@@ -243,7 +243,7 @@ impl ChatWidget {
             });
 
         // If there is a queued user message, send exactly one now to begin the next turn.
-        self.maybe_send_next_queued_input();
+        self.refresh_queued_user_messages();
         // Emit a notification when the turn completes (suppressed if focused).
         self.notify(Notification::AgentTurnComplete {
             response: last_agent_message.unwrap_or_default(),
@@ -347,7 +347,7 @@ impl ChatWidget {
         self.request_redraw();
 
         // After an error ends the turn, try sending the next queued input.
-        self.maybe_send_next_queued_input();
+        self.refresh_queued_user_messages();
     }
 
     pub(super) fn on_warning(&mut self, message: impl Into<String>) {
@@ -419,7 +419,7 @@ impl ChatWidget {
 
         self.mcp_startup_status = None;
         self.bottom_pane.set_task_running(false);
-        self.maybe_send_next_queued_input();
+        self.refresh_queued_user_messages();
         self.request_redraw();
         self.refresh_terminal_title();
     }
@@ -468,10 +468,9 @@ impl ChatWidget {
     }
 
     pub(super) fn on_elicitation_request(&mut self, ev: ElicitationRequestEvent) {
-        self.defer_or_handle(
-            InterruptManager::push_elicitation,
-            |s| s.handle_elicitation_request_now(ev),
-        );
+        self.defer_or_handle(InterruptManager::push_elicitation, |s| {
+            s.handle_elicitation_request_now(ev)
+        });
     }
 
     pub(super) fn on_exec_command_begin(&mut self, ev: ExecCommandBeginEvent) {

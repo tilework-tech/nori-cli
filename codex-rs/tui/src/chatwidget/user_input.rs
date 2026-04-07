@@ -44,10 +44,6 @@ impl ChatWidget {
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
     }
 
-    pub(super) fn queue_user_message(&mut self, text: String, image_paths: Vec<PathBuf>) {
-        self.submit_user_message(text, image_paths);
-    }
-
     pub(super) fn submit_user_message(&mut self, text: String, image_paths: Vec<PathBuf>) {
         if text.is_empty() && image_paths.is_empty() {
             return;
@@ -415,11 +411,6 @@ impl ChatWidget {
             }
             self.add_boxed_history(cell);
         }
-    }
-
-    // Refresh the queued-prompt display from the ACP projection.
-    pub(super) fn maybe_send_next_queued_input(&mut self) {
-        self.refresh_queued_user_messages();
     }
 
     /// Rebuild and update the queued user messages from the ACP projection.

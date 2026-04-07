@@ -1110,7 +1110,7 @@ fn chatwidget_tall() {
     chat.bottom_pane
         .update_status_header("Thinking really hard".to_string());
     for i in 0..30 {
-        chat.queue_user_message(format!("Hello, world! {i}"), Vec::new());
+        chat.submit_user_message(format!("Hello, world! {i}"), Vec::new());
     }
     let width: u16 = 80;
     let height: u16 = 24;

@@ -941,7 +941,7 @@ impl App {
                         );
                     } else {
                         let message = format!("Output from script '{name}':\n{stdout}");
-                        self.chat_widget.queue_text_as_user_message(message);
+                        self.chat_widget.submit_text_as_user_message(message);
                     }
                 }
                 Err(err) => {
@@ -949,7 +949,7 @@ impl App {
                         .add_error_message(format!("Script '{name}' failed: {err}"));
                     let error_context =
                         format!("Script '{name}' failed with the following error:\n{err}");
-                    self.chat_widget.queue_text_as_user_message(error_context);
+                    self.chat_widget.submit_text_as_user_message(error_context);
                 }
             },
             AppEvent::ShowViewonlySessionPicker {

@@ -45,7 +45,7 @@ impl ChatWidget {
         match self.bottom_pane.handle_key_event(key_event) {
             InputResult::Submitted(text) => {
                 let image_paths = self.bottom_pane.take_recent_submission_images();
-                self.queue_user_message(text, image_paths);
+                self.submit_user_message(text, image_paths);
             }
             InputResult::Command(cmd) => {
                 self.dispatch_command(cmd);

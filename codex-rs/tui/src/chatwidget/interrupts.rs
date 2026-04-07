@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
+use super::ChatWidget;
 use codex_core::protocol::ExecCommandBeginEvent;
 use codex_core::protocol::ExecCommandEndEvent;
 use codex_core::protocol::McpToolCallBeginEvent;
 use codex_core::protocol::McpToolCallEndEvent;
 use codex_core::protocol::PatchApplyEndEvent;
-use super::ChatWidget;
 
 /// Interrupts that can be queued during active streaming and flushed later.
 #[derive(Debug)]
