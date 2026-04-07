@@ -432,6 +432,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
 /// the approval handler's behavior. This verifies that `/approvals` command
 /// selecting "full access" makes it equivalent to `--yolo`.
 #[tokio::test]
+#[serial]
 async fn test_approval_policy_dynamic_update() {
     use codex_protocol::approvals::ExecApprovalRequestEvent;
     use sacp::schema as acp;
@@ -563,6 +564,7 @@ async fn test_approval_policy_dynamic_update() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_patch_approval_emits_normalized_client_event() {
     use sacp::schema as acp;
     use tokio::sync::oneshot;
@@ -673,6 +675,7 @@ async fn test_patch_approval_emits_normalized_client_event() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_exec_approval_emits_normalized_client_event() {
     use sacp::schema as acp;
     use tokio::sync::oneshot;
@@ -765,6 +768,7 @@ async fn test_exec_approval_emits_normalized_client_event() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_event() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -846,6 +850,7 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
 }
 
 #[tokio::test]
+#[serial]
 async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -914,6 +919,7 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -983,6 +989,7 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -1057,6 +1064,7 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -1120,6 +1128,7 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_agent_message_chunk_emits_normalized_message_delta() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -1160,6 +1169,7 @@ async fn test_agent_message_chunk_emits_normalized_message_delta() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_plan_update_emits_normalized_plan_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -1215,6 +1225,7 @@ async fn test_plan_update_emits_normalized_plan_snapshot() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
@@ -1349,6 +1360,7 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() {
     use pretty_assertions::assert_eq;
     use sacp::schema as acp;
