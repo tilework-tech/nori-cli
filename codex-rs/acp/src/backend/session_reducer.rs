@@ -6,6 +6,8 @@
 
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
+use nori_protocol::PromptCompleted;
+use nori_protocol::QueueChanged;
 use nori_protocol::TurnLifecycle;
 use nori_protocol::WarningInfo;
 use nori_protocol::session_runtime::ActiveRequestKind;
@@ -116,6 +118,9 @@ fn reduce_prompt_submit(
 ) {
     if runtime.phase != SessionPhase::Idle {
         runtime.queue.push_back(prompt);
+        out.events.push(ClientEvent::QueueChanged(QueueChanged {
+            prompts: queued_prompt_texts(runtime),
+        }));
         return;
     }
 
@@ -151,6 +156,8 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
         });
     }
 
+    out.events
+        .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
     out.events
         .push(ClientEvent::TurnLifecycle(TurnLifecycle::Started));
     out.side_effects.push(SideEffect::SendPrompt {
@@ -196,6 +203,8 @@ fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
         }
 
         out.events
+            .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
+        out.events
             .push(ClientEvent::TurnLifecycle(TurnLifecycle::Cancelling));
         out.side_effects.push(SideEffect::SendCancel);
     }
@@ -227,6 +236,13 @@ fn reduce_prompt_response(
     runtime.phase = SessionPhase::Idle;
 
     out.events
+        .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
+    out.events
+        .push(ClientEvent::PromptCompleted(PromptCompleted {
+            stop_reason,
+            last_agent_message: last_agent_message.clone(),
+        }));
+    out.events
         .push(ClientEvent::TurnLifecycle(TurnLifecycle::Completed {
             last_agent_message,
         }));
@@ -236,6 +252,9 @@ fn reduce_prompt_response(
         && queue_drain == QueueDrainOutcome::SendNextPrompt
         && let Some(next_prompt) = runtime.queue.pop_front()
     {
+        out.events.push(ClientEvent::QueueChanged(QueueChanged {
+            prompts: queued_prompt_texts(runtime),
+        }));
         start_prompt(runtime, next_prompt, out);
     }
 }
@@ -250,6 +269,13 @@ fn reduce_prompt_failed(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
 
     let last_agent_message = finalize_active(runtime);
     runtime.phase = SessionPhase::Idle;
+    out.events
+        .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
+    out.events
+        .push(ClientEvent::PromptCompleted(PromptCompleted {
+            stop_reason: acp::StopReason::Cancelled,
+            last_agent_message: last_agent_message.clone(),
+        }));
     out.events
         .push(ClientEvent::TurnLifecycle(TurnLifecycle::Completed {
             last_agent_message,
@@ -274,6 +300,8 @@ fn reduce_load_submit(runtime: &mut SessionRuntime, request_id: String, out: &mu
         request_id,
         ActiveRequestKind::Loading,
     ));
+    out.events
+        .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
 }
 
 fn reduce_load_response(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
@@ -286,6 +314,9 @@ fn reduce_load_response(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
 
     finalize_active(runtime);
     runtime.phase = SessionPhase::Idle;
+    out.events
+        .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
+    out.events.push(ClientEvent::LoadCompleted);
     // Loads never drain the queue.
 }
 
@@ -307,15 +338,13 @@ fn reduce_notification(
 
     // Request-owned content requires an active request.
     if runtime.active.is_none() {
-        // Out-of-phase content: emit warning, forward as standalone.
         out.events.push(ClientEvent::Warning(WarningInfo {
             message: "Received request-owned content update while no request is active".to_string(),
         }));
-        // Still forward well-formed content for display.
-        let client_events = normalizer.push_session_update(&update);
-        out.events.extend(client_events);
         return;
     }
+
+    let mut forward_to_normalizer = true;
 
     // Route to specific handlers.
     match &update {
@@ -335,9 +364,13 @@ fn reduce_notification(
             reduce_tool_call(runtime, tool_call);
         }
         acp::SessionUpdate::ToolCallUpdate(tool_update) => {
-            reduce_tool_call_update(runtime, tool_update, normalizer);
+            forward_to_normalizer = reduce_tool_call_update(runtime, tool_update, normalizer, out);
         }
         _ => {}
+    }
+
+    if !forward_to_normalizer {
+        return;
     }
 
     // Always forward to normalizer for ClientEvent production.
@@ -383,9 +416,19 @@ fn reduce_metadata_update(
     normalizer: &mut ClientEventNormalizer,
     out: &mut ReduceOutput,
 ) {
+    match update {
+        acp::SessionUpdate::AvailableCommandsUpdate(_) => {}
+        acp::SessionUpdate::CurrentModeUpdate(current_mode) => {
+            runtime.persisted.current_mode = Some(current_mode.current_mode_id.to_string());
+        }
+        acp::SessionUpdate::ConfigOptionUpdate(config_options) => {
+            runtime.persisted.config_options = config_options.config_options.clone();
+        }
+        _ => {}
+    }
+
     let client_events = normalizer.push_session_update(update);
 
-    // Update persisted state from the events.
     for event in &client_events {
         if let ClientEvent::AgentCommandsUpdate(commands_update) = event {
             runtime.persisted.available_commands = commands_update.commands.clone();
@@ -415,17 +458,25 @@ fn reduce_tool_call(runtime: &mut SessionRuntime, tool_call: &acp::ToolCall) {
 fn reduce_tool_call_update(
     runtime: &mut SessionRuntime,
     tool_update: &acp::ToolCallUpdate,
-    _normalizer: &mut ClientEventNormalizer,
-) {
+    normalizer: &mut ClientEventNormalizer,
+    out: &mut ReduceOutput,
+) -> bool {
     let call_id = tool_update.tool_call_id.to_string();
 
-    // If the tool call is not already tracked, it will be added by the
-    // normalizer output. We just ensure the active request tracks it.
+    if !normalizer.contains_tool_call(&call_id) {
+        out.events.push(ClientEvent::Warning(WarningInfo {
+            message: format!("Received tool_call_update for unknown toolCallId: {call_id}"),
+        }));
+        return false;
+    }
+
     if let Some(active) = &mut runtime.active
         && !active.tool_call_ids.contains(&call_id)
     {
         active.tool_call_ids.push(call_id);
     }
+
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -541,7 +592,9 @@ fn finalize_active(runtime: &mut SessionRuntime) -> Option<String> {
 fn is_session_metadata_update(update: &acp::SessionUpdate) -> bool {
     matches!(
         update,
-        acp::SessionUpdate::AvailableCommandsUpdate(_) | acp::SessionUpdate::CurrentModeUpdate(_)
+        acp::SessionUpdate::AvailableCommandsUpdate(_)
+            | acp::SessionUpdate::CurrentModeUpdate(_)
+            | acp::SessionUpdate::ConfigOptionUpdate(_)
     )
 }
 
@@ -550,6 +603,25 @@ fn is_terminal_phase(phase: &nori_protocol::ToolPhase) -> bool {
         phase,
         nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
     )
+}
+
+fn queued_prompt_texts(runtime: &SessionRuntime) -> Vec<String> {
+    runtime
+        .queue
+        .iter()
+        .filter(|prompt| {
+            matches!(
+                prompt.kind,
+                nori_protocol::session_runtime::QueuedPromptKind::User
+            )
+        })
+        .filter_map(|prompt| {
+            prompt
+                .display_text
+                .clone()
+                .or_else(|| Some(prompt.text.clone()))
+        })
+        .collect()
 }
 
 fn new_request_id() -> String {

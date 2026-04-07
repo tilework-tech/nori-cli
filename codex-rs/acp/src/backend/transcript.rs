@@ -183,6 +183,11 @@ fn replay_entry_from_client_event(
         }
         nori_protocol::ClientEvent::ApprovalRequest(_)
         | nori_protocol::ClientEvent::MessageDelta(_)
+        | nori_protocol::ClientEvent::SessionPhaseChanged(_)
+        | nori_protocol::ClientEvent::PromptCompleted(_)
+        | nori_protocol::ClientEvent::LoadCompleted
+        | nori_protocol::ClientEvent::QueueChanged(_)
+        | nori_protocol::ClientEvent::ContextCompacted(_)
         | nori_protocol::ClientEvent::TurnLifecycle(_)
         | nori_protocol::ClientEvent::ReplayEntry(_)
         | nori_protocol::ClientEvent::AgentCommandsUpdate(_)

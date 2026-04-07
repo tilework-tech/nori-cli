@@ -266,44 +266,43 @@ fn normalized_reasoning_message_delta_updates_status_header() {
 }
 
 #[test]
-fn normalized_turn_started_sets_task_running() {
+fn normalized_prompt_phase_sets_task_running() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
-        nori_protocol::TurnLifecycle::Started,
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
     ));
 
     assert!(chat.bottom_pane.is_task_running());
 }
 
 #[test]
-fn normalized_turn_aborted_restores_queued_messages_into_composer() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+fn normalized_cancelling_phase_keeps_composer_queue_unchanged() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
-    chat.bottom_pane.set_task_running(true);
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
+    chat.bottom_pane
+        .set_composer_text("draft while cancelling".to_string());
 
-    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
-        nori_protocol::TurnLifecycle::Aborted {
-            reason: nori_protocol::TurnAbortReason::Interrupted,
+    chat.handle_client_event(nori_protocol::ClientEvent::QueueChanged(
+        nori_protocol::QueueChanged {
+            prompts: vec!["first queued".to_string(), "second queued".to_string()],
         },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
     ));
 
     assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "first queued\nsecond queued"
+        (
+            chat.bottom_pane.composer_text(),
+            chat.bottom_pane.is_task_running(),
+            op_rx.try_recv().is_err(),
+        ),
+        ("draft while cancelling".to_string(), true, true)
     );
-    assert!(chat.queued_user_messages.is_empty());
-    assert!(
-        op_rx.try_recv().is_err(),
-        "unexpected outbound op after interrupt"
-    );
-
-    let _ = drain_insert_history(&mut rx);
 }
 
 #[test]

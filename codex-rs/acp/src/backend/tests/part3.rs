@@ -1,5 +1,17 @@
 use super::*;
 
+async fn send_seed_tool_call(
+    persistent_tx: &mpsc::Sender<sacp::schema::SessionUpdate>,
+    call_id: &str,
+) {
+    persistent_tx
+        .send(sacp::schema::SessionUpdate::ToolCall(
+            sacp::schema::ToolCall::new(call_id.to_string(), "Terminal"),
+        ))
+        .await
+        .expect("send seed tool call");
+}
+
 /// Test that authentication errors are correctly categorized
 #[test]
 fn test_categorize_acp_error_authentication() {
@@ -843,6 +855,7 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+    send_seed_tool_call(&persistent_tx, "call-edit-complete").await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -910,6 +923,7 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+    send_seed_tool_call(&persistent_tx, "call-delete-complete").await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -978,6 +992,7 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+    send_seed_tool_call(&persistent_tx, "call-fetch-complete").await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1051,6 +1066,7 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
 
     spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+    send_seed_tool_call(&persistent_tx, "call-exec-complete").await;
 
     persistent_tx
         .send(acp::SessionUpdate::ToolCallUpdate(
@@ -1295,6 +1311,7 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
             mpsc::channel::<nori_protocol::ClientEvent>(16);
 
         spawn_test_persistent_relay(persistent_rx, event_tx, Some(client_event_tx));
+        send_seed_tool_call(&persistent_tx, &update.tool_call_id.to_string()).await;
 
         persistent_tx
             .send(acp::SessionUpdate::ToolCallUpdate(update))

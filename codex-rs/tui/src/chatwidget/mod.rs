@@ -422,6 +422,8 @@ pub(crate) struct ChatWidget {
     // Outer Option: whether overridden; inner Option<i32>: the value.
     #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,
+    acp_session_phase: Option<nori_protocol::session_runtime::SessionPhaseView>,
+    acp_cancel_pending_completion: bool,
     // Gate: set when AgentMessage is received, cleared on next TaskStarted.
     // While true, late-arriving tool events are silently discarded.
     turn_finished: bool,

@@ -313,6 +313,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         loop_total: None,
         #[cfg(feature = "nori-config")]
         loop_count_override: None,
+        acp_session_phase: None,
+        acp_cancel_pending_completion: false,
         turn_finished: false,
         plan_drawer_mode: PlanDrawerMode::Off,
         pinned_plan: None,

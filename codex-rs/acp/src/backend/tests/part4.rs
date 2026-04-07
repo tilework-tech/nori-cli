@@ -2,6 +2,100 @@ use super::*;
 
 #[tokio::test]
 #[serial]
+async fn test_interrupt_emits_cancelling_phase_before_prompt_completion() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "stream until cancelled".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let mut saw_prompt_phase = false;
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::SessionPhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Prompt,
+            )) => {
+                saw_prompt_phase = true;
+                break;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+    assert!(saw_prompt_phase, "expected prompt phase before interrupt");
+
+    backend
+        .submit(Op::Interrupt)
+        .await
+        .expect("Failed to interrupt prompt");
+
+    let start = std::time::Instant::now();
+    let mut relevant_events = Vec::new();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::SessionPhaseChanged(phase)) => {
+                relevant_events.push(format!("phase:{phase:?}"));
+            }
+            Some(nori_protocol::ClientEvent::PromptCompleted(completed)) => {
+                relevant_events.push(format!("stop:{:?}", completed.stop_reason));
+                break;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    // SAFETY: Clean up the environment variable set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_STREAM_UNTIL_CANCEL");
+    }
+
+    assert_eq!(
+        relevant_events,
+        vec![
+            "phase:Cancelling".to_string(),
+            "phase:Idle".to_string(),
+            "stop:Cancelled".to_string(),
+        ]
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn test_user_input_emits_normalized_turn_lifecycle_events() {
     use std::time::Duration;
 

@@ -131,20 +131,19 @@ The selective flush ensures tool cells that are already visible transition from 
 
 **Begin/Completion Pairing in `flush_completions_and_clear`**: Tool begin and completion updates for the same `call_id` are still paired in the FIFO queue. When `flush_completions_and_clear` discards a deferred begin update, it records the `call_id` in a `HashSet`. Any later completion for the same `call_id` is discarded too. Without this pairing, a deferred completion can synthesize an orphan `ExecCell` from a normalized ACP tool snapshot after its begin state was already dropped.
 
-**Turn-Finished Gate** (`chatwidget/event_handlers.rs`):
+**Reducer-Owned ACP Phase Wiring** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
 
-The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, replay entries, tool snapshots, and control-plane notifications are independent async streams that can race. The `turn_finished: bool` field on `ChatWidget` acts as a gate to silently discard late-arriving tool activity after the agent's final response text:
+ACP prompt ownership is now rendered from normalized reducer projections instead of the old `TurnLifecycle`/interrupt timing path. `ChatWidget` consumes:
 
-| Transition | Trigger | Effect |
-|------------|---------|--------|
-| `turn_finished = true` | `on_agent_message()`, `on_task_complete()` | Closes the gate -- subsequent tool events are discarded |
-| `turn_finished = false` | `on_task_started()` | Opens the gate -- new turn begins accepting tool events |
+- `ClientEvent::SessionPhaseChanged(Idle|Loading|Prompt|Cancelling)` to drive input locking, status visibility, and the interrupt hint
+- `ClientEvent::PromptCompleted { .. }` to finalize the turn when the real ACP prompt response arrives
+- `ClientEvent::QueueChanged { prompts }` to render queued ACP prompts without owning a second prompt queue in the TUI
 
-The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
+For ACP sessions, pressing Enter while the phase is `Prompt` or `Cancelling` still sends `Op::UserInput`; the backend reducer decides whether to send immediately or enqueue. Interrupt no longer restores queued ACP prompts into the composer. The legacy `turn_finished` gate still exists for non-ACP / legacy event paths, but ACP control flow no longer treats it as the source of truth for whether a prompt is active.
 
 **Stale Event Suppression:**
 
-Stale `TurnLifecycle::Completed` and `ErrorEvent` from cancelled turns are suppressed entirely at the ACP backend layer via a monotonic turn counter (`turn_id: Arc<AtomicU64>`). Each spawned backend task captures its turn ID and only emits tail events if the counter still matches. The TUI does not need any complementary guard for this race — see `@/codex-rs/acp/docs.md` for details.
+ACP cancel no longer makes the TUI idle on its own. The UI stays in `Cancelling` until the backend reduces the matching prompt response and emits `PromptCompleted`. See `@/codex-rs/acp/docs.md` for the backend-side reducer rules.
 
 **Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
 

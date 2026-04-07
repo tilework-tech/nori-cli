@@ -61,6 +61,10 @@ impl SessionDriver {
         let out = reduce(&mut self.runtime, event, &mut self.normalizer);
         let completed_turn = completed_prompt.and_then(|prompt| {
             out.events.iter().find_map(|event| match event {
+                ClientEvent::PromptCompleted(completed) => Some(CompletedTurn {
+                    prompt: prompt.clone(),
+                    last_agent_message: completed.last_agent_message.clone(),
+                }),
                 ClientEvent::TurnLifecycle(TurnLifecycle::Completed { last_agent_message }) => {
                     Some(CompletedTurn {
                         prompt: prompt.clone(),
@@ -142,11 +146,27 @@ impl AcpBackend {
     ) {
         let request_id = pending_request.request_id.clone();
         let call_id = pending_request.request.event.call_id().to_string();
-        self.apply_session_event(InboundEvent::PermissionRequest {
-            request_id,
-            call_id: call_id.clone(),
-        })
-        .await;
+        let (actions, permission_is_valid) = {
+            let mut driver = self.session_driver.lock().await;
+            let actions = driver.apply(InboundEvent::PermissionRequest {
+                request_id,
+                call_id: call_id.clone(),
+            });
+            let permission_is_valid = matches!(
+                driver.runtime.phase,
+                nori_protocol::session_runtime::SessionPhase::Prompt { .. }
+            );
+            (actions, permission_is_valid)
+        };
+        self.dispatch_reducer_actions(actions).await;
+
+        if !permission_is_valid {
+            let _ = pending_request
+                .request
+                .response_tx
+                .send(ReviewDecision::Denied);
+            return;
+        }
 
         if current_policy == AskForApproval::Never {
             debug!(
@@ -209,6 +229,9 @@ impl AcpBackend {
                 let mut non_completion_events = Vec::new();
                 for event in actions.events {
                     match event {
+                        ClientEvent::PromptCompleted(_) => {
+                            completion_event = Some(event);
+                        }
                         ClientEvent::TurnLifecycle(TurnLifecycle::Completed { .. }) => {
                             completion_event = Some(event);
                         }
@@ -380,6 +403,12 @@ impl AcpBackend {
                     }
                 }
 
+                self.forward_and_record_client_event(ClientEvent::ContextCompacted(
+                    nori_protocol::ContextCompacted {
+                        summary: Some(summary.clone()),
+                    },
+                ))
+                .await;
                 self.forward_and_record_client_event(ClientEvent::TurnLifecycle(
                     TurnLifecycle::ContextCompacted {
                         summary: Some(summary),

@@ -850,27 +850,16 @@ Next prompt() overwrites active_update_tx slot with a fresh sender
 
 The generation counter on `active_update_tx` prevents stale cleanup: `close_update_channel(generation)` only clears the slot if the generation matches, so it is safe for `load_session` (which is sequential) to clear its own channel without risking a concurrent prompt's channel. `prompt()` callers do not call `close_update_channel` at all — they rely on the done/drain pattern instead.
 
-**Turn Interrupt Guard — Monotonic Turn Counter** (`submit_and_ops.rs`, `user_input.rs`):
+**Turn Interrupt Wiring — Reducer-Owned ACP Phase** (`session_reducer.rs`, `session_runtime_driver.rs`, `submit_and_ops.rs`):
 
-When `Op::Interrupt` fires, the backend emits `TurnLifecycle::Aborted` synchronously and calls `cancel()` on the ACP connection. However, the background tokio task spawned by `handle_user_input()` (and `handle_compact()`) continues running after cancellation and may emit stale `TurnLifecycle::Completed` or `ErrorEvent` at the end of its event loop. If the user submits a new message before these stale events arrive, they race with the next turn and can prematurely terminate it.
+When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::CancelSubmit` and calls `session/cancel` through the reducer side-effect path. The reducer remains the authority for ACP request ownership:
 
-The `turn_id: Arc<AtomicU64>` field on `AcpBackend` is a monotonic counter that eliminates this race. It is incremented on every `Op::Interrupt` and on every new turn (`handle_user_input()`, `handle_compact()`). Each spawned task captures its own turn ID at spawn time and only emits tail events (errors, warnings, `Completed`) if the counter still matches:
+- `SessionPhaseChanged(Cancelling)` is emitted immediately after `session/cancel` is accepted
+- the prompt stays active until the real ACP prompt response arrives
+- `SessionPhaseChanged(Idle)` and `PromptCompleted { stop_reason, last_agent_message }` are emitted only when that prompt response is reduced
+- queued follow-up prompts remain in the reducer-owned outbound queue until an eligible drain point (`stop_reason: end_turn`)
 
-```
-Op::Interrupt:
-  1. turn_id.fetch_add(1)           -- advance the counter, invalidating the current task
-  2. connection.cancel()            -- cancel the ACP session
-
-handle_user_input() / handle_compact():
-  1. my_turn_id = turn_id.fetch_add(1) + 1  -- advance counter, capture this turn's ID
-  ...
-  spawned task epilogue:
-    if turn_id.load() == my_turn_id          -- only emit tail events if still current
-      emit ErrorEvent (if error)
-      emit TurnLifecycle::Completed
-```
-
-Because the counter is monotonic and never reset, there is no TOCTOU window: an interrupt always invalidates any previously spawned task, and a new turn always gets a fresh ID that cannot collide with prior tasks. The TUI does not need any complementary guard — stale events are fully suppressed at the backend layer.
+This removes the old synthetic `TurnLifecycle::Aborted` fast-path that treated cancel as immediate idle. The TUI now renders ACP interrupt state from reducer-owned phase/completion projections instead of inferring prompt ownership from interrupt timing.
 
 **Tool Classification System:**
 

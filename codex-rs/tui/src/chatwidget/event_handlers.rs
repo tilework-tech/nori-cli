@@ -1196,6 +1196,25 @@ impl ChatWidget {
             nori_protocol::ClientEvent::PlanSnapshot(plan_snapshot) => {
                 self.handle_client_plan_snapshot(plan_snapshot);
             }
+            nori_protocol::ClientEvent::SessionPhaseChanged(phase) => {
+                self.handle_client_phase_changed(phase);
+            }
+            nori_protocol::ClientEvent::PromptCompleted(completed) => {
+                self.handle_client_prompt_completed(completed);
+            }
+            nori_protocol::ClientEvent::LoadCompleted => {
+                self.request_redraw();
+            }
+            nori_protocol::ClientEvent::QueueChanged(queue_changed) => {
+                self.bottom_pane
+                    .set_queued_user_messages(queue_changed.prompts);
+                self.request_redraw();
+            }
+            nori_protocol::ClientEvent::ContextCompacted(context_compacted) => {
+                self.on_context_compacted(codex_core::protocol::ContextCompactedEvent {
+                    summary: context_compacted.summary,
+                });
+            }
             nori_protocol::ClientEvent::TurnLifecycle(turn_lifecycle) => {
                 self.handle_client_turn_lifecycle(turn_lifecycle);
             }
@@ -1227,29 +1246,76 @@ impl ChatWidget {
     }
 
     fn handle_client_turn_lifecycle(&mut self, turn_lifecycle: nori_protocol::TurnLifecycle) {
-        match turn_lifecycle {
-            nori_protocol::TurnLifecycle::Started => self.on_task_started(),
-            nori_protocol::TurnLifecycle::Completed { last_agent_message } => {
-                self.on_task_complete(last_agent_message)
-            }
-            nori_protocol::TurnLifecycle::Aborted { reason } => match reason {
-                nori_protocol::TurnAbortReason::Interrupted => {
-                    self.on_interrupted_turn(TurnAbortReason::Interrupted)
+        if let nori_protocol::TurnLifecycle::ContextCompacted { summary } = turn_lifecycle {
+            self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
+        }
+    }
+
+    fn handle_client_phase_changed(
+        &mut self,
+        phase: nori_protocol::session_runtime::SessionPhaseView,
+    ) {
+        let previous_phase = self.acp_session_phase.replace(phase);
+
+        match phase {
+            nori_protocol::session_runtime::SessionPhaseView::Idle => {
+                self.bottom_pane.set_task_running(false);
+                self.bottom_pane.set_interrupt_hint_visible(false);
+                if !matches!(
+                    previous_phase,
+                    Some(nori_protocol::session_runtime::SessionPhaseView::Idle)
+                ) {
+                    self.request_redraw();
+                    self.refresh_terminal_title();
                 }
-                nori_protocol::TurnAbortReason::Replaced => {
-                    self.on_error("Turn aborted: replaced by a new task".to_owned())
-                }
-                nori_protocol::TurnAbortReason::Other(reason) => {
-                    self.on_error(format!("Turn aborted: {reason}"))
-                }
-            },
-            nori_protocol::TurnLifecycle::ContextCompacted { summary } => {
-                self.on_context_compacted(codex_core::protocol::ContextCompactedEvent { summary });
             }
-            nori_protocol::TurnLifecycle::Cancelling => {
-                // For now, treat as a no-op. Phase 2 will add proper
-                // cancelling state tracking in the TUI.
+            nori_protocol::session_runtime::SessionPhaseView::Loading => {
+                self.acp_cancel_pending_completion = false;
+                self.bottom_pane.set_task_running(true);
+                self.bottom_pane.ensure_status_indicator();
+                self.bottom_pane.set_interrupt_hint_visible(false);
+                self.set_status_header("Loading session".to_string());
+                self.request_redraw();
+                self.refresh_terminal_title();
             }
+            nori_protocol::session_runtime::SessionPhaseView::Prompt => {
+                self.acp_cancel_pending_completion = false;
+                if matches!(
+                    previous_phase,
+                    Some(nori_protocol::session_runtime::SessionPhaseView::Prompt)
+                        | Some(nori_protocol::session_runtime::SessionPhaseView::Cancelling)
+                ) {
+                    self.bottom_pane.set_task_running(true);
+                    self.bottom_pane.ensure_status_indicator();
+                    self.bottom_pane.set_interrupt_hint_visible(true);
+                    self.request_redraw();
+                    self.refresh_terminal_title();
+                } else {
+                    self.on_task_started();
+                }
+            }
+            nori_protocol::session_runtime::SessionPhaseView::Cancelling => {
+                self.acp_cancel_pending_completion = true;
+                self.bottom_pane.set_task_running(true);
+                self.bottom_pane.ensure_status_indicator();
+                self.bottom_pane.set_interrupt_hint_visible(false);
+                self.set_status_header("Cancelling".to_string());
+                self.request_redraw();
+                self.refresh_terminal_title();
+            }
+        }
+    }
+
+    fn handle_client_prompt_completed(&mut self, completed: nori_protocol::PromptCompleted) {
+        let cancelled_prompt_finished = self.acp_cancel_pending_completion;
+        self.acp_cancel_pending_completion = false;
+        self.on_task_complete(completed.last_agent_message);
+        if cancelled_prompt_finished {
+            self.add_to_history(history_cell::new_error_event(
+                "Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://github.com/tilework-tech/nori-cli/issues"
+                    .to_owned(),
+            ));
+            self.request_redraw();
         }
     }
 
@@ -1311,7 +1377,18 @@ impl ChatWidget {
     /// ClientToolCell auto-detects exploring tools (Read/Search) and renders
     /// them with "Explored" format, while Execute uses shell-style transcript.
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        if self.turn_finished {
+        let known_tool_update = self
+            .active_cell
+            .as_ref()
+            .and_then(|cell| cell.as_any().downcast_ref::<ClientToolCell>())
+            .is_some_and(|cell| cell.call_id() == tool_snapshot.call_id)
+            || self
+                .pending_client_tool_cells
+                .contains_key(&tool_snapshot.call_id)
+            || self
+                .completed_client_tool_calls
+                .contains(&tool_snapshot.call_id);
+        if self.turn_finished && (!self.uses_backend_owned_acp_queue() || !known_tool_update) {
             return;
         }
         self.flush_answer_stream_with_separator();

@@ -130,6 +130,44 @@ fn test_ctrl_c_cancels_streaming() {
 
 #[test]
 #[cfg(target_os = "linux")]
+fn test_prompt_submitted_during_cancelling_is_not_lost() {
+    let config = SessionConfig::new().with_stream_until_cancel();
+    let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt did not appear");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("first try").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("First prompt should become interruptible");
+
+    session.send_key(Key::Escape).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_str("queued follow up").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text(
+            "Conversation interrupted - tell the model what to do differently",
+            TIMEOUT,
+        )
+        .expect("Interrupted turn should finish before the queued prompt is sent");
+    session
+        .wait_for_text("queued follow up", TIMEOUT)
+        .expect("Queued follow-up prompt should stay visible");
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("Queued follow-up prompt should eventually start once ACP is idle");
+}
+
+#[test]
+#[cfg(target_os = "linux")]
 fn test_prompt_still_streams_after_interrupt() {
     let config = SessionConfig::new().with_stream_until_cancel();
     let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();

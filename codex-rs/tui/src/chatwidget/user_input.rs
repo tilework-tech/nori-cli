@@ -45,7 +45,9 @@ impl ChatWidget {
     }
 
     pub(super) fn queue_user_message(&mut self, user_message: UserMessage) {
-        if self.bottom_pane.is_task_running() {
+        if self.uses_backend_owned_acp_queue() && self.acp_phase_blocks_submission() {
+            self.submit_user_message(user_message);
+        } else if self.bottom_pane.is_task_running() {
             self.queued_user_messages.push_back(user_message);
             self.refresh_queued_user_messages();
         } else {
@@ -425,7 +427,7 @@ impl ChatWidget {
 
     // If idle and there are queued inputs, submit exactly one to start the next turn.
     pub(super) fn maybe_send_next_queued_input(&mut self) {
-        if self.bottom_pane.is_task_running() {
+        if self.uses_backend_owned_acp_queue() || self.bottom_pane.is_task_running() {
             return;
         }
         if let Some(user_message) = self.queued_user_messages.pop_front() {
@@ -443,6 +445,19 @@ impl ChatWidget {
             .map(|m| m.text.clone())
             .collect();
         self.bottom_pane.set_queued_user_messages(messages);
+    }
+
+    pub(super) fn uses_backend_owned_acp_queue(&self) -> bool {
+        self.acp_session_phase.is_some()
+    }
+
+    pub(super) fn acp_phase_blocks_submission(&self) -> bool {
+        matches!(
+            self.acp_session_phase,
+            Some(nori_protocol::session_runtime::SessionPhaseView::Prompt)
+                | Some(nori_protocol::session_runtime::SessionPhaseView::Cancelling)
+                | Some(nori_protocol::session_runtime::SessionPhaseView::Loading)
+        )
     }
 
     pub(crate) fn add_diff_in_progress(&mut self) {
