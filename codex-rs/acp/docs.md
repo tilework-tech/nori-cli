@@ -672,7 +672,7 @@ Turn lifecycle           → client_event entry
 
 Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remain in the schema for legacy read compatibility, but ACP live recording now uses normalized `ClientEvent` entries so transcript persistence matches the live TUI path.
 
-Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. Both this truncation and the `truncate_for_log()` helper (used for tracing previews) use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
+Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers in the crate -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 
 Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata

@@ -281,7 +281,8 @@ fn truncate_str(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+        let safe = codex_utils_string::take_bytes_at_char_boundary(s, max_len.saturating_sub(3));
+        format!("{safe}...")
     }
 }
 
@@ -837,6 +838,18 @@ mod tests {
     #[test]
     fn test_truncate_str_long_string() {
         assert_eq!(truncate_str("hello world this is long", 10), "hello w...");
+    }
+
+    #[test]
+    fn test_truncate_str_multibyte_does_not_panic() {
+        // Reproduces the crash from commands like: grep -E '(✓|✗|×|FAIL)'
+        // ✓ is 3 bytes (U+2713). Place it so byte 57 (= 60 - 3) lands inside it.
+        // 56 ASCII bytes put ✓ at bytes 56..59; truncation at byte 57 panics
+        // without a char-boundary-safe slice.
+        let s = format!("{}✓rest_of_string", "a".repeat(56));
+        let result = truncate_str(&s, 60);
+        assert!(result.ends_with("..."));
+        assert!(result.len() <= 60);
     }
 
     #[test]
