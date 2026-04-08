@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 #[allow(unused_imports)]
@@ -317,6 +316,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
+    pub(crate) footer_segment_config: codex_acp::config::FooterSegmentConfig,
     /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching agent. This prevents race conditions when switching agents.
@@ -379,8 +379,6 @@ pub(crate) struct ChatWidget {
     // When resuming an existing session (selected via resume picker), avoid an
     // immediate redraw on SessionConfigured to prevent a gratuitous UI flicker.
     suppress_session_configured_redraw: bool,
-    // User messages queued while a turn is in progress
-    queued_user_messages: VecDeque<UserMessage>,
     // Pending notification to show when unfocused on next Draw
     pending_notification: Option<Notification>,
     // Whether to add a final message separator after the last message
@@ -421,14 +419,7 @@ pub(crate) struct ChatWidget {
     // Outer Option: whether overridden; inner Option<i32>: the value.
     #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,
-    // Gate: set when AgentMessage is received, cleared on next TaskStarted.
-    // While true, late-arriving tool events are silently discarded.
-    turn_finished: bool,
-    // Defense-in-depth counter for stale TurnLifecycle::Completed events
-    // after interrupts. Incremented by on_interrupted_turn, decremented by
-    // on_task_complete, and reset to 0 by on_task_started (to drain orphaned
-    // counters when the ACP backend suppresses the stale Completed).
-    pending_stale_completes: i32,
+    acp_session_phase: Option<nori_protocol::session_runtime::SessionPhaseView>,
     /// Whether and how plan updates are rendered in a pinned drawer instead of
     /// history cells.
     plan_drawer_mode: PlanDrawerMode,
@@ -481,7 +472,12 @@ fn create_initial_user_message(text: String, image_paths: Vec<PathBuf>) -> Optio
     }
 }
 
-impl ChatWidget {}
+impl ChatWidget {
+    #[cfg(test)]
+    pub(crate) fn footer_segment_config(&self) -> codex_acp::config::FooterSegmentConfig {
+        self.bottom_pane.footer_segment_config()
+    }
+}
 
 impl Drop for ChatWidget {
     fn drop(&mut self) {

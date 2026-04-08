@@ -53,7 +53,7 @@ The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` +
 - File search integration (`file_search.rs`)
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
 
-The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. In ACP sessions, file operation tool snapshots render through `ClientToolCell` with `render_edit_lines()`, which produces the same `transcript_lines()` as `display_lines()` (both dispatch to the edit rendering path).
+The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. In ACP sessions, `ClientToolCell` provides differentiated `transcript_lines()` for Execute tools (shell-style `$ command` format via `render_execute_transcript_lines()`) while exploring and edit cells reuse their `display_lines()` rendering for transcripts.
 
 **Approval Request Routing** (`chatwidget/event_handlers.rs`, `bottom_pane/approval_overlay.rs`): ACP approval requests arrive as `ClientEvent::ApprovalRequest` containing a `nori_protocol::ToolSnapshot`. The `approval_request_from_client_event()` function performs two-way routing: Execute tools with `Invocation::Command` map to `ApprovalRequest::Exec` (bash-highlighted overlay), and everything else (including Edit/Delete/Move) maps to `ApprovalRequest::AcpTool`. The `AcpTool` variant carries a boxed `ToolSnapshot`, a `cwd: PathBuf` (threaded from `self.config.cwd` in the chat widget), and dispatches decisions via `Op::ExecApproval`, which gives users the "always approve" option that `ApplyPatch` did not have. The `From<ApprovalRequest>` impl in `approval_overlay.rs` applies `relativize_paths_in_text` to the title before building the overlay prompt and `DiffSummary`, so users see relative paths instead of absolute ones. The fullscreen approval preview in `app/event_handling.rs` also uses the real `cwd` from the request for `DiffSummary` construction. `ApprovalRequest::ApplyPatch` is now only used by the legacy non-ACP codex backend. History cells for AcpTool decisions are produced by `history_cell::new_acp_approval_decision_cell()`, using `format_tool_kind()` for the kind label.
 
@@ -61,11 +61,11 @@ For edit-like tools (Edit/Delete/Move), both the approval overlay and the fullsc
 
 **ClientToolCell Rendering** (`client_tool_cell.rs`):
 
-`ClientToolCell` wraps a `nori_protocol::ToolSnapshot` (and a `cwd` path for path normalization) and implements `HistoryCell`. It selects between four rendering paths based on cell state: exploring cells use `render_exploring_lines(width)`, `ToolKind::Execute` uses `render_execute_lines(width)` for ExecCell-parity display, Edit/Delete/Move kinds use `render_edit_lines()` for semantic verb headers with diff content, and all remaining tool kinds use `render_generic_lines()` for the generic `"Tool [phase]: title (kind)"` format with invocation/artifact details.
+`ClientToolCell` wraps a `nori_protocol::ToolSnapshot` (and a `cwd` path for path normalization) and implements `HistoryCell`. All ACP tool kinds route through `ClientToolCell` via `handle_client_native_tool_snapshot`. The cell selects between four rendering paths based on cell state: exploring cells (Read/Search, auto-detected via `is_exploring_snapshot()` or merged via `exploring_snapshots`) use `render_exploring_lines(width)`, `ToolKind::Execute` uses `render_execute_lines(width)` for display and `render_execute_transcript_lines(width)` for shell-style transcripts, Edit/Delete/Move kinds use `render_edit_lines()` for semantic verb headers with diff content, and all remaining tool kinds use `render_generic_lines()` for the generic `"Tool [phase]: title (kind)"` format with invocation/artifact details.
 
-**Exploring cell grouping**: When consecutive Read/Search/ListFiles snapshots arrive, they are merged into a single `ClientToolCell` with a grouped exploring rendering. The exploring display shows a compact `Explored`/`Exploring` header with tree-prefixed sub-items that group consecutive reads by filename (e.g., `Read file1.rs, file2.rs`) and show `Search`/`List` labels with compact arguments. Read output content is omitted from exploring cells since it is noise in history. The merge logic in `handle_client_native_tool_snapshot` checks whether the active cell is an exploring `ClientToolCell` and the new snapshot is also exploring; if so, it merges the snapshot via `merge_exploring()` rather than creating a new cell. A single exploring snapshot (not merged with others) still uses `render_exploring_lines` -- when `exploring_snapshots` is empty, the renderer falls back to the primary snapshot. The generic fallback sub-item renderer avoids duplicating the kind label when the title already starts with it (case-insensitive prefix check), e.g., `List /path` instead of `List List /path`.
+**Exploring cell grouping**: When consecutive Read/Search/ListFiles snapshots arrive, they are merged into a single `ClientToolCell` with a grouped exploring rendering. The exploring display shows a compact `Explored`/`Exploring` header with tree-prefixed sub-items that group consecutive reads by basename (e.g., `Read file1.rs, file2.rs`) and show `Search`/`List` labels with compact arguments. Read output content is omitted from exploring cells since it is noise in history. The merge logic in `handle_client_native_tool_snapshot` checks whether the active cell is an exploring `ClientToolCell` and the new snapshot is also exploring; if so, it merges the snapshot via `merge_exploring()` rather than creating a new cell. `merge_exploring()` deduplicates by `call_id` — if a snapshot with the same call_id already exists in the group, it is updated in place rather than appended. Merged call_ids are tracked in `completed_client_tool_calls` so completions arriving after the cell is flushed to history don't get re-merged into a later exploring cell. A standalone Read/Search snapshot (not merged with others) still uses `render_exploring_lines` — the auto-detection via `is_exploring_snapshot()` in `display_lines`/`transcript_lines` routes it there without requiring explicit `mark_exploring()`. The generic fallback sub-item renderer avoids duplicating the kind label when the title already starts with it (case-insensitive prefix check), e.g., `List /path` instead of `List List /path`.
 
-**Tool title sanitization** (`client_event_format.rs`): The `sanitize_tool_title()` function cleans up noisy tool titles produced by some agents (notably Gemini). It strips `[current working directory ...]` bracket patterns and trailing `(description text)` parenthetical metadata, then trims whitespace. This is applied in `exec_begin_event_from_client_snapshot` and the helper functions `generic_tool_command_text` and `generic_execute_command_text` in `event_handlers.rs`, ensuring that Execute, Edit, and other tool kinds all display clean titles in the TUI.
+**Tool title sanitization** (`client_event_format.rs`): The `sanitize_tool_title()` function cleans up noisy tool titles produced by some agents (notably Gemini). It strips `[current working directory ...]` bracket patterns and trailing `(description text)` parenthetical metadata, then trims whitespace. This is applied in the approval request path and helper functions in `event_handlers.rs`, ensuring that tool kinds display clean titles in the TUI.
 
 **Execute rendering**: The execute rendering path reuses shared utilities from `exec_cell/render.rs` (`truncate_lines_middle`, `limit_lines_from_start`, `output_lines`, `spinner`) and layout constants that match the `ExecCell` display layout. Output text is sourced preferentially from `raw_output["stdout"]`, falling back to `Artifact::Text` with code fence stripping only for completed/failed snapshots. During pending/in-progress phases, artifact text for execute tools contains the agent's description (e.g., "Print current UTC date/time"), not stdout, so the fallback is suppressed via `is_active_phase` gating in `execute_output_text()`. Exit code success is determined from `raw_output["exit_code"]` when present, otherwise inferred from `ToolPhase`.
 
@@ -83,7 +83,7 @@ The path is extracted from `locations[0].path` when available, falling back to p
 
 Diff content is rendered from two sources in priority order: (1) `Artifact::Diff` entries via `diff_changes_from_artifacts()`, (2) invocation data via `changes_from_invocation()` which handles both `Invocation::FileChanges` and `Invocation::FileOperations` (Create, Update, Delete, Move). Both helpers convert `nori_protocol` types to `codex_core::protocol::FileChange` for `create_diff_summary` from `diff_render.rs`. This means completed edits show inline diffs whether the diff data arrives as artifacts or as invocation-level file changes.
 
-**Header promotion for non-Move edits**: For all non-Move edits (both single-file and multi-file), the `DiffSummary`'s first header line is promoted to the outer header position. For a single-file edit this is the verb+path+line counts (e.g., "Edited README.md (+1 -1)"); for a multi-file edit this is the aggregate header (e.g., "Edited 2 files (+2 -2)"). The promoted line's "• " bullet prefix is stripped and replaced with the phase-aware bullet styling (green bold for completed, red bold for failed). This produces exactly one header line per edit cell. Move tools are excluded from promotion because the `DiffSummary` says "Edited" while the tool header says "Moved"; they retain the two-level header behavior with `format_edit_tool_header()` as the outer header. Diff content lines below the header are indented via `prefix_lines()` from `@/codex-rs/tui/src/render/line_utils.rs`, which propagates `Line.style.bg` onto the indent prefix span so that diff background tints (add/delete colors) extend edge-to-edge across the full terminal width.
+**Header promotion**: For all Edit/Delete/Move tools (both single-file and multi-file), the `DiffSummary`'s first header line is promoted to the outer header position. For a single-file edit this is the verb+path+line counts (e.g., "Edited README.md (+1 -1)"); for a multi-file edit this is the aggregate header (e.g., "Edited 2 files (+2 -2)"). The promoted line's "• " bullet prefix is stripped and replaced with the phase-aware bullet styling (green bold for completed, red bold for failed). For Move tools, the "Edited" verb span is swapped to "Moved" during header construction. This produces exactly one header line per edit cell. Diff content lines below the header come directly from `create_diff_summary`, which applies a single 4-space `prefix_lines()` indent — matching the indentation used by `PatchHistoryCell` in the non-ACP path. The `prefix_lines()` helper (from `@/codex-rs/tui/src/render/line_utils.rs`) propagates `Line.style.bg` onto the indent prefix span so that diff background tints (add/delete colors) extend edge-to-edge across the full terminal width.
 
 **Generic rendering**: The generic rendering path (`render_generic_lines()`) applies several cleanup passes to produce compact output: code fences are stripped from text artifacts via `strip_code_fences()` (shared with the execute path), the `Output:` prefix is omitted so artifact text renders directly as detail lines, invocation detail lines that are redundant with the title are suppressed (e.g., `Read: /path` when the title already says `Read /path`), and absolute paths under `cwd` are relativized in both the header and invocation lines.
 
@@ -119,7 +119,7 @@ The trade-off: incomplete cells may appear in scrollback showing "Running"/"Expl
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
-When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. The TUI adapts those normalized snapshots into the existing exec-cell and patch-cell machinery, and the relevant handlers call `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
+When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. All ACP tool kinds route directly through `ClientToolCell` via `handle_client_native_tool_snapshot`, and the handler calls `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
 
 One operation consumes the queue:
 
@@ -131,48 +131,39 @@ The selective flush ensures tool cells that are already visible transition from 
 
 **Begin/Completion Pairing in `flush_completions_and_clear`**: Tool begin and completion updates for the same `call_id` are still paired in the FIFO queue. When `flush_completions_and_clear` discards a deferred begin update, it records the `call_id` in a `HashSet`. Any later completion for the same `call_id` is discarded too. Without this pairing, a deferred completion can synthesize an orphan `ExecCell` from a normalized ACP tool snapshot after its begin state was already dropped.
 
-**Turn-Finished Gate** (`chatwidget/event_handlers.rs`):
+**Reducer-Owned ACP Phase Wiring** (`chatwidget/event_handlers.rs`, `chatwidget/user_input.rs`):
 
-The ACP protocol has no end-of-turn synchronization guarantee. Answer deltas, replay entries, tool snapshots, and control-plane notifications are independent async streams that can race. The `turn_finished: bool` field on `ChatWidget` acts as a gate to silently discard late-arriving tool activity after the agent's final response text:
+ACP prompt ownership is now rendered from normalized reducer projections instead of the old lifecycle/interrupt timing path. `ChatWidget` consumes:
 
-| Transition | Trigger | Effect |
-|------------|---------|--------|
-| `turn_finished = true` | `on_agent_message()`, `on_task_complete()` | Closes the gate -- subsequent tool events are discarded |
-| `turn_finished = false` | `on_task_started()` | Opens the gate -- new turn begins accepting tool events |
+- `ClientEvent::SessionPhaseChanged(Idle|Loading|Prompt|Cancelling)` to drive input locking, status visibility, and the interrupt hint
+- `ClientEvent::PromptCompleted { .. }` to finalize the turn when the real ACP prompt response arrives
+- `ClientEvent::QueueChanged { prompts }` to render queued ACP prompts without owning a second prompt queue in the TUI
 
-The gate is checked both in the legacy exec/mcp handlers and in the normalized ACP tool-snapshot handlers. When `turn_finished` is true, those methods return immediately without rendering any UI. This is complementary to the interrupt queue: the queue handles deferral during streaming within a turn, while `turn_finished` handles events that arrive after the turn ends entirely.
+For ACP sessions, pressing Enter while the phase is `Prompt` or `Cancelling` still sends `Op::UserInput`; the backend reducer decides whether to send immediately or enqueue. Interrupt no longer restores queued ACP prompts into the composer, and `ChatWidget` no longer owns a second ACP submission queue.
 
-**Stale Completed Guard** (`chatwidget/mod.rs`, `chatwidget/event_handlers.rs`):
+**Stale Event Suppression:**
 
-When a turn is interrupted (ESC), the ACP backend emits `TurnLifecycle::Aborted` synchronously, but the background task may still emit a stale `TurnLifecycle::Completed` later. If that stale `Completed` arrives after the next turn has started, `on_task_complete()` would set `turn_finished = true` and discard all subsequent tool events for the new turn. The `pending_stale_completes: i32` counter on `ChatWidget` acts as defense-in-depth against this race:
+ACP cancel no longer makes the TUI idle on its own. The UI stays in `Cancelling` until the backend reduces the matching prompt response and emits `PromptCompleted`. See `@/codex-rs/acp/docs.md` for the backend-side reducer rules.
 
-| Action | Method | Effect |
-|--------|--------|--------|
-| Interrupt received | `on_interrupted_turn()` | Increments `pending_stale_completes` |
-| New turn starts | `on_task_started()` | Resets `pending_stale_completes` to 0 (drains orphaned counters from backend-suppressed Completeds) |
-| Stale Completed arrives | `on_task_complete()` | If counter > 0, decrements and returns early (skips turn finalization) |
-
-This is complementary to the ACP backend's `turn_interrupted` flag (`@/codex-rs/acp/docs.md`), which suppresses the stale `Completed` at the source. In the common case the backend suppresses the stale event and the counter is never drained; the `on_task_started` reset ensures those orphaned counters don't consume the next turn's real Completed. The counter still provides defense-in-depth for the rare race where a stale Completed slips past the backend guard.
+For ACP tool rendering, phase is no longer used as a visibility gate. Once the backend emits a normalized `ClientEvent::ToolSnapshot`, the chat widget renders it even if the ACP phase is already `Idle`, so late or update-only provider events remain visible instead of disappearing.
 
 **Turn-Boundary Cleanup of Incomplete Tool Cells** (`chatwidget/event_handlers.rs`):
 
-Because the `turn_finished` gate blocks late-arriving End events, tool cells that began but never received their End event would remain stuck in `active_cell` or `pending_exec_cells`, filling the viewport and blocking the agent's text from rendering. Both `on_agent_message()` and `on_task_complete()` now explicitly finalize incomplete cells at turn boundaries:
+At ACP turn boundaries, `on_agent_message()` and `on_task_complete()` still explicitly finalize incomplete cells so the viewport is freed for the agent text and completed tool output can settle cleanly:
 
 ```
 on_agent_message():
   1. flush_answer_stream_with_separator()    -- finalize any in-progress text stream
   2. finalize_active_cell_as_failed()        -- mark stuck active_cell as failed, flush to history
   3. pending_exec_cells.drain_failed()       -- drain any queued incomplete cells
-  4. turn_finished = true                    -- close the gate
-  5. flush_completions_and_clear()           -- process deferred End events, discard stale Begins
+  4. flush_completions_and_clear()           -- process deferred End events, discard orphan Begins
 
 on_task_complete():
   1. flush_answer_stream_with_separator()
-  2. turn_finished = true                    -- close the gate (mirrors on_agent_message)
-  3. flush_completions_and_clear()
-  4. pending_exec_cells.drain_failed()
-  5. finalize_active_cell_as_failed()        -- safety net for cells blocked by the gate
-  6. set_task_running(false)
+  2. flush_completions_and_clear()
+  3. pending_exec_cells.drain_failed()
+  4. finalize_active_cell_as_failed()        -- safety net for incomplete cells
+  5. set_task_running(false)
 ```
 
 `finalize_active_cell_as_failed()` (in `user_input.rs`) takes the cell from `active_cell`, calls `mark_failed()` on the underlying `ExecCell` or `McpToolCallCell`, and flushes it to history. This frees the viewport so subsequent content (the agent's response text) can be inserted via `insert_history_lines()`.
@@ -372,7 +363,7 @@ When the ACP backend sends a `ContextCompactedEvent` with a summary, `on_context
 1. Flush the in-progress streamed summary (old session content)
 2. Show "Context compacted" as an info message
 3. Insert a `NoriSessionHeaderCell` (the "Nori CLI" card, same as starting a fresh session) by constructing a `SessionConfiguredEvent` from the current widget config state
-4. Reprint the summary text as the first assistant message of the new session (temporarily clears `turn_finished` to allow streaming)
+4. Reprint the summary text as the first assistant message of the new session
 
 When the event has no summary (core backend path), only the "Context compacted" info message is shown. This asymmetry exists because the core backend compacts history in-place without producing a summary for the TUI.
 
@@ -775,7 +766,7 @@ App::handle_event(LoopIteration)
 
 State fields on `ChatWidget`: `loop_remaining: Option<i32>` and `loop_total: Option<i32>`. These are initialized on the first `submit_user_message()` call and carried forward across iterations via `App`-level event handling.
 
-The loop is cancelled (both fields set to `None`) when an error occurs (`on_error()`) or the user interrupts (`on_interrupted_turn()`). The `/config` sub-picker is a custom `BottomPaneView` implemented by `LoopCountPickerView` in `@/codex-rs/tui/src/nori/loop_count_picker.rs`. It offers preset options (Disabled, 2, 3, 5, 10) plus a "Custom..." option that enters an input mode where the user can type an arbitrary number (2-1000). Values <= 1 are treated as disabled, values > 1000 are capped. This follows the same `BottomPaneView` pattern used by `HotkeyPickerView`. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
+The loop is cancelled (both fields set to `None`) when an error occurs or a turn ends unsuccessfully. The `/config` sub-picker is a custom `BottomPaneView` implemented by `LoopCountPickerView` in `@/codex-rs/tui/src/nori/loop_count_picker.rs`. It offers preset options (Disabled, 2, 3, 5, 10) plus a "Custom..." option that enters an input mode where the user can type an arbitrary number (2-1000). Values <= 1 are treated as disabled, values > 1000 are capped. This follows the same `BottomPaneView` pattern used by `HotkeyPickerView`. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
 
 **History Insertion and Scrollback (`insert_history.rs`, `tui.rs`):**
 

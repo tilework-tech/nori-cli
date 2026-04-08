@@ -266,44 +266,43 @@ fn normalized_reasoning_message_delta_updates_status_header() {
 }
 
 #[test]
-fn normalized_turn_started_sets_task_running() {
+fn normalized_prompt_phase_sets_task_running() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
-        nori_protocol::TurnLifecycle::Started,
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
     ));
 
     assert!(chat.bottom_pane.is_task_running());
 }
 
 #[test]
-fn normalized_turn_aborted_restores_queued_messages_into_composer() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+fn normalized_cancelling_phase_keeps_composer_queue_unchanged() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
-    chat.bottom_pane.set_task_running(true);
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
+    chat.bottom_pane
+        .set_composer_text("draft while cancelling".to_string());
 
-    chat.handle_client_event(nori_protocol::ClientEvent::TurnLifecycle(
-        nori_protocol::TurnLifecycle::Aborted {
-            reason: nori_protocol::TurnAbortReason::Interrupted,
+    chat.handle_client_event(nori_protocol::ClientEvent::QueueChanged(
+        nori_protocol::QueueChanged {
+            prompts: vec!["first queued".to_string(), "second queued".to_string()],
         },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
     ));
 
     assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "first queued\nsecond queued"
+        (
+            chat.bottom_pane.composer_text(),
+            chat.bottom_pane.is_task_running(),
+            op_rx.try_recv().is_err(),
+        ),
+        ("draft while cancelling".to_string(), true, true)
     );
-    assert!(chat.queued_user_messages.is_empty());
-    assert!(
-        op_rx.try_recv().is_err(),
-        "unexpected outbound op after interrupt"
-    );
-
-    let _ = drain_insert_history(&mut rx);
 }
 
 #[test]
@@ -359,6 +358,7 @@ fn approval_modal_patch_from_client_event_snapshot() {
                 })],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         },
     ));
@@ -399,6 +399,7 @@ fn approval_modal_exec_from_client_event() {
                 artifacts: vec![],
                 raw_input: Some(serde_json::json!({"command": "git status"})),
                 raw_output: None,
+                owner_request_id: None,
             }),
         },
     ));
@@ -415,79 +416,6 @@ fn approval_modal_exec_from_client_event() {
         contents.contains("git status"),
         "expected exec approval modal: {contents:?}"
     );
-}
-
-#[test]
-fn interrupt_restores_queued_messages_into_composer() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
-
-    // Simulate a running task to enable queuing of user inputs.
-    chat.bottom_pane.set_task_running(true);
-
-    // Queue two user messages while the task is running.
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
-
-    // Deliver a TurnAborted event with Interrupted reason (as if Esc was pressed).
-    chat.handle_codex_event(Event {
-        id: "turn-1".into(),
-        msg: EventMsg::TurnAborted(codex_core::protocol::TurnAbortedEvent {
-            reason: TurnAbortReason::Interrupted,
-        }),
-    });
-
-    // Composer should now contain the queued messages joined by newlines, in order.
-    assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "first queued\nsecond queued"
-    );
-
-    // Queue should be cleared and no new user input should have been auto-submitted.
-    assert!(chat.queued_user_messages.is_empty());
-    assert!(
-        op_rx.try_recv().is_err(),
-        "unexpected outbound op after interrupt"
-    );
-
-    // Drain rx to avoid unused warnings.
-    let _ = drain_insert_history(&mut rx);
-}
-
-#[test]
-fn interrupt_prepends_queued_messages_before_existing_composer_text() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
-
-    chat.bottom_pane.set_task_running(true);
-    chat.bottom_pane
-        .set_composer_text("current draft".to_string());
-
-    chat.queued_user_messages
-        .push_back(UserMessage::from("first queued".to_string()));
-    chat.queued_user_messages
-        .push_back(UserMessage::from("second queued".to_string()));
-    chat.refresh_queued_user_messages();
-
-    chat.handle_codex_event(Event {
-        id: "turn-1".into(),
-        msg: EventMsg::TurnAborted(codex_core::protocol::TurnAbortedEvent {
-            reason: TurnAbortReason::Interrupted,
-        }),
-    });
-
-    assert_eq!(
-        chat.bottom_pane.composer_text(),
-        "first queued\nsecond queued\ncurrent draft"
-    );
-    assert!(chat.queued_user_messages.is_empty());
-    assert!(
-        op_rx.try_recv().is_err(),
-        "unexpected outbound op after interrupt"
-    );
-
-    let _ = drain_insert_history(&mut rx);
 }
 
 #[test]
@@ -798,6 +726,7 @@ fn completed_edit_tool_snapshot_renders_patch_history_cell() {
             })],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -833,6 +762,7 @@ fn completed_delete_tool_snapshot_renders_patch_history_cell() {
                 "content": "hello\nworld\n",
             })),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -873,6 +803,7 @@ fn completed_move_tool_snapshot_renders_patch_history_cell() {
                 "to": "docs/README.md",
             })),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -904,6 +835,7 @@ fn completed_execute_tool_snapshot_renders_exec_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -937,6 +869,7 @@ fn pending_execute_tool_snapshot_renders_running_exec_cell() {
             artifacts: vec![],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -981,6 +914,7 @@ fn completed_execute_tool_snapshot_is_not_deferred_during_streaming() {
             }],
             raw_input: Some(serde_json::json!({"command": "git status"})),
             raw_output: Some(serde_json::json!({"stdout": "On branch main\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1034,6 +968,7 @@ fn completed_read_tool_snapshot_renders_exploring_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"path": "Cargo.toml"})),
             raw_output: Some(serde_json::json!({"stdout": "[package]\nname = \"nori\"\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1068,6 +1003,7 @@ fn completed_search_tool_snapshot_renders_exploring_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"pattern": "TODO", "path": "src"})),
             raw_output: Some(serde_json::json!({"stdout": "src/main.rs:12:// TODO\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1105,6 +1041,7 @@ fn completed_list_files_tool_snapshot_renders_exploring_history_cell() {
             }],
             raw_input: Some(serde_json::json!({"path": "src"})),
             raw_output: Some(serde_json::json!({"stdout": "src/main.rs\nsrc/lib.rs\n"})),
+            owner_request_id: None,
         },
     ));
 
@@ -1139,6 +1076,7 @@ fn completed_generic_execute_tool_snapshot_renders_exec_history_cell() {
                 "exit_code": 0,
                 "stdout": "command output here",
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1181,6 +1119,7 @@ fn completed_fetch_tool_snapshot_renders_exec_history_cell() {
             raw_output: Some(serde_json::json!({
                 "stdout": "ok\n",
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1217,6 +1156,7 @@ fn in_progress_edit_renders_active_client_tool_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1254,6 +1194,7 @@ fn completed_edit_after_in_progress_replaces_spinner_with_patch() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1282,6 +1223,7 @@ fn completed_edit_after_in_progress_replaces_spinner_with_patch() {
             })],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1318,6 +1260,7 @@ fn in_progress_delete_renders_active_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1354,6 +1297,7 @@ fn consecutive_read_snapshots_merge_into_single_exploring_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1370,6 +1314,7 @@ fn consecutive_read_snapshots_merge_into_single_exploring_cell() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1419,6 +1364,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
             artifacts: vec![],
             raw_input: Some(serde_json::json!({"command": "date --utc"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1438,6 +1384,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
             }],
             raw_input: Some(serde_json::json!({"command": "date --utc"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1455,6 +1402,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
             artifacts: vec![],
             raw_input: Some(serde_json::json!({"command": "uptime -p"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1477,6 +1425,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
                 "exit_code": 0,
                 "stdout": "2026-03-30 05:45:34 UTC"
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1499,6 +1448,7 @@ fn parallel_execute_snapshots_buffer_and_complete_correctly() {
                 "exit_code": 0,
                 "stdout": "up 1 week, 2 days"
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1545,6 +1495,7 @@ fn orphan_buffered_execute_cell_discarded_on_turn_complete() {
             }],
             raw_input: Some(serde_json::json!({"command": "date --utc"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1565,6 +1516,7 @@ fn orphan_buffered_execute_cell_discarded_on_turn_complete() {
                 "exit_code": 0,
                 "stdout": "up 1 week"
             })),
+            owner_request_id: None,
         },
     ));
 
@@ -1607,6 +1559,7 @@ fn description_text_not_shown_as_execute_output() {
             }],
             raw_input: Some(serde_json::json!({"command": "rm /tmp/test.md"})),
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1638,6 +1591,7 @@ fn single_read_snapshot_renders_as_explored() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1680,6 +1634,7 @@ fn list_files_title_not_duplicated() {
             artifacts: vec![],
             raw_input: None,
             raw_output: None,
+            owner_request_id: None,
         },
     ));
 
@@ -1734,6 +1689,7 @@ fn acp_edit_approval_routes_through_acp_tool() {
                 })],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         },
     ));

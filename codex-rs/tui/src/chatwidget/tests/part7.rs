@@ -1,84 +1,91 @@
 use super::*;
 
-/// When the ACP backend suppresses the stale Completed (common case), the
-/// next turn's real Completed must not be consumed as stale.
-///
-/// Sequence:
-///   1. Started(A)    → task running
-///   2. Aborted(A)    → task stopped (user pressed ESC), counter = 1
-///   3. Started(B)    → counter reset to 0
-///   4. Completed(B)  → should finalize turn B normally
-///
-/// Before the fix, the counter from step 2 was never drained (because the
-/// ACP backend suppressed the stale Completed), so the real Completed in
-/// step 4 was consumed as stale, leaving the spinner running forever.
 #[test]
-fn acp_suppressed_stale_should_not_block_next_turn_completion() {
+fn cancelling_phase_keeps_task_running_until_prompt_completed() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    // Start and interrupt turn A
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-    chat.on_interrupted_turn(TurnAbortReason::Interrupted);
-    drain_insert_history(&mut rx);
-
-    // ACP backend suppresses the stale Completed → no on_task_complete call.
-
-    // Start turn B
-    chat.on_task_started();
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
     drain_insert_history(&mut rx);
 
-    // Real Completed from turn B should finalize the turn.
-    chat.on_task_complete(None);
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
+    ));
+
+    assert!(chat.bottom_pane.is_task_running());
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Idle,
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::PromptCompleted(
+        nori_protocol::PromptCompleted {
+            stop_reason: nori_protocol::StopReason::Cancelled,
+            last_agent_message: None,
+        },
+    ));
     drain_insert_history(&mut rx);
 
-    // Task should be stopped.
-    assert!(
-        !chat.bottom_pane.is_task_running(),
-        "Task should be stopped after real Completed"
-    );
-    assert!(
-        chat.turn_finished,
-        "Turn should be marked finished after real Completed"
-    );
+    assert!(!chat.bottom_pane.is_task_running());
 }
 
-/// Multiple consecutive interrupts where ACP suppresses all stale Completeds.
-/// The final real turn's Completed must still finalize normally.
 #[test]
-fn multiple_interrupts_with_acp_suppression_should_not_hang() {
+fn queue_projection_submission_during_cancelling_still_sends_user_input() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Prompt,
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Cancelling,
+    ));
+
+    chat.submit_user_message(UserMessage::from("queued follow up"));
+
+    assert!(matches!(op_rx.try_recv(), Ok(Op::UserInput { .. })));
+}
+
+#[test]
+fn idle_phase_unknown_tool_snapshot_still_renders_visible_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    // Interrupt twice in a row
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-    chat.on_interrupted_turn(TurnAbortReason::Interrupted);
-    drain_insert_history(&mut rx);
-
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-    chat.on_interrupted_turn(TurnAbortReason::Interrupted);
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionPhaseChanged(
+        nori_protocol::session_runtime::SessionPhaseView::Idle,
+    ));
     drain_insert_history(&mut rx);
 
-    // ACP backend suppresses both stale Completeds.
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(
+        nori_protocol::ToolSnapshot {
+            call_id: "call-exec-idle".into(),
+            title: "Terminal".into(),
+            kind: nori_protocol::ToolKind::Execute,
+            phase: nori_protocol::ToolPhase::Completed,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Command {
+                command: "git status".into(),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "On branch spec\n".into(),
+            }],
+            raw_input: Some(serde_json::json!({
+                "command": "git status",
+            })),
+            raw_output: Some(serde_json::json!({
+                "stdout": "On branch spec\n",
+            })),
+            owner_request_id: None,
+        },
+    ));
 
-    // Start the real turn
-    chat.on_task_started();
-    drain_insert_history(&mut rx);
-
-    // Tool events for the real turn should work
-    begin_exec(&mut chat, "real-call", "echo real");
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected visible ACP tool history cell");
+    let blob = lines_to_single_string(cells.first().unwrap());
     assert!(
-        chat.active_cell.is_some(),
-        "ExecCell should be created - counter was reset by on_task_started"
+        blob.contains("git status"),
+        "expected command in cell: {blob:?}"
     );
-
-    // Real Completed should finalize the turn
-    chat.on_task_complete(None);
-    drain_insert_history(&mut rx);
-
     assert!(
-        !chat.bottom_pane.is_task_running(),
-        "Task should be stopped after real Completed following multiple interrupts"
+        blob.contains("On branch spec"),
+        "expected output in cell: {blob:?}"
     );
 }

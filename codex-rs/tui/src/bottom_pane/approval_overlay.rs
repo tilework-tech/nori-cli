@@ -465,7 +465,8 @@ impl From<ApprovalRequest> for ApprovalRequestState {
 
                 let is_edit_like = matches!(
                     kind,
-                    nori_protocol::ToolKind::Edit
+                    nori_protocol::ToolKind::Create
+                        | nori_protocol::ToolKind::Edit
                         | nori_protocol::ToolKind::Delete
                         | nori_protocol::ToolKind::Move
                 );
@@ -924,6 +925,7 @@ mod tests {
                 artifacts: vec![],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         }
     }
@@ -1101,6 +1103,7 @@ mod tests {
                 })],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         }
     }
@@ -1230,6 +1233,7 @@ mod tests {
                 })],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         };
 

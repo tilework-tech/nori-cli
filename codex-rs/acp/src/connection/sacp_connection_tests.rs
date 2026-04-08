@@ -5,7 +5,6 @@ use pretty_assertions::assert_eq;
 use sacp::schema as acp;
 use serial_test::serial;
 use tempfile::tempdir;
-use tokio::sync::mpsc;
 
 /// Helper: get the mock agent config and skip if binary is not built.
 fn mock_agent_config() -> Option<crate::registry::AcpAgentConfig> {
@@ -58,23 +57,24 @@ async fn test_prompt_receives_text_updates() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
+    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
         .await
         .expect("spawn");
+
+    let mut notification_rx = conn.take_notification_receiver();
 
     let session_id = conn
         .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 
-    let (tx, mut rx) = mpsc::channel(32);
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("Hello"))];
 
-    let stop_reason = conn.prompt(session_id, prompt, tx).await.expect("prompt");
+    let stop_reason = conn.prompt(session_id, prompt).await.expect("prompt");
 
-    // Collect all text messages from the updates channel.
+    // Collect all text messages from the notification channel.
     let mut messages = Vec::new();
-    while let Ok(update) = rx.try_recv() {
+    while let Ok(update) = notification_rx.try_recv() {
         if let acp::SessionUpdate::AgentMessageChunk(chunk) = update
             && let acp::ContentBlock::Text(text) = chunk.content
         {
@@ -92,6 +92,62 @@ async fn test_prompt_receives_text_updates() {
         "Should contain 'Test message', got: {messages:?}"
     );
     assert_eq!(stop_reason, acp::StopReason::EndTurn);
+}
+
+#[tokio::test]
+#[serial]
+async fn test_tool_call_prompt_delivers_final_text_update() {
+    use std::time::Duration;
+
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config
+        .env
+        .insert("MOCK_AGENT_SEND_TOOL_CALL".to_string(), "1".to_string());
+
+    let temp_dir = tempdir().expect("temp dir");
+
+    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("spawn");
+
+    let mut notification_rx = conn.take_notification_receiver();
+
+    let session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new(
+        "Do a tool call",
+    ))];
+
+    let stop_reason = conn.prompt(session_id, prompt).await.expect("prompt");
+
+    let mut saw_final_text = false;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        match tokio::time::timeout(Duration::from_millis(200), notification_rx.recv()).await {
+            Ok(Some(acp::SessionUpdate::AgentMessageChunk(chunk))) => {
+                if let acp::ContentBlock::Text(text) = chunk.content
+                    && text.text.contains("Tool call completed successfully.")
+                {
+                    saw_final_text = true;
+                    break;
+                }
+            }
+            Ok(Some(_)) => continue,
+            Ok(None) => break,
+            Err(_) => continue,
+        }
+    }
+
+    assert_eq!(stop_reason, acp::StopReason::EndTurn);
+    assert!(
+        saw_final_text,
+        "expected tool-call prompt to deliver final assistant text update"
+    );
 }
 
 /// Test that model state is populated after session creation.
@@ -160,7 +216,6 @@ async fn test_approval_receiver_forwards_requests() {
         .await
         .expect("create session");
 
-    let (update_tx, _update_rx) = mpsc::channel::<acp::SessionUpdate>(32);
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new(
         "do something",
     ))];
@@ -170,7 +225,7 @@ async fn test_approval_receiver_forwards_requests() {
     let conn = Arc::new(conn);
     let conn_for_prompt = Arc::clone(&conn);
     let prompt_handle =
-        tokio::spawn(async move { conn_for_prompt.prompt(session_id, prompt, update_tx).await });
+        tokio::spawn(async move { conn_for_prompt.prompt(session_id, prompt).await });
 
     // Wait for the approval request to arrive (with timeout).
     let approval =
@@ -234,22 +289,23 @@ async fn test_codex_home_not_inherited() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
+    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
         .await
         .expect("spawn");
+
+    let mut notification_rx = conn.take_notification_receiver();
 
     let session_id = conn
         .create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
 
-    let (tx, mut rx) = mpsc::channel(32);
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("check env"))];
 
-    conn.prompt(session_id, prompt, tx).await.expect("prompt");
+    conn.prompt(session_id, prompt).await.expect("prompt");
 
     let mut messages = Vec::new();
-    while let Ok(update) = rx.try_recv() {
+    while let Ok(update) = notification_rx.try_recv() {
         if let acp::SessionUpdate::AgentMessageChunk(chunk) = update
             && let acp::ContentBlock::Text(text) = chunk.content
         {
@@ -292,14 +348,13 @@ async fn test_drop_kills_subprocess() {
         .await
         .expect("create session");
 
-    let (tx, _rx) = mpsc::channel(32);
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("stream"))];
 
     // Start a prompt that will stream forever
     let conn = Arc::new(conn);
     let conn_for_prompt = Arc::clone(&conn);
     let prompt_handle = tokio::spawn(async move {
-        let _ = conn_for_prompt.prompt(session_id, prompt, tx).await;
+        let _ = conn_for_prompt.prompt(session_id, prompt).await;
     });
 
     // Give the prompt time to start streaming
@@ -344,13 +399,12 @@ async fn test_cancel_during_prompt() {
 
     let conn = Arc::new(conn);
 
-    let (tx, _rx) = mpsc::channel(32);
     let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new("stream"))];
 
     // Start the prompt in a background task
     let conn_for_prompt = Arc::clone(&conn);
     let sid = session_id.clone();
-    let prompt_task = tokio::spawn(async move { conn_for_prompt.prompt(sid, prompt, tx).await });
+    let prompt_task = tokio::spawn(async move { conn_for_prompt.prompt(sid, prompt).await });
 
     // Give the prompt time to start streaming
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -364,12 +418,117 @@ async fn test_cancel_during_prompt() {
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), prompt_task)
         .await
         .expect("Prompt should complete within 5s after cancel")
-        .expect("Prompt task should not panic")
-        .expect("Prompt should not error after cancel");
+        .expect("Prompt task should not panic");
+    let stop_reason = result.expect("Prompt should not error after cancel");
 
     assert_eq!(
-        result,
+        stop_reason,
         acp::StopReason::Cancelled,
         "Stop reason should be Cancelled after cancel"
     );
+}
+
+/// Test that a new prompt still receives updates after the previous prompt
+/// was cancelled. This covers the user-visible regression where the old
+/// prompt's stale cleanup could break the new prompt's update channel.
+#[tokio::test]
+#[serial]
+async fn test_sequential_prompt_after_cancel_receives_response() {
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config.env.insert(
+        "MOCK_AGENT_STREAM_UNTIL_CANCEL".to_string(),
+        "1".to_string(),
+    );
+
+    let temp_dir = tempdir().expect("temp dir");
+
+    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
+        .await
+        .expect("spawn");
+    let mut notification_rx = conn.take_notification_receiver();
+
+    let session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+    let conn = Arc::new(conn);
+
+    let prompt1 = vec![acp::ContentBlock::Text(acp::TextContent::new("hello"))];
+    let conn_for_prompt1 = Arc::clone(&conn);
+    let session_id_for_prompt1 = session_id.clone();
+    let prompt1_task = tokio::spawn(async move {
+        conn_for_prompt1
+            .prompt(session_id_for_prompt1, prompt1)
+            .await
+    });
+
+    let first_update =
+        tokio::time::timeout(std::time::Duration::from_secs(5), notification_rx.recv())
+            .await
+            .expect("Prompt 1 should start streaming within 5s")
+            .expect("Notification channel should stay open");
+    assert!(
+        matches!(first_update, acp::SessionUpdate::AgentMessageChunk(_)),
+        "Prompt 1 should receive a streamed agent message before cancel"
+    );
+
+    conn.cancel(&session_id)
+        .await
+        .expect("prompt 1 cancel should succeed");
+
+    let stop_reason_1 = tokio::time::timeout(std::time::Duration::from_secs(5), prompt1_task)
+        .await
+        .expect("Prompt 1 should complete within 5s after cancel")
+        .expect("Prompt 1 task should not panic")
+        .expect("Prompt 1 should not error after cancel");
+    assert_eq!(stop_reason_1, acp::StopReason::Cancelled);
+
+    while tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        notification_rx.recv(),
+    )
+    .await
+    .is_ok()
+    {}
+
+    let prompt2 = vec![acp::ContentBlock::Text(acp::TextContent::new(
+        "hello again",
+    ))];
+    let conn_for_prompt2 = Arc::clone(&conn);
+    let session_id_for_prompt2 = session_id.clone();
+    let prompt2_task = tokio::spawn(async move {
+        conn_for_prompt2
+            .prompt(session_id_for_prompt2, prompt2)
+            .await
+    });
+
+    let second_update =
+        tokio::time::timeout(std::time::Duration::from_secs(5), notification_rx.recv())
+            .await
+            .expect("Prompt 2 should start streaming within 5s")
+            .expect("Notification channel should stay open");
+    let second_text = match second_update {
+        acp::SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
+            acp::ContentBlock::Text(text) => text.text,
+            other => panic!("Prompt 2 should receive text content, got: {other:?}"),
+        },
+        other => panic!("Prompt 2 should receive an agent text chunk, got: {other:?}"),
+    };
+    assert!(
+        !second_text.is_empty(),
+        "Prompt 2 should receive non-empty text updates after cancel"
+    );
+
+    conn.cancel(&session_id)
+        .await
+        .expect("prompt 2 cancel should succeed");
+
+    let stop_reason_2 = tokio::time::timeout(std::time::Duration::from_secs(5), prompt2_task)
+        .await
+        .expect("Prompt 2 should complete within 5s after cancel")
+        .expect("Prompt 2 task should not panic")
+        .expect("Prompt 2 should not error after cancel");
+    assert_eq!(stop_reason_2, acp::StopReason::Cancelled);
 }

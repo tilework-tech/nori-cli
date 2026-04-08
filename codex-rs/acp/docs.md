@@ -23,6 +23,7 @@ The ACP crate serves as a bridge between:
 - External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex, @google/gemini-cli)
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
+- `SessionRuntime` in `@/codex-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
@@ -70,6 +71,20 @@ agent_name (normalized to lowercase)
 Built-in agents use `detect_preferred_package_manager()` which checks `NORI_MANAGED_BY_BUN`/`NORI_MANAGED_BY_NPM` env vars, then falls back to checking if `bun` is in PATH, defaulting to `npx`. Custom agents bypass auto-detection entirely and use their literal `ResolvedDistribution`.
 
 `AcpAgentConfig` carries `display_name` and `install_hint` as direct `String` fields (rather than deriving them from `AgentKind` methods), so both built-in and custom agents can be handled uniformly by `session.rs` and `spawn_and_relay.rs`. The `install_hint` field contains a distribution-appropriate install command (e.g. `npm install -g @pkg` for npx, `uv tool install pkg` for uvx, `ensure '/path/to/cmd' is in your PATH` for local). The `context_window_size()` and `transcript_base_dir()` methods on `AcpAgentConfig` look up values from the registry by `provider_slug`.
+
+**Serialized ACP session runtime** (`backend/session_reducer.rs`, `backend/session_runtime_driver.rs`):
+
+ACP session-domain state now flows through a single serialized reducer. `SessionDriver` owns a `SessionRuntime` plus `ClientEventNormalizer`, accepts ordered `InboundEvent` values (`PromptSubmit`, `CancelSubmit`, `LoadSubmit`, `Notification`, `PromptResponse`, `PermissionRequest`, etc.), and returns normalized `ClientEvent` projections plus ACP side effects. This removed the old split where prompt tasks emitted lifecycle events directly while a separate notification relay normalized deltas.
+
+`SessionRuntime` is the authoritative model for:
+- whether the ACP session is idle, loading, or in a prompt turn
+- queued user prompts and compact prompts waiting behind an active request
+- request-local message assembly for assistant/reasoning streams
+- tool snapshot ownership via `owner_request_id`
+- pending permission request ownership and cancellation cleanup
+- final assistant message extraction used for `PromptCompleted { last_agent_message, .. }`
+
+The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.rs`, and `session.rs` all feed reducer events into the same runtime. `resume_session()` uses the same reducer during `session/load`, buffering replay `ClientEvent`s from reducer output and then carrying the resulting `SessionDriver` state into the live backend once setup completes.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
@@ -755,8 +770,6 @@ Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` comm
 
 `run_approval_handler()` in `backend/mod.rs` enforces a strict ordering invariant: the normalized approval event is forwarded to the TUI via `BackendEvent::Client`, and the request is pushed into `pending_approvals`, **before** the OS notification fires (`user_notifier.notify()`). This ordering is critical because `notify-rust`'s `notif.show()` blocks synchronously on some platforms (macOS), so if the notification were sent first, the TUI would never receive the approval overlay.
 
-The `ApprovalRequest` struct (`connection/mod.rs`) carries an optional `tool_call_metadata: Option<ToolCallMetadata>` field. `ToolCallMetadata` holds the title, kind, and raw_input extracted from the ACP permission request's tool call fields. This metadata is populated in `ClientDelegate::request_permission()` (`connection/client_delegate.rs`) and consumed by the approval handler to seed the shared `pending_tool_calls` map, bridging the gap between the permission request path and the normalized tool snapshot path.
-
 **Normalized File Mutations:**
 
 For Edit/Write/Delete operations, the ACP backend normalizes file mutations into `nori_protocol::ClientEvent` snapshots that carry file-operation details for the TUI and transcript recorder. The same normalized snapshot drives approval prompts, live rendering, and persistence so the UI does not need to infer edits from Codex-shaped tool events.
@@ -772,62 +785,51 @@ The transcript recorder uses the same normalized snapshot data when deciding how
 
 For Codex specifically, the normalized tool snapshot path now understands the provider's `rawInput.command` shell-wrapper arrays (for example `["/usr/bin/zsh", "-lc", "df -h ."]`) and `rawInput.parsed_cmd` objects. This means execute tools normalize to `Invocation::Command`, read tools can recover paths from `parsed_cmd[0].path`, and search/list-files tools can recover query/path semantics from Codex's parsed command metadata instead of falling back to raw JSON in the TUI.
 
-**Tool Call Event Filtering and Title Accumulation:**
+**Tool Call Normalization and Visibility:**
 
-The ACP backend accumulates display metadata across multiple `ToolCall` and `ToolCallUpdate` messages so the normalized tool snapshot keeps a stable title, kind, and raw input. The ACP protocol emits multiple events for the same `call_id` in a lifecycle:
+The ACP backend no longer tries to hide undefined provider behavior. `ToolCall` events with generic titles may still be filtered at the protocol layer, but later `ToolCallUpdate` events always normalize into visible `ToolSnapshot`s by upserting a placeholder `ToolCall` when necessary.
 
-1. `ToolCall` with a generic title and empty `raw_input` (skipped, but data stored in `pending_tool_calls`)
-2. `ToolCallUpdate` with the real title/kind/raw_input but not yet completed (accumulated into `pending_tool_calls`)
-3. `ToolCallUpdate` with `status: Completed` but typically no title/kind/raw_input
+That means update-only provider flows, including Gemini-style shell calls that skip the initial declaration, are surfaced directly in history instead of being dropped behind an “unknown toolCallId” warning path.
 
-Some agents (notably Gemini) route shell commands through the `request_permission` ACP path (`client_delegate.rs`) instead of emitting standard `ToolCall` events with populated fields. In this path, the permission request carries full metadata (title, kind, raw_input) via `ToolCallMetadata` on the `ApprovalRequest`. The approval handler in `run_approval_handler()` extracts this metadata and populates `pending_tool_calls` before processing the approval, so that when the subsequent `ToolCallUpdate(completed)` arrives with empty fields, the normalized snapshot can still resolve the actual command name. Gemini's permission request titles follow a compound format (`command [current working directory path] (description)`), which is stripped by `extract_command_from_permission_title()` in `tool_display.rs` to extract just the command portion.
+Out-of-phase request-owned updates are treated the same way: the reducer still emits a warning when no request is active, but it forwards the raw ACP update to the normalizer so the user sees both the malformed session state and the underlying tool snapshot.
 
-The `pending_tool_calls` HashMap (keyed by `call_id`) accumulates title, kind, raw_input, and `_meta.claudeCode.toolName` from events 1 and 2 (and from permission request metadata for the Gemini path). On the completion event (step 3), the normalizer resolves the best available title using a fallback chain:
+**Prompt Update Channel Lifecycle** (`sacp_connection.rs`, `user_input.rs`, `submit_and_ops.rs`):
 
-```
-Title from completion update fields (if non-empty and not a raw ID)
-    |
-    v (fallback)
-Accumulated title from intermediate updates
-    |
-    v (fallback)
-_meta.claudeCode.toolName from the ACP adapter
-    |
-    v (fallback)
-kind_to_display_name() mapping (e.g., Read -> "Read", Execute -> "Terminal")
-    |
-    v (fallback)
-Hardcoded "Tool"
-```
+Each prompt/load_session call gets a dedicated `mpsc` channel (`update_tx`/`update_rx`) for receiving `SessionUpdate` notifications from the ACP agent. The connection layer routes notifications through a shared `active_update_tx` slot (an `Arc<Mutex<Option<(u64, Sender)>>>`) that pairs the sender with a monotonic generation counter. The routing logic in the notification handler uses `try_send` with fallthrough: if the per-prompt channel fails (receiver dropped, or channel full), the notification falls through to the `persistent_tx` channel instead of being silently dropped.
 
-Raw Anthropic `tool_use` IDs (e.g., `toolu_015Xtg1GzAd6aPH6oiirx5us`) are detected by `title_is_raw_id()` in `tool_display.rs` and treated as empty titles, triggering the fallback chain. The `kind_to_display_name()` function maps `ToolKind` variants to human-readable strings (e.g., `Execute` -> `"Terminal"`, `SwitchMode` -> `"Switch Mode"`).
-
-The same merged completion state is also used to decide whether a completed tool update should be treated as a file mutation or a generic tool snapshot. In practice this means a generic `ToolCall("Edit")` or a completion that arrives without earlier metadata can still resolve to a normalized file-operation snapshot if the resolved `kind`/`raw_input` identifies a file edit.
-
-The `pending_tool_calls` state is shared via `Arc<Mutex<HashMap<String, AccumulatedToolCall>>>` across the approval handler, persistent relay, and prompt relay tasks. This sharing is necessary because the approval handler (which receives permission requests) and the relay tasks (which receive `ToolCallUpdate` completions) run as separate spawned tasks. The map is created during session setup in `spawn()` and `resume_session()`, and `Arc::clone`d into each task. Completed normalized snapshots consume the shared `pending_tool_calls` metadata used for title/raw-input resolution once the lifecycle reaches its terminal phase.
-
-Late-arriving tool events that race past the agent's final response are handled at the TUI layer via the `turn_finished` gate (see `@/codex-rs/tui/docs.md`).
-
-**Turn Interrupt Guard** (`submit_and_ops.rs`, `user_input.rs`):
-
-When `Op::Interrupt` fires, the backend emits `TurnLifecycle::Aborted` synchronously and calls `cancel()` on the ACP connection. However, the background tokio task spawned by `handle_user_input()` continues running after cancellation and unconditionally emits `TurnLifecycle::Completed` at the end of its event loop. If the user submits a new message before this stale `Completed` arrives, it races with the next turn's `TurnLifecycle::Started` and prematurely terminates it.
-
-The `turn_interrupted: Arc<AtomicBool>` field on `AcpBackend` prevents this:
+The critical invariant is that `prompt()` does **not** clear `active_update_tx` when it returns. This is because `block_task()` (the SACP request/response mechanism) can return before all `SessionNotification` events have been delivered. Instead, callers use a `done_tx`/`done_rx` oneshot to signal the `update_handler` task:
 
 ```
-Op::Interrupt:
-  1. turn_interrupted.store(true)   -- flag the current turn as interrupted
-  2. connection.cancel()            -- cancel the ACP session
-
-handle_user_input():
-  1. turn_interrupted.store(false)  -- reset for new turn
-  ...
-  spawned task epilogue:
-    if !turn_interrupted            -- only emit Completed if not interrupted
-      emit TurnLifecycle::Completed
+prompt() returns
+    |
+    v
+done_tx.send(())  -- signals update_handler that prompt is done
+    |
+    v
+update_handler enters drain mode:
+    tokio::select! switches from waiting on (update_rx OR done_rx)
+    to waiting on update_rx with a 500ms timeout
+    |
+    v
+After timeout or channel close, update_handler exits
+    (dropping update_rx, which causes future try_send to fail)
+    |
+    v
+Next prompt() overwrites active_update_tx slot with a fresh sender
 ```
 
-Since `TurnLifecycle::Aborted` already serves as the turn-ending signal for interrupted turns, suppressing the stale `Completed` is safe. The TUI also has a defense-in-depth counter (`pending_stale_completes`) that ignores stale `Completed` events at the presentation layer (see `@/codex-rs/tui/docs.md`).
+The generation counter on `active_update_tx` prevents stale cleanup: `close_update_channel(generation)` only clears the slot if the generation matches, so it is safe for `load_session` (which is sequential) to clear its own channel without risking a concurrent prompt's channel. `prompt()` callers do not call `close_update_channel` at all — they rely on the done/drain pattern instead.
+
+**Turn Interrupt Wiring — Reducer-Owned ACP Phase** (`session_reducer.rs`, `session_runtime_driver.rs`, `submit_and_ops.rs`):
+
+When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::CancelSubmit` and calls `session/cancel` through the reducer side-effect path. The reducer remains the authority for ACP request ownership:
+
+- `SessionPhaseChanged(Cancelling)` is emitted immediately after `session/cancel` is accepted
+- the prompt stays active until the real ACP prompt response arrives
+- `SessionPhaseChanged(Idle)` and `PromptCompleted { stop_reason, last_agent_message }` are emitted only when that prompt response is reduced
+- queued follow-up prompts remain in the reducer-owned outbound queue until an eligible drain point (`stop_reason: end_turn`)
+
+This removes the old synthetic interrupt-abort fast-path that treated cancel as immediate idle. The TUI now renders ACP interrupt state from reducer-owned phase/completion projections instead of inferring prompt ownership from interrupt timing.
 
 **Tool Classification System:**
 

@@ -167,9 +167,14 @@ fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
             ))
         }
         nori_protocol::ClientEvent::MessageDelta(_)
+        | nori_protocol::ClientEvent::SessionPhaseChanged(_)
+        | nori_protocol::ClientEvent::PromptCompleted(_)
+        | nori_protocol::ClientEvent::LoadCompleted
+        | nori_protocol::ClientEvent::QueueChanged(_)
+        | nori_protocol::ClientEvent::ContextCompacted(_)
         | nori_protocol::ClientEvent::ReplayEntry(_)
-        | nori_protocol::ClientEvent::TurnLifecycle(_)
-        | nori_protocol::ClientEvent::AgentCommandsUpdate(_) => None,
+        | nori_protocol::ClientEvent::AgentCommandsUpdate(_)
+        | nori_protocol::ClientEvent::Warning(_) => None,
     }
 }
 
@@ -268,6 +273,7 @@ fn format_tool_kind(kind: &nori_protocol::ToolKind) -> &str {
         nori_protocol::ToolKind::Read => "read",
         nori_protocol::ToolKind::Search => "search",
         nori_protocol::ToolKind::Execute => "execute",
+        nori_protocol::ToolKind::Create => "create",
         nori_protocol::ToolKind::Edit => "edit",
         nori_protocol::ToolKind::Delete => "delete",
         nori_protocol::ToolKind::Move => "move",
@@ -548,6 +554,7 @@ mod tests {
                 artifacts: vec![],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         })]);
 
@@ -577,6 +584,7 @@ mod tests {
                 }],
                 raw_input: None,
                 raw_output: None,
+                owner_request_id: None,
             }),
         })]);
 
@@ -613,6 +621,7 @@ mod tests {
                     }],
                     raw_input: None,
                     raw_output: None,
+                    owner_request_id: None,
                 }),
             }),
             TranscriptEntry::ClientEvent(ClientEventEntry {
@@ -631,6 +640,7 @@ mod tests {
                     }],
                     raw_input: None,
                     raw_output: None,
+                    owner_request_id: None,
                 }),
             }),
             TranscriptEntry::ClientEvent(ClientEventEntry {
@@ -646,6 +656,7 @@ mod tests {
                     artifacts: vec![],
                     raw_input: None,
                     raw_output: None,
+                    owner_request_id: None,
                 }),
             }),
         ]);
@@ -695,6 +706,7 @@ mod tests {
                         artifacts: vec![],
                         raw_input: None,
                         raw_output: None,
+                        owner_request_id: None,
                     },
                 ),
             }),

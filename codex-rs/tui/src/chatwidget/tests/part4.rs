@@ -1109,9 +1109,8 @@ fn chatwidget_tall() {
     });
     chat.bottom_pane
         .update_status_header("Thinking really hard".to_string());
-    for i in 0..30 {
-        chat.queue_user_message(format!("Hello, world! {i}").into());
-    }
+    chat.bottom_pane
+        .set_queued_user_messages((0..30).map(|i| format!("Hello, world! {i}")).collect());
     let width: u16 = 80;
     let height: u16 = 24;
     let backend = VT100Backend::new(width, height);
