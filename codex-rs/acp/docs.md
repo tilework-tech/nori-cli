@@ -662,6 +662,8 @@ Key methods:
 - `load_transcript()`: Load complete transcript with all entries
 - `load_session_meta()`: Load just session metadata (for quick listing)
 
+**Forward/backward compatibility:** `load_transcript_from_path()` gracefully skips JSONL lines that fail to deserialize after the first line (session metadata). This means transcripts remain loadable across schema changes -- older binaries skip unknown entry types written by newer versions, and newer binaries skip removed entry types from older transcripts (e.g., the removed `turn_lifecycle` variant). The first line must always be valid `SessionMeta`; a deserialization failure there is a hard error. Skipped lines are logged at `tracing::debug` level. `load_session_meta_from_path()` is unaffected since it only reads the first line.
+
 **ACP Integration:**
 
 The `AcpBackend` automatically:
@@ -682,7 +684,6 @@ Message / reasoning deltas → client_event entry
 Plan snapshot            → client_event entry
 Tool snapshot            → client_event entry
 Approval request         → client_event entry
-Turn lifecycle           → client_event entry
 ```
 
 Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remain in the schema for legacy read compatibility, but ACP live recording now uses normalized `ClientEvent` entries so transcript persistence matches the live TUI path.

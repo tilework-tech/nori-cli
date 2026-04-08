@@ -275,6 +275,10 @@ async fn load_session_meta_from_path(path: &Path) -> io::Result<SessionMetaEntry
 }
 
 /// Load a complete transcript from a file.
+///
+/// Lines that fail to deserialize (e.g. unknown entry types from older or newer
+/// versions) are silently skipped so that transcripts remain loadable across
+/// schema changes.
 async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
     let file = tokio::fs::File::open(path).await?;
     let reader = tokio::io::BufReader::new(file);
@@ -288,8 +292,24 @@ async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
             continue;
         }
 
-        let parsed: TranscriptLine = serde_json::from_str(&line)
-            .map_err(|e| io::Error::other(format!("failed to parse transcript line: {e}")))?;
+        let parsed: TranscriptLine = match serde_json::from_str(&line) {
+            Ok(entry) => entry,
+            Err(e) => {
+                // The first line must be valid session metadata; fail hard.
+                if meta.is_none() {
+                    return Err(io::Error::other(format!(
+                        "failed to parse transcript line: {e}"
+                    )));
+                }
+                // Skip unrecognized entries (e.g. removed or future event types).
+                tracing::debug!(
+                    path = %path.display(),
+                    error = %e,
+                    "skipping unrecognized transcript entry",
+                );
+                continue;
+            }
+        };
 
         // Extract metadata from first entry
         if meta.is_none()
@@ -526,5 +546,204 @@ mod tests {
 
         let sessions = loader.list_sessions("nonexistent").await.unwrap();
         assert!(sessions.is_empty());
+    }
+
+    /// Helper to write a raw JSONL transcript file with the given lines.
+    async fn write_raw_transcript(
+        nori_home: &Path,
+        project_id: &str,
+        session_id: &str,
+        lines: &[&str],
+    ) {
+        let sessions_dir = nori_home
+            .join(TRANSCRIPTS_DIR)
+            .join(BY_PROJECT_DIR)
+            .join(project_id)
+            .join(SESSIONS_DIR);
+        tokio::fs::create_dir_all(&sessions_dir).await.unwrap();
+
+        // Write project metadata
+        let project_dir = nori_home
+            .join(TRANSCRIPTS_DIR)
+            .join(BY_PROJECT_DIR)
+            .join(project_id);
+        let meta_path = project_dir.join(PROJECT_METADATA_FILE);
+        let meta_json = serde_json::json!({
+            "id": project_id,
+            "name": "test-project",
+            "cwd": "/tmp/test",
+        });
+        tokio::fs::write(
+            &meta_path,
+            serde_json::to_string_pretty(&meta_json).unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let path = sessions_dir.join(format!("{session_id}.jsonl"));
+        let content = lines.join("\n") + "\n";
+        tokio::fs::write(&path, content).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_load_transcript_skips_unknown_entry_types() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let project_id = "test-project-123";
+        let session_id = "test-session-456";
+
+        // Valid session meta line
+        let meta_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:00.000Z",
+            "v": 2,
+            "type": "session_meta",
+            "session_id": session_id,
+            "project_id": project_id,
+            "started_at": "2025-01-27T12:00:00.000Z",
+            "cwd": "/tmp/test",
+            "cli_version": "0.1.0"
+        });
+
+        // Unknown entry type (simulates old turn_lifecycle from removed ClientEvent variant)
+        let unknown_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:01.000Z",
+            "v": 2,
+            "type": "client_event",
+            "event": {
+                "event_type": "turn_lifecycle",
+                "data": {"phase": "started"}
+            }
+        });
+
+        // Valid user entry
+        let user_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:02.000Z",
+            "v": 2,
+            "type": "user",
+            "id": "msg-001",
+            "content": "Hello",
+            "attachments": []
+        });
+
+        write_raw_transcript(
+            nori_home,
+            project_id,
+            session_id,
+            &[
+                &meta_line.to_string(),
+                &unknown_line.to_string(),
+                &user_line.to_string(),
+            ],
+        )
+        .await;
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let transcript = loader
+            .load_transcript(project_id, session_id)
+            .await
+            .unwrap();
+
+        // Should have loaded meta + user, skipping the unknown entry
+        assert_eq!(transcript.meta.session_id, session_id);
+        assert_eq!(transcript.entries.len(), 2);
+        assert!(matches!(
+            transcript.entries[0].entry,
+            TranscriptEntry::SessionMeta(_)
+        ));
+        assert!(matches!(
+            transcript.entries[1].entry,
+            TranscriptEntry::User(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_load_transcript_with_only_unknown_entries() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let project_id = "test-project-789";
+        let session_id = "test-session-abc";
+
+        // Valid session meta line
+        let meta_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:00.000Z",
+            "v": 2,
+            "type": "session_meta",
+            "session_id": session_id,
+            "project_id": project_id,
+            "started_at": "2025-01-27T12:00:00.000Z",
+            "cwd": "/tmp/test",
+            "cli_version": "0.1.0"
+        });
+
+        // Only unknown entries after the meta
+        let unknown1 = serde_json::json!({
+            "ts": "2025-01-27T12:00:01.000Z",
+            "v": 2,
+            "type": "client_event",
+            "event": {
+                "event_type": "turn_lifecycle",
+                "data": {"phase": "started"}
+            }
+        });
+        let unknown2 = serde_json::json!({
+            "ts": "2025-01-27T12:00:02.000Z",
+            "v": 2,
+            "type": "some_future_type",
+            "payload": "whatever"
+        });
+
+        write_raw_transcript(
+            nori_home,
+            project_id,
+            session_id,
+            &[
+                &meta_line.to_string(),
+                &unknown1.to_string(),
+                &unknown2.to_string(),
+            ],
+        )
+        .await;
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let transcript = loader
+            .load_transcript(project_id, session_id)
+            .await
+            .unwrap();
+
+        // Should load with just the meta entry, all unknown entries skipped
+        assert_eq!(transcript.meta.session_id, session_id);
+        assert_eq!(transcript.entries.len(), 1);
+        assert!(matches!(
+            transcript.entries[0].entry,
+            TranscriptEntry::SessionMeta(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_load_transcript_fails_on_corrupt_first_line() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let project_id = "test-project-fail";
+        let session_id = "test-session-fail";
+
+        // First line is not valid session metadata
+        let bad_first_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:00.000Z",
+            "v": 2,
+            "type": "some_future_type",
+            "data": {}
+        });
+
+        write_raw_transcript(
+            nori_home,
+            project_id,
+            session_id,
+            &[&bad_first_line.to_string()],
+        )
+        .await;
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let result = loader.load_transcript(project_id, session_id).await;
+        assert!(result.is_err());
     }
 }
