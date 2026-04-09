@@ -66,7 +66,7 @@ fn agent_command_tab_completion_uses_prefix() {
 }
 
 #[test]
-fn agent_command_with_args_submits_successfully() {
+fn agent_command_with_args_strips_prefix_on_submit() {
     let (mut composer, _rx) = make_composer_with_agent_commands();
 
     // Type the full prefixed command with args
@@ -78,14 +78,86 @@ fn agent_command_with_args_submits_successfully() {
         ],
     );
 
-    // Press Enter to submit
+    // Press Escape to dismiss popup, then Enter to submit
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
+    // The agent should see "/loop 5m hi", not "/claude-code:loop 5m hi"
     match result {
         InputResult::Submitted(text) => {
-            assert_eq!(text, "/claude-code:loop 5m hi");
+            assert_eq!(text, "/loop 5m hi");
         }
         other => panic!("Expected Submitted for agent command with args, got: {other:?}"),
+    }
+}
+
+#[test]
+fn agent_command_without_args_strips_prefix_on_submit() {
+    let (mut composer, _rx) = make_composer_with_agent_commands();
+
+    // Type the full prefixed command without args
+    type_chars_humanlike(
+        &mut composer,
+        &[
+            '/', 'c', 'l', 'a', 'u', 'd', 'e', '-', 'c', 'o', 'd', 'e', ':', 's', 'c', 'h', 'e',
+            'd', 'u', 'l', 'e',
+        ],
+    );
+
+    // Press Escape to dismiss popup, then Enter to submit
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    // The agent should see "/schedule", not "/claude-code:schedule"
+    match result {
+        InputResult::Submitted(text) => {
+            assert_eq!(text, "/schedule");
+        }
+        other => panic!("Expected Submitted for agent command, got: {other:?}"),
+    }
+}
+
+#[test]
+fn agent_command_popup_selection_strips_prefix() {
+    let (mut composer, _rx) = make_composer_with_agent_commands();
+
+    // Type enough to filter to "loop" in the popup
+    type_chars_humanlike(
+        &mut composer,
+        &[
+            '/', 'c', 'l', 'a', 'u', 'd', 'e', '-', 'c', 'o', 'd', 'e', ':', 'l', 'o',
+        ],
+    );
+
+    // Navigate to the agent command in the popup and press Enter to select+submit
+    // The popup should be open; press Down to move to the agent command if needed,
+    // then Enter to submit.
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    // The agent should see "/loop", not "/claude-code:loop"
+    match result {
+        InputResult::Submitted(text) => {
+            assert_eq!(text, "/loop");
+        }
+        other => panic!("Expected Submitted for popup agent command selection, got: {other:?}"),
+    }
+}
+
+#[test]
+fn builtin_command_is_not_affected_by_prefix_stripping() {
+    let (mut composer, _rx) = make_composer_with_agent_commands();
+
+    // Type a builtin command
+    type_chars_humanlike(&mut composer, &['/', 'c', 'o', 'm', 'p', 'a', 'c', 't']);
+
+    // Press Escape to dismiss popup, then Enter to submit
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    // Builtin should be dispatched as a command, not submitted as text
+    match result {
+        InputResult::Command(_) => {}
+        other => panic!("Builtin /compact should be dispatched as Command, got: {other:?}"),
     }
 }
 
