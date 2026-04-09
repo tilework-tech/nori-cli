@@ -728,6 +728,21 @@ impl acp::Agent for MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
+        // Echo back the full prompt text for verifying context injection.
+        if std::env::var("MOCK_AGENT_ECHO_PROMPT").is_ok() {
+            let user_text = arguments
+                .prompt
+                .iter()
+                .filter_map(|block| match block {
+                    acp::ContentBlock::Text(t) => Some(t.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.send_text_chunk(session_id.clone(), &user_text).await?;
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
             self.send_text_chunk(session_id.clone(), &response).await?;

@@ -384,6 +384,8 @@ The `/fork` slash command lets users rewind to a previous user message and branc
 
 The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
 
+**Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/codex-rs/tui/session_context.md` (loaded at compile time via `include_str!`). This tells the ACP agent that it is running inside the nori CLI and provides a source-code URL for self-referential questions. The context is prepended (without `SUMMARY_PREFIX` framing) to the first user prompt only and then consumed (see `@/codex-rs/acp/docs.md` for the hook context injection mechanism).
+
 Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.

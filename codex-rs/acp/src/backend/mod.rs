@@ -230,6 +230,10 @@ pub struct AcpBackendConfig {
     /// Optional initial context to inject into the first prompt.
     /// Used by fork to provide conversation history as context to the new session.
     pub initial_context: Option<String>,
+    /// Optional session context injected into the first prompt without
+    /// `SUMMARY_PREFIX` framing. Used to provide product-level context
+    /// (e.g. "you are running inside the nori CLI").
+    pub session_context: Option<String>,
     /// MCP server configuration for listing via /mcp command
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
