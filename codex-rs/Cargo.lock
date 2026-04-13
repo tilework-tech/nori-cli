@@ -6726,7 +6726,9 @@ dependencies = [
  "libc",
  "owo-colors",
  "portable-pty 0.8.1",
+ "pretty_assertions",
  "regex",
+ "serde_json",
  "tempfile",
  "vt100 0.15.2",
 ]

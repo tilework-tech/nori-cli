@@ -1,5 +1,7 @@
 //! Mock ACP agent for testing nori-cli
 
+mod runaway_search;
+
 use std::cell::Cell;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -329,6 +331,10 @@ impl acp::Agent for MockAgent {
             self.send_text_chunk(session_id.clone(), &format!("RESPONSE_{marker}"))
                 .await?;
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
+        if std::env::var("MOCK_AGENT_RUNAWAY_SEARCH").is_ok() {
+            return runaway_search::run(self, session_id).await;
         }
 
         // Reproduce the orphan tool cell bug caused by cascade deferral.
