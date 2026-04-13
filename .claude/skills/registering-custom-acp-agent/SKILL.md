@@ -1,6 +1,6 @@
 ---
 name: Registering Custom ACP Agents
-description: Use when the user wants to register a custom ACP agent in Nori, or try one of the example agents (elizacp, kimi-cli, opencode)
+description: Use when the user wants to register a custom ACP agent in Nori, or try one of the example agents (elizacp, kimi-cli, vibe-acp)
 ---
 
 <required>
@@ -8,7 +8,7 @@ description: Use when the user wants to register a custom ACP agent in Nori, or 
 
 1. Ask the user: custom agent setup or example demo?
 2. If custom agent: gather agent details and write config
-3. If example: let user choose (elizacp, kimi-cli, opencode) and walk through setup
+3. If example: let user choose (elizacp, kimi-cli, vibe-acp) and walk through setup
 4. Write the `[[agents]]` entry to `~/.nori/cli/config.toml`
 5. Verify the agent appears in Nori's agent picker
 </required>
@@ -51,7 +51,7 @@ args = ["acp"]
 
 ## elizacp (Rust/Cargo)
 
-Minimal Eliza chatbot. Install: `cargo install --git https://github.com/agentclientprotocol/symposium-acp elizacp`
+Minimal Eliza chatbot. Install: `cargo install --locked elizacp`
 
 No `cargo` distribution variant exists -- use `local` since cargo puts binaries in PATH.
 
@@ -80,18 +80,17 @@ package = "kimi-cli"
 args = ["acp"]
 ```
 
-## opencode
+## vibe-acp (Mistral Vibe)
 
-Install: `curl -fsSL https://opencode.ai/install | bash` (or `npm install -g opencode-ai` / `brew install anomalyco/tap/opencode`)
+Mistral's coding agent. Install: `curl -LsSf https://mistral.ai/vibe/install.sh | bash` (or `uv tool install mistral-vibe` / `pip install mistral-vibe`). Installs both `vibe` (interactive CLI) and `vibe-acp` (ACP server). First-time setup: run `vibe --setup` to configure your Mistral API key.
 
 ```toml
 [[agents]]
-name = "OpenCode"
-slug = "opencode"
+name = "Mistral Vibe"
+slug = "vibe-acp"
 
 [agents.distribution.local]
-command = "opencode"
-args = ["acp"]
+command = "vibe-acp"
 ```
 
 # Step 3: Write the Config

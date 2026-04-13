@@ -38,6 +38,41 @@ You should be good to go. If not, first follow the authentication for your desir
 | Gemini   | Run `npx @google/gemini-cli` in your terminal, then when the Gemini CLI opens, type `/auth` there.                                                      |
 | OpenAI   | In Nori, use `/agent` to switch to Codex, then run `/login` inside the Nori interface. Nori will prompt you to install OpenAI via npm if needed.        |
 
+## Bring Your Own Agent
+
+Have your own ACP agent? Add it to Nori CLI! Any agent that speaks [Agent Client Protocol](https://github.com/agentclientprotocol/agent-client-protocol) over stdin/stdout can be registered in `~/.nori/cli/config.toml` and used alongside the built-in providers.
+
+Add one or more `[[agents]]` entries to your config:
+
+```toml
+[[agents]]
+name = "Mistral Vibe"
+slug = "vibe-acp"
+
+[agents.distribution.local]
+command = "vibe-acp"
+
+[[agents]]
+name = "ElizACP"
+slug = "elizacp"
+
+[agents.distribution.local]
+command = "elizacp"
+args = ["acp"]
+```
+
+Then switch to your agent with `/agent` inside Nori.
+
+**Example agents to try:**
+
+| Agent | Install | Notes |
+|-------|---------|-------|
+| [Mistral Vibe](https://docs.mistral.ai/mistral-vibe/introduction/install) | `curl -LsSf https://mistral.ai/vibe/install.sh \| bash` | Installs both `vibe` and `vibe-acp`. Run `vibe --setup` to configure your API key. |
+| [ElizACP](https://github.com/agentclientprotocol/symposium-acp) | `cargo install --locked elizacp` | Minimal Eliza chatbot, useful for testing. |
+| [Kimi](https://github.com/nicepkg/kimi-cli) | No install needed — uses `uvx` | First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login`. |
+
+Want your AI agent to configure this automatically? Point it at the raw skill file: https://github.com/tilework-tech/nori-cli/blob/main/.claude/skills/registering-custom-acp-agent/SKILL.md
+
 ## Features
 
 - **Multi-provider**: Anthropic's Claude Code, Google DeepMind's Gemini, and OpenAI's Codex
