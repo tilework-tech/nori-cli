@@ -350,6 +350,7 @@ pub(crate) async fn emit_client_event(
         .send(BackendEvent::Client(client_event.clone()))
         .await;
     if let Some(recorder) = transcript_recorder
+        && transcript::should_record_client_event(&client_event)
         && let Err(e) = recorder.record_client_event(&client_event).await
     {
         warn!("Failed to record normalized client event: {e}");

@@ -5,6 +5,14 @@ use super::*;
 /// rejection is the real guard — but large summaries are worth logging.
 const TRANSCRIPT_SUMMARY_WARN_CHARS: usize = 200_000;
 
+pub(crate) fn should_record_client_event(event: &nori_protocol::ClientEvent) -> bool {
+    !matches!(
+        event,
+        nori_protocol::ClientEvent::ToolSnapshot(snapshot)
+            if snapshot.phase == nori_protocol::ToolPhase::InProgress
+    )
+}
+
 /// Convert a loaded transcript into normalized replay events suitable for ACP
 /// session resume. The replay stream is intentionally static: it reconstructs
 /// user/assistant history and completed normalized artifacts without reviving
@@ -313,5 +321,44 @@ mod tests {
                 }),
             ]
         );
+    }
+
+    #[test]
+    fn transcript_recording_skips_in_progress_tool_snapshots() {
+        let in_progress = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            call_id: "tool-1".into(),
+            title: "Search repo".into(),
+            kind: nori_protocol::ToolKind::Search,
+            phase: nori_protocol::ToolPhase::InProgress,
+            locations: vec![],
+            invocation: Some(nori_protocol::Invocation::Search {
+                query: Some("needle".into()),
+                path: Some(PathBuf::from("/repo")),
+            }),
+            artifacts: vec![nori_protocol::Artifact::Text {
+                text: "streaming output".into(),
+            }],
+            raw_input: None,
+            raw_output: None,
+            owner_request_id: None,
+        });
+        let pending = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            phase: nori_protocol::ToolPhase::Pending,
+            ..match &in_progress {
+                nori_protocol::ClientEvent::ToolSnapshot(snapshot) => snapshot.clone(),
+                _ => unreachable!(),
+            }
+        });
+        let completed = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            phase: nori_protocol::ToolPhase::Completed,
+            ..match &in_progress {
+                nori_protocol::ClientEvent::ToolSnapshot(snapshot) => snapshot.clone(),
+                _ => unreachable!(),
+            }
+        });
+
+        assert!(!should_record_client_event(&in_progress));
+        assert!(should_record_client_event(&pending));
+        assert!(should_record_client_event(&completed));
     }
 }
