@@ -28,6 +28,8 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 
 **Environment Variable Echo**: The `MOCK_AGENT_ECHO_ENV` env var causes the mock agent's `prompt()` handler to respond with `ENV:<name>=<value>` (or `ENV:<name>=<unset>` if the variable is absent). Used by `test_codex_home_not_inherited_by_agent_subprocess` in `@/codex-rs/acp/src/connection/tests.rs` to verify that the parent's `CODEX_HOME` is not inherited by the spawned ACP subprocess.
 
+**Prompt Echo**: The `MOCK_AGENT_ECHO_PROMPT` env var causes the mock agent's `prompt()` handler to echo back the full prompt text it received. Used by session context tests in `@/codex-rs/acp/src/backend/tests/part5.rs` to verify that `AcpBackendConfig.session_context` is correctly prepended to the first user prompt and consumed after that.
+
 **Stuck Tool Calls (No Completion)**: The `MOCK_AGENT_STUCK_TOOL_CALLS` env var triggers a scenario where 3 Read tool calls are sent with `Pending` status but never receive completion updates. After a short delay the agent sends its final text response and ends the turn. This reproduces the frozen-display bug where incomplete ExecCells fill the viewport and block `insert_history_lines()` from rendering the agent's text. The fix under test is `finalize_active_cell_as_failed()` in `@/codex-rs/tui/src/chatwidget.rs`.
 
 **Runaway Search Snapshot Amplification**: The `MOCK_AGENT_RUNAWAY_SEARCH` env var triggers a deterministic Search tool-call stream that repeatedly emits `InProgress` updates for the **same** `call_id` while the text artifact grows cumulatively on every update. Tunables:

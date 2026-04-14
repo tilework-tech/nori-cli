@@ -398,6 +398,7 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
         initial_context: None,
+        session_context: None,
         mcp_servers: std::collections::HashMap::new(),
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };
@@ -1621,6 +1622,7 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         script_timeout: std::time::Duration::from_secs(30),
         default_model: None,
         initial_context: None,
+        session_context: None,
         mcp_servers: std::collections::HashMap::new(),
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
     };

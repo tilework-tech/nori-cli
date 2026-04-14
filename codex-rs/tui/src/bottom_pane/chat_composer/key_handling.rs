@@ -193,11 +193,7 @@ impl ChatComposer {
                         }
                         CommandItem::AgentCommand(idx) => {
                             if let Some(cmd) = popup.agent_command(idx) {
-                                let text = if self.agent_command_prefix.is_empty() {
-                                    format!("/{}", cmd.name)
-                                } else {
-                                    format!("/{}:{}", self.agent_command_prefix, cmd.name)
-                                };
+                                let text = format!("/{}", cmd.name);
                                 self.textarea.set_text("");
                                 return (InputResult::Submitted(text), true);
                             }
@@ -691,6 +687,18 @@ impl ChatComposer {
                     }
                 }
 
+                // Strip the agent command prefix so the ACP agent receives the
+                // bare command name (e.g. "/loop 5m" instead of "/claude-code:loop 5m").
+                // Save the pre-stripped text for history so recall + resubmit works
+                // (the prefixed form passes validation and gets stripped again).
+                let history_text = text.clone();
+                if !self.agent_command_prefix.is_empty() {
+                    let slash_prefix = format!("/{}:", self.agent_command_prefix);
+                    if let Some(rest) = text.strip_prefix(&slash_prefix) {
+                        text = format!("/{rest}");
+                    }
+                }
+
                 // Intercept script-kind prompts before attempting expand_custom_prompt,
                 // since scripts have empty content and would just submit empty text.
                 if let Some((name, _rest)) = parse_slash_name(&text)
@@ -726,7 +734,7 @@ impl ChatComposer {
                     return (InputResult::None, true);
                 }
                 if !text.is_empty() {
-                    self.history.record_local_submission(&text);
+                    self.history.record_local_submission(&history_text);
                 }
                 // Do not clear attached_images here; ChatWidget drains them via take_recent_submission_images().
                 (InputResult::Submitted(text), true)

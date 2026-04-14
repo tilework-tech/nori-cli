@@ -372,7 +372,7 @@ Hook scripts can route their stdout lines to different destinations by using lin
 
 The routing is handled by `route_hook_results()` in `backend/mod.rs`, which is shared across all hook types. It sends `EventMsg::HookOutput` events (from `@/codex-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
 
-**Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt. Only `pre_user_prompt` and `post_user_prompt` hooks pass the context accumulator to `route_hook_results()`; other hooks pass `None`.
+**Hook context injection:** Context lines (`::context::`) are accumulated into a `pending_hook_context: Arc<Mutex<Option<String>>>` field on `AcpBackend`. This field can be pre-seeded at spawn time from `AcpBackendConfig.session_context` (product-level context like "you are running inside the nori CLI"), so session context and hook context share the same accumulator. When the next user prompt is submitted via `handle_user_input()`, the accumulated context is consumed and prepended to the user prompt as raw text: `{context}\n{prompt}`. Hook context is applied before compact summary injection so that the `SUMMARY_PREFIX` framing instruction always comes first in the final prompt. Only `pre_user_prompt` and `post_user_prompt` hooks pass the context accumulator to `route_hook_results()`; other hooks pass `None`.
 
 **Session end hook timing:** During `Op::Shutdown`, end hooks execute and their output is routed via `route_hook_results()` before `ShutdownComplete` is sent, so the TUI can still display hook output. Context lines are irrelevant during shutdown, so `None` is passed for the context accumulator.
 
@@ -662,6 +662,8 @@ Key methods:
 - `load_transcript()`: Load complete transcript with all entries
 - `load_session_meta()`: Load just session metadata (for quick listing)
 
+**Forward/backward compatibility:** `load_transcript_from_path()` gracefully skips JSONL lines that fail to deserialize after the first line (session metadata). This means transcripts remain loadable across schema changes -- older binaries skip unknown entry types written by newer versions, and newer binaries skip removed entry types from older transcripts (e.g., the removed `turn_lifecycle` variant). The first line must always be valid `SessionMeta`; a deserialization failure there is a hard error. Skipped lines are logged at `tracing::debug` level. `load_session_meta_from_path()` is unaffected since it only reads the first line.
+
 **ACP Integration:**
 
 The `AcpBackend` automatically:
@@ -682,17 +684,17 @@ Message / reasoning deltas → client_event entry
 Plan snapshot            → client_event entry
 Tool snapshot            → client_event entry
 Approval request         → client_event entry
-Turn lifecycle           → client_event entry
 ```
 
 Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remain in the schema for legacy read compatibility, but ACP live recording now uses normalized `ClientEvent` entries so transcript persistence matches the live TUI path.
 
-Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. Both this truncation and the `truncate_for_log()` helper (used for tracing previews) use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
+Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers in the crate -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 
 Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 - `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
+- `AcpBackendConfig.session_context`: Optional string injected into `pending_hook_context` at spawn time (`spawn_and_relay.rs`). Unlike `initial_context`, session context is prepended to the first user prompt **without** `SUMMARY_PREFIX` framing -- it appears as raw text before the user's message. If session start hooks also produce `::context::` lines, those are appended to the session context (both accumulate in the same `pending_hook_context` mutex). The context is consumed on the first prompt and not repeated. The TUI populates this with an embedded markdown blurb (`@/codex-rs/tui/session_context.md`) that tells the agent it is running inside the nori CLI.
 
 **Re-exported Types:**
 
