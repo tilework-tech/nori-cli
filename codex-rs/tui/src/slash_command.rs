@@ -33,8 +33,6 @@ pub enum SlashCommand {
     Logout,
     Quit,
     Exit,
-    Rollout,
-    TestApproval,
     SwitchSkillset,
     Fork,
 }
@@ -63,8 +61,6 @@ impl SlashCommand {
             SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
-            SlashCommand::Rollout => "print the rollout file path",
-            SlashCommand::TestApproval => "test approval request",
             SlashCommand::SwitchSkillset => "switch between available skillsets",
             SlashCommand::Fork => "rewind conversation to a previous message",
         }
@@ -102,14 +98,11 @@ impl SlashCommand {
             | SlashCommand::FirstPrompt
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
-            SlashCommand::Rollout => true,
-            SlashCommand::TestApproval => true,
         }
     }
 
     fn is_visible(self) -> bool {
         match self {
-            SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),
             #[cfg(not(feature = "login"))]
             SlashCommand::Logout => false,
             _ => true,
@@ -287,6 +280,28 @@ mod tests {
         assert!(
             SlashCommand::Browse.available_during_task(),
             "/browse should be available while task is running"
+        );
+    }
+
+    #[test]
+    fn legacy_debug_commands_are_not_exposed() {
+        let commands = built_in_slash_commands();
+
+        assert!(
+            commands.iter().all(|(name, _)| *name != "rollout"),
+            "/rollout should not be visible in commands list"
+        );
+        assert!(
+            commands.iter().all(|(name, _)| *name != "test-approval"),
+            "/test-approval should not be visible in commands list"
+        );
+        assert!(
+            "rollout".parse::<SlashCommand>().is_err(),
+            "/rollout should not parse as a slash command"
+        );
+        assert!(
+            "test-approval".parse::<SlashCommand>().is_err(),
+            "/test-approval should not parse as a slash command"
         );
     }
 

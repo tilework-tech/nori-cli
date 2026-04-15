@@ -39,7 +39,7 @@ The auto-worktree startup flow branches on the `AutoWorktree` enum (see `@/codex
 | `Ask` | After TUI init, in `run_ratatui_app()` | Sets `pending_worktree_ask = true`, deferred to a TUI popup shown after onboarding but before `App::run()` |
 | `Off` | N/A | Skips worktree creation entirely |
 
-The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`, a standalone mini-app screen (same pattern as `update_prompt.rs`) that runs its own event loop before the main `App`. It presents two options ("Yes, create a worktree" / "No, continue without a worktree") and returns a boolean. If the user confirms, `setup_auto_worktree()` is called and config is reloaded with the new cwd via `load_config_or_exit()`. Ctrl-C, Escape, and the "No" option all skip worktree creation. On failure, the TUI continues with the original cwd.
+The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`, a standalone mini-app screen using the same pre-`App` event-loop pattern as `nori::update_prompt` in release builds. It presents two options ("Yes, create a worktree" / "No, continue without a worktree") and returns a boolean. If the user confirms, `setup_auto_worktree()` is called and config is reloaded with the new cwd via `load_config_or_exit()`. Ctrl-C, Escape, and the "No" option all skip worktree creation. On failure, the TUI continues with the original cwd.
 
 The main event loop in `app/mod.rs` processes:
 
@@ -389,8 +389,6 @@ The `/fork` slash command lets users rewind to a previous user message and branc
 The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
 
 **Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/codex-rs/tui/session_context.md` (loaded at compile time via `include_str!`). This tells the ACP agent that it is running inside the nori CLI and provides a source-code URL for self-referential questions. The context is prepended (without `SUMMARY_PREFIX` framing) to the first user prompt only and then consumed (see `@/codex-rs/acp/docs.md` for the hook context injection mechanism).
-
-Debug-only commands (not shown in help): `/rollout`, `/test-approval`
 
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
 
@@ -847,10 +845,10 @@ The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) works in
 
 **Update Checking:**
 
-The TUI uses Nori-specific update checking via files in `@/codex-rs/tui/src/nori/`:
-- `update_action.rs`: Update action handling
-- `updates.rs`: Version checking against GitHub releases
-- `update_prompt.rs`: User prompting for updates
+The TUI uses Nori-specific update checking via the modules in `@/codex-rs/tui/src/nori/`:
+- `nori/update_action.rs`: Update action handling
+- `nori/updates.rs`: Version checking against GitHub releases
+- `nori/update_prompt.rs`: User prompting for updates
 
 **Error Reporting:**
 

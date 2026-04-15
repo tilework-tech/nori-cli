@@ -221,54 +221,6 @@ impl ChatWidget {
             SlashCommand::Mcp => {
                 self.open_mcp_servers_popup();
             }
-            SlashCommand::Rollout => {
-                if let Some(path) = self.rollout_path() {
-                    self.add_info_message(
-                        format!("Current rollout path: {}", path.display()),
-                        None,
-                    );
-                } else {
-                    self.add_info_message("Rollout path is not available yet.".to_string(), None);
-                }
-            }
-            SlashCommand::TestApproval => {
-                use codex_core::protocol::EventMsg;
-                use std::collections::HashMap;
-
-                use codex_core::protocol::ApplyPatchApprovalRequestEvent;
-                use codex_core::protocol::FileChange;
-
-                self.app_event_tx.send(AppEvent::CodexEvent(Event {
-                    id: "1".to_string(),
-                    // msg: EventMsg::ExecApprovalRequest(ExecApprovalRequestEvent {
-                    //     call_id: "1".to_string(),
-                    //     command: vec!["git".into(), "apply".into()],
-                    //     cwd: self.config.cwd.clone(),
-                    //     reason: Some("test".to_string()),
-                    // }),
-                    msg: EventMsg::ApplyPatchApprovalRequest(ApplyPatchApprovalRequestEvent {
-                        call_id: "1".to_string(),
-                        turn_id: "turn-1".to_string(),
-                        changes: HashMap::from([
-                            (
-                                PathBuf::from("/tmp/test.txt"),
-                                FileChange::Add {
-                                    content: "test".to_string(),
-                                },
-                            ),
-                            (
-                                PathBuf::from("/tmp/test2.txt"),
-                                FileChange::Update {
-                                    unified_diff: "+test\n-test2".to_string(),
-                                    move_path: None,
-                                },
-                            ),
-                        ]),
-                        reason: None,
-                        grant_root: Some(PathBuf::from("/tmp")),
-                    }),
-                }));
-            }
             SlashCommand::SwitchSkillset => {
                 self.handle_switch_skillset_command();
             }
