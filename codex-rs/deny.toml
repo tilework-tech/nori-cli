@@ -74,6 +74,7 @@ unmaintained = "workspace"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
+    { id = "RUSTSEC-2026-0002", reason = "lru 0.12.5 is pinned by the ratatui patch branch in [patch.crates-io]; track removal once ratatui can move to a fixed lru release" },
     { id = "RUSTSEC-2026-0097", reason = "rand 0.8.x pinned by oauth2/zbus/secret-service; no custom logger uses ThreadRng in this codebase" },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
