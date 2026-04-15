@@ -11,7 +11,9 @@ use pretty_assertions::assert_eq;
 
 use super::InboundEvent;
 use super::SideEffect;
+use super::inbound_event_kind;
 use super::reduce;
+use super::session_phase_label;
 
 fn new_runtime() -> SessionRuntime {
     SessionRuntime::new()
@@ -123,6 +125,41 @@ fn prompt_response_transitions_to_idle() {
         e,
         ClientEvent::PromptCompleted(_)
     )));
+}
+
+#[test]
+fn inbound_event_kind_labels_prompt_response() {
+    assert_eq!(
+        inbound_event_kind(&InboundEvent::PromptResponse {
+            stop_reason: acp::StopReason::Cancelled,
+        }),
+        "prompt_response"
+    );
+}
+
+#[test]
+fn session_phase_label_labels_known_phases() {
+    assert_eq!(session_phase_label(&SessionPhase::Idle), "idle");
+    assert_eq!(
+        session_phase_label(&SessionPhase::Prompt {
+            request_id: "req-1".to_string(),
+            cancelling: false,
+        }),
+        "prompt"
+    );
+    assert_eq!(
+        session_phase_label(&SessionPhase::Prompt {
+            request_id: "req-1".to_string(),
+            cancelling: true,
+        }),
+        "cancelling"
+    );
+    assert_eq!(
+        session_phase_label(&SessionPhase::Loading {
+            request_id: "req-2".to_string(),
+        }),
+        "loading"
+    );
 }
 
 // =========================================================================

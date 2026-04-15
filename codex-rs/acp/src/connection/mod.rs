@@ -22,6 +22,23 @@ pub enum ConnectionEvent {
     ApprovalRequest(ApprovalRequest),
 }
 
+pub(crate) fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {
+    match update {
+        acp::SessionUpdate::AgentMessageChunk(_) => "agent_message_chunk",
+        acp::SessionUpdate::AgentThoughtChunk(_) => "agent_thought_chunk",
+        acp::SessionUpdate::UserMessageChunk(_) => "user_message_chunk",
+        acp::SessionUpdate::Plan(_) => "plan",
+        acp::SessionUpdate::ToolCall(_) => "tool_call",
+        acp::SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+        acp::SessionUpdate::AvailableCommandsUpdate(_) => "available_commands_update",
+        acp::SessionUpdate::CurrentModeUpdate(_) => "current_mode_update",
+        acp::SessionUpdate::ConfigOptionUpdate(_) => "config_option_update",
+        acp::SessionUpdate::SessionInfoUpdate(_) => "session_info_update",
+        acp::SessionUpdate::UsageUpdate(_) => "usage_update",
+        _ => "other",
+    }
+}
+
 /// The type of approval event to send to the UI.
 ///
 /// This enum allows us to use the more appropriate approval UI for different
@@ -89,5 +106,16 @@ impl AcpModelState {
             current_model_id: Some(state.current_model_id.clone()),
             available_models: state.available_models.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_update_kind_labels_usage_update() {
+        let update = acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(12, 100));
+        assert_eq!(session_update_kind(&update), "usage_update");
     }
 }

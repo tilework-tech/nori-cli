@@ -262,12 +262,21 @@ impl AcpBackend {
         approval_policy_rx: watch::Receiver<AskForApproval>,
     ) {
         let approval_policy_rx = approval_policy_rx;
+        let mut relay_seq = 0_i64;
         loop {
             tokio::select! {
                 biased;
                 maybe_event = event_rx.recv() => {
                     match maybe_event {
                         Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
+                            relay_seq += 1;
+                            debug!(
+                                target: "acp_event_flow",
+                                relay_seq,
+                                relay_source = "transport_event_rx",
+                                update_kind = crate::connection::session_update_kind(&update),
+                                "Relaying session/update into serialized session runtime"
+                            );
                             let _ = backend
                                 .session_event_tx
                                 .send(session_runtime_driver::SessionRuntimeInput::Reducer(
@@ -276,7 +285,15 @@ impl AcpBackend {
                                 .await;
                         }
                         Some(crate::connection::ConnectionEvent::ApprovalRequest(request)) => {
+                            relay_seq += 1;
                             let current_policy = *approval_policy_rx.borrow();
+                            debug!(
+                                target: "acp_event_flow",
+                                relay_seq,
+                                relay_source = "transport_event_rx",
+                                call_id = request.event.call_id(),
+                                "Relaying permission request into serialized session runtime"
+                            );
                             let _ = backend
                                 .session_event_tx
                                 .send(
@@ -296,6 +313,14 @@ impl AcpBackend {
                 maybe_result = prompt_result_rx.recv() => {
                     match maybe_result {
                         Some(result) => {
+                            relay_seq += 1;
+                            debug!(
+                                target: "acp_event_flow",
+                                relay_seq,
+                                relay_source = "prompt_result_rx",
+                                inbound_event = session_reducer::inbound_event_kind(&result),
+                                "Relaying prompt result into serialized session runtime"
+                            );
                             let _ = backend
                                 .session_event_tx
                                 .send(session_runtime_driver::SessionRuntimeInput::Reducer(result))
@@ -305,6 +330,14 @@ impl AcpBackend {
                             while let Some(event) = event_rx.recv().await {
                                 match event {
                                     crate::connection::ConnectionEvent::SessionUpdate(update) => {
+                                        relay_seq += 1;
+                                        debug!(
+                                            target: "acp_event_flow",
+                                            relay_seq,
+                                            relay_source = "transport_event_rx_drain",
+                                            update_kind = crate::connection::session_update_kind(&update),
+                                            "Draining session/update after prompt result channel closed"
+                                        );
                                         let _ = backend
                                             .session_event_tx
                                             .send(session_runtime_driver::SessionRuntimeInput::Reducer(
@@ -313,7 +346,15 @@ impl AcpBackend {
                                             .await;
                                     }
                                     crate::connection::ConnectionEvent::ApprovalRequest(request) => {
+                                        relay_seq += 1;
                                         let current_policy = *approval_policy_rx.borrow();
+                                        debug!(
+                                            target: "acp_event_flow",
+                                            relay_seq,
+                                            relay_source = "transport_event_rx_drain",
+                                            call_id = request.event.call_id(),
+                                            "Draining permission request after prompt result channel closed"
+                                        );
                                         let _ = backend
                                             .session_event_tx
                                             .send(

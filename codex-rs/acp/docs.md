@@ -818,6 +818,8 @@ When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::Canc
 - `SessionPhaseChanged(Idle)` and `PromptCompleted { stop_reason, last_agent_message }` are emitted only when that prompt response is reduced
 - queued follow-up prompts remain in the reducer-owned outbound queue until an eligible drain point (`stop_reason: end_turn`)
 
+`SacpConnection::prompt()` also carries a small amount of session-local transport state so cancellation tails can be absorbed without widening the public phase model. If the previous prompt ended with `Cancelled`, the next prompt request may receive one or more immediate empty `end_turn` responses before the agent starts working on the user's real follow-up prompt. The connection layer now treats those empty terminal responses as stale cancel-tail cleanup and retries the same ACP prompt request until either streamed updates arrive or a non-stale stop reason is observed. That keeps the reducer contract unchanged: it still only sees the final logical completion for the user-facing prompt turn.
+
 This removes the old synthetic interrupt-abort fast-path that treated cancel as immediate idle. The TUI now renders ACP interrupt state from reducer-owned phase/completion projections instead of inferring prompt ownership from interrupt timing.
 
 **Tool Classification System:**

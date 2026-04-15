@@ -1,0 +1,15 @@
+
+Handles session update notifications from the agent.
+
+This is a notification endpoint (no response expected) that receives
+real-time updates about session progress, including message chunks,
+tool calls, and execution plans.
+
+Note: Clients SHOULD continue accepting tool call updates even after
+sending a `session/cancel` notification, as the agent may send final
+updates before responding with the cancelled stop reason.
+
+See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)
+
+#### <span>SessionNotification</span>
+
