@@ -31,6 +31,18 @@ fn simple_prompt() -> QueuedPrompt {
     }
 }
 
+fn sample_config_option() -> acp::SessionConfigOption {
+    acp::SessionConfigOption::select(
+        "verbosity",
+        "Verbosity",
+        "normal",
+        vec![
+            acp::SessionConfigSelectOption::new("normal", "Normal"),
+            acp::SessionConfigSelectOption::new("verbose", "Verbose"),
+        ],
+    )
+}
+
 fn notification(update: acp::SessionUpdate) -> InboundEvent {
     InboundEvent::Notification(Box::new(update))
 }
@@ -650,5 +662,107 @@ fn available_commands_update_accepted_in_any_phase() {
     assert!(has_event(&out.events, |e| matches!(
         e,
         ClientEvent::AgentCommandsUpdate(_)
+    )));
+}
+
+#[test]
+fn current_mode_update_is_accepted_while_idle_and_emits_info_event() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    let update = acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new("review"));
+    let out = reduce(&mut rt, notification(update), &mut norm);
+
+    assert_eq!(rt.persisted.current_mode.as_deref(), Some("review"));
+    assert!(!has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::Warning(_)
+    )));
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::SessionUpdateInfo(info)
+            if info.kind == nori_protocol::SessionUpdateKind::CurrentMode
+    )));
+}
+
+#[test]
+fn config_option_update_is_accepted_while_idle_and_emits_info_event() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    let update = acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(vec![
+        sample_config_option(),
+    ]));
+    let out = reduce(&mut rt, notification(update), &mut norm);
+
+    assert_eq!(rt.persisted.config_options.len(), 1);
+    assert!(!has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::Warning(_)
+    )));
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::SessionUpdateInfo(info)
+            if info.kind == nori_protocol::SessionUpdateKind::ConfigOptions
+    )));
+}
+
+#[test]
+fn session_info_update_is_accepted_while_idle_and_emits_info_event() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    let update = acp::SessionUpdate::SessionInfoUpdate(
+        acp::SessionInfoUpdate::new()
+            .title("Resume chat")
+            .updated_at("2026-04-14T15:00:00Z"),
+    );
+    let out = reduce(&mut rt, notification(update), &mut norm);
+
+    assert_eq!(
+        rt.persisted.session_info.title.as_deref(),
+        Some("Resume chat")
+    );
+    assert_eq!(
+        rt.persisted.session_info.updated_at.as_deref(),
+        Some("2026-04-14T15:00:00Z")
+    );
+    assert!(!has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::Warning(_)
+    )));
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::SessionUpdateInfo(info)
+            if info.kind == nori_protocol::SessionUpdateKind::SessionInfo
+    )));
+}
+
+#[test]
+fn usage_update_is_accepted_while_idle_and_emits_info_event() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    let update = acp::SessionUpdate::UsageUpdate(
+        acp::UsageUpdate::new(128, 4096).cost(acp::Cost::new(0.42, "USD")),
+    );
+    let out = reduce(&mut rt, notification(update), &mut norm);
+
+    assert_eq!(
+        rt.persisted.session_usage,
+        Some(nori_protocol::session_runtime::SessionUsageState {
+            used_tokens: 128,
+            total_tokens: 4096,
+            cost_display: Some("0.42 USD".to_string()),
+        })
+    );
+    assert!(!has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::Warning(_)
+    )));
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::SessionUpdateInfo(info)
+            if info.kind == nori_protocol::SessionUpdateKind::Usage
     )));
 }

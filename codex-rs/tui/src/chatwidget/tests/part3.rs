@@ -328,6 +328,35 @@ fn replay_entry_user_and_assistant_render_history() {
 }
 
 #[test]
+fn session_update_info_event_renders_history_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
+        nori_protocol::SessionUpdateInfo {
+            kind: nori_protocol::SessionUpdateKind::CurrentMode,
+            message: "ACP mode changed to review".into(),
+            hint: None,
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
+        nori_protocol::SessionUpdateInfo {
+            kind: nori_protocol::SessionUpdateKind::Usage,
+            message: "Session usage: 128 / 4096 tokens, cost 0.42 USD".into(),
+            hint: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let combined = cells
+        .into_iter()
+        .map(|lines| lines_to_single_string(&lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!("session_update_info_history", combined);
+}
+
+#[test]
 fn approval_modal_patch_from_client_event_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     chat.config.approval_policy = AskForApproval::OnRequest;

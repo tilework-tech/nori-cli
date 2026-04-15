@@ -83,8 +83,13 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
 - final assistant message extraction used for `PromptCompleted { last_agent_message, .. }`
+- session-scoped ACP metadata (`available_commands`, `current_mode`, `config_options`, `session_info`, `session_usage`) that can arrive outside any active prompt turn
 
 The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.rs`, and `session.rs` all feed reducer events into the same runtime. `resume_session()` uses the same reducer during `session/load`, buffering replay `ClientEvent`s from reducer output and then carrying the resulting `SessionDriver` state into the live backend once setup completes.
+
+Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
+
+`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged so restored transcripts can show lightweight session metadata alongside the loaded conversation.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 

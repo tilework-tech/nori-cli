@@ -53,6 +53,8 @@ pub fn transcript_to_replay_client_events(
             crate::transcript::TranscriptEntry::ClientEvent(client_event) => {
                 if let Some(replay_entry) = replay_entry_from_client_event(&client_event.event) {
                     replay.push(nori_protocol::ClientEvent::ReplayEntry(replay_entry));
+                } else if should_pass_through_replay_client_event(&client_event.event) {
+                    replay.push(client_event.event.clone());
                 }
             }
             _ => {}
@@ -66,12 +68,21 @@ pub fn client_events_to_replay_client_events(
     client_events: Vec<nori_protocol::ClientEvent>,
 ) -> Vec<nori_protocol::ClientEvent> {
     let mut replay = Vec::new();
+    let mut user = String::new();
     let mut assistant = String::new();
     let mut reasoning = String::new();
 
     let flush_buffers = |replay: &mut Vec<nori_protocol::ClientEvent>,
+                         user: &mut String,
                          assistant: &mut String,
                          reasoning: &mut String| {
+        if !user.is_empty() {
+            replay.push(nori_protocol::ClientEvent::ReplayEntry(
+                nori_protocol::ReplayEntry::UserMessage {
+                    text: std::mem::take(user),
+                },
+            ));
+        }
         if !reasoning.is_empty() {
             replay.push(nori_protocol::ClientEvent::ReplayEntry(
                 nori_protocol::ReplayEntry::ReasoningMessage {
@@ -91,19 +102,22 @@ pub fn client_events_to_replay_client_events(
     for event in client_events {
         match event {
             nori_protocol::ClientEvent::MessageDelta(message_delta) => match message_delta.stream {
+                nori_protocol::MessageStream::User => user.push_str(&message_delta.delta),
                 nori_protocol::MessageStream::Answer => assistant.push_str(&message_delta.delta),
                 nori_protocol::MessageStream::Reasoning => reasoning.push_str(&message_delta.delta),
             },
             other => {
-                flush_buffers(&mut replay, &mut assistant, &mut reasoning);
+                flush_buffers(&mut replay, &mut user, &mut assistant, &mut reasoning);
                 if let Some(replay_entry) = replay_entry_from_client_event(&other) {
                     replay.push(nori_protocol::ClientEvent::ReplayEntry(replay_entry));
+                } else if should_pass_through_replay_client_event(&other) {
+                    replay.push(other);
                 }
             }
         }
     }
 
-    flush_buffers(&mut replay, &mut assistant, &mut reasoning);
+    flush_buffers(&mut replay, &mut user, &mut assistant, &mut reasoning);
     replay
 }
 
@@ -198,8 +212,13 @@ fn replay_entry_from_client_event(
         | nori_protocol::ClientEvent::ContextCompacted(_)
         | nori_protocol::ClientEvent::ReplayEntry(_)
         | nori_protocol::ClientEvent::AgentCommandsUpdate(_)
+        | nori_protocol::ClientEvent::SessionUpdateInfo(_)
         | nori_protocol::ClientEvent::Warning(_) => None,
     }
+}
+
+fn should_pass_through_replay_client_event(event: &nori_protocol::ClientEvent) -> bool {
+    matches!(event, nori_protocol::ClientEvent::SessionUpdateInfo(_))
 }
 
 #[cfg(test)]
@@ -320,6 +339,74 @@ mod tests {
                     }),
                 }),
             ]
+        );
+    }
+
+    #[test]
+    fn client_events_to_replay_client_events_buffers_user_deltas_and_preserves_info_updates() {
+        let replay = client_events_to_replay_client_events(vec![
+            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                stream: nori_protocol::MessageStream::User,
+                delta: "Resume".into(),
+            }),
+            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                stream: nori_protocol::MessageStream::User,
+                delta: " this session".into(),
+            }),
+            nori_protocol::ClientEvent::SessionUpdateInfo(nori_protocol::SessionUpdateInfo {
+                kind: nori_protocol::SessionUpdateKind::SessionInfo,
+                message: "Session info updated: title=\"Resume chat\"".into(),
+                hint: None,
+            }),
+            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                stream: nori_protocol::MessageStream::Answer,
+                delta: "Loaded.".into(),
+            }),
+        ]);
+
+        assert_eq!(
+            replay,
+            vec![
+                nori_protocol::ClientEvent::ReplayEntry(nori_protocol::ReplayEntry::UserMessage {
+                    text: "Resume this session".into(),
+                }),
+                nori_protocol::ClientEvent::SessionUpdateInfo(nori_protocol::SessionUpdateInfo {
+                    kind: nori_protocol::SessionUpdateKind::SessionInfo,
+                    message: "Session info updated: title=\"Resume chat\"".into(),
+                    hint: None,
+                }),
+                nori_protocol::ClientEvent::ReplayEntry(
+                    nori_protocol::ReplayEntry::AssistantMessage {
+                        text: "Loaded.".into(),
+                    },
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn transcript_to_replay_client_events_preserves_session_update_info() {
+        let transcript = make_transcript(vec![TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: nori_protocol::ClientEvent::SessionUpdateInfo(
+                nori_protocol::SessionUpdateInfo {
+                    kind: nori_protocol::SessionUpdateKind::Usage,
+                    message: "Session usage: 128 / 4096 tokens".into(),
+                    hint: None,
+                },
+            ),
+        })]);
+
+        let replay = transcript_to_replay_client_events(&transcript);
+
+        assert_eq!(
+            replay,
+            vec![nori_protocol::ClientEvent::SessionUpdateInfo(
+                nori_protocol::SessionUpdateInfo {
+                    kind: nori_protocol::SessionUpdateKind::Usage,
+                    message: "Session usage: 128 / 4096 tokens".into(),
+                    hint: None,
+                },
+            )]
         );
     }
 

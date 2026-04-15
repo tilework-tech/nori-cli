@@ -166,6 +166,7 @@ fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
                 &snapshot.artifacts,
             ))
         }
+        nori_protocol::ClientEvent::SessionUpdateInfo(info) => Some(info.message.clone()),
         nori_protocol::ClientEvent::MessageDelta(_)
         | nori_protocol::ClientEvent::SessionPhaseChanged(_)
         | nori_protocol::ClientEvent::PromptCompleted(_)
@@ -564,6 +565,33 @@ mod tests {
         assert!(matches!(&entries[0], ViewonlyEntry::Info { .. }));
         assert!(
             matches!(&entries[1], ViewonlyEntry::Info { content } if content == "Tool [completed]: Edit /tmp/main.rs (edit)")
+        );
+    }
+
+    #[test]
+    fn test_transcript_to_entries_renders_session_update_info() {
+        let transcript = make_transcript(vec![TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: nori_protocol::ClientEvent::SessionUpdateInfo(
+                nori_protocol::SessionUpdateInfo {
+                    kind: nori_protocol::SessionUpdateKind::Usage,
+                    message: "Session usage: 128 / 4096 tokens".to_string(),
+                    hint: None,
+                },
+            ),
+        })]);
+
+        let entries = transcript_to_entries(&transcript);
+
+        assert_eq!(
+            entries,
+            vec![
+                ViewonlyEntry::Info {
+                    content: "Session from 2025-01-27 12:00 (test-ses)".to_string(),
+                },
+                ViewonlyEntry::Info {
+                    content: "Session usage: 128 / 4096 tokens".to_string(),
+                },
+            ]
         );
     }
 

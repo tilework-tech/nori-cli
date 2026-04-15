@@ -23,6 +23,7 @@ pub enum ClientEvent {
     ContextCompacted(ContextCompacted),
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
+    SessionUpdateInfo(SessionUpdateInfo),
     Warning(WarningInfo),
 }
 
@@ -70,6 +71,23 @@ pub struct AgentCommandInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SessionUpdateInfo {
+    pub kind: SessionUpdateKind,
+    pub message: String,
+    pub hint: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionUpdateKind {
+    CurrentMode,
+    ConfigOptions,
+    SessionInfo,
+    Usage,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "replay_type", rename_all = "snake_case")]
 pub enum ReplayEntry {
     UserMessage { text: String },
@@ -89,6 +107,7 @@ pub struct MessageDelta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageStream {
+    User,
     Answer,
     Reasoning,
 }
@@ -273,6 +292,12 @@ pub struct ClientEventNormalizer {
 impl ClientEventNormalizer {
     pub fn push_session_update(&mut self, update: &acp::SessionUpdate) -> Vec<ClientEvent> {
         match update {
+            acp::SessionUpdate::UserMessageChunk(chunk) => {
+                message_delta_from_chunk(chunk, MessageStream::User)
+                    .into_iter()
+                    .map(ClientEvent::MessageDelta)
+                    .collect()
+            }
             acp::SessionUpdate::AgentMessageChunk(chunk) => {
                 message_delta_from_chunk(chunk, MessageStream::Answer)
                     .into_iter()
@@ -338,6 +363,24 @@ impl ClientEventNormalizer {
                     commands,
                 })]
             }
+            acp::SessionUpdate::CurrentModeUpdate(update) => {
+                vec![ClientEvent::SessionUpdateInfo(
+                    session_update_info_from_current_mode(update),
+                )]
+            }
+            acp::SessionUpdate::ConfigOptionUpdate(update) => {
+                vec![ClientEvent::SessionUpdateInfo(
+                    session_update_info_from_config_options(update),
+                )]
+            }
+            acp::SessionUpdate::SessionInfoUpdate(update) => {
+                vec![ClientEvent::SessionUpdateInfo(
+                    session_update_info_from_session_info(update),
+                )]
+            }
+            acp::SessionUpdate::UsageUpdate(update) => vec![ClientEvent::SessionUpdateInfo(
+                session_update_info_from_usage(update),
+            )],
             _ => Vec::new(),
         }
     }
@@ -911,6 +954,83 @@ fn message_delta_from_chunk(
     }
 }
 
+fn session_update_info_from_current_mode(update: &acp::CurrentModeUpdate) -> SessionUpdateInfo {
+    SessionUpdateInfo {
+        kind: SessionUpdateKind::CurrentMode,
+        message: format!("ACP mode changed to {}", update.current_mode_id),
+        hint: None,
+    }
+}
+
+fn session_update_info_from_config_options(update: &acp::ConfigOptionUpdate) -> SessionUpdateInfo {
+    let names = update
+        .config_options
+        .iter()
+        .map(|option| option.name.as_str())
+        .collect::<Vec<_>>();
+    let message = if names.is_empty() {
+        "ACP config options updated".to_string()
+    } else {
+        format!("ACP config options updated: {}", names.join(", "))
+    };
+
+    SessionUpdateInfo {
+        kind: SessionUpdateKind::ConfigOptions,
+        message,
+        hint: None,
+    }
+}
+
+fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> SessionUpdateInfo {
+    let mut parts = Vec::new();
+
+    if let Some(title) = format_maybe_undefined_field("title", &update.title) {
+        parts.push(title);
+    }
+    if let Some(updated_at) = format_maybe_undefined_field("updated_at", &update.updated_at) {
+        parts.push(updated_at);
+    }
+
+    let message = if parts.is_empty() {
+        "Session info updated".to_string()
+    } else {
+        format!("Session info updated: {}", parts.join("; "))
+    };
+
+    SessionUpdateInfo {
+        kind: SessionUpdateKind::SessionInfo,
+        message,
+        hint: None,
+    }
+}
+
+fn format_maybe_undefined_field(
+    label: &str,
+    value: &acp::MaybeUndefined<String>,
+) -> Option<String> {
+    match value.as_opt_ref() {
+        Some(Some(value)) => Some(match label {
+            "updated_at" => format!("{label}={value}"),
+            _ => format!("{label}=\"{value}\""),
+        }),
+        Some(None) => Some(format!("{label}=null")),
+        None => None,
+    }
+}
+
+fn session_update_info_from_usage(update: &acp::UsageUpdate) -> SessionUpdateInfo {
+    let mut message = format!("Session usage: {} / {} tokens", update.used, update.size);
+    if let Some(cost) = &update.cost {
+        message.push_str(&format!(", cost {:.2} {}", cost.amount, cost.currency));
+    }
+
+    SessionUpdateInfo {
+        kind: SessionUpdateKind::Usage,
+        message,
+        hint: None,
+    }
+}
+
 fn plan_snapshot_from_acp(plan: &acp::Plan) -> PlanSnapshot {
     PlanSnapshot {
         entries: plan
@@ -943,6 +1063,18 @@ mod tests {
                 acp::PermissionOptionKind::RejectOnce,
             ),
         ]
+    }
+
+    fn sample_config_option() -> acp::SessionConfigOption {
+        acp::SessionConfigOption::select(
+            "verbosity",
+            "Verbosity",
+            "normal",
+            vec![
+                acp::SessionConfigSelectOption::new("normal", "Normal"),
+                acp::SessionConfigSelectOption::new("verbose", "Verbose"),
+            ],
+        )
     }
 
     #[test]
@@ -1936,6 +2068,111 @@ mod tests {
         };
 
         assert_eq!(commands_update.commands.len(), 0);
+    }
+
+    #[test]
+    fn normalizer_converts_user_message_chunk() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
+            acp::ContentBlock::Text(acp::TextContent::new("resume this session")),
+        ));
+
+        let events = normalizer.push_session_update(&update);
+
+        assert_eq!(
+            events,
+            vec![ClientEvent::MessageDelta(MessageDelta {
+                stream: MessageStream::User,
+                delta: "resume this session".to_string(),
+            })]
+        );
+    }
+
+    #[test]
+    fn normalizer_converts_current_mode_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new("review"));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::SessionUpdateInfo(info) = &events[0] else {
+            panic!("expected SessionUpdateInfo");
+        };
+
+        assert_eq!(info.kind, SessionUpdateKind::CurrentMode);
+        assert_eq!(info.message, "ACP mode changed to review");
+        assert_eq!(info.hint, None);
+    }
+
+    #[test]
+    fn normalizer_converts_config_option_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(vec![
+            sample_config_option(),
+        ]));
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::SessionUpdateInfo(info) = &events[0] else {
+            panic!("expected SessionUpdateInfo");
+        };
+
+        assert_eq!(info.kind, SessionUpdateKind::ConfigOptions);
+        assert_eq!(info.message, "ACP config options updated: Verbosity");
+        assert_eq!(info.hint, None);
+    }
+
+    #[test]
+    fn normalizer_converts_session_info_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::SessionInfoUpdate(
+            acp::SessionInfoUpdate::new()
+                .title("Resume chat")
+                .updated_at("2026-04-14T15:00:00Z"),
+        );
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::SessionUpdateInfo(info) = &events[0] else {
+            panic!("expected SessionUpdateInfo");
+        };
+
+        assert_eq!(info.kind, SessionUpdateKind::SessionInfo);
+        assert_eq!(
+            info.message,
+            "Session info updated: title=\"Resume chat\"; updated_at=2026-04-14T15:00:00Z"
+        );
+        assert_eq!(info.hint, None);
+    }
+
+    #[test]
+    fn normalizer_converts_usage_update() {
+        let mut normalizer = ClientEventNormalizer::default();
+
+        let update = acp::SessionUpdate::UsageUpdate(
+            acp::UsageUpdate::new(128, 4096).cost(acp::Cost::new(0.42, "USD")),
+        );
+
+        let events = normalizer.push_session_update(&update);
+        assert_eq!(events.len(), 1);
+
+        let ClientEvent::SessionUpdateInfo(info) = &events[0] else {
+            panic!("expected SessionUpdateInfo");
+        };
+
+        assert_eq!(info.kind, SessionUpdateKind::Usage);
+        assert_eq!(
+            info.message,
+            "Session usage: 128 / 4096 tokens, cost 0.42 USD"
+        );
+        assert_eq!(info.hint, None);
     }
 
     // ── refine_edit_kind: Codex ACP sends kind:"edit" for create/delete/move ──

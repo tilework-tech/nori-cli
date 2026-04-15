@@ -398,6 +398,25 @@ fn reduce_metadata_update(
         acp::SessionUpdate::ConfigOptionUpdate(config_options) => {
             runtime.persisted.config_options = config_options.config_options.clone();
         }
+        acp::SessionUpdate::SessionInfoUpdate(session_info) => {
+            if let Some(title) = session_info.title.as_opt_ref() {
+                runtime.persisted.session_info.title = title.cloned();
+            }
+            if let Some(updated_at) = session_info.updated_at.as_opt_ref() {
+                runtime.persisted.session_info.updated_at = updated_at.cloned();
+            }
+        }
+        acp::SessionUpdate::UsageUpdate(usage) => {
+            runtime.persisted.session_usage =
+                Some(nori_protocol::session_runtime::SessionUsageState {
+                    used_tokens: saturating_i64(usage.used),
+                    total_tokens: saturating_i64(usage.size),
+                    cost_display: usage
+                        .cost
+                        .as_ref()
+                        .map(|cost| format!("{:.2} {}", cost.amount, cost.currency)),
+                });
+        }
         _ => {}
     }
 
@@ -555,7 +574,16 @@ fn is_session_metadata_update(update: &acp::SessionUpdate) -> bool {
         acp::SessionUpdate::AvailableCommandsUpdate(_)
             | acp::SessionUpdate::CurrentModeUpdate(_)
             | acp::SessionUpdate::ConfigOptionUpdate(_)
+            | acp::SessionUpdate::SessionInfoUpdate(_)
+            | acp::SessionUpdate::UsageUpdate(_)
     )
+}
+
+fn saturating_i64(value: u64) -> i64 {
+    match i64::try_from(value) {
+        Ok(value) => value,
+        Err(_) => i64::MAX,
+    }
 }
 
 fn is_terminal_phase(phase: &nori_protocol::ToolPhase) -> bool {

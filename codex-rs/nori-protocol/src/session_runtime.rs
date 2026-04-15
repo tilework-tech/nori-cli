@@ -153,6 +153,21 @@ pub struct PersistedSessionState {
     pub available_commands: Vec<AgentCommandInfo>,
     pub current_mode: Option<String>,
     pub config_options: Vec<acp::SessionConfigOption>,
+    pub session_info: SessionInfoState,
+    pub session_usage: Option<SessionUsageState>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SessionInfoState {
+    pub title: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionUsageState {
+    pub used_tokens: i64,
+    pub total_tokens: i64,
+    pub cost_display: Option<String>,
 }
 
 /// A finalized message in the transcript.

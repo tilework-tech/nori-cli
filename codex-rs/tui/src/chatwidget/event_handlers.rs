@@ -1146,6 +1146,10 @@ impl ChatWidget {
             nori_protocol::ClientEvent::AgentCommandsUpdate(update) => {
                 self.bottom_pane.set_agent_commands(update.commands);
             }
+            nori_protocol::ClientEvent::SessionUpdateInfo(update) => {
+                self.add_info_message(update.message, update.hint);
+                self.request_redraw();
+            }
             nori_protocol::ClientEvent::Warning(warning) => {
                 self.on_warning(warning.message);
             }
@@ -1154,6 +1158,7 @@ impl ChatWidget {
 
     fn handle_client_message_delta(&mut self, message_delta: nori_protocol::MessageDelta) {
         match message_delta.stream {
+            nori_protocol::MessageStream::User => {}
             nori_protocol::MessageStream::Answer => {
                 self.on_agent_message_delta(message_delta.delta)
             }

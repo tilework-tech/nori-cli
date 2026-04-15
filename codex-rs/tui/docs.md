@@ -47,11 +47,15 @@ The main event loop in `app/mod.rs` processes:
 2. **Backend events** from ACP: `BackendEvent::Client` carries normalized `nori_protocol::ClientEvent` session data, while `BackendEvent::Control` carries shared control-plane events
 3. **App events** for state changes (agent selection, config updates)
 
+The client-event stream now also includes lightweight ACP session metadata summaries. Rather than adding dedicated UI chrome for every ACP session update, the first-pass TUI behavior renders `ClientEvent::SessionUpdateInfo` as ordinary info/history cells and includes the same text in the view-only transcript.
+
 The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` + submodules), which handles:
 - User input composition with multi-line editing
 - Message history display with markdown rendering
 - File search integration (`file_search.rs`)
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
+
+For replayed ACP conversations, user-authored message chunks are reconstructed upstream into `ReplayEntry::UserMessage` before they reach the widget. Live `MessageStream::User` deltas are therefore ignored by `ChatWidget` itself; the widget only needs to render the replay entry path, not duplicate the local composer state.
 
 The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. In ACP sessions, `ClientToolCell` provides differentiated `transcript_lines()` for Execute tools (shell-style `$ command` format via `render_execute_transcript_lines()`) while exploring and edit cells reuse their `display_lines()` rendering for transcripts.
 
