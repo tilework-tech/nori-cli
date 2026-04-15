@@ -386,8 +386,6 @@ The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` 
 
 **Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/codex-rs/tui/session_context.md` (loaded at compile time via `include_str!`). This tells the ACP agent that it is running inside the nori CLI and provides a source-code URL for self-referential questions. The context is prepended (without `SUMMARY_PREFIX` framing) to the first user prompt only and then consumed (see `@/codex-rs/acp/docs.md` for the hook context injection mechanism).
 
-Debug-only commands (not shown in help): `/rollout`, `/test-approval`
-
 The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
 
 
