@@ -39,7 +39,7 @@ The auto-worktree startup flow branches on the `AutoWorktree` enum (see `@/codex
 | `Ask` | After TUI init, in `run_ratatui_app()` | Sets `pending_worktree_ask = true`, deferred to a TUI popup shown after onboarding but before `App::run()` |
 | `Off` | N/A | Skips worktree creation entirely |
 
-The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`, a standalone mini-app screen (same pattern as `update_prompt.rs`) that runs its own event loop before the main `App`. It presents two options ("Yes, create a worktree" / "No, continue without a worktree") and returns a boolean. If the user confirms, `setup_auto_worktree()` is called and config is reloaded with the new cwd via `load_config_or_exit()`. Ctrl-C, Escape, and the "No" option all skip worktree creation. On failure, the TUI continues with the original cwd.
+The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`, a standalone mini-app screen using the same pre-`App` event-loop pattern as `nori::update_prompt` in release builds. It presents two options ("Yes, create a worktree" / "No, continue without a worktree") and returns a boolean. If the user confirms, `setup_auto_worktree()` is called and config is reloaded with the new cwd via `load_config_or_exit()`. Ctrl-C, Escape, and the "No" option all skip worktree creation. On failure, the TUI continues with the original cwd.
 
 The main event loop in `app/mod.rs` processes:
 
@@ -841,10 +841,10 @@ The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) works in
 
 **Update Checking:**
 
-The TUI uses Nori-specific update checking via files in `@/codex-rs/tui/src/nori/`:
-- `update_action.rs`: Update action handling
-- `updates.rs`: Version checking against GitHub releases
-- `update_prompt.rs`: User prompting for updates
+The TUI uses Nori-specific update checking via the modules in `@/codex-rs/tui/src/nori/`:
+- `nori/update_action.rs`: Update action handling
+- `nori/updates.rs`: Version checking against GitHub releases
+- `nori/update_prompt.rs`: User prompting for updates
 
 **Error Reporting:**
 

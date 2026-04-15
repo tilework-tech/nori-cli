@@ -7,10 +7,6 @@
 //! The flow is designed to be used instead of the default Codex onboarding
 //! screen when building with Nori branding.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
-use codex_core::AuthManager;
 use codex_core::config::Config;
 use codex_core::git_info::get_git_repo_root;
 use color_eyre::eyre::Result;
@@ -23,8 +19,8 @@ use ratatui::prelude::Widget;
 use ratatui::style::Color;
 use ratatui::widgets::Clear;
 use ratatui::widgets::WidgetRef;
+use std::path::PathBuf;
 
-use crate::LoginStatus;
 use crate::onboarding::TrustDirectorySelection;
 use crate::onboarding::onboarding_screen::KeyboardHandler;
 use crate::onboarding::onboarding_screen::StepState;
@@ -56,12 +52,6 @@ pub(crate) struct NoriOnboardingScreenArgs {
     pub skip_welcome: bool,
     /// Whether to skip the trust directory prompt (--skip-trust-directory flag).
     pub skip_trust_directory: bool,
-    /// Current login status (unused in Nori but kept for API compatibility).
-    #[allow(dead_code)]
-    pub login_status: LoginStatus,
-    /// Auth manager (unused in Nori but kept for API compatibility).
-    #[allow(dead_code)]
-    pub auth_manager: Arc<AuthManager>,
     /// Application configuration.
     pub config: Config,
 }
@@ -90,8 +80,6 @@ impl NoriOnboardingScreen {
             show_trust_screen,
             skip_welcome,
             skip_trust_directory,
-            login_status: _,
-            auth_manager: _,
             config,
         } = args;
 
@@ -375,11 +363,30 @@ pub(crate) async fn run_nori_onboarding_app(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use codex_core::config::Config;
+    use codex_core::config::ConfigOverrides;
+    use codex_core::config::ConfigToml;
 
     #[test]
     fn nori_step_implements_required_traits() {
         // This test verifies the NoriStep enum implements all required traits.
         // The compilation of this test is the actual verification.
         let _welcome = NoriStep::Welcome(NoriWelcomeWidget::new());
+    }
+
+    #[test]
+    fn nori_onboarding_args_only_require_live_fields() -> std::io::Result<()> {
+        let _args = NoriOnboardingScreenArgs {
+            show_trust_screen: true,
+            skip_welcome: false,
+            skip_trust_directory: false,
+            config: Config::load_from_base_config_with_overrides(
+                ConfigToml::default(),
+                ConfigOverrides::default(),
+                std::env::temp_dir(),
+            )?,
+        };
+
+        Ok(())
     }
 }
