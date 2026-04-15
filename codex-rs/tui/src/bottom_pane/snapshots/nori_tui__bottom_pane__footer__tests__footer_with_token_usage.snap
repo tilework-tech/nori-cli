@@ -2,4 +2,4 @@
 source: tui/src/bottom_pane/footer.rs
 expression: terminal.backend()
 ---
-"  ⎇ feature/test · +10 -3 · Context: 123K (72%) · Skillset: clifford · Skillsets"
+"  ⎇ feature/test · +10 -3 · Context 72% (123K) · Skillset: clifford · Skillsets "

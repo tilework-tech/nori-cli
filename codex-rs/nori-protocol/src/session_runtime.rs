@@ -9,6 +9,8 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use agent_client_protocol_schema as acp;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::AgentCommandInfo;
 use crate::PlanSnapshot;
@@ -163,7 +165,7 @@ pub struct SessionInfoState {
     pub updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionUsageState {
     pub used_tokens: i64,
     pub total_tokens: i64,

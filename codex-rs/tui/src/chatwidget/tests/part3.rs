@@ -328,7 +328,7 @@ fn replay_entry_user_and_assistant_render_history() {
 }
 
 #[test]
-fn session_update_info_event_renders_history_snapshot() {
+fn session_update_info_events_only_render_non_usage_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
@@ -336,13 +336,19 @@ fn session_update_info_event_renders_history_snapshot() {
             kind: nori_protocol::SessionUpdateKind::CurrentMode,
             message: "ACP mode changed to review".into(),
             hint: None,
+            usage: None,
         },
     ));
     chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
         nori_protocol::SessionUpdateInfo {
             kind: nori_protocol::SessionUpdateKind::Usage,
-            message: "Session usage: 128 / 4096 tokens, cost 0.42 USD".into(),
+            message: "Session usage: 42600 / 258400 tokens".into(),
             hint: None,
+            usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                used_tokens: 42_600,
+                total_tokens: 258_400,
+                cost_display: None,
+            }),
         },
     ));
 
@@ -354,6 +360,58 @@ fn session_update_info_event_renders_history_snapshot() {
         .join("\n");
 
     assert_snapshot!("session_update_info_history", combined);
+}
+
+#[test]
+fn session_usage_updates_footer_and_disables_transcript_fallback() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_system_info_refresh(crate::system_info::SystemInfo {
+        transcript_location: Some(codex_acp::TranscriptLocation {
+            agent_kind: codex_acp::AgentKind::Codex,
+            transcript_path: PathBuf::from("/tmp/codex-transcript.jsonl"),
+            session_id: "codex-session".to_string(),
+            token_breakdown: Some(codex_acp::TranscriptTokenUsage {
+                input_tokens: 995_726,
+                output_tokens: 8_452,
+                cached_tokens: 500_000,
+                last_context_tokens: Some(69_246),
+            }),
+        }),
+        ..Default::default()
+    });
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
+        nori_protocol::SessionUpdateInfo {
+            kind: nori_protocol::SessionUpdateKind::Usage,
+            message: "Session usage: 42600 / 258400 tokens".into(),
+            hint: None,
+            usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                used_tokens: 42_600,
+                total_tokens: 258_400,
+                cost_display: None,
+            }),
+        },
+    ));
+
+    assert!(drain_insert_history(&mut rx).is_empty());
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with footer usage");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("Context 16% (42.6K)"),
+        "expected ACP session usage in footer, got: {contents:?}"
+    );
+    assert!(
+        !contents.contains("Context: 69.2K (27%)"),
+        "expected transcript fallback to be disabled, got: {contents:?}"
+    );
 }
 
 #[test]

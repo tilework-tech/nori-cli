@@ -357,6 +357,7 @@ mod tests {
                 kind: nori_protocol::SessionUpdateKind::SessionInfo,
                 message: "Session info updated: title=\"Resume chat\"".into(),
                 hint: None,
+                usage: None,
             }),
             nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
                 stream: nori_protocol::MessageStream::Answer,
@@ -374,6 +375,7 @@ mod tests {
                     kind: nori_protocol::SessionUpdateKind::SessionInfo,
                     message: "Session info updated: title=\"Resume chat\"".into(),
                     hint: None,
+                    usage: None,
                 }),
                 nori_protocol::ClientEvent::ReplayEntry(
                     nori_protocol::ReplayEntry::AssistantMessage {
@@ -392,6 +394,11 @@ mod tests {
                     kind: nori_protocol::SessionUpdateKind::Usage,
                     message: "Session usage: 128 / 4096 tokens".into(),
                     hint: None,
+                    usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                        used_tokens: 128,
+                        total_tokens: 4096,
+                        cost_display: None,
+                    }),
                 },
             ),
         })]);
@@ -405,6 +412,11 @@ mod tests {
                     kind: nori_protocol::SessionUpdateKind::Usage,
                     message: "Session usage: 128 / 4096 tokens".into(),
                     hint: None,
+                    usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                        used_tokens: 128,
+                        total_tokens: 4096,
+                        cost_display: None,
+                    }),
                 },
             )]
         );

@@ -1147,7 +1147,13 @@ impl ChatWidget {
                 self.bottom_pane.set_agent_commands(update.commands);
             }
             nori_protocol::ClientEvent::SessionUpdateInfo(update) => {
-                self.add_info_message(update.message, update.hint);
+                if update.kind == nori_protocol::SessionUpdateKind::Usage
+                    && let Some(usage) = update.usage
+                {
+                    self.bottom_pane.set_session_usage(Some(usage));
+                } else {
+                    self.add_info_message(update.message, update.hint);
+                }
                 self.request_redraw();
             }
             nori_protocol::ClientEvent::Warning(warning) => {

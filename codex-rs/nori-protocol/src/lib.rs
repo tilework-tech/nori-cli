@@ -76,6 +76,8 @@ pub struct SessionUpdateInfo {
     pub kind: SessionUpdateKind,
     pub message: String,
     pub hint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<session_runtime::SessionUsageState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -959,6 +961,7 @@ fn session_update_info_from_current_mode(update: &acp::CurrentModeUpdate) -> Ses
         kind: SessionUpdateKind::CurrentMode,
         message: format!("ACP mode changed to {}", update.current_mode_id),
         hint: None,
+        usage: None,
     }
 }
 
@@ -978,6 +981,7 @@ fn session_update_info_from_config_options(update: &acp::ConfigOptionUpdate) -> 
         kind: SessionUpdateKind::ConfigOptions,
         message,
         hint: None,
+        usage: None,
     }
 }
 
@@ -1001,6 +1005,7 @@ fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> Ses
         kind: SessionUpdateKind::SessionInfo,
         message,
         hint: None,
+        usage: None,
     }
 }
 
@@ -1028,6 +1033,14 @@ fn session_update_info_from_usage(update: &acp::UsageUpdate) -> SessionUpdateInf
         kind: SessionUpdateKind::Usage,
         message,
         hint: None,
+        usage: Some(session_runtime::SessionUsageState {
+            used_tokens: update.used as i64,
+            total_tokens: update.size as i64,
+            cost_display: update
+                .cost
+                .as_ref()
+                .map(|cost| format!("{:.2} {}", cost.amount, cost.currency)),
+        }),
     }
 }
 
@@ -2168,6 +2181,14 @@ mod tests {
         };
 
         assert_eq!(info.kind, SessionUpdateKind::Usage);
+        assert_eq!(
+            info.usage,
+            Some(session_runtime::SessionUsageState {
+                used_tokens: 128,
+                total_tokens: 4096,
+                cost_display: Some("0.42 USD".to_string()),
+            })
+        );
         assert_eq!(
             info.message,
             "Session usage: 128 / 4096 tokens, cost 0.42 USD"

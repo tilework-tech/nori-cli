@@ -362,18 +362,21 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
-    // Add context window info if available and enabled: "Context: 34K (27%)" (white/default)
-    if config.is_enabled(FooterSegment::Context)
-        && let Some(tokens) = props.context_tokens
-        && tokens > 0
-    {
-        let formatted_tokens = format_si_suffix(tokens);
-        let context_text = if let Some(pct) = props.context_window_percent {
-            format!("Context: {formatted_tokens} ({pct}%)")
-        } else {
-            format!("Context: {formatted_tokens}")
+    // Add context window info if available and enabled: "Context 27% (34K)".
+    if config.is_enabled(FooterSegment::Context) {
+        let formatted_tokens = props
+            .context_tokens
+            .filter(|&tokens| tokens > 0)
+            .map(format_si_suffix);
+        let context_text = match (props.context_window_percent, formatted_tokens) {
+            (Some(pct), Some(tokens)) => Some(format!("Context {pct}% ({tokens})")),
+            (Some(pct), None) => Some(format!("Context {pct}%")),
+            (None, Some(tokens)) => Some(format!("Context {tokens}")),
+            (None, None) => None,
         };
-        segments.push(Line::from(context_text));
+        if let Some(context_text) = context_text {
+            segments.push(Line::from(context_text));
+        }
     }
 
     // Add approval mode if available and enabled: "Approvals: Agent" (magenta)
@@ -621,6 +624,7 @@ const SHORTCUTS: &[ShortcutDescriptor] = &[
 mod tests {
     use super::*;
     use insta::assert_snapshot;
+    use pretty_assertions::assert_eq;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -661,6 +665,27 @@ mod tests {
             })
             .unwrap();
         assert_snapshot!(name, terminal.backend());
+    }
+
+    fn render_footer_text(props: FooterProps) -> String {
+        let height = footer_height(&props).max(1);
+        let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, f.area().width, height);
+                render_footer(area, f.buffer_mut(), &props);
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        (0..height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]
@@ -928,6 +953,17 @@ mod tests {
                 ..default_props()
             },
         );
+    }
+
+    #[test]
+    fn footer_context_renders_percent_before_tokens() {
+        let rendered = render_footer_text(FooterProps {
+            context_window_percent: Some(16),
+            context_tokens: Some(42_600),
+            ..default_props()
+        });
+
+        assert_eq!(rendered.trim(), "Context 16% (42.6K) · ? for shortcuts");
     }
 
     #[test]

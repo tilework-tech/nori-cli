@@ -531,6 +531,15 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update ACP-reported session usage displayed in the footer.
+    pub(crate) fn set_session_usage(
+        &mut self,
+        usage: Option<nori_protocol::session_runtime::SessionUsageState>,
+    ) {
+        self.composer.set_session_usage(usage);
+        self.request_redraw();
+    }
+
     /// Get the prompt summary for status card display.
     pub(crate) fn prompt_summary(&self) -> Option<String> {
         self.composer.prompt_summary()

@@ -166,7 +166,9 @@ fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
                 &snapshot.artifacts,
             ))
         }
-        nori_protocol::ClientEvent::SessionUpdateInfo(info) => Some(info.message.clone()),
+        nori_protocol::ClientEvent::SessionUpdateInfo(info) => {
+            (info.kind != nori_protocol::SessionUpdateKind::Usage).then(|| info.message.clone())
+        }
         nori_protocol::ClientEvent::MessageDelta(_)
         | nori_protocol::ClientEvent::SessionPhaseChanged(_)
         | nori_protocol::ClientEvent::PromptCompleted(_)
@@ -576,6 +578,11 @@ mod tests {
                     kind: nori_protocol::SessionUpdateKind::Usage,
                     message: "Session usage: 128 / 4096 tokens".to_string(),
                     hint: None,
+                    usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                        used_tokens: 128,
+                        total_tokens: 4096,
+                        cost_display: None,
+                    }),
                 },
             ),
         })]);
@@ -584,14 +591,9 @@ mod tests {
 
         assert_eq!(
             entries,
-            vec![
-                ViewonlyEntry::Info {
-                    content: "Session from 2025-01-27 12:00 (test-ses)".to_string(),
-                },
-                ViewonlyEntry::Info {
-                    content: "Session usage: 128 / 4096 tokens".to_string(),
-                },
-            ]
+            vec![ViewonlyEntry::Info {
+                content: "Session from 2025-01-27 12:00 (test-ses)".to_string(),
+            }]
         );
     }
 

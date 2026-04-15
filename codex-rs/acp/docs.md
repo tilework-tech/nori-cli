@@ -89,7 +89,7 @@ The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.
 
 Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
 
-`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged so restored transcripts can show lightweight session metadata alongside the loaded conversation.
+`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
@@ -494,9 +494,9 @@ Codex `token_count` events contain two token usage objects with different semant
 | Object | Meaning | Used For |
 |--------|---------|----------|
 | `total_token_usage` | Cumulative billing counter across ALL API calls in the session; grows unboundedly | `input_tokens`, `output_tokens`, `cached_tokens` fields (the "Tokens" footer segment) |
-| `last_token_usage` | Tokens from the most recent API call only; represents actual context window fill | `last_context_tokens` field (the "Context: XK (Y%)" footer segment) |
+| `last_token_usage` | Tokens from the most recent API call only; represents actual context window fill | `last_context_tokens` field used by transcript-discovery fallback for the "Context Y% (XK)" footer segment |
 
-Using `total_token_usage.input_tokens` for context window percentage would produce nonsensical results (e.g., 995K tokens for a 258K context window) because the cumulative counter sums across all turns. The `last_token_usage.input_tokens` correctly reflects how full the context window is for the current turn. When `last_token_usage` is absent (older transcript formats), `last_context_tokens` is `None` and the context percentage is not displayed.
+Using `total_token_usage.input_tokens` for context window percentage would produce nonsensical results (e.g., 995K tokens for a 258K context window) because the cumulative counter sums across all turns. The `last_token_usage.input_tokens` correctly reflects how full the context window is for the current turn. When ACP `UsageUpdate` events are present, the TUI prefers those live session values for the footer; transcript parsing remains a fallback for older agents/sessions where `UsageUpdate` is absent. When `last_token_usage` is absent (older transcript formats), `last_context_tokens` is `None` and the transcript fallback does not display a context percentage.
 
 **Claude Code Streaming Deduplication:**
 

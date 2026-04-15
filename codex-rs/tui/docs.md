@@ -47,7 +47,7 @@ The main event loop in `app/mod.rs` processes:
 2. **Backend events** from ACP: `BackendEvent::Client` carries normalized `nori_protocol::ClientEvent` session data, while `BackendEvent::Control` carries shared control-plane events
 3. **App events** for state changes (agent selection, config updates)
 
-The client-event stream now also includes lightweight ACP session metadata summaries. Rather than adding dedicated UI chrome for every ACP session update, the first-pass TUI behavior renders `ClientEvent::SessionUpdateInfo` as ordinary info/history cells and includes the same text in the view-only transcript.
+The client-event stream now also includes lightweight ACP session metadata summaries. Most `ClientEvent::SessionUpdateInfo` values still render as ordinary info/history cells, but usage updates are handled specially: they update the footer context segment and are omitted from both live history cells and the view-only transcript.
 
 The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` + submodules), which handles:
 - User input composition with multi-line editing
@@ -415,7 +415,7 @@ The card always shows: version, directory, agent, skillset (Nori profile). Optio
 |---------|-----------|---------|
 | Task summary | `prompt_summary` present | "Task: Fix auth bug" |
 | Approval mode | `approval_mode_label` present | "approvals: Agent" |
-| Context line | `context_window_percent` present, with or without token data | "Context: 77.0K (27%)" or just "42%" |
+| Context line | `context_window_percent` present, with or without token data | "Context 27% (77.0K)" or just "Context 42%" |
 | Token totals | `token_breakdown` has non-zero total | "Tokens: 123K total (32.0K cached)" |
 
 The Tokens section renders if either `token_breakdown` has a non-zero total OR `context_window_percent` is present. This means context window percentage from the live API (`TokenUsageInfo`) can appear even before transcript token data is available.
@@ -598,7 +598,7 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Git Branch | `git_branch` | Current branch name with ⎇ symbol (yellow for main repo, orange for worktree) |
 | Worktree Name | `worktree_name` | "Worktree: {name}" (light red) when running in an auto-worktree session -- the immutable directory name, distinct from the git branch which gets renamed after the first prompt |
 | Git Stats | `git_stats` | Lines added/removed in current session |
-| Context Window | `context` | "Context: 34K (27%)" when running within an agent environment |
+| Context Window | `context` | "Context 27% (34K)" when running within an agent environment |
 | Approval Mode | `approval_mode` | "Approvals: Agent/Full Access/Read Only" |
 | Nori Profile | `nori_profile` | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
 | Nori Version | `nori_version` | "Skillsets v<version>" |
@@ -614,6 +614,7 @@ git_stats = false
 All segments are enabled by default. The order of segments in the footer is fixed (cannot be reordered via config).
 
 Token data flows from `TranscriptLocation.token_breakdown` (provided by `codex_acp::discover_transcript_for_agent_with_message()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
+Footer context usage is sourced in priority order: ACP `SessionUpdateInfo { kind: Usage, usage: Some(..) }` updates drive the footer when available, while `TranscriptLocation.token_breakdown` remains the provider-specific fallback for older sessions or agents that do not emit ACP usage updates.
 
 The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `footer_segments()` renderer.
 
