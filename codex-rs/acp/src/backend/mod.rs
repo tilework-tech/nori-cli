@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use agent_client_protocol_schema as acp;
 use anyhow::Result;
 use codex_core::config::types::McpServerConfig;
 use codex_protocol::ConversationId;
@@ -30,7 +31,6 @@ use codex_protocol::protocol::WarningEvent;
 use codex_protocol::user_input::UserInput;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
 use nori_protocol::ClientEvent;
-use sacp::schema as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;

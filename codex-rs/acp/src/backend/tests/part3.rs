@@ -1,12 +1,12 @@
 use super::*;
 
 async fn send_seed_tool_call(
-    persistent_tx: &mpsc::Sender<sacp::schema::SessionUpdate>,
+    persistent_tx: &mpsc::Sender<agent_client_protocol_schema::SessionUpdate>,
     call_id: &str,
 ) {
     persistent_tx
-        .send(sacp::schema::SessionUpdate::ToolCall(
-            sacp::schema::ToolCall::new(call_id.to_string(), "Terminal"),
+        .send(agent_client_protocol_schema::SessionUpdate::ToolCall(
+            agent_client_protocol_schema::ToolCall::new(call_id.to_string(), "Terminal"),
         ))
         .await
         .expect("send seed tool call");
@@ -435,8 +435,8 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
 #[tokio::test]
 #[serial]
 async fn test_approval_policy_dynamic_update() {
+    use agent_client_protocol_schema as acp;
     use codex_protocol::approvals::ExecApprovalRequestEvent;
-    use sacp::schema as acp;
     use tokio::sync::oneshot;
     use tokio::sync::watch;
 
@@ -563,7 +563,7 @@ async fn test_approval_policy_dynamic_update() {
 #[tokio::test]
 #[serial]
 async fn test_patch_approval_emits_normalized_client_event() {
-    use sacp::schema as acp;
+    use agent_client_protocol_schema as acp;
     use tokio::sync::oneshot;
     use tokio::sync::watch;
 
@@ -671,7 +671,7 @@ async fn test_patch_approval_emits_normalized_client_event() {
 #[tokio::test]
 #[serial]
 async fn test_exec_approval_emits_normalized_client_event() {
-    use sacp::schema as acp;
+    use agent_client_protocol_schema as acp;
     use tokio::sync::oneshot;
     use tokio::sync::watch;
 
@@ -761,8 +761,8 @@ async fn test_exec_approval_emits_normalized_client_event() {
 #[tokio::test]
 #[serial]
 async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_event() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
     use tokio::sync::oneshot;
     use tokio::sync::watch;
 
@@ -840,8 +840,8 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
 #[tokio::test]
 #[serial]
 async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
@@ -909,8 +909,8 @@ async fn test_completed_edit_update_emits_normalized_tool_snapshot() {
 #[tokio::test]
 #[serial]
 async fn test_unknown_tool_call_update_still_emits_normalized_tool_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
@@ -981,8 +981,8 @@ async fn test_unknown_tool_call_update_still_emits_normalized_tool_snapshot() {
 #[tokio::test]
 #[serial]
 async fn test_out_of_phase_tool_call_update_still_emits_normalized_tool_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, _event_rx) = mpsc::channel::<Event>(16);
@@ -1053,8 +1053,8 @@ async fn test_out_of_phase_tool_call_update_still_emits_normalized_tool_snapshot
 #[tokio::test]
 #[serial]
 async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
@@ -1123,8 +1123,8 @@ async fn test_completed_delete_update_emits_normalized_tool_snapshot() {
 #[tokio::test]
 #[serial]
 async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
@@ -1198,8 +1198,8 @@ async fn test_completed_fetch_update_emits_normalized_tool_snapshot() {
 #[tokio::test]
 #[serial]
 async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
@@ -1262,8 +1262,8 @@ async fn test_completed_execute_update_emits_normalized_tool_snapshot() {
 #[tokio::test]
 #[serial]
 async fn test_agent_message_chunk_emits_normalized_message_delta() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
@@ -1303,8 +1303,8 @@ async fn test_agent_message_chunk_emits_normalized_message_delta() {
 #[tokio::test]
 #[serial]
 async fn test_plan_update_emits_normalized_plan_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
@@ -1359,8 +1359,8 @@ async fn test_plan_update_emits_normalized_plan_snapshot() {
 #[tokio::test]
 #[serial]
 async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let cases = vec![
         (
@@ -1494,8 +1494,8 @@ async fn test_completed_exploring_updates_emit_normalized_tool_snapshots() {
 #[tokio::test]
 #[serial]
 async fn test_completed_generic_execute_update_emits_normalized_tool_snapshot() {
+    use agent_client_protocol_schema as acp;
     use pretty_assertions::assert_eq;
-    use sacp::schema as acp;
 
     let (persistent_tx, persistent_rx) = mpsc::channel::<acp::SessionUpdate>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);

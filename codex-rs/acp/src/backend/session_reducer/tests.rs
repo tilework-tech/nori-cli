@@ -1,3 +1,4 @@
+use agent_client_protocol_schema as acp;
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use nori_protocol::session_runtime::ActiveRequestKind;
@@ -7,7 +8,6 @@ use nori_protocol::session_runtime::SessionPhase;
 use nori_protocol::session_runtime::SessionPhaseView;
 use nori_protocol::session_runtime::SessionRuntime;
 use pretty_assertions::assert_eq;
-use sacp::schema as acp;
 
 use super::InboundEvent;
 use super::SideEffect;

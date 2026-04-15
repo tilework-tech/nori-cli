@@ -24,15 +24,17 @@ pub(super) async fn run_prompt_summary(
     );
     let prompt = vec![translator::text_to_content_block(&summarization_prompt)];
 
-    // Take the notification receiver so we can collect updates from this
+    // Take the ordered event receiver so we can collect updates from this
     // throwaway connection. The main session uses the reducer loop instead.
-    let mut notification_rx = connection.take_notification_receiver();
+    let mut event_rx = connection.take_event_receiver();
 
     // Consume updates in a task to accumulate the agent's text response
     let collector = tokio::spawn(async move {
         let mut text = String::new();
-        while let Some(update) = notification_rx.recv().await {
-            if let acp::SessionUpdate::AgentMessageChunk(chunk) = &update
+        while let Some(event) = event_rx.recv().await {
+            if let crate::connection::ConnectionEvent::SessionUpdate(
+                acp::SessionUpdate::AgentMessageChunk(chunk),
+            ) = &event
                 && let acp::ContentBlock::Text(t) = &chunk.content
             {
                 text.push_str(&t.text);

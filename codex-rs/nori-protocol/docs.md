@@ -4,18 +4,19 @@ Path: @/codex-rs/nori-protocol
 
 ### Overview
 
-- Defines the normalized `ClientEvent` protocol that sits between raw ACP session updates (from `sacp`) and the TUI rendering layer. All ACP tool calls, messages, plans, approvals, and replay entries are transformed into this crate's types before reaching the TUI.
+- Defines the normalized `ClientEvent` protocol that sits between raw ACP session updates (from `agent-client-protocol-schema`) and the TUI rendering layer. All ACP tool calls, messages, plans, approvals, and replay entries are transformed into this crate's types before reaching the TUI.
 - The `ClientEventNormalizer` is the stateful entry point: it accepts `acp::SessionUpdate` and `acp::RequestPermissionRequest` values and emits `Vec<ClientEvent>`.
 - Single-file crate (`lib.rs`) with no submodules.
 
 ### How it fits into the larger codebase
 
 ```
-sacp::SessionUpdate ──> ClientEventNormalizer ──> Vec<ClientEvent> ──> nori-tui
+agent_client_protocol_schema::SessionUpdate
+    ──> ClientEventNormalizer ──> Vec<ClientEvent> ──> nori-tui
                                                                        (chatwidget, client_tool_cell, etc.)
 ```
 
-- **Upstream dependency:** `sacp` crate provides the raw ACP schema types (`ToolCall`, `ToolCallUpdate`, `ContentChunk`, `Plan`, `RequestPermissionRequest`).
+- **Upstream dependency:** `agent-client-protocol-schema` provides the raw ACP schema types (`ToolCall`, `ToolCallUpdate`, `ContentChunk`, `Plan`, `RequestPermissionRequest`).
 - **Downstream consumer:** `nori-tui` (`@/codex-rs/tui/`) is the primary consumer. The TUI renders `ToolSnapshot`, `MessageDelta`, `PlanSnapshot`, `ApprovalRequest`, reducer-owned `SessionPhaseChanged` / `PromptCompleted` / `QueueChanged` events, `ReplayEntry`, and `AgentCommandsUpdate` from this crate.
 - The `codex-acp` backend (`@/codex-rs/acp/`) now wraps the normalizer inside a serialized `SessionRuntime` driver. ACP prompt responses, `session/load`, `session/update`, cancellations, and permission requests are reduced in order before the backend forwards the resulting `ClientEvent` items to the TUI via `BackendEvent::Client`.
 - This crate intentionally has no TUI, rendering, or terminal dependencies. It is a pure data transformation layer.

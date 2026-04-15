@@ -12,7 +12,7 @@ unstable = []
 workspace = true
 
 [dependencies]
-agent-client-protocol-schema = { version = "0.10.8", features = ["unstable"] }
+agent-client-protocol-schema = { workspace = true, features = ["unstable"] }
 anyhow = { workspace = true }
 sacp = { workspace = true }
 base64 = { workspace = true }

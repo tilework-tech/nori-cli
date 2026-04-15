@@ -79,23 +79,23 @@ pub use transcript::TranscriptLoader;
 pub use transcript::TranscriptRecorder;
 
 // Re-export commonly used types from the ACP schema
-pub use sacp::schema::InitializeRequest;
-pub use sacp::schema::InitializeResponse;
-pub use sacp::schema::NewSessionRequest;
-pub use sacp::schema::NewSessionResponse;
-pub use sacp::schema::PromptRequest;
-pub use sacp::schema::PromptResponse;
-pub use sacp::schema::SessionNotification;
-pub use sacp::schema::SessionUpdate;
+pub use agent_client_protocol_schema::InitializeRequest;
+pub use agent_client_protocol_schema::InitializeResponse;
+pub use agent_client_protocol_schema::NewSessionRequest;
+pub use agent_client_protocol_schema::NewSessionResponse;
+pub use agent_client_protocol_schema::PromptRequest;
+pub use agent_client_protocol_schema::PromptResponse;
+pub use agent_client_protocol_schema::SessionNotification;
+pub use agent_client_protocol_schema::SessionUpdate;
 
 // Re-export model-related types (unstable feature)
 #[cfg(feature = "unstable")]
-pub use sacp::schema::ModelId;
+pub use agent_client_protocol_schema::ModelId;
 #[cfg(feature = "unstable")]
-pub use sacp::schema::ModelInfo;
+pub use agent_client_protocol_schema::ModelInfo;
 #[cfg(feature = "unstable")]
-pub use sacp::schema::SessionModelState;
+pub use agent_client_protocol_schema::SessionModelState;
 #[cfg(feature = "unstable")]
-pub use sacp::schema::SetSessionModelRequest;
+pub use agent_client_protocol_schema::SetSessionModelRequest;
 #[cfg(feature = "unstable")]
-pub use sacp::schema::SetSessionModelResponse;
+pub use agent_client_protocol_schema::SetSessionModelResponse;

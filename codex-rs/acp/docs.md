@@ -27,7 +27,7 @@ The ACP crate serves as a bridge between:
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
-- `connection/` - SACP v10-based subprocess spawning and JSON-RPC communication
+- `connection/` - SACP v11-based subprocess spawning and JSON-RPC communication
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -532,10 +532,10 @@ Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
 **Connection Management** (`connection/`):
 
-The ACP connection layer uses SACP v10 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
+The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
 
 ```
-┌─────────────────────────┐   SACP v10 (JSON-RPC)   ┌─────────────────────────┐
+┌─────────────────────────┐   SACP v11 (JSON-RPC)   ┌─────────────────────────┐
 │   Main Tokio Runtime    │◄────────────────────────►│  ACP Agent Subprocess   │
 │                         │   stdin/stdout           │  (spawned child process)│
 │   SacpConnection        │                          │                         │
@@ -548,17 +548,17 @@ The ACP connection layer uses SACP v10 (`sacp` crate) to communicate with agent 
 └─────────────────────────┘                          └─────────────────────────┘
 ```
 
-**Builder-based handler registration:** `SacpConnection::spawn()` uses `ClientToAgent::builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `run_until()` is called.
+**Builder-based handler registration:** `SacpConnection::spawn()` uses `Client.builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `connect_with()` is called.
 
-**Connection initialization:** Inside `run_until()`, the connection sends `InitializeRequest` to the agent, validates the protocol version (minimum V1), and clones the `JrConnectionCx` out of the closure via a oneshot channel. The background task then awaits `futures::future::pending()` to keep the connection alive until the task is aborted on drop.
+**Connection initialization:** Inside `connect_with()`, the connection sends `InitializeRequest` to the agent, validates the protocol version (minimum V1), and clones the `ConnectionTo<Agent>` plus agent capabilities out of the callback via a oneshot channel. The background task then awaits `futures::future::pending()` to keep the connection alive until the task is aborted on drop.
 
-**Dynamic update channel routing:** Session notifications from the agent are routed via `Arc<Mutex<Option<Sender<SessionUpdate>>>>`. During a prompt, the sender is set to the caller's `update_tx`; between turns, it is `None` and notifications fall through to the persistent channel. This swap happens in `prompt()` and `load_session()`.
+**Ordered transport inbox:** Session notifications, permission requests, and synthetic file-operation updates are all forwarded into one ordered `ConnectionEvent` stream. The backend consumes that single inbox and feeds it through the serialized reducer/runtime path, which avoids ordering ambiguity between notification and approval channels.
 
-**Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the `approval_tx` channel, and spawns a concurrent task via `cx.spawn()` to wait for the user's response. The spawn avoids blocking the SACP dispatch loop while the UI collects user input.
+**Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the ordered inbox, and uses the SACP responder plus `ConnectionTo<Agent>` to send the eventual review decision back without blocking the dispatch loop while the UI collects user input.
 
 **MCP Server Forwarding** (`connection/mcp.rs`):
 
-CLI-configured MCP servers (from `config.toml`) are converted to SACP protocol types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_sacp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to `sacp::schema::McpServer`:
+CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_sacp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to ACP `McpServer` values inside the transport adapter:
 
 | Transport | SACP Type | Key Fields |
 |-----------|-----------|------------|
@@ -736,7 +736,7 @@ Multi-layer cleanup strategy for robust process termination:
 1. **Process Group Isolation (Unix)**: Agent spawns in own process group via `setpgid(0, 0)`. Enables killing entire process tree with `killpg()`.
 2. **Kernel-Level Parent Death Signal (Linux)**: `PR_SET_PDEATHSIG` set to `SIGTERM`. Guarantees agent receives signal if parent crashes.
 3. **Process Group Kill**: On drop, `SIGKILL` is sent to the entire process group via `kill_child_process_group()`, ensuring grandchildren are terminated.
-4. **Async Drop**: `SacpConnection::drop()` aborts the connection and stderr tasks, then kills the child process. No blocking wait is required because SACP v10's `ClientToAgent` is `Send + Sync` and runs as a regular tokio task.
+4. **Async Drop**: `SacpConnection::drop()` aborts the connection and stderr tasks, then kills the child process. No blocking wait is required because SACP v11's `ConnectionTo<Agent>` is `Send + Sync` and runs as a regular tokio task.
 
 **Environment Isolation** (`sacp_connection.rs`):
 
@@ -795,32 +795,14 @@ That means update-only provider flows, including Gemini-style shell calls that s
 
 Out-of-phase request-owned updates are treated the same way: the reducer still emits a warning when no request is active, but it forwards the raw ACP update to the normalizer so the user sees both the malformed session state and the underlying tool snapshot.
 
-**Prompt Update Channel Lifecycle** (`sacp_connection.rs`, `user_input.rs`, `submit_and_ops.rs`):
+**Transport Event Flow** (`connection/sacp_connection.rs`, `backend/spawn_and_relay.rs`, `backend/session.rs`):
 
-Each prompt/load_session call gets a dedicated `mpsc` channel (`update_tx`/`update_rx`) for receiving `SessionUpdate` notifications from the ACP agent. The connection layer routes notifications through a shared `active_update_tx` slot (an `Arc<Mutex<Option<(u64, Sender)>>>`) that pairs the sender with a monotonic generation counter. The routing logic in the notification handler uses `try_send` with fallthrough: if the per-prompt channel fails (receiver dropped, or channel full), the notification falls through to the `persistent_tx` channel instead of being silently dropped.
+The connection layer now exposes exactly one ordered `mpsc::Receiver<ConnectionEvent>`. `SessionNotification` updates, permission requests, and synthetic file-operation updates all flow through that inbox in source order. The backend takes ownership of the receiver once, then either:
 
-The critical invariant is that `prompt()` does **not** clear `active_update_tx` when it returns. This is because `block_task()` (the SACP request/response mechanism) can return before all `SessionNotification` events have been delivered. Instead, callers use a `done_tx`/`done_rx` oneshot to signal the `update_handler` task:
+- hands it to `run_connection_event_relay()` for live sessions, where it is merged with reducer prompt results and fed into the serialized runtime, or
+- temporarily hands it to the `session/load` collector during resume, buffering replay `ClientEvent`s before returning the receiver to the live backend.
 
-```
-prompt() returns
-    |
-    v
-done_tx.send(())  -- signals update_handler that prompt is done
-    |
-    v
-update_handler enters drain mode:
-    tokio::select! switches from waiting on (update_rx OR done_rx)
-    to waiting on update_rx with a 500ms timeout
-    |
-    v
-After timeout or channel close, update_handler exits
-    (dropping update_rx, which causes future try_send to fail)
-    |
-    v
-Next prompt() overwrites active_update_tx slot with a fresh sender
-```
-
-The generation counter on `active_update_tx` prevents stale cleanup: `close_update_channel(generation)` only clears the slot if the generation matches, so it is safe for `load_session` (which is sequential) to clear its own channel without risking a concurrent prompt's channel. `prompt()` callers do not call `close_update_channel` at all — they rely on the done/drain pattern instead.
+This keeps the SACP-specific routing logic inside `connection/` and removes the old split between notification and approval channels.
 
 **Turn Interrupt Wiring — Reducer-Owned ACP Phase** (`session_reducer.rs`, `session_runtime_driver.rs`, `submit_and_ops.rs`):
 
@@ -909,7 +891,7 @@ SessionConfigured event sent to TUI
 Deferred replay relay spawned (sends buffered events to backend_event_tx)
 ```
 
-**Server-side path:** A collect task runs concurrently during `load_session()`, receiving `SessionUpdate` notifications via an `mpsc` channel and buffering the normalized `ClientEvent` stream into a `Vec`. `SacpConnection::load_session()` installs the `update_tx` channel into the shared `active_update_tx` slot before sending the request, ensuring history replay notifications are captured. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.
+**Server-side path:** A collect task runs concurrently during `load_session()`, taking ownership of the ordered `ConnectionEvent` receiver and buffering the normalized `ClientEvent` stream into a `Vec`. `SacpConnection::load_session()` reuses that same ordered inbox for the agent's replay notifications, so the collector can observe session updates in source order without a special side channel. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.
 
 **Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is replayed through normalized `ClientEvent::ReplayEntry` items derived from the transcript rather than through `SessionConfigured.initial_messages`. The transcript summary path remains available for context management and `/compact`-style behavior. A `TRANSCRIPT_SUMMARY_WARN_CHARS` threshold (200K chars) logs a warning when summaries are very large; the actual safety net is the agent-side "prompt too long" rejection, which the caller handles gracefully.
 
