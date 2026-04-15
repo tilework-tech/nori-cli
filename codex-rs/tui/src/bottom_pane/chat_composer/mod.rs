@@ -120,6 +120,7 @@ pub(crate) struct ChatComposer {
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
+    session_usage: Option<nori_protocol::session_runtime::SessionUsageState>,
     system_info: Option<crate::system_info::SystemInfo>,
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
@@ -179,6 +180,7 @@ impl ChatComposer {
             footer_mode: FooterMode::ShortcutSummary,
             footer_hint_override: None,
             context_window_percent: None,
+            session_usage: None,
             system_info: None,
             approval_mode_label: None,
             vim_enter_behavior: codex_acp::config::VimEnterBehavior::Off,
@@ -367,6 +369,13 @@ impl ChatComposer {
         if self.context_window_percent != percent {
             self.context_window_percent = percent;
         }
+    }
+
+    pub(crate) fn set_session_usage(
+        &mut self,
+        usage: Option<nori_protocol::session_runtime::SessionUsageState>,
+    ) {
+        self.session_usage = usage;
     }
 
     pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {

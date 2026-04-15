@@ -3,6 +3,3 @@ source: tui/src/chatwidget/tests/part3.rs
 expression: combined
 ---
 • ACP mode changed to review
-
-
-• Session usage: 128 / 4096 tokens, cost 0.42 USD

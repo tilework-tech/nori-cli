@@ -79,6 +79,21 @@ impl ChatComposer {
                 })
             })
         });
+        let (context_tokens, context_window_percent) =
+            if let Some(session_usage) = &self.session_usage {
+                (
+                    Some(session_usage.used_tokens).filter(|&tokens| tokens > 0),
+                    (session_usage.total_tokens > 0).then(|| {
+                        session_usage
+                            .used_tokens
+                            .saturating_mul(100)
+                            .saturating_div(session_usage.total_tokens)
+                            .clamp(0, 100)
+                    }),
+                )
+            } else {
+                (context_tokens, context_window_percent)
+            };
 
         FooterProps {
             mode: self.footer_mode(),

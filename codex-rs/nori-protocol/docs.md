@@ -6,7 +6,7 @@ Path: @/codex-rs/nori-protocol
 
 - Defines the normalized `ClientEvent` protocol that sits between raw ACP session updates (from `agent-client-protocol-schema`) and the TUI rendering layer. All ACP tool calls, messages, plans, approvals, and replay entries are transformed into this crate's types before reaching the TUI.
 - The `ClientEventNormalizer` is the stateful entry point: it accepts `acp::SessionUpdate` and `acp::RequestPermissionRequest` values and emits `Vec<ClientEvent>`.
-- Session-scoped ACP metadata that does not deserve bespoke widgets yet is normalized into `ClientEvent::SessionUpdateInfo`, giving the rest of the stack one minimal rendering/replay path for mode, config, session-info, and usage updates.
+- Session-scoped ACP metadata is normalized into `ClientEvent::SessionUpdateInfo`, giving the rest of the stack one minimal rendering/replay path for mode, config, and session-info updates while still letting usage updates carry structured footer state.
 - Single-file crate (`lib.rs`) with no submodules.
 
 ### How it fits into the larger codebase
@@ -29,7 +29,8 @@ agent_client_protocol_schema::SessionUpdate
 - **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `codex-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. These types let the backend treat prompt turns, `session/load`, queued prompts, and ownership of tool/approval updates as one ordered state machine instead of reconstructing turn state from racing tasks.
 - **Session update normalization** keeps the first pass intentionally small:
   - `UserMessageChunk` becomes `MessageDelta { stream: User, .. }`, which lets replay paths reconstruct visible user history during `session/load`.
-  - `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` become `SessionUpdateInfo`, a display-oriented summary with a stable `kind`.
+  - `CurrentModeUpdate`, `ConfigOptionUpdate`, and `SessionInfoUpdate` become lightweight `SessionUpdateInfo` summaries.
+  - `UsageUpdate` also becomes `SessionUpdateInfo`, but the usage variant additionally carries `SessionUsageState` so the TUI can update footer context without reparsing the display string.
 - **Persisted session metadata** now includes `session_info` and `session_usage` alongside available commands, current mode, and config options. `codex-acp` owns persistence, but these structs live here so the reducer and replay pipeline share one runtime model.
 - **`is_generic_tool_call()`** gates initial `ToolCall` emission: tool calls with no `raw_input`, no `locations`, empty `content`, and no `/` in the title are suppressed (return empty `Vec`). The normalizer still records them internally so that later attributed `ToolCallUpdate` messages can refine the existing call without forcing the TUI to render a placeholder cell first.
 - **Invocation priority cascade** in `invocation_from_tool_call()` resolves what the tool is doing, in priority order:
@@ -48,7 +49,7 @@ agent_client_protocol_schema::SessionUpdate
 ### Things to Know
 
 - The `is_generic_tool_call()` filter means the normalizer is not 1:1 with incoming events. Initial `ToolCall` messages that are sufficiently sparse are silently dropped, but later `ToolCallUpdate` messages still become visible `ToolSnapshot`s even if no initial `ToolCall` ever arrived.
-- `SessionUpdateInfo` is intentionally lossy. It exists to stop valid ACP session updates from disappearing while the UI remains lightweight; richer dedicated widgets can still be layered on later without changing ACP reducer semantics.
+- `SessionUpdateInfo` stays intentionally lightweight, but it is no longer fully lossy: the `Usage` variant also carries structured `SessionUsageState` so replay and live footer updates can share the same path.
 - The location fallback (tier 4) only handles `Read` and `Search` kinds. Edit/Delete/Move with locations but no `raw_input` return `None` from the normalizer and fall through to the TUI's location-path display fallback, avoiding creation of empty-diff `FileOperations` that would route to `PatchHistoryCell`.
 - `sanitize_title()` is a two-pass operation: first strips the `[current working directory ...]` bracket, then strips trailing `(description)` parenthetical. The parenthetical strip only fires after a cwd bracket was found, because Gemini appends descriptions after the cwd metadata.
 - Shell wrapper detection (`is_shell_wrapper()`) recognizes `bash`, `sh`, `zsh`, `fish`, `pwsh`, and `powershell` with `-c` or `-lc` flags. When a 3-element command array matches this pattern, only the script portion is extracted as the command string.
