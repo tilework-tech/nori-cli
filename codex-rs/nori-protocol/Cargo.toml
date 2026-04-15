@@ -8,7 +8,7 @@ license = { workspace = true }
 workspace = true
 
 [dependencies]
-sacp = { workspace = true }
+agent-client-protocol-schema = { workspace = true, features = ["unstable"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 

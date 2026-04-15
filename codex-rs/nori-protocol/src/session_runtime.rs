@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use sacp::schema as acp;
+use agent_client_protocol_schema as acp;
 
 use crate::AgentCommandInfo;
 use crate::PlanSnapshot;

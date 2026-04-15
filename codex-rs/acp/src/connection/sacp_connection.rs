@@ -1,44 +1,22 @@
-//! SACP v10-based ACP connection layer.
+//! SACP v11-based ACP connection layer.
 //!
 //! This replaces the old `AcpConnection` which required a dedicated worker thread
-//! due to the `!Send` futures in `agent-client-protocol` v0.9. SACP v10's
-//! `ClientToAgent` is `Send + Sync`, allowing direct async usage from the main
+//! due to the `!Send` futures in `agent-client-protocol` v0.9. SACP v11's
+//! `ConnectionTo<Agent>` is `Send + Sync`, allowing direct async usage from the main
 //! tokio runtime without a dedicated thread or `LocalSet`.
 
 use std::path::Path;
 use std::process::Stdio;
 
+use agent_client_protocol_schema as acp;
 use anyhow::Context;
 use anyhow::Result;
 use futures::AsyncBufReadExt;
 use futures::io::BufReader;
+use sacp::Agent;
 use sacp::ByteStreams;
-use sacp::ClientToAgent;
-use sacp::JrConnectionCx;
-use sacp::schema::AgentCapabilities;
-use sacp::schema::CancelNotification;
-use sacp::schema::ClientCapabilities;
-use sacp::schema::ContentBlock;
-use sacp::schema::FileSystemCapability;
-use sacp::schema::Implementation;
-use sacp::schema::InitializeRequest;
-use sacp::schema::LoadSessionRequest;
-use sacp::schema::NewSessionRequest;
-use sacp::schema::PromptRequest;
-use sacp::schema::ProtocolVersion;
-use sacp::schema::ReadTextFileRequest;
-use sacp::schema::ReadTextFileResponse;
-use sacp::schema::RequestPermissionRequest;
-use sacp::schema::SessionId;
-use sacp::schema::SessionNotification;
-use sacp::schema::SessionUpdate;
-use sacp::schema::StopReason;
-use sacp::schema::ToolCall;
-use sacp::schema::ToolCallId;
-use sacp::schema::ToolCallStatus;
-use sacp::schema::ToolKind;
-use sacp::schema::WriteTextFileRequest;
-use sacp::schema::WriteTextFileResponse;
+use sacp::Client;
+use sacp::ConnectionTo;
 use tokio::process::Child;
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -52,42 +30,36 @@ use tracing::warn;
 use super::AcpModelState;
 use super::ApprovalEventType;
 use super::ApprovalRequest;
+use super::ConnectionEvent;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
 #[cfg(feature = "unstable")]
 use sacp::UntypedMessage;
-#[cfg(feature = "unstable")]
-use sacp::schema::ModelId;
-#[cfg(feature = "unstable")]
-use sacp::schema::SetSessionModelRequest;
 
 /// Minimum supported ACP protocol version.
-const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
+const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
 
-/// A thread-safe connection to an ACP agent subprocess using SACP v10.
+/// A thread-safe connection to an ACP agent subprocess using SACP v11.
 ///
 /// Unlike the old `AcpConnection`, this does NOT require a dedicated worker thread.
-/// SACP v10's `ClientToAgent` is `Send + Sync`, allowing all operations to run
+/// SACP v11's `ConnectionTo<Agent>` is `Send + Sync`, allowing all operations to run
 /// directly on the main tokio runtime.
 ///
 /// Internal architecture:
-/// - A background tokio task runs the SACP connection via `run_until`.
-/// - The `JrConnectionCx` is cloned out and used for all subsequent requests.
+/// - A background tokio task runs the SACP connection via `connect_with`.
+/// - The `ConnectionTo<Agent>` is cloned out and used for all subsequent requests.
 /// - Session notifications and approval requests are forwarded via channels.
-/// - All session updates flow through a single `notification_tx` channel.
+/// - All session-domain traffic flows through a single ordered inbox.
 pub struct SacpConnection {
     /// Connection context for sending requests to the agent.
-    cx: JrConnectionCx<ClientToAgent>,
+    cx: ConnectionTo<Agent>,
 
     /// Agent capabilities from the initialization handshake.
-    agent_capabilities: AgentCapabilities,
+    agent_capabilities: acp::AgentCapabilities,
 
-    /// Channel to receive approval requests from the agent.
-    approval_rx: mpsc::Receiver<ApprovalRequest>,
-
-    /// Channel to receive all session notifications (both during and between turns).
-    notification_rx: mpsc::Receiver<SessionUpdate>,
+    /// Ordered inbox of raw ACP events from the transport layer.
+    event_rx: mpsc::Receiver<ConnectionEvent>,
 
     /// Thread-safe model state, updated on session creation and model switch.
     model_state: std::sync::Arc<std::sync::RwLock<AcpModelState>>,
@@ -103,10 +75,10 @@ pub struct SacpConnection {
 }
 
 impl SacpConnection {
-    /// Spawn a new ACP agent subprocess and establish a SACP v10 connection.
+    /// Spawn a new ACP agent subprocess and establish a SACP v11 connection.
     pub async fn spawn(config: &AcpAgentConfig, cwd: &Path) -> Result<Self> {
         debug!(
-            "Spawning ACP agent (SACP v10): {} {:?} in {}",
+            "Spawning ACP agent (SACP v11): {} {:?} in {}",
             config.command,
             config.args,
             cwd.display()
@@ -172,32 +144,36 @@ impl SacpConnection {
         });
 
         // --- Set up channels ---
-        let (approval_tx, approval_rx) = mpsc::channel::<ApprovalRequest>(16);
-        let (notification_tx, notification_rx) = mpsc::channel::<SessionUpdate>(1024);
+        let (event_tx, event_rx) = mpsc::channel::<ConnectionEvent>(1024);
 
         // --- Build SACP connection ---
         let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
 
-        let notify_tx_for_notifications = notification_tx.clone();
-        let notify_tx_for_write = notification_tx.clone();
-        let notify_tx_for_read = notification_tx.clone();
+        let event_tx_for_notifications = event_tx.clone();
+        let event_tx_for_write = event_tx.clone();
+        let event_tx_for_read = event_tx.clone();
         let approval_cwd = cwd.to_path_buf();
         let write_cwd = cwd.to_path_buf();
         let read_cwd = cwd.to_path_buf();
 
-        // Oneshot to receive the JrConnectionCx and init result from inside run_until.
+        // Oneshot to receive the connection context and init result from inside connect_with.
         let (init_tx, init_rx) =
-            oneshot::channel::<Result<(JrConnectionCx<ClientToAgent>, AgentCapabilities)>>();
+            oneshot::channel::<Result<(ConnectionTo<Agent>, acp::AgentCapabilities)>>();
 
         let child = std::sync::Arc::new(Mutex::new(child));
 
         let connection_task = tokio::spawn(async move {
-            let result = ClientToAgent::builder()
+            let result = Client
+                .builder()
                 .on_receive_notification(
                     {
-                        let notification_tx = notify_tx_for_notifications;
-                        async move |notification: SessionNotification, _cx| {
-                            if notification_tx.send(notification.update).await.is_err() {
+                        let event_tx = event_tx_for_notifications;
+                        async move |notification: acp::SessionNotification, _connection| {
+                            if event_tx
+                                .send(ConnectionEvent::SessionUpdate(notification.update))
+                                .await
+                                .is_err()
+                            {
                                 warn!("Notification channel closed, dropping update");
                             }
                             Ok(())
@@ -207,29 +183,26 @@ impl SacpConnection {
                 )
                 .on_receive_request(
                     {
-                        let approval_tx = approval_tx;
+                        let event_tx = event_tx.clone();
                         let cwd = approval_cwd;
-                        async move |request: RequestPermissionRequest,
-                                    request_cx: sacp::JrRequestCx<
-                            sacp::schema::RequestPermissionResponse,
-                        >,
-                                    cx: JrConnectionCx<ClientToAgent>| {
+                        async move |request: acp::RequestPermissionRequest,
+                                    responder: sacp::Responder<acp::RequestPermissionResponse>,
+                                    connection: ConnectionTo<Agent>| {
                             // Translate ACP permission request to Codex approval event.
                             let event = if let Some(patch_event) =
                                 translator::permission_request_to_patch_approval_event(&request)
                             {
                                 ApprovalEventType::Patch(patch_event)
                             } else {
-                                let exec_event =
-                                    translator::permission_request_to_approval_event(
-                                        &request, &cwd,
-                                    );
+                                let exec_event = translator::permission_request_to_approval_event(
+                                    &request, &cwd,
+                                );
                                 ApprovalEventType::Exec(exec_event)
                             };
 
                             let (response_tx, response_rx) = oneshot::channel();
                             let approval = ApprovalRequest {
-                                request_id: match request_cx.id() {
+                                request_id: match responder.id() {
                                     serde_json::Value::String(id) => id,
                                     other => other.to_string(),
                                 },
@@ -239,45 +212,48 @@ impl SacpConnection {
                                 response_tx,
                             };
 
-                            if approval_tx.send(approval).await.is_err() {
-                                request_cx.respond(
-                                    sacp::schema::RequestPermissionResponse::new(
-                                        sacp::schema::RequestPermissionOutcome::Cancelled,
-                                    ),
-                                )?;
+                            if event_tx
+                                .send(ConnectionEvent::ApprovalRequest(approval))
+                                .await
+                                .is_err()
+                            {
+                                responder.respond(acp::RequestPermissionResponse::new(
+                                    acp::RequestPermissionOutcome::Cancelled,
+                                ))?;
                                 return Ok(());
                             }
 
                             // Spawn to avoid blocking the dispatch loop.
-                            cx.spawn(async move {
-                                let outcome =
-                                    match response_rx.await {
-                                        Ok(decision) => {
-                                            translator::review_decision_to_permission_outcome(
-                                                decision,
-                                                &request.options,
-                                            )
-                                        }
-                                        Err(_) => {
-                                            // Response channel dropped — deny.
-                                            let option_id = request
-                                                .options
-                                                .iter()
-                                                .find(|opt| matches!(
+                            connection.spawn(async move {
+                                let outcome = match response_rx.await {
+                                    Ok(decision) => {
+                                        translator::review_decision_to_permission_outcome(
+                                            decision,
+                                            &request.options,
+                                        )
+                                    }
+                                    Err(_) => {
+                                        // Response channel dropped — deny.
+                                        let option_id = request
+                                            .options
+                                            .iter()
+                                            .find(|opt| {
+                                                matches!(
                                                     opt.kind,
-                                                    sacp::schema::PermissionOptionKind::RejectOnce
-                                                    | sacp::schema::PermissionOptionKind::RejectAlways
-                                                ))
-                                                .map(|opt| opt.option_id.clone())
-                                                .unwrap_or_else(|| sacp::schema::PermissionOptionId::from("deny".to_string()));
-                                            sacp::schema::RequestPermissionOutcome::Selected(
-                                                sacp::schema::SelectedPermissionOutcome::new(option_id),
-                                            )
-                                        }
-                                    };
-                                request_cx.respond(
-                                    sacp::schema::RequestPermissionResponse::new(outcome),
-                                )?;
+                                                    acp::PermissionOptionKind::RejectOnce
+                                                        | acp::PermissionOptionKind::RejectAlways
+                                                )
+                                            })
+                                            .map(|opt| opt.option_id.clone())
+                                            .unwrap_or_else(|| {
+                                                acp::PermissionOptionId::from("deny".to_string())
+                                            });
+                                        acp::RequestPermissionOutcome::Selected(
+                                            acp::SelectedPermissionOutcome::new(option_id),
+                                        )
+                                    }
+                                };
+                                responder.respond(acp::RequestPermissionResponse::new(outcome))?;
                                 Ok(())
                             })?;
 
@@ -288,22 +264,23 @@ impl SacpConnection {
                 )
                 .on_receive_request(
                     {
-                        let notification_tx = notify_tx_for_write;
+                        let event_tx = event_tx_for_write;
                         let cwd = write_cwd;
-                        async move |request: WriteTextFileRequest,
-                                    request_cx: sacp::JrRequestCx<WriteTextFileResponse>,
-                                    _cx: JrConnectionCx<ClientToAgent>| {
+                        async move |request: acp::WriteTextFileRequest,
+                                    responder: sacp::Responder<acp::WriteTextFileResponse>,
+                                    _connection: ConnectionTo<Agent>| {
                             // Emit synthetic ToolCall for TUI rendering.
-                            let tool_call_id = ToolCallId::from(format!(
+                            let tool_call_id = acp::ToolCallId::from(format!(
                                 "write_text_file-{}",
                                 request.path.display()
                             ));
-                            let title =
-                                format!("Writing {}", request.path.display());
-                            let tool_call = ToolCall::new(tool_call_id, title)
-                                .kind(ToolKind::Execute)
-                                .status(ToolCallStatus::Pending);
-                            let _ = notification_tx.try_send(SessionUpdate::ToolCall(tool_call));
+                            let title = format!("Writing {}", request.path.display());
+                            let tool_call = acp::ToolCall::new(tool_call_id, title)
+                                .kind(acp::ToolKind::Execute)
+                                .status(acp::ToolCallStatus::Pending);
+                            let _ = event_tx.try_send(ConnectionEvent::SessionUpdate(
+                                acp::SessionUpdate::ToolCall(tool_call),
+                            ));
 
                             let path = &request.path;
                             let resolved_path = if path.is_relative() {
@@ -313,65 +290,58 @@ impl SacpConnection {
                             };
 
                             // Security: restrict writes to workspace or /tmp.
-                            let allowed =
-                                if let Ok(canonical) = resolved_path.canonicalize() {
+                            let allowed = if let Ok(canonical) = resolved_path.canonicalize() {
+                                let in_cwd = cwd
+                                    .canonicalize()
+                                    .map(|c| canonical.starts_with(&c))
+                                    .unwrap_or(false);
+                                let in_tmp = canonical.starts_with("/tmp");
+                                in_cwd || in_tmp
+                            } else if let Some(parent) = resolved_path.parent() {
+                                if let Ok(canonical_parent) = parent.canonicalize() {
                                     let in_cwd = cwd
                                         .canonicalize()
-                                        .map(|c| canonical.starts_with(&c))
+                                        .map(|c| canonical_parent.starts_with(&c))
                                         .unwrap_or(false);
-                                    let in_tmp = canonical.starts_with("/tmp");
+                                    let in_tmp = canonical_parent.starts_with("/tmp");
                                     in_cwd || in_tmp
-                                } else if let Some(parent) = resolved_path.parent() {
-                                    if let Ok(canonical_parent) = parent.canonicalize() {
-                                        let in_cwd = cwd
-                                            .canonicalize()
-                                            .map(|c| {
-                                                canonical_parent.starts_with(&c)
-                                            })
-                                            .unwrap_or(false);
-                                        let in_tmp =
-                                            canonical_parent.starts_with("/tmp");
-                                        in_cwd || in_tmp
-                                    } else {
-                                        resolved_path.starts_with(&cwd)
-                                            || resolved_path.starts_with("/tmp")
-                                    }
                                 } else {
-                                    false
-                                };
+                                    resolved_path.starts_with(&cwd)
+                                        || resolved_path.starts_with("/tmp")
+                                }
+                            } else {
+                                false
+                            };
 
                             if !allowed {
-                                request_cx.respond_with_error(
-                                    sacp::Error::invalid_params().data(format!(
-                                        "Write restricted to working directory ({}) or /tmp. Path: {}",
-                                        cwd.display(),
-                                        resolved_path.display()
-                                    )),
-                                )?;
+                                responder
+                                    .respond_with_error(sacp::Error::invalid_params().data(format!(
+                                    "Write restricted to working directory ({}) or /tmp. Path: {}",
+                                    cwd.display(),
+                                    resolved_path.display()
+                                )))?;
                                 return Ok(());
                             }
 
                             // Create parent directories if needed.
                             if let Some(parent) = resolved_path.parent()
                                 && !parent.exists()
-                                    && let Err(e) = std::fs::create_dir_all(parent) {
-                                        request_cx.respond_with_error(
-                                            sacp::util::internal_error(
-                                                e.to_string(),
-                                            ),
-                                        )?;
-                                        return Ok(());
-                                    }
+                                && let Err(e) = std::fs::create_dir_all(parent)
+                            {
+                                responder.respond_with_error(sacp::util::internal_error(
+                                    e.to_string(),
+                                ))?;
+                                return Ok(());
+                            }
 
                             match std::fs::write(&resolved_path, &request.content) {
                                 Ok(()) => {
-                                    request_cx
-                                        .respond(WriteTextFileResponse::new())?;
+                                    responder.respond(acp::WriteTextFileResponse::new())?;
                                 }
                                 Err(e) => {
-                                    request_cx.respond_with_error(
-                                        sacp::util::internal_error(e.to_string()),
-                                    )?;
+                                    responder.respond_with_error(sacp::util::internal_error(
+                                        e.to_string(),
+                                    ))?;
                                 }
                             }
                             Ok(())
@@ -381,22 +351,23 @@ impl SacpConnection {
                 )
                 .on_receive_request(
                     {
-                        let notification_tx = notify_tx_for_read;
+                        let event_tx = event_tx_for_read;
                         let cwd = read_cwd;
-                        async move |request: ReadTextFileRequest,
-                                    request_cx: sacp::JrRequestCx<ReadTextFileResponse>,
-                                    _cx: JrConnectionCx<ClientToAgent>| {
+                        async move |request: acp::ReadTextFileRequest,
+                                    responder: sacp::Responder<acp::ReadTextFileResponse>,
+                                    _connection: ConnectionTo<Agent>| {
                             // Emit synthetic ToolCall for TUI rendering.
-                            let tool_call_id = ToolCallId::from(format!(
+                            let tool_call_id = acp::ToolCallId::from(format!(
                                 "read_text_file-{}",
                                 request.path.display()
                             ));
-                            let title =
-                                format!("Reading {}", request.path.display());
-                            let tool_call = ToolCall::new(tool_call_id, title)
-                                .kind(ToolKind::Execute)
-                                .status(ToolCallStatus::Pending);
-                            let _ = notification_tx.try_send(SessionUpdate::ToolCall(tool_call));
+                            let title = format!("Reading {}", request.path.display());
+                            let tool_call = acp::ToolCall::new(tool_call_id, title)
+                                .kind(acp::ToolKind::Execute)
+                                .status(acp::ToolCallStatus::Pending);
+                            let _ = event_tx.try_send(ConnectionEvent::SessionUpdate(
+                                acp::SessionUpdate::ToolCall(tool_call),
+                            ));
 
                             // Resolve relative paths against cwd.
                             let resolved_path = if request.path.is_relative() {
@@ -407,13 +378,12 @@ impl SacpConnection {
 
                             match std::fs::read_to_string(&resolved_path) {
                                 Ok(content) => {
-                                    request_cx
-                                        .respond(ReadTextFileResponse::new(content))?;
+                                    responder.respond(acp::ReadTextFileResponse::new(content))?;
                                 }
                                 Err(e) => {
-                                    request_cx.respond_with_error(
-                                        sacp::util::internal_error(e.to_string()),
-                                    )?;
+                                    responder.respond_with_error(sacp::util::internal_error(
+                                        e.to_string(),
+                                    ))?;
                                 }
                             }
                             Ok(())
@@ -421,20 +391,20 @@ impl SacpConnection {
                     },
                     sacp::on_receive_request!(),
                 )
-                .run_until(transport, |cx: JrConnectionCx<ClientToAgent>| async move {
+                .connect_with(transport, |connection: ConnectionTo<Agent>| async move {
                     // Initialization handshake.
-                    let response = cx
+                    let response = connection
                         .send_request(
-                            InitializeRequest::new(ProtocolVersion::LATEST)
+                            acp::InitializeRequest::new(acp::ProtocolVersion::LATEST)
                                 .client_capabilities(
-                                    ClientCapabilities::new().fs(
-                                        FileSystemCapability::new()
+                                    acp::ClientCapabilities::new().fs(
+                                        acp::FileSystemCapabilities::new()
                                             .read_text_file(true)
                                             .write_text_file(true),
                                     ),
                                 )
                                 .client_info(
-                                    Implementation::new("codex", env!("CARGO_PKG_VERSION"))
+                                    acp::Implementation::new("codex", env!("CARGO_PKG_VERSION"))
                                         .title("Codex CLI"),
                                 ),
                         )
@@ -449,23 +419,20 @@ impl SacpConnection {
                                     resp.protocol_version,
                                     MINIMUM_SUPPORTED_VERSION
                                 )));
-                                return Err(sacp::util::internal_error(
-                                    "Protocol version too old",
-                                ));
+                                return Err(sacp::util::internal_error("Protocol version too old"));
                             }
                             debug!(
-                                "ACP connection established (SACP v10), agent: {:?}",
+                                "ACP connection established (SACP v11), agent: {:?}",
                                 resp.agent_info
                             );
-                            let _ = init_tx.send(Ok((cx.clone(), resp.agent_capabilities)));
+                            let _ = init_tx.send(Ok((connection.clone(), resp.agent_capabilities)));
 
                             // Keep connection alive until the task is aborted.
                             futures::future::pending::<Result<(), sacp::Error>>().await
                         }
                         Err(e) => {
-                            let _ = init_tx.send(Err(anyhow::anyhow!(
-                                "ACP initialization failed: {e}"
-                            )));
+                            let _ = init_tx
+                                .send(Err(anyhow::anyhow!("ACP initialization failed: {e}")));
                             Err(e)
                         }
                     }
@@ -485,8 +452,7 @@ impl SacpConnection {
         Ok(Self {
             cx,
             agent_capabilities: capabilities,
-            approval_rx,
-            notification_rx,
+            event_rx,
             model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
             connection_task,
             child,
@@ -501,11 +467,11 @@ impl SacpConnection {
     pub async fn create_session(
         &self,
         cwd: &Path,
-        mcp_servers: Vec<sacp::schema::McpServer>,
-    ) -> Result<SessionId> {
+        mcp_servers: Vec<acp::McpServer>,
+    ) -> Result<acp::SessionId> {
         let response = self
             .cx
-            .send_request(NewSessionRequest::new(cwd).mcp_servers(mcp_servers))
+            .send_request(acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers))
             .block_task()
             .await
             .context("Failed to create ACP session")?;
@@ -528,12 +494,12 @@ impl SacpConnection {
     /// Load (resume) an existing session.
     ///
     /// The agent replays previous session history. Updates flow through the
-    /// unified notification channel. The returned `SessionId` is the same as
+    /// ordered event inbox. The returned `SessionId` is the same as
     /// the input `session_id` (the LoadSessionResponse doesn't contain one).
-    pub async fn load_session(&self, session_id: &str, cwd: &Path) -> Result<SessionId> {
+    pub async fn load_session(&self, session_id: &str, cwd: &Path) -> Result<acp::SessionId> {
         let response = self
             .cx
-            .send_request(LoadSessionRequest::new(session_id.to_string(), cwd))
+            .send_request(acp::LoadSessionRequest::new(session_id.to_string(), cwd))
             .block_task()
             .await
             .context("Failed to load ACP session")?;
@@ -547,19 +513,19 @@ impl SacpConnection {
 
         // The session ID from the request is reused since the response
         // doesn't contain one.
-        Ok(SessionId::from(session_id.to_string()))
+        Ok(acp::SessionId::from(session_id.to_string()))
     }
 
     /// Send a prompt to an existing session and receive streaming updates.
     ///
-    /// Updates flow through the unified notification channel.
+    /// Updates flow through the ordered event inbox.
     pub async fn prompt(
         &self,
-        session_id: SessionId,
-        prompt: Vec<ContentBlock>,
-    ) -> Result<StopReason> {
+        session_id: acp::SessionId,
+        prompt: Vec<acp::ContentBlock>,
+    ) -> Result<acp::StopReason> {
         self.cx
-            .send_request(PromptRequest::new(session_id, prompt))
+            .send_request(acp::PromptRequest::new(session_id, prompt))
             .block_task()
             .await
             .context("ACP prompt failed")
@@ -567,25 +533,20 @@ impl SacpConnection {
     }
 
     /// Cancel an ongoing prompt.
-    pub async fn cancel(&self, session_id: &SessionId) -> Result<()> {
+    pub async fn cancel(&self, session_id: &acp::SessionId) -> Result<()> {
         self.cx
-            .send_notification(CancelNotification::new(session_id.clone()))
+            .send_notification(acp::CancelNotification::new(session_id.clone()))
             .context("Failed to cancel ACP session")
     }
 
     /// Get the agent's capabilities.
-    pub fn capabilities(&self) -> &AgentCapabilities {
+    pub fn capabilities(&self) -> &acp::AgentCapabilities {
         &self.agent_capabilities
     }
 
-    /// Take ownership of the approval request receiver.
-    pub fn take_approval_receiver(&mut self) -> mpsc::Receiver<ApprovalRequest> {
-        std::mem::replace(&mut self.approval_rx, mpsc::channel(1).1)
-    }
-
-    /// Take ownership of the unified notification receiver.
-    pub fn take_notification_receiver(&mut self) -> mpsc::Receiver<SessionUpdate> {
-        std::mem::replace(&mut self.notification_rx, mpsc::channel(1).1)
+    /// Take ownership of the ordered ACP event receiver.
+    pub fn take_event_receiver(&mut self) -> mpsc::Receiver<ConnectionEvent> {
+        std::mem::replace(&mut self.event_rx, mpsc::channel(1).1)
     }
 
     /// Get the current model state.
@@ -622,10 +583,12 @@ impl SacpConnection {
 
     /// Switch to a different model for the given session.
     #[cfg(feature = "unstable")]
-    pub async fn set_model(&self, session_id: &SessionId, model_id: &ModelId) -> Result<()> {
-        // SetSessionModelRequest doesn't have JrRequest impl in sacp v10,
-        // so we send it as an UntypedMessage with the correct method name.
-        let request = SetSessionModelRequest::new(session_id.clone(), model_id.clone());
+    pub async fn set_model(
+        &self,
+        session_id: &acp::SessionId,
+        model_id: &acp::ModelId,
+    ) -> Result<()> {
+        let request = acp::SetSessionModelRequest::new(session_id.clone(), model_id.clone());
         let untyped = UntypedMessage::new("session/set_model", &request)
             .context("Failed to serialize SetSessionModelRequest")?;
         self.cx

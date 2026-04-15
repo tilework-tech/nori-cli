@@ -21,12 +21,12 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 
 **Mock Behaviors**: Controlled via environment variables that the E2E tests set on the mock agent process. Each env var activates a specific behavior scenario. Key scenarios include multi-turn conversations, tool call streaming, permission requests, file operations, race condition simulations, and session lifecycle behaviors.
 
-**Session Lifecycle Testing**: Several env vars control `session/load` behavior for testing the resume path in `@/codex-rs/acp/src/backend.rs`:
+**Session Lifecycle Testing**: Several env vars control `session/load` behavior for testing the resume path in `@/codex-rs/acp/src/backend/session.rs`:
 - `MOCK_AGENT_SUPPORT_LOAD_SESSION` -- when set, the agent advertises `load_session: true` in its capabilities during `initialize()`
 - `MOCK_AGENT_LOAD_SESSION_FAIL` -- when set, the `load_session()` handler returns an error instead of succeeding, allowing tests to exercise the runtime-failure fallback path
 - `MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT` -- when set to an integer N, the `load_session()` handler sends N text-chunk notifications (via `send_text_chunk()`) before returning, simulating history replay with a configurable volume of events. Used to test the deferred-relay pattern in `resume_session()` that prevents deadlocks when the notification count exceeds the bounded `event_tx` channel capacity.
 
-**Environment Variable Echo**: The `MOCK_AGENT_ECHO_ENV` env var causes the mock agent's `prompt()` handler to respond with `ENV:<name>=<value>` (or `ENV:<name>=<unset>` if the variable is absent). Used by `test_codex_home_not_inherited_by_agent_subprocess` in `@/codex-rs/acp/src/connection/tests.rs` to verify that the parent's `CODEX_HOME` is not inherited by the spawned ACP subprocess.
+**Environment Variable Echo**: The `MOCK_AGENT_ECHO_ENV` env var causes the mock agent's `prompt()` handler to respond with `ENV:<name>=<value>` (or `ENV:<name>=<unset>` if the variable is absent). Used by `test_codex_home_not_inherited_by_agent_subprocess` in `@/codex-rs/acp/src/connection/sacp_connection_tests.rs` to verify that the parent's `CODEX_HOME` is not inherited by the spawned ACP subprocess.
 
 **Prompt Echo**: The `MOCK_AGENT_ECHO_PROMPT` env var causes the mock agent's `prompt()` handler to echo back the full prompt text it received. Used by session context tests in `@/codex-rs/acp/src/backend/tests/part5.rs` to verify that `AcpBackendConfig.session_context` is correctly prepended to the first user prompt and consumed after that.
 
@@ -68,6 +68,7 @@ This simulates the real-world race condition that the `InterruptManager.flush_co
 ### Things to Know
 
 - The mock is a binary crate (no lib.rs) intended only for testing
+- Local ACP test runs expect the binary to exist at `target/debug/mock_acp_agent` or via `MOCK_ACP_AGENT_BIN`; `cargo build -p mock-acp-agent` prepares that path when CI is not setting the env var
 - Uses the same ACP protocol as real agents for realistic testing
 - Simulates streaming with configurable chunk delays
 - Supports permission options (accept, deny, skip)

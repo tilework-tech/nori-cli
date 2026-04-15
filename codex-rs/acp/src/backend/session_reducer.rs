@@ -4,6 +4,7 @@
 //! mutates [`SessionRuntime`] and produces [`ClientEvent`]s. The caller
 //! executes any [`SideEffect`]s after reduction.
 
+use agent_client_protocol_schema as acp;
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use nori_protocol::PromptCompleted;
@@ -17,7 +18,6 @@ use nori_protocol::session_runtime::SessionPhase;
 use nori_protocol::session_runtime::SessionRuntime;
 use nori_protocol::session_runtime::TranscriptMessage;
 use nori_protocol::session_runtime::TranscriptRole;
-use sacp::schema as acp;
 
 /// Everything that can affect [`SessionRuntime`] state.
 #[derive(Debug)]

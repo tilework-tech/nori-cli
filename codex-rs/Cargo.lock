@@ -44,7 +44,7 @@ version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2659b1089101b15db31137710159421cb44785ecdb5ba784be3b4a6f8cb8a475"
 dependencies = [
- "agent-client-protocol-schema",
+ "agent-client-protocol-schema 0.10.8",
  "anyhow",
  "async-broadcast",
  "async-trait",
@@ -67,6 +67,20 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+]
+
+[[package]]
+name = "agent-client-protocol-schema"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc0a5d70688e969fc0e58d74625441adddb57fe56c29dc9422dde397c8eadda"
+dependencies = [
+ "anyhow",
+ "derive_more 2.0.1",
+ "schemars 1.0.4",
+ "serde",
+ "serde_json",
+ "strum 0.28.0",
 ]
 
 [[package]]
@@ -822,7 +836,7 @@ checksum = "e9b18233253483ce2f65329a24072ec414db782531bdbb7d0bbc4bd2ce6b7e21"
 name = "codex-acp"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol-schema",
+ "agent-client-protocol-schema 0.11.6",
  "anyhow",
  "base64",
  "chrono",
@@ -1177,7 +1191,7 @@ dependencies = [
  "oauth2",
  "pretty_assertions",
  "reqwest",
- "rmcp",
+ "rmcp 0.12.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -2717,7 +2731,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3704,8 +3718,8 @@ dependencies = [
 name = "nori-protocol"
 version = "0.0.0"
 dependencies = [
+ "agent-client-protocol-schema 0.11.6",
  "pretty_assertions",
- "sacp",
  "serde",
  "serde_json",
 ]
@@ -4687,7 +4701,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -4724,7 +4738,7 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -5017,7 +5031,7 @@ dependencies = [
  "process-wrap",
  "rand 0.9.4",
  "reqwest",
- "rmcp-macros",
+ "rmcp-macros 0.12.0",
  "schemars 1.0.4",
  "serde",
  "serde_json",
@@ -5033,10 +5047,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmcp"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f542f74cf247da16f19bbc87e298cd201e912314f4083e88cdd671f44f5fcb53"
+dependencies = [
+ "async-trait",
+ "base64",
+ "chrono",
+ "futures",
+ "pastey",
+ "pin-project-lite",
+ "rmcp-macros 1.4.0",
+ "schemars 1.0.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "rmcp-macros"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3f81daaa494eb8e985c9462f7d6ce1ab05e5299f48aafd76cdd3d8b060e6f59"
+dependencies = [
+ "darling 0.23.0",
+ "proc-macro2",
+ "quote",
+ "serde_json",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "rmcp-macros"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2391e4ae47f314e70eaafb6c7bd82e495e770b935448864446302143019151f"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -5173,18 +5222,18 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "sacp"
-version = "10.1.0"
+version = "11.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704f40d3c269b30229c34093b658ec80c4fac103281654b3965249c592dd6fa6"
+checksum = "b4c55e83008bb3aec4bc1348bf1a58dc5d42381ee704697dccb5c59553dce0fc"
 dependencies = [
- "agent-client-protocol-schema",
+ "agent-client-protocol-schema 0.11.6",
  "anyhow",
  "boxfnonce",
  "futures",
  "futures-concurrency",
- "fxhash",
  "jsonrpcmsg",
- "rmcp",
+ "rmcp 1.4.0",
+ "rustc-hash 2.1.1",
  "sacp-derive",
  "schemars 1.0.4",
  "serde",
@@ -5198,9 +5247,9 @@ dependencies = [
 
 [[package]]
 name = "sacp-derive"
-version = "10.0.0"
+version = "11.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92150f9246c01d501855e34469810a82adc27c416c8d8e21665567f8cd966f29"
+checksum = "ab42f7ccff8ab957cb7eaee9727cfca1ba38ea390178cb3d1cdfc1ddbce1ddd8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5942,6 +5991,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros 0.28.0",
+]
+
+[[package]]
 name = "strum_macros"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5959,6 +6017,18 @@ name = "strum_macros"
 version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
 dependencies = [
  "heck",
  "proc-macro2",

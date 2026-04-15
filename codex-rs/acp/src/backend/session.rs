@@ -61,7 +61,7 @@ impl AcpBackend {
             is_first_prompt_val,
             used_fallback,
             deferred_replay_client_events,
-            notification_rx,
+            event_rx,
             session_driver_state,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
@@ -69,14 +69,14 @@ impl AcpBackend {
             // Take the notification receiver so we can collect replay events
             // during session/load. With the unified channel, load replay
             // events flow through the same notification_tx as all other updates.
-            let notification_rx = connection.take_notification_receiver();
+            let event_rx = connection.take_event_receiver();
 
             // Collect replay events into a buffer. The collector runs until
             // load_session() finishes and signals completion via the oneshot.
             let (load_done_tx, load_done_rx) = tokio::sync::oneshot::channel::<()>();
             let load_request_id = uuid::Uuid::new_v4().to_string();
             let collect_handle = tokio::spawn(async move {
-                let mut notification_rx = notification_rx;
+                let mut event_rx = event_rx;
                 let mut session_driver = session_runtime_driver::SessionDriver::new();
                 let mut buffered_events = client_events_to_replay_client_events(
                     session_driver
@@ -89,26 +89,29 @@ impl AcpBackend {
                 loop {
                     tokio::select! {
                         biased;
-                        update = notification_rx.recv() => {
-                            match update {
-                                Some(update) => {
+                        maybe_event = event_rx.recv() => {
+                            match maybe_event {
+                                Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
                                     buffered_events.extend(client_events_to_replay_client_events(
                                         session_driver
                                             .apply(session_reducer::InboundEvent::Notification(Box::new(update)))
                                             .events,
                                     ));
                                 }
+                                Some(crate::connection::ConnectionEvent::ApprovalRequest(_)) => {}
                                 None => break,
                             }
                         }
                         _ = &mut done => {
                             // Drain any remaining buffered updates after load completes
-                            while let Ok(update) = notification_rx.try_recv() {
-                                buffered_events.extend(client_events_to_replay_client_events(
-                                    session_driver
-                                        .apply(session_reducer::InboundEvent::Notification(Box::new(update)))
-                                        .events,
-                                ));
+                            while let Ok(event) = event_rx.try_recv() {
+                                if let crate::connection::ConnectionEvent::SessionUpdate(update) = event {
+                                    buffered_events.extend(client_events_to_replay_client_events(
+                                        session_driver
+                                            .apply(session_reducer::InboundEvent::Notification(Box::new(update)))
+                                            .events,
+                                    ));
+                                }
                             }
                             buffered_events.extend(client_events_to_replay_client_events(
                                 session_driver
@@ -119,7 +122,7 @@ impl AcpBackend {
                         }
                     }
                 }
-                (session_driver, notification_rx, buffered_events)
+                (session_driver, event_rx, buffered_events)
             });
 
             match connection.load_session(sid, &cwd).await {
@@ -234,19 +237,18 @@ impl AcpBackend {
                 (Vec::new(), None)
             };
 
-            let notification_rx = connection.take_notification_receiver();
+            let event_rx = connection.take_event_receiver();
             (
                 session_id,
                 summary,
                 true,
                 None,
                 replay_events,
-                notification_rx,
+                event_rx,
                 session_runtime_driver::SessionDriver::new(),
             )
         };
 
-        let approval_rx = connection.take_approval_receiver();
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let session_driver = Arc::new(Mutex::new(session_driver_state));
@@ -390,19 +392,11 @@ impl AcpBackend {
                 .ok();
         }
 
-        tokio::spawn(Self::run_approval_handler(
+        tokio::spawn(Self::run_connection_event_relay(
             backend.clone(),
-            approval_rx,
-            Arc::clone(&pending_approvals),
-            Arc::clone(&user_notifier),
-            approval_policy_rx,
-        ));
-
-        // Spawn notification relay for inter-turn notifications
-        tokio::spawn(Self::run_notification_relay(
-            backend.clone(),
-            notification_rx,
+            event_rx,
             prompt_result_rx,
+            approval_policy_rx,
         ));
 
         if !deferred_replay_client_events.is_empty() {

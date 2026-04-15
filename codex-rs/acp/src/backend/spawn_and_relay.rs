@@ -103,9 +103,7 @@ impl AcpBackend {
             }
         }
 
-        // Take the approval receiver for handling permission requests
-        let approval_rx = connection.take_approval_receiver();
-        let notification_rx = connection.take_notification_receiver();
+        let event_rx = connection.take_event_receiver();
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
@@ -243,31 +241,103 @@ impl AcpBackend {
             .await
             .ok();
 
-        // Spawn approval handler task
-        tokio::spawn(Self::run_approval_handler(
+        // Spawn reducer loop: processes all transport events and prompt
+        // results through the serialized reducer/runtime pipeline.
+        tokio::spawn(Self::run_connection_event_relay(
             backend.clone(),
-            approval_rx,
-            Arc::clone(&pending_approvals),
-            Arc::clone(&user_notifier),
-            approval_policy_rx,
-        ));
-
-        // Spawn reducer loop: processes ALL session notifications through the
-        // serialized reducer, replacing the old per-prompt update handler and
-        // persistent relay.
-        tokio::spawn(Self::run_notification_relay(
-            backend.clone(),
-            notification_rx,
+            event_rx,
             prompt_result_rx,
+            approval_policy_rx,
         ));
 
         Ok(backend)
     }
 
-    /// Background task to handle approval requests from the ACP connection.
-    ///
-    /// When `approval_policy` is `AskForApproval::Never` (yolo mode), requests
-    /// are auto-approved without prompting the user.
+    /// Background task that processes transport events and prompt results
+    /// through the serialized session reducer/runtime pipeline.
+    pub(super) async fn run_connection_event_relay(
+        backend: AcpBackend,
+        mut event_rx: mpsc::Receiver<crate::connection::ConnectionEvent>,
+        mut prompt_result_rx: mpsc::Receiver<session_reducer::InboundEvent>,
+        approval_policy_rx: watch::Receiver<AskForApproval>,
+    ) {
+        let approval_policy_rx = approval_policy_rx;
+        loop {
+            tokio::select! {
+                biased;
+                maybe_event = event_rx.recv() => {
+                    match maybe_event {
+                        Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
+                            let _ = backend
+                                .session_event_tx
+                                .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                                    session_reducer::InboundEvent::Notification(Box::new(update)),
+                                ))
+                                .await;
+                        }
+                        Some(crate::connection::ConnectionEvent::ApprovalRequest(request)) => {
+                            let current_policy = *approval_policy_rx.borrow();
+                            let _ = backend
+                                .session_event_tx
+                                .send(
+                                    session_runtime_driver::SessionRuntimeInput::PermissionRequest {
+                                        pending_request: Box::new(PendingApprovalRequest {
+                                            request_id: request.request_id.clone(),
+                                            request,
+                                        }),
+                                        current_policy,
+                                    },
+                                )
+                                .await;
+                        }
+                        None => break,
+                    }
+                }
+                maybe_result = prompt_result_rx.recv() => {
+                    match maybe_result {
+                        Some(result) => {
+                            let _ = backend
+                                .session_event_tx
+                                .send(session_runtime_driver::SessionRuntimeInput::Reducer(result))
+                                .await;
+                        }
+                        None => {
+                            while let Some(event) = event_rx.recv().await {
+                                match event {
+                                    crate::connection::ConnectionEvent::SessionUpdate(update) => {
+                                        let _ = backend
+                                            .session_event_tx
+                                            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                                                session_reducer::InboundEvent::Notification(Box::new(update)),
+                                            ))
+                                            .await;
+                                    }
+                                    crate::connection::ConnectionEvent::ApprovalRequest(request) => {
+                                        let current_policy = *approval_policy_rx.borrow();
+                                        let _ = backend
+                                            .session_event_tx
+                                            .send(
+                                                session_runtime_driver::SessionRuntimeInput::PermissionRequest {
+                                                    pending_request: Box::new(PendingApprovalRequest {
+                                                        request_id: request.request_id.clone(),
+                                                        request,
+                                                    }),
+                                                    current_policy,
+                                                },
+                                            )
+                                            .await;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub(super) async fn run_approval_handler(
         backend: AcpBackend,
@@ -294,8 +364,7 @@ impl AcpBackend {
         }
     }
 
-    /// Background task that processes ALL session notifications through the
-    /// serialized session reducer instead of forwarding them directly.
+    #[cfg(test)]
     pub(super) async fn run_notification_relay(
         backend: AcpBackend,
         mut notification_rx: mpsc::Receiver<acp::SessionUpdate>,

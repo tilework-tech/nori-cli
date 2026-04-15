@@ -1,7 +1,7 @@
 //! ACP Connection management
 //!
 //! Provides `SacpConnection` for spawning and communicating with ACP agent
-//! subprocesses using the SACP v10 protocol over stdin/stdout.
+//! subprocesses using the SACP v11 protocol over stdin/stdout.
 
 use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
 use codex_protocol::approvals::ExecApprovalRequestEvent;
@@ -14,6 +14,13 @@ pub mod sacp_connection;
 
 #[cfg(test)]
 mod sacp_connection_tests;
+
+/// Raw events emitted by the ACP transport adapter in source order.
+#[derive(Debug)]
+pub enum ConnectionEvent {
+    SessionUpdate(acp::SessionUpdate),
+    ApprovalRequest(ApprovalRequest),
+}
 
 /// The type of approval event to send to the UI.
 ///

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use sacp::schema as acp;
+use agent_client_protocol_schema as acp;
 use serde::Deserialize;
 use serde::Serialize;
 
 pub mod session_runtime;
 
-pub use sacp::schema::StopReason;
+pub use agent_client_protocol_schema::StopReason;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", rename_all = "snake_case")]
