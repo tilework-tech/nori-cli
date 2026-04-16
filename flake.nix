@@ -17,11 +17,11 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          codex-rs = pkgs.callPackage ./codex-rs { };
+          nori_rs = pkgs.callPackage ./nori-rs { };
         in
         {
-          codex-rs = codex-rs;
-          default = codex-rs;
+          nori-rs = nori_rs;
+          default = nori_rs;
         }
       );
 
@@ -34,7 +34,7 @@
         {
           default = pkgs.mkShell {
             # Inherit build dependencies from package definition
-            inputsFrom = [ (pkgs.callPackage ./codex-rs { }) ];
+            inputsFrom = [ (pkgs.callPackage ./nori-rs { }) ];
 
             # Additional dev tools (Rust toolchain managed by rustup)
             buildInputs = linkerPkgs ++ [

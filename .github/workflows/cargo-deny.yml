@@ -10,7 +10,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
-        working-directory: ./codex-rs
+        working-directory: ./nori-rs
     env:
       # Disable sccache wrapper from .cargo/config.toml since it's not available
       # in the cargo-deny Docker container.
@@ -26,7 +26,7 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           rust-version: nightly
-          manifest-path: ./codex-rs/Cargo.toml
+          manifest-path: ./nori-rs/Cargo.toml
           log-level: warn
           command: check
           arguments: --all-features

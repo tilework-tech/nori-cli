@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: codex-rs
+        working-directory: nori-rs
     env:
       CARGO_INCREMENTAL: "0"
       # Speed up repeated builds across CI runs by caching compiled objects.
@@ -60,8 +60,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "hash=${{ hashFiles('codex-rs/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
-          echo "toolchain_hash=${{ hashFiles('codex-rs/rust-toolchain.toml') }}" >> "$GITHUB_OUTPUT"
+          echo "hash=${{ hashFiles('nori-rs/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
+          echo "toolchain_hash=${{ hashFiles('nori-rs/rust-toolchain.toml') }}" >> "$GITHUB_OUTPUT"
 
       # Cache cargo home directory (registry, git deps, etc.)
       - name: Restore cargo home cache
@@ -129,10 +129,10 @@ jobs:
           cargo build -p nori-cli --profile ci-test --target ${{ matrix.target }}
       - name: cargo test nori
         env:
-          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/codex-rs/target/mock-acp-out/mock_acp_agent
+          MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
           cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-acp
+          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-protocol
