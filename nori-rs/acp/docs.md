@@ -723,7 +723,7 @@ Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
 The `init_rolling_file_tracing()` function in `@/nori-rs/acp/src/tracing_setup.rs` provides structured file logging:
 - Sets global tracing subscriber that writes to rolling daily log files
 - Log files are named `nori-acp.YYYY-MM-DD` in the configured log directory
-- Filters at DEBUG level (debug builds) or WARN with INFO for codex_tui/acp (release builds)
+- Filters at DEBUG level (debug builds) or WARN with INFO for nori_tui/acp (release builds)
 - RUST_LOG environment variable overrides default log level
 - Uses non-blocking file appender for async-safe writes
 - Creates log directory automatically if it doesn't exist
