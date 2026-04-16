@@ -351,13 +351,8 @@ impl App {
         let upgrade_version = crate::updates::get_upgrade_version(&config);
 
         let (system_info_tx, system_info_rx) = mpsc::channel();
-        let _system_info_worker = Self::spawn_system_info_worker(
-            system_info_rx,
-            app_event_tx.clone(),
-            config.cwd.clone(),
-            config.model.clone(),
-            initial_prompt.clone(),
-        );
+        let _system_info_worker =
+            Self::spawn_system_info_worker(system_info_rx, app_event_tx.clone());
 
         let mut app = Self {
             app_event_tx,
@@ -556,31 +551,22 @@ impl App {
     fn spawn_system_info_worker(
         system_info_rx: mpsc::Receiver<SystemInfoRefreshRequest>,
         app_event_tx: AppEventSender,
-        initial_dir: PathBuf,
-        initial_model: String,
-        initial_first_message: Option<String>,
     ) -> thread::JoinHandle<()> {
         thread::spawn(move || {
-            let mut last_request = SystemInfoRefreshRequest {
-                dir: initial_dir,
-                model: Some(initial_model),
-                first_message: initial_first_message,
-            };
-            loop {
-                match system_info_rx.recv_timeout(Duration::from_secs(5)) {
-                    Ok(request) => last_request = request,
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
-                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                }
-
-                let agent_kind = last_request
+            // Refresh only when a request arrives. The initial refresh is
+            // scheduled explicitly via `request_system_info_refresh` at
+            // startup, and subsequent refreshes are driven by user actions
+            // (message submit, task completion, tool-call cwd changes,
+            // skillset install/switch). No periodic polling.
+            while let Ok(request) = system_info_rx.recv() {
+                let agent_kind = request
                     .model
                     .as_ref()
                     .and_then(|model| codex_acp::AgentKind::from_slug(model));
                 let info = crate::system_info::SystemInfo::collect_for_directory_with_message(
-                    &last_request.dir,
+                    &request.dir,
                     agent_kind,
-                    last_request.first_message.as_deref(),
+                    request.first_message.as_deref(),
                 );
                 app_event_tx.send(AppEvent::SystemInfoRefreshed(info));
             }

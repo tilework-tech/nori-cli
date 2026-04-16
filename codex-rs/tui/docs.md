@@ -227,6 +227,22 @@ Two collection methods are provided:
 
 The first-message is obtained from `ChatWidget::first_prompt_text()`, which stores the text of the first submitted prompt. This flows through `SystemInfoRefreshRequest` to the background worker, enabling accurate transcript matching when multiple sessions exist in the same project directory.
 
+**Refresh model:**
+
+`spawn_system_info_worker` runs a background thread that blocks on its request channel: a refresh happens only when a `SystemInfoRefreshRequest` is sent via `request_system_info_refresh()`. There is no periodic polling. Refreshes are triggered on:
+
+1. Startup (explicit initial refresh in `App::run()`)
+2. User message submit (`chatwidget/user_input.rs`)
+3. Task completion (`chatwidget/event_handlers.rs`)
+4. Effective cwd change observed from tool-call directories or file-change paths (debounced 500ms by `EffectiveCwdTracker`)
+5. Successful skillset install or switch (`app/event_handling.rs`)
+
+This means an external change (e.g., the user runs `nori-skillsets switch` in another terminal) will not be reflected in the footer until the next event-driven refresh. Footer staleness is bounded by user activity, not by wall-clock time.
+
+**Version caching:**
+
+`get_nori_version()` shells out to `nori-skillsets --version` (or `nori-ai --version` as a legacy fallback) and caches the result in a process-wide `OnceLock` (`NORI_VERSION_CACHE`). The installed CLI version is stable for the lifetime of a TUI process, so the subprocess runs at most once per session. Only `nori-skillsets list-active` is re-invoked on every refresh.
+
 **`/diff` Slash Command** (`get_git_diff.rs`):
 
 The `/diff` handler in `key_handling.rs` resolves the effective CWD from the `effective_cwd_tracker` (falling back to `config.cwd`) and passes it to `get_git_diff()`. This ensures `/diff` works correctly in git worktrees and directories different from the process launch directory. All git commands in `get_git_diff.rs` use `.current_dir()` when a directory is provided.

@@ -2,6 +2,7 @@ use codex_acp::AgentKind;
 use codex_acp::TranscriptLocation;
 use std::env;
 use std::process::Command;
+use std::sync::OnceLock;
 
 /// Indicates which command was used to detect the Nori version.
 /// This affects the UI display text.
@@ -161,7 +162,19 @@ fn discover_transcript(
     })
 }
 
+/// Cached result of `nori-skillsets --version` / `nori-ai --version`.
+///
+/// The installed CLI version is stable for the lifetime of a TUI process, so
+/// we detect it once and reuse the result on every subsequent `SystemInfo`
+/// refresh. This avoids spawning a heavyweight Node.js subprocess on every
+/// footer update.
+static NORI_VERSION_CACHE: OnceLock<(Option<String>, Option<NoriVersionSource>)> = OnceLock::new();
+
 fn get_nori_version() -> (Option<String>, Option<NoriVersionSource>) {
+    NORI_VERSION_CACHE.get_or_init(detect_nori_version).clone()
+}
+
+fn detect_nori_version() -> (Option<String>, Option<NoriVersionSource>) {
     // Try nori-skillsets first (new installer)
     if let Ok(output) = Command::new("nori-skillsets").arg("--version").output()
         && output.status.success()
