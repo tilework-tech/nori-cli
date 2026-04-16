@@ -161,6 +161,27 @@ impl AcpBackend {
             prompt_with_context
         };
 
+        let (phase_before_submit, active_request_id_before_submit, queue_len_before_submit) = {
+            let driver = self.session_driver.lock().await;
+            (
+                driver.phase_label(),
+                driver.active_request_id(),
+                driver.queue_len(),
+            )
+        };
+        debug!(
+            target: "acp_event_flow",
+            event_id = id,
+            phase_before_submit,
+            active_request_id_before_submit = active_request_id_before_submit
+                .as_deref()
+                .unwrap_or("<none>"),
+            queue_len_before_submit,
+            prompt_text_len = final_prompt_text.len(),
+            image_blocks = image_blocks.len(),
+            "Accepted user prompt into ACP backend"
+        );
+
         let _ = self
             .session_event_tx
             .send(session_runtime_driver::SessionRuntimeInput::Reducer(

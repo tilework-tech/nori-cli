@@ -210,3 +210,56 @@ fn test_prompt_still_streams_after_interrupt() {
         )
         .expect("Second prompt should also be interruptible");
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn test_prompt_after_interrupt_absorbs_empty_end_turn_tail() {
+    let config = SessionConfig::new()
+        .with_stream_until_cancel()
+        .with_agent_env("MOCK_AGENT_CANCEL_TAIL_EMPTY_END_TURNS", "2")
+        .with_agent_env(
+            "MOCK_AGENT_CANCEL_TAIL_FOLLOW_UP_RESPONSE",
+            "Recovered after cancel tail",
+        );
+    let mut session = TuiSession::spawn_with_config(24, 80, config).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt did not appear");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("first try").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("First prompt should become interruptible");
+
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for_text(
+            "Conversation interrupted - tell the model what to do differently",
+            TIMEOUT,
+        )
+        .expect("First prompt should report interrupt");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Prompt should return after first interrupt");
+
+    session.send_str("what have you finished?").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("Recovered after cancel tail", TIMEOUT)
+        .expect("The follow-up prompt should still produce a real response after the stale end_turn tail");
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("Recovered after cancel tail")
+                    && !screen.contains("esc to interrupt")
+            },
+            TIMEOUT,
+        )
+        .expect("The follow-up prompt should settle instead of getting stuck in another interruptible turn");
+}

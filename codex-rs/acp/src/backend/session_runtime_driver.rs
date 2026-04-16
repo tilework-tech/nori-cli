@@ -36,6 +36,24 @@ pub(crate) struct ReducerActions {
     pub completed_turn: Option<CompletedTurn>,
 }
 
+fn client_event_kind(event: &ClientEvent) -> &'static str {
+    match event {
+        ClientEvent::SessionUpdateInfo(_) => "session_update_info",
+        ClientEvent::SessionPhaseChanged(_) => "session_phase_changed",
+        ClientEvent::QueueChanged(_) => "queue_changed",
+        ClientEvent::MessageDelta(_) => "message_delta",
+        ClientEvent::PromptCompleted(_) => "prompt_completed",
+        ClientEvent::ToolSnapshot(_) => "tool_snapshot",
+        ClientEvent::ApprovalRequest(_) => "approval_request",
+        ClientEvent::AgentCommandsUpdate(_) => "agent_commands_update",
+        ClientEvent::PlanSnapshot(_) => "plan_snapshot",
+        ClientEvent::LoadCompleted => "load_completed",
+        ClientEvent::ContextCompacted(_) => "context_compacted",
+        ClientEvent::Warning(_) => "warning",
+        ClientEvent::ReplayEntry(_) => "replay_entry",
+    }
+}
+
 impl SessionDriver {
     pub(crate) fn new() -> Self {
         Self {
@@ -82,6 +100,14 @@ impl SessionDriver {
             .map(|active| active.request_id.clone())
     }
 
+    pub(crate) fn phase_label(&self) -> &'static str {
+        session_reducer::session_phase_label(&self.runtime.phase)
+    }
+
+    pub(crate) fn queue_len(&self) -> usize {
+        self.runtime.queue.len()
+    }
+
     pub(crate) fn push_permission_request(
         &mut self,
         request: &crate::connection::ApprovalRequest,
@@ -122,9 +148,27 @@ impl AcpBackend {
             event,
             InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed
         );
+        let event_kind = session_reducer::inbound_event_kind(&event);
         let actions = {
             let mut driver = self.session_driver.lock().await;
-            driver.apply(event)
+            let phase_before = driver.phase_label();
+            let active_before = driver.active_request_id();
+            let queue_len_before = driver.queue_len();
+            let actions = driver.apply(event);
+            debug!(
+                target: "acp_event_flow",
+                event_kind,
+                phase_before,
+                active_request_id_before = active_before.as_deref().unwrap_or("<none>"),
+                queue_len_before,
+                phase_after = driver.phase_label(),
+                active_request_id_after = driver.active_request_id().as_deref().unwrap_or("<none>"),
+                queue_len_after = driver.queue_len(),
+                client_events = actions.events.len(),
+                side_effects = actions.side_effects.len(),
+                "Applied reducer event in serialized session runtime"
+            );
+            actions
         };
         self.dispatch_reducer_actions(actions).await;
         if start_idle_timer {
@@ -258,6 +302,35 @@ impl AcpBackend {
     }
 
     async fn forward_and_record_client_event(&self, client_event: ClientEvent) {
+        match &client_event {
+            ClientEvent::SessionPhaseChanged(phase) => {
+                debug!(
+                    target: "acp_event_flow",
+                    client_event = client_event_kind(&client_event),
+                    ?phase,
+                    "Forwarding client event from ACP backend"
+                );
+            }
+            ClientEvent::PromptCompleted(completed) => {
+                debug!(
+                    target: "acp_event_flow",
+                    client_event = client_event_kind(&client_event),
+                    stop_reason = ?completed.stop_reason,
+                    has_last_agent_message = completed
+                        .last_agent_message
+                        .as_ref()
+                        .is_some_and(|message| !message.is_empty()),
+                    "Forwarding client event from ACP backend"
+                );
+            }
+            _ => {
+                debug!(
+                    target: "acp_event_flow",
+                    client_event = client_event_kind(&client_event),
+                    "Forwarding client event from ACP backend"
+                );
+            }
+        }
         emit_client_event(
             &self.backend_event_tx,
             self.transcript_recorder.as_ref(),
@@ -415,7 +488,7 @@ impl AcpBackend {
 
     async fn execute_side_effect(&self, side_effect: SideEffect) {
         match side_effect {
-            SideEffect::SendPrompt { prompt, .. } => {
+            SideEffect::SendPrompt { request_id, prompt } => {
                 if let Some(abort_handle) = self.idle_timer_abort.lock().await.take() {
                     abort_handle.abort();
                 }
@@ -432,22 +505,39 @@ impl AcpBackend {
                 };
                 let backend = (*self).clone();
                 let prompt_result_tx = self.prompt_result_tx.clone();
+                let request_id_for_task = request_id.clone();
                 tokio::spawn(async move {
                     let session_id = backend.session_id.read().await.clone();
+                    let prompt_kind = prompt_kind.unwrap_or(QueuedPromptKind::User);
+                    debug!(
+                        target: "acp_event_flow",
+                        request_id = %request_id_for_task,
+                        session_id = %session_id,
+                        ?prompt_kind,
+                        content_blocks = prompt.len(),
+                        "Sending ACP session/prompt request"
+                    );
                     let result = backend.connection.prompt(session_id, prompt).await;
                     match result {
                         Ok(stop_reason) => {
+                            debug!(
+                                target: "acp_event_flow",
+                                request_id = %request_id_for_task,
+                                ?stop_reason,
+                                "Prompt task received ACP session/prompt response"
+                            );
                             let _ = prompt_result_tx
                                 .send(InboundEvent::PromptResponse { stop_reason })
                                 .await;
                         }
                         Err(err) => {
-                            backend
-                                .send_prompt_error(
-                                    prompt_kind.unwrap_or(QueuedPromptKind::User),
-                                    &err,
-                                )
-                                .await;
+                            warn!(
+                                target: "acp_event_flow",
+                                request_id = %request_id_for_task,
+                                error = %err,
+                                "Prompt task failed before reducer observed a prompt response"
+                            );
+                            backend.send_prompt_error(prompt_kind, &err).await;
                             let _ = prompt_result_tx.send(InboundEvent::PromptFailed).await;
                         }
                     }
@@ -455,6 +545,11 @@ impl AcpBackend {
             }
             SideEffect::SendCancel => {
                 let session_id = self.session_id.read().await.clone();
+                debug!(
+                    target: "acp_event_flow",
+                    session_id = %session_id,
+                    "Sending ACP session/cancel notification"
+                );
                 if let Err(err) = self.connection.cancel(&session_id).await {
                     warn!("Failed to cancel ACP session: {err}");
                 }

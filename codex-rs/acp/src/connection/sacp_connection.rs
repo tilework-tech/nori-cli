@@ -5,6 +5,7 @@
 //! `ConnectionTo<Agent>` is `Send + Sync`, allowing direct async usage from the main
 //! tokio runtime without a dedicated thread or `LocalSet`.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 
@@ -40,6 +41,12 @@ use sacp::UntypedMessage;
 /// Minimum supported ACP protocol version.
 const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
 
+#[derive(Debug, Default)]
+struct SessionPromptState {
+    update_seq: i64,
+    draining_cancel_tail: bool,
+}
+
 /// A thread-safe connection to an ACP agent subprocess using SACP v11.
 ///
 /// Unlike the old `AcpConnection`, this does NOT require a dedicated worker thread.
@@ -60,6 +67,10 @@ pub struct SacpConnection {
 
     /// Ordered inbox of raw ACP events from the transport layer.
     event_rx: mpsc::Receiver<ConnectionEvent>,
+
+    /// Per-session prompt boundary state used to absorb stale terminal stop
+    /// responses after cancellation without widening the public phase model.
+    prompt_state: std::sync::Arc<Mutex<HashMap<String, SessionPromptState>>>,
 
     /// Thread-safe model state, updated on session creation and model switch.
     model_state: std::sync::Arc<std::sync::RwLock<AcpModelState>>,
@@ -152,6 +163,9 @@ impl SacpConnection {
         let event_tx_for_notifications = event_tx.clone();
         let event_tx_for_write = event_tx.clone();
         let event_tx_for_read = event_tx.clone();
+        let prompt_state =
+            std::sync::Arc::new(Mutex::new(HashMap::<String, SessionPromptState>::new()));
+        let prompt_state_for_notifications = prompt_state.clone();
         let approval_cwd = cwd.to_path_buf();
         let write_cwd = cwd.to_path_buf();
         let read_cwd = cwd.to_path_buf();
@@ -168,7 +182,22 @@ impl SacpConnection {
                 .on_receive_notification(
                     {
                         let event_tx = event_tx_for_notifications;
+                        let prompt_state = prompt_state_for_notifications;
                         async move |notification: acp::SessionNotification, _connection| {
+                            let session_id = notification.session_id.to_string();
+                            {
+                                let mut prompt_state = prompt_state.lock().await;
+                                prompt_state
+                                    .entry(session_id.clone())
+                                    .or_default()
+                                    .update_seq += 1;
+                            }
+                            debug!(
+                                target: "acp_event_flow",
+                                session_id,
+                                update_kind = super::session_update_kind(&notification.update),
+                                "Transport received ACP session/update notification"
+                            );
                             if event_tx
                                 .send(ConnectionEvent::SessionUpdate(notification.update))
                                 .await
@@ -453,6 +482,7 @@ impl SacpConnection {
             cx,
             agent_capabilities: capabilities,
             event_rx,
+            prompt_state,
             model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
             connection_task,
             child,
@@ -524,12 +554,82 @@ impl SacpConnection {
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
     ) -> Result<acp::StopReason> {
-        self.cx
-            .send_request(acp::PromptRequest::new(session_id, prompt))
-            .block_task()
-            .await
-            .context("ACP prompt failed")
-            .map(|r| r.stop_reason)
+        let session_key = session_id.to_string();
+        let mut attempt = 0_i64;
+
+        loop {
+            attempt += 1;
+            let (update_seq_before, draining_cancel_tail) = {
+                let mut prompt_state = self.prompt_state.lock().await;
+                let state = prompt_state.entry(session_key.clone()).or_default();
+                (state.update_seq, state.draining_cancel_tail)
+            };
+
+            debug!(
+                target: "acp_event_flow",
+                session_id = %session_id,
+                content_blocks = prompt.len(),
+                attempt,
+                draining_cancel_tail,
+                update_seq_before,
+                "Transport sending ACP session/prompt request"
+            );
+            let response = self
+                .cx
+                .send_request(acp::PromptRequest::new(session_id.clone(), prompt.clone()))
+                .block_task()
+                .await
+                .context("ACP prompt failed");
+
+            match response {
+                Ok(response) => {
+                    let absorb_cancel_tail_end_turn = {
+                        let mut prompt_state = self.prompt_state.lock().await;
+                        let state = prompt_state.entry(session_key.clone()).or_default();
+                        let saw_updates = state.update_seq > update_seq_before;
+                        let absorb = state.draining_cancel_tail
+                            && !saw_updates
+                            && response.stop_reason == acp::StopReason::EndTurn;
+
+                        if response.stop_reason == acp::StopReason::Cancelled {
+                            state.draining_cancel_tail = true;
+                        } else if !absorb {
+                            state.draining_cancel_tail = false;
+                        }
+
+                        debug!(
+                            target: "acp_event_flow",
+                            session_id = %session_id,
+                            attempt,
+                            stop_reason = ?response.stop_reason,
+                            saw_updates,
+                            absorb_cancel_tail_end_turn = absorb,
+                            draining_cancel_tail_after = state.draining_cancel_tail,
+                            update_seq_after = state.update_seq,
+                            "Transport received ACP session/prompt response"
+                        );
+
+                        absorb
+                    };
+
+                    if absorb_cancel_tail_end_turn {
+                        continue;
+                    }
+
+                    return Ok(response.stop_reason);
+                }
+                Err(err) => {
+                    warn!(
+                        target: "acp_event_flow",
+                        error = %err,
+                        session_id = %session_id,
+                        attempt,
+                        "Transport session/prompt request failed"
+                    );
+                    return Err(err);
+                }
+            }
+        }
     }
 
     /// Cancel an ongoing prompt.

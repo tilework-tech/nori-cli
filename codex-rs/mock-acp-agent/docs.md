@@ -30,6 +30,8 @@ Used by `@/codex-rs/tui-pty-e2e/` for end-to-end integration testing. The mock a
 
 **Prompt Echo**: The `MOCK_AGENT_ECHO_PROMPT` env var causes the mock agent's `prompt()` handler to echo back the full prompt text it received. Used by session context tests in `@/codex-rs/acp/src/backend/tests/part5.rs` to verify that `AcpBackendConfig.session_context` is correctly prepended to the first user prompt and consumed after that.
 
+**Cancel Tail Ordering**: The `MOCK_AGENT_CANCEL_TAIL_EMPTY_END_TURNS` env var reproduces the Claude-style cancel tail that motivated the ACP cancellation-ordering fix. When a streaming prompt is cancelled, the mock agent queues N immediate empty `end_turn` responses for the next prompt attempts before finally allowing the real follow-up prompt to complete. `MOCK_AGENT_CANCEL_TAIL_FOLLOW_UP_RESPONSE` overrides the text returned by that eventual real follow-up turn. These knobs are used by `@/codex-rs/acp/src/connection/sacp_connection_tests.rs` and `@/codex-rs/tui-pty-e2e/tests/streaming.rs` to verify that Nori absorbs repeated stale terminal responses without admitting a new logical prompt turn too early.
+
 **Stuck Tool Calls (No Completion)**: The `MOCK_AGENT_STUCK_TOOL_CALLS` env var triggers a scenario where 3 Read tool calls are sent with `Pending` status but never receive completion updates. After a short delay the agent sends its final text response and ends the turn. This reproduces the frozen-display bug where incomplete ExecCells fill the viewport and block `insert_history_lines()` from rendering the agent's text. The fix under test is `finalize_active_cell_as_failed()` in `@/codex-rs/tui/src/chatwidget.rs`.
 
 **Runaway Search Snapshot Amplification**: The `MOCK_AGENT_RUNAWAY_SEARCH` env var triggers a deterministic Search tool-call stream that repeatedly emits `InProgress` updates for the **same** `call_id` while the text artifact grows cumulatively on every update. Tunables:
@@ -72,7 +74,7 @@ This simulates the real-world race condition that the `InterruptManager.flush_co
 - Uses the same ACP protocol as real agents for realistic testing
 - Simulates streaming with configurable chunk delays
 - Supports permission options (accept, deny, skip)
-- Session state is tracked per-session ID
+- Session state is tracked per-session ID, including cancel-tail replay state for ordering regressions
 - Sleep durations between mock events are tuned to create reliable timing in E2E tests
 
 Created and maintained by Nori.

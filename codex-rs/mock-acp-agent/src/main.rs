@@ -42,6 +42,8 @@ struct MockAgent {
     client_request_tx: mpsc::UnboundedSender<MockClientRequest>,
     next_session_id: Cell<u64>,
     cancel_requested: Cell<bool>,
+    pending_cancel_tail_empty_end_turns: Cell<usize>,
+    follow_up_after_cancel_tail: Cell<bool>,
 }
 
 impl MockAgent {
@@ -54,6 +56,8 @@ impl MockAgent {
             next_session_id: Cell::new(0),
             client_request_tx,
             cancel_requested: Cell::new(false),
+            pending_cancel_tail_empty_end_turns: Cell::new(0),
+            follow_up_after_cancel_tail: Cell::new(false),
         }
     }
 
@@ -285,6 +289,14 @@ impl acp::Agent for MockAgent {
         eprintln!("Mock agent: prompt");
         self.cancel_requested.set(false);
         let session_id = arguments.session_id.clone();
+        let pending_cancel_tail_empty_end_turns = self.pending_cancel_tail_empty_end_turns.get();
+        if pending_cancel_tail_empty_end_turns > 0 {
+            self.pending_cancel_tail_empty_end_turns
+                .set(pending_cancel_tail_empty_end_turns - 1);
+            eprintln!("Mock agent: emitting empty end_turn from cancel tail");
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+        let complete_after_default_response = self.follow_up_after_cancel_tail.replace(false);
 
         // Support configurable stderr output for testing stderr capture
         if let Ok(count_str) = std::env::var("MOCK_AGENT_STDERR_COUNT")
@@ -749,6 +761,14 @@ impl acp::Agent for MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
+        if complete_after_default_response {
+            let response = std::env::var("MOCK_AGENT_CANCEL_TAIL_FOLLOW_UP_RESPONSE")
+                .unwrap_or_else(|_| "Recovered after cancel tail".to_string());
+            self.send_text_chunk(session_id.clone(), &response).await?;
+            eprintln!("Mock agent: completing follow-up prompt after cancel tail");
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
             self.send_text_chunk(session_id.clone(), &response).await?;
@@ -1002,6 +1022,21 @@ impl acp::Agent for MockAgent {
                     .await?;
                 iterations += 1;
                 sleep(Duration::from_millis(10)).await;
+            }
+
+            let cancel_tail_empty_end_turns =
+                std::env::var("MOCK_AGENT_CANCEL_TAIL_EMPTY_END_TURNS")
+                    .ok()
+                    .and_then(|count| count.parse::<usize>().ok())
+                    .unwrap_or(0);
+            if self.cancel_requested.get() && cancel_tail_empty_end_turns > 0 {
+                self.pending_cancel_tail_empty_end_turns
+                    .set(cancel_tail_empty_end_turns);
+                self.follow_up_after_cancel_tail.set(true);
+                eprintln!(
+                    "Mock agent: queued {} empty end_turn responses after cancel",
+                    cancel_tail_empty_end_turns
+                );
             }
 
             return Ok(acp::PromptResponse::new(if self.cancel_requested.get() {

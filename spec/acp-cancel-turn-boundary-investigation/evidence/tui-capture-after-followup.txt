@@ -1,0 +1,34 @@
+╭──────────────────────────────────────────────────────────────╮
+│ Nori CLI v0.0.0                                              │
+│                                                              │
+│ directory: ~/…/debug-acp-cancel-ordering-trace/codex-rs      │
+│ agent:     claude-debug-acp                                  │
+│ skillset:  clifford                                          │
+│                                                              │
+│ Instruction Files                                            │
+│   ~/.claude/CLAUDE.md                                        │
+│   ~/Documents/…/debug-acp-cancel-ordering-trace/CLAUDE.md    │
+│   total                                        ~4,809 tokens │
+╰──────────────────────────────────────────────────────────────╯
+
+
+› I'm testing something. Just run a foreground sleep 30 task, then say 'all done!'
+
+
+• Running sleep 30
+
+• Session usage: 24539 / 1000000 tokens, cost 0.16 USD
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Report the issue at https://
+github.com/tilework-tech/nori-cli/issues
+
+
+› what have you finished
+
+
+
+› Explain this codebase
+
+  ⎇ debug-acp-cancel-ordering-t...
+  +936 -13
+  ? for shortcuts

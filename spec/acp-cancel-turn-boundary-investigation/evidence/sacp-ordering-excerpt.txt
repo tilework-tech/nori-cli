@@ -1,0 +1,46 @@
+    pub async fn block_task(self) -> Result<T, crate::Error>
+    where
+        T: Send,
+    {
+        match self.response_rx.await {
+            Ok(ResponsePayload {
+                result: Ok(json_value),
+                ack_tx,
+            }) => {
+                // Ack immediately - we're in a spawned task, so the dispatch loop
+                // can continue while we process the value.
+                if let Some(tx) = ack_tx {
+                    let _ = tx.send(());
+                }
+    #[track_caller]
+    pub fn on_receiving_result<F>(
+        self,
+        task: impl FnOnce(Result<T, crate::Error>) -> F + 'static + Send,
+    ) -> Result<(), crate::Error>
+    where
+        F: Future<Output = Result<(), crate::Error>> + 'static + Send,
+        T: Send,
+    {
+        let task_tx = self.task_tx.clone();
+        let method = self.method;
+        let response_rx = self.response_rx;
+        let to_result = self.to_result;
+        let location = Location::caller();
+
+        Task::new(location, async move {
+            match response_rx.await {
+                Ok(ResponsePayload { result, ack_tx }) => {
+                    // Convert the result using to_result for Ok values
+                    let typed_result = match result {
+                        Ok(json_value) => to_result(json_value),
+                        Err(err) => Err(err),
+                    };
+
+                    // Run the user's callback
+                    let outcome = task(typed_result).await;
+
+                    // Ack AFTER the callback completes - this is the key difference
+                    // from block_task. The dispatch loop waits for this ack.
+                    if let Some(tx) = ack_tx {
+                        let _ = tx.send(());
+                    }

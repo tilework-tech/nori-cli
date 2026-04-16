@@ -1,0 +1,47 @@
+    /// Send a prompt to the agent. You can then read messages sent in response.
+    pub fn send_prompt(&mut self, prompt: impl ToString) -> Result<(), crate::Error> {
+        let update_tx = self.update_tx.clone();
+        self.connection
+            .send_request_to(
+                AgentPeer,
+                PromptRequest::new(self.session_id.clone(), vec![prompt.to_string().into()]),
+            )
+            .on_receiving_result(async move |result| {
+                let PromptResponse {
+                    stop_reason,
+                    meta: _,
+                    ..
+                } = result?;
+
+                update_tx
+                    .unbounded_send(SessionMessage::StopReason(stop_reason))
+                    .map_err(crate::util::internal_error)?;
+
+                Ok(())
+            })
+    }
+    /// Read all updates until the end of the turn and create a string.
+    /// Ignores non-text updates.
+    pub async fn read_to_string(&mut self) -> Result<String, crate::Error> {
+        let mut output = String::new();
+        loop {
+            let update = self.read_update().await?;
+            tracing::trace!(?update, "read_to_string update");
+            match update {
+                SessionMessage::SessionMessage(message_cx) => MatchMessage::new(message_cx)
+                    .if_notification(async |notif: SessionNotification| match notif.update {
+                        SessionUpdate::AgentMessageChunk(ContentChunk {
+                            content: ContentBlock::Text(text),
+                            meta: _,
+                            ..
+                        }) => {
+                            output.push_str(&text.text);
+                            Ok(())
+                        }
+                        _ => Ok(()),
+                    })
+                    .await
+                    .otherwise_ignore()?,
+                SessionMessage::StopReason(_stop_reason) => break,
+            }
+        }

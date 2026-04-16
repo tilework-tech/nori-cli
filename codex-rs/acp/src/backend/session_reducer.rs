@@ -18,6 +18,7 @@ use nori_protocol::session_runtime::SessionPhase;
 use nori_protocol::session_runtime::SessionRuntime;
 use nori_protocol::session_runtime::TranscriptMessage;
 use nori_protocol::session_runtime::TranscriptRole;
+use tracing::debug;
 
 /// Everything that can affect [`SessionRuntime`] state.
 #[derive(Debug)]
@@ -38,6 +39,32 @@ pub enum InboundEvent {
     CancelSubmit,
     /// A `session/load` was initiated.
     LoadSubmit { request_id: String },
+}
+
+pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
+    match event {
+        InboundEvent::Notification(update) => crate::connection::session_update_kind(update),
+        InboundEvent::PromptResponse { .. } => "prompt_response",
+        InboundEvent::PromptFailed => "prompt_failed",
+        InboundEvent::LoadResponse => "load_response",
+        InboundEvent::PermissionRequest { .. } => "permission_request",
+        InboundEvent::PromptSubmit(_) => "prompt_submit",
+        InboundEvent::CancelSubmit => "cancel_submit",
+        InboundEvent::LoadSubmit { .. } => "load_submit",
+    }
+}
+
+pub(super) fn session_phase_label(phase: &SessionPhase) -> &'static str {
+    match phase {
+        SessionPhase::Idle => "idle",
+        SessionPhase::Loading { .. } => "loading",
+        SessionPhase::Prompt {
+            cancelling: true, ..
+        } => "cancelling",
+        SessionPhase::Prompt {
+            cancelling: false, ..
+        } => "prompt",
+    }
 }
 
 /// Side effects the caller must execute after reduction.
@@ -116,6 +143,12 @@ fn reduce_prompt_submit(
 ) {
     if runtime.phase != SessionPhase::Idle {
         runtime.queue.push_back(prompt);
+        debug!(
+            target: "acp_event_flow",
+            phase = session_phase_label(&runtime.phase),
+            queue_len = runtime.queue.len(),
+            "Queued prompt while another session request is active"
+        );
         out.events.push(ClientEvent::QueueChanged(QueueChanged {
             prompts: queued_prompt_texts(runtime),
         }));
@@ -126,6 +159,7 @@ fn reduce_prompt_submit(
 }
 
 fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut ReduceOutput) {
+    let phase_before = session_phase_label(&runtime.phase);
     let request_id = new_request_id();
 
     // Build ACP content blocks from the queued prompt.
@@ -153,6 +187,15 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
             content: display_text.clone(),
         });
     }
+
+    debug!(
+        target: "acp_event_flow",
+        request_id = %request_id,
+        prompt_kind = ?prompt.kind,
+        phase_before,
+        queue_len = runtime.queue.len(),
+        "Reducer started prompt and emitted session/prompt side effect"
+    );
 
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
@@ -198,6 +241,20 @@ fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
             }
         }
 
+        debug!(
+            target: "acp_event_flow",
+            request_id = %owner_id,
+            pending_permission_requests = runtime
+                .active
+                .as_ref()
+                .map_or(0, |active| active.pending_permission_requests.len()),
+            tool_calls = runtime
+                .active
+                .as_ref()
+                .map_or(0, |active| active.tool_call_ids.len()),
+            "Reducer marked the active prompt as cancelling"
+        );
+
         out.events
             .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
         out.side_effects.push(SideEffect::SendCancel);
@@ -213,6 +270,22 @@ fn reduce_prompt_response(
     stop_reason: acp::StopReason,
     out: &mut ReduceOutput,
 ) {
+    let active_request_id = runtime
+        .active
+        .as_ref()
+        .map(|active| active.request_id.clone())
+        .unwrap_or_else(|| "<none>".to_string());
+    let phase_before = session_phase_label(&runtime.phase);
+    let queue_len_before = runtime.queue.len();
+    debug!(
+        target: "acp_event_flow",
+        active_request_id,
+        phase_before,
+        queue_len_before,
+        ?stop_reason,
+        "Reducer received prompt response"
+    );
+
     if !matches!(runtime.phase, SessionPhase::Prompt { .. }) {
         out.events.push(ClientEvent::Warning(WarningInfo {
             message: "Received prompt response while not in Prompt phase".to_string(),
@@ -224,6 +297,15 @@ fn reduce_prompt_response(
     let last_agent_message = finalize_active(runtime);
 
     runtime.phase = SessionPhase::Idle;
+
+    debug!(
+        target: "acp_event_flow",
+        active_request_id,
+        ?stop_reason,
+        should_drain_queue,
+        queue_len_after_finalize = runtime.queue.len(),
+        "Reducer finalized prompt response"
+    );
 
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
@@ -242,6 +324,18 @@ fn reduce_prompt_response(
 }
 
 fn reduce_prompt_failed(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
+    let active_request_id = runtime
+        .active
+        .as_ref()
+        .map(|active| active.request_id.clone())
+        .unwrap_or_else(|| "<none>".to_string());
+    debug!(
+        target: "acp_event_flow",
+        active_request_id,
+        phase = session_phase_label(&runtime.phase),
+        "Reducer received prompt failure"
+    );
+
     if !matches!(runtime.phase, SessionPhase::Prompt { .. }) {
         out.events.push(ClientEvent::Warning(WarningInfo {
             message: "Received prompt failure while not in Prompt phase".to_string(),
@@ -308,6 +402,18 @@ fn reduce_notification(
     normalizer: &mut ClientEventNormalizer,
     out: &mut ReduceOutput,
 ) {
+    debug!(
+        target: "acp_event_flow",
+        update_kind = crate::connection::session_update_kind(&update),
+        phase = session_phase_label(&runtime.phase),
+        active_request_id = runtime
+            .active
+            .as_ref()
+            .map(|active| active.request_id.as_str())
+            .unwrap_or("<none>"),
+        "Reducer received session/update"
+    );
+
     // Session metadata updates are accepted in any phase.
     if is_session_metadata_update(&update) {
         reduce_metadata_update(runtime, &update, normalizer, out);
