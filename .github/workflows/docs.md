@@ -10,7 +10,7 @@ Path: @/.github/workflows
 
 ### How it fits into the larger codebase
 
-- The release workflow builds Rust binaries from `@/codex-rs/` and packages them via the Node.js launcher in `@/nori-cli/`
+- The release workflow builds Rust binaries from `@/nori-rs/` and packages them via the Node.js launcher in `@/nori-cli/`
 - Version detection delegates to `@/scripts/create_nori_release --get-next-version`, which queries git tags (via the GitHub API) as the single source of truth for version numbering
 - Stable releases use "synthetic commits" created by the `create_nori_release` script -- release tags point to commits that exist only for the release (not on any branch), with `Cargo.toml` updated to the release version, keeping the `main` branch's `Cargo.toml` at a placeholder `0.0.0`
 - The `nori-release.yml` workflow publishes to npm under the package name `nori-ai-cli`, with stable releases tagged `@latest` and snapshots tagged `@next`
@@ -25,7 +25,7 @@ Path: @/.github/workflows
 | Main branch push | Push to `main` (e.g., merged PR) with path filters | `publish_next=true` -- publishes a `@next` snapshot |
 | Manual dispatch | `workflow_dispatch` with inputs | Either `publish_next=true` or explicit version + optional `dry_run` |
 
-**Path filters for main branch pushes** restrict triggering to changes in `codex-rs/**`, `nori-cli/**`, `scripts/**`, and the workflow file itself, so docs-only changes do not trigger a release.
+**Path filters for main branch pushes** restrict triggering to changes in `nori-rs/**`, `nori-cli/**`, `scripts/**`, and the workflow file itself, so docs-only changes do not trigger a release.
 
 **Concurrency control** uses group `nori-release-${{ github.ref }}` with `cancel-in-progress` enabled only for main branch pushes. This means if two PRs merge in quick succession, the second run cancels the first since only the latest snapshot matters.
 

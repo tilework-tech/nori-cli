@@ -38,7 +38,7 @@ on:
     branches:
       - main
     paths:
-      - "codex-rs/**"
+      - "nori-rs/**"
       - "nori-cli/**"
       - "scripts/**"
       - ".github/workflows/nori-release.yml"
@@ -225,24 +225,24 @@ jobs:
         uses: rui314/setup-mold@v1
 
       - name: cargo check
-        working-directory: codex-rs
+        working-directory: nori-rs
         run: cargo check --profile ci-test --target ${{ env.MUSL_TARGET }} --all-targets
 
       # - name: cargo clippy
-      #   working-directory: codex-rs
+      #   working-directory: nori-rs
       #   run: cargo clippy --target ${{ env.MUSL_TARGET }} --all-features -- -D warnings
 
       # - name: cargo build
-      #   working-directory: codex-rs
+      #   working-directory: nori-rs
       #   run: |
       #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p nori-cli
       #     cargo build --profile ci-test --target ${{ env.MUSL_TARGET }} -p mock-acp-agent
 
       # - name: cargo test
-      #   working-directory: codex-rs
+      #   working-directory: nori-rs
       #   run: |
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package tui-pty-e2e
-      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-acp
+      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-acp
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-tui
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-cli
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-protocol
@@ -352,7 +352,7 @@ jobs:
 
       - name: Set version in Cargo.toml
         if: ${{ needs.validate.outputs.publish_next == 'true' }}
-        working-directory: codex-rs
+        working-directory: nori-rs
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           echo "Injecting version $VERSION into Cargo.toml"
@@ -360,7 +360,7 @@ jobs:
           grep '^version' Cargo.toml | head -1
 
       - name: Build release binaries
-        working-directory: codex-rs
+        working-directory: nori-rs
         run: |
           cargo build --release --target ${{ matrix.target }} -p nori-cli
 
@@ -377,9 +377,9 @@ jobs:
 
           # Copy the main binary
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            cp codex-rs/target/$TARGET/release/nori.exe artifacts/vendor/$TARGET/nori/nori.exe
+            cp nori-rs/target/$TARGET/release/nori.exe artifacts/vendor/$TARGET/nori/nori.exe
           else
-            cp codex-rs/target/$TARGET/release/nori artifacts/vendor/$TARGET/nori/nori
+            cp nori-rs/target/$TARGET/release/nori artifacts/vendor/$TARGET/nori/nori
             chmod +x artifacts/vendor/$TARGET/nori/nori
           fi
 
@@ -527,7 +527,7 @@ jobs:
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           TAG_NAME="${{ needs.validate.outputs.tag_name }}"
-          CARGO_TOML_PATH="codex-rs/Cargo.toml"
+          CARGO_TOML_PATH="nori-rs/Cargo.toml"
 
           echo "Creating synthetic commit for version $VERSION"
 

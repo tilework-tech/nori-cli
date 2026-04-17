@@ -4,13 +4,13 @@ Path: @/
 
 ### Overview
 
-Nori CLI is a multi-provider terminal-based AI coding assistant built in Rust. It provides a unified interface for interacting with AI agents from Anthropic (Claude Code), OpenAI (Codex), and Google (Gemini). The project uses the Agent Client Protocol (ACP) for subprocess-based agent communication and features a Ratatui-based TUI. The implementation is in Rust (`codex-rs`), with a Node.js launcher for npm distribution (`nori-cli`).
+Nori CLI is a multi-provider terminal-based AI coding assistant built in Rust. It provides a unified interface for interacting with AI agents from Anthropic (Claude Code), OpenAI (Codex), and Google (Gemini). The project uses the Agent Client Protocol (ACP) for subprocess-based agent communication and features a Ratatui-based TUI. The implementation is in Rust (`nori-rs`), with a Node.js launcher for npm distribution (`nori-cli`).
 
 ### How it fits into the larger codebase
 
 This is the root repository containing the Nori CLI project:
 
-- **`codex-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
+- **`nori-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
 - **`nori-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
 - **`.github/`**: Build and CI configuration
 - **`.claude/`**: Skills and configuration for Claude-based development
@@ -25,12 +25,12 @@ The project was originally forked from OpenAI Codex CLI and has been adapted to 
 ```
 ┌─────────────────────────────────────────────────┐
 │                   nori CLI                      │
-│         (codex-rs/tui - main binary)            │
+│         (nori-rs/tui - main binary)            │
 ├─────────────────────────────────────────────────┤
 │                  nori-tui                       │
 │        Interactive Terminal Interface           │
 ├────────────────────────┬────────────────────────┤
-│     codex-acp (acp/)   │   codex-core (core/)   │
+│     nori-acp (acp/)   │   codex-core (core/)   │
 │  ACP Agent Connection  │  Config, Auth, Tools   │
 │  Subprocess Spawning   │  Sandbox, Utilities    │
 ├────────────────────────┴────────────────────────┤
@@ -49,11 +49,11 @@ The project was originally forked from OpenAI Codex CLI and has been adapted to 
 
 | Command           | Description        | Implementation        |
 | ----------------- | ------------------ | --------------------- |
-| `nori`            | Interactive TUI    | `codex-rs/tui`        |
-| `nori exec`       | Headless execution | `codex-rs/exec`       |
-| `nori mcp-server` | MCP tool provider  | `codex-rs/mcp-server` |
-| `nori login`      | Authentication     | `codex-rs/login`      |
-| `nori apply`      | Apply cloud diffs  | `codex-rs/chatgpt`    |
+| `nori`              | Interactive TUI          | `nori-rs/tui`                     |
+| `nori login`        | Authentication           | `nori-rs/cli` + `nori-rs/login`   |
+| `nori logout`       | Clear saved credentials  | `nori-rs/cli` + `nori-rs/login`   |
+| `nori sandbox ...`  | Sandbox command runner   | `nori-rs/cli` + platform sandbox crates |
+| `nori skillsets`    | Skillset management shim | `nori-rs/cli`                     |
 
 **Model Providers (via ACP):**
 
@@ -87,10 +87,10 @@ nori resume <SESSION_ID> # Specific session
 
 **MCP Support:**
 
-Nori acts as both MCP client and server:
+Nori acts as an MCP client:
 
-- **Client**: Connects to MCP servers defined in config
-- **Server**: Exposes Nori tools via `nori mcp-server`
+- Connects to MCP servers defined in config
+- Exposes MCP management through the interactive `/mcp` workflow in the TUI
 
 ### Things to Know
 
@@ -99,7 +99,7 @@ Nori acts as both MCP client and server:
 - The `unstable` feature flag gates experimental ACP features like model switching
 - Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
 - Snapshot testing with `insta` is used extensively for TUI regression testing
-- The project has two justfiles: a root `@/justfile` implementing the Shared Local Runner Layer spec (standardized `help`, `dev`, `test`, `doctor` targets) and `@/codex-rs/justfile` for Rust-specific workflows. The root justfile wraps `codex-rs` by running `cd codex-rs && cargo ...` for each target. Both coexist -- run `just` from the repo root for the standard targets, or `cd codex-rs && just` for the Rust-native recipes
+- The project has two justfiles: a root `@/justfile` implementing the Shared Local Runner Layer spec (standardized `help`, `dev`, `test`, `doctor` targets) and `@/nori-rs/justfile` for Rust-specific workflows. The root justfile wraps `nori-rs` by running `cd nori-rs && cargo ...` for each target. Both coexist -- run `just` from the repo root for the standard targets, or `cd nori-rs && just` for the Rust-native recipes
 - `pnpm` is used for Node.js workspace management in `@/nori-cli/`
 
 Created and maintained by Nori.

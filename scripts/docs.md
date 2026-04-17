@@ -11,7 +11,7 @@ Path: @/scripts
 ### How it fits into the larger codebase
 
 - `create_nori_release` is the authoritative version-numbering tool -- it is called both directly by developers (`--publish-release`, `--publish-alpha`, `--publish-next`) and by the CI workflow `@/.github/workflows/nori-release.yml` (via `--get-next-version`) to determine `@next` snapshot versions
-- The script creates synthetic commits via the GitHub API that modify `@/codex-rs/Cargo.toml` with the release version, then tags those commits; this keeps the `main` branch's `Cargo.toml` at `0.0.0` permanently
+- The script creates synthetic commits via the GitHub API that modify `@/nori-rs/Cargo.toml` with the release version, then tags those commits; this keeps the `main` branch's `Cargo.toml` at `0.0.0` permanently
 - The release tags created by this script are what trigger the `nori-release.yml` workflow's tag-push code path
 
 ### Core Implementation

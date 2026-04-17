@@ -14,7 +14,7 @@ Upstream releases are very rapid (multiple releases per week):
 Release Workflow (from rust-release.yml):
 
 1. Manual process: git tag -a rust-vX.Y.Z → git push origin rust-vX.Y.Z
-2. CI validates tag matches codex-rs/Cargo.toml version
+2. CI validates tag matches nori-rs/Cargo.toml version
 3. Builds multi-platform binaries with code signing
 4. Publishes to GitHub Releases and npm
 
@@ -100,7 +100,7 @@ git merge sync/upstream-v0.63.0 --no-ff -m "Sync upstream rust-v0.63.0"
 4. Resolve conflicts, test, push
 
 ```bash
-cd codex-rs && cargo test
+cd nori-rs && cargo test
 cargo insta review  # if snapshot tests need updating
 git push origin main
 ```

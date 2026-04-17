@@ -1,0 +1,630 @@
+diff --git a/codex-rs/acp/src/backend/session_reducer.rs b/codex-rs/acp/src/backend/session_reducer.rs
+index b691e409..7574022d 100644
+--- a/codex-rs/acp/src/backend/session_reducer.rs
++++ b/codex-rs/acp/src/backend/session_reducer.rs
+@@ -18,6 +18,7 @@ use nori_protocol::session_runtime::SessionPhase;
+ use nori_protocol::session_runtime::SessionRuntime;
+ use nori_protocol::session_runtime::TranscriptMessage;
+ use nori_protocol::session_runtime::TranscriptRole;
++use tracing::debug;
+ 
+ /// Everything that can affect [`SessionRuntime`] state.
+ #[derive(Debug)]
+@@ -40,6 +41,32 @@ pub enum InboundEvent {
+     LoadSubmit { request_id: String },
+ }
+ 
++pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
++    match event {
++        InboundEvent::Notification(update) => crate::connection::session_update_kind(update),
++        InboundEvent::PromptResponse { .. } => "prompt_response",
++        InboundEvent::PromptFailed => "prompt_failed",
++        InboundEvent::LoadResponse => "load_response",
++        InboundEvent::PermissionRequest { .. } => "permission_request",
++        InboundEvent::PromptSubmit(_) => "prompt_submit",
++        InboundEvent::CancelSubmit => "cancel_submit",
++        InboundEvent::LoadSubmit { .. } => "load_submit",
++    }
++}
++
++pub(super) fn session_phase_label(phase: &SessionPhase) -> &'static str {
++    match phase {
++        SessionPhase::Idle => "idle",
++        SessionPhase::Loading { .. } => "loading",
++        SessionPhase::Prompt {
++            cancelling: true, ..
++        } => "cancelling",
++        SessionPhase::Prompt {
++            cancelling: false, ..
++        } => "prompt",
++    }
++}
++
+ /// Side effects the caller must execute after reduction.
+ #[derive(Debug, PartialEq)]
+ pub enum SideEffect {
+@@ -116,6 +143,12 @@ fn reduce_prompt_submit(
+ ) {
+     if runtime.phase != SessionPhase::Idle {
+         runtime.queue.push_back(prompt);
++        debug!(
++            target: "acp_event_flow",
++            phase = session_phase_label(&runtime.phase),
++            queue_len = runtime.queue.len(),
++            "Queued prompt while another session request is active"
++        );
+         out.events.push(ClientEvent::QueueChanged(QueueChanged {
+             prompts: queued_prompt_texts(runtime),
+         }));
+@@ -126,6 +159,7 @@ fn reduce_prompt_submit(
+ }
+ 
+ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut ReduceOutput) {
++    let phase_before = session_phase_label(&runtime.phase);
+     let request_id = new_request_id();
+ 
+     // Build ACP content blocks from the queued prompt.
+@@ -154,6 +188,15 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
+         });
+     }
+ 
++    debug!(
++        target: "acp_event_flow",
++        request_id = %request_id,
++        prompt_kind = ?prompt.kind,
++        phase_before,
++        queue_len = runtime.queue.len(),
++        "Reducer started prompt and emitted session/prompt side effect"
++    );
++
+     out.events
+         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
+     out.side_effects.push(SideEffect::SendPrompt {
+@@ -198,6 +241,20 @@ fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
+             }
+         }
+ 
++        debug!(
++            target: "acp_event_flow",
++            request_id = %owner_id,
++            pending_permission_requests = runtime
++                .active
++                .as_ref()
++                .map_or(0, |active| active.pending_permission_requests.len()),
++            tool_calls = runtime
++                .active
++                .as_ref()
++                .map_or(0, |active| active.tool_call_ids.len()),
++            "Reducer marked the active prompt as cancelling"
++        );
++
+         out.events
+             .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
+         out.side_effects.push(SideEffect::SendCancel);
+@@ -213,6 +270,22 @@ fn reduce_prompt_response(
+     stop_reason: acp::StopReason,
+     out: &mut ReduceOutput,
+ ) {
++    let active_request_id = runtime
++        .active
++        .as_ref()
++        .map(|active| active.request_id.clone())
++        .unwrap_or_else(|| "<none>".to_string());
++    let phase_before = session_phase_label(&runtime.phase);
++    let queue_len_before = runtime.queue.len();
++    debug!(
++        target: "acp_event_flow",
++        active_request_id,
++        phase_before,
++        queue_len_before,
++        ?stop_reason,
++        "Reducer received prompt response"
++    );
++
+     if !matches!(runtime.phase, SessionPhase::Prompt { .. }) {
+         out.events.push(ClientEvent::Warning(WarningInfo {
+             message: "Received prompt response while not in Prompt phase".to_string(),
+@@ -225,6 +298,15 @@ fn reduce_prompt_response(
+ 
+     runtime.phase = SessionPhase::Idle;
+ 
++    debug!(
++        target: "acp_event_flow",
++        active_request_id,
++        ?stop_reason,
++        should_drain_queue,
++        queue_len_after_finalize = runtime.queue.len(),
++        "Reducer finalized prompt response"
++    );
++
+     out.events
+         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
+     out.events
+@@ -242,6 +324,18 @@ fn reduce_prompt_response(
+ }
+ 
+ fn reduce_prompt_failed(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
++    let active_request_id = runtime
++        .active
++        .as_ref()
++        .map(|active| active.request_id.clone())
++        .unwrap_or_else(|| "<none>".to_string());
++    debug!(
++        target: "acp_event_flow",
++        active_request_id,
++        phase = session_phase_label(&runtime.phase),
++        "Reducer received prompt failure"
++    );
++
+     if !matches!(runtime.phase, SessionPhase::Prompt { .. }) {
+         out.events.push(ClientEvent::Warning(WarningInfo {
+             message: "Received prompt failure while not in Prompt phase".to_string(),
+@@ -308,6 +402,18 @@ fn reduce_notification(
+     normalizer: &mut ClientEventNormalizer,
+     out: &mut ReduceOutput,
+ ) {
++    debug!(
++        target: "acp_event_flow",
++        update_kind = crate::connection::session_update_kind(&update),
++        phase = session_phase_label(&runtime.phase),
++        active_request_id = runtime
++            .active
++            .as_ref()
++            .map(|active| active.request_id.as_str())
++            .unwrap_or("<none>"),
++        "Reducer received session/update"
++    );
++
+     // Session metadata updates are accepted in any phase.
+     if is_session_metadata_update(&update) {
+         reduce_metadata_update(runtime, &update, normalizer, out);
+diff --git a/codex-rs/acp/src/backend/session_reducer/tests.rs b/codex-rs/acp/src/backend/session_reducer/tests.rs
+index b03d44e4..27e75593 100644
+--- a/codex-rs/acp/src/backend/session_reducer/tests.rs
++++ b/codex-rs/acp/src/backend/session_reducer/tests.rs
+@@ -11,7 +11,9 @@ use pretty_assertions::assert_eq;
+ 
+ use super::InboundEvent;
+ use super::SideEffect;
++use super::inbound_event_kind;
+ use super::reduce;
++use super::session_phase_label;
+ 
+ fn new_runtime() -> SessionRuntime {
+     SessionRuntime::new()
+@@ -125,6 +127,41 @@ fn prompt_response_transitions_to_idle() {
+     )));
+ }
+ 
++#[test]
++fn inbound_event_kind_labels_prompt_response() {
++    assert_eq!(
++        inbound_event_kind(&InboundEvent::PromptResponse {
++            stop_reason: acp::StopReason::Cancelled,
++        }),
++        "prompt_response"
++    );
++}
++
++#[test]
++fn session_phase_label_labels_known_phases() {
++    assert_eq!(session_phase_label(&SessionPhase::Idle), "idle");
++    assert_eq!(
++        session_phase_label(&SessionPhase::Prompt {
++            request_id: "req-1".to_string(),
++            cancelling: false,
++        }),
++        "prompt"
++    );
++    assert_eq!(
++        session_phase_label(&SessionPhase::Prompt {
++            request_id: "req-1".to_string(),
++            cancelling: true,
++        }),
++        "cancelling"
++    );
++    assert_eq!(
++        session_phase_label(&SessionPhase::Loading {
++            request_id: "req-2".to_string(),
++        }),
++        "loading"
++    );
++}
++
+ // =========================================================================
+ // 2. Cancel semantics
+ // =========================================================================
+diff --git a/codex-rs/acp/src/backend/session_runtime_driver.rs b/codex-rs/acp/src/backend/session_runtime_driver.rs
+index f3e345f8..cc038641 100644
+--- a/codex-rs/acp/src/backend/session_runtime_driver.rs
++++ b/codex-rs/acp/src/backend/session_runtime_driver.rs
+@@ -36,6 +36,24 @@ pub(crate) struct ReducerActions {
+     pub completed_turn: Option<CompletedTurn>,
+ }
+ 
++fn client_event_kind(event: &ClientEvent) -> &'static str {
++    match event {
++        ClientEvent::SessionUpdateInfo(_) => "session_update_info",
++        ClientEvent::SessionPhaseChanged(_) => "session_phase_changed",
++        ClientEvent::QueueChanged(_) => "queue_changed",
++        ClientEvent::MessageDelta(_) => "message_delta",
++        ClientEvent::PromptCompleted(_) => "prompt_completed",
++        ClientEvent::ToolSnapshot(_) => "tool_snapshot",
++        ClientEvent::ApprovalRequest(_) => "approval_request",
++        ClientEvent::AgentCommandsUpdate(_) => "agent_commands_update",
++        ClientEvent::PlanSnapshot(_) => "plan_snapshot",
++        ClientEvent::LoadCompleted => "load_completed",
++        ClientEvent::ContextCompacted(_) => "context_compacted",
++        ClientEvent::Warning(_) => "warning",
++        ClientEvent::ReplayEntry(_) => "replay_entry",
++    }
++}
++
+ impl SessionDriver {
+     pub(crate) fn new() -> Self {
+         Self {
+@@ -82,6 +100,14 @@ impl SessionDriver {
+             .map(|active| active.request_id.clone())
+     }
+ 
++    pub(crate) fn phase_label(&self) -> &'static str {
++        session_reducer::session_phase_label(&self.runtime.phase)
++    }
++
++    pub(crate) fn queue_len(&self) -> usize {
++        self.runtime.queue.len()
++    }
++
+     pub(crate) fn push_permission_request(
+         &mut self,
+         request: &crate::connection::ApprovalRequest,
+@@ -122,9 +148,27 @@ impl AcpBackend {
+             event,
+             InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed
+         );
++        let event_kind = session_reducer::inbound_event_kind(&event);
+         let actions = {
+             let mut driver = self.session_driver.lock().await;
+-            driver.apply(event)
++            let phase_before = driver.phase_label();
++            let active_before = driver.active_request_id();
++            let queue_len_before = driver.queue_len();
++            let actions = driver.apply(event);
++            debug!(
++                target: "acp_event_flow",
++                event_kind,
++                phase_before,
++                active_request_id_before = active_before.as_deref().unwrap_or("<none>"),
++                queue_len_before,
++                phase_after = driver.phase_label(),
++                active_request_id_after = driver.active_request_id().as_deref().unwrap_or("<none>"),
++                queue_len_after = driver.queue_len(),
++                client_events = actions.events.len(),
++                side_effects = actions.side_effects.len(),
++                "Applied reducer event in serialized session runtime"
++            );
++            actions
+         };
+         self.dispatch_reducer_actions(actions).await;
+         if start_idle_timer {
+@@ -258,6 +302,35 @@ impl AcpBackend {
+     }
+ 
+     async fn forward_and_record_client_event(&self, client_event: ClientEvent) {
++        match &client_event {
++            ClientEvent::SessionPhaseChanged(phase) => {
++                debug!(
++                    target: "acp_event_flow",
++                    client_event = client_event_kind(&client_event),
++                    ?phase,
++                    "Forwarding client event from ACP backend"
++                );
++            }
++            ClientEvent::PromptCompleted(completed) => {
++                debug!(
++                    target: "acp_event_flow",
++                    client_event = client_event_kind(&client_event),
++                    stop_reason = ?completed.stop_reason,
++                    has_last_agent_message = completed
++                        .last_agent_message
++                        .as_ref()
++                        .is_some_and(|message| !message.is_empty()),
++                    "Forwarding client event from ACP backend"
++                );
++            }
++            _ => {
++                debug!(
++                    target: "acp_event_flow",
++                    client_event = client_event_kind(&client_event),
++                    "Forwarding client event from ACP backend"
++                );
++            }
++        }
+         emit_client_event(
+             &self.backend_event_tx,
+             self.transcript_recorder.as_ref(),
+@@ -415,7 +488,7 @@ impl AcpBackend {
+ 
+     async fn execute_side_effect(&self, side_effect: SideEffect) {
+         match side_effect {
+-            SideEffect::SendPrompt { prompt, .. } => {
++            SideEffect::SendPrompt { request_id, prompt } => {
+                 if let Some(abort_handle) = self.idle_timer_abort.lock().await.take() {
+                     abort_handle.abort();
+                 }
+@@ -432,22 +505,39 @@ impl AcpBackend {
+                 };
+                 let backend = (*self).clone();
+                 let prompt_result_tx = self.prompt_result_tx.clone();
++                let request_id_for_task = request_id.clone();
+                 tokio::spawn(async move {
+                     let session_id = backend.session_id.read().await.clone();
++                    let prompt_kind = prompt_kind.unwrap_or(QueuedPromptKind::User);
++                    debug!(
++                        target: "acp_event_flow",
++                        request_id = %request_id_for_task,
++                        session_id = %session_id,
++                        ?prompt_kind,
++                        content_blocks = prompt.len(),
++                        "Sending ACP session/prompt request"
++                    );
+                     let result = backend.connection.prompt(session_id, prompt).await;
+                     match result {
+                         Ok(stop_reason) => {
++                            debug!(
++                                target: "acp_event_flow",
++                                request_id = %request_id_for_task,
++                                ?stop_reason,
++                                "Prompt task received ACP session/prompt response"
++                            );
+                             let _ = prompt_result_tx
+                                 .send(InboundEvent::PromptResponse { stop_reason })
+                                 .await;
+                         }
+                         Err(err) => {
+-                            backend
+-                                .send_prompt_error(
+-                                    prompt_kind.unwrap_or(QueuedPromptKind::User),
+-                                    &err,
+-                                )
+-                                .await;
++                            warn!(
++                                target: "acp_event_flow",
++                                request_id = %request_id_for_task,
++                                error = %err,
++                                "Prompt task failed before reducer observed a prompt response"
++                            );
++                            backend.send_prompt_error(prompt_kind, &err).await;
+                             let _ = prompt_result_tx.send(InboundEvent::PromptFailed).await;
+                         }
+                     }
+@@ -455,6 +545,11 @@ impl AcpBackend {
+             }
+             SideEffect::SendCancel => {
+                 let session_id = self.session_id.read().await.clone();
++                debug!(
++                    target: "acp_event_flow",
++                    session_id = %session_id,
++                    "Sending ACP session/cancel notification"
++                );
+                 if let Err(err) = self.connection.cancel(&session_id).await {
+                     warn!("Failed to cancel ACP session: {err}");
+                 }
+diff --git a/codex-rs/acp/src/backend/spawn_and_relay.rs b/codex-rs/acp/src/backend/spawn_and_relay.rs
+index 4f15b443..1184a60a 100644
+--- a/codex-rs/acp/src/backend/spawn_and_relay.rs
++++ b/codex-rs/acp/src/backend/spawn_and_relay.rs
+@@ -262,12 +262,21 @@ impl AcpBackend {
+         approval_policy_rx: watch::Receiver<AskForApproval>,
+     ) {
+         let approval_policy_rx = approval_policy_rx;
++        let mut relay_seq = 0_i64;
+         loop {
+             tokio::select! {
+                 biased;
+                 maybe_event = event_rx.recv() => {
+                     match maybe_event {
+                         Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
++                            relay_seq += 1;
++                            debug!(
++                                target: "acp_event_flow",
++                                relay_seq,
++                                relay_source = "transport_event_rx",
++                                update_kind = crate::connection::session_update_kind(&update),
++                                "Relaying session/update into serialized session runtime"
++                            );
+                             let _ = backend
+                                 .session_event_tx
+                                 .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+@@ -276,7 +285,15 @@ impl AcpBackend {
+                                 .await;
+                         }
+                         Some(crate::connection::ConnectionEvent::ApprovalRequest(request)) => {
++                            relay_seq += 1;
+                             let current_policy = *approval_policy_rx.borrow();
++                            debug!(
++                                target: "acp_event_flow",
++                                relay_seq,
++                                relay_source = "transport_event_rx",
++                                call_id = request.event.call_id(),
++                                "Relaying permission request into serialized session runtime"
++                            );
+                             let _ = backend
+                                 .session_event_tx
+                                 .send(
+@@ -296,6 +313,14 @@ impl AcpBackend {
+                 maybe_result = prompt_result_rx.recv() => {
+                     match maybe_result {
+                         Some(result) => {
++                            relay_seq += 1;
++                            debug!(
++                                target: "acp_event_flow",
++                                relay_seq,
++                                relay_source = "prompt_result_rx",
++                                inbound_event = session_reducer::inbound_event_kind(&result),
++                                "Relaying prompt result into serialized session runtime"
++                            );
+                             let _ = backend
+                                 .session_event_tx
+                                 .send(session_runtime_driver::SessionRuntimeInput::Reducer(result))
+@@ -305,6 +330,14 @@ impl AcpBackend {
+                             while let Some(event) = event_rx.recv().await {
+                                 match event {
+                                     crate::connection::ConnectionEvent::SessionUpdate(update) => {
++                                        relay_seq += 1;
++                                        debug!(
++                                            target: "acp_event_flow",
++                                            relay_seq,
++                                            relay_source = "transport_event_rx_drain",
++                                            update_kind = crate::connection::session_update_kind(&update),
++                                            "Draining session/update after prompt result channel closed"
++                                        );
+                                         let _ = backend
+                                             .session_event_tx
+                                             .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+@@ -313,7 +346,15 @@ impl AcpBackend {
+                                             .await;
+                                     }
+                                     crate::connection::ConnectionEvent::ApprovalRequest(request) => {
++                                        relay_seq += 1;
+                                         let current_policy = *approval_policy_rx.borrow();
++                                        debug!(
++                                            target: "acp_event_flow",
++                                            relay_seq,
++                                            relay_source = "transport_event_rx_drain",
++                                            call_id = request.event.call_id(),
++                                            "Draining permission request after prompt result channel closed"
++                                        );
+                                         let _ = backend
+                                             .session_event_tx
+                                             .send(
+diff --git a/codex-rs/acp/src/backend/user_input.rs b/codex-rs/acp/src/backend/user_input.rs
+index bce9d6d4..33737d7c 100644
+--- a/codex-rs/acp/src/backend/user_input.rs
++++ b/codex-rs/acp/src/backend/user_input.rs
+@@ -161,6 +161,27 @@ impl AcpBackend {
+             prompt_with_context
+         };
+ 
++        let (phase_before_submit, active_request_id_before_submit, queue_len_before_submit) = {
++            let driver = self.session_driver.lock().await;
++            (
++                driver.phase_label(),
++                driver.active_request_id(),
++                driver.queue_len(),
++            )
++        };
++        debug!(
++            target: "acp_event_flow",
++            event_id = id,
++            phase_before_submit,
++            active_request_id_before_submit = active_request_id_before_submit
++                .as_deref()
++                .unwrap_or("<none>"),
++            queue_len_before_submit,
++            prompt_text_len = final_prompt_text.len(),
++            image_blocks = image_blocks.len(),
++            "Accepted user prompt into ACP backend"
++        );
++
+         let _ = self
+             .session_event_tx
+             .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+diff --git a/codex-rs/acp/src/connection/mod.rs b/codex-rs/acp/src/connection/mod.rs
+index b5186336..6a75b354 100644
+--- a/codex-rs/acp/src/connection/mod.rs
++++ b/codex-rs/acp/src/connection/mod.rs
+@@ -22,6 +22,23 @@ pub enum ConnectionEvent {
+     ApprovalRequest(ApprovalRequest),
+ }
+ 
++pub(crate) fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {
++    match update {
++        acp::SessionUpdate::AgentMessageChunk(_) => "agent_message_chunk",
++        acp::SessionUpdate::AgentThoughtChunk(_) => "agent_thought_chunk",
++        acp::SessionUpdate::UserMessageChunk(_) => "user_message_chunk",
++        acp::SessionUpdate::Plan(_) => "plan",
++        acp::SessionUpdate::ToolCall(_) => "tool_call",
++        acp::SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
++        acp::SessionUpdate::AvailableCommandsUpdate(_) => "available_commands_update",
++        acp::SessionUpdate::CurrentModeUpdate(_) => "current_mode_update",
++        acp::SessionUpdate::ConfigOptionUpdate(_) => "config_option_update",
++        acp::SessionUpdate::SessionInfoUpdate(_) => "session_info_update",
++        acp::SessionUpdate::UsageUpdate(_) => "usage_update",
++        _ => "other",
++    }
++}
++
+ /// The type of approval event to send to the UI.
+ ///
+ /// This enum allows us to use the more appropriate approval UI for different
+@@ -91,3 +108,14 @@ impl AcpModelState {
+         }
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn session_update_kind_labels_usage_update() {
++        let update = acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(12, 100));
++        assert_eq!(session_update_kind(&update), "usage_update");
++    }
++}
+diff --git a/codex-rs/acp/src/connection/sacp_connection.rs b/codex-rs/acp/src/connection/sacp_connection.rs
+index 7e4f54fc..edb669b4 100644
+--- a/codex-rs/acp/src/connection/sacp_connection.rs
++++ b/codex-rs/acp/src/connection/sacp_connection.rs
+@@ -169,6 +169,11 @@ impl SacpConnection {
+                     {
+                         let event_tx = event_tx_for_notifications;
+                         async move |notification: acp::SessionNotification, _connection| {
++                            debug!(
++                                target: "acp_event_flow",
++                                update_kind = super::session_update_kind(&notification.update),
++                                "Transport received ACP session/update notification"
++                            );
+                             if event_tx
+                                 .send(ConnectionEvent::SessionUpdate(notification.update))
+                                 .await
+@@ -524,12 +529,35 @@ impl SacpConnection {
+         session_id: acp::SessionId,
+         prompt: Vec<acp::ContentBlock>,
+     ) -> Result<acp::StopReason> {
+-        self.cx
++        debug!(
++            target: "acp_event_flow",
++            session_id = %session_id,
++            content_blocks = prompt.len(),
++            "Transport sending ACP session/prompt request"
++        );
++        let response = self
++            .cx
+             .send_request(acp::PromptRequest::new(session_id, prompt))
+             .block_task()
+             .await
+-            .context("ACP prompt failed")
+-            .map(|r| r.stop_reason)
++            .context("ACP prompt failed");
++        match &response {
++            Ok(response) => {
++                debug!(
++                    target: "acp_event_flow",
++                    stop_reason = ?response.stop_reason,
++                    "Transport received ACP session/prompt response"
++                );
++            }
++            Err(err) => {
++                warn!(
++                    target: "acp_event_flow",
++                    error = %err,
++                    "Transport session/prompt request failed"
++                );
++            }
++        }
++        response.map(|response| response.stop_reason)
+     }
+ 
+     /// Cancel an ongoing prompt.

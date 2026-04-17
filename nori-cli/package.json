@@ -27,6 +27,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tilework-tech/nori-cli.git",
-    "directory": "codex-cli"
+    "directory": "nori-cli"
   }
 }
