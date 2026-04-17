@@ -49,7 +49,7 @@ use tokio::sync::Mutex;
 
 use crate::find_codex_home::find_codex_home;
 
-const KEYRING_SERVICE: &str = "Codex MCP Credentials";
+const KEYRING_SERVICE: &str = "Nori TUI MCP Credentials";
 const REFRESH_SKEW_MILLIS: u64 = 30_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -90,7 +90,7 @@ impl PartialEq for WrappedOAuthTokenResponse {
     }
 }
 
-pub(crate) fn load_oauth_tokens(
+pub fn load_oauth_tokens(
     server_name: &str,
     url: &str,
     store_mode: OAuthCredentialsStoreMode,

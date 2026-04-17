@@ -568,9 +568,16 @@ CLI-configured MCP servers (from `config.toml`) are converted to ACP schema type
 | Transport | SACP Type | Key Fields |
 |-----------|-----------|------------|
 | `Stdio` | `McpServer::Stdio` | command, args, env (explicit key-value pairs + env vars resolved from process environment) |
-| `StreamableHttp` | `McpServer::Http` | url, headers (static headers + env-resolved headers + bearer token from env var as `Authorization: Bearer` header) |
+| `StreamableHttp` | `McpServer::Http` | url, headers (static headers + env-resolved headers + bearer token + OAuth token as `Authorization: Bearer` header) |
 
-Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. The `client_id` and `client_secret_env_var` fields on `StreamableHttp` are not forwarded to the agent -- they are only used by the TUI/rmcp-client layer for OAuth login flows (see `@/codex-rs/rmcp-client/docs.md`). All servers are included regardless of the `enabled` flag; the agent decides how to handle them. Results are sorted by server name for deterministic ordering.
+Disabled servers (`enabled == false`) are filtered out before conversion. Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. The `client_id` and `client_secret_env_var` fields on `StreamableHttp` are not forwarded to the agent -- they are only used by the TUI/rmcp-client layer for OAuth login flows (see `@/codex-rs/rmcp-client/docs.md`). Results are sorted by server name for deterministic ordering.
+
+**OAuth token injection for HTTP servers:** For `StreamableHttp` servers, `to_sacp_mcp_servers()` resolves authentication headers using a priority chain:
+1. `bearer_token_env_var` -- if present and the env var resolves, used as `Authorization: Bearer` header
+2. Stored OAuth tokens -- if no bearer token env var was resolved, `load_oauth_tokens()` from `@/codex-rs/rmcp-client/src/oauth.rs` is called to load credentials from the system keyring or `CODEX_HOME/.credentials.json` fallback file
+3. No auth -- if neither source produces a token, the server is forwarded without an `Authorization` header
+
+This means `to_sacp_mcp_servers()` has side effects (reads from keyring/file system) rather than being a pure config transformation. The `acp` crate depends on `codex-rmcp-client`'s `load_oauth_tokens` for this purpose.
 
 `create_session()` accepts a `mcp_servers: Vec<McpServer>` parameter that is populated by calling `to_sacp_mcp_servers()` at each session creation site:
 - `spawn_and_relay.rs` -- initial session creation during backend spawn

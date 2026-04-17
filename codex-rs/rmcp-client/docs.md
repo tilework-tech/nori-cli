@@ -8,7 +8,8 @@ The rmcp-client crate provides a high-level MCP client for connecting to remote 
 
 ### How it fits into the larger codebase
 
-Used by `@/codex-rs/core/` (`mcp_connection_manager.rs`) to establish connections to configured MCP servers that provide additional tools to the AI model.
+- Used by `@/codex-rs/core/` (`mcp_connection_manager.rs`) to establish connections to configured MCP servers that provide additional tools to the AI model
+- Used by `@/codex-rs/acp/src/connection/mcp.rs` to load stored OAuth tokens at session creation time, so the ACP agent receives credentials for MCP servers that were authenticated via the OAuth browser flow
 
 ### Core Implementation
 
@@ -23,6 +24,7 @@ Used by `@/codex-rs/core/` (`mcp_connection_manager.rs`) to establish connection
 - Two OAuth login entry points, both backed by the same `wait_for_callback_or_cancel()` mechanism (biased `tokio::select!` between callback, cancel signal, and 5-minute timeout):
   - `perform_oauth_login()` - Blocking/interactive flow that uses `println!` for status and `stdin` Enter for cancellation. Used by CLI contexts where TUI suspension is acceptable.
   - `start_oauth_login()` - Non-blocking async flow that returns an `OAuthLoginHandle`. The handle exposes a `cancel_tx: Option<oneshot::Sender<()>>` for programmatic cancellation and a `task: JoinHandle<Result<()>>` for awaiting completion. Used by the TUI to run OAuth inline without suspending the terminal. Accepts optional `client_id` and `client_secret` parameters to select between two OAuth paths (see below).
+- Dynamic client registration (DCR) uses `"Nori"` as the client name presented to OAuth servers
 - Token refresh handling via `OAuthPersistor`, which is called after every MCP request
 
 **Two OAuth Credential Paths** (`perform_oauth_login.rs`):
@@ -43,8 +45,11 @@ The pre-configured path uses `discover_oauth_metadata()` to fetch the server's `
 **Program Resolution** (`program_resolver.rs`): Resolves MCP server executables from configuration.
 
 **Credential Storage** (`oauth.rs`):
-- `OAuthCredentialsStoreMode` - Keyring vs file storage
-- `save_oauth_tokens()` / `delete_oauth_tokens()` - Credential management
+- `OAuthCredentialsStoreMode` - Keyring vs file storage (`Auto`, `File`, `Keyring`)
+- `save_oauth_tokens()` / `load_oauth_tokens()` / `delete_oauth_tokens()` - Credential management
+- `load_oauth_tokens` is public and used by `@/codex-rs/acp/src/connection/mcp.rs` to inject stored OAuth tokens when forwarding MCP server configs to ACP agents
+- Keyring service name: `"Nori TUI MCP Credentials"`. Credentials stored under the previous service name are not migrated
+- Fallback file: `CODEX_HOME/.credentials.json` (used when keyring is unavailable or fails)
 
 ### Things to Know
 
