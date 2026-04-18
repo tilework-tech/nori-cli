@@ -345,6 +345,15 @@ impl App {
             return;
         }
 
+        // Sync in-memory state so that ComputeMcpAuthStatuses (which reads
+        // chat_widget.config_ref().mcp_servers) sees the newly added servers.
+        let hash_map: std::collections::HashMap<
+            String,
+            codex_core::config::types::McpServerConfig,
+        > = servers.into_iter().collect();
+        self.config.mcp_servers = hash_map.clone();
+        self.chat_widget.set_mcp_servers(hash_map);
+
         self.chat_widget.add_info_message(
             "MCP servers updated. Restart to apply changes.".to_string(),
             None,
