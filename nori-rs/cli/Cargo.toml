@@ -1,0 +1,64 @@
+[package]
+name = "nori-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "nori"
+path = "src/main.rs"
+
+[lib]
+name = "nori_cli"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+
+# Login/logout commands - propagate to TUI
+login = ["dep:codex-login", "nori-tui/login"]
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+clap_complete = { workspace = true }
+nori-acp = { workspace = true }
+codex-app-server-protocol = { workspace = true }
+codex-arg0 = { workspace = true }
+codex-common = { workspace = true, features = ["cli"] }
+codex-core = { workspace = true }
+codex-execpolicy = { workspace = true }
+codex-login = { workspace = true, optional = true }
+codex-process-hardening = { workspace = true }
+codex-protocol = { workspace = true }
+codex-stdio-to-uds = { workspace = true }
+nori-tui = { workspace = true }
+ctor = { workspace = true }
+libc = { workspace = true }
+owo-colors = { workspace = true }
+regex-lite = { workspace = true}
+serde_json = { workspace = true }
+supports-color = { workspace = true }
+toml = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "signal",
+] }
+tracing = { workspace = true }
+which = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+codex_windows_sandbox = { package = "codex-windows-sandbox", path = "../windows-sandbox-rs" }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+assert_matches = { workspace = true }
+predicates = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }

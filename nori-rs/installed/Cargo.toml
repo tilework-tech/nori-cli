@@ -1,0 +1,38 @@
+[package]
+name = "nori-installed"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+name = "nori_installed"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+nori-acp = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+semver = "1"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_SystemInformation"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
