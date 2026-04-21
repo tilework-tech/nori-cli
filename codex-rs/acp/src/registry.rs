@@ -97,8 +97,8 @@ impl AgentKind {
     /// Get the ACP adapter package name for launching this agent
     pub fn acp_package(&self) -> &'static str {
         match self {
-            // Claude and Codex use Zed's ACP adapters
-            AgentKind::ClaudeCode => "@zed-industries/claude-agent-acp",
+            AgentKind::ClaudeCode => "@agentclientprotocol/claude-agent-acp",
+            // Codex uses Zed's ACP adapter
             AgentKind::Codex => "@zed-industries/codex-acp",
             // Gemini has native ACP support
             AgentKind::Gemini => "@google/gemini-cli",
@@ -703,7 +703,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
         let package_manager = detect_preferred_package_manager();
 
         let (command, args) = match agent {
-            // Claude and Codex use Zed's ACP adapters
+            // Claude and Codex use external ACP adapters
             AgentKind::ClaudeCode | AgentKind::Codex => (
                 package_manager.command().to_string(),
                 vec![agent.acp_package().to_string()],
@@ -999,11 +999,10 @@ mod tests {
             "Command should be npx or bunx, got: {}",
             config.command
         );
-        // Uses Zed's ACP adapter
         assert!(
             config
                 .args
-                .contains(&"@zed-industries/claude-agent-acp".to_string())
+                .contains(&"@agentclientprotocol/claude-agent-acp".to_string())
         );
         assert_eq!(config.provider_info.name, "Claude Code ACP");
     }
