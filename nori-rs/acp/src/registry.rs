@@ -728,12 +728,13 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
         // this entirely.
         let mut env = HashMap::new();
         if agent == AgentKind::ClaudeCode
-            && let Ok(path) = which::which("claude") {
-                env.insert(
-                    "CLAUDE_CODE_EXECUTABLE".to_string(),
-                    path.to_string_lossy().to_string(),
-                );
-            }
+            && let Ok(path) = which::which("claude")
+        {
+            env.insert(
+                "CLAUDE_CODE_EXECUTABLE".to_string(),
+                path.to_string_lossy().to_string(),
+            );
+        }
 
         return Ok(AcpAgentConfig {
             agent,
