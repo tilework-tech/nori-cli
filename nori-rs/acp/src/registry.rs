@@ -720,12 +720,12 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             ),
         };
 
-        // The Claude ACP adapter resolves its native binary via
-        // require.resolve() on platform-specific optional deps. On Linux it
-        // tries the musl variant first; if that file exists but the musl
-        // loader is missing the binary silently fails to execute. Setting
-        // CLAUDE_CODE_EXECUTABLE to the system-installed binary sidesteps
-        // this entirely.
+        // Workaround: the v0.30.0+ Claude ACP adapter resolves its native
+        // binary via require.resolve() on platform-specific optional deps.
+        // On glibc Linux, bunx installs both musl and glibc variants; the
+        // adapter tries musl first, require.resolve succeeds (file exists),
+        // but execution fails (no musl loader). Point CLAUDE_CODE_EXECUTABLE
+        // at the system binary to bypass the broken resolution.
         let mut env = HashMap::new();
         if agent == AgentKind::ClaudeCode
             && let Ok(path) = which::which("claude")
