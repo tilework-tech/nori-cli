@@ -97,7 +97,9 @@ impl AgentKind {
     /// Get the ACP adapter package name for launching this agent
     pub fn acp_package(&self) -> &'static str {
         match self {
-            AgentKind::ClaudeCode => "@agentclientprotocol/claude-agent-acp",
+            // @latest forces bunx to resolve the new scope instead of a stale
+            // @zed-industries cache entry with the same unscoped package name.
+            AgentKind::ClaudeCode => "@agentclientprotocol/claude-agent-acp@latest",
             // Codex uses Zed's ACP adapter
             AgentKind::Codex => "@zed-industries/codex-acp",
             // Gemini has native ACP support
@@ -718,12 +720,27 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             ),
         };
 
+        // The Claude ACP adapter resolves its native binary via
+        // require.resolve() on platform-specific optional deps. On Linux it
+        // tries the musl variant first; if that file exists but the musl
+        // loader is missing the binary silently fails to execute. Setting
+        // CLAUDE_CODE_EXECUTABLE to the system-installed binary sidesteps
+        // this entirely.
+        let mut env = HashMap::new();
+        if agent == AgentKind::ClaudeCode
+            && let Ok(path) = which::which("claude") {
+                env.insert(
+                    "CLAUDE_CODE_EXECUTABLE".to_string(),
+                    path.to_string_lossy().to_string(),
+                );
+            }
+
         return Ok(AcpAgentConfig {
             agent,
             provider_slug: agent.slug().to_string(),
             command,
             args,
-            env: HashMap::new(),
+            env,
             provider_info: AcpProviderInfo {
                 name: format!("{} ACP", agent.display_name()),
                 ..Default::default()
@@ -1002,7 +1019,7 @@ mod tests {
         assert!(
             config
                 .args
-                .contains(&"@agentclientprotocol/claude-agent-acp".to_string())
+                .contains(&"@agentclientprotocol/claude-agent-acp@latest".to_string())
         );
         assert_eq!(config.provider_info.name, "Claude Code ACP");
     }
