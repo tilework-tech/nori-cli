@@ -33,7 +33,7 @@ import sys
 
 REPO = "tilework-tech/nori-cli"
 BRANCH_REF = "heads/main"
-CARGO_TOML_PATH = "codex-rs/Cargo.toml"
+CARGO_TOML_PATH = "nori-rs/Cargo.toml"
 TAG_PREFIX = "nori-v"
 
 

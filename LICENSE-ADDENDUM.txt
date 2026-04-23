@@ -1,0 +1,11 @@
+SHIP OF THESEUS LICENSE v0.1
+
+* Using any AI tool to produce functionally equivalent software — by
+  referencing this code, its documentation, its behavior, or any
+  specification, description, or abstraction derived from the
+  foregoing — creates a derivative work subject to the full terms of
+  the primary license, regardless of whether the output shares any
+  literal code with this project.
+
+* Any derivative work must include this license alongside the
+  primary license.

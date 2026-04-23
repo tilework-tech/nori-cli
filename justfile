@@ -34,7 +34,7 @@ help:
 
 # Run the nori binary (primary dev entrypoint)
 dev *args:
-    cd codex-rs && cargo run --bin nori -- "$@"
+    cd nori-rs && cargo run --bin nori -- "$@"
 
 # Run tests for a given scope (default: workspace)
 test *args:
@@ -44,25 +44,25 @@ test *args:
     shift 2>/dev/null || true
     case "$scope" in
       tui)
-        cd codex-rs && cargo test -p nori-tui "$@"
+        cd nori-rs && cargo test -p nori-tui "$@"
         ;;
       acp)
-        cd codex-rs && cargo test -p codex-acp "$@"
+        cd nori-rs && cargo test -p nori-acp "$@"
         ;;
       core)
-        cd codex-rs && cargo test -p codex-core "$@"
+        cd nori-rs && cargo test -p codex-core "$@"
         ;;
       protocol)
-        cd codex-rs && cargo test -p codex-protocol "$@"
+        cd nori-rs && cargo test -p codex-protocol "$@"
         ;;
       e2e)
-        cd codex-rs && cargo build --bin nori && cargo test -p tui-pty-e2e "$@"
+        cd nori-rs && cargo build --bin nori && cargo test -p tui-pty-e2e "$@"
         ;;
       all)
-        cd codex-rs && cargo test --all-features "$@"
+        cd nori-rs && cargo test --all-features "$@"
         ;;
       *)
-        cd codex-rs && cargo test ${scope:+"$scope"} "$@"
+        cd nori-rs && cargo test ${scope:+"$scope"} "$@"
         ;;
     esac
 
@@ -118,8 +118,8 @@ doctor:
     echo ""
     echo "Toolchain:"
     total=$((total + 1))
-    if [ -f codex-rs/rust-toolchain.toml ]; then
-      expected=$(grep 'channel' codex-rs/rust-toolchain.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+    if [ -f nori-rs/rust-toolchain.toml ]; then
+      expected=$(grep 'channel' nori-rs/rust-toolchain.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
       active=$(rustup show active-toolchain 2>/dev/null | awk '{print $1}')
       if echo "$active" | grep -q "$expected"; then
         echo "  ok   rust toolchain ($active)"
@@ -139,24 +139,24 @@ doctor:
       exit 1
     fi
 
-# Forward existing codex-rs targets
+# Forward existing nori-rs targets
 
 # Format code
 fmt:
-    cd codex-rs && cargo fmt -- --config imports_granularity=Item
+    cd nori-rs && cargo fmt -- --config imports_granularity=Item
 
 # Auto-fix clippy lints
 fix *args:
-    cd codex-rs && cargo clippy --fix --all-features --tests --allow-dirty "$@"
+    cd nori-rs && cargo clippy --fix --all-features --tests --allow-dirty "$@"
 
 # Run clippy
 clippy:
-    cd codex-rs && cargo clippy --all-features --tests
+    cd nori-rs && cargo clippy --all-features --tests
 
 # Fetch toolchain and dependencies
 install:
-    cd codex-rs && rustup show active-toolchain && cargo fetch
+    cd nori-rs && rustup show active-toolchain && cargo fetch
 
 # Run tests with cargo-nextest
 nextest:
-    cd codex-rs && cargo nextest run --no-fail-fast
+    cd nori-rs && cargo nextest run --no-fail-fast
