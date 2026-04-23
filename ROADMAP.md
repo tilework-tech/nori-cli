@@ -48,29 +48,29 @@ These areas are good enough to build on, even where we may still want cleaner or
 
 This section is the dependency-facing catalog. It exists to keep the roadmap grounded in the current ACP spec and draft surface, but it is not the main structure of the project roadmap.
 
-| Feature | ACP status | Nori status |
-| --- | --- | --- |
-| `session/load` | stable baseline | done |
-| `session/list` | stable | done |
-| Session Config Options | stable | near term |
-| `session_info_update` | stable | later |
-| ACP Registry | stable | near term |
-| `session/resume` | unstable landed | done |
-| `session/fork` | unstable landed | todo |
-| `session/close` | unstable landed | handled |
-| `additionalDirectories` | unstable landed | partial |
-| auth methods | unstable landed | planned |
-| `logout` | unstable landed | planned |
-| `messageId` and `userMessageId` | unstable landed | partial |
-| usage updates | unstable landed | partial |
-| boolean config options | unstable landed | near term |
-| elicitation | unstable landed | later |
-| NES | unstable landed | later |
-| `session/delete` | draft only | not planned near term |
-| custom provider endpoints | draft only | not planned near term |
-| diff-delete metadata | draft only | not planned near term |
-| proxy-chains | draft only | not planned near term |
-| subagents | not first-class ACP today | not planned near term |
+| Feature                         | ACP status                | Nori status           |
+| ------------------------------- | ------------------------- | --------------------- |
+| `session/load`                  | stable baseline           | done                  |
+| `session/list`                  | stable                    | done                  |
+| Session Config Options          | stable                    | near term             |
+| `session_info_update`           | stable                    | later                 |
+| ACP Registry                    | stable                    | near term             |
+| `session/resume`                | unstable landed           | done                  |
+| `session/fork`                  | unstable landed           | todo                  |
+| `session/close`                 | unstable landed           | handled               |
+| `additionalDirectories`         | unstable landed           | partial               |
+| auth methods                    | unstable landed           | planned               |
+| `logout`                        | unstable landed           | planned               |
+| `messageId` and `userMessageId` | unstable landed           | partial               |
+| usage updates                   | unstable landed           | partial               |
+| boolean config options          | unstable landed           | near term             |
+| elicitation                     | unstable landed           | later                 |
+| NES                             | unstable landed           | later                 |
+| `session/delete`                | draft only                | not planned near term |
+| custom provider endpoints       | draft only                | not planned near term |
+| diff-delete metadata            | draft only                | not planned near term |
+| proxy-chains                    | draft only                | not planned near term |
+| subagents                       | not first-class ACP today | not planned near term |
 
 ## Notes
 
