@@ -670,11 +670,17 @@ The `TranscriptLoader` (in `@/nori-rs/acp/src/transcript/loader.rs`) reads trans
 Key methods:
 - `list_projects()`: List all projects with transcripts
 - `list_sessions()`: List sessions for a specific project
+- `list_session_metadata()`: List first-line-only session metadata for a specific project
 - `find_sessions_for_cwd()`: Find sessions for current working directory
+- `find_session_metadata_for_cwd()`: Find first-line-only session metadata for current working directory
 - `load_transcript()`: Load complete transcript with all entries
 - `load_session_meta()`: Load just session metadata (for quick listing)
+- `load_first_user_preview()`: Stream lines until the first user entry, bounded for picker preview loading
+- `count_user_turns()`: Stream transcript lines and count only `type=user` entries for turn counts
 
 **Forward/backward compatibility:** `load_transcript_from_path()` gracefully skips JSONL lines that fail to deserialize after the first line (session metadata). This means transcripts remain loadable across schema changes -- older binaries skip unknown entry types written by newer versions, and newer binaries skip removed entry types from older transcripts (e.g., the removed `turn_lifecycle` variant). The first line must always be valid `SessionMeta`; a deserialization failure there is a hard error. Skipped lines are logged at `tracing::debug` level. `load_session_meta_from_path()` is unaffected since it only reads the first line.
+
+Large transcript paths avoid full-file reads when building `/resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after the picker is visible.
 
 **ACP Integration:**
 
@@ -712,7 +718,7 @@ Configuration:
 
 Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
 - `TranscriptRecorder`, `TranscriptLoader`
-- `ProjectId`, `ProjectInfo`, `SessionInfo`, `Transcript`
+- `ProjectId`, `ProjectInfo`, `SessionInfo`, `SessionMetadata`, `Transcript`
 - Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, `ToolCallEntry`, `ToolResultEntry`, `PatchApplyEntry`
 - `PatchOperationType`: Enum for patch operations (Edit, Write, Delete)
 - `ContentBlock` (Text and Thinking variants), `Attachment`, `GitInfo`

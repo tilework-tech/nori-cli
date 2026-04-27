@@ -323,3 +323,47 @@ Validation added:
   matching `codex` transcript and one nonmatching `claude-code` transcript,
   then asserts the nonmatching session never enters
   `load_first_message_preview.start`.
+
+## Fix Slice 2: Lazy Resume Picker Summaries
+
+Implemented in worktree branch `debug/resume-lazy-summaries`, stacked on
+`debug/resume-picker-tracing`.
+
+This slice addresses causes 2 and 3 for the `/resume` pre-picker path:
+
+- `/resume` now builds initial picker rows from first-line
+  `SessionMetadata` only.
+- Initial picker rows do not show a turn count or preview text.
+- The first user message preview is loaded after the picker appears by
+  streaming transcript lines only until the first `type=user` entry, with a
+  `1 MiB` scan cap.
+- The displayed count is now an exact user-turn count, not a raw transcript
+  line/message count.
+- User-turn counts are streamed lazily after the picker appears and only count
+  `type=user` transcript entries.
+- Sessions that turn out to have `0` user turns are removed from the active
+  resume picker once their lazy count is known.
+- Lazy summary updates carry a picker generation id so stale background work
+  from an older picker open is ignored.
+
+Expected effect against the captured state:
+
+- The picker can appear after scanning only metadata for agent-matching
+  sessions, instead of waiting for preview extraction or turn counting.
+- The `1.3G-1.6G` `codex` transcripts no longer block picker display.
+- The `7.4G` `codex-debug-acp` transcript remains excluded by the slice 1
+  agent filter before any lazy summary work is scheduled for `/resume`.
+
+Validation added:
+
+- `find_session_metadata_for_cwd_reads_only_session_meta` verifies metadata
+  listing succeeds without reading corrupt bytes after the first transcript
+  line.
+- `load_first_user_preview_stops_before_later_invalid_bytes` verifies preview
+  extraction stops after finding the first user message.
+- `count_user_turns_counts_only_user_messages` verifies the lazy count includes
+  only user entries and excludes assistant/tool entries.
+- `resume_picker_omits_turn_count_until_known` verifies initial picker rows do
+  not show a turn count before the lazy count completes.
+- `update_item_refreshes_row_and_search_index` verifies lazy picker row updates
+  refresh visible text and searchable content.

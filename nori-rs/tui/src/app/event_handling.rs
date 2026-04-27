@@ -993,13 +993,30 @@ impl App {
             AppEvent::ShowResumeSessionPicker {
                 sessions,
                 nori_home,
+                generation,
             } => {
                 let params = crate::nori::resume_session_picker::resume_session_picker_params(
                     sessions,
                     nori_home,
                     self.app_event_tx.clone(),
                 );
-                self.chat_widget.show_selection_view(params);
+                self.chat_widget
+                    .show_resume_session_picker(params, generation);
+            }
+            AppEvent::ResumeSessionSummaryReady {
+                generation,
+                session_id,
+                started_at,
+                first_message_preview,
+                user_turn_count,
+            } => {
+                self.chat_widget.update_resume_session_picker_item(
+                    generation,
+                    &session_id,
+                    &started_at,
+                    first_message_preview.as_deref(),
+                    user_turn_count,
+                );
             }
             AppEvent::ResumeSession {
                 nori_home,

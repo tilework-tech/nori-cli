@@ -74,6 +74,7 @@ pub use translator::translate_session_update;
 pub use transcript::ProjectId;
 pub use transcript::ProjectInfo;
 pub use transcript::SessionInfo;
+pub use transcript::SessionMetadata;
 pub use transcript::Transcript;
 pub use transcript::TranscriptLoader;
 pub use transcript::TranscriptRecorder;

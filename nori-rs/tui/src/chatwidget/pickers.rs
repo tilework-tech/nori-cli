@@ -1,5 +1,8 @@
 use super::*;
 
+static RESUME_PICKER_GENERATION: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(1);
+
 impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
@@ -65,6 +68,8 @@ impl ChatWidget {
         let cwd = self.config.cwd.clone();
         let tx = self.app_event_tx.clone();
         let model = self.config.model.clone();
+        let generation =
+            RESUME_PICKER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         tracing::info!(
             target: "nori_resume",
@@ -130,8 +135,9 @@ impl ChatWidget {
                         )));
                     } else {
                         tx.send(crate::app_event::AppEvent::ShowResumeSessionPicker {
-                            sessions,
+                            sessions: sessions.clone(),
                             nori_home: nori_home_for_event,
+                            generation,
                         });
                         tracing::info!(
                             target: "nori_resume",
@@ -139,6 +145,7 @@ impl ChatWidget {
                             elapsed_ms = task_started.elapsed().as_millis(),
                             "sent ShowResumeSessionPicker event",
                         );
+                        spawn_resume_summary_task(tx.clone(), nori_home, sessions, generation);
                     }
                 }
                 Err(e) => {
@@ -157,6 +164,50 @@ impl ChatWidget {
                 }
             }
         });
+    }
+
+    pub(crate) fn show_resume_session_picker(
+        &mut self,
+        params: SelectionViewParams,
+        generation: u64,
+    ) {
+        self.active_resume_picker_generation = Some(generation);
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    pub(crate) fn update_resume_session_picker_item(
+        &mut self,
+        generation: u64,
+        session_id: &str,
+        started_at: &str,
+        first_message_preview: Option<&str>,
+        user_turn_count: Option<usize>,
+    ) {
+        if self.active_resume_picker_generation != Some(generation) {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "resume_session_summary.stale",
+                generation,
+                session_id,
+                "ignored stale resume session summary update",
+            );
+            return;
+        }
+
+        if user_turn_count == Some(0) {
+            self.bottom_pane.remove_selection_item(session_id);
+            return;
+        }
+
+        let (name, description, search_value) =
+            crate::nori::resume_session_picker::resume_session_item_update(
+                session_id,
+                started_at,
+                first_message_preview,
+                user_turn_count,
+            );
+        self.bottom_pane
+            .update_selection_item(session_id, name, description, search_value);
     }
 
     /// Open the config popup for TUI settings.
@@ -628,4 +679,47 @@ impl ChatWidget {
             );
         }
     }
+}
+
+fn spawn_resume_summary_task(
+    tx: AppEventSender,
+    nori_home: std::path::PathBuf,
+    sessions: Vec<crate::nori::viewonly_session_picker::SessionPickerInfo>,
+    generation: u64,
+) {
+    tokio::spawn(async move {
+        let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+        let mut previews = std::collections::HashMap::new();
+
+        for session in &sessions {
+            let preview = loader
+                .load_first_user_preview(&session.project_id, &session.session_id)
+                .await
+                .ok()
+                .flatten();
+            previews.insert(session.session_id.clone(), preview.clone());
+            tx.send(crate::app_event::AppEvent::ResumeSessionSummaryReady {
+                generation,
+                session_id: session.session_id.clone(),
+                started_at: session.started_at.clone(),
+                first_message_preview: preview,
+                user_turn_count: None,
+            });
+        }
+
+        for session in sessions {
+            let user_turn_count = loader
+                .count_user_turns(&session.project_id, &session.session_id)
+                .await
+                .ok();
+            let preview = previews.remove(&session.session_id).flatten();
+            tx.send(crate::app_event::AppEvent::ResumeSessionSummaryReady {
+                generation,
+                session_id: session.session_id,
+                started_at: session.started_at,
+                first_message_preview: preview,
+                user_turn_count,
+            });
+        }
+    });
 }

@@ -138,6 +138,44 @@ impl ListSelectionView {
         s
     }
 
+    pub(crate) fn update_item(
+        &mut self,
+        stable_id: &str,
+        name: String,
+        description: Option<String>,
+        search_value: String,
+    ) -> bool {
+        let Some(item) = self.items.iter_mut().find(|item| {
+            item.search_value
+                .as_deref()
+                .map(search_value_id)
+                .is_some_and(|id| id == stable_id)
+        }) else {
+            return false;
+        };
+
+        item.name = name;
+        item.description = description;
+        item.search_value = Some(search_value);
+        self.apply_filter();
+        true
+    }
+
+    pub(crate) fn remove_item(&mut self, stable_id: &str) -> bool {
+        let Some(index) = self.items.iter().position(|item| {
+            item.search_value
+                .as_deref()
+                .map(search_value_id)
+                .is_some_and(|id| id == stable_id)
+        }) else {
+            return false;
+        };
+
+        self.items.remove(index);
+        self.apply_filter();
+        true
+    }
+
     fn visible_len(&self) -> usize {
         self.filtered_indices.len()
     }
@@ -324,6 +362,12 @@ impl ListSelectionView {
     }
 }
 
+fn search_value_id(search_value: &str) -> &str {
+    search_value
+        .split_once(' ')
+        .map_or(search_value, |(id, _)| id)
+}
+
 impl BottomPaneView for ListSelectionView {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event {
@@ -455,6 +499,20 @@ impl BottomPaneView for ListSelectionView {
         }
         self.complete = true;
         CancellationEvent::Handled
+    }
+
+    fn update_selection_item(
+        &mut self,
+        stable_id: &str,
+        name: String,
+        description: Option<String>,
+        search_value: String,
+    ) -> bool {
+        self.update_item(stable_id, name, description, search_value)
+    }
+
+    fn remove_selection_item(&mut self, stable_id: &str) -> bool {
+        self.remove_item(stable_id)
     }
 }
 
@@ -674,6 +732,41 @@ mod tests {
             lines.contains("filters"),
             "expected search query line to include rendered query, got {lines:?}"
         );
+    }
+
+    #[test]
+    fn update_item_refreshes_row_and_search_index() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                items: vec![SelectionItem {
+                    name: "Apr 27, 2026 15:44".to_string(),
+                    search_value: Some("session-1".to_string()),
+                    ..Default::default()
+                }],
+                is_searchable: true,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        let updated = view.update_item(
+            "session-1",
+            "Apr 27, 2026 15:44 · 2 turns".to_string(),
+            Some("\"first prompt\"".to_string()),
+            "session-1 first prompt".to_string(),
+        );
+
+        assert!(updated);
+        assert_eq!(view.items[0].name, "Apr 27, 2026 15:44 · 2 turns");
+        assert_eq!(
+            view.items[0].description.as_deref(),
+            Some("\"first prompt\"")
+        );
+
+        view.set_search_query("first prompt".to_string());
+        assert_eq!(view.filtered_indices, vec![0]);
     }
 
     #[test]

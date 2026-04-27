@@ -354,6 +354,8 @@ The `desc_col` is computed once per render pass from the widest visible name plu
 
 `SelectionViewParams` supports an optional `on_dismiss: Option<SelectionAction>` callback that fires when the picker is dismissed without selection (Escape or Ctrl-C). The callback is invoked in `ListSelectionView::on_ctrl_c()` before marking the view as complete. It does not fire when the user makes a selection via `accept()`. This is used by the skillset picker to send `SkillsetPickerDismissed` when the deferred agent spawn needs a fallback trigger.
 
+`BottomPane` can also forward item updates and removals into the active selection view. `ListSelectionView` matches rows by the stable id stored at the beginning of `SelectionItem.search_value`, then reapplies filtering after the update. This is used by `/resume` to show metadata-only rows immediately and lazily fill in preview text and turn counts after transcript scans complete.
+
 **ListSelectionView Vim-Mode-Aware Search:**
 
 `ListSelectionView` supports a `vim_mode: bool` field (alongside `is_searchable`) that changes how key input is routed. When a searchable view is created, `BottomPane::show_selection_view()` automatically injects the current `vim_mode_enabled` state into `SelectionViewParams`, so individual callers (skillset picker, config picker, etc.) do not need to pass vim mode explicitly.
@@ -727,9 +729,12 @@ SlashCommand::Resume
     |
     v
 ChatWidget::open_resume_session_picker()
-    |  (async: loads sessions via TranscriptLoader, filters by agent)
+    |  (async: loads first-line session metadata, filters by agent)
     v
 AppEvent::ShowResumeSessionPicker -> resume_session_picker modal
+    |  (background task lazily streams first-user previews and user-turn counts)
+    v
+AppEvent::ResumeSessionSummaryReady -> update active picker row
     |  (user selects session)
     v
 AppEvent::ResumeSession { nori_home, project_id, session_id }
@@ -746,7 +751,9 @@ spawn_acp_agent_resume() -> AcpBackend::resume_session()
 
 The `ResumeSession` handler loads the full transcript (not just metadata) via `TranscriptLoader::load_transcript()`. The `acp_session_id` is extracted as `Option<String>` from `transcript.meta.acp_session_id` -- sessions without an `acp_session_id` are still resumable via the normalized replay fallback.
 
-Session filtering: `load_resumable_sessions()` in `@/nori-rs/tui/src/nori/resume_session_picker.rs` loads all sessions for the current working directory via the viewonly session picker's `load_sessions_with_preview()`, then filters to only sessions whose `agent` field matches the currently active agent.
+Session filtering: `load_resumable_sessions()` in `@/nori-rs/tui/src/nori/resume_session_picker.rs` loads first-line session metadata for the current working directory via `TranscriptLoader::find_session_metadata_for_cwd()`, filters to only sessions whose `agent` field matches the currently active agent, and returns metadata-only picker rows. It does not read transcript bodies before the picker appears.
+
+Lazy picker summaries: after `ShowResumeSessionPicker` is sent, `ChatWidget::open_resume_session_picker()` starts a background task that first streams each matching transcript until the first user message for preview text, then streams full files to count exact user turns. Counts are user-turn counts (`type=user` entries), not raw transcript line counts, and are hidden until known. Sessions with zero user turns are removed from the active picker once their lazy count completes. Summary update events carry a generation id so stale updates from an older picker open do not mutate a newer picker.
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/nori-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 

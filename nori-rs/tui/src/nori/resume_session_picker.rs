@@ -18,7 +18,7 @@ use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::nori::viewonly_session_picker::SessionPickerInfo;
 use crate::nori::viewonly_session_picker::format_relative_time;
-use crate::nori::viewonly_session_picker::load_session_infos_with_preview;
+use crate::nori::viewonly_session_picker::format_session_name;
 
 /// Create selection view parameters for the resume session picker.
 ///
@@ -43,17 +43,19 @@ pub fn resume_session_picker_params(
         .into_iter()
         .map(|session| {
             let timestamp = format_relative_time(&session.started_at);
-            let message_count = session.entry_count.saturating_sub(1);
-
-            let name = format!("{timestamp} · {message_count} messages");
+            let name = format_session_name(&timestamp, session.user_turn_count);
 
             let description = session
                 .first_message_preview
                 .clone()
                 .map(|preview| format!("\"{preview}\""));
+            let search_value = resume_session_search_value(
+                &session.session_id,
+                session.first_message_preview.as_deref(),
+            );
 
-            let session_id = session.session_id.clone();
-            let project_id = session.project_id.clone();
+            let session_id = session.session_id;
+            let project_id = session.project_id;
             let nori_home = nori_home.clone();
 
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx: &AppEventSender| {
@@ -67,7 +69,7 @@ pub fn resume_session_picker_params(
             SelectionItem {
                 name,
                 description,
-                search_value: Some(session.session_id),
+                search_value: Some(search_value),
                 is_current: false,
                 actions,
                 dismiss_on_select: true,
@@ -84,6 +86,26 @@ pub fn resume_session_picker_params(
         is_searchable: true,
         search_placeholder: Some("Type to search sessions".to_string()),
         ..Default::default()
+    }
+}
+
+pub(crate) fn resume_session_item_update(
+    session_id: &str,
+    started_at: &str,
+    first_message_preview: Option<&str>,
+    user_turn_count: Option<usize>,
+) -> (String, Option<String>, String) {
+    let timestamp = format_relative_time(started_at);
+    let name = format_session_name(&timestamp, user_turn_count);
+    let description = first_message_preview.map(|preview| format!("\"{preview}\""));
+    let search_value = resume_session_search_value(session_id, first_message_preview);
+    (name, description, search_value)
+}
+
+fn resume_session_search_value(session_id: &str, first_message_preview: Option<&str>) -> String {
+    match first_message_preview {
+        Some(preview) => format!("{session_id} {preview}"),
+        None => session_id.to_string(),
     }
 }
 
@@ -106,11 +128,12 @@ pub async fn load_resumable_sessions(
         "loading /resume sessions before picker display",
     );
 
-    // Filter by agent before loading previews. Different agents have
-    // incompatible resume formats, and preview loading may parse large transcripts.
+    // Filter by agent before any transcript body work. Different agents have
+    // incompatible resume formats, and transcript summary loading may scan
+    // large files.
     let filter_started = Instant::now();
     let loader = TranscriptLoader::new(nori_home.to_path_buf());
-    let session_infos = loader.find_sessions_for_cwd(cwd).await?;
+    let session_infos = loader.find_session_metadata_for_cwd(cwd).await?;
     let session_info_count = session_infos.len();
 
     let matching_session_infos: Vec<_> = session_infos
@@ -129,16 +152,17 @@ pub async fn load_resumable_sessions(
         "loaded session metadata for /resume agent filtering",
     );
 
-    let preview_started = Instant::now();
-    let filtered = load_session_infos_with_preview(nori_home, matching_session_infos).await?;
+    let filtered: Vec<SessionPickerInfo> = matching_session_infos
+        .into_iter()
+        .map(SessionPickerInfo::from)
+        .collect();
     tracing::info!(
         target: "nori_resume",
-        phase = "load_resumable_sessions.preview_loaded",
-        elapsed_ms = preview_started.elapsed().as_millis(),
+        phase = "load_resumable_sessions.metadata_rows_built",
         total_elapsed_ms = started.elapsed().as_millis(),
         returned_session_count = filtered.len(),
         agent_filter = %agent_filter,
-        "loaded previews for resumable sessions after agent filtering",
+        "built metadata-only resumable session rows",
     );
 
     tracing::info!(
@@ -216,14 +240,14 @@ mod tests {
                 session_id: "sess-1".to_string(),
                 project_id: "proj-1".to_string(),
                 started_at: "2025-01-27T12:00:00Z".to_string(),
-                entry_count: 5,
+                user_turn_count: Some(4),
                 first_message_preview: Some("Hello world".to_string()),
             },
             SessionPickerInfo {
                 session_id: "sess-2".to_string(),
                 project_id: "proj-1".to_string(),
                 started_at: "2025-01-26T10:00:00Z".to_string(),
-                entry_count: 3,
+                user_turn_count: Some(2),
                 first_message_preview: None,
             },
         ];
@@ -231,14 +255,33 @@ mod tests {
         let params = resume_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
 
         assert_eq!(params.items.len(), 2);
-        assert!(params.items[0].name.contains("4 messages"));
-        assert!(params.items[1].name.contains("2 messages"));
+        assert!(params.items[0].name.contains("4 turns"));
+        assert!(params.items[1].name.contains("2 turns"));
         assert_eq!(
             params.items[0].description.as_deref(),
             Some("\"Hello world\"")
         );
         assert!(params.items[1].description.is_none());
         assert!(params.is_searchable);
+    }
+
+    #[test]
+    fn resume_picker_omits_turn_count_until_known() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let app_event_tx = AppEventSender::new(tx);
+        let sessions = vec![SessionPickerInfo {
+            session_id: "sess-1".to_string(),
+            project_id: "proj-1".to_string(),
+            started_at: "2025-01-27T12:00:00Z".to_string(),
+            user_turn_count: None,
+            first_message_preview: None,
+        }];
+
+        let params = resume_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
+
+        assert_eq!(params.items.len(), 1);
+        assert!(!params.items[0].name.contains("turn"));
+        assert!(params.items[0].description.is_none());
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -291,10 +334,8 @@ mod tests {
 
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].session_id, matching_session_id);
-        assert_eq!(
-            sessions[0].first_message_preview.as_deref(),
-            Some("preview me")
-        );
+        assert!(sessions[0].first_message_preview.is_none());
+        assert!(sessions[0].user_turn_count.is_none());
 
         let logs = captured_logs.contents();
         let preview_started_for = |session_id: &str| {
@@ -305,8 +346,8 @@ mod tests {
         };
 
         assert!(
-            preview_started_for(&matching_session_id),
-            "matching session preview should be loaded; logs:\n{logs}"
+            !preview_started_for(&matching_session_id),
+            "initial /resume load should not preview matching session before picker display; logs:\n{logs}"
         );
         assert!(
             !preview_started_for(&nonmatching_session_id),

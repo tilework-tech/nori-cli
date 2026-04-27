@@ -45,4 +45,20 @@ pub(crate) trait BottomPaneView: Renderable {
     /// Handle MCP OAuth login completion. Only meaningful for the MCP server
     /// picker; other views ignore this.
     fn handle_mcp_oauth_complete(&mut self, _server_name: &str, _success: bool) {}
+
+    /// Update an item in a generic selection view by stable id.
+    fn update_selection_item(
+        &mut self,
+        _stable_id: &str,
+        _name: String,
+        _description: Option<String>,
+        _search_value: String,
+    ) -> bool {
+        false
+    }
+
+    /// Remove an item in a generic selection view by stable id.
+    fn remove_selection_item(&mut self, _stable_id: &str) -> bool {
+        false
+    }
 }

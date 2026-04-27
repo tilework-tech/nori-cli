@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use nori_acp::transcript::SessionInfo;
+use nori_acp::transcript::SessionMetadata;
 use nori_acp::transcript::TranscriptLoader;
 
 use crate::app_event::AppEvent;
@@ -26,10 +27,22 @@ pub struct SessionPickerInfo {
     pub project_id: String,
     /// When the session started (ISO 8601)
     pub started_at: String,
-    /// Number of conversation entries
-    pub entry_count: usize,
+    /// Exact number of user turns, once known.
+    pub user_turn_count: Option<usize>,
     /// Preview of first user message (truncated)
     pub first_message_preview: Option<String>,
+}
+
+impl From<SessionMetadata> for SessionPickerInfo {
+    fn from(session: SessionMetadata) -> Self {
+        Self {
+            session_id: session.session_id,
+            project_id: session.project_id,
+            started_at: session.started_at,
+            user_turn_count: None,
+            first_message_preview: None,
+        }
+    }
 }
 
 /// Load sessions for the current working directory with preview text.
@@ -75,35 +88,6 @@ pub async fn load_sessions_with_preview(
     Ok(result)
 }
 
-/// Load picker preview text for an already selected set of sessions.
-pub async fn load_session_infos_with_preview(
-    nori_home: &Path,
-    sessions: Vec<SessionInfo>,
-) -> std::io::Result<Vec<SessionPickerInfo>> {
-    let started = Instant::now();
-    tracing::info!(
-        target: "nori_resume",
-        phase = "load_session_infos_with_preview.start",
-        nori_home = %nori_home.display(),
-        session_count = sessions.len(),
-        "loading previews for prefiltered sessions",
-    );
-
-    let loader = TranscriptLoader::new(nori_home.to_path_buf());
-    let mut result = Vec::new();
-    load_session_previews(&loader, sessions, &mut result, started).await?;
-
-    tracing::info!(
-        target: "nori_resume",
-        phase = "load_session_infos_with_preview.done",
-        total_elapsed_ms = started.elapsed().as_millis(),
-        returned_session_count = result.len(),
-        "finished loading prefiltered session previews",
-    );
-
-    Ok(result)
-}
-
 async fn load_session_previews(
     loader: &TranscriptLoader,
     sessions: Vec<SessionInfo>,
@@ -133,7 +117,7 @@ async fn load_session_previews(
             "loading preview for session",
         );
 
-        // Skip sessions with no conversation content (only session_meta)
+        // Skip sessions with no conversation content (only session_meta).
         if session.entry_count <= 1 {
             tracing::info!(
                 target: "nori_resume",
@@ -153,7 +137,7 @@ async fn load_session_previews(
             session_id: session.session_id,
             project_id: session.project_id,
             started_at: session.started_at,
-            entry_count: session.entry_count,
+            user_turn_count: None,
             first_message_preview: preview,
         });
 
@@ -187,38 +171,22 @@ async fn load_first_message_preview(
         "loading full transcript to find first user message preview",
     );
 
-    let transcript = loader.load_transcript(project_id, session_id).await.ok()?;
-    tracing::info!(
-        target: "nori_resume",
-        phase = "load_first_message_preview.transcript_loaded",
-        elapsed_ms = started.elapsed().as_millis(),
-        entry_count = transcript.entries.len(),
-        project_id,
-        session_id,
-        "loaded full transcript for first message preview",
-    );
+    let preview = loader
+        .load_first_user_preview(project_id, session_id)
+        .await
+        .ok()
+        .flatten();
 
-    // Find the first user entry
-    for line in &transcript.entries {
-        if let nori_acp::transcript::TranscriptEntry::User(user) = &line.entry {
-            let content = &user.content;
-            // Truncate to first 50 chars for preview
-            let preview = if content.chars().count() > 50 {
-                let truncated: String = content.chars().take(50).collect();
-                format!("{truncated}...")
-            } else {
-                content.clone()
-            };
-            tracing::info!(
-                target: "nori_resume",
-                phase = "load_first_message_preview.done",
-                elapsed_ms = started.elapsed().as_millis(),
-                project_id,
-                session_id,
-                "found first user message preview",
-            );
-            return Some(preview);
-        }
+    if preview.is_some() {
+        tracing::info!(
+            target: "nori_resume",
+            phase = "load_first_message_preview.done",
+            elapsed_ms = started.elapsed().as_millis(),
+            project_id,
+            session_id,
+            "found first user message preview",
+        );
+        return preview;
     }
 
     tracing::info!(
@@ -253,10 +221,7 @@ pub fn viewonly_session_picker_params(
         .into_iter()
         .map(|session| {
             let timestamp = format_relative_time(&session.started_at);
-            let message_count = session.entry_count.saturating_sub(1); // Exclude session_meta
-
-            // Build display name: timestamp · N messages
-            let name = format!("{timestamp} · {message_count} messages");
+            let name = format_session_name(&timestamp, session.user_turn_count);
 
             // Description shows first message preview
             let description = session
@@ -297,6 +262,14 @@ pub fn viewonly_session_picker_params(
         is_searchable: true,
         search_placeholder: Some("Type to search sessions".to_string()),
         ..Default::default()
+    }
+}
+
+pub(crate) fn format_session_name(timestamp: &str, user_turn_count: Option<usize>) -> String {
+    match user_turn_count {
+        Some(1) => format!("{timestamp} · 1 turn"),
+        Some(count) => format!("{timestamp} · {count} turns"),
+        None => timestamp.to_string(),
     }
 }
 

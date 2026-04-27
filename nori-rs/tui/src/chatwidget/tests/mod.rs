@@ -307,6 +307,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
         login_handler: None,
+        active_resume_picker_generation: None,
         first_prompt_text: None,
         loop_remaining: None,
         loop_total: None,

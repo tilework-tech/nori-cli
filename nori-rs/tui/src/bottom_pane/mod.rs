@@ -477,6 +477,28 @@ impl BottomPane {
         self.show_selection_view(params);
     }
 
+    pub(crate) fn update_selection_item(
+        &mut self,
+        stable_id: &str,
+        name: String,
+        description: Option<String>,
+        search_value: String,
+    ) {
+        if let Some(view) = self.view_stack.last_mut()
+            && view.update_selection_item(stable_id, name, description, search_value)
+        {
+            self.request_redraw();
+        }
+    }
+
+    pub(crate) fn remove_selection_item(&mut self, stable_id: &str) {
+        if let Some(view) = self.view_stack.last_mut()
+            && view.remove_selection_item(stable_id)
+        {
+            self.request_redraw();
+        }
+    }
+
     /// Update the queued messages preview shown above the composer.
     pub(crate) fn set_queued_user_messages(&mut self, queued: Vec<String>) {
         self.queued_user_messages.messages = queued;
