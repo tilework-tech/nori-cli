@@ -11,6 +11,11 @@
 - Active agent filter during `/resume`: `codex`
 - Instrumentation target: `nori_resume`
 
+Note: this capture was taken before `origin/main` renamed the Rust workspace
+directory from `codex-rs` to `nori-rs`. The captured binary path is intentionally
+kept exact. Source-code references below use the final post-merge `nori-rs`
+paths where applicable.
+
 ## Captures
 
 - stderr capture: `/tmp/nori-resume-debug/stderr-20260427-154408.log`
@@ -183,18 +188,18 @@ elizacp         count=12  bytes=0.00 GiB  entries=48
 
 ## Code Path Evidence
 
-The current `/resume` pre-picker path loads every session preview before
-filtering by agent:
+The pre-fix `/resume` pre-picker path captured in the debug run loaded every
+session preview before filtering by agent:
 
 - `load_resumable_sessions` calls `load_sessions_with_preview(nori_home, cwd)`
   before knowing which preview rows will survive the active-agent filter.
 - The agent filter happens later by rescanning session metadata with
   `loader.find_sessions_for_cwd(cwd)`.
 
-Relevant source in this worktree:
+Relevant pre-fix source locations from the captured behavior:
 
 ```text
-codex-rs/tui/src/nori/resume_session_picker.rs
+nori-rs/tui/src/nori/resume_session_picker.rs
   load_resumable_sessions
   line 110: let all_sessions = load_sessions_with_preview(nori_home, cwd).await?;
   line 124: let session_infos = loader.find_sessions_for_cwd(cwd).await?;
@@ -204,7 +209,7 @@ codex-rs/tui/src/nori/resume_session_picker.rs
 The preview loader loads a full transcript to find the first user message:
 
 ```text
-codex-rs/tui/src/nori/viewonly_session_picker.rs
+nori-rs/tui/src/nori/viewonly_session_picker.rs
   load_first_message_preview
   line 149: let transcript = loader.load_transcript(project_id, session_id).await.ok()?;
 ```
@@ -212,7 +217,7 @@ codex-rs/tui/src/nori/viewonly_session_picker.rs
 The transcript list path reads the entire transcript file just to count lines:
 
 ```text
-codex-rs/acp/src/transcript/loader.rs
+nori-rs/acp/src/transcript/loader.rs
   load_session_info
   line 343: let content = tokio::fs::read_to_string(path).await?;
   line 346: let entry_count = content.lines().count();
@@ -221,7 +226,7 @@ codex-rs/acp/src/transcript/loader.rs
 The full transcript loader parses every line and materializes all entries:
 
 ```text
-codex-rs/acp/src/transcript/loader.rs
+nori-rs/acp/src/transcript/loader.rs
   load_transcript_from_path
   lines 423-484: reads each line, deserializes JSON, pushes parsed entries
 ```

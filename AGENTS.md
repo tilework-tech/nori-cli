@@ -2,9 +2,9 @@
 
 We only care about the ACP backend and the code that compiles into the nori bin. We do not care about the default codex backend or the code that compiles into the codex bin. Make sure all changes and responses are aligned to this critical fact. For example, if I ask 'add notifications to the cli', you should assume I mean 'add notification support to the ACP backend for the nori cli'.
 
-# Rust/codex-rs
+# Rust/nori-rs
 
-In the codex-rs folder where the rust code lives:
+In the nori-rs folder where the rust code lives:
 
 - Crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`
 - When using format! and you can inline variables into {}, always do that.
@@ -23,21 +23,21 @@ In the codex-rs folder where the rust code lives:
   - Prefer adding new modules instead of growing existing ones.
   - Target Rust modules under 500 LoC, excluding tests.
   - If a file exceeds roughly 800 LoC, add new functionality in a new module instead of extending the existing file unless there is a strong documented reason not to.
-  - This rule applies especially to high-touch files such as `codex-rs/tui/src/app.rs`, `codex-rs/tui/src/bottom_pane/chat_composer.rs`, `codex-rs/tui/src/bottom_pane/footer.rs`, `codex-rs/tui/src/chatwidget.rs`, `codex-rs/tui/src/bottom_pane/mod.rs`, and similarly central orchestration modules.
+  - This rule applies especially to high-touch files such as `nori-rs/tui/src/app.rs`, `nori-rs/tui/src/bottom_pane/chat_composer.rs`, `nori-rs/tui/src/bottom_pane/footer.rs`, `nori-rs/tui/src/chatwidget.rs`, `nori-rs/tui/src/bottom_pane/mod.rs`, and similarly central orchestration modules.
   - When extracting code from a large module, move the related tests and module/type docs toward the new implementation so the invariants stay close to the code that owns them.
 - When running Rust commands (e.g. `just fix` or `cargo test`) be patient and never try to kill them using the PID. Rust lock contention can make execution slow; this is expected.
 
-Run `just fmt` (in `codex-rs` directory) automatically after you have finished making Rust code changes; do not ask for approval to run it. Additionally, run the tests:
+Run `just fmt` (in `nori-rs` directory) automatically after you have finished making Rust code changes; do not ask for approval to run it. Additionally, run the tests:
 
-1. Run the test for the specific project that was changed. For example, if changes were made in `codex-rs/tui`, run `cargo test -p nori-tui`.
+1. Run the test for the specific project that was changed. For example, if changes were made in `nori-rs/tui`, run `cargo test -p nori-tui`.
 2. Once those pass, if any changes were made in common, core, or protocol, run the complete test suite with `cargo test`. Avoid `--all-features` for routine local runs because it expands the build matrix and can significantly increase `target/` disk usage; use it only when you specifically need full feature coverage.
 3. If any changes were made in tui, cli, or acp, run `cargo build --bin nori && cargo test -p tui-pty-e2e`. The E2E tests require the `nori` binary (from the `cli` crate), not `nori-tui`.
 
-Before finalizing a change to `codex-rs`, run `just fix -p <project>` (in `codex-rs` directory) to fix any linter issues in the code. Prefer scoping with `-p` to avoid slow workspace‑wide Clippy builds; only run `just fix` without `-p` if you changed shared crates. Do not re-run tests after running `fix` or `fmt`.
+Before finalizing a change to `nori-rs`, run `just fix -p <project>` (in `nori-rs` directory) to fix any linter issues in the code. Prefer scoping with `-p` to avoid slow workspace‑wide Clippy builds; only run `just fix` without `-p` if you changed shared crates. Do not re-run tests after running `fix` or `fmt`.
 
 ## TUI style conventions
 
-See `codex-rs/tui/styles.md`.
+See `nori-rs/tui/styles.md`.
 
 ## TUI code conventions
 
@@ -62,7 +62,7 @@ See `codex-rs/tui/styles.md`.
 
 ### Snapshot tests
 
-This repo uses snapshot tests (via `insta`), especially in `codex-rs/tui`, to validate rendered output.
+This repo uses snapshot tests (via `insta`), especially in `nori-rs/tui`, to validate rendered output.
 
 **Requirement:** Any change that affects user-visible UI (including adding new UI) must include corresponding `insta` snapshot coverage (add a new snapshot test if one doesn't exist yet, or update the existing snapshot). Review and accept snapshot updates as part of the PR so UI impact is easy to review and future diffs stay visual.
 
@@ -114,13 +114,13 @@ below. Choose the option that matches the area of the codebase you changed.
 
 ### Option 1: Build and Drive the TUI
 
-**When to use:** Any change to `codex-rs/tui/`, `codex-rs/cli/`, or `codex-rs/acp/` crates. Also consider running this for changes to shared crates (`core/`, `common/`, `protocol/`) that affect TUI behavior.
+**When to use:** Any change to `nori-rs/tui/`, `nori-rs/cli/`, or `nori-rs/acp/` crates. Also consider running this for changes to shared crates (`core/`, `common/`, `protocol/`) that affect TUI behavior.
 
 **Skill:** `tui-puppeteering-with-tmux`
 
 **Steps:**
 
-Run all steps from the `codex-rs/` directory.
+Run all steps from the `nori-rs/` directory.
 
 1. Build the `nori` binary: `cargo build --bin nori`
 2. Ensure `elizacp` is installed: `which elizacp || cargo install --locked elizacp`

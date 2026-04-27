@@ -15,8 +15,8 @@ Things to look out for when doing the review:
 
 ## Code Organization
 
-- Each create in the Cargo workspace in `codex-rs` has a specific purpose: make a note if you believe new code is not introduced in the correct crate.
-- When possible, try to keep the `core` crate as small as possible. Non-core but shared logic is often a good candidate for `codex-rs/common`.
+- Each create in the Cargo workspace in `nori-rs` has a specific purpose: make a note if you believe new code is not introduced in the correct crate.
+- When possible, try to keep the `core` crate as small as possible. Non-core but shared logic is often a good candidate for `nori-rs/common`.
 - Be wary of large files and offer suggestions for how to break things into more reasonably-sized files.
 - Rust files should generally be organized such that the public parts of the API appear near the top of the file and helper functions go below. This is analagous to the "inverted pyramid" structure that is favored in journalism.
 
@@ -131,7 +131,7 @@ fn test_get_latest_messages() {
 
 ## Pull Request Body
 
-- If the nature of the change seems to have a visual component (which is often the case for changes to `codex-rs/tui`), recommend including a screenshot or video to demonstrate the change, if appropriate.
+- If the nature of the change seems to have a visual component (which is often the case for changes to `nori-rs/tui`), recommend including a screenshot or video to demonstrate the change, if appropriate.
 - References to existing GitHub issues and PRs are encouraged, where appropriate, though you likely do not have network access, so may not be able to help here.
 
 # PR Information
