@@ -5,7 +5,9 @@
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Instant;
 
+use codex_acp::transcript::SessionInfo;
 use codex_acp::transcript::TranscriptLoader;
 
 use crate::app_event::AppEvent;
@@ -38,18 +40,115 @@ pub async fn load_sessions_with_preview(
     nori_home: &Path,
     cwd: &Path,
 ) -> std::io::Result<Vec<SessionPickerInfo>> {
+    let started = Instant::now();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_sessions_with_preview.start",
+        nori_home = %nori_home.display(),
+        cwd = %cwd.display(),
+        "loading session list with previews",
+    );
+
     let loader = TranscriptLoader::new(nori_home.to_path_buf());
+    let find_started = Instant::now();
     let sessions = loader.find_sessions_for_cwd(cwd).await?;
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_sessions_with_preview.sessions_found",
+        elapsed_ms = find_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        session_count = sessions.len(),
+        "found sessions for cwd before loading previews",
+    );
 
     let mut result = Vec::new();
-    for session in sessions {
+    load_session_previews(&loader, sessions, &mut result, started).await?;
+
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_sessions_with_preview.done",
+        total_elapsed_ms = started.elapsed().as_millis(),
+        returned_session_count = result.len(),
+        "finished loading session previews",
+    );
+
+    Ok(result)
+}
+
+/// Load picker preview text for an already selected set of sessions.
+pub async fn load_session_infos_with_preview(
+    nori_home: &Path,
+    sessions: Vec<SessionInfo>,
+) -> std::io::Result<Vec<SessionPickerInfo>> {
+    let started = Instant::now();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_session_infos_with_preview.start",
+        nori_home = %nori_home.display(),
+        session_count = sessions.len(),
+        "loading previews for prefiltered sessions",
+    );
+
+    let loader = TranscriptLoader::new(nori_home.to_path_buf());
+    let mut result = Vec::new();
+    load_session_previews(&loader, sessions, &mut result, started).await?;
+
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_session_infos_with_preview.done",
+        total_elapsed_ms = started.elapsed().as_millis(),
+        returned_session_count = result.len(),
+        "finished loading prefiltered session previews",
+    );
+
+    Ok(result)
+}
+
+async fn load_session_previews(
+    loader: &TranscriptLoader,
+    sessions: Vec<SessionInfo>,
+    result: &mut Vec<SessionPickerInfo>,
+    started: Instant,
+) -> std::io::Result<()> {
+    let total_sessions = sessions.len();
+    for (index, session) in sessions.into_iter().enumerate() {
+        let session_started = Instant::now();
+        let transcript_path = loader.session_path(&session.project_id, &session.session_id);
+        let transcript_bytes = tokio::fs::metadata(&transcript_path)
+            .await
+            .map(|metadata| metadata.len())
+            .ok();
+
+        tracing::info!(
+            target: "nori_resume",
+            phase = "load_sessions_with_preview.session.start",
+            session_index = index + 1,
+            total_sessions,
+            session_id = %session.session_id,
+            project_id = %session.project_id,
+            agent = session.agent.as_deref().unwrap_or("<unknown>"),
+            entry_count = session.entry_count,
+            transcript_bytes,
+            transcript_path = %transcript_path.display(),
+            "loading preview for session",
+        );
+
         // Skip sessions with no conversation content (only session_meta)
         if session.entry_count <= 1 {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "load_sessions_with_preview.session.skipped_empty",
+                session_index = index + 1,
+                total_sessions,
+                session_id = %session.session_id,
+                elapsed_ms = session_started.elapsed().as_millis(),
+                "skipped session with no conversation content",
+            );
             continue;
         }
 
         let preview =
-            load_first_message_preview(&loader, &session.project_id, &session.session_id).await;
+            load_first_message_preview(loader, &session.project_id, &session.session_id).await;
         result.push(SessionPickerInfo {
             session_id: session.session_id,
             project_id: session.project_id,
@@ -57,9 +156,20 @@ pub async fn load_sessions_with_preview(
             entry_count: session.entry_count,
             first_message_preview: preview,
         });
+
+        tracing::info!(
+            target: "nori_resume",
+            phase = "load_sessions_with_preview.session.done",
+            session_index = index + 1,
+            total_sessions,
+            session_count_so_far = result.len(),
+            elapsed_ms = session_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "loaded session preview",
+        );
     }
 
-    Ok(result)
+    Ok(())
 }
 
 /// Load the first user message from a transcript for preview.
@@ -68,7 +178,25 @@ async fn load_first_message_preview(
     project_id: &str,
     session_id: &str,
 ) -> Option<String> {
+    let started = Instant::now();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_first_message_preview.start",
+        project_id,
+        session_id,
+        "loading full transcript to find first user message preview",
+    );
+
     let transcript = loader.load_transcript(project_id, session_id).await.ok()?;
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_first_message_preview.transcript_loaded",
+        elapsed_ms = started.elapsed().as_millis(),
+        entry_count = transcript.entries.len(),
+        project_id,
+        session_id,
+        "loaded full transcript for first message preview",
+    );
 
     // Find the first user entry
     for line in &transcript.entries {
@@ -81,9 +209,26 @@ async fn load_first_message_preview(
             } else {
                 content.clone()
             };
+            tracing::info!(
+                target: "nori_resume",
+                phase = "load_first_message_preview.done",
+                elapsed_ms = started.elapsed().as_millis(),
+                project_id,
+                session_id,
+                "found first user message preview",
+            );
             return Some(preview);
         }
     }
+
+    tracing::info!(
+        target: "nori_resume",
+        phase = "load_first_message_preview.missing",
+        elapsed_ms = started.elapsed().as_millis(),
+        project_id,
+        session_id,
+        "no first user message found in transcript",
+    );
 
     None
 }

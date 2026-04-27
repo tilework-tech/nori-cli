@@ -3,6 +3,7 @@
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -65,6 +66,8 @@ pub struct TranscriptLoader {
     nori_home: PathBuf,
 }
 
+const TRANSCRIPT_LOAD_PROGRESS_BYTES: usize = 100 * 1024 * 1024;
+
 impl TranscriptLoader {
     /// Create a new TranscriptLoader.
     pub fn new(nori_home: PathBuf) -> Self {
@@ -124,26 +127,63 @@ impl TranscriptLoader {
 
     /// List all sessions for a specific project.
     pub async fn list_sessions(&self, project_id: &str) -> io::Result<Vec<SessionInfo>> {
+        let started = Instant::now();
         let sessions_path = self.transcripts_base().join(project_id).join(SESSIONS_DIR);
 
         if !sessions_path.exists() {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "transcript_loader.list_sessions.missing_dir",
+                project_id,
+                sessions_path = %sessions_path.display(),
+                elapsed_ms = started.elapsed().as_millis(),
+                "no transcript sessions directory found",
+            );
             return Ok(Vec::new());
         }
 
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.list_sessions.start",
+            project_id,
+            sessions_path = %sessions_path.display(),
+            "listing transcript sessions",
+        );
+
         let mut sessions = Vec::new();
         let mut read_dir = tokio::fs::read_dir(&sessions_path).await?;
+        let mut file_count = 0usize;
 
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "jsonl")
-                && let Ok(info) = load_session_info(&path, project_id).await
-            {
-                sessions.push(info);
+            if path.extension().is_some_and(|ext| ext == "jsonl") {
+                file_count += 1;
+                match load_session_info(&path, project_id).await {
+                    Ok(info) => sessions.push(info),
+                    Err(error) => tracing::warn!(
+                        target: "nori_resume",
+                        phase = "transcript_loader.list_sessions.session_info_error",
+                        project_id,
+                        path = %path.display(),
+                        error = %error,
+                        "failed to load transcript session info",
+                    ),
+                }
             }
         }
 
         // Sort by started_at (most recent first)
         sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.list_sessions.done",
+            project_id,
+            file_count,
+            loaded_session_count = sessions.len(),
+            elapsed_ms = started.elapsed().as_millis(),
+            "finished listing transcript sessions",
+        );
 
         Ok(sessions)
     }
@@ -151,9 +191,42 @@ impl TranscriptLoader {
     /// Find sessions for the current working directory.
     /// Useful for showing "recent sessions in this project".
     pub async fn find_sessions_for_cwd(&self, cwd: &Path) -> io::Result<Vec<SessionInfo>> {
+        let started = Instant::now();
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.find_sessions_for_cwd.start",
+            cwd = %cwd.display(),
+            "finding transcript sessions for cwd",
+        );
+
         // Compute project ID for the cwd
+        let project_started = Instant::now();
         let project_id = compute_project_id(cwd).await?;
-        self.list_sessions(&project_id.id).await
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.find_sessions_for_cwd.project_id",
+            cwd = %cwd.display(),
+            project_id = %project_id.id,
+            project_name = %project_id.name,
+            git_remote = project_id.git_remote.as_deref().unwrap_or("<none>"),
+            elapsed_ms = project_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "computed transcript project id",
+        );
+
+        let list_started = Instant::now();
+        let sessions = self.list_sessions(&project_id.id).await?;
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.find_sessions_for_cwd.done",
+            cwd = %cwd.display(),
+            project_id = %project_id.id,
+            session_count = sessions.len(),
+            list_elapsed_ms = list_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "finished finding transcript sessions for cwd",
+        );
+        Ok(sessions)
     }
 
     /// Load a complete transcript for display.
@@ -237,11 +310,54 @@ async fn get_last_session_timestamp(sessions_path: &Path) -> Option<String> {
 
 /// Load session info from a transcript file.
 async fn load_session_info(path: &Path, project_id: &str) -> io::Result<SessionInfo> {
+    let started = Instant::now();
+    let transcript_bytes = tokio::fs::metadata(path)
+        .await
+        .map(|metadata| metadata.len())
+        .ok();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_session_info.start",
+        project_id,
+        path = %path.display(),
+        transcript_bytes,
+        "loading transcript session metadata and line count",
+    );
+
+    let meta_started = Instant::now();
     let meta = load_session_meta_from_path(path).await?;
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_session_info.meta_loaded",
+        project_id,
+        path = %path.display(),
+        session_id = %meta.session_id,
+        agent = meta.agent.as_deref().unwrap_or("<unknown>"),
+        elapsed_ms = meta_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        "loaded transcript session metadata",
+    );
 
     // Count entries (approximate - just count lines)
+    let read_started = Instant::now();
     let content = tokio::fs::read_to_string(path).await?;
+    let read_elapsed_ms = read_started.elapsed().as_millis();
+    let count_started = Instant::now();
     let entry_count = content.lines().count();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_session_info.done",
+        project_id,
+        path = %path.display(),
+        session_id = %meta.session_id,
+        agent = meta.agent.as_deref().unwrap_or("<unknown>"),
+        entry_count,
+        transcript_bytes,
+        read_elapsed_ms,
+        count_elapsed_ms = count_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        "loaded transcript session info",
+    );
 
     Ok(SessionInfo {
         session_id: meta.session_id,
@@ -280,14 +396,50 @@ async fn load_session_meta_from_path(path: &Path) -> io::Result<SessionMetaEntry
 /// versions) are silently skipped so that transcripts remain loadable across
 /// schema changes.
 async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
+    let started = Instant::now();
+    let transcript_bytes = tokio::fs::metadata(path)
+        .await
+        .map(|metadata| metadata.len())
+        .ok();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_transcript.start",
+        path = %path.display(),
+        transcript_bytes,
+        "loading full transcript",
+    );
+
     let file = tokio::fs::File::open(path).await?;
     let reader = tokio::io::BufReader::new(file);
     let mut lines = reader.lines();
 
     let mut entries = Vec::new();
     let mut meta: Option<SessionMetaEntry> = None;
+    let mut line_count = 0usize;
+    let mut skipped_count = 0usize;
+    let mut bytes_seen = 0usize;
+    let mut next_progress_bytes = TRANSCRIPT_LOAD_PROGRESS_BYTES;
 
     while let Some(line) = lines.next_line().await? {
+        line_count += 1;
+        bytes_seen = bytes_seen.saturating_add(line.len() + 1);
+        if bytes_seen >= next_progress_bytes {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "transcript_loader.load_transcript.progress",
+                path = %path.display(),
+                line_count,
+                parsed_entry_count = entries.len(),
+                skipped_count,
+                bytes_seen,
+                transcript_bytes,
+                elapsed_ms = started.elapsed().as_millis(),
+                "still loading full transcript",
+            );
+            next_progress_bytes =
+                next_progress_bytes.saturating_add(TRANSCRIPT_LOAD_PROGRESS_BYTES);
+        }
+
         if line.trim().is_empty() {
             continue;
         }
@@ -297,11 +449,21 @@ async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
             Err(e) => {
                 // The first line must be valid session metadata; fail hard.
                 if meta.is_none() {
+                    tracing::warn!(
+                        target: "nori_resume",
+                        phase = "transcript_loader.load_transcript.first_line_error",
+                        path = %path.display(),
+                        line_count,
+                        elapsed_ms = started.elapsed().as_millis(),
+                        error = %e,
+                        "failed to parse first transcript line",
+                    );
                     return Err(io::Error::other(format!(
                         "failed to parse transcript line: {e}"
                     )));
                 }
                 // Skip unrecognized entries (e.g. removed or future event types).
+                skipped_count += 1;
                 tracing::debug!(
                     path = %path.display(),
                     error = %e,
@@ -323,6 +485,21 @@ async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
 
     let meta =
         meta.ok_or_else(|| io::Error::other("transcript does not contain session metadata"))?;
+
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_transcript.done",
+        path = %path.display(),
+        session_id = %meta.session_id,
+        agent = meta.agent.as_deref().unwrap_or("<unknown>"),
+        line_count,
+        parsed_entry_count = entries.len(),
+        skipped_count,
+        bytes_seen,
+        transcript_bytes,
+        elapsed_ms = started.elapsed().as_millis(),
+        "loaded full transcript",
+    );
 
     Ok(Transcript { meta, entries })
 }
