@@ -271,6 +271,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/diff` | Show PR-like git diff (changes since merge-base with default branch, plus untracked files) |
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and context window usage |
+| `/memory` | Show the contents of all active instruction files (CLAUDE.md / AGENTS.md / GEMINI.md) |
 | `/first-prompt` | Show the first prompt from this session |
 | `/mcp` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
 | `/login` | Log in to the current agent |
@@ -437,6 +438,41 @@ The card always shows: version, directory, agent, skillset (Nori profile). Optio
 The Tokens section renders if either `token_breakdown` has a non-zero total OR `context_window_percent` is present. This means context window percentage from the live API (`TokenUsageInfo`) can appear even before transcript token data is available.
 
 Task summaries are truncated to 50 characters via `truncate_summary()`, which uses char-level operations (`chars().count()` / `chars().take()`) rather than byte slicing for UTF-8 safety with multi-byte characters.
+
+**Instruction File Discovery (`nori/session_header/mod.rs`):**
+
+The "Instruction Files" block in the startup welcome banner, the `/status` card, and the `/memory` output (`chatwidget/helpers.rs::add_memory_output()` -> `active_instruction_file_contents()`) all funnel through the same discovery pathway: `discover_all_instruction_files()` -> `discover_all_instruction_files_with_paths(cwd, agent_kind, home_dir, managed_policy_dir)`. The active subset of those files is what the agent will actually load, so the displayed list must mirror each agent's documented inheritance rules instead of using a single shared rule.
+
+The agent kind is inferred by `detect_agent_kind()` from the configured agent/model string ("claude*", "codex*", "gemini*"). The set of directories searched for instruction files is then chosen per agent:
+
+| Agent | Search range | Fallback when no `.git` is found |
+|-------|--------------|----------------------------------|
+| Claude | Full ancestor chain from cwd up to filesystem root (no git-root cutoff) | n/a -- always walks to root |
+| Codex | cwd up to the nearest `.git` ancestor | cwd only |
+| Gemini | cwd up to the nearest `.git` ancestor | cwd only |
+| Unknown | cwd up to the nearest `.git` ancestor | cwd only |
+
+Claude's behavior follows Claude Code's documented memory loader (https://code.claude.com/docs/en/memory). Walking only to the git root would underreport which CLAUDE.md files Claude will actually load (e.g. with cwd `/tmp/bar/baz`, a `CLAUDE.md` at `/tmp/bar/.claude/` would be missed), so the displayed list would not match what the agent sees.
+
+In each search directory, the discoverer probes for `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `GEMINI.md`, and `.claude/CLAUDE.md`. Two extra passes layer in user-level and system-level configs:
+
+- Home-config pass: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`.
+- Managed-policy pass (Claude only): platform-specific system-wide CLAUDE.md (`/etc/claude-code/CLAUDE.md` on Linux, `/Library/Application Support/ClaudeCode/CLAUDE.md` on macOS, `C:\Program Files\ClaudeCode\CLAUDE.md` on Windows) chosen by `default_managed_policy_dir()`.
+
+The final list is concatenated lowest-precedence first (managed-policy, then home, then ancestor walk) and then deduplicated by absolute path so a file reachable through more than one pass appears exactly once.
+
+After discovery, an activation pass marks each file `active` for the current agent:
+
+| Agent | Files marked active |
+|-------|---------------------|
+| Claude | `.claude/CLAUDE.md`, `CLAUDE.md`, `CLAUDE.local.md` (all of them, anywhere they appear) |
+| Codex | Per directory: `AGENTS.override.md` if present, else `AGENTS.md`. `dirs_with_override` tracks which directories had an override so the sibling `AGENTS.md` in the same directory is suppressed. |
+| Gemini | `GEMINI.md` only (no hidden variants, no overrides) |
+| Unknown | nothing is active |
+
+Token counts are computed only for active files (via `count_tokens()` from `nori/token_count.rs`), so inactive files render dim and contribute nothing to the per-section total in the status card.
+
+Tests inject fake home and managed-policy directories through `discover_all_instruction_files_with_paths()` (and the test-only `discover_all_instruction_files_with_home()` wrapper) to avoid touching real filesystem locations. In debug builds, setting `NORI_MOCK_INSTRUCTION_FILES=1` short-circuits discovery and returns a single fixed entry so E2E snapshots stay stable across machines.
 
 **Skillset Switching (`nori/skillset_picker.rs`):**
 
