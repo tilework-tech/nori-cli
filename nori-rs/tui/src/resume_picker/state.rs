@@ -2,15 +2,15 @@ use super::*;
 
 impl PickerState {
     pub(super) fn new(
-        codex_home: PathBuf,
+        nori_home: PathBuf,
         requester: FrameRequester,
         page_loader: PageLoader,
-        default_provider: String,
+        agent_filter: Option<String>,
         show_all: bool,
         filter_cwd: Option<PathBuf>,
     ) -> Self {
         Self {
-            codex_home,
+            nori_home,
             requester,
             pagination: PaginationState {
                 next_cursor: None,
@@ -29,7 +29,7 @@ impl PickerState {
             next_search_token: 0,
             page_loader,
             view_rows: None,
-            default_provider,
+            agent_filter,
             show_all,
             filter_cwd,
         }
@@ -51,7 +51,7 @@ impl PickerState {
             }
             KeyCode::Enter => {
                 if let Some(row) = self.filtered_rows.get(self.selected) {
-                    return Ok(Some(ResumeSelection::Resume(row.path.clone())));
+                    return Ok(Some(ResumeSelection::Resume(row.target.clone())));
                 }
             }
             KeyCode::Up => {
@@ -110,14 +110,10 @@ impl PickerState {
     }
 
     pub(super) async fn load_initial_page(&mut self) -> Result<()> {
-        let provider_filter = vec![self.default_provider.clone()];
-        let page = RolloutRecorder::list_conversations(
-            &self.codex_home,
-            PAGE_SIZE,
-            None,
-            INTERACTIVE_SESSION_SOURCES,
-            Some(provider_filter.as_slice()),
-            self.default_provider.as_str(),
+        let page = load_transcript_page(
+            &self.nori_home,
+            self.filter_cwd.as_deref(),
+            self.agent_filter.as_deref(),
         )
         .await?;
         self.reset_pagination();
@@ -161,7 +157,7 @@ impl PickerState {
         self.pagination.loading = LoadingState::Idle;
     }
 
-    pub(super) fn ingest_page(&mut self, page: ConversationsPage) {
+    pub(super) fn ingest_page(&mut self, page: TranscriptPage) {
         if let Some(cursor) = page.next_cursor.clone() {
             self.pagination.next_cursor = Some(cursor);
         } else {
@@ -175,9 +171,16 @@ impl PickerState {
             self.pagination.reached_scan_cap = true;
         }
 
-        let rows = helpers::rows_from_items(page.items);
+        let rows = helpers::rows_from_items(page.items, self.nori_home.clone());
         for row in rows {
-            if self.seen_paths.insert(row.path.clone()) {
+            let path = self
+                .nori_home
+                .join("transcripts")
+                .join("by-project")
+                .join(&row.target.project_id)
+                .join("sessions")
+                .join(format!("{}.jsonl", row.target.session_id));
+            if self.seen_paths.insert(path) {
                 self.all_rows.push(row);
             }
         }
@@ -337,9 +340,9 @@ impl PickerState {
         if self.pagination.loading.is_pending() {
             return;
         }
-        let Some(cursor) = self.pagination.next_cursor.clone() else {
+        if self.pagination.next_cursor.is_none() {
             return;
-        };
+        }
         let request_token = self.allocate_request_token();
         let search_token = match trigger {
             LoadTrigger::Scroll => None,
@@ -352,11 +355,10 @@ impl PickerState {
         self.request_frame();
 
         (self.page_loader)(PageLoadRequest {
-            codex_home: self.codex_home.clone(),
-            cursor: Some(cursor),
+            nori_home: self.nori_home.clone(),
             request_token,
             search_token,
-            default_provider: self.default_provider.clone(),
+            agent_filter: self.agent_filter.clone(),
         });
     }
 

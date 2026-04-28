@@ -26,9 +26,17 @@ This crate is the primary entry point that ties together the core crates:
 **WindowsCommand**: Windows sandbox testing with:
 - `--full-auto` - Restricted token sandbox with cwd/TMPDIR write access
 
+**ResumeCommand**: Starts the TUI from a saved transcript session:
+- `nori resume` - Opens the startup session picker for the current working directory
+- `nori resume <session-id>` - Resumes a saved session by transcript session ID
+- `nori resume --last` - Resumes the newest saved session for the current working directory
+- `nori resume --all` - Lets picker/last selection search all transcript projects instead of only the current working directory
+- TUI flags such as `--agent`, `--profile`, `--sandbox`, prompts, images, `-c`, and working-directory overrides can be passed after `resume`; they are merged into the normal interactive CLI configuration before `nori_tui::run_main()`
+
 ```rust
 match subcommand {
     None => nori_tui::run_main(...),           // Interactive TUI
+    Some(Subcommand::Resume(cmd)) => nori_tui::run_main(...),
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
@@ -101,6 +109,16 @@ These allow testing sandbox behavior without running the full TUI. All commands 
 1. Subcommand-specific flags (highest)
 2. Root-level `-c` overrides
 3. Config file (lowest)
+
+For `nori resume`, subcommand-scoped interactive flags are copied into the same `TuiCli` structure used by a fresh interactive launch. If both root-level and resume-scoped flags are present, the resume-scoped flag wins for that field while preserving unrelated root-level settings.
+
+**Startup Resume:**
+
+`nori resume` is the top-level counterpart to the in-TUI `/resume` command. It resolves saved sessions through Nori's transcript metadata instead of external provider rollout files:
+- `nori resume <session-id>` searches all transcript projects by session ID.
+- `nori resume --last` selects the newest saved session, scoped to the current working directory unless `--all` is present.
+- `nori resume` without an ID opens a picker, scoped to the current working directory unless `--all` is present.
+- If the saved session metadata records an agent, that recorded agent is used automatically. Passing a different `--agent` is a startup error so the command never resumes a session with the wrong agent.
 
 **Process Hardening:**
 

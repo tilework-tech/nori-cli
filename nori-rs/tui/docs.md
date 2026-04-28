@@ -718,6 +718,34 @@ Rendering behavior:
 
 The async flow uses three AppEvents: `ShowViewonlySessionPicker` -> `LoadViewonlyTranscript` -> `DisplayViewonlyTranscript`.
 
+**Startup Session Resume (`nori resume`):**
+
+The top-level `nori resume` subcommand enters the TUI with an existing transcript session already selected. This path is handled before `App::run()` constructs the chat widget:
+
+```
+nori resume [session-id]
+    |
+    v
+run_main() -> run_ratatui_app()
+    |  (resolves metadata by ID, --last, or startup picker)
+    v
+ResumeSelection::Resume(ResumeTarget)
+    |  (loads full Transcript, extracts acp_session_id as Option<String>)
+    v
+ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
+    |
+    v
+spawn_acp_agent_resume() -> AcpBackend::resume_session()
+```
+
+Selection behavior:
+- `nori resume <session-id>` searches all transcript projects for that exact session ID.
+- `nori resume --last` chooses the newest transcript for the current working directory; `--all` removes the cwd filter.
+- `nori resume` opens `resume_picker/`, which lists metadata-only transcript rows and returns a `ResumeTarget`.
+- `--agent` is optional. When omitted, the recorded `session_meta.agent` is used. When present, it must match the recorded agent or startup fails with a clear error.
+
+The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It uses `TranscriptLoader::list_resumable_session_metadata()` and keeps rows lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery.
+
 **Session Resume (`/resume`):**
 
 The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and otherwise falls back to a fresh ACP session plus normalized replay derived from the saved transcript (see `@/nori-rs/acp/docs.md`).

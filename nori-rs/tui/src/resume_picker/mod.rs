@@ -5,16 +5,13 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use codex_core::ConversationItem;
-use codex_core::ConversationsPage;
 use codex_core::Cursor;
-use codex_core::INTERACTIVE_SESSION_SOURCES;
-use codex_core::RolloutRecorder;
-use codex_protocol::items::TurnItem;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_acp::transcript::SessionMetadata;
+use nori_acp::transcript::TranscriptLoader;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
 use ratatui::layout::Rect;
@@ -32,8 +29,6 @@ use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
-use codex_protocol::models::ResponseItem;
-use codex_protocol::protocol::SessionMetaLine;
 
 mod helpers;
 mod rendering;
@@ -41,27 +36,29 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-const PAGE_SIZE: usize = 25;
 const LOAD_NEAR_THRESHOLD: usize = 5;
+
+#[derive(Debug, Clone)]
+pub struct ResumeTarget {
+    pub nori_home: PathBuf,
+    pub project_id: String,
+    pub session_id: String,
+    pub agent: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 pub enum ResumeSelection {
     StartFresh,
-    /// Previously used for HTTP-backend resume. The PathBuf is still
-    /// constructed by the resume picker but no longer consumed by
-    /// `App::run()` because ACP resume goes through a different path.
-    #[allow(dead_code)]
-    Resume(PathBuf),
+    Resume(ResumeTarget),
     Exit,
 }
 
 #[derive(Clone)]
 struct PageLoadRequest {
-    pub(super) codex_home: PathBuf,
-    pub(super) cursor: Option<Cursor>,
+    pub(super) nori_home: PathBuf,
     pub(super) request_token: usize,
     pub(super) search_token: Option<usize>,
-    pub(super) default_provider: String,
+    pub(super) agent_filter: Option<String>,
 }
 
 type PageLoader = Arc<dyn Fn(PageLoadRequest) + Send + Sync>;
@@ -70,23 +67,30 @@ enum BackgroundEvent {
     PageLoaded {
         request_token: usize,
         search_token: Option<usize>,
-        page: std::io::Result<ConversationsPage>,
+        page: std::io::Result<TranscriptPage>,
     },
 }
 
-/// Interactive session picker that lists recorded rollout files with simple
+struct TranscriptPage {
+    items: Vec<SessionMetadata>,
+    next_cursor: Option<Cursor>,
+    num_scanned_files: usize,
+    reached_scan_cap: bool,
+}
+
+/// Interactive session picker that lists recorded Nori transcript sessions with simple
 /// search and pagination. Shows the first user input as the preview, relative
 /// time (e.g., "5 seconds ago"), and the absolute path.
 pub async fn run_resume_picker(
     tui: &mut Tui,
-    codex_home: &Path,
-    default_provider: &str,
+    nori_home: &Path,
+    agent_filter: Option<&str>,
     show_all: bool,
 ) -> Result<ResumeSelection> {
     let alt = AltScreenGuard::enter(tui);
     let (bg_tx, bg_rx) = mpsc::unbounded_channel();
 
-    let default_provider = default_provider.to_string();
+    let agent_filter = agent_filter.map(str::to_string);
     let filter_cwd = if show_all {
         None
     } else {
@@ -97,16 +101,9 @@ pub async fn run_resume_picker(
     let page_loader: PageLoader = Arc::new(move |request: PageLoadRequest| {
         let tx = loader_tx.clone();
         tokio::spawn(async move {
-            let provider_filter = vec![request.default_provider.clone()];
-            let page = RolloutRecorder::list_conversations(
-                &request.codex_home,
-                PAGE_SIZE,
-                request.cursor.as_ref(),
-                INTERACTIVE_SESSION_SOURCES,
-                Some(provider_filter.as_slice()),
-                request.default_provider.as_str(),
-            )
-            .await;
+            let page =
+                load_transcript_page(&request.nori_home, None, request.agent_filter.as_deref())
+                    .await;
             let _ = tx.send(BackgroundEvent::PageLoaded {
                 request_token: request.request_token,
                 search_token: request.search_token,
@@ -116,10 +113,10 @@ pub async fn run_resume_picker(
     });
 
     let mut state = PickerState::new(
-        codex_home.to_path_buf(),
+        nori_home.to_path_buf(),
         alt.tui.frame_requester(),
         page_loader,
-        default_provider.clone(),
+        agent_filter.clone(),
         show_all,
         filter_cwd,
     );
@@ -163,6 +160,23 @@ pub async fn run_resume_picker(
     Ok(ResumeSelection::StartFresh)
 }
 
+async fn load_transcript_page(
+    nori_home: &Path,
+    cwd: Option<&Path>,
+    agent_filter: Option<&str>,
+) -> std::io::Result<TranscriptPage> {
+    let loader = TranscriptLoader::new(nori_home.to_path_buf());
+    let items = loader
+        .list_resumable_session_metadata(cwd, agent_filter)
+        .await?;
+    Ok(TranscriptPage {
+        num_scanned_files: items.len(),
+        items,
+        next_cursor: None,
+        reached_scan_cap: false,
+    })
+}
+
 /// RAII guard that ensures we leave the alt-screen on scope exit.
 struct AltScreenGuard<'a> {
     tui: &'a mut Tui,
@@ -182,7 +196,7 @@ impl Drop for AltScreenGuard<'_> {
 }
 
 struct PickerState {
-    pub(super) codex_home: PathBuf,
+    pub(super) nori_home: PathBuf,
     pub(super) requester: FrameRequester,
     pub(super) pagination: PaginationState,
     pub(super) all_rows: Vec<Row>,
@@ -196,7 +210,7 @@ struct PickerState {
     pub(super) next_search_token: usize,
     pub(super) page_loader: PageLoader,
     pub(super) view_rows: Option<usize>,
-    pub(super) default_provider: String,
+    pub(super) agent_filter: Option<String>,
     pub(super) show_all: bool,
     pub(super) filter_cwd: Option<PathBuf>,
 }
@@ -252,7 +266,7 @@ impl SearchState {
 
 #[derive(Clone)]
 struct Row {
-    pub(super) path: PathBuf,
+    pub(super) target: ResumeTarget,
     pub(super) preview: String,
     pub(super) created_at: Option<DateTime<Utc>>,
     pub(super) updated_at: Option<DateTime<Utc>>,

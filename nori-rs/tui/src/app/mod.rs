@@ -82,7 +82,7 @@ fn session_summary(
 
     let usage_line = FinalOutput::from(token_usage).to_string();
     let resume_command =
-        conversation_id.map(|conversation_id| format!("codex resume {conversation_id}"));
+        conversation_id.map(|conversation_id| format!("nori resume {conversation_id}"));
     Some(SessionSummary {
         usage_line,
         resume_command,
@@ -293,13 +293,6 @@ impl App {
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
-        if matches!(resume_selection, ResumeSelection::Resume(_)) {
-            tracing::warn!(
-                "Startup resume via --resume is not supported with ACP backend. \
-                 Use the /resume command within a session instead."
-            );
-        }
-
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
 
@@ -341,7 +334,17 @@ impl App {
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
             };
-            ChatWidget::new(init)
+            match resume_selection {
+                ResumeSelection::Resume(target) => {
+                    let loader = nori_acp::transcript::TranscriptLoader::new(target.nori_home);
+                    let transcript = loader
+                        .load_transcript(&target.project_id, &target.session_id)
+                        .await?;
+                    let acp_session_id = transcript.meta.acp_session_id.clone();
+                    ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
+                }
+                ResumeSelection::StartFresh | ResumeSelection::Exit => ChatWidget::new(init),
+            }
         };
 
         chat_widget.maybe_prompt_windows_sandbox_enable();

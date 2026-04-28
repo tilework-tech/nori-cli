@@ -262,7 +262,6 @@ impl AcpBackend {
         ));
         let idle_timer_abort = Arc::new(Mutex::new(None));
         let (approval_policy_tx, approval_policy_rx) = watch::channel(config.approval_policy);
-        let conversation_id = ConversationId::new();
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
 
@@ -281,6 +280,10 @@ impl AcpBackend {
                 None
             }
         };
+        let conversation_id = transcript_recorder
+            .as_ref()
+            .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
+            .unwrap_or_default();
 
         let backend = Self {
             connection,

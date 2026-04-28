@@ -673,6 +673,8 @@ Key methods:
 - `list_session_metadata()`: List first-line-only session metadata for a specific project
 - `find_sessions_for_cwd()`: Find sessions for current working directory
 - `find_session_metadata_for_cwd()`: Find first-line-only session metadata for current working directory
+- `find_session_metadata_by_id()`: Find first-line-only session metadata by transcript session ID across all projects
+- `list_resumable_session_metadata()`: List first-line-only session metadata for startup resume, optionally scoped to a cwd and/or agent
 - `load_transcript()`: Load complete transcript with all entries
 - `load_session_meta()`: Load just session metadata (for quick listing)
 - `load_first_user_preview()`: Stream lines until the first user entry, bounded for picker preview loading
@@ -680,12 +682,12 @@ Key methods:
 
 **Forward/backward compatibility:** `load_transcript_from_path()` gracefully skips JSONL lines that fail to deserialize after the first line (session metadata). This means transcripts remain loadable across schema changes -- older binaries skip unknown entry types written by newer versions, and newer binaries skip removed entry types from older transcripts (e.g., the removed `turn_lifecycle` variant). The first line must always be valid `SessionMeta`; a deserialization failure there is a hard error. Skipped lines are logged at `tracing::debug` level. `load_session_meta_from_path()` is unaffected since it only reads the first line.
 
-Large transcript paths avoid full-file reads when building `/resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after the picker is visible.
+Large transcript paths avoid full-file reads when building `/resume` and startup `nori resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after picker rows are visible.
 
 **ACP Integration:**
 
 The `AcpBackend` automatically:
-1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support
+1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
 4. Records normalized ACP session events via `record_client_event()` in the update and approval handlers

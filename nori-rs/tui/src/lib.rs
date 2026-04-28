@@ -9,16 +9,15 @@ pub use app::AppExitInfo;
 use codex_app_server_protocol::AuthMode;
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
-use codex_core::INTERACTIVE_SESSION_SOURCES;
-use codex_core::RolloutRecorder;
 use codex_core::auth::enforce_login_restrictions;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
-use codex_core::find_conversation_path_by_id_str;
 use codex_core::get_platform_sandbox;
 use codex_core::protocol::AskForApproval;
 use codex_protocol::config_types::SandboxMode;
+use nori_acp::transcript::SessionMetadata;
+use nori_acp::transcript::TranscriptLoader;
 #[cfg(feature = "otel")]
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use std::fs::OpenOptions;
@@ -477,7 +476,7 @@ async fn run_ratatui_app(
 
     // Auto-worktree "ask" mode: show a TUI popup asking the user.
     // If they confirm, create the worktree and reload config with the new cwd.
-    let config = if pending_worktree_ask {
+    let mut config = if pending_worktree_ask {
         let effective_cwd = config.cwd.clone();
         let user_wants_worktree = nori::worktree_ask::run_worktree_ask_popup(&mut tui).await?;
         if user_wants_worktree {
@@ -500,52 +499,64 @@ async fn run_ratatui_app(
         config
     };
 
+    let resume_agent_filter = cli.agent.as_deref();
+    let transcript_loader = TranscriptLoader::new(config.codex_home.clone());
+
     // Determine resume behavior: explicit id, then resume last, then picker.
     let resume_selection = if let Some(id_str) = cli.resume_session_id.as_deref() {
-        match find_conversation_path_by_id_str(&config.codex_home, id_str).await? {
-            Some(path) => resume_picker::ResumeSelection::Resume(path),
-            None => {
-                error!("Error finding conversation path: {id_str}");
-                restore();
-                session_log::log_session_end();
-                let _ = tui.terminal.clear();
-                if let Err(err) = writeln!(
-                    std::io::stdout(),
-                    "No saved session found with ID {id_str}. Run `codex resume` without an ID to choose from existing sessions."
-                ) {
-                    error!("Failed to write resume error message: {err}");
+        match transcript_loader
+            .find_session_metadata_by_id(id_str)
+            .await?
+        {
+            Some(metadata) => match resume_target_from_metadata(
+                config.codex_home.clone(),
+                metadata,
+                resume_agent_filter,
+            ) {
+                Ok(target) => resume_picker::ResumeSelection::Resume(target),
+                Err(message) => {
+                    return resume_startup_error(&mut tui, message);
                 }
-                return Ok(AppExitInfo {
-                    token_usage: codex_core::protocol::TokenUsage::default(),
-                    conversation_id: None,
-                    update_action: None,
-                });
+            },
+            None => {
+                return resume_startup_error(
+                    &mut tui,
+                    format!(
+                        "No saved session found with ID {id_str}. Run `nori resume` without an ID to choose from existing sessions."
+                    ),
+                );
             }
         }
     } else if cli.resume_last {
-        let provider_filter = vec![config.model_provider_id.clone()];
-        match RolloutRecorder::list_conversations(
-            &config.codex_home,
-            1,
-            None,
-            INTERACTIVE_SESSION_SOURCES,
-            Some(provider_filter.as_slice()),
-            &config.model_provider_id,
-        )
-        .await
+        let filter_cwd = if cli.resume_show_all {
+            None
+        } else {
+            Some(config.cwd.as_path())
+        };
+        match transcript_loader
+            .list_resumable_session_metadata(filter_cwd, resume_agent_filter)
+            .await
         {
-            Ok(page) => page
-                .items
-                .first()
-                .map(|it| resume_picker::ResumeSelection::Resume(it.path.clone()))
-                .unwrap_or(resume_picker::ResumeSelection::StartFresh),
+            Ok(sessions) => match sessions.into_iter().next() {
+                Some(metadata) => match resume_target_from_metadata(
+                    config.codex_home.clone(),
+                    metadata,
+                    resume_agent_filter,
+                ) {
+                    Ok(target) => resume_picker::ResumeSelection::Resume(target),
+                    Err(message) => {
+                        return resume_startup_error(&mut tui, message);
+                    }
+                },
+                None => resume_picker::ResumeSelection::StartFresh,
+            },
             Err(_) => resume_picker::ResumeSelection::StartFresh,
         }
     } else if cli.resume_picker {
         match resume_picker::run_resume_picker(
             &mut tui,
             &config.codex_home,
-            &config.model_provider_id,
+            resume_agent_filter,
             cli.resume_show_all,
         )
         .await?
@@ -564,6 +575,12 @@ async fn run_ratatui_app(
     } else {
         resume_picker::ResumeSelection::StartFresh
     };
+
+    if let resume_picker::ResumeSelection::Resume(target) = &resume_selection
+        && let Some(agent) = target.agent.as_ref()
+    {
+        config.model = agent.clone();
+    }
 
     let Cli { prompt, images, .. } = cli;
 
@@ -584,6 +601,44 @@ async fn run_ratatui_app(
     session_log::log_session_end();
     // ignore error when collecting usage – report underlying error instead
     app_result
+}
+
+fn resume_target_from_metadata(
+    nori_home: PathBuf,
+    metadata: SessionMetadata,
+    requested_agent: Option<&str>,
+) -> std::result::Result<resume_picker::ResumeTarget, String> {
+    if let (Some(requested_agent), Some(recorded_agent)) =
+        (requested_agent, metadata.agent.as_deref())
+        && requested_agent != recorded_agent
+    {
+        return Err(format!(
+            "Session {} was recorded with agent `{recorded_agent}`, but `--agent {requested_agent}` was requested.",
+            metadata.session_id
+        ));
+    }
+
+    Ok(resume_picker::ResumeTarget {
+        nori_home,
+        project_id: metadata.project_id,
+        session_id: metadata.session_id,
+        agent: metadata.agent,
+    })
+}
+
+fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<AppExitInfo> {
+    error!("{message}");
+    restore();
+    session_log::log_session_end();
+    let _ = tui.terminal.clear();
+    if let Err(err) = writeln!(std::io::stdout(), "{message}") {
+        error!("Failed to write resume error message: {err}");
+    }
+    Ok(AppExitInfo {
+        token_usage: codex_core::protocol::TokenUsage::default(),
+        conversation_id: None,
+        update_action: None,
+    })
 }
 
 #[expect(
@@ -682,6 +737,41 @@ mod tests {
     use codex_core::config::ProjectConfig;
     use serial_test::serial;
     use tempfile::TempDir;
+
+    fn session_metadata(agent: Option<&str>) -> SessionMetadata {
+        SessionMetadata {
+            session_id: "session-123".to_string(),
+            project_id: "project-123".to_string(),
+            started_at: "2025-01-01T00:00:00Z".to_string(),
+            cwd: PathBuf::from("/tmp/project"),
+            agent: agent.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn resume_target_uses_recorded_agent_when_agent_not_requested() {
+        let target = resume_target_from_metadata(
+            PathBuf::from("/tmp/nori-home"),
+            session_metadata(Some("codex")),
+            None,
+        )
+        .expect("recorded agent should be accepted");
+
+        assert_eq!(target.agent.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn resume_target_rejects_requested_agent_mismatch() {
+        let error = resume_target_from_metadata(
+            PathBuf::from("/tmp/nori-home"),
+            session_metadata(Some("codex")),
+            Some("claude-code"),
+        )
+        .expect_err("mismatched agent should be rejected");
+
+        assert!(error.contains("recorded with agent `codex`"));
+        assert!(error.contains("--agent claude-code"));
+    }
 
     #[test]
     #[serial]

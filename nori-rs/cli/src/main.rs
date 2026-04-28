@@ -85,12 +85,33 @@ enum Subcommand {
 
     /// Generate shell completion scripts.
     Completions(CompletionsCommand),
+
+    /// Resume a previous interactive session (picker by default; use --last to continue the most recent).
+    Resume(ResumeCommand),
 }
 
 #[derive(Debug, Parser)]
 struct CompletionsCommand {
     /// The shell to generate completions for.
     shell: clap_complete::Shell,
+}
+
+#[derive(Debug, Parser)]
+struct ResumeCommand {
+    /// Session id (UUID). If omitted, use --last or choose from the picker.
+    #[arg(value_name = "SESSION_ID")]
+    session_id: Option<String>,
+
+    /// Continue the most recent session without showing the picker.
+    #[arg(long = "last", default_value_t = false)]
+    last: bool,
+
+    /// Show all sessions instead of filtering to the current working directory.
+    #[arg(long = "all", default_value_t = false)]
+    all: bool,
+
+    #[clap(flatten)]
+    config_overrides: TuiCli,
 }
 
 #[derive(Debug, Parser)]
@@ -457,6 +478,23 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         Some(Subcommand::Skillsets(cmd)) => {
             run_skillsets_command(cmd)?;
         }
+        Some(Subcommand::Resume(ResumeCommand {
+            session_id,
+            last,
+            all,
+            config_overrides,
+        })) => {
+            interactive = finalize_resume_interactive(
+                interactive,
+                root_config_overrides.clone(),
+                session_id,
+                last,
+                all,
+                config_overrides,
+            );
+            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            handle_app_exit(exit_info)?;
+        }
         Some(Subcommand::Execpolicy(ExecpolicyCommand { sub })) => match sub {
             ExecpolicySubcommand::Check(cmd) => run_execpolicycheck(cmd)?,
         },
@@ -489,12 +527,91 @@ fn prepend_config_flags(
         .splice(0..0, cli_config_overrides.raw_overrides);
 }
 
+fn finalize_resume_interactive(
+    mut interactive: TuiCli,
+    root_config_overrides: CliConfigOverrides,
+    session_id: Option<String>,
+    last: bool,
+    show_all: bool,
+    resume_cli: TuiCli,
+) -> TuiCli {
+    interactive.resume_picker = session_id.is_none() && !last;
+    interactive.resume_last = last;
+    interactive.resume_session_id = session_id;
+    interactive.resume_show_all = show_all;
+    merge_interactive_cli_flags(&mut interactive, resume_cli);
+    prepend_config_flags(&mut interactive.config_overrides, root_config_overrides);
+    interactive
+}
+
+fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli) {
+    if let Some(prompt) = subcommand_cli.prompt {
+        interactive.prompt = Some(prompt.replace("\r\n", "\n").replace('\r', "\n"));
+    }
+    if !subcommand_cli.images.is_empty() {
+        interactive.images = subcommand_cli.images;
+    }
+    if let Some(agent) = subcommand_cli.agent {
+        interactive.agent = Some(agent);
+    }
+    if let Some(profile) = subcommand_cli.config_profile {
+        interactive.config_profile = Some(profile);
+    }
+    if subcommand_cli.dangerously_bypass_approvals_and_sandbox {
+        interactive.dangerously_bypass_approvals_and_sandbox = true;
+    }
+    if let Some(cwd) = subcommand_cli.cwd {
+        interactive.cwd = Some(cwd);
+    }
+    if !subcommand_cli.add_dir.is_empty() {
+        interactive.add_dir.extend(subcommand_cli.add_dir);
+    }
+    if subcommand_cli.skip_welcome {
+        interactive.skip_welcome = true;
+    }
+    if subcommand_cli.skip_trust_directory {
+        interactive.skip_trust_directory = true;
+    }
+    interactive
+        .config_overrides
+        .raw_overrides
+        .extend(subcommand_cli.config_overrides.raw_overrides);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
     use pretty_assertions::assert_eq;
+
+    fn finalize_resume_from_args(args: &[&str]) -> TuiCli {
+        let cli = MultitoolCli::try_parse_from(args).expect("parse");
+        let MultitoolCli {
+            interactive,
+            config_overrides: root_overrides,
+            subcommand,
+        } = cli;
+
+        let Subcommand::Resume(ResumeCommand {
+            session_id,
+            last,
+            all,
+            config_overrides: resume_cli,
+        }) = subcommand.expect("resume present")
+        else {
+            unreachable!()
+        };
+
+        finalize_resume_interactive(
+            interactive,
+            root_overrides,
+            session_id,
+            last,
+            all,
+            resume_cli,
+        )
+    }
 
     fn sample_exit_info(conversation: Option<&str>) -> AppExitInfo {
         let token_usage = TokenUsage {
@@ -542,6 +659,83 @@ mod tests {
         let lines = format_exit_messages(exit_info, true);
         assert_eq!(lines.len(), 2);
         assert!(lines[1].contains("\u{1b}[36m"));
+    }
+
+    #[test]
+    fn resume_picker_logic_none_and_not_last() {
+        let interactive = finalize_resume_from_args(["nori", "resume"].as_ref());
+        assert!(interactive.resume_picker);
+        assert!(!interactive.resume_last);
+        assert_eq!(interactive.resume_session_id, None);
+        assert!(!interactive.resume_show_all);
+    }
+
+    #[test]
+    fn resume_picker_logic_last() {
+        let interactive = finalize_resume_from_args(["nori", "resume", "--last"].as_ref());
+        assert!(!interactive.resume_picker);
+        assert!(interactive.resume_last);
+        assert_eq!(interactive.resume_session_id, None);
+    }
+
+    #[test]
+    fn resume_picker_logic_with_session_id() {
+        let interactive = finalize_resume_from_args(["nori", "resume", "session-123"].as_ref());
+        assert!(!interactive.resume_picker);
+        assert!(!interactive.resume_last);
+        assert_eq!(
+            interactive.resume_session_id.as_deref(),
+            Some("session-123")
+        );
+    }
+
+    #[test]
+    fn resume_all_flag_sets_show_all() {
+        let interactive = finalize_resume_from_args(["nori", "resume", "--all"].as_ref());
+        assert!(interactive.resume_picker);
+        assert!(interactive.resume_show_all);
+    }
+
+    #[test]
+    fn resume_merges_resume_scoped_interactive_flags() {
+        let interactive = finalize_resume_from_args(
+            [
+                "nori",
+                "resume",
+                "session-123",
+                "--agent",
+                "codex",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "-C",
+                "/tmp",
+                "-i",
+                "/tmp/a.png,/tmp/b.png",
+                "--skip-welcome",
+                "--skip-trust-directory",
+            ]
+            .as_ref(),
+        );
+
+        assert_eq!(interactive.agent.as_deref(), Some("codex"));
+        assert!(interactive.dangerously_bypass_approvals_and_sandbox);
+        assert_eq!(
+            interactive.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp"))
+        );
+        assert!(
+            interactive
+                .images
+                .iter()
+                .any(|path| path == std::path::Path::new("/tmp/a.png"))
+        );
+        assert!(
+            interactive
+                .images
+                .iter()
+                .any(|path| path == std::path::Path::new("/tmp/b.png"))
+        );
+        assert!(interactive.skip_welcome);
+        assert!(interactive.skip_trust_directory);
     }
 
     /// Binary name should be "nori" in help output

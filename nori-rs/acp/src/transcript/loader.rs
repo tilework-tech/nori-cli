@@ -313,6 +313,46 @@ impl TranscriptLoader {
         self.list_session_metadata(&project_id.id).await
     }
 
+    /// Find one session by its transcript session id across all known projects.
+    pub async fn find_session_metadata_by_id(
+        &self,
+        session_id: &str,
+    ) -> io::Result<Option<SessionMetadata>> {
+        for project in self.list_projects().await? {
+            let sessions = self.list_session_metadata(&project.id).await?;
+            if let Some(session) = sessions
+                .into_iter()
+                .find(|session| session.session_id == session_id)
+            {
+                return Ok(Some(session));
+            }
+        }
+        Ok(None)
+    }
+
+    /// List transcript session metadata for startup resume flows.
+    pub async fn list_resumable_session_metadata(
+        &self,
+        cwd: Option<&Path>,
+        agent_filter: Option<&str>,
+    ) -> io::Result<Vec<SessionMetadata>> {
+        let mut sessions = if let Some(cwd) = cwd {
+            self.find_session_metadata_for_cwd(cwd).await?
+        } else {
+            let mut sessions = Vec::new();
+            for project in self.list_projects().await? {
+                sessions.extend(self.list_session_metadata(&project.id).await?);
+            }
+            sessions
+        };
+
+        if let Some(agent_filter) = agent_filter {
+            sessions.retain(|session| session.agent.as_deref() == Some(agent_filter));
+        }
+        sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        Ok(sessions)
+    }
+
     /// Load a complete transcript for display.
     pub async fn load_transcript(
         &self,
@@ -1019,6 +1059,64 @@ mod tests {
         assert_eq!(sessions[0].session_id, session_id);
         assert_eq!(sessions[0].project_id, project_id);
         assert_eq!(sessions[0].agent.as_deref(), Some("codex"));
+    }
+
+    #[tokio::test]
+    async fn find_session_metadata_by_id_finds_sessions_across_projects() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let first_cwd = nori_home.join("first");
+        let second_cwd = nori_home.join("second");
+        tokio::fs::create_dir_all(&first_cwd).await.unwrap();
+        tokio::fs::create_dir_all(&second_cwd).await.unwrap();
+
+        let first_recorder = TranscriptRecorder::new(
+            nori_home,
+            &first_cwd,
+            Some("claude-code".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
+        first_recorder.shutdown().await.unwrap();
+
+        let second_recorder = TranscriptRecorder::new(
+            nori_home,
+            &second_cwd,
+            Some("codex".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
+        let second_session_id = second_recorder.session_id().to_string();
+        let second_project_id = second_recorder.project_id().to_string();
+        second_recorder.shutdown().await.unwrap();
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let found = loader
+            .find_session_metadata_by_id(&second_session_id)
+            .await
+            .unwrap()
+            .expect("session should be found");
+
+        assert_eq!(found.session_id, second_session_id);
+        assert_eq!(found.project_id, second_project_id);
+        assert_eq!(found.agent.as_deref(), Some("codex"));
+    }
+
+    #[tokio::test]
+    async fn find_session_metadata_by_id_returns_none_for_missing_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let loader = TranscriptLoader::new(temp_dir.path().to_path_buf());
+
+        let found = loader
+            .find_session_metadata_by_id("missing-session")
+            .await
+            .unwrap();
+
+        assert!(found.is_none());
     }
 
     #[tokio::test]
