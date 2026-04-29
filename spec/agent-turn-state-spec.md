@@ -268,14 +268,18 @@ handle that path anyway, even if only to log and drop it.
 The observable behavior should be:
 
 - if a request-owned content update arrives with `active.is_none()`, emit
-  `UiEvent::Warning`
+  `UiEvent::Warning` once per burst — only the first such update since the
+  last active request emits the warning, subsequent updates in the same
+  idle window do not. The flag resets when a new prompt or load begins.
 - forward the well-formed content to the TUI as standalone between-turn output
+  (every update, regardless of whether the warning fired)
 - do not attribute that content to a prior or future request
 - do not reopen `active`
 - if the update is malformed or unrecognizable, log a warning and drop it
 
 This keeps the protocol handling honest without adding attribution heuristics to
-the core reducer.
+the core reducer, and prevents post-cancel update bursts from spamming the
+history with identical warning cells.
 
 ### 4. Attributed tool updates
 

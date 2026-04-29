@@ -220,6 +220,11 @@ pub struct SessionRuntime {
     pub persisted: PersistedSessionState,
     pub active: Option<ActiveRequestState>,
     pub queue: VecDeque<QueuedPrompt>,
+    /// Tracks whether we have already emitted the "request-owned content
+    /// update while no request is active" warning since the last time a
+    /// request became active. Reset on each new prompt/load start so that a
+    /// fresh post-cancel burst on a subsequent request can warn again.
+    pub orphan_update_warning_emitted: bool,
 }
 
 impl SessionRuntime {
@@ -229,6 +234,7 @@ impl SessionRuntime {
             persisted: PersistedSessionState::default(),
             active: None,
             queue: VecDeque::new(),
+            orphan_update_warning_emitted: false,
         }
     }
 

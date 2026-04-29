@@ -177,6 +177,7 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
         request_id.clone(),
         prompt.clone(),
     ));
+    runtime.orphan_update_warning_emitted = false;
 
     // Add user message to transcript.
     if let Some(display_text) = &prompt.display_text
@@ -372,6 +373,7 @@ fn reduce_load_submit(runtime: &mut SessionRuntime, request_id: String, out: &mu
         request_id,
         ActiveRequestKind::Loading,
     ));
+    runtime.orphan_update_warning_emitted = false;
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
 }
@@ -422,9 +424,13 @@ fn reduce_notification(
 
     // Request-owned content requires an active request.
     if runtime.active.is_none() {
-        out.events.push(ClientEvent::Warning(WarningInfo {
-            message: "Received request-owned content update while no request is active".to_string(),
-        }));
+        if !runtime.orphan_update_warning_emitted {
+            out.events.push(ClientEvent::Warning(WarningInfo {
+                message: "Received request-owned content update while no request is active"
+                    .to_string(),
+            }));
+            runtime.orphan_update_warning_emitted = true;
+        }
         let client_events = normalizer.push_session_update(&update);
         out.events.extend(client_events);
         return;
