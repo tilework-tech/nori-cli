@@ -3,6 +3,8 @@
 mod runaway_search;
 
 use std::cell::Cell;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -44,6 +46,14 @@ struct MockAgent {
     cancel_requested: Cell<bool>,
     pending_cancel_tail_empty_end_turns: Cell<usize>,
     follow_up_after_cancel_tail: Cell<bool>,
+    session_configs: RefCell<HashMap<String, MockSessionConfig>>,
+}
+
+#[derive(Clone)]
+struct MockSessionConfig {
+    model_id: String,
+    thought_level: Option<String>,
+    speed: Option<String>,
 }
 
 impl MockAgent {
@@ -58,7 +68,88 @@ impl MockAgent {
             cancel_requested: Cell::new(false),
             pending_cancel_tail_empty_end_turns: Cell::new(0),
             follow_up_after_cancel_tail: Cell::new(false),
+            session_configs: RefCell::new(HashMap::new()),
         }
+    }
+
+    fn default_session_config() -> MockSessionConfig {
+        MockSessionConfig {
+            model_id: "mock-model-default".to_string(),
+            thought_level: Some("medium".to_string()),
+            speed: None,
+        }
+    }
+
+    fn session_model_state() -> acp::SessionModelState {
+        acp::SessionModelState::new(
+            acp::ModelId::new("mock-model-default"),
+            vec![
+                acp::ModelInfo::new(
+                    acp::ModelId::new("mock-model-default"),
+                    "Mock Default Model",
+                )
+                .description("The default mock model"),
+                acp::ModelInfo::new(acp::ModelId::new("mock-model-fast"), "Mock Fast Model")
+                    .description("A faster mock model variant"),
+                acp::ModelInfo::new(
+                    acp::ModelId::new("mock-model-powerful"),
+                    "Mock Powerful Model",
+                )
+                .description("A more powerful mock model variant"),
+            ],
+        )
+    }
+
+    fn config_options_for_state(config: &MockSessionConfig) -> Vec<acp::SessionConfigOption> {
+        let mut options = vec![
+            acp::SessionConfigOption::select(
+                "model",
+                "Model",
+                config.model_id.clone(),
+                vec![
+                    acp::SessionConfigSelectOption::new("mock-model-default", "Mock Default Model")
+                        .description("The default mock model"),
+                    acp::SessionConfigSelectOption::new("mock-model-fast", "Mock Fast Model")
+                        .description("A faster mock model variant"),
+                ],
+            )
+            .category(acp::SessionConfigOptionCategory::Model),
+        ];
+
+        if config.model_id == "mock-model-fast" {
+            options.push(
+                acp::SessionConfigOption::select(
+                    "speed",
+                    "Speed",
+                    config.speed.clone().unwrap_or_else(|| "fast".to_string()),
+                    vec![
+                        acp::SessionConfigSelectOption::new("fast", "Fast"),
+                        acp::SessionConfigSelectOption::new("balanced", "Balanced"),
+                    ],
+                )
+                .description("Latency profile for the active model"),
+            );
+        } else {
+            options.push(
+                acp::SessionConfigOption::select(
+                    "thought_level",
+                    "Thought Level",
+                    config
+                        .thought_level
+                        .clone()
+                        .unwrap_or_else(|| "medium".to_string()),
+                    vec![
+                        acp::SessionConfigSelectOption::new("low", "Low"),
+                        acp::SessionConfigSelectOption::new("medium", "Medium"),
+                        acp::SessionConfigSelectOption::new("high", "High"),
+                    ],
+                )
+                .description("Reasoning depth for the active model")
+                .category(acp::SessionConfigOptionCategory::ThoughtLevel),
+            );
+        }
+
+        options
     }
 
     async fn send_update(
@@ -228,28 +319,16 @@ impl acp::Agent for MockAgent {
         self.next_session_id.set(session_id + 1);
         eprintln!("Mock agent: new_session id={}", session_id);
 
-        // Include model state with available models for testing model switching
-        let session_model_state = acp::SessionModelState::new(
-            acp::ModelId::new("mock-model-default"),
-            vec![
-                acp::ModelInfo::new(
-                    acp::ModelId::new("mock-model-default"),
-                    "Mock Default Model",
-                )
-                .description("The default mock model"),
-                acp::ModelInfo::new(acp::ModelId::new("mock-model-fast"), "Mock Fast Model")
-                    .description("A faster mock model variant"),
-                acp::ModelInfo::new(
-                    acp::ModelId::new("mock-model-powerful"),
-                    "Mock Powerful Model",
-                )
-                .description("A more powerful mock model variant"),
-            ],
-        );
+        let session_key = session_id.to_string();
+        let session_config = Self::default_session_config();
+        self.session_configs
+            .borrow_mut()
+            .insert(session_key.clone(), session_config.clone());
 
         Ok(
-            acp::NewSessionResponse::new(acp::SessionId::new(session_id.to_string()))
-                .models(session_model_state),
+            acp::NewSessionResponse::new(acp::SessionId::new(session_key))
+                .models(Self::session_model_state())
+                .config_options(Self::config_options_for_state(&session_config)),
         )
     }
 
@@ -265,6 +344,13 @@ impl acp::Agent for MockAgent {
             ));
         }
 
+        let session_config = self
+            .session_configs
+            .borrow_mut()
+            .entry(arguments.session_id.to_string())
+            .or_insert_with(Self::default_session_config)
+            .clone();
+
         // Send configurable number of notifications during load_session
         // to simulate history replay. Uses the session_id from the request
         // so notifications are routed to the correct update channel.
@@ -279,7 +365,9 @@ impl acp::Agent for MockAgent {
             }
         }
 
-        Ok(acp::LoadSessionResponse::new())
+        Ok(acp::LoadSessionResponse::new()
+            .models(Self::session_model_state())
+            .config_options(Self::config_options_for_state(&session_config)))
     }
 
     async fn prompt(
@@ -1192,6 +1280,44 @@ impl acp::Agent for MockAgent {
         // Accept any model switch request - in a real agent, this would
         // validate the model_id against available models.
         Ok(acp::SetSessionModelResponse::default())
+    }
+
+    async fn set_session_config_option(
+        &self,
+        args: acp::SetSessionConfigOptionRequest,
+    ) -> Result<acp::SetSessionConfigOptionResponse, acp::Error> {
+        let response_options = {
+            let mut sessions = self.session_configs.borrow_mut();
+            let state = sessions
+                .entry(args.session_id.to_string())
+                .or_insert_with(Self::default_session_config);
+
+            match args.config_id.to_string().as_str() {
+                "model" => {
+                    state.model_id = args.value.to_string();
+                    if state.model_id == "mock-model-fast" {
+                        state.thought_level = None;
+                        state.speed = Some("fast".to_string());
+                    } else {
+                        state.speed = None;
+                        if state.thought_level.is_none() {
+                            state.thought_level = Some("medium".to_string());
+                        }
+                    }
+                }
+                "thought_level" => {
+                    state.thought_level = Some(args.value.to_string());
+                }
+                "speed" => {
+                    state.speed = Some(args.value.to_string());
+                }
+                _ => return Err(acp::Error::invalid_params()),
+            }
+
+            Self::config_options_for_state(state)
+        };
+
+        Ok(acp::SetSessionConfigOptionResponse::new(response_options))
     }
 
     async fn ext_method(&self, _args: acp::ExtRequest) -> Result<acp::ExtResponse, acp::Error> {

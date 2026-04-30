@@ -262,6 +262,16 @@ The model is only applied if:
 
 Failures to apply the default model (e.g., model unavailable, API error) produce warnings but do not block session startup. When users switch models via `/model` command, the TUI persists the selection by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md`).
 
+**Live Session Configuration** (`connection/sacp_connection.rs`, `backend/submit_and_ops.rs`):
+
+ACP agents can expose runtime session configuration through `NewSessionResponse.config_options`, `LoadSessionResponse.config_options`, idle `SessionUpdate::ConfigOptionUpdate` notifications, and the `session/set_config_option` RPC. `SacpConnection` owns the latest live config snapshot in `AcpSessionConfigState`, updates it when a session is created/loaded or when config-option notifications arrive, and replaces it with the full response snapshot after `set_config_option()`.
+
+This first implementation is deliberately live-session only:
+- `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
+- `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
+- No config form is shown during `/agent` switching yet.
+- No ACP session config selections are persisted to `config.toml` yet.
+
 **Hooks System** (`config/types/mod.rs`, `hooks.rs`, `backend/mod.rs`):
 
 Hooks allow users to run custom scripts at lifecycle boundaries. There are two flavors: **synchronous** hooks (blocking, executed sequentially) and **async** hooks (fire-and-forget, spawned via `tokio::spawn`). Both are configured under `[hooks]` in `config.toml`, are **fail-open** (failures produce warnings but do not halt operations), and share the same execution engine (`execute_hooks_with_env()` in `hooks.rs`) and interpreter detection. Synchronous hooks support output routing and context injection; async hooks route all output exclusively to tracing.
