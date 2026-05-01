@@ -271,6 +271,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/diff` | Show PR-like git diff (changes since merge-base with default branch, plus untracked files) |
 | `/mention` | Mention a file |
 | `/status` | Show session configuration and context window usage |
+| `/memory` | Show the contents of all active instruction files (CLAUDE.md / AGENTS.md / GEMINI.md) |
 | `/first-prompt` | Show the first prompt from this session |
 | `/mcp` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
 | `/login` | Log in to the current agent |
@@ -352,6 +353,8 @@ Agent commands appear in the slash command popup alongside builtins and user pro
 The `desc_col` is computed once per render pass from the widest visible name plus 2 columns of padding. The stacked fallback prevents descriptions from being squeezed into 1-2 characters of horizontal space on narrow terminals. Because both `render_rows()` and `measure_rows_height()` call the same `wrap_row()` function, layout and height calculation are always consistent.
 
 `SelectionViewParams` supports an optional `on_dismiss: Option<SelectionAction>` callback that fires when the picker is dismissed without selection (Escape or Ctrl-C). The callback is invoked in `ListSelectionView::on_ctrl_c()` before marking the view as complete. It does not fire when the user makes a selection via `accept()`. This is used by the skillset picker to send `SkillsetPickerDismissed` when the deferred agent spawn needs a fallback trigger.
+
+`BottomPane` can also forward item updates and removals into the active selection view. `ListSelectionView` matches rows by the stable id stored at the beginning of `SelectionItem.search_value`, then reapplies filtering after the update. This is used by `/resume` to show metadata-only rows immediately and lazily fill in preview text and turn counts after transcript scans complete.
 
 **ListSelectionView Vim-Mode-Aware Search:**
 
@@ -437,6 +440,41 @@ The card always shows: version, directory, agent, skillset (Nori profile). Optio
 The Tokens section renders if either `token_breakdown` has a non-zero total OR `context_window_percent` is present. This means context window percentage from the live API (`TokenUsageInfo`) can appear even before transcript token data is available.
 
 Task summaries are truncated to 50 characters via `truncate_summary()`, which uses char-level operations (`chars().count()` / `chars().take()`) rather than byte slicing for UTF-8 safety with multi-byte characters.
+
+**Instruction File Discovery (`nori/session_header/mod.rs`):**
+
+The "Instruction Files" block in the startup welcome banner, the `/status` card, and the `/memory` output (`chatwidget/helpers.rs::add_memory_output()` -> `active_instruction_file_contents()`) all funnel through the same discovery pathway: `discover_all_instruction_files()` -> `discover_all_instruction_files_with_paths(cwd, agent_kind, home_dir, managed_policy_dir)`. The active subset of those files is what the agent will actually load, so the displayed list must mirror each agent's documented inheritance rules instead of using a single shared rule.
+
+The agent kind is inferred by `detect_agent_kind()` from the configured agent/model string ("claude*", "codex*", "gemini*"). The set of directories searched for instruction files is then chosen per agent:
+
+| Agent | Search range | Fallback when no `.git` is found |
+|-------|--------------|----------------------------------|
+| Claude | Full ancestor chain from cwd up to filesystem root (no git-root cutoff) | n/a -- always walks to root |
+| Codex | cwd up to the nearest `.git` ancestor | cwd only |
+| Gemini | cwd up to the nearest `.git` ancestor | cwd only |
+| Unknown | cwd up to the nearest `.git` ancestor | cwd only |
+
+Claude's behavior follows Claude Code's documented memory loader (https://code.claude.com/docs/en/memory). Walking only to the git root would underreport which CLAUDE.md files Claude will actually load (e.g. with cwd `/tmp/bar/baz`, a `CLAUDE.md` at `/tmp/bar/.claude/` would be missed), so the displayed list would not match what the agent sees.
+
+In each search directory, the discoverer probes for `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `GEMINI.md`, and `.claude/CLAUDE.md`. Two extra passes layer in user-level and system-level configs:
+
+- Home-config pass: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`.
+- Managed-policy pass (Claude only): platform-specific system-wide CLAUDE.md (`/etc/claude-code/CLAUDE.md` on Linux, `/Library/Application Support/ClaudeCode/CLAUDE.md` on macOS, `C:\Program Files\ClaudeCode\CLAUDE.md` on Windows) chosen by `default_managed_policy_dir()`.
+
+The final list is concatenated lowest-precedence first (managed-policy, then home, then ancestor walk) and then deduplicated by absolute path so a file reachable through more than one pass appears exactly once.
+
+After discovery, an activation pass marks each file `active` for the current agent:
+
+| Agent | Files marked active |
+|-------|---------------------|
+| Claude | `.claude/CLAUDE.md`, `CLAUDE.md`, `CLAUDE.local.md` (all of them, anywhere they appear) |
+| Codex | Per directory: `AGENTS.override.md` if present, else `AGENTS.md`. `dirs_with_override` tracks which directories had an override so the sibling `AGENTS.md` in the same directory is suppressed. |
+| Gemini | `GEMINI.md` only (no hidden variants, no overrides) |
+| Unknown | nothing is active |
+
+Token counts are computed only for active files (via `count_tokens()` from `nori/token_count.rs`), so inactive files render dim and contribute nothing to the per-section total in the status card.
+
+Tests inject fake home and managed-policy directories through `discover_all_instruction_files_with_paths()` (and the test-only `discover_all_instruction_files_with_home()` wrapper) to avoid touching real filesystem locations. In debug builds, setting `NORI_MOCK_INSTRUCTION_FILES=1` short-circuits discovery and returns a single fixed entry so E2E snapshots stay stable across machines.
 
 **Skillset Switching (`nori/skillset_picker.rs`):**
 
@@ -680,6 +718,34 @@ Rendering behavior:
 
 The async flow uses three AppEvents: `ShowViewonlySessionPicker` -> `LoadViewonlyTranscript` -> `DisplayViewonlyTranscript`.
 
+**Startup Session Resume (`nori resume`):**
+
+The top-level `nori resume` subcommand enters the TUI with an existing transcript session already selected. This path is handled before `App::run()` constructs the chat widget:
+
+```
+nori resume [session-id]
+    |
+    v
+run_main() -> run_ratatui_app()
+    |  (resolves metadata by ID, --last, or startup picker)
+    v
+ResumeSelection::Resume(ResumeTarget)
+    |  (loads full Transcript, extracts acp_session_id as Option<String>)
+    v
+ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
+    |
+    v
+spawn_acp_agent_resume() -> AcpBackend::resume_session()
+```
+
+Selection behavior:
+- `nori resume <session-id>` searches all transcript projects for that exact session ID.
+- `nori resume --last` chooses the newest transcript for the current working directory; `--all` removes the cwd filter.
+- `nori resume` opens `resume_picker/`, which lists metadata-only transcript rows and returns a `ResumeTarget`.
+- `--agent` is optional. When omitted, the recorded `session_meta.agent` is used. When present, it must match the recorded agent or startup fails with a clear error.
+
+The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It uses `TranscriptLoader::list_resumable_session_metadata()` and keeps rows lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery.
+
 **Session Resume (`/resume`):**
 
 The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and otherwise falls back to a fresh ACP session plus normalized replay derived from the saved transcript (see `@/nori-rs/acp/docs.md`).
@@ -691,9 +757,12 @@ SlashCommand::Resume
     |
     v
 ChatWidget::open_resume_session_picker()
-    |  (async: loads sessions via TranscriptLoader, filters by agent)
+    |  (async: loads first-line session metadata, filters by agent)
     v
 AppEvent::ShowResumeSessionPicker -> resume_session_picker modal
+    |  (background task lazily streams first-user previews and user-turn counts)
+    v
+AppEvent::ResumeSessionSummaryReady -> update active picker row
     |  (user selects session)
     v
 AppEvent::ResumeSession { nori_home, project_id, session_id }
@@ -710,7 +779,9 @@ spawn_acp_agent_resume() -> AcpBackend::resume_session()
 
 The `ResumeSession` handler loads the full transcript (not just metadata) via `TranscriptLoader::load_transcript()`. The `acp_session_id` is extracted as `Option<String>` from `transcript.meta.acp_session_id` -- sessions without an `acp_session_id` are still resumable via the normalized replay fallback.
 
-Session filtering: `load_resumable_sessions()` in `@/nori-rs/tui/src/nori/resume_session_picker.rs` loads all sessions for the current working directory via the viewonly session picker's `load_sessions_with_preview()`, then filters to only sessions whose `agent` field matches the currently active agent.
+Session filtering: `load_resumable_sessions()` in `@/nori-rs/tui/src/nori/resume_session_picker.rs` loads first-line session metadata for the current working directory via `TranscriptLoader::find_session_metadata_for_cwd()`, filters to only sessions whose `agent` field matches the currently active agent, and returns metadata-only picker rows. It does not read transcript bodies before the picker appears.
+
+Lazy picker summaries: after `ShowResumeSessionPicker` is sent, `ChatWidget::open_resume_session_picker()` starts a background task that first streams each matching transcript until the first user message for preview text, then streams full files to count exact user turns. Counts are user-turn counts (`type=user` entries), not raw transcript line counts, and are hidden until known. Sessions with zero user turns are removed from the active picker once their lazy count completes. Summary update events carry a generation id so stale updates from an older picker open do not mutate a newer picker.
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/nori-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 

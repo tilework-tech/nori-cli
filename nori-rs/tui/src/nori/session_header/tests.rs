@@ -1432,3 +1432,360 @@ fn compact_mode_snapshot() {
 
     insta::assert_snapshot!(rendered);
 }
+
+// =========================================================================
+// Per-agent ancestor walk semantics
+// =========================================================================
+
+#[test]
+fn discover_walks_all_ancestors_for_claude_when_no_git() {
+    // Repro of the user-reported bug: with no .git anywhere in the chain,
+    // Claude should still discover CLAUDE.md files in parent directories.
+    //
+    // Layout (no .git anywhere):
+    //   tmp/.claude/CLAUDE.md         <- ancestor
+    //   tmp/sub/.claude/CLAUDE.md     <- cwd
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join(".claude")).expect("create root/.claude");
+    fs::write(root.join(".claude/CLAUDE.md"), "ancestor").expect("write ancestor CLAUDE.md");
+
+    let sub = root.join("sub");
+    fs::create_dir_all(sub.join(".claude")).expect("create sub/.claude");
+    fs::write(sub.join(".claude/CLAUDE.md"), "cwd").expect("write cwd CLAUDE.md");
+
+    let files = discover_all_instruction_files_with_home(&sub, Some(AgentKindSimple::Claude), None);
+
+    let ancestor_path = root.join(".claude/CLAUDE.md");
+    let cwd_path = sub.join(".claude/CLAUDE.md");
+
+    assert!(
+        files.iter().any(|f| f.path == ancestor_path && f.active),
+        "Claude should discover ancestor .claude/CLAUDE.md as active when no .git is present. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+    assert!(
+        files.iter().any(|f| f.path == cwd_path && f.active),
+        "Claude should still discover cwd .claude/CLAUDE.md. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn discover_walks_past_git_root_for_claude() {
+    // Per Anthropic docs, Claude Code walks all the way up to /, not just to git root.
+    //
+    // Layout:
+    //   tmp/CLAUDE.md          <- above git root (must be discovered for Claude)
+    //   tmp/proj/.git
+    //   tmp/proj/CLAUDE.md
+    //   tmp/proj/sub/CLAUDE.md <- cwd
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path();
+
+    fs::write(root.join("CLAUDE.md"), "above-git").expect("write above-git CLAUDE.md");
+
+    let proj = root.join("proj");
+    fs::create_dir_all(&proj).expect("create proj");
+    fs::write(proj.join(".git"), "gitdir").expect("write .git");
+    fs::write(proj.join("CLAUDE.md"), "proj").expect("write proj CLAUDE.md");
+
+    let sub = proj.join("sub");
+    fs::create_dir_all(&sub).expect("create sub");
+    fs::write(sub.join("CLAUDE.md"), "sub").expect("write sub CLAUDE.md");
+
+    let files = discover_all_instruction_files_with_home(&sub, Some(AgentKindSimple::Claude), None);
+
+    let above_git = root.join("CLAUDE.md");
+    assert!(
+        files.iter().any(|f| f.path == above_git && f.active),
+        "Claude should discover CLAUDE.md above the git root. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == proj.join("CLAUDE.md") && f.active),
+        "Claude should still discover CLAUDE.md at git root."
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == sub.join("CLAUDE.md") && f.active),
+        "Claude should still discover CLAUDE.md at cwd."
+    );
+}
+
+#[test]
+fn discover_codex_stays_at_git_root() {
+    // Codex CLI semantics: walk stops at the git root. AGENTS.md above git root
+    // must NOT appear in the result.
+    //
+    // Layout:
+    //   tmp/AGENTS.md           <- above git root (must NOT appear)
+    //   tmp/proj/.git
+    //   tmp/proj/AGENTS.md
+    //   tmp/proj/sub/AGENTS.md  <- cwd
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path();
+
+    fs::write(root.join("AGENTS.md"), "above-git").expect("write above-git AGENTS.md");
+
+    let proj = root.join("proj");
+    fs::create_dir_all(&proj).expect("create proj");
+    fs::write(proj.join(".git"), "gitdir").expect("write .git");
+    fs::write(proj.join("AGENTS.md"), "proj").expect("write proj AGENTS.md");
+
+    let sub = proj.join("sub");
+    fs::create_dir_all(&sub).expect("create sub");
+    fs::write(sub.join("AGENTS.md"), "sub").expect("write sub AGENTS.md");
+
+    let files = discover_all_instruction_files_with_home(&sub, Some(AgentKindSimple::Codex), None);
+
+    let above_git = root.join("AGENTS.md");
+    assert!(
+        !files.iter().any(|f| f.path == above_git),
+        "Codex should NOT discover AGENTS.md above the git root. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == proj.join("AGENTS.md") && f.active),
+        "Codex should discover AGENTS.md at git root."
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == sub.join("AGENTS.md") && f.active),
+        "Codex should discover AGENTS.md at cwd."
+    );
+}
+
+#[test]
+fn discover_codex_no_git_stays_at_cwd() {
+    // Codex semantics with no .git anywhere: only cwd is searched (current behavior).
+    //
+    // Layout (no .git anywhere):
+    //   tmp/AGENTS.md           <- ancestor (must NOT appear)
+    //   tmp/sub/AGENTS.md       <- cwd
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path();
+
+    fs::write(root.join("AGENTS.md"), "ancestor").expect("write ancestor AGENTS.md");
+
+    let sub = root.join("sub");
+    fs::create_dir_all(&sub).expect("create sub");
+    fs::write(sub.join("AGENTS.md"), "cwd").expect("write cwd AGENTS.md");
+
+    let files = discover_all_instruction_files_with_home(&sub, Some(AgentKindSimple::Codex), None);
+
+    let ancestor = root.join("AGENTS.md");
+    assert!(
+        !files.iter().any(|f| f.path == ancestor),
+        "Codex with no git root should NOT walk ancestors. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == sub.join("AGENTS.md") && f.active),
+        "Codex should discover AGENTS.md at cwd."
+    );
+}
+
+#[test]
+fn discover_gemini_stays_at_git_root() {
+    // Gemini CLI semantics: walk stops at git root. GEMINI.md above git root
+    // must NOT appear in the result.
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path();
+
+    fs::write(root.join("GEMINI.md"), "above-git").expect("write above-git GEMINI.md");
+
+    let proj = root.join("proj");
+    fs::create_dir_all(&proj).expect("create proj");
+    fs::write(proj.join(".git"), "gitdir").expect("write .git");
+    fs::write(proj.join("GEMINI.md"), "proj").expect("write proj GEMINI.md");
+
+    let sub = proj.join("sub");
+    fs::create_dir_all(&sub).expect("create sub");
+    fs::write(sub.join("GEMINI.md"), "sub").expect("write sub GEMINI.md");
+
+    let files = discover_all_instruction_files_with_home(&sub, Some(AgentKindSimple::Gemini), None);
+
+    let above_git = root.join("GEMINI.md");
+    assert!(
+        !files.iter().any(|f| f.path == above_git),
+        "Gemini should NOT discover GEMINI.md above the git root. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == proj.join("GEMINI.md") && f.active),
+        "Gemini should discover GEMINI.md at git root."
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == sub.join("GEMINI.md") && f.active),
+        "Gemini should discover GEMINI.md at cwd."
+    );
+}
+
+#[test]
+fn discover_unknown_agent_no_git_stays_at_cwd() {
+    // Unknown agent with no .git: only cwd is searched (current behavior preserved).
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path();
+
+    fs::write(root.join("CLAUDE.md"), "ancestor").expect("write ancestor CLAUDE.md");
+
+    let sub = root.join("sub");
+    fs::create_dir_all(&sub).expect("create sub");
+    fs::write(sub.join("CLAUDE.md"), "cwd").expect("write cwd CLAUDE.md");
+
+    let files = discover_all_instruction_files_with_home(&sub, None, None);
+
+    let ancestor = root.join("CLAUDE.md");
+    assert!(
+        !files.iter().any(|f| f.path == ancestor),
+        "Unknown agent with no git root should NOT walk ancestors. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn discover_dedupes_home_config_against_ancestor_walk() {
+    // When cwd is inside $HOME, the Claude ancestor walk also visits $HOME and would
+    // discover ~/.claude/CLAUDE.md a second time. The result must contain the home
+    // CLAUDE.md exactly once.
+    let tmp = TempDir::new().expect("tempdir");
+    let fake_home = tmp.path().join("home");
+    fs::create_dir_all(fake_home.join(".claude")).expect("create fake_home/.claude");
+    fs::write(fake_home.join(".claude/CLAUDE.md"), "user").expect("write user CLAUDE.md");
+
+    // cwd is a child of fake_home with no .git anywhere
+    let cwd = fake_home.join("work").join("proj");
+    fs::create_dir_all(&cwd).expect("create cwd");
+
+    let files = discover_all_instruction_files_with_home(
+        &cwd,
+        Some(AgentKindSimple::Claude),
+        Some(&fake_home),
+    );
+
+    let home_claude = fake_home.join(".claude/CLAUDE.md");
+    let matches: Vec<&InstructionFile> = files.iter().filter(|f| f.path == home_claude).collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "Home CLAUDE.md must appear exactly once even when cwd is inside $HOME. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+    assert!(
+        matches[0].active,
+        "Deduplicated home CLAUDE.md should still be active for Claude. Got: {:?}",
+        matches[0]
+    );
+}
+
+// =========================================================================
+// Managed policy CLAUDE.md discovery
+// =========================================================================
+
+#[test]
+fn discover_finds_managed_policy_claude_md_for_claude_agent() {
+    // Anthropic ships a "managed policy" CLAUDE.md location (e.g. /etc/claude-code/CLAUDE.md
+    // on Linux) that Claude Code loads in addition to user/project files. The info box
+    // should reflect it.
+    //
+    // To keep the test platform-independent and avoid touching system paths, we use the
+    // injection-based variant of the discovery function that takes an explicit policy dir.
+    let tmp = TempDir::new().expect("tempdir");
+    let policy_dir = tmp.path().join("policy");
+    fs::create_dir_all(&policy_dir).expect("create policy dir");
+    fs::write(policy_dir.join("CLAUDE.md"), "managed policy").expect("write policy CLAUDE.md");
+
+    let cwd = tmp.path().join("work");
+    fs::create_dir_all(&cwd).expect("create cwd");
+
+    let files = discover_all_instruction_files_with_paths(
+        &cwd,
+        Some(AgentKindSimple::Claude),
+        None,
+        Some(&policy_dir),
+    );
+
+    let policy_path = policy_dir.join("CLAUDE.md");
+    let policy_file = files
+        .iter()
+        .find(|f| f.path == policy_path)
+        .expect("Should discover managed-policy CLAUDE.md");
+    assert!(
+        policy_file.active,
+        "Managed-policy CLAUDE.md should be active for Claude. Got: {policy_file:?}"
+    );
+}
+
+#[test]
+fn discover_managed_policy_inactive_for_codex() {
+    // Managed policy CLAUDE.md is a Claude-specific concept. For Codex it should not
+    // be reported as active.
+    let tmp = TempDir::new().expect("tempdir");
+    let policy_dir = tmp.path().join("policy");
+    fs::create_dir_all(&policy_dir).expect("create policy dir");
+    fs::write(policy_dir.join("CLAUDE.md"), "managed policy").expect("write policy CLAUDE.md");
+
+    let cwd = tmp.path().join("work");
+    fs::create_dir_all(&cwd).expect("create cwd");
+
+    let files = discover_all_instruction_files_with_paths(
+        &cwd,
+        Some(AgentKindSimple::Codex),
+        None,
+        Some(&policy_dir),
+    );
+
+    // The policy file may either be omitted from the list entirely or included as inactive.
+    // The invariant we care about is that it is never active for non-Claude agents.
+    let policy_path = policy_dir.join("CLAUDE.md");
+    let active_policy_files: Vec<&InstructionFile> = files
+        .iter()
+        .filter(|f| f.path == policy_path && f.active)
+        .collect();
+    assert!(
+        active_policy_files.is_empty(),
+        "Managed-policy CLAUDE.md must NOT be active for Codex agent. Got: {active_policy_files:?}"
+    );
+}
+
+#[test]
+fn discover_managed_policy_inactive_for_gemini() {
+    let tmp = TempDir::new().expect("tempdir");
+    let policy_dir = tmp.path().join("policy");
+    fs::create_dir_all(&policy_dir).expect("create policy dir");
+    fs::write(policy_dir.join("CLAUDE.md"), "managed policy").expect("write policy CLAUDE.md");
+
+    let cwd = tmp.path().join("work");
+    fs::create_dir_all(&cwd).expect("create cwd");
+
+    let files = discover_all_instruction_files_with_paths(
+        &cwd,
+        Some(AgentKindSimple::Gemini),
+        None,
+        Some(&policy_dir),
+    );
+
+    let policy_path = policy_dir.join("CLAUDE.md");
+    let active_policy_files: Vec<&InstructionFile> = files
+        .iter()
+        .filter(|f| f.path == policy_path && f.active)
+        .collect();
+    assert!(
+        active_policy_files.is_empty(),
+        "Managed-policy CLAUDE.md must NOT be active for Gemini agent. Got: {active_policy_files:?}"
+    );
+}

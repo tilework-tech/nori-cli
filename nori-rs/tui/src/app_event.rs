@@ -439,6 +439,22 @@ pub(crate) enum AppEvent {
         sessions: Vec<crate::nori::viewonly_session_picker::SessionPickerInfo>,
         /// The NORI_HOME path
         nori_home: PathBuf,
+        /// Monotonic generation for ignoring stale lazy summary updates.
+        generation: u64,
+    },
+
+    /// Update one row in the active resume picker after lazy transcript scanning.
+    ResumeSessionSummaryReady {
+        /// Monotonic generation for ignoring stale lazy summary updates.
+        generation: u64,
+        /// Session identifier to update.
+        session_id: String,
+        /// Session start timestamp for rebuilding the row name.
+        started_at: String,
+        /// Preview of the first user message, if discovered.
+        first_message_preview: Option<String>,
+        /// Exact number of user turns, once known.
+        user_turn_count: Option<usize>,
     },
 
     /// Resume a previous session via ACP session/load or client-side replay.

@@ -409,6 +409,7 @@ pub(crate) struct ChatWidget {
     session_stats: SessionStats,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
+    active_resume_picker_generation: Option<u64>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
     // Loop mode state: remaining iterations (None = not looping)

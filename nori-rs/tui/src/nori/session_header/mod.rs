@@ -90,17 +90,50 @@ fn discover_all_instruction_files(
         }];
     }
 
-    discover_all_instruction_files_with_home(cwd, agent_kind, dirs::home_dir().as_deref())
+    discover_all_instruction_files_with_paths(
+        cwd,
+        agent_kind,
+        dirs::home_dir().as_deref(),
+        default_managed_policy_dir().as_deref(),
+    )
+}
+
+/// Default platform-specific directory containing the managed-policy CLAUDE.md
+/// that Claude Code loads in addition to user/project files.
+fn default_managed_policy_dir() -> Option<PathBuf> {
+    if cfg!(target_os = "linux") {
+        Some(PathBuf::from("/etc/claude-code"))
+    } else if cfg!(target_os = "macos") {
+        Some(PathBuf::from("/Library/Application Support/ClaudeCode"))
+    } else if cfg!(target_os = "windows") {
+        Some(PathBuf::from(r"C:\Program Files\ClaudeCode"))
+    } else {
+        None
+    }
 }
 
 /// Internal function that discovers instruction files with an optional custom home directory.
-/// This allows testing with a fake home directory.
+/// Used by tests that want to inject a fake home directory but don't care about the
+/// managed-policy path.
+#[cfg(test)]
 fn discover_all_instruction_files_with_home(
     cwd: &Path,
     agent_kind: Option<AgentKindSimple>,
     home_dir: Option<&Path>,
 ) -> Vec<InstructionFile> {
-    // Build chain from cwd upwards and detect git root
+    discover_all_instruction_files_with_paths(cwd, agent_kind, home_dir, None)
+}
+
+/// Internal function that discovers instruction files with optional custom home and managed-policy
+/// directories. Tests can inject paths to avoid touching real filesystem locations.
+fn discover_all_instruction_files_with_paths(
+    cwd: &Path,
+    agent_kind: Option<AgentKindSimple>,
+    home_dir: Option<&Path>,
+    managed_policy_dir: Option<&Path>,
+) -> Vec<InstructionFile> {
+    // Build the full chain from cwd up to filesystem root, recording whether we
+    // saw a `.git` marker and at which level.
     let mut chain: Vec<PathBuf> = Vec::new();
     let mut current = cwd.to_path_buf();
     let mut git_root: Option<PathBuf> = None;
@@ -108,11 +141,8 @@ fn discover_all_instruction_files_with_home(
     loop {
         chain.push(current.clone());
 
-        // Check for .git marker
-        let git_marker = current.join(".git");
-        if git_marker.exists() {
+        if git_root.is_none() && current.join(".git").exists() {
             git_root = Some(current.clone());
-            break;
         }
 
         if !current.pop() {
@@ -120,25 +150,34 @@ fn discover_all_instruction_files_with_home(
         }
     }
 
-    // Determine search directories (from git root to cwd, or just cwd if no git root)
-    let search_dirs: Vec<PathBuf> = if let Some(root) = &git_root {
-        // Reverse the chain and filter to only include from git root onward
-        let mut dirs: Vec<PathBuf> = Vec::new();
-        let mut saw_root = false;
-        for p in chain.iter().rev() {
-            if !saw_root {
-                if p == root {
-                    saw_root = true;
-                } else {
-                    continue;
+    // Choose the set of directories to search based on the agent's documented behavior.
+    //
+    // - Claude Code: walks all the way up to filesystem root, regardless of `.git`.
+    //   See https://code.claude.com/docs/en/memory.
+    // - Codex / Gemini: walk up only as far as the git root; if no git root exists,
+    //   look at cwd only.
+    // - Unknown agent: same as Codex/Gemini (conservative).
+    let search_dirs: Vec<PathBuf> = match agent_kind {
+        Some(AgentKindSimple::Claude) => chain.iter().rev().cloned().collect(),
+        Some(AgentKindSimple::Codex) | Some(AgentKindSimple::Gemini) | None => {
+            if let Some(root) = &git_root {
+                let mut dirs: Vec<PathBuf> = Vec::new();
+                let mut saw_root = false;
+                for p in chain.iter().rev() {
+                    if !saw_root {
+                        if p == root {
+                            saw_root = true;
+                        } else {
+                            continue;
+                        }
+                    }
+                    dirs.push(p.clone());
                 }
+                dirs
+            } else {
+                vec![cwd.to_path_buf()]
             }
-            dirs.push(p.clone());
         }
-        dirs
-    } else {
-        // No git root, just search cwd
-        vec![cwd.to_path_buf()]
     };
 
     let mut found: Vec<InstructionFile> = Vec::new();
@@ -206,9 +245,28 @@ fn discover_all_instruction_files_with_home(
         }
     }
 
-    // Prepend home configs to discovered list so they appear first
-    let mut all_discovered = home_configs;
+    // Discover managed-policy CLAUDE.md (Claude Code only).
+    // This is a system-level CLAUDE.md that the Claude Code agent loads in addition
+    // to user/project files (e.g. /etc/claude-code/CLAUDE.md on Linux).
+    let mut policy_configs: Vec<(PathBuf, PathBuf)> = Vec::new();
+    if matches!(agent_kind, Some(AgentKindSimple::Claude))
+        && let Some(policy_dir) = managed_policy_dir
+    {
+        let policy_file = policy_dir.join("CLAUDE.md");
+        if policy_file.is_file() {
+            policy_configs.push((policy_file, policy_dir.to_path_buf()));
+        }
+    }
+
+    // Build the final list, lowest-precedence first: managed-policy, then home, then ancestor walk.
+    let mut all_discovered = policy_configs;
+    all_discovered.extend(home_configs);
     all_discovered.extend(discovered);
+
+    // Deduplicate by path so a file discovered both via the ancestor walk and the
+    // home-config / managed-policy passes appears exactly once.
+    let mut seen_paths: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    all_discovered.retain(|(path, _)| seen_paths.insert(path.clone()));
 
     // Second pass: apply activation algorithm
     for (file_path, parent_dir) in all_discovered {
@@ -217,12 +275,11 @@ fn discover_all_instruction_files_with_home(
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        let is_hidden_claude = file_path.to_string_lossy().contains(".claude/CLAUDE.md");
-
         let active = match agent_kind {
             Some(AgentKindSimple::Claude) => {
-                // Claude activates: .claude/CLAUDE.md, CLAUDE.md, CLAUDE.local.md
-                is_hidden_claude || filename == "CLAUDE.md" || filename == "CLAUDE.local.md"
+                // Claude activates: CLAUDE.md, CLAUDE.local.md (basename match covers
+                // both `<dir>/CLAUDE.md` and `<dir>/.claude/CLAUDE.md`).
+                filename == "CLAUDE.md" || filename == "CLAUDE.local.md"
             }
             Some(AgentKindSimple::Codex) => {
                 // Codex activates: AGENTS.override.md OR AGENTS.md (prefer override)
