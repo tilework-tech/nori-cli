@@ -32,11 +32,11 @@ Each provider you plan to use needs to be authenticated separately before use. T
 Currently each agent relies on an existing authenticated session on your system. If you're coming in from another CLI tool, great!
 You should be good to go. If not, first follow the authentication for your desired provider:
 
-| Provider | Authentication                                                                                                                                          |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude   | Run `npx @anthropic-ai/claude-code` in your terminal, then when the Claude CLI opens, type `/login` there.                                              |
-| Gemini   | Run `npx @google/gemini-cli` in your terminal, then when the Gemini CLI opens, type `/auth` there.                                                      |
-| OpenAI   | In Nori, use `/agent` to switch to Codex, then run `/login` inside the Nori interface. Nori will prompt you to install OpenAI via npm if needed.        |
+| Provider | Authentication                                                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Claude   | Run `npx @anthropic-ai/claude-code` in your terminal, then when the Claude CLI opens, type `/login` there.                                       |
+| Gemini   | Run `npx @google/gemini-cli` in your terminal, then when the Gemini CLI opens, type `/auth` there.                                               |
+| OpenAI   | In Nori, use `/agent` to switch to Codex, then run `/login` inside the Nori interface. Nori will prompt you to install OpenAI via npm if needed. |
 
 ## Bring Your Own Agent
 
@@ -65,11 +65,11 @@ Then switch to your agent with `/agent` inside Nori.
 
 **Example agents to try:**
 
-| Agent | Install | Notes |
-|-------|---------|-------|
+| Agent                                                                     | Install                                                 | Notes                                                                              |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [Mistral Vibe](https://docs.mistral.ai/mistral-vibe/introduction/install) | `curl -LsSf https://mistral.ai/vibe/install.sh \| bash` | Installs both `vibe` and `vibe-acp`. Run `vibe --setup` to configure your API key. |
-| [ElizACP](https://github.com/agentclientprotocol/symposium-acp) | `cargo install --locked elizacp` | Minimal Eliza chatbot, useful for testing. |
-| [Kimi](https://github.com/nicepkg/kimi-cli) | No install needed — uses `uvx` | First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login`. |
+| [ElizACP](https://github.com/agentclientprotocol/symposium-acp)           | `cargo install --locked elizacp`                        | Minimal Eliza chatbot, useful for testing.                                         |
+| [Kimi](https://github.com/nicepkg/kimi-cli)                               | No install needed — uses `uvx`                          | First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login`.                  |
 
 Want your AI agent to configure this automatically? Point it at the raw skill file: https://github.com/tilework-tech/nori-cli/blob/main/.claude/skills/registering-custom-acp-agent/SKILL.md
 
