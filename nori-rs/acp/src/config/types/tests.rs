@@ -1023,7 +1023,7 @@ name = "Claude Code"
 slug = "claude-code"
 
 [agents.distribution.npx]
-package = "@agentclientprotocol/claude-agent-acp"
+package = "@zed-industries/claude-agent-acp@0.23.1"
 "#,
     )
     .unwrap();
@@ -1033,7 +1033,7 @@ package = "@agentclientprotocol/claude-agent-acp"
     assert!(config.agents[0].distribution.npx.is_some());
     assert_eq!(
         config.agents[0].distribution.npx.as_ref().unwrap().package,
-        "@agentclientprotocol/claude-agent-acp"
+        "@zed-industries/claude-agent-acp@0.23.1"
     );
 }
 
@@ -1130,7 +1130,7 @@ name = "Claude Code"
 slug = "claude-code"
 
 [agents.distribution.npx]
-package = "@agentclientprotocol/claude-agent-acp"
+package = "@zed-industries/claude-agent-acp@0.23.1"
 
 [[agents]]
 name = "Kimi"
@@ -1217,7 +1217,7 @@ fn test_agent_distribution_resolve_rejects_multiple() {
 fn test_agent_distribution_resolve_npx() {
     let dist = AgentDistributionToml {
         npx: Some(PackageDistribution {
-            package: "@agentclientprotocol/claude-agent-acp".to_string(),
+            package: "@zed-industries/claude-agent-acp@0.23.1".to_string(),
             args: vec![],
         }),
         ..Default::default()
@@ -1225,7 +1225,7 @@ fn test_agent_distribution_resolve_npx() {
     let resolved = dist.resolve().unwrap();
     assert!(matches!(resolved, ResolvedDistribution::Npx { .. }));
     if let ResolvedDistribution::Npx { package, args } = resolved {
-        assert_eq!(package, "@agentclientprotocol/claude-agent-acp");
+        assert_eq!(package, "@zed-industries/claude-agent-acp@0.23.1");
         assert!(args.is_empty());
     }
 }

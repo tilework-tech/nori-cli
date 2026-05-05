@@ -97,9 +97,7 @@ impl AgentKind {
     /// Get the ACP adapter package name for launching this agent
     pub fn acp_package(&self) -> &'static str {
         match self {
-            // @latest forces bunx to resolve the new scope instead of a stale
-            // @zed-industries cache entry with the same unscoped package name.
-            AgentKind::ClaudeCode => "@agentclientprotocol/claude-agent-acp@latest",
+            AgentKind::ClaudeCode => "@zed-industries/claude-agent-acp@0.23.1",
             // Codex uses Zed's ACP adapter
             AgentKind::Codex => "@zed-industries/codex-acp",
             // Gemini has native ACP support
@@ -1020,7 +1018,7 @@ mod tests {
         assert!(
             config
                 .args
-                .contains(&"@agentclientprotocol/claude-agent-acp@latest".to_string())
+                .contains(&"@zed-industries/claude-agent-acp@0.23.1".to_string())
         );
         assert_eq!(config.provider_info.name, "Claude Code ACP");
     }
