@@ -80,6 +80,7 @@ impl App {
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
+                    self.chat_widget.session_stats().has_activity(),
                 );
                 self.shutdown_current_conversation();
                 let init = self.chat_widget_init(
@@ -93,10 +94,13 @@ impl App {
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
                 if let Some(summary) = summary {
-                    let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
+                    let mut lines: Vec<Line<'static>> = Vec::new();
+                    if let Some(usage_line) = summary.usage_line {
+                        lines.push(usage_line.into());
+                    }
                     if let Some(command) = summary.resume_command {
-                        let spans = vec!["To continue this session, run ".into(), command.cyan()];
-                        lines.push(spans.into());
+                        lines.push(RESUME_HINT_LEAD.into());
+                        lines.push(command.cyan().into());
                     }
                     self.chat_widget.add_plain_history_lines(lines);
                 }

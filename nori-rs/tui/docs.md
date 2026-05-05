@@ -748,6 +748,8 @@ Selection behavior:
 
 The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It uses `TranscriptLoader::list_resumable_session_metadata()` and keeps rows lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery.
 
+Resume hints use the shared `RESUME_HINT_LEAD` and `resume_command_for_conversation()` helpers from `app/` so the in-TUI new-conversation summary and the post-exit CLI output stay aligned. Both surfaces put the copyable `nori resume <session-id>` command on its own line after the `run:` lead text.
+
 **Session Resume (`/resume`):**
 
 The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and otherwise falls back to a fresh ACP session plus normalized replay derived from the saved transcript (see `@/nori-rs/acp/docs.md`).
