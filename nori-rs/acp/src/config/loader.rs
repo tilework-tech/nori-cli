@@ -168,6 +168,7 @@ impl NoriConfig {
             skillset_per_session,
             file_manager: toml.tui.file_manager,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
+            custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),
             auto_worktree,
             footer_segment_config: super::types::FooterSegmentConfig::from_toml(
                 &toml.tui.footer_segments,

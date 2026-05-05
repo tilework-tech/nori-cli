@@ -163,6 +163,10 @@ Three config enums control notification behavior, all stored in the `[tui]` sect
 
 The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_idle` so the backend can configure the `UserNotifier` and the idle timer respectively. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
 
+**TUI Display Configuration** (`config/types/mod.rs`):
+
+The `[tui]` section also owns display-only preferences consumed by `@/nori-rs/tui/`. `custom_working_messages` defaults to `true`; setting it to `false` disables the rotating whimsical status header list and lets the TUI use a plain "Working" label while a task starts. This value is resolved onto `NoriConfig` in `loader.rs`, mirrored through `codex-core`'s config, and can be changed from the `/config` menu.
+
 
 **Hotkey Configuration** (`config/types/mod.rs`):
 

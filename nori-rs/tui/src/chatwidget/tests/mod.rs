@@ -258,6 +258,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         placeholder_text: "Ask Nori to do anything".to_string(),
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
+        custom_working_messages: cfg.custom_working_messages,
         vertical_footer: false,
         footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
         agent_display_name: String::new(),

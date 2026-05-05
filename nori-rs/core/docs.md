@@ -115,7 +115,7 @@ Notification modes:
 1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. All calls to `send_native()` are non-blocking -- they spawn a background thread to call `notif.show()`, because some platforms (notably macOS) block synchronously on that call. On X11 Linux, the spawned thread also handles click-to-focus via `wmctrl` or `xdotool`. The `use_native` flag is controlled by `OsNotifications` in the ACP config layer (`@/nori-rs/acp/src/config/types.rs`).
 2. **External script** (`notify_command` configured): Invokes user-specified command with JSON payload.
 
-Core's `Config::tui_notifications` is a simple `bool` that controls whether the TUI sends OSC 9 terminal escape sequence notifications. It derives its value from the ACP config's `TerminalNotifications` enum during config loading.
+Core's `Config::tui_notifications` is a simple `bool` that controls whether the TUI sends OSC 9 terminal escape sequence notifications. It derives its value from the ACP config's `TerminalNotifications` enum during config loading. Core also carries TUI display booleans such as `animations` and `custom_working_messages`; the latter mirrors `[tui].custom_working_messages` from Nori config so the TUI can choose between rotating custom working headers and the plain `Working` label without re-reading config.
 
 ### Things to Know
 

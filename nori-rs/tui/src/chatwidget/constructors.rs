@@ -45,6 +45,7 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                custom_working_messages: config.custom_working_messages,
                 vertical_footer,
                 footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
@@ -75,7 +76,9 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: crate::status_indicator_widget::random_status_message(),
+            current_status_header: crate::status_indicator_widget::initial_status_message(
+                config.custom_working_messages,
+            ),
             retry_status_header: None,
             conversation_id: None,
             show_welcome_banner: true,
@@ -155,6 +158,7 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                custom_working_messages: config.custom_working_messages,
                 vertical_footer,
                 footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
@@ -185,7 +189,9 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: crate::status_indicator_widget::random_status_message(),
+            current_status_header: crate::status_indicator_widget::initial_status_message(
+                config.custom_working_messages,
+            ),
             retry_status_header: None,
             conversation_id: None,
             show_welcome_banner: false,
