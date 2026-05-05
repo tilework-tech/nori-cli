@@ -13,11 +13,13 @@ use agent_client_protocol_schema as acp;
 use anyhow::Context;
 use anyhow::Result;
 use futures::AsyncBufReadExt;
+use futures::AsyncWriteExt;
+use futures::StreamExt;
 use futures::io::BufReader;
 use sacp::Agent;
-use sacp::ByteStreams;
 use sacp::Client;
 use sacp::ConnectionTo;
+use sacp::Lines;
 use tokio::process::Child;
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -32,6 +34,9 @@ use super::AcpModelState;
 use super::ApprovalEventType;
 use super::ApprovalRequest;
 use super::ConnectionEvent;
+use super::wire_log::WireDirection;
+use super::wire_log::WireLogger;
+use crate::config::AcpProxyConfig;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
@@ -87,7 +92,11 @@ pub struct SacpConnection {
 
 impl SacpConnection {
     /// Spawn a new ACP agent subprocess and establish a SACP v11 connection.
-    pub async fn spawn(config: &AcpAgentConfig, cwd: &Path) -> Result<Self> {
+    pub async fn spawn(
+        config: &AcpAgentConfig,
+        cwd: &Path,
+        proxy_config: AcpProxyConfig,
+    ) -> Result<Self> {
         debug!(
             "Spawning ACP agent (SACP v11): {} {:?} in {}",
             config.command,
@@ -141,6 +150,13 @@ impl SacpConnection {
 
         debug!("ACP agent spawned (pid: {:?})", child.id());
 
+        let wire_logger = if proxy_config.enabled {
+            let pid = child.id().unwrap_or(0);
+            Some(WireLogger::new(&proxy_config, config, pid)?)
+        } else {
+            None
+        };
+
         // Log stderr in background.
         let stderr_task = tokio::spawn(async move {
             let mut stderr = BufReader::new(stderr.compat());
@@ -156,9 +172,6 @@ impl SacpConnection {
 
         // --- Set up channels ---
         let (event_tx, event_rx) = mpsc::channel::<ConnectionEvent>(1024);
-
-        // --- Build SACP connection ---
-        let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
 
         let event_tx_for_notifications = event_tx.clone();
         let event_tx_for_write = event_tx.clone();
@@ -177,6 +190,36 @@ impl SacpConnection {
         let child = std::sync::Arc::new(Mutex::new(child));
 
         let connection_task = tokio::spawn(async move {
+            let outgoing_logger = wire_logger.clone();
+            let outgoing_sink = futures::sink::unfold(
+                Box::pin(stdin.compat_write()),
+                move |mut writer, line: String| {
+                    let logger = outgoing_logger.clone();
+                    async move {
+                        if let Some(logger) = &logger {
+                            logger.record(WireDirection::ClientToAgent, &line);
+                        }
+                        let mut bytes = line.into_bytes();
+                        bytes.push(b'\n');
+                        writer.write_all(&bytes).await?;
+                        Ok::<_, std::io::Error>(writer)
+                    }
+                },
+            );
+
+            let incoming_logger = wire_logger;
+            let incoming_lines = Box::pin(BufReader::new(stdout.compat()).lines().map(
+                move |line_result| {
+                    if let Ok(line) = &line_result
+                        && let Some(logger) = &incoming_logger
+                    {
+                        logger.record(WireDirection::AgentToClient, line);
+                    }
+                    line_result
+                },
+            ));
+            let transport = Lines::new(outgoing_sink, incoming_lines);
+
             let result = Client
                 .builder()
                 .on_receive_notification(

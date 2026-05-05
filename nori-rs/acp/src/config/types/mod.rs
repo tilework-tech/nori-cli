@@ -199,6 +199,10 @@ pub struct NoriConfigToml {
     /// History persistence policy
     pub history_persistence: Option<HistoryPersistence>,
 
+    /// ACP wire proxy logging settings
+    #[serde(default)]
+    pub acp_proxy: AcpProxyConfigToml,
+
     /// TUI settings
     #[serde(default)]
     pub tui: TuiConfigToml,
@@ -218,6 +222,41 @@ pub struct NoriConfigToml {
     /// Custom agent definitions
     #[serde(default)]
     pub agents: Vec<AgentConfigToml>,
+}
+
+/// TOML settings for ACP wire proxy logging.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AcpProxyConfigToml {
+    /// Whether to record raw ACP JSON-RPC messages to disk.
+    pub enabled: Option<bool>,
+}
+
+/// Resolved ACP wire proxy logging settings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcpProxyConfig {
+    /// Whether wire logging is enabled.
+    pub enabled: bool,
+    /// Directory where per-child JSONL wire logs are written.
+    pub log_dir: PathBuf,
+}
+
+impl AcpProxyConfig {
+    /// Build resolved proxy settings from TOML and the Nori home directory.
+    pub fn from_toml(toml: AcpProxyConfigToml, nori_home: &std::path::Path) -> Self {
+        Self {
+            enabled: toml.enabled.unwrap_or(false),
+            log_dir: nori_home.join("acp-wire"),
+        }
+    }
+
+    /// Disabled proxy settings for tests and direct internal callers.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            log_dir: PathBuf::new(),
+        }
+    }
 }
 
 /// Whether terminal notifications (OSC 9) are enabled or disabled.
@@ -1478,6 +1517,9 @@ pub struct NoriConfig {
     /// History persistence policy
     pub history_persistence: HistoryPersistence,
 
+    /// ACP wire proxy logging settings.
+    pub acp_proxy: AcpProxyConfig,
+
     /// Enable TUI animations
     pub animations: bool,
 
@@ -1594,6 +1636,10 @@ impl Default for NoriConfig {
             sandbox_mode: SandboxMode::WorkspaceWrite,
             approval_policy: ApprovalPolicy::OnRequest,
             history_persistence: HistoryPersistence::default(),
+            acp_proxy: AcpProxyConfig {
+                enabled: false,
+                log_dir: PathBuf::from(".nori/cli/acp-wire"),
+            },
             animations: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,

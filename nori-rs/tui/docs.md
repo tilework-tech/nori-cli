@@ -31,6 +31,8 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `nori_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
 
+`NoriConfig` is also the source of truth for ACP backend diagnostics that do not have direct TUI controls yet. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without needing UI state in the TUI layer.
+
 The auto-worktree startup flow branches on the `AutoWorktree` enum (see `@/nori-rs/acp/docs.md`):
 
 | Variant | Timing | Behavior |

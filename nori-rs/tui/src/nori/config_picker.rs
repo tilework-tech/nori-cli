@@ -628,6 +628,7 @@ mod tests {
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
             approval_policy: nori_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: nori_acp::config::HistoryPersistence::SaveAll,
+            acp_proxy: nori_acp::config::AcpProxyConfig::disabled(),
             animations: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,

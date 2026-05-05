@@ -5,6 +5,7 @@ use super::ConnectionEvent;
 use super::sacp_connection::SacpConnection;
 use agent_client_protocol_schema as acp;
 use pretty_assertions::assert_eq;
+use serde_json::Value;
 use serial_test::serial;
 use tempfile::tempdir;
 
@@ -36,6 +37,35 @@ async fn recv_approval_request(
     }
 }
 
+async fn drive_logged_prompt(
+    config: &crate::registry::AcpAgentConfig,
+    cwd: &std::path::Path,
+    proxy: crate::config::AcpProxyConfig,
+) {
+    let conn = SacpConnection::spawn(config, cwd, proxy)
+        .await
+        .expect("spawn logged connection");
+    let session_id = conn
+        .create_session(cwd, vec![])
+        .await
+        .expect("create session");
+    conn.prompt(
+        session_id,
+        vec![acp::ContentBlock::Text(acp::TextContent::new("Hello"))],
+    )
+    .await
+    .expect("prompt");
+    conn.shutdown().await;
+}
+
+fn read_wire_log(path: &std::path::Path) -> Vec<Value> {
+    let content = std::fs::read_to_string(path).expect("read wire log");
+    content
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("wire log line is json"))
+        .collect()
+}
+
 /// Test that SacpConnection can spawn a mock agent, perform the initialization
 /// handshake, and return a working connection. After spawn, the connection
 /// should be able to create a session (proving the transport is alive).
@@ -47,9 +77,13 @@ async fn test_spawn_and_create_session() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("Failed to spawn SacpConnection");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("Failed to spawn SacpConnection");
 
     // Verify the connection is functional by creating a session.
     let session_id = conn
@@ -64,6 +98,60 @@ async fn test_spawn_and_create_session() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn test_proxy_logging_records_one_wire_log_per_child_subprocess() {
+    let Some(config) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+    let proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: temp_dir.path().join("acp-wire"),
+    };
+
+    drive_logged_prompt(&config, temp_dir.path(), proxy.clone()).await;
+    drive_logged_prompt(&config, temp_dir.path(), proxy.clone()).await;
+
+    let mut log_paths = std::fs::read_dir(&proxy.log_dir)
+        .expect("wire log dir exists")
+        .map(|entry| entry.expect("wire log entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .collect::<Vec<_>>();
+    log_paths.sort();
+
+    assert_eq!(
+        log_paths.len(),
+        2,
+        "expected one JSONL wire log per spawned ACP child subprocess"
+    );
+
+    for path in log_paths {
+        let records = read_wire_log(&path);
+        assert!(
+            records.iter().any(|record| {
+                record["direction"] == "client_to_agent"
+                    && record["message"]["method"] == "initialize"
+            }),
+            "expected client initialize request in {path:?}: {records:#?}"
+        );
+        assert!(
+            records.iter().any(|record| {
+                record["direction"] == "client_to_agent"
+                    && record["message"]["method"] == "session/prompt"
+            }),
+            "expected client prompt request in {path:?}: {records:#?}"
+        );
+        assert!(
+            records.iter().any(|record| {
+                record["direction"] == "agent_to_client"
+                    && record["message"]["method"] == "session/update"
+            }),
+            "expected agent session/update notification in {path:?}: {records:#?}"
+        );
+    }
+}
+
 /// Test the full prompt lifecycle: spawn -> create session -> prompt -> receive
 /// text updates -> get stop reason.
 #[tokio::test]
@@ -74,9 +162,13 @@ async fn test_prompt_receives_text_updates() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let mut event_rx = conn.take_event_receiver();
 
@@ -120,9 +212,13 @@ async fn test_event_receiver_forwards_session_updates() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
     let mut event_rx = conn.take_event_receiver();
 
     let session_id = conn
@@ -163,9 +259,13 @@ async fn test_tool_call_prompt_delivers_final_text_update() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let mut event_rx = conn.take_event_receiver();
 
@@ -217,9 +317,13 @@ async fn test_model_state_after_session_creation() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let _session_id = conn
         .create_session(temp_dir.path(), vec![])
@@ -261,9 +365,13 @@ async fn test_approval_receiver_forwards_requests() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let mut event_rx = conn.take_event_receiver();
 
@@ -321,9 +429,13 @@ async fn test_event_receiver_preserves_update_then_approval_order() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
     let mut event_rx = conn.take_event_receiver();
 
     let session_id = conn
@@ -415,9 +527,13 @@ async fn test_codex_home_not_inherited() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let mut event_rx = conn.take_event_receiver();
 
@@ -465,9 +581,13 @@ async fn test_drop_kills_subprocess() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let session_id = conn
         .create_session(temp_dir.path(), vec![])
@@ -514,9 +634,13 @@ async fn test_cancel_during_prompt() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let session_id = conn
         .create_session(temp_dir.path(), vec![])
@@ -570,9 +694,13 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
     let mut event_rx = conn.take_event_receiver();
 
     let session_id = conn
@@ -684,9 +812,13 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
     let mut event_rx = conn.take_event_receiver();
 
     let session_id = conn

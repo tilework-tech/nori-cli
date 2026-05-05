@@ -123,6 +123,7 @@ impl NoriConfig {
 
         let skillset_per_session = toml.tui.skillset_per_session.unwrap_or(false);
         let auto_worktree = toml.tui.auto_worktree.unwrap_or_default();
+        let acp_proxy = super::types::AcpProxyConfig::from_toml(toml.acp_proxy, &nori_home);
 
         // Active agent is the runtime value: CLI override > config model > persisted agent > DEFAULT_AGENT
         // Using agent as fallback ensures the persisted preference is honored at startup
@@ -145,6 +146,7 @@ impl NoriConfig {
             history_persistence: toml
                 .history_persistence
                 .unwrap_or(super::types::HistoryPersistence::SaveAll),
+            acp_proxy,
             animations: toml.tui.animations.unwrap_or(true),
             terminal_notifications: toml
                 .tui
@@ -359,6 +361,37 @@ notify_after_idle = "30s"
             config.notify_after_idle,
             super::super::types::NotifyAfterIdle::FiveSeconds
         );
+    }
+
+    #[test]
+    fn test_acp_proxy_defaults_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(!config.acp_proxy.enabled);
+        assert_eq!(config.acp_proxy.log_dir, temp_dir.path().join("acp-wire"));
+    }
+
+    #[test]
+    fn test_acp_proxy_enabled_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[acp_proxy]
+enabled = true
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert!(config.acp_proxy.enabled);
+        assert_eq!(config.acp_proxy.log_dir, temp_dir.path().join("acp-wire"));
     }
 
     #[test]

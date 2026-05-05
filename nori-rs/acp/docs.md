@@ -129,6 +129,19 @@ The config module provides the **canonical source of truth** for Nori home path 
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
 - `DEFAULT_AGENT`: Default agent (`"claude-code"`)
 
+**ACP Wire Proxy Configuration** (`config/types/mod.rs`, `connection/`):
+
+Nori can optionally wrap ACP subprocess transports with an append-only wire logger. The setting is top-level in `config.toml`:
+
+```toml
+[acp_proxy]
+enabled = true
+```
+
+When enabled, the resolved `AcpProxyConfig` stores logs under `$NORI_HOME/acp-wire`. The config layer intentionally owns this path resolution so every ACP entry point uses the same home directory semantics. The TUI passes the resolved proxy config into `AcpBackendConfig`; the backend passes it to each `SacpConnection::spawn()` call, including prompt-summary subprocesses, so every ACP child process gets its own log file.
+
+The connection layer uses `sacp::Lines` to observe raw newline-delimited JSON-RPC messages at the transport boundary before or after SACP parsing. Each child process gets a distinct JSONL file named from the launch timestamp, child PID, and sanitized agent slug. Records include the timestamp, direction (`client_to_agent` or `agent_to_client`), agent slug, child PID, and the parsed JSON message. If a line cannot be parsed as JSON, the logger preserves the raw line and parse error instead of disrupting the live session.
+
 **Agent Config Field Resolution:**
 
 | Field | Purpose | Persistence |

@@ -185,6 +185,8 @@ pub struct AcpBackendConfig {
     pub nori_home: PathBuf,
     /// History persistence policy
     pub history_persistence: crate::config::HistoryPersistence,
+    /// ACP wire proxy logging settings
+    pub acp_proxy: crate::config::AcpProxyConfig,
     /// CLI version for transcript metadata
     pub cli_version: String,
     /// Auto-worktree mode (whether a worktree was created at startup)
@@ -276,6 +278,8 @@ pub struct AcpBackend {
     nori_home: PathBuf,
     /// History persistence policy
     history_persistence: crate::config::HistoryPersistence,
+    /// ACP wire proxy logging settings
+    acp_proxy: crate::config::AcpProxyConfig,
     /// Conversation ID for this session (used for history entries)
     conversation_id: ConversationId,
     /// Sender for broadcasting approval policy updates to the handler

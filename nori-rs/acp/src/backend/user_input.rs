@@ -88,6 +88,7 @@ impl AcpBackend {
                     let prompt_for_summary = display_text.clone();
                     let auto_worktree = self.auto_worktree;
                     let auto_worktree_repo_root = self.auto_worktree_repo_root.clone();
+                    let acp_proxy = self.acp_proxy.clone();
                     tokio::spawn(async move {
                         if let Err(e) = run_prompt_summary(
                             &event_tx,
@@ -96,6 +97,7 @@ impl AcpBackend {
                             &prompt_for_summary,
                             auto_worktree,
                             auto_worktree_repo_root.as_deref(),
+                            acp_proxy,
                         )
                         .await
                         {

@@ -10,6 +10,8 @@ pub use loader::CONFIG_FILE;
 pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
+pub use types::AcpProxyConfig;
+pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;
 pub use types::AgentDistributionToml;
 pub use types::ApprovalPolicy;
