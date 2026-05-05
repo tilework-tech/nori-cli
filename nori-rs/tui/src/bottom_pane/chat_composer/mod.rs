@@ -116,7 +116,7 @@ pub(crate) struct ChatComposer {
     custom_prompts: Vec<CustomPrompt>,
     agent_commands: Vec<nori_protocol::AgentCommandInfo>,
     agent_command_prefix: String,
-    command_description_overrides: HashMap<SlashCommand, String>,
+    command_description_overrides: HashMap<SlashCommand, Line<'static>>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
@@ -391,6 +391,15 @@ impl ChatComposer {
     }
 
     pub(crate) fn set_command_description_override(&mut self, cmd: SlashCommand, desc: String) {
+        self.command_description_overrides
+            .insert(cmd, Line::from(desc));
+    }
+
+    pub(crate) fn set_command_description_override_line(
+        &mut self,
+        cmd: SlashCommand,
+        desc: Line<'static>,
+    ) {
         self.command_description_overrides.insert(cmd, desc);
     }
 

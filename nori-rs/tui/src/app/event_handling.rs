@@ -797,6 +797,10 @@ impl App {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
             }
             #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigAcpWireRecording(enabled) => {
+                self.persist_acp_wire_recording_setting(enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
             AppEvent::OpenSkillsetPerSessionWorktreeChoice => {
                 self.chat_widget.open_skillset_worktree_choice_picker();
             }

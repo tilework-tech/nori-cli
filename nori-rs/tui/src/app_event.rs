@@ -320,6 +320,10 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigPinnedPlanDrawer(bool),
 
+    /// Set ACP wire JSONL recording for future ACP child subprocesses.
+    #[cfg(feature = "nori-config")]
+    SetConfigAcpWireRecording(bool),
+
     /// Open the worktree choice modal when enabling per-session skillsets.
     #[cfg(feature = "nori-config")]
     OpenSkillsetPerSessionWorktreeChoice,

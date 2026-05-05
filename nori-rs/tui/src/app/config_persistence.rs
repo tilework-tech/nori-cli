@@ -1,4 +1,12 @@
 use super::*;
+use std::path::Path;
+
+async fn persist_acp_wire_recording_config(codex_home: &Path, enabled: bool) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(codex_home)
+        .set_path(&["acp_proxy", "enabled"], toml_value(enabled))
+        .apply()
+        .await
+}
 
 impl App {
     /// Persist a TUI config setting to config.toml and apply it immediately.
@@ -189,6 +197,23 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Pinned plan drawer {status}."), None);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
+        if let Err(err) = persist_acp_wire_recording_config(&self.config.codex_home, enabled).await
+        {
+            tracing::error!(error = %err, "failed to persist acp wire recording setting");
+            self.chat_widget
+                .add_error_message(format!("Failed to save ACP wire recording setting: {err}"));
+            return;
+        }
+
+        self.chat_widget.set_acp_wire_recording_enabled(enabled);
+        self.chat_widget.replace_agent_popup(enabled);
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("ACP wire recording {status}."), None);
     }
 
     #[cfg(feature = "nori-config")]
@@ -433,5 +458,31 @@ impl App {
         if let Some(tx) = self.mcp_oauth_cancel_tx.take() {
             let _ = tx.send(());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn persists_acp_wire_recording_to_top_level_acp_proxy_section() {
+        let temp = TempDir::new().expect("temp home");
+
+        persist_acp_wire_recording_config(temp.path(), true)
+            .await
+            .expect("persist recording enabled");
+
+        let content = std::fs::read_to_string(temp.path().join("config.toml"))
+            .expect("read persisted config");
+        let parsed: toml::Value = toml::from_str(&content).expect("config toml");
+        assert_eq!(
+            parsed
+                .get("acp_proxy")
+                .and_then(|section| section.get("enabled"))
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
     }
 }
