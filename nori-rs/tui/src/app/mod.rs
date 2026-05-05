@@ -69,6 +69,7 @@ const GPT_5_1_CODEX_MIGRATION_AUTH_MODES: [AuthMode; 1] = [AuthMode::ChatGPT];
 pub struct AppExitInfo {
     pub token_usage: TokenUsage,
     pub conversation_id: Option<ConversationId>,
+    pub conversation_has_activity: bool,
     pub update_action: Option<UpdateAction>,
 }
 
@@ -187,6 +188,7 @@ async fn handle_model_migration_prompt_if_needed(
                 return Some(AppExitInfo {
                     token_usage: TokenUsage::default(),
                     conversation_id: None,
+                    conversation_has_activity: false,
                     update_action: None,
                 });
             }
@@ -481,6 +483,7 @@ impl App {
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             conversation_id: app.chat_widget.conversation_id(),
+            conversation_has_activity: app.chat_widget.session_stats().has_activity(),
             update_action: app.pending_update_action,
         })
     }

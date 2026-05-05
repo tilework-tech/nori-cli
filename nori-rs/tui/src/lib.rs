@@ -417,6 +417,7 @@ async fn run_ratatui_app(
                     return Ok(AppExitInfo {
                         token_usage: codex_core::protocol::TokenUsage::default(),
                         conversation_id: None,
+                        conversation_has_activity: false,
                         update_action: Some(action),
                     });
                 }
@@ -456,6 +457,7 @@ async fn run_ratatui_app(
             return Ok(AppExitInfo {
                 token_usage: codex_core::protocol::TokenUsage::default(),
                 conversation_id: None,
+                conversation_has_activity: false,
                 update_action: None,
             });
         }
@@ -567,6 +569,7 @@ async fn run_ratatui_app(
                 return Ok(AppExitInfo {
                     token_usage: codex_core::protocol::TokenUsage::default(),
                     conversation_id: None,
+                    conversation_has_activity: false,
                     update_action: None,
                 });
             }
@@ -637,6 +640,7 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
     Ok(AppExitInfo {
         token_usage: codex_core::protocol::TokenUsage::default(),
         conversation_id: None,
+        conversation_has_activity: false,
         update_action: None,
     })
 }

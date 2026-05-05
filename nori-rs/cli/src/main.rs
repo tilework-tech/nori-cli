@@ -216,19 +216,19 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
     let AppExitInfo {
         token_usage,
         conversation_id,
+        conversation_has_activity,
         ..
     } = exit_info;
 
-    if token_usage.is_zero() {
-        return Vec::new();
+    let mut lines = Vec::new();
+    if !token_usage.is_zero() {
+        lines.push(format!(
+            "{}",
+            codex_core::protocol::FinalOutput::from(token_usage)
+        ));
     }
 
-    let mut lines = vec![format!(
-        "{}",
-        codex_core::protocol::FinalOutput::from(token_usage)
-    )];
-
-    if let Some(session_id) = conversation_id {
+    if conversation_has_activity && let Some(session_id) = conversation_id {
         let resume_cmd = format!("nori resume {session_id}");
         let command = if color_enabled {
             resume_cmd.cyan().to_string()
@@ -624,6 +624,7 @@ mod tests {
             conversation_id: conversation
                 .map(ConversationId::from_string)
                 .map(Result::unwrap),
+            conversation_has_activity: conversation.is_some(),
             update_action: None,
         }
     }
@@ -633,6 +634,41 @@ mod tests {
         let exit_info = AppExitInfo {
             token_usage: TokenUsage::default(),
             conversation_id: None,
+            conversation_has_activity: false,
+            update_action: None,
+        };
+        let lines = format_exit_messages(exit_info, false);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn format_exit_messages_includes_resume_hint_without_token_usage() {
+        let exit_info = AppExitInfo {
+            token_usage: TokenUsage::default(),
+            conversation_id: Some(
+                ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            ),
+            conversation_has_activity: true,
+            update_action: None,
+        };
+        let lines = format_exit_messages(exit_info, false);
+        assert_eq!(
+            lines,
+            vec![
+                "To continue this session, run nori resume 123e4567-e89b-12d3-a456-426614174000"
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn format_exit_messages_skips_resume_hint_without_activity() {
+        let exit_info = AppExitInfo {
+            token_usage: TokenUsage::default(),
+            conversation_id: Some(
+                ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            ),
+            conversation_has_activity: false,
             update_action: None,
         };
         let lines = format_exit_messages(exit_info, false);
