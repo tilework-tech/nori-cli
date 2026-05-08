@@ -36,6 +36,14 @@ pub fn config_picker_params(
     let os_notifications_enabled = config.os_notifications == OsNotifications::Enabled;
     let pinned_plan_drawer_enabled = config.pinned_plan_drawer;
     let custom_working_messages_enabled = config.custom_working_messages;
+    let custom_working_messages_description = if config.custom_working_message_list.is_empty() {
+        "Rotate playful status messages while the agent is working".to_string()
+    } else {
+        format!(
+            "Rotate playful status messages while the agent is working (custom list active: {} entries from config.toml)",
+            config.custom_working_message_list.len()
+        )
+    };
 
     let items: Vec<SelectionItem> = vec![
         build_toggle_item(
@@ -52,7 +60,7 @@ pub fn config_picker_params(
         ),
         build_toggle_item(
             "Custom Working Messages",
-            "Rotate playful status messages while the agent is working",
+            &custom_working_messages_description,
             custom_working_messages_enabled,
             {
                 let tx = app_event_tx.clone();
@@ -678,6 +686,7 @@ mod tests {
             file_manager: None,
             pinned_plan_drawer: false,
             custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
         }
     }
 
@@ -764,6 +773,30 @@ mod tests {
             }
             _ => panic!("expected SetConfigCustomWorkingMessages event, got: {event:?}"),
         }
+    }
+
+    #[test]
+    fn config_picker_custom_working_messages_description_announces_user_list() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.custom_working_message_list = vec!["alpha".to_string(), "beta".to_string()];
+
+        let params = config_picker_params(&config, tx);
+
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Custom Working Messages"))
+            .expect("config picker should include Custom Working Messages");
+        let description = item
+            .description
+            .as_ref()
+            .expect("custom working messages item should have a description");
+        assert!(
+            description.contains("custom list"),
+            "description should mention the custom list when one is configured, got: {description:?}"
+        );
     }
 
     #[test]

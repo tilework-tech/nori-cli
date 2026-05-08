@@ -811,7 +811,13 @@ When the user selects an agent (or resumes a session), the TUI shows a "Connecti
 
 **Status Indicator Whimsical Messages (`status_indicator_widget.rs`):**
 
-When the agent begins processing a task, the `StatusIndicatorWidget` displays an animated header. By default it chooses a randomly selected tongue-in-cheek message (e.g., "Thinking really hard", "Hallucinating responsibly") drawn from the `WHIMSICAL_STATUS_MESSAGES` pool via `initial_status_message(true)`. Users can opt out with `[tui].custom_working_messages = false` or the `/config` toggle, which makes the initial header the plain `Working` label instead. During streaming, reasoning chunk headers (extracted from bold markdown text) dynamically replace this initial message via `update_status_header()`.
+When the agent begins processing a task, the `StatusIndicatorWidget` displays an animated header. The header is selected by `pick_status_message(custom_working_messages, &custom_working_message_list)`:
+
+- `custom_working_messages = false` → plain `"Working"` label.
+- `custom_working_messages = true` (default) and `custom_working_message_list` is empty → randomly samples from `WHIMSICAL_STATUS_MESSAGES` (e.g., "Thinking really hard", "Hallucinating responsibly").
+- `custom_working_messages = true` and `custom_working_message_list = ["..."]` → randomly samples from the user's list, overriding the builtin pool.
+
+The same `pick_status_message` helper is used for the initial header in `ChatWidget::new`, in `BottomPane::set_task_running`/`ensure_status_indicator`, in the `/config` toggle's live update, and in `chatwidget::event_handlers::on_task_started` so all task starts respect the user's preference. Users edit the toggle from `[tui].custom_working_messages` (TOML) or the `/config` menu; the user list is TOML-only via `[tui].custom_working_message_list`. The `/config` "Custom Working Messages" entry indicates when a custom list is active so the user is reminded that flipping the toggle preserves their TOML list. During streaming, reasoning chunk headers (extracted from bold markdown text) dynamically replace this initial message via `update_status_header()`.
 
 **Terminal Title Management (`terminal_title.rs`, `chatwidget/helpers.rs`):**
 

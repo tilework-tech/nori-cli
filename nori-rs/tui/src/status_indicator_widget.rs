@@ -64,12 +64,20 @@ pub(crate) fn random_status_message() -> String {
     WHIMSICAL_STATUS_MESSAGES[idx].to_string()
 }
 
-pub(crate) fn initial_status_message(custom_working_messages: bool) -> String {
-    if custom_working_messages {
-        random_status_message()
-    } else {
-        DEFAULT_STATUS_MESSAGE.to_string()
+/// Pick the status header to display while the agent is working.
+///
+/// - When `custom_working_messages` is `false`, returns `"Working"`.
+/// - When the user supplied a non-empty `user_list`, samples from it.
+/// - Otherwise samples from the builtin whimsical messages.
+pub(crate) fn pick_status_message(custom_working_messages: bool, user_list: &[String]) -> String {
+    if !custom_working_messages {
+        return DEFAULT_STATUS_MESSAGE.to_string();
     }
+    if user_list.is_empty() {
+        return random_status_message();
+    }
+    let idx = rand::rng().random_range(0..user_list.len());
+    user_list[idx].clone()
 }
 
 pub(crate) struct StatusIndicatorWidget {
@@ -108,9 +116,10 @@ impl StatusIndicatorWidget {
         frame_requester: FrameRequester,
         animations_enabled: bool,
         custom_working_messages: bool,
+        custom_working_message_list: Vec<String>,
     ) -> Self {
         Self {
-            header: initial_status_message(custom_working_messages),
+            header: pick_status_message(custom_working_messages, &custom_working_message_list),
             show_interrupt_hint: true,
             elapsed_running: Duration::ZERO,
             last_resume_at: Instant::now(),
@@ -280,8 +289,13 @@ mod tests {
     fn new_widget_gets_whimsical_default_header() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let w =
-            StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true, true);
+        let w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            true,
+            Vec::new(),
+        );
         assert!(
             WHIMSICAL_STATUS_MESSAGES.contains(&w.header()),
             "default header {:?} should be a whimsical message",
@@ -293,8 +307,45 @@ mod tests {
     fn new_widget_uses_plain_default_header_when_custom_working_messages_disabled() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let w =
-            StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true, false);
+        let w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            false,
+            Vec::new(),
+        );
+
+        assert_eq!(w.header(), "Working");
+    }
+
+    #[test]
+    fn new_widget_uses_user_list_when_provided_and_rotation_enabled() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let user_list = vec!["only one".to_string()];
+        let w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            true,
+            user_list,
+        );
+
+        assert_eq!(w.header(), "only one");
+    }
+
+    #[test]
+    fn new_widget_ignores_user_list_when_rotation_disabled() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let user_list = vec!["should not appear".to_string()];
+        let w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            false,
+            user_list,
+        );
 
         assert_eq!(w.header(), "Working");
     }
@@ -303,8 +354,13 @@ mod tests {
     fn renders_with_default_header() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let mut w =
-            StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true, true);
+        let mut w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            true,
+            Vec::new(),
+        );
         w.update_header("Thinking really hard".to_string());
 
         // Render into a fixed-size test terminal and snapshot the backend.
@@ -319,8 +375,13 @@ mod tests {
     fn renders_truncated() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let mut w =
-            StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true, true);
+        let mut w = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            true,
+            Vec::new(),
+        );
         w.update_header("Thinking really hard".to_string());
 
         // Render into a fixed-size test terminal and snapshot the backend.
@@ -335,8 +396,13 @@ mod tests {
     fn timer_pauses_when_requested() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let mut widget =
-            StatusIndicatorWidget::new(tx, crate::tui::FrameRequester::test_dummy(), true, true);
+        let mut widget = StatusIndicatorWidget::new(
+            tx,
+            crate::tui::FrameRequester::test_dummy(),
+            true,
+            true,
+            Vec::new(),
+        );
 
         let baseline = Instant::now();
         widget.last_resume_at = baseline;

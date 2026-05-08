@@ -179,7 +179,10 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(true);
         self.retry_status_header = None;
         self.bottom_pane.set_interrupt_hint_visible(true);
-        self.set_status_header(crate::status_indicator_widget::random_status_message());
+        self.set_status_header(crate::status_indicator_widget::pick_status_message(
+            self.config.custom_working_messages,
+            &self.config.custom_working_message_list,
+        ));
         self.full_reasoning_buffer.clear();
         self.reasoning_buffer.clear();
         self.completed_client_tool_calls.clear();
