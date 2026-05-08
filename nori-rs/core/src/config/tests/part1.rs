@@ -74,6 +74,49 @@ custom_working_messages = false
 }
 
 #[test]
+fn tui_config_custom_working_message_list_defaults_to_empty() {
+    let cfg = r#"
+[tui]
+"#;
+
+    let parsed = toml::from_str::<ConfigToml>(cfg)
+        .expect("TUI config without custom_working_message_list should succeed");
+    let tui = parsed.tui.expect("config should include tui section");
+
+    assert!(tui.custom_working_message_list.is_empty());
+}
+
+#[test]
+fn tui_config_custom_working_message_list_accepts_strings() {
+    let cfg = r#"
+[tui]
+custom_working_message_list = ["Compiling thoughts", "Reticulating splines"]
+"#;
+
+    let parsed = toml::from_str::<ConfigToml>(cfg)
+        .expect("TUI config with custom_working_message_list should succeed");
+    let tui = parsed.tui.expect("config should include tui section");
+
+    assert_eq!(
+        tui.custom_working_message_list,
+        vec![
+            "Compiling thoughts".to_string(),
+            "Reticulating splines".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn tui_config_custom_working_message_list_rejects_non_strings() {
+    let cfg = r#"
+[tui]
+custom_working_message_list = [42]
+"#;
+
+    assert!(toml::from_str::<ConfigToml>(cfg).is_err());
+}
+
+#[test]
 fn test_sandbox_config_parsing() {
     let sandbox_full_access = r#"
 sandbox_mode = "danger-full-access"

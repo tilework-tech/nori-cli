@@ -46,6 +46,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 custom_working_messages: config.custom_working_messages,
+                custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
@@ -76,8 +77,9 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: crate::status_indicator_widget::initial_status_message(
+            current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,
+                &config.custom_working_message_list,
             ),
             retry_status_header: None,
             conversation_id: None,
@@ -159,6 +161,7 @@ impl ChatWidget {
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
                 custom_working_messages: config.custom_working_messages,
+                custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
@@ -189,8 +192,9 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: crate::status_indicator_widget::initial_status_message(
+            current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,
+                &config.custom_working_message_list,
             ),
             retry_status_header: None,
             conversation_id: None,

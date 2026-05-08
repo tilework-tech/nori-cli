@@ -165,7 +165,7 @@ The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_
 
 **TUI Display Configuration** (`config/types/mod.rs`):
 
-The `[tui]` section also owns display-only preferences consumed by `@/nori-rs/tui/`. `custom_working_messages` defaults to `true`; setting it to `false` disables the rotating whimsical status header list and lets the TUI use a plain "Working" label while a task starts. This value is resolved onto `NoriConfig` in `loader.rs`, mirrored through `codex-core`'s config, and can be changed from the `/config` menu.
+The `[tui]` section also owns display-only preferences consumed by `@/nori-rs/tui/`. `custom_working_messages` defaults to `true`; setting it to `false` disables the rotating whimsical status header list and lets the TUI use a plain "Working" label while a task starts. The companion `custom_working_message_list` accepts an array of strings; when non-empty and `custom_working_messages` is `true`, the TUI samples from the user's list instead of the builtin whimsical messages. Both values are resolved onto `NoriConfig` in `loader.rs` and mirrored through `codex-core`'s config. The `/config` menu only toggles the boolean; the user list is TOML-only and the menu's "Custom Working Messages" entry advertises when a custom list is active.
 
 
 **Hotkey Configuration** (`config/types/mod.rs`):

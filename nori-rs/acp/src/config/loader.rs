@@ -169,6 +169,11 @@ impl NoriConfig {
             file_manager: toml.tui.file_manager,
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
             custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),
+            custom_working_message_list: toml
+                .tui
+                .custom_working_message_list
+                .clone()
+                .unwrap_or_default(),
             auto_worktree,
             footer_segment_config: super::types::FooterSegmentConfig::from_toml(
                 &toml.tui.footer_segments,

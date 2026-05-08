@@ -157,6 +157,10 @@ pub struct Config {
     /// Show rotating custom messages while the agent is working.
     pub custom_working_messages: bool,
 
+    /// Optional user-supplied working messages that override the builtin list
+    /// when `custom_working_messages` is enabled. Empty means "use builtin".
+    pub custom_working_message_list: Vec<String>,
+
     /// The directory that should be treated as the current working directory
     /// for the session. All relative paths inside the business-logic layer are
     /// resolved against this path.
@@ -1269,6 +1273,11 @@ impl Config {
                 .as_ref()
                 .map(|t| t.custom_working_messages)
                 .unwrap_or(true),
+            custom_working_message_list: cfg
+                .tui
+                .as_ref()
+                .map(|t| t.custom_working_message_list.clone())
+                .unwrap_or_default(),
             otel: {
                 let t: OtelConfigToml = cfg.otel.unwrap_or_default();
                 let log_user_prompt = t.log_user_prompt.unwrap_or(false);
