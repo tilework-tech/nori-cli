@@ -66,6 +66,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         disable_paste_burst: false,
         tui_notifications: true,
         animations: true,
+        custom_working_messages: true,
         otel: OtelConfig::default(),
         acp_allow_http_fallback: false,
     };
@@ -140,6 +141,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         disable_paste_burst: false,
         tui_notifications: true,
         animations: true,
+        custom_working_messages: true,
         otel: OtelConfig::default(),
         acp_allow_http_fallback: false,
     };

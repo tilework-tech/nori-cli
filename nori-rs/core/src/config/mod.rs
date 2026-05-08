@@ -154,6 +154,9 @@ pub struct Config {
     /// Enable ASCII animations and shimmer effects in the TUI.
     pub animations: bool,
 
+    /// Show rotating custom messages while the agent is working.
+    pub custom_working_messages: bool,
+
     /// The directory that should be treated as the current working directory
     /// for the session. All relative paths inside the business-logic layer are
     /// resolved against this path.
@@ -1261,6 +1264,11 @@ impl Config {
                 .map(|t| t.terminal_notifications)
                 .unwrap_or(true),
             animations: cfg.tui.as_ref().map(|t| t.animations).unwrap_or(true),
+            custom_working_messages: cfg
+                .tui
+                .as_ref()
+                .map(|t| t.custom_working_messages)
+                .unwrap_or(true),
             otel: {
                 let t: OtelConfigToml = cfg.otel.unwrap_or_default();
                 let log_user_prompt = t.log_user_prompt.unwrap_or(false);
