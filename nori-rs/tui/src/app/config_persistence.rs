@@ -393,7 +393,7 @@ impl App {
         {
             Ok(handle) => {
                 self.chat_widget.add_info_message(
-                    format!("Opening browser to authenticate `{server_name}`..."),
+                    mcp_oauth_login_started_message(&server_name, &handle.authorization_url),
                     Some("Press Esc in the MCP picker to cancel".to_string()),
                 );
 
@@ -433,5 +433,26 @@ impl App {
         if let Some(tx) = self.mcp_oauth_cancel_tx.take() {
             let _ = tx.send(());
         }
+    }
+}
+
+fn mcp_oauth_login_started_message(server_name: &str, authorization_url: &str) -> String {
+    format!(
+        "Opening browser to authenticate `{server_name}`...\n\nIf the browser doesn't open automatically, visit:\n{authorization_url}\n\nWaiting for authentication to complete..."
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mcp_oauth_login_started_message_includes_manual_url() {
+        let message = mcp_oauth_login_started_message("linear", "https://linear.example.com/oauth");
+
+        assert!(message.contains("Opening browser to authenticate `linear`"));
+        assert!(message.contains("If the browser doesn't open automatically, visit:"));
+        assert!(message.contains("https://linear.example.com/oauth"));
+        assert!(message.contains("Waiting for authentication to complete"));
     }
 }

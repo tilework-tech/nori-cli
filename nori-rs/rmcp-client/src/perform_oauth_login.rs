@@ -39,6 +39,8 @@ impl Drop for CallbackServerGuard {
 /// and the `task` (to await completion). There is no Drop implementation;
 /// the caller is responsible for managing both halves.
 pub struct OAuthLoginHandle {
+    /// The URL the user can open manually to authorize this MCP server.
+    pub authorization_url: String,
     /// Send to cancel the OAuth flow.
     pub cancel_tx: Option<oneshot::Sender<()>>,
     /// The task running the flow.
@@ -151,6 +153,7 @@ pub async fn start_oauth_login(
         });
 
         Ok(OAuthLoginHandle {
+            authorization_url: auth_url,
             cancel_tx: Some(cancel_tx),
             task,
         })
@@ -255,6 +258,7 @@ async fn start_oauth_login_preconfigured(
     });
 
     Ok(OAuthLoginHandle {
+        authorization_url: auth_url_str,
         cancel_tx: Some(cancel_tx),
         task,
     })
