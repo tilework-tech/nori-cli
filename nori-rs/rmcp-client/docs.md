@@ -24,6 +24,7 @@ The rmcp-client crate provides a high-level MCP client for connecting to remote 
 - Two OAuth login entry points, both backed by the same `wait_for_callback_or_cancel()` mechanism (biased `tokio::select!` between callback, cancel signal, and 5-minute timeout):
   - `perform_oauth_login()` - Blocking/interactive flow that uses `println!` for status and `stdin` Enter for cancellation. Used by CLI contexts where TUI suspension is acceptable.
   - `start_oauth_login()` - Non-blocking async flow that returns an `OAuthLoginHandle`. The handle exposes the generated `authorization_url` for manual login, a `cancel_tx: Option<oneshot::Sender<()>>` for programmatic cancellation, and a `task: JoinHandle<Result<()>>` for awaiting completion. Used by the TUI to run OAuth inline without suspending the terminal. Accepts optional `client_id` and `client_secret` parameters to select between two OAuth paths (see below).
+- The local callback server accepts only `/callback` requests containing both `code` and `state` query parameters; `@/nori-rs/rmcp-client/src/perform_oauth_login.rs` percent-decodes those values before handing them to `rmcp::OAuthState` or the direct `oauth2` token exchange path.
 - Dynamic client registration (DCR) uses `"Nori"` as the client name presented to OAuth servers
 - Token refresh handling via `OAuthPersistor`, which is called after every MCP request
 

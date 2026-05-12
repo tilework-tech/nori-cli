@@ -241,6 +241,8 @@ The first-message is obtained from `ChatWidget::first_prompt_text()`, which stor
 
 This means an external change (e.g., the user runs `nori-skillsets switch` in another terminal) will not be reflected in the footer until the next event-driven refresh. Footer staleness is bounded by user activity, not by wall-clock time.
 
+When a file-change path needs to be lifted to a repository root for refresh, `@/nori-rs/tui/src/effective_cwd_tracker.rs` uses `@/nori-rs/tui/src/git_marker.rs::is_git_marker()` so only worktree `.git` files or repository `.git` directories containing `HEAD` count as git roots. Empty marker-shaped directories are ignored and fall back to the nearest existing parent directory.
+
 **Version caching:**
 
 `get_nori_version()` shells out to `nori-skillsets --version` (or `nori-ai --version` as a legacy fallback) and caches the result in a process-wide `OnceLock` (`NORI_VERSION_CACHE`). The installed CLI version is stable for the lifetime of a TUI process, so the subprocess runs at most once per session. Only `nori-skillsets list-active` is re-invoked on every refresh.
@@ -331,7 +333,7 @@ The `BottomPaneView` trait has default no-op `update_mcp_auth_statuses()` and `h
 
 The OAuth flow is fully async and inline -- no TUI suspension. The `McpOAuthLogin` event carries `server_name`, `server_url`, `http_headers`, `env_http_headers`, `client_id`, and `client_secret_env_var`. The handler in `app/config_persistence.rs` (`perform_mcp_oauth_login()`) resolves `client_secret` from the environment variable named by `client_secret_env_var` (if provided), then calls `codex_rmcp_client::start_oauth_login()` from `@/nori-rs/rmcp-client/`, passing the optional `client_id` and resolved `client_secret`. This selects between dynamic registration and pre-configured credential OAuth paths (see `@/nori-rs/rmcp-client/docs.md`). The returned `OAuthLoginHandle` includes the generated authorization URL, which the TUI displays so remote/SSH users can copy it manually if the browser launch is not visible. The handle's cancel sender is stored in `App.mcp_oauth_cancel_tx`, and a spawned watcher task awaits the handle's `JoinHandle` and sends `AppEvent::McpOAuthLoginComplete` on finish.
 
-Cancellation uses the oneshot channel pattern: Esc in `OAuthInProgress` mode emits `McpOAuthLoginCancel`, which calls `cancel_mcp_oauth_login()` (sends `()` on the stored cancel sender). The watcher task then resolves with the cancellation error. Completion (`McpOAuthLoginComplete`) shows a success or error info message and forwards to `McpServerPickerView::handle_oauth_complete()`, which transitions the picker from `OAuthInProgress` back to `List` mode.
+Cancellation uses the oneshot channel pattern: Esc in `OAuthInProgress` mode emits `McpOAuthLoginCancel`, which calls `cancel_mcp_oauth_login()` (sends `()` on the stored cancel sender). The watcher task then resolves with the cancellation error. Completion (`McpOAuthLoginComplete`) shows a success or error info message and forwards to `McpServerPickerView::handle_oauth_complete()`, which transitions the picker from `OAuthInProgress` back to `List` mode. OAuth task failures are formatted with their full error chain so callback and token-exchange failures expose the underlying cause instead of only the top-level context.
 
 **Agent-Provided Slash Commands** (`command_popup.rs`, `chat_composer/popup_management.rs`, `chat_composer/key_handling.rs`, `chatwidget/event_handlers.rs`):
 
@@ -455,6 +457,8 @@ The agent kind is inferred by `detect_agent_kind()` from the configured agent/mo
 | Codex | cwd up to the nearest `.git` ancestor | cwd only |
 | Gemini | cwd up to the nearest `.git` ancestor | cwd only |
 | Unknown | cwd up to the nearest `.git` ancestor | cwd only |
+
+The `.git` ancestor check uses the same `@/nori-rs/tui/src/git_marker.rs::is_git_marker()` helper as effective CWD refreshes: a worktree `.git` file or a repository `.git` directory with `HEAD` marks a real root, while an empty `.git` directory does not change the search range.
 
 Claude's behavior follows Claude Code's documented memory loader (https://code.claude.com/docs/en/memory). Walking only to the git root would underreport which CLAUDE.md files Claude will actually load (e.g. with cwd `/tmp/bar/baz`, a `CLAUDE.md` at `/tmp/bar/.claude/` would be missed), so the displayed list would not match what the agent sees.
 

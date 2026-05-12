@@ -406,7 +406,7 @@ impl App {
                     let result = task.await;
                     let (success, error) = match result {
                         Ok(Ok(())) => (true, None),
-                        Ok(Err(e)) => (false, Some(e.to_string())),
+                        Ok(Err(e)) => (false, Some(format_mcp_oauth_error(&e))),
                         Err(e) => (false, Some(format!("OAuth task panicked: {e}"))),
                     };
                     tx.send(crate::app_event::AppEvent::McpOAuthLoginComplete {
@@ -442,6 +442,10 @@ fn mcp_oauth_login_started_message(server_name: &str, authorization_url: &str) -
     )
 }
 
+fn format_mcp_oauth_error(error: &anyhow::Error) -> String {
+    format!("{error:#}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -454,5 +458,18 @@ mod tests {
         assert!(message.contains("If the browser doesn't open automatically, visit:"));
         assert!(message.contains("https://linear.example.com/oauth"));
         assert!(message.contains("Waiting for authentication to complete"));
+    }
+
+    #[test]
+    fn mcp_oauth_error_message_includes_error_chain() {
+        let err = anyhow::anyhow!("OAuth token exchange failed: server returned 400")
+            .context("failed to handle OAuth callback");
+
+        let message = format_mcp_oauth_error(&err);
+
+        assert_eq!(
+            message,
+            "failed to handle OAuth callback: OAuth token exchange failed: server returned 400"
+        );
     }
 }

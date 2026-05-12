@@ -533,4 +533,17 @@ mod tests {
                 .contains("timed out waiting for OAuth callback"),
         );
     }
+
+    #[test]
+    fn parse_oauth_callback_decodes_linear_code_and_state() {
+        let callback = "/callback?code=6308519a-74c6-493a-84bc-0b62f65d6bd8%3AFye4xafYoqSz7AiE%3A9RbaPBdYF2ALzmJ8V1YezOvsKtQLpTtR&state=u9U31LFMBwdjKtt_zaq6qQ";
+
+        let parsed = parse_oauth_callback(callback).expect("callback should parse");
+
+        assert_eq!(
+            parsed.code,
+            "6308519a-74c6-493a-84bc-0b62f65d6bd8:Fye4xafYoqSz7AiE:9RbaPBdYF2ALzmJ8V1YezOvsKtQLpTtR"
+        );
+        assert_eq!(parsed.state, "u9U31LFMBwdjKtt_zaq6qQ");
+    }
 }
