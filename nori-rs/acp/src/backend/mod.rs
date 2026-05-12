@@ -328,6 +328,8 @@ pub struct AcpBackend {
     session_driver: Arc<Mutex<session_runtime_driver::SessionDriver>>,
     /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
+    /// OAuth credential store mode used when forwarding MCP auth to ACP agents.
+    mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
 mod helpers;

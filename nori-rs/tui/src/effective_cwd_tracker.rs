@@ -12,8 +12,8 @@ use std::time::Instant;
 
 /// Find the git repository root for a given path by walking up the directory tree.
 ///
-/// Returns the directory containing `.git` (either as a directory or a file,
-/// since git worktrees use a `.git` file pointing to the main repository).
+/// Returns the directory containing a real `.git` marker (a `.git` file for
+/// worktrees, or a `.git` directory with `HEAD` for regular repositories).
 ///
 /// Returns `None` if no git root is found or if the starting path doesn't exist.
 pub(crate) fn find_git_root(start: &Path) -> Option<PathBuf> {
@@ -26,8 +26,7 @@ pub(crate) fn find_git_root(start: &Path) -> Option<PathBuf> {
 
     loop {
         let git_marker = current.join(".git");
-        // .git can be a directory (regular repo) or a file (worktree)
-        if git_marker.is_dir() || git_marker.is_file() {
+        if git_marker.is_file() || git_marker.join("HEAD").is_file() {
             return Some(current);
         }
 

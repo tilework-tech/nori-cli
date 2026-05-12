@@ -159,8 +159,10 @@ impl AcpBackend {
                         anyhow::anyhow!("load session collector task panicked: {err}")
                     })?;
 
-                    let mcp_servers =
-                        crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+                    let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                        &config.mcp_servers,
+                        config.mcp_oauth_credentials_store_mode,
+                    );
                     let session_id =
                         connection
                             .create_session(&cwd, mcp_servers)
@@ -206,7 +208,10 @@ impl AcpBackend {
         } else {
             debug!("Agent does not support session/load — using client-side replay");
 
-            let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+            let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                &config.mcp_servers,
+                config.mcp_oauth_credentials_store_mode,
+            );
             let session_id = connection
                 .create_session(&cwd, mcp_servers)
                 .await
@@ -321,6 +326,7 @@ impl AcpBackend {
             script_timeout: config.script_timeout,
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         let runtime_backend = backend.clone();

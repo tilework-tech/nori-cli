@@ -23,6 +23,8 @@ use nori_cli::login::run_logout;
 
 use nori_tui::AppExitInfo;
 use nori_tui::Cli as TuiCli;
+use nori_tui::RESUME_HINT_LEAD;
+use nori_tui::resume_command_for_conversation;
 use nori_tui::update_action::UpdateAction;
 use owo_colors::OwoColorize;
 use std::path::PathBuf;
@@ -216,26 +218,27 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
     let AppExitInfo {
         token_usage,
         conversation_id,
+        conversation_has_activity,
         ..
     } = exit_info;
 
-    if token_usage.is_zero() {
-        return Vec::new();
+    let mut lines = Vec::new();
+    if !token_usage.is_zero() {
+        lines.push(format!(
+            "{}",
+            codex_core::protocol::FinalOutput::from(token_usage)
+        ));
     }
 
-    let mut lines = vec![format!(
-        "{}",
-        codex_core::protocol::FinalOutput::from(token_usage)
-    )];
-
-    if let Some(session_id) = conversation_id {
-        let resume_cmd = format!("nori resume {session_id}");
+    if conversation_has_activity && let Some(session_id) = conversation_id {
+        let resume_cmd = resume_command_for_conversation(&session_id);
         let command = if color_enabled {
             resume_cmd.cyan().to_string()
         } else {
             resume_cmd
         };
-        lines.push(format!("To continue this session, run {command}"));
+        lines.push(RESUME_HINT_LEAD.to_string());
+        lines.push(command);
     }
 
     lines
@@ -624,6 +627,7 @@ mod tests {
             conversation_id: conversation
                 .map(ConversationId::from_string)
                 .map(Result::unwrap),
+            conversation_has_activity: conversation.is_some(),
             update_action: None,
         }
     }
@@ -633,6 +637,41 @@ mod tests {
         let exit_info = AppExitInfo {
             token_usage: TokenUsage::default(),
             conversation_id: None,
+            conversation_has_activity: false,
+            update_action: None,
+        };
+        let lines = format_exit_messages(exit_info, false);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn format_exit_messages_includes_resume_hint_without_token_usage() {
+        let exit_info = AppExitInfo {
+            token_usage: TokenUsage::default(),
+            conversation_id: Some(
+                ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            ),
+            conversation_has_activity: true,
+            update_action: None,
+        };
+        let lines = format_exit_messages(exit_info, false);
+        assert_eq!(
+            lines,
+            vec![
+                "To continue this session, run:".to_string(),
+                "nori resume 123e4567-e89b-12d3-a456-426614174000".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn format_exit_messages_skips_resume_hint_without_activity() {
+        let exit_info = AppExitInfo {
+            token_usage: TokenUsage::default(),
+            conversation_id: Some(
+                ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            ),
+            conversation_has_activity: false,
             update_action: None,
         };
         let lines = format_exit_messages(exit_info, false);
@@ -647,8 +686,8 @@ mod tests {
             lines,
             vec![
                 "Token usage: total=2 input=0 output=2".to_string(),
-                "To continue this session, run nori resume 123e4567-e89b-12d3-a456-426614174000"
-                    .to_string(),
+                "To continue this session, run:".to_string(),
+                "nori resume 123e4567-e89b-12d3-a456-426614174000".to_string(),
             ]
         );
     }
@@ -657,8 +696,9 @@ mod tests {
     fn format_exit_messages_applies_color_when_enabled() {
         let exit_info = sample_exit_info(Some("123e4567-e89b-12d3-a456-426614174000"));
         let lines = format_exit_messages(exit_info, true);
-        assert_eq!(lines.len(), 2);
-        assert!(lines[1].contains("\u{1b}[36m"));
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[1], "To continue this session, run:");
+        assert!(lines[2].contains("\u{1b}[36m"));
     }
 
     #[test]

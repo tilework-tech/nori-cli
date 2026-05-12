@@ -1385,6 +1385,14 @@ pub struct TuiConfigToml {
 
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: Option<bool>,
+
+    /// Show rotating custom messages while the agent is working.
+    pub custom_working_messages: Option<bool>,
+
+    /// User-supplied list of working messages. When non-empty and
+    /// `custom_working_messages` is enabled, the TUI samples from this list
+    /// instead of the builtin whimsical messages.
+    pub custom_working_message_list: Option<Vec<String>>,
 }
 
 /// Resolved TUI configuration
@@ -1561,6 +1569,14 @@ pub struct NoriConfig {
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: bool,
 
+    /// Show rotating custom messages while the agent is working.
+    pub custom_working_messages: bool,
+
+    /// Optional user-supplied list of working messages. When non-empty and
+    /// `custom_working_messages` is `true`, the TUI samples from this list
+    /// instead of the builtin whimsical messages.
+    pub custom_working_message_list: Vec<String>,
+
     /// Footer segment visibility configuration.
     pub footer_segment_config: FooterSegmentConfig,
 
@@ -1653,6 +1669,8 @@ impl Default for NoriConfig {
             skillset_per_session: false,
             file_manager: None,
             pinned_plan_drawer: false,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             footer_segment_config: FooterSegmentConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),

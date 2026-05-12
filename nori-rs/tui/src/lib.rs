@@ -6,6 +6,8 @@
 use additional_dirs::add_dir_warning_message;
 use app::App;
 pub use app::AppExitInfo;
+pub use app::RESUME_HINT_LEAD;
+pub use app::resume_command_for_conversation;
 use codex_app_server_protocol::AuthMode;
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
@@ -417,6 +419,7 @@ async fn run_ratatui_app(
                     return Ok(AppExitInfo {
                         token_usage: codex_core::protocol::TokenUsage::default(),
                         conversation_id: None,
+                        conversation_has_activity: false,
                         update_action: Some(action),
                     });
                 }
@@ -456,6 +459,7 @@ async fn run_ratatui_app(
             return Ok(AppExitInfo {
                 token_usage: codex_core::protocol::TokenUsage::default(),
                 conversation_id: None,
+                conversation_has_activity: false,
                 update_action: None,
             });
         }
@@ -567,6 +571,7 @@ async fn run_ratatui_app(
                 return Ok(AppExitInfo {
                     token_usage: codex_core::protocol::TokenUsage::default(),
                     conversation_id: None,
+                    conversation_has_activity: false,
                     update_action: None,
                 });
             }
@@ -637,6 +642,7 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
     Ok(AppExitInfo {
         token_usage: codex_core::protocol::TokenUsage::default(),
         conversation_id: None,
+        conversation_has_activity: false,
         update_action: None,
     })
 }

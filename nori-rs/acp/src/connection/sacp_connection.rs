@@ -262,8 +262,9 @@ impl SacpConnection {
                                     connection: ConnectionTo<Agent>| {
                             // Translate ACP permission request to Codex approval event.
                             let event = if let Some(patch_event) =
-                                translator::permission_request_to_patch_approval_event(&request)
-                            {
+                                translator::permission_request_to_patch_approval_event(
+                                    &request, &cwd,
+                                ) {
                                 ApprovalEventType::Patch(patch_event)
                             } else {
                                 let exec_event = translator::permission_request_to_approval_event(

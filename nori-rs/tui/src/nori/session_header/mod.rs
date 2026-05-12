@@ -141,7 +141,8 @@ fn discover_all_instruction_files_with_paths(
     loop {
         chain.push(current.clone());
 
-        if git_root.is_none() && current.join(".git").exists() {
+        let git_marker = current.join(".git");
+        if git_root.is_none() && (git_marker.is_file() || git_marker.join("HEAD").is_file()) {
             git_root = Some(current.clone());
         }
 
