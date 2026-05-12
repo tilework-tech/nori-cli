@@ -31,7 +31,7 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `nori_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
 
-`NoriConfig` is also the source of truth for ACP backend diagnostics that do not have direct TUI controls yet. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without needing UI state in the TUI layer.
+`NoriConfig` is also the source of truth for ACP backend diagnostics. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
 
 The auto-worktree startup flow branches on the `AutoWorktree` enum (see `@/nori-rs/acp/docs.md`):
 
@@ -197,7 +197,7 @@ The drawer is inserted into the `FlexRenderable` layout in `ChatWidget::as_rende
 
 The config persists a boolean `pinned_plan_drawer` in `[tui]` of `config.toml`. At startup, `true` maps to `Expanded` and `false` maps to `Off`. Runtime toggling via Ctrl+O does not persist -- only the `/config` toggle persists.
 
-The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
+The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents. It also exposes the ACP wire JSONL recorder as a same-line footer hint: `Shift-Tab` toggles `[acp_proxy].enabled` through the app config persistence path, updates the open picker and slash-command status text, and applies to future ACP child subprocesses. Existing running ACP subprocesses keep the proxy setting they were spawned with.
 
 **System Info Collection** (`system_info.rs`):
 

@@ -455,7 +455,10 @@ impl AcpBackend {
                 *self.pending_compact_summary.lock().await = Some(summary.clone());
 
                 let cwd = self.cwd.clone();
-                let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&self.mcp_servers);
+                let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                    &self.mcp_servers,
+                    self.mcp_oauth_credentials_store_mode,
+                );
                 match self.connection.create_session(&cwd, mcp_servers).await {
                     Ok(new_session_id) => {
                         debug!("Created new session after compact: {:?}", new_session_id);

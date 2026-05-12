@@ -13,6 +13,9 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::text::Span;
 use std::time::Duration;
 
 mod approval_overlay;
@@ -82,6 +85,8 @@ pub(crate) struct BottomPane {
     agent_slug: String,
     /// Whether vim mode is enabled, used to configure selection view behavior.
     vim_mode_enabled: bool,
+    /// Whether ACP wire JSONL recording is enabled for future child subprocesses.
+    acp_wire_recording_enabled: bool,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -140,6 +145,10 @@ impl BottomPane {
         let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 
+        let acp_wire_recording_enabled = nori_acp::config::NoriConfig::load()
+            .map(|config| config.acp_proxy.enabled)
+            .unwrap_or(false);
+
         let mut pane = Self {
             composer,
             view_stack: Vec::new(),
@@ -158,6 +167,7 @@ impl BottomPane {
             agent_display_name,
             agent_slug,
             vim_mode_enabled: false,
+            acp_wire_recording_enabled,
         };
 
         // Set description overrides for the slash command popup so that
@@ -412,13 +422,21 @@ impl BottomPane {
 
     /// Update the agent display name used in approval dialogs and slash command descriptions.
     pub(crate) fn set_agent_display_name(&mut self, name: String) {
-        self.agent_display_name = name.clone();
-        self.composer.set_command_description_override(
+        self.agent_display_name = name;
+        self.refresh_agent_command_descriptions();
+    }
+
+    pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
+        self.acp_wire_recording_enabled = enabled;
+        self.refresh_agent_command_descriptions();
+        self.request_redraw();
+    }
+
+    fn refresh_agent_command_descriptions(&mut self) {
+        let name = self.agent_display_name.clone();
+        self.composer.set_command_description_override_line(
             crate::slash_command::SlashCommand::Agent,
-            format!(
-                "{} (current: {name})",
-                crate::slash_command::SlashCommand::Agent.description()
-            ),
+            agent_command_description(&name, self.acp_wire_recording_enabled),
         );
         self.composer.set_command_description_override(
             crate::slash_command::SlashCommand::Model,
@@ -762,6 +780,31 @@ impl BottomPane {
     }
 }
 
+fn agent_command_description(agent_name: &str, recording_enabled: bool) -> Line<'static> {
+    let command_description = crate::slash_command::SlashCommand::Agent.description();
+    let prefix = if agent_name.is_empty() {
+        command_description.to_string()
+    } else {
+        format!("{command_description} (current: {agent_name})")
+    };
+    let (symbol, status) = if recording_enabled {
+        ("●", "on")
+    } else {
+        ("○", "off")
+    };
+    let symbol_span: Span<'static> = if recording_enabled {
+        symbol.red()
+    } else {
+        symbol.into()
+    };
+
+    Line::from(vec![
+        format!("{prefix} (").dim(),
+        symbol_span,
+        format!(" rec {status})").dim(),
+    ])
+}
+
 impl Renderable for BottomPane {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         self.as_renderable().render(area, buf);
@@ -870,6 +913,49 @@ mod tests {
             r0.push(buf[(x, 0)].symbol().chars().next().unwrap_or(' '));
         }
         assert!(!r0.contains("•"), "overlay should not render above modal");
+    }
+
+    #[test]
+    fn slash_agent_description_appends_recording_status_after_current_agent() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut pane = BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Nori to do anything".to_string(),
+            disable_paste_burst: false,
+            animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
+            vertical_footer: false,
+            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            agent_display_name: "ElizACP".to_string(),
+            agent_slug: "elizacp".to_string(),
+        });
+
+        pane.set_acp_wire_recording_enabled(false);
+        for ch in ['/', 'a', 'g'] {
+            let _ = pane.composer.handle_key_event(KeyEvent::new(
+                KeyCode::Char(ch),
+                crossterm::event::KeyModifiers::NONE,
+            ));
+            std::thread::sleep(ChatComposer::recommended_paste_flush_delay());
+            let _ = pane.composer.flush_paste_burst_if_due();
+        }
+
+        let area = Rect::new(0, 0, 92, 6);
+        let mut buf = Buffer::empty(area);
+        pane.render(area, &mut buf);
+        let rendered = snapshot_buffer(&buf);
+
+        assert!(
+            rendered.contains(
+                "/agent  switch between available ACP agents (current: ElizACP) (○ rec off)"
+            ),
+            "expected /agent row to show current agent before recording status, got:\n{rendered}"
+        );
     }
 
     #[test]

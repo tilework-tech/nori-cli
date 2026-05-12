@@ -1,5 +1,6 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::text::Line;
 use ratatui::widgets::WidgetRef;
 
 use super::popup_consts::MAX_POPUP_ROWS;
@@ -35,7 +36,7 @@ pub(crate) struct CommandPopup {
     agent_commands: Vec<AgentCommandInfo>,
     agent_command_prefix: String,
     state: ScrollState,
-    description_overrides: HashMap<SlashCommand, String>,
+    description_overrides: HashMap<SlashCommand, Line<'static>>,
 }
 
 impl CommandPopup {
@@ -47,7 +48,7 @@ impl CommandPopup {
     #[cfg(test)]
     pub(crate) fn new_with_overrides(
         prompts: Vec<CustomPrompt>,
-        description_overrides: HashMap<SlashCommand, String>,
+        description_overrides: HashMap<SlashCommand, Line<'static>>,
     ) -> Self {
         Self::new_full(prompts, Vec::new(), String::new(), description_overrides)
     }
@@ -56,7 +57,7 @@ impl CommandPopup {
         mut prompts: Vec<CustomPrompt>,
         agent_commands: Vec<AgentCommandInfo>,
         agent_command_prefix: String,
-        description_overrides: HashMap<SlashCommand, String>,
+        description_overrides: HashMap<SlashCommand, Line<'static>>,
     ) -> Self {
         let builtins = built_in_slash_commands();
         // Exclude prompts that collide with builtin command names and sort by name.
@@ -229,14 +230,20 @@ impl CommandPopup {
         matches
             .into_iter()
             .map(|(item, indices, _)| {
-                let (name, description) = match item {
+                let (name, description, styled_description) = match item {
                     CommandItem::Builtin(cmd) => {
-                        let desc = self
-                            .description_overrides
-                            .get(&cmd)
-                            .cloned()
-                            .unwrap_or_else(|| cmd.description().to_string());
-                        (format!("/{}", cmd.command()), desc)
+                        let (description, styled_description) = if let Some(desc_line) =
+                            self.description_overrides.get(&cmd).cloned()
+                        {
+                            (desc_line.to_string(), Some(desc_line))
+                        } else {
+                            (cmd.description().to_string(), None)
+                        };
+                        (
+                            format!("/{}", cmd.command()),
+                            description,
+                            styled_description,
+                        )
                     }
                     CommandItem::UserPrompt(i) => {
                         let prompt = &self.prompts[i];
@@ -247,12 +254,13 @@ impl CommandPopup {
                         (
                             format!("/{PROMPTS_CMD_PREFIX}:{}", prompt.name),
                             description,
+                            None,
                         )
                     }
                     CommandItem::AgentCommand(i) => {
                         let display_key = self.agent_command_display_key(i);
                         let cmd = &self.agent_commands[i];
-                        (format!("/{display_key}"), cmd.description.clone())
+                        (format!("/{display_key}"), cmd.description.clone(), None)
                     }
                 };
                 GenericDisplayRow {
@@ -260,6 +268,7 @@ impl CommandPopup {
                     match_indices: indices.map(|v| v.into_iter().map(|i| i + 1).collect()),
                     display_shortcut: None,
                     description: Some(description),
+                    styled_description,
                 }
             })
             .collect()
@@ -452,7 +461,7 @@ mod tests {
         let mut overrides = HashMap::new();
         overrides.insert(
             SlashCommand::Agent,
-            "switch between available ACP agents (current: Claude Code)".to_string(),
+            Line::from("switch between available ACP agents (current: Claude Code)"),
         );
         let popup = CommandPopup::new_with_overrides(Vec::new(), overrides);
         let rows =
@@ -469,7 +478,7 @@ mod tests {
         let mut overrides = HashMap::new();
         overrides.insert(
             SlashCommand::Agent,
-            "switch between available ACP agents (current: Claude Code)".to_string(),
+            Line::from("switch between available ACP agents (current: Claude Code)"),
         );
         let popup = CommandPopup::new_with_overrides(Vec::new(), overrides);
         let rows =
