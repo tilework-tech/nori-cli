@@ -357,9 +357,13 @@ async fn test_session_config_options_after_session_creation() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let _session_id = conn
         .create_session(temp_dir.path(), vec![])
@@ -383,9 +387,13 @@ async fn test_set_session_config_option_replaces_connection_state() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path())
-        .await
-        .expect("spawn");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
 
     let session_id = conn
         .create_session(temp_dir.path(), vec![])
