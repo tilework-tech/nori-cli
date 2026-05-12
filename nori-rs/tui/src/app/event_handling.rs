@@ -532,11 +532,15 @@ impl App {
                             | nori_protocol::ToolKind::Delete
                             | nori_protocol::ToolKind::Move
                     ) {
-                        let mut changes =
-                            client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts);
+                        let mut changes = client_tool_cell::diff_changes_from_artifacts(
+                            &snapshot.artifacts,
+                            &cwd,
+                        );
                         if changes.is_empty() {
-                            changes =
-                                client_tool_cell::changes_from_invocation(&snapshot.invocation);
+                            changes = client_tool_cell::changes_from_invocation(
+                                &snapshot.invocation,
+                                &cwd,
+                            );
                         }
                         if changes.is_empty() {
                             None

@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 use crate::exec_command::relativize_to_home;
 use crate::render::Insets;
+use crate::render::highlight::highlight_code_to_lines_for_path;
 use crate::render::line_utils::prefix_lines;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::InsetRenderable;
@@ -126,6 +127,13 @@ enum DiffLineType {
     Context,
 }
 
+#[derive(Clone, Copy)]
+struct DiffLineLayout {
+    width: usize,
+    line_number_width: usize,
+    outer_pad: usize,
+}
+
 pub struct DiffSummary {
     changes: HashMap<PathBuf, FileChange>,
     cwd: PathBuf,
@@ -140,13 +148,13 @@ impl DiffSummary {
 impl Renderable for FileChange {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let mut lines = vec![];
-        render_change(self, &mut lines, area.width as usize);
+        render_change(self, &mut lines, area.width as usize, None);
         Paragraph::new(lines).render(area, buf);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
         let mut lines = vec![];
-        render_change(self, &mut lines, width as usize);
+        render_change(self, &mut lines, width as usize, None);
         lines.len() as u16
     }
 }
@@ -165,12 +173,39 @@ impl From<DiffSummary> for Box<dyn Renderable> {
             rows.push(Box::new(path));
             rows.push(Box::new(RtLine::from("")));
             rows.push(Box::new(InsetRenderable::new(
-                Box::new(row.change) as Box<dyn Renderable>,
+                Box::new(PathAwareFileChange {
+                    path: row.path,
+                    change: row.change,
+                }) as Box<dyn Renderable>,
                 Insets::tlbr(0, 2, 0, 0),
             )));
         }
 
         Box::new(ColumnRenderable::with(rows))
+    }
+}
+
+struct PathAwareFileChange {
+    path: PathBuf,
+    change: FileChange,
+}
+
+impl Renderable for PathAwareFileChange {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        let mut lines = vec![];
+        render_change(
+            &self.change,
+            &mut lines,
+            area.width as usize,
+            Some(&self.path),
+        );
+        Paragraph::new(lines).render(area, buf);
+    }
+
+    fn desired_height(&self, width: u16) -> u16 {
+        let mut lines = vec![];
+        render_change(&self.change, &mut lines, width as usize, Some(&self.path));
+        lines.len() as u16
     }
 }
 
@@ -292,6 +327,7 @@ fn render_changes_block(rows: Vec<Row>, wrap_cols: usize, cwd: &Path) -> Vec<RtL
             wrap_cols - prefix_width,
             prefix_width,
             &ctx,
+            Some(&r.path),
         );
         out.extend(prefix_lines(lines, "    ".into(), "    ".into()));
     }
@@ -299,8 +335,13 @@ fn render_changes_block(rows: Vec<Row>, wrap_cols: usize, cwd: &Path) -> Vec<RtL
     out
 }
 
-fn render_change(change: &FileChange, out: &mut Vec<RtLine<'static>>, width: usize) {
-    render_change_with_ctx(change, out, width, 0, &DiffRenderStyleContext::new());
+fn render_change(
+    change: &FileChange,
+    out: &mut Vec<RtLine<'static>>,
+    width: usize,
+    path: Option<&Path>,
+) {
+    render_change_with_ctx(change, out, width, 0, &DiffRenderStyleContext::new(), path);
 }
 
 fn render_change_with_ctx(
@@ -309,33 +350,40 @@ fn render_change_with_ctx(
     width: usize,
     outer_pad: usize,
     ctx: &DiffRenderStyleContext,
+    path: Option<&Path>,
 ) {
     match change {
         FileChange::Add { content } => {
             let line_number_width = line_number_width(content.lines().count());
             for (i, raw) in content.lines().enumerate() {
-                out.extend(push_wrapped_diff_line(
+                out.extend(push_wrapped_diff_line_maybe_path(
                     i + 1,
                     DiffLineType::Insert,
                     raw,
-                    width,
-                    line_number_width,
-                    outer_pad,
+                    DiffLineLayout {
+                        width,
+                        line_number_width,
+                        outer_pad,
+                    },
                     ctx,
+                    path,
                 ));
             }
         }
         FileChange::Delete { content } => {
             let line_number_width = line_number_width(content.lines().count());
             for (i, raw) in content.lines().enumerate() {
-                out.extend(push_wrapped_diff_line(
+                out.extend(push_wrapped_diff_line_maybe_path(
                     i + 1,
                     DiffLineType::Delete,
                     raw,
-                    width,
-                    line_number_width,
-                    outer_pad,
+                    DiffLineLayout {
+                        width,
+                        line_number_width,
+                        outer_pad,
+                    },
                     ctx,
+                    path,
                 ));
             }
         }
@@ -379,40 +427,49 @@ fn render_change_with_ctx(
                         match l {
                             diffy::Line::Insert(text) => {
                                 let s = text.trim_end_matches('\n');
-                                out.extend(push_wrapped_diff_line(
+                                out.extend(push_wrapped_diff_line_maybe_path(
                                     new_ln,
                                     DiffLineType::Insert,
                                     s,
-                                    width,
-                                    line_number_width,
-                                    outer_pad,
+                                    DiffLineLayout {
+                                        width,
+                                        line_number_width,
+                                        outer_pad,
+                                    },
                                     ctx,
+                                    path,
                                 ));
                                 new_ln += 1;
                             }
                             diffy::Line::Delete(text) => {
                                 let s = text.trim_end_matches('\n');
-                                out.extend(push_wrapped_diff_line(
+                                out.extend(push_wrapped_diff_line_maybe_path(
                                     old_ln,
                                     DiffLineType::Delete,
                                     s,
-                                    width,
-                                    line_number_width,
-                                    outer_pad,
+                                    DiffLineLayout {
+                                        width,
+                                        line_number_width,
+                                        outer_pad,
+                                    },
                                     ctx,
+                                    path,
                                 ));
                                 old_ln += 1;
                             }
                             diffy::Line::Context(text) => {
                                 let s = text.trim_end_matches('\n');
-                                out.extend(push_wrapped_diff_line(
+                                out.extend(push_wrapped_diff_line_maybe_path(
                                     new_ln,
                                     DiffLineType::Context,
                                     s,
-                                    width,
-                                    line_number_width,
-                                    outer_pad,
+                                    DiffLineLayout {
+                                        width,
+                                        line_number_width,
+                                        outer_pad,
+                                    },
                                     ctx,
+                                    path,
                                 ));
                                 old_ln += 1;
                                 new_ln += 1;
@@ -461,9 +518,32 @@ fn push_wrapped_diff_line(
     line_number: usize,
     kind: DiffLineType,
     text: &str,
-    width: usize,
-    line_number_width: usize,
-    outer_pad: usize,
+    layout: DiffLineLayout,
+    ctx: &DiffRenderStyleContext,
+) -> Vec<RtLine<'static>> {
+    push_wrapped_diff_line_for_path(line_number, kind, text, Path::new(""), layout, ctx)
+}
+
+fn push_wrapped_diff_line_maybe_path(
+    line_number: usize,
+    kind: DiffLineType,
+    text: &str,
+    layout: DiffLineLayout,
+    ctx: &DiffRenderStyleContext,
+    path: Option<&Path>,
+) -> Vec<RtLine<'static>> {
+    match path {
+        Some(path) => push_wrapped_diff_line_for_path(line_number, kind, text, path, layout, ctx),
+        None => push_wrapped_diff_line(line_number, kind, text, layout, ctx),
+    }
+}
+
+fn push_wrapped_diff_line_for_path(
+    line_number: usize,
+    kind: DiffLineType,
+    text: &str,
+    path: &Path,
+    layout: DiffLineLayout,
     ctx: &DiffRenderStyleContext,
 ) -> Vec<RtLine<'static>> {
     let ln_str = line_number.to_string();
@@ -471,7 +551,7 @@ fn push_wrapped_diff_line(
 
     // Reserve a fixed number of spaces (equal to the widest line number plus a
     // trailing spacer) so the sign column stays aligned across the diff block.
-    let gutter_width = line_number_width.max(1);
+    let gutter_width = layout.line_number_width.max(1);
     let prefix_cols = gutter_width + 1;
 
     let mut first = true;
@@ -494,7 +574,7 @@ fn push_wrapped_diff_line(
         // Fit the content for the current terminal row:
         // compute how many columns are available after the prefix, then split
         // at a UTF-8 character boundary so this row's chunk fits exactly.
-        let available_content_cols = width.saturating_sub(prefix_cols + 1).max(1);
+        let available_content_cols = layout.width.saturating_sub(prefix_cols + 1).max(1);
         let split_at_byte_index = remaining_text
             .char_indices()
             .nth(available_content_cols)
@@ -503,17 +583,18 @@ fn push_wrapped_diff_line(
         let (chunk, rest) = remaining_text.split_at(split_at_byte_index);
         remaining_text = rest;
 
-        let (gutter_span, content_span, used_cols) = if first {
+        let (gutter_span, sign_span, content_spans, used_cols) = if first {
             let gutter = format!("{ln_str:>gutter_width$} ");
-            let content = format!("{sign_char}{chunk}");
-            let cols = gutter.len() + content.len();
+            let sign = sign_char.to_string();
+            let content_spans = highlighted_diff_content_spans(chunk, path, line_style);
+            let cols = gutter.len() + sign.len() + chunk.len();
             first = false;
-            (gutter, content, cols)
+            (gutter, Some(sign), content_spans, cols)
         } else {
             let gutter = format!("{:gutter_width$}  ", "");
-            let content = chunk.to_string();
-            let cols = gutter.len() + content.len();
-            (gutter, content, cols)
+            let content_spans = highlighted_diff_content_spans(chunk, path, line_style);
+            let cols = gutter.len() + chunk.len();
+            (gutter, None, content_spans, cols)
         };
 
         // When a background tint is active, apply it to every span (including
@@ -522,20 +603,26 @@ fn push_wrapped_diff_line(
         let line = if let Some(bg_style) = line_bg_style {
             let gutter_style = style_gutter().patch(bg_style);
             let content_style = line_style.patch(bg_style);
-            let mut spans = vec![
-                RtSpan::styled(gutter_span, gutter_style),
-                RtSpan::styled(content_span, content_style),
-            ];
-            let pad = (width + outer_pad).saturating_sub(used_cols);
+            let mut spans = vec![RtSpan::styled(gutter_span, gutter_style)];
+            if let Some(sign) = sign_span {
+                spans.push(RtSpan::styled(sign, content_style));
+            }
+            spans.extend(content_spans.into_iter().map(|span| {
+                let style = span.style.patch(bg_style);
+                RtSpan::styled(span.content.into_owned(), style)
+            }));
+            let pad = (layout.width + layout.outer_pad).saturating_sub(used_cols);
             if pad > 0 {
                 spans.push(RtSpan::styled(" ".repeat(pad), bg_style));
             }
             RtLine::from(spans).style(bg_style)
         } else {
-            RtLine::from(vec![
-                RtSpan::styled(gutter_span, style_gutter()),
-                RtSpan::styled(content_span, line_style),
-            ])
+            let mut spans = vec![RtSpan::styled(gutter_span, style_gutter())];
+            if let Some(sign) = sign_span {
+                spans.push(RtSpan::styled(sign, line_style));
+            }
+            spans.extend(content_spans);
+            RtLine::from(spans)
         };
 
         lines.push(line);
@@ -545,6 +632,31 @@ fn push_wrapped_diff_line(
         }
     }
     lines
+}
+
+fn highlighted_diff_content_spans(
+    chunk: &str,
+    path: &Path,
+    fallback_style: Style,
+) -> Vec<RtSpan<'static>> {
+    if chunk.is_empty() {
+        return vec![RtSpan::styled(String::new(), fallback_style)];
+    }
+
+    let highlighted = highlight_code_to_lines_for_path(chunk, path);
+    let Some(line) = highlighted.into_iter().next() else {
+        return vec![RtSpan::styled(chunk.to_string(), fallback_style)];
+    };
+
+    let has_syntax_style = line
+        .spans
+        .iter()
+        .any(|span| span.style.fg.is_some() && span.style.fg != Some(Color::default()));
+    if has_syntax_style {
+        line.spans
+    } else {
+        vec![RtSpan::styled(chunk.to_string(), fallback_style)]
+    }
 }
 
 fn line_number_width(max_line_number: usize) -> usize {
@@ -633,9 +745,11 @@ mod tests {
             1,
             DiffLineType::Insert,
             long_line,
-            80,
-            line_number_width(1),
-            0,
+            DiffLineLayout {
+                width: 80,
+                line_number_width: line_number_width(1),
+                outer_pad: 0,
+            },
             &ctx,
         );
 
@@ -895,9 +1009,11 @@ mod tests {
             1,
             DiffLineType::Insert,
             "hello",
-            (total_width as usize) - prefix_width * 2,
-            1,
-            prefix_width,
+            DiffLineLayout {
+                width: (total_width as usize) - prefix_width * 2,
+                line_number_width: 1,
+                outer_pad: prefix_width,
+            },
             &ctx,
         );
 
@@ -933,9 +1049,11 @@ mod tests {
             1,
             DiffLineType::Insert,
             "hello",
-            content_width,
-            1,
-            outer_pad,
+            DiffLineLayout {
+                width: content_width,
+                line_number_width: 1,
+                outer_pad,
+            },
             &ctx,
         );
         assert_eq!(lines.len(), 1);
@@ -953,6 +1071,38 @@ mod tests {
         assert!(
             lines[0].spans[0].style.bg.is_some(),
             "expected gutter span to have background"
+        );
+    }
+
+    #[test]
+    fn diff_insert_content_uses_syntax_highlighting_when_path_is_known() {
+        #[allow(clippy::disallowed_methods)]
+        let ctx = DiffRenderStyleContext {
+            add_bg: Some(Color::Rgb(33, 58, 43)),
+            del_bg: Some(Color::Rgb(74, 34, 29)),
+        };
+
+        let lines = push_wrapped_diff_line_for_path(
+            1,
+            DiffLineType::Insert,
+            "fn main() { println!(\"hello\"); }",
+            Path::new("src/main.rs"),
+            DiffLineLayout {
+                width: 80,
+                line_number_width: 1,
+                outer_pad: 0,
+            },
+            &ctx,
+        );
+
+        assert!(
+            lines[0].spans.iter().skip(2).any(|span| {
+                span.style.fg.is_some()
+                    && span.style.fg != Some(Color::Green)
+                    && span.style.bg == ctx.add_bg
+            }),
+            "expected inserted Rust content to use syntax colors over the add background, got {:?}",
+            lines[0].spans
         );
     }
 }

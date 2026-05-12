@@ -87,7 +87,7 @@ For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` no
 
 The path is extracted from `locations[0].path` when available, falling back to parsing the title (stripping the kind prefix, e.g., `"Edit README.md"` -> `"README.md"`). Bullet styling: green bold for completed, red bold for failed, spinner for active. For failed edits, error text is extracted via `extract_error_text()` (checks `raw_output` for `"error"`, `"stderr"`, `"output"`, or bare string), with a `"(failed)"` fallback.
 
-Diff content is rendered from two sources in priority order: (1) `Artifact::Diff` entries via `diff_changes_from_artifacts()`, (2) invocation data via `changes_from_invocation()` which handles both `Invocation::FileChanges` and `Invocation::FileOperations` (Create, Update, Delete, Move). Both helpers convert `nori_protocol` types to `codex_core::protocol::FileChange` for `create_diff_summary` from `diff_render.rs`. This means completed edits show inline diffs whether the diff data arrives as artifacts or as invocation-level file changes.
+Diff content is rendered from two sources in priority order: (1) `Artifact::Diff` entries via `diff_changes_from_artifacts()`, (2) invocation data via `changes_from_invocation()` which handles both `Invocation::FileChanges` and `Invocation::FileOperations` (Create, Update, Delete, Move). Both helpers convert `nori_protocol` types to `codex_core::protocol::FileChange` for `create_diff_summary` from `diff_render.rs`. Update and move diffs use the real `cwd` to preserve file-context line numbers when the edited text can be found on disk, so completed edits show inline diffs whether the diff data arrives as artifacts or as invocation-level file changes.
 
 **Header promotion**: For all Edit/Delete/Move tools (both single-file and multi-file), the `DiffSummary`'s first header line is promoted to the outer header position. For a single-file edit this is the verb+path+line counts (e.g., "Edited README.md (+1 -1)"); for a multi-file edit this is the aggregate header (e.g., "Edited 2 files (+2 -2)"). The promoted line's "• " bullet prefix is stripped and replaced with the phase-aware bullet styling (green bold for completed, red bold for failed). For Move tools, the "Edited" verb span is swapped to "Moved" during header construction. This produces exactly one header line per edit cell. Diff content lines below the header come directly from `create_diff_summary`, which applies a single 4-space `prefix_lines()` indent — matching the indentation used by `PatchHistoryCell` in the non-ACP path. The `prefix_lines()` helper (from `@/nori-rs/tui/src/render/line_utils.rs`) propagates `Line.style.bg` onto the indent prefix span so that diff background tints (add/delete colors) extend edge-to-edge across the full terminal width.
 
@@ -205,7 +205,8 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 |-------|--------|
 | `git_branch` | Git repository branch name |
 | `active_skillsets` | Active skillsets from `nori-skillsets list-active` (one name per line; returns all skillsets active for the current directory). Empty vec if the command is unavailable or fails. |
-| `git_lines_added` / `git_lines_removed` | Git diff statistics relative to the merge-base with the default branch (PR-like stats) |
+| `git_lines_added` / `git_lines_removed` | Git working tree statistics relative to `HEAD` for tracked files |
+| `git_has_untracked` | Whether untracked, non-ignored files are present |
 | `is_worktree` | Whether CWD is a git worktree |
 | `worktree_name` | Last path component of CWD when parent directory is `.worktrees`; used to display the immutable worktree directory identifier in the footer |
 | `transcript_location` | Discovered transcript path and token usage when running within an agent environment |
@@ -213,15 +214,11 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 
 The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
 
-**Git Diff Base Resolution** (`system_info.rs: resolve_diff_base()`):
-
-The git diff stats are computed against the merge-base with the default branch, so they reflect what a PR would show rather than only uncommitted changes. The resolution order is:
-1. `origin/HEAD` via `git symbolic-ref` -- detects the remote's default branch name
-2. Falls back to checking if local `main` or `master` branches exist
-3. Computes `git merge-base HEAD <branch>` to find the common ancestor
-4. Falls back to `HEAD` if no default branch can be resolved (shows only uncommitted changes)
-
-Untracked files (via `git ls-files --others --exclude-standard`) are also counted: their line counts are added to the insertion total. Binary files (non-UTF-8) are silently skipped. This means the statusline stats include new files that haven't been `git add`ed yet.
+The footer git stats are intentionally scoped to uncommitted tracked-file
+changes so the statusline stays compact in long-lived branches or repositories
+with large histories. Untracked, non-ignored files render as a compact red `!`
+alert instead of contributing line counts. The `/diff` command still produces a
+PR-like diff when users ask for the full change context.
 
 Two collection methods are provided:
 - `collect_for_directory()` - Basic collection without first-message matching (test-only)
