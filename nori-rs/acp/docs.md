@@ -142,6 +142,8 @@ When enabled, the resolved `AcpProxyConfig` stores logs under `$NORI_HOME/acp-wi
 
 The connection layer uses `sacp::Lines` to observe raw newline-delimited JSON-RPC messages at the transport boundary before or after SACP parsing. Each child process gets a distinct JSONL file named from the launch timestamp, child PID, and sanitized agent slug. Records include the timestamp, direction (`client_to_agent` or `agent_to_client`), agent slug, child PID, and the parsed JSON message. If a line cannot be parsed as JSON, the logger preserves the raw line and parse error instead of disrupting the live session.
 
+The TUI's `/agent` picker can persistently toggle this setting with `Shift-Tab`. Because the proxy wraps subprocess transports at spawn time, the toggle is intentionally a future-process setting: newly spawned ACP child subprocesses observe the updated config, while already-running subprocesses continue with the proxy state they started with.
+
 **Agent Config Field Resolution:**
 
 | Field | Purpose | Persistence |

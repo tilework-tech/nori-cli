@@ -843,6 +843,10 @@ impl App {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
             }
             #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigAcpWireRecording(enabled) => {
+                self.persist_acp_wire_recording_setting(enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigCustomWorkingMessages(enabled) => {
                 self.persist_custom_working_messages_setting(enabled).await;
             }

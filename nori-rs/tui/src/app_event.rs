@@ -347,6 +347,10 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigPinnedPlanDrawer(bool),
 
+    /// Set ACP wire JSONL recording for future ACP child subprocesses.
+    #[cfg(feature = "nori-config")]
+    SetConfigAcpWireRecording(bool),
+
     /// Set the TUI custom working messages config setting.
     #[cfg(feature = "nori-config")]
     SetConfigCustomWorkingMessages(bool),

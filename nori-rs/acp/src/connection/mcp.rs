@@ -27,11 +27,14 @@ use tracing::warn;
 /// For HTTP servers without a `bearer_token_env_var`, stored OAuth tokens
 /// (from keyring or credential file) are loaded and injected as an
 /// `Authorization: Bearer` header.
-pub fn to_sacp_mcp_servers(servers: &HashMap<String, McpServerConfig>) -> Vec<acp::McpServer> {
+pub fn to_sacp_mcp_servers(
+    servers: &HashMap<String, McpServerConfig>,
+    oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+) -> Vec<acp::McpServer> {
     let mut result: Vec<acp::McpServer> = servers
         .iter()
         .filter(|(_, config)| config.enabled)
-        .map(|(name, config)| convert_one(name, config))
+        .map(|(name, config)| convert_one(name, config, oauth_credentials_store_mode))
         .collect();
     // Sort for deterministic ordering (HashMap iteration is random).
     result.sort_by(|a, b| mcp_server_name(a).cmp(mcp_server_name(b)));
@@ -47,7 +50,11 @@ fn mcp_server_name(server: &acp::McpServer) -> &str {
     }
 }
 
-fn convert_one(name: &str, config: &McpServerConfig) -> acp::McpServer {
+fn convert_one(
+    name: &str,
+    config: &McpServerConfig,
+    oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+) -> acp::McpServer {
     match &config.transport {
         McpServerTransportConfig::Stdio {
             command,
@@ -133,7 +140,7 @@ fn convert_one(name: &str, config: &McpServerConfig) -> acp::McpServer {
 
             // Fall back to stored OAuth tokens if no bearer token env var was resolved.
             if !has_bearer {
-                match load_oauth_tokens(name, url, OAuthCredentialsStoreMode::Auto) {
+                match load_oauth_tokens(name, url, oauth_credentials_store_mode) {
                     Ok(Some(tokens)) => {
                         if let Some(expires_at) = tokens.expires_at {
                             let now_ms = std::time::SystemTime::now()
@@ -213,6 +220,10 @@ mod tests {
             enabled_tools: None,
             disabled_tools: None,
         }
+    }
+
+    fn to_sacp_mcp_servers(servers: &HashMap<String, McpServerConfig>) -> Vec<acp::McpServer> {
+        super::to_sacp_mcp_servers(servers, OAuthCredentialsStoreMode::Auto)
     }
 
     #[test]
@@ -425,7 +436,7 @@ mod tests {
             http_config(server_url, None, None, None),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = super::to_sacp_mcp_servers(&servers, OAuthCredentialsStoreMode::File);
         assert_eq!(result.len(), 1);
 
         match &result[0] {

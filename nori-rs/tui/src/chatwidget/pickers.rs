@@ -7,11 +7,35 @@ impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
+        let recording_enabled = nori_acp::config::NoriConfig::load()
+            .map(|config| config.acp_proxy.enabled)
+            .unwrap_or(false);
+        self.bottom_pane
+            .set_acp_wire_recording_enabled(recording_enabled);
         let params = crate::nori::agent_picker::agent_picker_params(
             &current_model,
             self.app_event_tx.clone(),
+            recording_enabled,
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
+        self.bottom_pane.set_acp_wire_recording_enabled(enabled);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn replace_agent_popup(&mut self, recording_enabled: bool) {
+        if !self.bottom_pane.has_active_view() {
+            return;
+        }
+        let params = crate::nori::agent_picker::agent_picker_params(
+            &self.config.model,
+            self.app_event_tx.clone(),
+            recording_enabled,
+        );
+        self.bottom_pane.replace_selection_view(params);
     }
 
     /// Show a selection view in the bottom pane.
