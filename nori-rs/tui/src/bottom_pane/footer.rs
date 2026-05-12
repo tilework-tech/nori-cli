@@ -36,6 +36,7 @@ pub(crate) struct FooterProps {
     pub(crate) nori_version_source: Option<NoriVersionSource>,
     pub(crate) git_lines_added: Option<i32>,
     pub(crate) git_lines_removed: Option<i32>,
+    pub(crate) git_has_untracked: bool,
     /// Whether the current directory is a git worktree (not the main repo).
     /// When true, the git branch indicator is shown in orange instead of yellow.
     pub(crate) is_worktree: bool,
@@ -350,16 +351,27 @@ fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
         ]));
     }
 
-    // Add git stats if available and enabled: "+10 -3" (green for added, red for removed)
-    if config.is_enabled(FooterSegment::GitStats)
-        && let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
-        && (added > 0 || removed > 0)
-    {
-        segments.push(Line::from(vec![
-            Span::from(format!("+{added}")).green(),
-            Span::from(" ").dim(),
-            Span::from(format!("-{removed}")).red(),
-        ]));
+    // Add git stats if available and enabled: "+10 -3" plus "!" for untracked files.
+    if config.is_enabled(FooterSegment::GitStats) {
+        let mut spans = Vec::new();
+        if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
+            && (added > 0 || removed > 0)
+        {
+            spans.extend([
+                Span::from(format!("+{added}")).green(),
+                Span::from(" ").dim(),
+                Span::from(format!("-{removed}")).red(),
+            ]);
+        }
+        if props.git_has_untracked {
+            if !spans.is_empty() {
+                spans.push(Span::from(" ").dim());
+            }
+            spans.push(Span::from("!").red().bold());
+        }
+        if !spans.is_empty() {
+            segments.push(Line::from(spans));
+        }
     }
 
     // Add context window info if available and enabled: "Context 27% (34K)".
@@ -644,6 +656,7 @@ mod tests {
             nori_version_source: None,
             git_lines_added: None,
             git_lines_removed: None,
+            git_has_untracked: false,
             is_worktree: false,
             input_tokens: None,
             output_tokens: None,
@@ -791,6 +804,18 @@ mod tests {
                 git_branch: Some("main".to_string()),
                 git_lines_added: Some(5),
                 git_lines_removed: Some(2),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_with_untracked_alert() {
+        snapshot_footer(
+            "footer_with_untracked_alert",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                git_has_untracked: true,
                 ..default_props()
             },
         );

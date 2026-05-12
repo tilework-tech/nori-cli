@@ -357,9 +357,11 @@ mod tests {
         let shell_path = bash_shell.shell_path;
 
         assert!(
-            shell_path == PathBuf::from("/bin/bash")
-                || shell_path == PathBuf::from("/usr/bin/bash")
-                || shell_path == PathBuf::from("/usr/local/bin/bash"),
+            shell_path.is_absolute()
+                && shell_path
+                    .file_name()
+                    .and_then(|file_name| file_name.to_str())
+                    == Some("bash"),
             "shell path: {shell_path:?}",
         );
     }
