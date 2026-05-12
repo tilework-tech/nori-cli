@@ -64,34 +64,43 @@ use crate::history_cell::UpdateAvailableHistoryCell;
 
 const GPT_5_1_MIGRATION_AUTH_MODES: [AuthMode; 2] = [AuthMode::ChatGPT, AuthMode::ApiKey];
 const GPT_5_1_CODEX_MIGRATION_AUTH_MODES: [AuthMode; 1] = [AuthMode::ChatGPT];
+pub const RESUME_HINT_LEAD: &str = "To continue this session, run:";
 
 #[derive(Debug, Clone)]
 pub struct AppExitInfo {
     pub token_usage: TokenUsage,
     pub conversation_id: Option<ConversationId>,
+    pub conversation_has_activity: bool,
     pub update_action: Option<UpdateAction>,
 }
 
 fn session_summary(
     token_usage: TokenUsage,
     conversation_id: Option<ConversationId>,
+    conversation_has_activity: bool,
 ) -> Option<SessionSummary> {
-    if token_usage.is_zero() {
+    let usage_line = (!token_usage.is_zero()).then(|| FinalOutput::from(token_usage).to_string());
+    let resume_command = conversation_id
+        .filter(|_| conversation_has_activity)
+        .map(|conversation_id| resume_command_for_conversation(&conversation_id));
+
+    if usage_line.is_none() && resume_command.is_none() {
         return None;
     }
 
-    let usage_line = FinalOutput::from(token_usage).to_string();
-    let resume_command =
-        conversation_id.map(|conversation_id| format!("nori resume {conversation_id}"));
     Some(SessionSummary {
         usage_line,
         resume_command,
     })
 }
 
+pub fn resume_command_for_conversation(conversation_id: &ConversationId) -> String {
+    format!("nori resume {conversation_id}")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SessionSummary {
-    usage_line: String,
+    usage_line: Option<String>,
     resume_command: Option<String>,
 }
 
@@ -187,6 +196,7 @@ async fn handle_model_migration_prompt_if_needed(
                 return Some(AppExitInfo {
                     token_usage: TokenUsage::default(),
                     conversation_id: None,
+                    conversation_has_activity: false,
                     update_action: None,
                 });
             }
@@ -481,6 +491,7 @@ impl App {
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             conversation_id: app.chat_widget.conversation_id(),
+            conversation_has_activity: app.chat_widget.session_stats().has_activity(),
             update_action: app.pending_update_action,
         })
     }

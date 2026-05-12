@@ -370,6 +370,17 @@ pub struct Tui {
     /// Defaults to `true`.
     #[serde(default = "default_true")]
     pub animations: bool,
+
+    /// Show rotating custom messages while the agent is working.
+    /// Defaults to `true`.
+    #[serde(default = "default_true")]
+    pub custom_working_messages: bool,
+
+    /// User-supplied list of working messages. When non-empty and
+    /// `custom_working_messages` is `true`, the TUI samples from this list
+    /// instead of the builtin whimsical messages. Defaults to empty.
+    #[serde(default)]
+    pub custom_working_message_list: Vec<String>,
 }
 
 const fn default_true() -> bool {

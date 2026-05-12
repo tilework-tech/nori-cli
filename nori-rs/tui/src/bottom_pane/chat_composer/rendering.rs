@@ -38,6 +38,7 @@ impl ChatComposer {
             nori_version_source,
             git_lines_added,
             git_lines_removed,
+            git_has_untracked,
         ) = if let Some(ref info) = self.system_info {
             (
                 info.git_branch.clone(),
@@ -46,9 +47,10 @@ impl ChatComposer {
                 info.nori_version_source,
                 info.git_lines_added,
                 info.git_lines_removed,
+                info.git_has_untracked,
             )
         } else {
-            (None, Vec::new(), None, None, None, None)
+            (None, Vec::new(), None, None, None, None, false)
         };
 
         // Extract token breakdown and agent kind from transcript location
@@ -110,6 +112,7 @@ impl ChatComposer {
             nori_version_source,
             git_lines_added,
             git_lines_removed,
+            git_has_untracked,
             is_worktree: self
                 .system_info
                 .as_ref()

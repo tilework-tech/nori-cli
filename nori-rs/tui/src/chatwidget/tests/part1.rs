@@ -473,3 +473,25 @@ fn slash_init_skips_when_project_doc_exists() {
         "existing instructions"
     );
 }
+
+#[test]
+fn on_task_started_respects_custom_working_messages_disabled() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.custom_working_messages = false;
+    chat.config.custom_working_message_list.clear();
+
+    chat.on_task_started();
+
+    assert_eq!(chat.current_status_header, "Working");
+}
+
+#[test]
+fn on_task_started_uses_user_list_when_provided() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.custom_working_messages = true;
+    chat.config.custom_working_message_list = vec!["only one".to_string()];
+
+    chat.on_task_started();
+
+    assert_eq!(chat.current_status_header, "only one");
+}

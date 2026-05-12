@@ -948,6 +948,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
+            // Resume hint: "nori resume 019bb411-..." -> "nori resume [SESSION_ID]"
+            if let Some(result) = replace_after_marker(&line, "nori resume", "[SESSION_ID]") {
+                line = result;
+            }
+
             // Git diff stats in footer: strip "· +N -M " segment
             // The stats vary based on repo state and would cause flaky snapshots
             line = strip_git_stats_segment(&line);

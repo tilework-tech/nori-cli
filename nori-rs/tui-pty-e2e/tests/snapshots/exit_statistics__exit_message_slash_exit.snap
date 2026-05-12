@@ -20,3 +20,5 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 │  Subagents Used                       │
 │    (none)                             │
 ╰───────────────────────────────────────╯
+To continue this session, run:
+nori resume [SESSION_ID]

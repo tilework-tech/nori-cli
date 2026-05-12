@@ -18,6 +18,11 @@ impl ChatWidget {
         self.bottom_pane.set_vertical_footer(enabled);
     }
 
+    pub(crate) fn set_custom_working_messages(&mut self, enabled: bool) {
+        self.config.custom_working_messages = enabled;
+        self.bottom_pane.set_custom_working_messages(enabled);
+    }
+
     /// Set the plan drawer mode. The latest plan state is always retained so
     /// that switching to a visible mode shows the most recent plan immediately.
     pub(crate) fn set_plan_drawer_mode(&mut self, mode: PlanDrawerMode) {

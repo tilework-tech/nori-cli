@@ -391,7 +391,7 @@ fn apply_approval_preset_updates_app_widget_and_backend_for_full_access() {
 
 #[test]
 fn session_summary_skip_zero_usage() {
-    assert!(session_summary(TokenUsage::default(), None).is_none());
+    assert!(session_summary(TokenUsage::default(), None, false).is_none());
 }
 
 #[test]
@@ -404,15 +404,35 @@ fn session_summary_includes_resume_hint() {
     };
     let conversation = ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap();
 
-    let summary = session_summary(usage, Some(conversation)).expect("summary");
+    let summary = session_summary(usage, Some(conversation), true).expect("summary");
     assert_eq!(
         summary.usage_line,
-        "Token usage: total=12 input=10 output=2"
+        Some("Token usage: total=12 input=10 output=2".to_string())
     );
     assert_eq!(
         summary.resume_command,
         Some("nori resume 123e4567-e89b-12d3-a456-426614174000".to_string())
     );
+}
+
+#[test]
+fn session_summary_includes_resume_hint_without_token_usage() {
+    let conversation = ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap();
+
+    let summary =
+        session_summary(TokenUsage::default(), Some(conversation), true).expect("summary");
+    assert_eq!(summary.usage_line, None);
+    assert_eq!(
+        summary.resume_command,
+        Some("nori resume 123e4567-e89b-12d3-a456-426614174000".to_string())
+    );
+}
+
+#[test]
+fn session_summary_skips_resume_hint_without_activity() {
+    let conversation = ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap();
+
+    assert!(session_summary(TokenUsage::default(), Some(conversation), false).is_none());
 }
 
 #[test]

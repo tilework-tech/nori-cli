@@ -320,6 +320,10 @@ pub(crate) enum AppEvent {
     #[cfg(feature = "nori-config")]
     SetConfigPinnedPlanDrawer(bool),
 
+    /// Set the TUI custom working messages config setting.
+    #[cfg(feature = "nori-config")]
+    SetConfigCustomWorkingMessages(bool),
+
     /// Open the worktree choice modal when enabling per-session skillsets.
     #[cfg(feature = "nori-config")]
     OpenSkillsetPerSessionWorktreeChoice,
