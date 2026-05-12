@@ -259,7 +259,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 |---------|-------------|
 | `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
 | `/model` | Choose model (dynamically shows current agent/model name) |
-| `/settings` | Configure live ACP session settings exposed by the current agent |
+| `/config` | Configure live ACP session settings exposed by the current agent |
 | `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
 | `/settings` | Configure Nori CLI settings (pinned plan drawer, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
 | `/browse` | Open a terminal file manager to browse and edit files |

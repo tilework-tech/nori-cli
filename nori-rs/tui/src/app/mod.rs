@@ -236,7 +236,7 @@ pub(crate) struct App {
     /// prompt submission. This avoids disrupting active prompt turns.
     pending_agent: Option<PendingAgentSelection>,
 
-    /// Ephemeral per-session loop count override (set via /config menu).
+    /// Ephemeral per-session loop count override (set via /settings menu).
     /// Outer Option: whether overridden; inner Option<i32>: the value.
     #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,

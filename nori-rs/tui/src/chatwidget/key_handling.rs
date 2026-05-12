@@ -168,7 +168,7 @@ impl ChatWidget {
                     }
                     None => {
                         self.add_error_message(
-                            "No file manager configured. Use /config to set one.".to_string(),
+                            "No file manager configured. Use /settings to set one.".to_string(),
                         );
                     }
                 },

@@ -223,6 +223,12 @@ mod tests {
     }
 
     #[test]
+    fn legacy_session_config_string_is_not_a_command() {
+        // Guards the rename: the live ACP picker is now `/config`, not `/session-config`.
+        assert!("session-config".parse::<SlashCommand>().is_err());
+    }
+
+    #[test]
     fn first_prompt_visible_in_commands() {
         let commands = built_in_slash_commands();
         let has_first_prompt = commands

@@ -414,7 +414,7 @@ pub(crate) struct ChatWidget {
     loop_remaining: Option<i32>,
     // Loop mode state: total iterations configured
     loop_total: Option<i32>,
-    // Ephemeral per-session override for loop_count (set via /config menu).
+    // Ephemeral per-session override for loop_count (set via /settings menu).
     // Outer Option: whether overridden; inner Option<i32>: the value.
     #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,
