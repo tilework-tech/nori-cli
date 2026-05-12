@@ -94,6 +94,21 @@ pub struct AcpModelState {
     pub available_models: Vec<acp::ModelInfo>,
 }
 
+/// Session config state captured from ACP session setup and updates.
+///
+/// This stores the complete current `configOptions` snapshot for the active
+/// session. ACP responses and notifications replace the full list.
+#[derive(Debug, Clone, Default)]
+pub struct AcpSessionConfigState {
+    pub config_options: Vec<acp::SessionConfigOption>,
+}
+
+impl AcpSessionConfigState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl AcpModelState {
     /// Create a new empty model state
     pub fn new() -> Self {

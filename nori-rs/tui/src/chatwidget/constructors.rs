@@ -25,7 +25,6 @@ impl ChatWidget {
             let (op_tx, _) = tokio::sync::mpsc::unbounded_channel();
             SpawnAgentResult {
                 op_tx,
-                #[cfg(feature = "unstable")]
                 acp_handle: None,
             }
         } else {
@@ -95,7 +94,6 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
@@ -210,7 +208,6 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
             session_stats: SessionStats::new(),
             login_handler: None,
@@ -251,9 +248,6 @@ impl ChatWidget {
     pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
         let spawn_result = spawn_agent(config, app_event_tx, None);
         self.codex_op_tx = spawn_result.op_tx;
-        #[cfg(feature = "unstable")]
-        {
-            self.acp_handle = spawn_result.acp_handle;
-        }
+        self.acp_handle = spawn_result.acp_handle;
     }
 }

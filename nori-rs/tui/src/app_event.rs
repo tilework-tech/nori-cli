@@ -5,6 +5,7 @@ use codex_core::protocol::ConversationPathResponseEvent;
 use codex_core::protocol::Event;
 use codex_core::protocol::RateLimitSnapshot;
 use codex_file_search::FileMatch;
+use nori_acp::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
@@ -232,6 +233,32 @@ pub(crate) enum AppEvent {
         /// The display name for UI feedback
         display_name: String,
         /// Error message on failure
+        error: Option<String>,
+    },
+
+    /// Open the generic ACP session config picker.
+    OpenAcpSessionConfigPicker {
+        config_options: Vec<SessionConfigOption>,
+    },
+
+    /// Open the value picker for a specific ACP session config option.
+    OpenAcpSessionConfigValuePicker {
+        option: SessionConfigOption,
+    },
+
+    /// Set an ACP session config option value.
+    SetAcpSessionConfigOption {
+        config_id: String,
+        value: String,
+        option_name: String,
+        value_name: String,
+    },
+
+    /// Result of setting an ACP session config option.
+    AcpSessionConfigSetResult {
+        success: bool,
+        option_name: String,
+        value_name: String,
         error: Option<String>,
     },
 

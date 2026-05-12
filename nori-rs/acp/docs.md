@@ -245,7 +245,7 @@ The `FileManager` enum (`types/mod.rs`) represents supported terminal file manag
 - `chooser_args(output_path)` -- CLI arguments that put the file manager into chooser mode, writing the selected file path to a temp file. Each file manager uses a different flag convention (e.g. vifm uses `--choose-files`, ranger uses `--choosefile=`, lf uses `-selection-path`, nnn uses `-p`)
 - `display_name()` -- human-friendly label for the config picker
 
-The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/config` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
+The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
 
 Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
 
@@ -280,6 +280,16 @@ The model is only applied if:
 - The session was successfully created
 
 Failures to apply the default model (e.g., model unavailable, API error) produce warnings but do not block session startup. When users switch models via `/model` command, the TUI persists the selection by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md`).
+
+**Live Session Configuration** (`connection/sacp_connection.rs`, `backend/submit_and_ops.rs`):
+
+ACP agents can expose runtime session configuration through `NewSessionResponse.config_options`, `LoadSessionResponse.config_options`, idle `SessionUpdate::ConfigOptionUpdate` notifications, and the `session/set_config_option` RPC. `SacpConnection` owns the latest live config snapshot in `AcpSessionConfigState`, updates it when a session is created/loaded or when config-option notifications arrive, and replaces it with the full response snapshot after `set_config_option()`.
+
+This first implementation is deliberately live-session only:
+- `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
+- `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
+- No config form is shown during `/agent` switching yet.
+- No ACP session config selections are persisted to `config.toml` yet.
 
 **Hooks System** (`config/types/mod.rs`, `hooks.rs`, `backend/mod.rs`):
 

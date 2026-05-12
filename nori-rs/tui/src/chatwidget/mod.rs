@@ -118,7 +118,6 @@ use self::interrupts::InterruptManager;
 mod pending_exec_cells;
 use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
-#[cfg(feature = "unstable")]
 pub(crate) use self::agent::AcpAgentHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
@@ -402,8 +401,7 @@ pub(crate) struct ChatWidget {
     // Whether SessionConfigured has been received for this widget.
     // Used with expected_agent to filter events from previous agents.
     session_configured_received: bool,
-    // ACP agent handle for model switching (only present in ACP mode)
-    #[cfg(feature = "unstable")]
+    // ACP agent handle for session config and model switching (only present in ACP mode)
     acp_handle: Option<AcpAgentHandle>,
     // Session statistics tracking
     session_stats: SessionStats,
@@ -416,7 +414,7 @@ pub(crate) struct ChatWidget {
     loop_remaining: Option<i32>,
     // Loop mode state: total iterations configured
     loop_total: Option<i32>,
-    // Ephemeral per-session override for loop_count (set via /config menu).
+    // Ephemeral per-session override for loop_count (set via /settings menu).
     // Outer Option: whether overridden; inner Option<i32>: the value.
     #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,

@@ -713,6 +713,44 @@ impl App {
                         .add_info_message(format!("Failed to switch model: {error_msg}"), None);
                 }
             }
+            AppEvent::OpenAcpSessionConfigPicker { config_options } => {
+                self.chat_widget
+                    .open_acp_session_config_picker(config_options);
+            }
+            AppEvent::OpenAcpSessionConfigValuePicker { option } => {
+                self.chat_widget
+                    .open_acp_session_config_value_picker(option);
+            }
+            AppEvent::SetAcpSessionConfigOption {
+                config_id,
+                value,
+                option_name,
+                value_name,
+            } => {
+                self.chat_widget.set_acp_session_config_option(
+                    config_id,
+                    value,
+                    option_name,
+                    value_name,
+                );
+            }
+            AppEvent::AcpSessionConfigSetResult {
+                success,
+                option_name,
+                value_name,
+                error,
+            } => {
+                if success {
+                    self.chat_widget
+                        .add_info_message(format!("{option_name} set to: {value_name}"), None);
+                } else {
+                    let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
+                    self.chat_widget.add_info_message(
+                        format!("Failed to set {option_name}: {error_msg}"),
+                        None,
+                    );
+                }
+            }
             AppEvent::LoginComplete { success } => {
                 self.chat_widget.handle_login_complete(success);
             }
