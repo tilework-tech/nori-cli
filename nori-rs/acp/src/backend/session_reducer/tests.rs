@@ -803,3 +803,129 @@ fn usage_update_is_accepted_while_idle_and_emits_info_event() {
             if info.kind == nori_protocol::SessionUpdateKind::Usage
     )));
 }
+
+// =========================================================================
+// Orphan-update warning de-duplication
+// =========================================================================
+
+fn orphan_tool_update(call_id: &'static str) -> acp::SessionUpdate {
+    acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        call_id,
+        acp::ToolCallUpdateFields::new()
+            .title("Read Cargo.toml")
+            .kind(acp::ToolKind::Read)
+            .status(acp::ToolCallStatus::Completed)
+            .raw_input(serde_json::json!({ "path": "Cargo.toml" })),
+    ))
+}
+
+fn count_orphan_warnings(events: &[ClientEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| match e {
+            ClientEvent::Warning(w) => w
+                .message
+                .contains("Received request-owned content update while no request is active"),
+            _ => false,
+        })
+        .count()
+}
+
+fn count_tool_snapshots(events: &[ClientEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| matches!(e, ClientEvent::ToolSnapshot(_)))
+        .count()
+}
+
+#[test]
+fn orphan_warning_is_emitted_only_once_per_burst() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    let first = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-1")),
+        &mut norm,
+    );
+    let second = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-2")),
+        &mut norm,
+    );
+    let third = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-3")),
+        &mut norm,
+    );
+
+    let warnings = count_orphan_warnings(&first.events)
+        + count_orphan_warnings(&second.events)
+        + count_orphan_warnings(&third.events);
+    assert_eq!(
+        warnings, 1,
+        "expected exactly one orphan warning across the burst"
+    );
+
+    let snapshots = count_tool_snapshots(&first.events)
+        + count_tool_snapshots(&second.events)
+        + count_tool_snapshots(&third.events);
+    assert_eq!(
+        snapshots, 3,
+        "every orphan update should still produce a tool snapshot"
+    );
+}
+
+#[test]
+fn orphan_warning_resets_when_a_new_prompt_starts() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    // First burst while idle.
+    let first = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-1")),
+        &mut norm,
+    );
+    let second = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-2")),
+        &mut norm,
+    );
+    assert_eq!(
+        count_orphan_warnings(&first.events) + count_orphan_warnings(&second.events),
+        1
+    );
+
+    // Start a new prompt and finalize it back to idle.
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+    reduce(
+        &mut rt,
+        InboundEvent::PromptResponse {
+            stop_reason: acp::StopReason::EndTurn,
+        },
+        &mut norm,
+    );
+    assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
+
+    // Second burst after the new request — warning should fire again.
+    let third = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-3")),
+        &mut norm,
+    );
+    let fourth = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-4")),
+        &mut norm,
+    );
+    assert_eq!(
+        count_orphan_warnings(&third.events) + count_orphan_warnings(&fourth.events),
+        1,
+        "a new prompt should reset the burst window so the warning fires again"
+    );
+}

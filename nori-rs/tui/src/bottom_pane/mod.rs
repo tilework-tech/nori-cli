@@ -68,6 +68,8 @@ pub(crate) struct BottomPane {
     ctrl_c_quit_hint: bool,
     esc_backtrack_hint: bool,
     animations_enabled: bool,
+    custom_working_messages: bool,
+    custom_working_message_list: Vec<String>,
 
     /// Inline status indicator shown above the composer while a task is running.
     status: Option<StatusIndicatorWidget>,
@@ -90,6 +92,8 @@ pub(crate) struct BottomPaneParams {
     pub(crate) placeholder_text: String,
     pub(crate) disable_paste_burst: bool,
     pub(crate) animations_enabled: bool,
+    pub(crate) custom_working_messages: bool,
+    pub(crate) custom_working_message_list: Vec<String>,
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
     pub(crate) agent_display_name: String,
@@ -106,6 +110,8 @@ impl BottomPane {
             placeholder_text,
             disable_paste_burst,
             animations_enabled,
+            custom_working_messages,
+            custom_working_message_list,
             vertical_footer,
             footer_segment_config,
             agent_display_name,
@@ -146,6 +152,8 @@ impl BottomPane {
             queued_user_messages: QueuedUserMessages::new(),
             esc_backtrack_hint: false,
             animations_enabled,
+            custom_working_messages,
+            custom_working_message_list,
             context_window_percent: None,
             agent_display_name,
             agent_slug,
@@ -350,6 +358,8 @@ impl BottomPane {
                         self.app_event_tx.clone(),
                         self.frame_requester.clone(),
                         self.animations_enabled,
+                        self.custom_working_messages,
+                        self.custom_working_message_list.clone(),
                     ));
                 }
                 if let Some(status) = self.status.as_mut() {
@@ -376,6 +386,8 @@ impl BottomPane {
                 self.app_event_tx.clone(),
                 self.frame_requester.clone(),
                 self.animations_enabled,
+                self.custom_working_messages,
+                self.custom_working_message_list.clone(),
             ));
             self.request_redraw();
         }
@@ -420,6 +432,17 @@ impl BottomPane {
     /// Set the vertical footer layout flag.
     pub(crate) fn set_vertical_footer(&mut self, vertical_footer: bool) {
         self.composer.set_vertical_footer(vertical_footer);
+    }
+
+    pub(crate) fn set_custom_working_messages(&mut self, enabled: bool) {
+        self.custom_working_messages = enabled;
+        if let Some(status) = self.status.as_mut() {
+            status.update_header(crate::status_indicator_widget::pick_status_message(
+                enabled,
+                &self.custom_working_message_list,
+            ));
+            self.request_redraw();
+        }
     }
 
     /// Update the hotkey configuration used by the textarea for editing bindings.
@@ -799,6 +822,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
@@ -824,6 +849,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
@@ -857,6 +884,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
@@ -931,6 +960,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
@@ -963,6 +994,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
@@ -998,6 +1031,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
@@ -1029,6 +1064,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),
@@ -1060,6 +1097,8 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
             agent_display_name: String::new(),

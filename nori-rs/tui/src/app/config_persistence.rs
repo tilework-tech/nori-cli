@@ -192,6 +192,27 @@ impl App {
     }
 
     #[cfg(feature = "nori-config")]
+    pub(super) async fn persist_custom_working_messages_setting(&mut self, enabled: bool) {
+        self.config.custom_working_messages = enabled;
+        self.chat_widget.set_custom_working_messages(enabled);
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "custom_working_messages"], toml_value(enabled))
+            .apply()
+            .await
+        {
+            tracing::error!(error = %err, "failed to persist custom_working_messages setting");
+            self.chat_widget.add_error_message(format!(
+                "Failed to save custom_working_messages setting: {err}"
+            ));
+            return;
+        }
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("Custom working messages {status}."), None);
+    }
+
+    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
         let builder = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "skillset_per_session"], toml_value(enabled));

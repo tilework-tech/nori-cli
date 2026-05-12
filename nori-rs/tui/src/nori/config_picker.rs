@@ -35,6 +35,15 @@ pub fn config_picker_params(
         config.terminal_notifications == TerminalNotifications::Enabled;
     let os_notifications_enabled = config.os_notifications == OsNotifications::Enabled;
     let pinned_plan_drawer_enabled = config.pinned_plan_drawer;
+    let custom_working_messages_enabled = config.custom_working_messages;
+    let custom_working_messages_description = if config.custom_working_message_list.is_empty() {
+        "Rotate playful status messages while the agent is working".to_string()
+    } else {
+        format!(
+            "Rotate playful status messages while the agent is working (custom list active: {} entries from config.toml)",
+            config.custom_working_message_list.len()
+        )
+    };
 
     let items: Vec<SelectionItem> = vec![
         build_toggle_item(
@@ -46,6 +55,18 @@ pub fn config_picker_params(
                 let new_value = !pinned_plan_drawer_enabled;
                 move || {
                     tx.send(AppEvent::SetConfigPinnedPlanDrawer(new_value));
+                }
+            },
+        ),
+        build_toggle_item(
+            "Custom Working Messages",
+            &custom_working_messages_description,
+            custom_working_messages_enabled,
+            {
+                let tx = app_event_tx.clone();
+                let new_value = !custom_working_messages_enabled;
+                move || {
+                    tx.send(AppEvent::SetConfigCustomWorkingMessages(new_value));
                 }
             },
         ),
@@ -628,6 +649,7 @@ mod tests {
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
             approval_policy: nori_acp::config::ApprovalPolicy::OnRequest,
             history_persistence: nori_acp::config::HistoryPersistence::SaveAll,
+            acp_proxy: nori_acp::config::AcpProxyConfig::disabled(),
             animations: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
@@ -663,6 +685,8 @@ mod tests {
             skillset_per_session: false,
             file_manager: None,
             pinned_plan_drawer: false,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
         }
     }
 
@@ -674,7 +698,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 13);
+        assert_eq!(params.items.len(), 14);
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Configuration"));
     }
@@ -687,8 +711,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Vertical Footer is at index 1 (Pinned Plan Drawer is at index 0)
-        assert!(params.items[1].name.contains("(on)"));
+        // Vertical Footer follows Pinned Plan Drawer and Custom Working Messages.
+        assert!(params.items[2].name.contains("(on)"));
     }
 
     #[test]
@@ -699,8 +723,8 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Vertical Footer is at index 1 (Pinned Plan Drawer is at index 0)
-        assert!(params.items[1].name.contains("(off)"));
+        // Vertical Footer follows Pinned Plan Drawer and Custom Working Messages.
+        assert!(params.items[2].name.contains("(off)"));
     }
 
     #[test]
@@ -711,23 +735,68 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        assert_eq!(params.items.len(), 13);
+        assert_eq!(params.items.len(), 14);
         // The 1st item should be Pinned Plan Drawer
         assert!(params.items[0].name.contains("Pinned Plan Drawer"));
-        // The 5th item should be Vim Mode
-        assert!(params.items[4].name.contains("Vim Mode"));
-        // The 6th item should be Auto Worktree
-        assert!(params.items[5].name.contains("Auto Worktree"));
-        // The 7th item should be Per Session Skillsets
-        assert!(params.items[6].name.contains("Per Session Skillsets"));
-        // The 8th item should be Notify After Idle
-        assert!(params.items[7].name.contains("Notify After Idle"));
-        // The 9th item should be Hotkeys
-        assert!(params.items[8].name.contains("Hotkeys"));
-        // The 10th item should be Script Timeout
-        assert!(params.items[9].name.contains("Script Timeout"));
-        // The 11th item should be Loop Count
-        assert!(params.items[10].name.contains("Loop Count"));
+        assert!(params.items[1].name.contains("Custom Working Messages"));
+        assert!(params.items[5].name.contains("Vim Mode"));
+        assert!(params.items[6].name.contains("Auto Worktree"));
+        assert!(params.items[7].name.contains("Per Session Skillsets"));
+        assert!(params.items[8].name.contains("Notify After Idle"));
+        assert!(params.items[9].name.contains("Hotkeys"));
+        assert!(params.items[10].name.contains("Script Timeout"));
+        assert!(params.items[11].name.contains("Loop Count"));
+    }
+
+    #[test]
+    fn config_picker_custom_working_messages_action_sends_correct_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone());
+
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Custom Working Messages"))
+            .expect("config picker should include Custom Working Messages");
+        assert!(item.name.contains("(on)"));
+        for action in &item.actions {
+            action(&tx);
+        }
+
+        let event = rx.try_recv().expect("should receive event");
+        match event {
+            AppEvent::SetConfigCustomWorkingMessages(value) => {
+                assert!(!value, "enabled setting should toggle off");
+            }
+            _ => panic!("expected SetConfigCustomWorkingMessages event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_custom_working_messages_description_announces_user_list() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut config = make_test_config(false);
+        config.custom_working_message_list = vec!["alpha".to_string(), "beta".to_string()];
+
+        let params = config_picker_params(&config, tx);
+
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Custom Working Messages"))
+            .expect("config picker should include Custom Working Messages");
+        let description = item
+            .description
+            .as_ref()
+            .expect("custom working messages item should have a description");
+        assert!(
+            description.contains("custom list"),
+            "description should mention the custom list when one is configured, got: {description:?}"
+        );
     }
 
     #[test]
@@ -739,7 +808,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has FiveSeconds, so should show "5 seconds"
-        let idle_item = &params.items[7];
+        let idle_item = &params.items[8];
         assert!(
             idle_item.name.contains("5 seconds"),
             "Expected '5 seconds' in name, got: {}",
@@ -755,8 +824,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the notify after idle action (8th item, index 7)
-        let idle_item = &params.items[7];
+        let idle_item = &params.items[8];
         for action in &idle_item.actions {
             action(&tx);
         }
@@ -776,8 +844,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the vertical footer toggle action (second item)
-        let vertical_footer_item = &params.items[1];
+        let vertical_footer_item = &params.items[2];
         assert!(vertical_footer_item.name.contains("Vertical Footer"));
         for action in &vertical_footer_item.actions {
             action(&tx);
@@ -802,8 +869,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the hotkeys action (9th item, index 8)
-        let hotkeys_item = &params.items[8];
+        let hotkeys_item = &params.items[9];
         assert!(hotkeys_item.name.contains("Hotkeys"));
         for action in &hotkeys_item.actions {
             action(&tx);
@@ -884,8 +950,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx);
 
-        // Should now have 13 items (includes pinned plan drawer, vim mode, auto worktree, per session skillsets, script timeout, and loop count)
-        assert_eq!(params.items.len(), 13);
+        assert_eq!(params.items.len(), 14);
         // Find the vim mode item
         let vim_mode_item = params
             .items
@@ -953,7 +1018,7 @@ mod tests {
         let params = config_picker_params(&config, tx);
 
         // Default config has 30s timeout
-        let timeout_item = &params.items[9];
+        let timeout_item = &params.items[10];
         assert!(
             timeout_item.name.contains("30s"),
             "Expected '30s' in name, got: {}",
@@ -969,8 +1034,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone());
 
-        // Trigger the script timeout action (10th item, index 9)
-        let timeout_item = &params.items[9];
+        let timeout_item = &params.items[10];
         assert!(timeout_item.name.contains("Script Timeout"));
         for action in &timeout_item.actions {
             action(&tx);

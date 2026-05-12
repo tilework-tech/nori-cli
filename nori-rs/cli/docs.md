@@ -130,6 +130,6 @@ On non-Windows, `wsl_paths.rs` normalizes paths for WSL environments to ensure c
 
 **Exit Handling:**
 
-`handle_app_exit()` prints token usage and session resume hints after TUI exits, then optionally runs update actions if the user requested an upgrade.
+`handle_app_exit()` prints token usage when available and prints a copyable two-line resume hint for sessions that recorded activity. The lead line ends with `run:` and the next line contains only `nori resume <session-id>` so the command can be copied without surrounding output. It then optionally runs update actions if the user requested an upgrade.
 
 Created and maintained by Nori.

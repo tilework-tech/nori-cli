@@ -11,6 +11,7 @@ use tokio::sync::oneshot;
 
 pub mod mcp;
 pub mod sacp_connection;
+mod wire_log;
 
 #[cfg(test)]
 mod sacp_connection_tests;

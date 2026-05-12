@@ -3,6 +3,7 @@ use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
+use std::path::Path;
 use syntect::highlighting::FontStyle;
 use syntect::highlighting::Theme;
 use syntect::highlighting::ThemeSet;
@@ -121,6 +122,55 @@ pub(crate) fn highlight_code_to_lines(code: &str, lang: &str) -> Vec<Line<'stati
     }
 }
 
+/// Highlight source code by inferring the language from a file path.
+pub(crate) fn highlight_code_to_lines_for_path(code: &str, path: &Path) -> Vec<Line<'static>> {
+    if code.is_empty() {
+        return vec![Line::from("")];
+    }
+
+    if is_too_large(code) {
+        return plain_lines(code);
+    }
+
+    let ss = syntax_set();
+    let syntax = match ss.find_syntax_for_file(path) {
+        Ok(Some(s)) => s,
+        Ok(None) | Err(_) => return plain_lines(code),
+    };
+
+    let theme = current_theme();
+    let mut highlighter = syntect::easy::HighlightLines::new(syntax, theme);
+    let mut result: Vec<Line<'static>> = Vec::new();
+
+    for line_str in syntect::util::LinesWithEndings::from(code) {
+        let regions = match highlighter.highlight_line(line_str, ss) {
+            Ok(r) => r,
+            Err(_) => return plain_lines(code),
+        };
+
+        let spans: Vec<Span<'static>> = regions
+            .into_iter()
+            .map(|(style, text)| {
+                let ratatui_style = syntect_style_to_ratatui(style);
+                let text = text.strip_suffix('\n').unwrap_or(text);
+                if text.is_empty() {
+                    return Span::from("".to_string());
+                }
+                Span::styled(text.to_string(), ratatui_style)
+            })
+            .filter(|s| !s.content.is_empty())
+            .collect();
+
+        result.push(Line::from(spans));
+    }
+
+    if result.is_empty() {
+        vec![Line::from("")]
+    } else {
+        result
+    }
+}
+
 /// Highlight a bash script into styled ratatui `Line`s.
 ///
 /// This is a convenience wrapper around [`highlight_code_to_lines`].
@@ -182,6 +232,15 @@ mod tests {
         assert!(
             has_non_default_fg(&lines),
             "expected colored output for Rust code, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn highlight_code_to_lines_for_path_rust() {
+        let lines = highlight_code_to_lines_for_path("fn main() {}", Path::new("src/main.rs"));
+        assert!(
+            has_non_default_fg(&lines),
+            "expected colored output for Rust path, got: {lines:?}"
         );
     }
 

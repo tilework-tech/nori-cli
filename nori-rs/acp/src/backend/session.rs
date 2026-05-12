@@ -25,7 +25,7 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
-        let mut connection = SacpConnection::spawn(&agent_config, &cwd)
+        let mut connection = SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
             .await
             .map_err(|e| {
                 let error_string = format!("{e:?}");
@@ -296,6 +296,7 @@ impl AcpBackend {
             idle_timer_abort: Arc::clone(&idle_timer_abort),
             nori_home: config.nori_home.clone(),
             history_persistence: config.history_persistence,
+            acp_proxy: config.acp_proxy.clone(),
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
