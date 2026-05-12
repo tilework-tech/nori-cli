@@ -14,9 +14,9 @@ pub enum SlashCommand {
     // more frequently used commands should be listed first.
     Agent,
     Model,
-    SessionConfig,
-    Approvals,
     Config,
+    Approvals,
+    Settings,
     New,
     Resume,
     ResumeViewonly,
@@ -57,9 +57,9 @@ impl SlashCommand {
             SlashCommand::Memory => "show the contents of all active instruction files",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
-            SlashCommand::SessionConfig => "configure ACP session settings exposed by the agent",
+            SlashCommand::Config => "configure ACP agent settings (if exposed by the agent)",
             SlashCommand::Approvals => "choose what Nori can do without approval",
-            SlashCommand::Config => "toggle config settings",
+            SlashCommand::Settings => "configure Nori CLI settings (theme, hotkeys, layout, …)",
             SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
@@ -85,9 +85,9 @@ impl SlashCommand {
             | SlashCommand::Compact
             | SlashCommand::Undo
             | SlashCommand::Model
-            | SlashCommand::SessionConfig
-            | SlashCommand::Approvals
             | SlashCommand::Config
+            | SlashCommand::Approvals
+            | SlashCommand::Settings
             | SlashCommand::Mcp
             | SlashCommand::Login
             | SlashCommand::Logout
@@ -187,6 +187,39 @@ mod tests {
             !SlashCommand::Config.available_during_task(),
             "/config should not be available while task is running"
         );
+    }
+
+    #[test]
+    fn settings_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_settings = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::Settings);
+        assert!(has_settings, "/settings should be visible in commands list");
+    }
+
+    #[test]
+    fn settings_has_description() {
+        let desc = SlashCommand::Settings.description();
+        assert!(!desc.is_empty(), "/settings should have a description");
+    }
+
+    #[test]
+    fn settings_not_available_during_task() {
+        assert!(
+            !SlashCommand::Settings.available_during_task(),
+            "/settings should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn config_serializes_to_kebab_config() {
+        assert_eq!(SlashCommand::Config.command(), "config");
+    }
+
+    #[test]
+    fn settings_serializes_to_kebab_settings() {
+        assert_eq!(SlashCommand::Settings.command(), "settings");
     }
 
     #[test]

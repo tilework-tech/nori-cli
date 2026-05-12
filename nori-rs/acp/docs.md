@@ -226,7 +226,7 @@ The `FileManager` enum (`types/mod.rs`) represents supported terminal file manag
 - `chooser_args(output_path)` -- CLI arguments that put the file manager into chooser mode, writing the selected file path to a temp file. Each file manager uses a different flag convention (e.g. vifm uses `--choose-files`, ranger uses `--choosefile=`, lf uses `-selection-path`, nnn uses `-p`)
 - `display_name()` -- human-friendly label for the config picker
 
-The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/config` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
+The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
 
 Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
 

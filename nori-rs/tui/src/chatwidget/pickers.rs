@@ -210,9 +210,9 @@ impl ChatWidget {
             .update_selection_item(session_id, name, description, search_value);
     }
 
-    /// Open the config popup for TUI settings.
+    /// Open the Nori CLI settings popup.
     #[cfg(feature = "nori-config")]
-    pub(crate) fn open_config_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
+    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
         let params = crate::nori::config_picker::config_picker_params(
             nori_config,
             self.app_event_tx.clone(),
