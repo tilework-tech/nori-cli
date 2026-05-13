@@ -439,7 +439,7 @@ impl App {
         {
             Ok(handle) => {
                 self.chat_widget.add_info_message(
-                    format!("Opening browser to authenticate `{server_name}`..."),
+                    mcp_oauth_login_started_message(&server_name, &handle.authorization_url),
                     Some("Press Esc in the MCP picker to cancel".to_string()),
                 );
 
@@ -452,7 +452,7 @@ impl App {
                     let result = task.await;
                     let (success, error) = match result {
                         Ok(Ok(())) => (true, None),
-                        Ok(Err(e)) => (false, Some(e.to_string())),
+                        Ok(Err(e)) => (false, Some(format_mcp_oauth_error(&e))),
                         Err(e) => (false, Some(format!("OAuth task panicked: {e}"))),
                     };
                     tx.send(crate::app_event::AppEvent::McpOAuthLoginComplete {
@@ -482,10 +482,43 @@ impl App {
     }
 }
 
+fn mcp_oauth_login_started_message(server_name: &str, authorization_url: &str) -> String {
+    format!(
+        "Opening browser to authenticate `{server_name}`...\n\nIf the browser doesn't open automatically, visit:\n{authorization_url}\n\nWaiting for authentication to complete..."
+    )
+}
+
+fn format_mcp_oauth_error(error: &anyhow::Error) -> String {
+    format!("{error:#}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn mcp_oauth_login_started_message_includes_manual_url() {
+        let message = mcp_oauth_login_started_message("linear", "https://linear.example.com/oauth");
+
+        assert!(message.contains("Opening browser to authenticate `linear`"));
+        assert!(message.contains("If the browser doesn't open automatically, visit:"));
+        assert!(message.contains("https://linear.example.com/oauth"));
+        assert!(message.contains("Waiting for authentication to complete"));
+    }
+
+    #[test]
+    fn mcp_oauth_error_message_includes_error_chain() {
+        let err = anyhow::anyhow!("OAuth token exchange failed: server returned 400")
+            .context("failed to handle OAuth callback");
+
+        let message = format_mcp_oauth_error(&err);
+
+        assert_eq!(
+            message,
+            "failed to handle OAuth callback: OAuth token exchange failed: server returned 400"
+        );
+    }
 
     #[tokio::test]
     async fn persists_acp_wire_recording_to_top_level_acp_proxy_section() {

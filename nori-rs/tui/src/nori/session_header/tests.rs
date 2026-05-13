@@ -1596,6 +1596,33 @@ fn discover_codex_no_git_stays_at_cwd() {
 }
 
 #[test]
+fn discover_codex_ignores_empty_git_marker_directory() {
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path();
+    fs::create_dir(root.join(".git")).expect("create empty .git dir");
+    fs::write(root.join("AGENTS.md"), "ancestor").expect("write ancestor AGENTS.md");
+
+    let sub = root.join("sub");
+    fs::create_dir_all(&sub).expect("create sub");
+    fs::write(sub.join("AGENTS.md"), "cwd").expect("write cwd AGENTS.md");
+
+    let files = discover_all_instruction_files_with_home(&sub, Some(AgentKindSimple::Codex), None);
+
+    let ancestor = root.join("AGENTS.md");
+    assert!(
+        !files.iter().any(|f| f.path == ancestor),
+        "empty .git directories should not mark a git root. Got: {:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+    assert!(
+        files
+            .iter()
+            .any(|f| f.path == sub.join("AGENTS.md") && f.active),
+        "Codex should discover AGENTS.md at cwd."
+    );
+}
+
+#[test]
 fn discover_gemini_stays_at_git_root() {
     // Gemini CLI semantics: walk stops at git root. GEMINI.md above git root
     // must NOT appear in the result.

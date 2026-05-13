@@ -8,6 +8,7 @@
 //! is reserved for the first-launch welcome screen).
 
 use crate::exec_command::relativize_to_home;
+use crate::git_marker::is_git_marker;
 use crate::history_cell::CompositeHistoryCell;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::PlainHistoryCell;
@@ -141,8 +142,7 @@ fn discover_all_instruction_files_with_paths(
     loop {
         chain.push(current.clone());
 
-        let git_marker = current.join(".git");
-        if git_root.is_none() && (git_marker.is_file() || git_marker.join("HEAD").is_file()) {
+        if git_root.is_none() && is_git_marker(&current.join(".git")) {
             git_root = Some(current.clone());
         }
 
