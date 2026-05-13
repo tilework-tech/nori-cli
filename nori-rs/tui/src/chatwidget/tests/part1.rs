@@ -99,6 +99,7 @@ async fn helpers_are_available_and_do_not_panic() {
         auth_manager,
         vertical_footer: false,
         footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         expected_agent: None,
         deferred_spawn: false,
         fork_context: None,

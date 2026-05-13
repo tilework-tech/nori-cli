@@ -349,6 +349,70 @@ async fn test_model_state_after_session_creation() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn test_session_config_options_after_session_creation() {
+    let Some(config) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
+
+    let _session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    let config_options = conn.config_options();
+    let option_names = config_options
+        .iter()
+        .map(|option| option.name.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(option_names, vec!["Model", "Thought Level"]);
+}
+
+#[tokio::test]
+#[serial]
+async fn test_set_session_config_option_replaces_connection_state() {
+    let Some(config) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
+
+    let session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    conn.set_config_option(&session_id, "model", "mock-model-fast")
+        .await
+        .expect("set config option");
+
+    let config_options = conn.config_options();
+    let option_names = config_options
+        .iter()
+        .map(|option| option.name.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(option_names, vec!["Model", "Speed"]);
+}
+
 /// Test that approval requests flow through the ordered event inbox and the
 /// prompt completes after the approval response is sent back.
 #[tokio::test]

@@ -5,9 +5,11 @@ use codex_core::protocol::ConversationPathResponseEvent;
 use codex_core::protocol::Event;
 use codex_core::protocol::RateLimitSnapshot;
 use codex_file_search::FileMatch;
+use nori_acp::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
+use crate::nori::session_config_mode::AcpModeConfig;
 use crate::system_info::SystemInfo;
 
 use codex_core::protocol::AskForApproval;
@@ -235,6 +237,38 @@ pub(crate) enum AppEvent {
         error: Option<String>,
     },
 
+    /// Open the generic ACP session config picker.
+    OpenAcpSessionConfigPicker {
+        config_options: Vec<SessionConfigOption>,
+    },
+
+    /// Open the value picker for a specific ACP session config option.
+    OpenAcpSessionConfigValuePicker {
+        option: SessionConfigOption,
+    },
+
+    /// Set an ACP session config option value.
+    SetAcpSessionConfigOption {
+        config_id: String,
+        value: String,
+        option_name: String,
+        value_name: String,
+    },
+
+    /// Result of setting an ACP session config option.
+    AcpSessionConfigSetResult {
+        success: bool,
+        option_name: String,
+        value_name: String,
+        error: Option<String>,
+    },
+
+    /// Latest derived ACP mode config for the active session.
+    AcpModeConfigSnapshot {
+        generation: i64,
+        mode: Option<AcpModeConfig>,
+    },
+
     /// Result of OAuth login flow completion.
     LoginComplete {
         /// Whether the login was successful
@@ -319,6 +353,10 @@ pub(crate) enum AppEvent {
     /// Set the TUI pinned plan drawer config setting.
     #[cfg(feature = "nori-config")]
     SetConfigPinnedPlanDrawer(bool),
+
+    /// Set ACP wire JSONL recording for future ACP child subprocesses.
+    #[cfg(feature = "nori-config")]
+    SetConfigAcpWireRecording(bool),
 
     /// Set the TUI custom working messages config setting.
     #[cfg(feature = "nori-config")]

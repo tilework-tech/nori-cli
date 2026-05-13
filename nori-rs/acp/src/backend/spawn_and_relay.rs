@@ -55,7 +55,10 @@ impl AcpBackend {
         };
 
         // Create a session with enhanced error handling, forwarding CLI MCP servers.
-        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+            &config.mcp_servers,
+            config.mcp_oauth_credentials_store_mode,
+        );
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
             Ok(id) => id,
@@ -184,6 +187,7 @@ impl AcpBackend {
             script_timeout: config.script_timeout,
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         let runtime_backend = backend.clone();

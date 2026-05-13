@@ -1,0 +1,147 @@
+use super::*;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
+
+static ACP_MODE_CONFIG_GENERATION: AtomicI64 = AtomicI64::new(1);
+
+pub(super) fn next_acp_mode_config_generation() -> i64 {
+    ACP_MODE_CONFIG_GENERATION.fetch_add(1, Ordering::Relaxed)
+}
+
+impl ChatWidget {
+    #[cfg(test)]
+    pub(crate) fn acp_mode_config_generation(&self) -> i64 {
+        self.acp_mode_config_generation
+    }
+
+    pub(crate) fn apply_acp_mode_config_snapshot(
+        &mut self,
+        generation: i64,
+        mode: Option<crate::nori::session_config_mode::AcpModeConfig>,
+    ) {
+        if generation != self.acp_mode_config_generation {
+            return;
+        }
+
+        self.bottom_pane
+            .set_acp_mode_label(mode.as_ref().map(|mode| mode.current_label.clone()));
+        self.acp_mode_config = mode;
+        self.request_redraw();
+    }
+
+    pub(super) fn refresh_acp_mode_config_snapshot(&self) {
+        let Some(handle) = self.acp_handle.clone() else {
+            return;
+        };
+        let generation = self.acp_mode_config_generation;
+        let app_event_tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            let Some(config_options) = handle.get_session_config().await else {
+                return;
+            };
+            app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                generation,
+                mode: crate::nori::session_config_mode::acp_mode_config_from_options(
+                    &config_options,
+                ),
+            });
+        });
+    }
+
+    pub(super) fn cycle_acp_mode_config(&mut self) -> bool {
+        let Some(handle) = self.acp_handle.clone() else {
+            return false;
+        };
+        let generation = self.acp_mode_config_generation;
+        let app_event_tx = self.app_event_tx.clone();
+
+        if let Some(mode) = self.acp_mode_config.clone() {
+            let next_mode = mode.advanced();
+            let config_id = mode.config_id;
+            let value = mode.next_value;
+            let value_name = mode.next_label;
+            self.apply_acp_mode_config_snapshot(generation, Some(next_mode));
+            tokio::spawn(async move {
+                match handle.set_session_config_option(config_id, value).await {
+                    Ok(config_options) => {
+                        app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                            generation,
+                            mode: crate::nori::session_config_mode::acp_mode_config_from_options(
+                                &config_options,
+                            ),
+                        });
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: true,
+                            option_name: "Mode".to_string(),
+                            value_name,
+                            error: None,
+                        });
+                    }
+                    Err(err) => {
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: false,
+                            option_name: "Mode".to_string(),
+                            value_name: value_name.clone(),
+                            error: Some(err.to_string()),
+                        });
+                        if let Some(config_options) = handle.get_session_config().await {
+                            app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                                generation,
+                                mode:
+                                    crate::nori::session_config_mode::acp_mode_config_from_options(
+                                        &config_options,
+                                    ),
+                            });
+                        }
+                    }
+                }
+            });
+            return true;
+        }
+
+        tokio::spawn(async move {
+            let Some(config_options) = handle.get_session_config().await else {
+                return;
+            };
+            let Some(mode) =
+                crate::nori::session_config_mode::acp_mode_config_from_options(&config_options)
+            else {
+                app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                    generation,
+                    mode: None,
+                });
+                return;
+            };
+
+            match handle
+                .set_session_config_option(mode.config_id.clone(), mode.next_value.clone())
+                .await
+            {
+                Ok(config_options) => {
+                    let value_name = mode.next_label.clone();
+                    app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                        generation,
+                        mode: crate::nori::session_config_mode::acp_mode_config_from_options(
+                            &config_options,
+                        ),
+                    });
+                    app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                        success: true,
+                        option_name: "Mode".to_string(),
+                        value_name,
+                        error: None,
+                    });
+                }
+                Err(err) => {
+                    app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                        success: false,
+                        option_name: "Mode".to_string(),
+                        value_name: mode.next_label,
+                        error: Some(err.to_string()),
+                    });
+                }
+            }
+        });
+        true
+    }
+}

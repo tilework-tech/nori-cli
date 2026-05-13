@@ -7,11 +7,35 @@ impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
+        let recording_enabled = nori_acp::config::NoriConfig::load()
+            .map(|config| config.acp_proxy.enabled)
+            .unwrap_or(false);
+        self.bottom_pane
+            .set_acp_wire_recording_enabled(recording_enabled);
         let params = crate::nori::agent_picker::agent_picker_params(
             &current_model,
             self.app_event_tx.clone(),
+            recording_enabled,
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
+        self.bottom_pane.set_acp_wire_recording_enabled(enabled);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn replace_agent_popup(&mut self, recording_enabled: bool) {
+        if !self.bottom_pane.has_active_view() {
+            return;
+        }
+        let params = crate::nori::agent_picker::agent_picker_params(
+            &self.config.model,
+            self.app_event_tx.clone(),
+            recording_enabled,
+        );
+        self.bottom_pane.replace_selection_view(params);
     }
 
     /// Show a selection view in the bottom pane.
@@ -210,9 +234,9 @@ impl ChatWidget {
             .update_selection_item(session_id, name, description, search_value);
     }
 
-    /// Open the config popup for TUI settings.
+    /// Open the Nori CLI settings popup.
     #[cfg(feature = "nori-config")]
-    pub(crate) fn open_config_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
+    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
         let params = crate::nori::config_picker::config_picker_params(
             nori_config,
             self.app_event_tx.clone(),
@@ -630,6 +654,21 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the generic ACP session-config picker.
+    pub(crate) fn open_session_config_popup(&mut self) {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            tokio::spawn(async move {
+                let config_options = handle.get_session_config().await.unwrap_or_default();
+                app_event_tx.send(AppEvent::OpenAcpSessionConfigPicker { config_options });
+            });
+            return;
+        }
+
+        let params = crate::nori::session_config_picker::acp_session_config_picker_params(&[]);
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the ACP model picker with fetched models.
     #[cfg(feature = "unstable")]
     pub(crate) fn open_acp_model_picker(
@@ -641,6 +680,26 @@ impl ChatWidget {
             &models,
             current_model_id.as_deref(),
         );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the top-level ACP session-config picker with the current config snapshot.
+    pub(crate) fn open_acp_session_config_picker(
+        &mut self,
+        config_options: Vec<nori_acp::SessionConfigOption>,
+    ) {
+        let params =
+            crate::nori::session_config_picker::acp_session_config_picker_params(&config_options);
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the value picker for one ACP session config option.
+    pub(crate) fn open_acp_session_config_value_picker(
+        &mut self,
+        option: nori_acp::SessionConfigOption,
+    ) {
+        let params =
+            crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -675,6 +734,54 @@ impl ChatWidget {
         } else {
             self.add_info_message(
                 "No ACP agent handle available for model switching".to_string(),
+                None,
+            );
+        }
+    }
+
+    /// Set an ACP session config option via the agent handle.
+    pub(crate) fn set_acp_session_config_option(
+        &mut self,
+        config_id: String,
+        value: String,
+        option_name: String,
+        value_name: String,
+    ) {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            let generation = self.acp_mode_config_generation;
+            let option_name_for_result = option_name.clone();
+            let value_name_for_result = value_name.clone();
+            tokio::spawn(async move {
+                match handle.set_session_config_option(config_id, value).await {
+                    Ok(config_options) => {
+                        app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                            generation,
+                            mode: crate::nori::session_config_mode::acp_mode_config_from_options(
+                                &config_options,
+                            ),
+                        });
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: true,
+                            option_name: option_name_for_result,
+                            value_name: value_name_for_result,
+                            error: None,
+                        });
+                    }
+                    Err(err) => {
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: false,
+                            option_name: option_name_for_result,
+                            value_name: value_name_for_result,
+                            error: Some(err.to_string()),
+                        });
+                    }
+                }
+            });
+            self.add_info_message(format!("Updating {option_name} to: {value_name}..."), None);
+        } else {
+            self.add_info_message(
+                "No ACP agent handle available for session config".to_string(),
                 None,
             );
         }

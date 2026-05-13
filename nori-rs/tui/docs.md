@@ -31,7 +31,7 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `nori_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
 
-`NoriConfig` is also the source of truth for ACP backend diagnostics that do not have direct TUI controls yet. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without needing UI state in the TUI layer.
+`NoriConfig` is also the source of truth for ACP backend diagnostics. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
 
 The auto-worktree startup flow branches on the `AutoWorktree` enum (see `@/nori-rs/acp/docs.md`):
 
@@ -127,7 +127,7 @@ The trade-off: incomplete cells may appear in scrollback showing "Running"/"Expl
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
-When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. All ACP tool kinds route directly through `ClientToolCell` via `handle_client_native_tool_snapshot`, and the handler calls `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
+When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. All ACP tool kinds route directly through `ClientToolCell` via `handle_client_native_tool_snapshot`, and the handler calls `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. Reasoning deltas also flush any open answer stream before updating the status header, preserving the visible boundary for answer -> reasoning -> answer sequences. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
 
 One operation consumes the queue:
 
@@ -195,9 +195,13 @@ The drawer is inserted into the `FlexRenderable` layout in `ChatWidget::as_rende
 - `Expanded` renders `PinnedPlanDrawer` (full checklist via `render_plan_lines()`)
 - `Off` contributes zero height
 
-The config persists a boolean `pinned_plan_drawer` in `[tui]` of `config.toml`. At startup, `true` maps to `Expanded` and `false` maps to `Off`. Runtime toggling via Ctrl+O does not persist -- only the `/config` toggle persists.
+The config persists a boolean `pinned_plan_drawer` in `[tui]` of `config.toml`. At startup, `true` maps to `Expanded` and `false` maps to `Off`. Runtime toggling via Ctrl+O does not persist -- only the `/settings` toggle persists.
 
-The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents.
+The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents. It also exposes the ACP wire JSONL recorder as a same-line footer hint: `Shift-Tab` toggles `[acp_proxy].enabled` through the app config persistence path, updates the open picker and slash-command status text, and applies to future ACP child subprocesses. Existing running ACP subprocesses keep the proxy setting they were spawned with.
+
+**ACP Session Config Mode Shortcut** (`nori/session_config_mode.rs`, `chatwidget/session_config_mode.rs`, `bottom_pane/footer.rs`):
+
+When an ACP agent exposes a select-style session config option categorized as `Mode` (or using id `mode`), the TUI derives a compact mode snapshot from the same live `config_options` data used by `/config`. The current mode label flows into the normal footer segment pipeline as the `mode_indicator` segment, rendered as compact bracketed text such as `[ Plan ]`; labels longer than 20 characters are truncated with an ellipsis. By default, the segment appears in the right side of the footer line and is skipped entirely when the selected agent does not expose mode options. While the composer has focus and no popup is active, `Shift-Tab` fetches the current ACP session config snapshot from the agent handle, chooses the next mode value in the agent-provided option order (including grouped options), and applies it through `session/set_config_option`. Successful changes from either `Shift-Tab` or the ACP `/config` menu refresh the footer segment through `AppEvent::AcpModeConfigSnapshot`. This remains live-session only and does not persist mode selections to `config.toml`.
 
 **System Info Collection** (`system_info.rs`):
 
@@ -214,7 +218,17 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | `transcript_location` | Discovered transcript path and token usage when running within an agent environment |
 | `worktree_cleanup_warning` | Warning when git worktrees exist and disk space is below 10% free (unix only) |
 
-The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
+The `transcript_location` field includes `token_breakdown` (detailed input/output/cached breakdown), which is displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini. It can also include `subagents_used`, which is merged into goodbye-card session stats when visible ACP events do not expose delegated subagent launches.
+
+**Goodbye Card Session Stats**:
+
+The goodbye card renders from `SessionStats` and does not parse transcripts directly. ACP sessions update those stats from normalized `ClientEvent` values:
+
+- `ToolSnapshot` increments one tool group for each completed or failed `call_id`.
+- Tool snapshots are scanned for `*/SKILL.md` paths in locations, invocations, artifacts, raw input, and raw output so skills are listed once by directory name.
+- Agent-style snapshots with generic `Other("Other")` kinds fall back to the snapshot title for display, allowing `Agent` to appear as a tool group.
+- ACP answer streams are counted as one assistant message at `PromptCompleted`, whether the final message arrives in `last_agent_message` or only as prior `MessageDelta { stream: Answer, .. }` chunks.
+- `TranscriptLocation.subagents_used` is merged during system-info refresh as a narrow fallback for subagent launches that do not appear as visible ACP tool snapshots.
 
 The footer git stats are intentionally scoped to uncommitted tracked-file
 changes so the statusline stays compact in long-lived branches or repositories
@@ -262,8 +276,9 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 |---------|-------------|
 | `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
 | `/model` | Choose model (dynamically shows current agent/model name) |
+| `/config` | Configure live ACP session settings exposed by the current agent |
 | `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
-| `/config` | Toggle TUI settings (pinned plan drawer, custom working messages, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
+| `/settings` | Configure Nori CLI settings (pinned plan drawer, custom working messages, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
 | `/browse` | Open a terminal file manager to browse and edit files |
 | `/new` | Start a new chat during a conversation |
 | `/resume` | Resume a previous ACP session |
@@ -344,6 +359,12 @@ Agent commands appear in the slash command popup alongside builtins and user pro
 
 `/agent`, `/model`, and `/approvals` show the current runtime value in parentheses in the slash command popup (e.g., `(current: Mock ACP)`). This is implemented via a `command_description_overrides: HashMap<SlashCommand, String>` that flows through `BottomPane` -> `ChatComposer` -> `CommandPopup`. `BottomPane::set_agent_display_name()` sets overrides for both `/agent` and `/model`; `BottomPane::set_approval_mode_label()` sets the override for `/approvals`. The agent override is populated at startup in `BottomPane::new()` and updated on agent switches. The approval override is set whenever the approval mode changes.
 
+**Live ACP Session Config Picker** (`chatwidget/pickers.rs`, `nori/session_config_picker.rs`):
+
+`/config` opens a two-step picker for the current ACP session. `ChatWidget::open_session_config_popup()` asks the `AcpAgentHandle` for the live `AcpBackend::config_options()` snapshot, renders supported `select` options, then opens a value picker for the selected option. Selecting a value sends `session/set_config_option` through `AcpBackend::set_config_option()` and shows an info or error message when the RPC finishes.
+
+The picker intentionally only edits the active session. It does not run during `/agent` switching and it does not persist selected values. Unsupported ACP config kinds and future non-exhaustive select layouts are treated as unavailable rather than guessed.
+
 **Selection Popup Row Layout (`bottom_pane/selection_popup_common.rs`):**
 
 `render_rows()` and `measure_rows_height()` are the shared rendering functions used by all selection popups (`ListSelectionView`, `CommandPopup`, `FileSearchPopup`). Each popup item has an optional description that appears alongside the item name. The layout engine chooses between two modes per-row via `wrap_row()`:
@@ -412,7 +433,7 @@ The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` 
 
 **Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). This tells the ACP agent that it is running inside the nori CLI and provides a source-code URL for self-referential questions. The context is prepended (without `SUMMARY_PREFIX` framing) to the first user prompt only and then consumed (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
 
-The `/logout` command is only available when the `login` feature is enabled. The `/config` command requires the `nori-config` feature.
+The `/logout` command is only available when the `login` feature is enabled. The `/settings` command requires the `nori-config` feature.
 
 
 **Status Card (`/status`) (`nori/session_header/mod.rs`):**
@@ -503,16 +524,16 @@ When `skillset_per_session` is on and `auto_worktree` is `Off`, the picker subti
 
 Events: `AppEvent::SkillsetListResult` (carries `install_dir: Option<PathBuf>`), `AppEvent::InstallSkillset`, `AppEvent::SwitchSkillset`, `AppEvent::SkillsetInstallResult`, `AppEvent::SkillsetSwitchResult`, `AppEvent::SkillsetPickerDismissed`, `AppEvent::OpenSkillsetPerSessionWorktreeChoice`
 
-The "Per Session Skillsets" toggle in `/config` is built in `nori/config_picker.rs`. Toggling it on emits `AppEvent::OpenSkillsetPerSessionWorktreeChoice`, which opens a worktree choice modal (`skillset_worktree_choice_params()`) letting the user choose between "With Auto Worktrees" (sets `auto_worktree` to `Automatic`) and "Without Auto Worktrees". Toggling it off emits `AppEvent::SetConfigSkillsetPerSession`, handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`.
+The "Per Session Skillsets" toggle in `/settings` is built in `nori/config_picker.rs`. Toggling it on emits `AppEvent::OpenSkillsetPerSessionWorktreeChoice`, which opens a worktree choice modal (`skillset_worktree_choice_params()`) letting the user choose between "With Auto Worktrees" (sets `auto_worktree` to `Automatic`) and "Without Auto Worktrees". Toggling it off emits `AppEvent::SetConfigSkillsetPerSession`, handled in `app/config_persistence.rs` via `persist_skillset_per_session_setting()` to write `skillset_per_session` under `[tui]` in `config.toml`.
 
-The "Auto Worktree" item in `/config` uses a sub-picker pattern (matching Notify After Idle / Script Timeout): selecting the config item emits `AppEvent::OpenAutoWorktreePicker`, which opens a second selection view listing all `AutoWorktree` variants (`Automatic`, `Ask`, `Off`) with radio-select style (current variant marked). The config item's display name shows the current mode in parentheses (e.g. "Auto Worktree (automatic)"). Selecting a variant emits `AppEvent::SetConfigAutoWorktree(variant)`, persisted via `persist_auto_worktree_setting()` which writes the string value (e.g. `"automatic"`, `"ask"`, `"off"`) to `[tui]` in `config.toml`.
+The "Auto Worktree" item in `/settings` uses a sub-picker pattern (matching Notify After Idle / Script Timeout): selecting the config item emits `AppEvent::OpenAutoWorktreePicker`, which opens a second selection view listing all `AutoWorktree` variants (`Automatic`, `Ask`, `Off`) with radio-select style (current variant marked). The config item's display name shows the current mode in parentheses (e.g. "Auto Worktree (automatic)"). Selecting a variant emits `AppEvent::SetConfigAutoWorktree(variant)`, persisted via `persist_auto_worktree_setting()` which writes the string value (e.g. `"automatic"`, `"ask"`, `"off"`) to `[tui]` in `config.toml`.
 
 Active skillset display in the footer is driven entirely by `SystemInfo.active_skillsets`, which is populated by shelling out to `nori-skillsets list-active`. After a successful skillset switch or install, `request_system_info_refresh()` triggers a background re-collection so the footer reflects the updated state. There is no in-memory override -- `nori-skillsets list-active` is the single source of truth.
 
 
 **Notification Configuration:**
 
-Three notification settings are toggled via `/config` and persisted to the `[tui]` section of `config.toml`:
+Three notification settings are toggled via `/settings` and persisted to the `[tui]` section of `config.toml`:
 
 - **Terminal Notifications** (`TerminalNotifications` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget/user_input.rs::notify()` gates on that bool.
 - **OS Notifications** (`OsNotifications` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend/mod.rs` to set the `use_native` flag on `UserNotifier`.
@@ -540,11 +561,11 @@ The composer intercepts Script-kind prompts in two places: when a command popup 
 
 In `app/event_handling.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
 
-The script timeout is configurable via `/config` -> "Script Timeout" which opens a sub-picker (same pattern as Notify After Idle). The sub-picker is built by `script_timeout_picker_params()` in `@/nori-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenScriptTimeoutPicker` / `AppEvent::SetConfigScriptTimeout` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_script_timeout_setting()`.
+The script timeout is configurable via `/settings` -> "Script Timeout" which opens a sub-picker (same pattern as Notify After Idle). The sub-picker is built by `script_timeout_picker_params()` in `@/nori-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenScriptTimeoutPicker` / `AppEvent::SetConfigScriptTimeout` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_script_timeout_setting()`.
 
 **Configurable Hotkeys:**
 
-Keyboard shortcuts are configurable through the `/config` panel ("Hotkeys" item) and persisted under `[tui.hotkeys]` in `config.toml`. The implementation is split across two layers:
+Keyboard shortcuts are configurable through the `/settings` panel ("Hotkeys" item) and persisted under `[tui.hotkeys]` in `config.toml`. The implementation is split across two layers:
 
 - **Config layer** (`@/nori-rs/acp/src/config/types/mod.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
 - **TUI layer** (`@/nori-rs/tui/src/nori/hotkey_match.rs`): Converts `HotkeyBinding` strings to crossterm `KeyEvent` matches via `parse_binding()` and `matches_binding()`. Also provides `key_event_to_binding()` for the reverse direction (capturing a key press as a binding string).
@@ -567,7 +588,7 @@ The hotkey picker (`@/nori-rs/tui/src/nori/hotkey_picker.rs`) implements `Bottom
 
 **Vim Mode:**
 
-The textarea supports an optional vim-style navigation mode, configured via `/config` ("Vim Mode" item) which opens a sub-picker (like Auto Worktree) showing three options. The setting is persisted to `config.toml` under `[tui]`:
+The textarea supports an optional vim-style navigation mode, configured via `/settings` ("Vim Mode" item) which opens a sub-picker (like Auto Worktree) showing three options. The setting is persisted to `config.toml` under `[tui]`:
 
 ```toml
 [tui]
@@ -648,7 +669,7 @@ Vim mode is inherited from the composer's current vim state. When vim mode is en
 
 **Status Line Footer:**
 
-The footer displays configurable segments, each of which can be enabled/disabled via `/config` -> "Footer Segments" or via `[tui.footer_segments]` in config.toml:
+The footer displays configurable segments, each of which can be enabled/disabled via `/settings` -> "Footer Segments" or via `[tui.footer_segments]` in config.toml:
 
 | Segment | TOML Key | Description |
 |---------|----------|-------------|
@@ -662,6 +683,7 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Nori Profile | `nori_profile` | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
 | Nori Version | `nori_version` | "Skillsets v<version>" |
 | Token Usage | `token_usage` | "Tokens: 123K total (32K cached)" when running within an agent environment |
+| Mode Indicator | `mode_indicator` | "[ Plan ]" style ACP mode label, shown only when the active ACP agent exposes a mode config option |
 
 Example config.toml to disable specific segments:
 ```toml
@@ -670,12 +692,20 @@ token_usage = false
 git_stats = false
 ```
 
-All segments are enabled by default. The order of segments in the footer is fixed (cannot be reordered via config).
+All segments are enabled by default, though individual segments still render only when their backing data exists.
+
+Segment placement is configurable through `[tui.footer_layout]`. Missing layout fields use defaults: legacy status segments render on `footer_left`, and `mode_indicator` renders on `footer_right`. A field that is present replaces that placement; listed segments are moved out of other default placements so a partial override can move one segment without duplicating it. The layout supports `footer_left`, `footer_right`, `textarea_top_left`, `textarea_top_right`, `textarea_bottom_left`, and `textarea_bottom_right`.
+
+Example config.toml to move the mode indicator into the textarea's top-right corner:
+```toml
+[tui.footer_layout]
+textarea_top_right = ["mode_indicator"]
+```
 
 Token data flows from `TranscriptLocation.token_breakdown` (provided by `nori_acp::discover_transcript_for_agent_with_message()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
 Footer context usage is sourced in priority order: ACP `SessionUpdateInfo { kind: Usage, usage: Some(..) }` updates drive the footer when available, while `TranscriptLocation.token_breakdown` remains the provider-specific fallback for older sessions or agents that do not emit ACP usage updates.
 
-The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `footer_segments()` renderer.
+The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `segments_for()` renderer.
 
 The TUI detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree.is_enabled()` (true for both `Automatic` and `Ask` variants) and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig` (see `chatwidget/agent.rs`). The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
 
@@ -703,9 +733,9 @@ The `/browse` slash command launches a configurable terminal file manager in cho
 5. If the selected path is a file, opens it in the user's editor using the same `editor::resolve_editor()` / `editor::spawn_editor()` as Ctrl-G
 6. Re-enables the TUI via `tui::set_modes()`
 
-When `/browse` is invoked, `SlashCommand::Browse` dispatches by loading `NoriConfig` to check `file_manager`. If `None`, an error message directs the user to `/config`. If set, it sends `AppEvent::BrowseFiles(fm)`.
+When `/browse` is invoked, `SlashCommand::Browse` dispatches by loading `NoriConfig` to check `file_manager`. If `None`, an error message directs the user to `/settings`. If set, it sends `AppEvent::BrowseFiles(fm)`.
 
-The file manager setting is configurable via `/config` -> "File Manager" which opens a sub-picker (same pattern as auto worktree). The sub-picker is built by `file_manager_picker_params()` in `@/nori-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenFileManagerPicker` / `AppEvent::SetConfigFileManager` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_file_manager_setting()`.
+The file manager setting is configurable via `/settings` -> "File Manager" which opens a sub-picker (same pattern as auto worktree). The sub-picker is built by `file_manager_picker_params()` in `@/nori-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenFileManagerPicker` / `AppEvent::SetConfigFileManager` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_file_manager_setting()`.
 
 **View-Only Transcript Viewing:**
 The `/resume-viewonly` command allows viewing previous session transcripts without replaying the conversation. Implementation in `@/nori-rs/tui/src/`:
@@ -842,7 +872,7 @@ Every error/timeout/shutdown arm in the `tokio::select!` explicitly calls `drop(
 
 **Loop Mode (Prompt Repetition):**
 
-Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/config` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/nori-rs/acp/src/config/types/mod.rs`).
+Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/settings` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/nori-rs/acp/src/config/types/mod.rs`).
 
 The loop is orchestrated entirely within the TUI layer -- `codex-core` has no awareness of loop semantics:
 
@@ -871,7 +901,7 @@ App::handle_event(LoopIteration)
 
 State fields on `ChatWidget`: `loop_remaining: Option<i32>` and `loop_total: Option<i32>`. These are initialized on the first `submit_user_message()` call and carried forward across iterations via `App`-level event handling.
 
-The loop is cancelled (both fields set to `None`) when an error occurs or a turn ends unsuccessfully. The `/config` sub-picker is a custom `BottomPaneView` implemented by `LoopCountPickerView` in `@/nori-rs/tui/src/nori/loop_count_picker.rs`. It offers preset options (Disabled, 2, 3, 5, 10) plus a "Custom..." option that enters an input mode where the user can type an arbitrary number (2-1000). Values <= 1 are treated as disabled, values > 1000 are capped. This follows the same `BottomPaneView` pattern used by `HotkeyPickerView`. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
+The loop is cancelled (both fields set to `None`) when an error occurs or a turn ends unsuccessfully. The `/settings` sub-picker is a custom `BottomPaneView` implemented by `LoopCountPickerView` in `@/nori-rs/tui/src/nori/loop_count_picker.rs`. It offers preset options (Disabled, 2, 3, 5, 10) plus a "Custom..." option that enters an input mode where the user can type an arbitrary number (2-1000). Values <= 1 are treated as disabled, values > 1000 are capped. This follows the same `BottomPaneView` pattern used by `HotkeyPickerView`. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
 
 **History Insertion and Scrollback (`insert_history.rs`, `tui.rs`):**
 

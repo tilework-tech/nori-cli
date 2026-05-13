@@ -13,6 +13,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             expected_agent,
             deferred_spawn,
             fork_context,
@@ -25,7 +26,6 @@ impl ChatWidget {
             let (op_tx, _) = tokio::sync::mpsc::unbounded_channel();
             SpawnAgentResult {
                 op_tx,
-                #[cfg(feature = "unstable")]
                 acp_handle: None,
             }
         } else {
@@ -49,6 +49,7 @@ impl ChatWidget {
                 custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
+                footer_layout_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -95,9 +96,12 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
+            acp_mode_config: None,
+            acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
+            ),
             session_stats: SessionStats::new(),
+            assistant_stream_seen_for_stats: false,
             login_handler: None,
             active_resume_picker_generation: None,
             first_prompt_text,
@@ -134,6 +138,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             expected_agent,
             deferred_spawn: _,
             fork_context: _,
@@ -164,6 +169,7 @@ impl ChatWidget {
                 custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
+                footer_layout_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -210,9 +216,12 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
+            acp_mode_config: None,
+            acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
+            ),
             session_stats: SessionStats::new(),
+            assistant_stream_seen_for_stats: false,
             login_handler: None,
             active_resume_picker_generation: None,
             first_prompt_text,
@@ -251,9 +260,6 @@ impl ChatWidget {
     pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
         let spawn_result = spawn_agent(config, app_event_tx, None);
         self.codex_op_tx = spawn_result.op_tx;
-        #[cfg(feature = "unstable")]
-        {
-            self.acp_handle = spawn_result.acp_handle;
-        }
+        self.acp_handle = spawn_result.acp_handle;
     }
 }

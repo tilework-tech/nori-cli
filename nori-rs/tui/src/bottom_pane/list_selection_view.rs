@@ -49,6 +49,7 @@ pub(crate) struct SelectionViewParams {
     pub title: Option<String>,
     pub subtitle: Option<String>,
     pub footer_hint: Option<Line<'static>>,
+    pub footer_hint_right: Option<Line<'static>>,
     pub items: Vec<SelectionItem>,
     pub is_searchable: bool,
     pub search_placeholder: Option<String>,
@@ -57,6 +58,8 @@ pub(crate) struct SelectionViewParams {
     /// Optional callback fired when the picker is dismissed without selection
     /// (e.g. via Escape or Ctrl-C).
     pub on_dismiss: Option<SelectionAction>,
+    /// Optional callback fired when Shift-Tab is pressed while the picker is open.
+    pub on_shift_tab: Option<SelectionAction>,
     /// When true, j/k navigate and `/` toggles search mode.
     /// When false (default), typing goes directly to search if `is_searchable`.
     pub vim_mode: bool,
@@ -68,12 +71,14 @@ impl Default for SelectionViewParams {
             title: None,
             subtitle: None,
             footer_hint: None,
+            footer_hint_right: None,
             items: Vec::new(),
             is_searchable: false,
             search_placeholder: None,
             header: Box::new(()),
             initial_selected_idx: None,
             on_dismiss: None,
+            on_shift_tab: None,
             vim_mode: false,
         }
     }
@@ -81,6 +86,7 @@ impl Default for SelectionViewParams {
 
 pub(crate) struct ListSelectionView {
     footer_hint: Option<Line<'static>>,
+    footer_hint_right: Option<Line<'static>>,
     items: Vec<SelectionItem>,
     state: ScrollState,
     complete: bool,
@@ -93,6 +99,7 @@ pub(crate) struct ListSelectionView {
     header: Box<dyn Renderable>,
     initial_selected_idx: Option<usize>,
     on_dismiss: Option<SelectionAction>,
+    on_shift_tab: Option<SelectionAction>,
     vim_mode: bool,
     search_active: bool,
 }
@@ -111,6 +118,7 @@ impl ListSelectionView {
         }
         let mut s = Self {
             footer_hint: params.footer_hint,
+            footer_hint_right: params.footer_hint_right,
             items: params.items,
             state: ScrollState::new(),
             complete: false,
@@ -131,6 +139,7 @@ impl ListSelectionView {
             header,
             initial_selected_idx: params.initial_selected_idx,
             on_dismiss: params.on_dismiss,
+            on_shift_tab: params.on_shift_tab,
             vim_mode: params.vim_mode,
             search_active: false,
         };
@@ -265,6 +274,7 @@ impl ListSelectionView {
                         display_shortcut: item.display_shortcut,
                         match_indices: None,
                         description,
+                        styled_description: None,
                     }
                 })
             })
@@ -397,6 +407,19 @@ impl BottomPaneView for ListSelectionView {
                 code: KeyCode::Esc, ..
             } => {
                 self.on_ctrl_c();
+            }
+            KeyEvent {
+                code: KeyCode::BackTab,
+                ..
+            }
+            | KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::SHIFT,
+                ..
+            } => {
+                if let Some(action) = &self.on_shift_tab {
+                    action(&self.app_event_tx);
+                }
             }
             // Vim mode + searchable + search active: chars go to search query.
             KeyEvent {
@@ -616,7 +639,26 @@ impl Renderable for ListSelectionView {
                 width: footer_area.width.saturating_sub(2),
                 height: footer_area.height,
             };
+            let left_width = hint.width() as u16;
+            let right_width = self
+                .footer_hint_right
+                .as_ref()
+                .map(|line| line.width() as u16)
+                .unwrap_or(0);
             hint.dim().render(hint_area, buf);
+            if let Some(right_hint) = self.footer_hint_right.clone()
+                && left_width.saturating_add(1).saturating_add(right_width) <= hint_area.width
+            {
+                let right_area = Rect {
+                    x: hint_area
+                        .x
+                        .saturating_add(hint_area.width.saturating_sub(right_width)),
+                    y: hint_area.y,
+                    width: right_width,
+                    height: hint_area.height,
+                };
+                right_hint.render(right_area, buf);
+            }
         }
     }
 }
@@ -701,6 +743,62 @@ mod tests {
     fn renders_blank_line_between_subtitle_and_items() {
         let view = make_selection_view(Some("Switch between Nori approval presets"));
         assert_snapshot!("list_selection_spacing_with_subtitle", render_lines(&view));
+    }
+
+    #[test]
+    fn renders_right_aligned_footer_hint_without_extra_height() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Select Agent".to_string()),
+                footer_hint: Some(Line::from("Press esc to dismiss.")),
+                footer_hint_right: Some(Line::from("Recording: ○ off  Shift-Tab to enable")),
+                items: vec![SelectionItem {
+                    name: "ElizACP".to_string(),
+                    description: Some("Local test ACP agent".to_string()),
+                    is_current: true,
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            tx,
+        );
+
+        assert_snapshot!(
+            "list_selection_right_aligned_footer_hint",
+            render_lines_with_width(&view, 80)
+        );
+    }
+
+    #[test]
+    fn shift_tab_runs_action_without_dismissing_selection_view() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                items: vec![SelectionItem {
+                    name: "ElizACP".to_string(),
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }],
+                on_shift_tab: Some(Box::new(|tx| {
+                    tx.send(AppEvent::SetConfigAcpWireRecording(true));
+                })),
+                ..Default::default()
+            },
+            tx,
+        );
+
+        view.handle_key_event(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+
+        let event = rx.try_recv().expect("shift-tab event");
+        assert!(
+            matches!(event, AppEvent::SetConfigAcpWireRecording(true)),
+            "expected SetConfigAcpWireRecording(true), got: {event:?}"
+        );
+        assert!(!view.is_complete(), "shift-tab should keep picker open");
     }
 
     #[test]
