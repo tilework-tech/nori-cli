@@ -16,15 +16,17 @@ I will add `nori-rs/tui/src/chatwidget/tests/part8.rs` and register it from `nor
 
 The first test will send pending and completed `ToolSnapshot` updates for the same `call_id`, then verify the tool is counted once. It will include a completed `read` snapshot for `/tmp/repro-skill/SKILL.md` and a completed `execute` snapshot for `printf`, then verify the stats include `read: 1`, `execute: 1`, and skill `repro-skill`. This proves dedupe, grouping by normalized name, and `SKILL.md` path detection without testing only a helper.
 
-The second test will send a Claude-shaped agent tool snapshot, such as title `Agent`, kind `Other("Agent")`, and `raw_input.subagent_type = "nori-task-runner"`. It will verify the stats count the `Agent` tool once and include subagent `nori-task-runner`.
+The second test will send a Claude-shaped agent tool snapshot using the real generic ACP-normalized shape: title `Agent`, kind `Other("Other")` or another generic `Other(...)`, and `raw_input.subagent_type = "nori-task-runner"`. It will verify the stats fall back to the title, count the `Agent` tool once, and include subagent `nori-task-runner`. If this can be constructed through the existing ACP-to-`ClientEvent` normalization path instead of hand-building `ToolSnapshot`, prefer that boundary.
 
 The third test will send ACP answer deltas followed by `PromptCompleted { last_agent_message: Some(...) }`, then verify the exit card shows `Assistant: 1`. This covers the captured bug shape where the card showed `Assistant: 0` after a visible assistant answer.
+
+The fourth test must cover streamed ACP answers where the completion has no final message payload: send `MessageDelta { stream: Answer, delta: "Done" }` followed by `PromptCompleted { last_agent_message: None, ... }`, then verify the exit card/session stats show `Assistant: 1`. Existing chat widget tests already exercise this visible-stream/no-final-message shape, so the goodbye-card stats tests should force it too.
 
 I will add focused unit tests in `nori-rs/tui/src/session_stats.rs` only for path/string extraction behavior that is awkward to exercise through `ChatWidget`, such as recursively scanning JSON string values for `*/SKILL.md` and extracting subagent names from `subagent_type`, `agentType`, or `agentId`.
 
 If the transcript fallback is implemented in the same PR, I will add tests in `nori-rs/acp/src/transcript_discovery.rs` that create small JSONL fixtures containing Codex-style `function_call` records named `spawn_agent`. The test will verify the parser returns one subagent usage per unique call id and ignores unrelated function calls.
 
-I will update or add `insta` snapshot coverage for the goodbye card if rendered output changes beyond replacing false `(none)` values.
+I will add or update `insta` snapshot coverage for a goodbye card containing ACP-derived `read`/`execute` tools, a detected `repro-skill`, a detected subagent, and `Assistant: 1`. Replacing false `(none)` values is the user-visible bug, so this snapshot coverage is required rather than optional.
 
 NOTE: I will write _all_ tests before I add any implementation behavior.
 
@@ -58,9 +60,9 @@ The current gap is that `handle_client_tool_snapshot()` records stats only for c
 2. Normalize tool names from `ToolSnapshot`.
 
    Add one local helper in `session_stats.rs` for display names:
-   - For `ToolKind::Other(name)`, use `name` when non-empty.
+   - For `ToolKind::Other(name)`, use `name` when non-empty and not generic.
    - For normal `ToolKind` values, use `crate::client_event_format::format_tool_kind(&snapshot.kind)`.
-   - If the result is empty or generic, fall back to `snapshot.title`.
+   - If the result is empty or generic, including `Other`, fall back to `snapshot.title`.
    - Trim whitespace.
 
    This keeps Codex-style tools grouped as `read`/`execute` while still allowing Claude-shaped `Agent` or `Task` snapshots to display as the actual agent tool name.
@@ -109,7 +111,7 @@ The current gap is that `handle_client_tool_snapshot()` records stats only for c
 
    In `handle_client_prompt_completed()`, record one assistant message when `completed.last_agent_message.as_deref()` is non-empty.
 
-   If tests show `last_agent_message` is absent for streamed ACP answers, use a single boolean in `ChatWidget` to remember that an answer stream produced non-whitespace content during the current turn, then increment on prompt completion. Keep this state private to `ChatWidget` and reset it at task start/completion.
+   Also handle streamed ACP answers where `last_agent_message` is absent. Use a single boolean in `ChatWidget` to remember that an answer stream produced non-whitespace content during the current turn, then increment on prompt completion. Keep this state private to `ChatWidget` and reset it at task start/completion.
 
    Do not increment on every answer delta. The goodbye card wants assistant messages, not chunks.
 
@@ -177,7 +179,7 @@ cargo test -p nori-tui chatwidget::tests::part8
 cargo test -p nori-tui nori::exit_message
 cargo test -p nori-acp transcript_discovery
 cargo build --bin nori
-cargo test -p tui-pty-e2e exit_statistics
+cargo test -p tui-pty-e2e --test exit_statistics
 just fmt
 just fix -p nori-tui
 ```
