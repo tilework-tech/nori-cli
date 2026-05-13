@@ -28,7 +28,7 @@ session lifecycle             message queue                                     
 | Session forking       | `🔵 now`   | sessions can branch and form trees | finish `fork` and tree-oriented flows                          | keep native ACP behavior ahead of local stand-ins                       |
 | Image attachments     | `🔵 now`   | users can send visual context      | capability-aware image routing and transcript fidelity         | images reach ACP, but the path needs polish                             |
 | Queued messages       | `🔵 now`   | users can keep typing during work  | finish backend handling for queued turns                       | TUI support exists, but ACP backend behavior needs tightening           |
-| Session configuration | `🟡 next`  | agents can expose useful controls  | custom options like thinking/effort level and plan/build modes | keep this driven by agent-provided config, not hardcoding               |
+| Session configuration | `✅ done`  | agents can expose useful controls  | custom options like thinking/effort level and plan/build modes | keep this driven by agent-provided config, not hardcoding               |
 | Agent discovery       | `🟡 next`  | custom agents are easier to find   | support the official ACP Registry                              | local config registration already works                                 |
 | Agent-driven auth     | `⚪ later` | agents can own login/logout flows  | auth methods and `logout`                                      | wait until lifecycle, config, and registry are settled                  |
 | Multi-session UX      | `⚪ later` | users can move across active work  | multi-session support and navigation                           | keep this separate from single-session lifecycle cleanup                |
@@ -57,7 +57,7 @@ This table keeps the roadmap grounded in the current ACP spec and draft surface.
 | File attachments      | `@` path references + `readTextFile`          | ACP filesystem capability    | done                  |
 | File attachments      | `ResourceLink` / embedded `Resource` context  | baseline + `embeddedContext` | todo                  |
 | Image attachments     | image content blocks                          | prompt capability            | partial               |
-| Configuration         | session config options                        | stable                       | near term             |
+| Configuration         | session config options                        | stable                       | done                  |
 | Configuration         | boolean config options                        | unstable landed              | near term             |
 | Discovery             | ACP Registry                                  | stable                       | near term             |
 | Auth                  | auth methods                                  | unstable landed              | planned               |
