@@ -127,6 +127,11 @@ impl ChatWidget {
 
     /// Update system info in the footer (for background refresh).
     pub(crate) fn apply_system_info_refresh(&mut self, info: crate::system_info::SystemInfo) {
+        if let Some(transcript_location) = &info.transcript_location {
+            for subagent in &transcript_location.subagents_used {
+                self.session_stats.record_subagent(subagent);
+            }
+        }
         self.bottom_pane.set_system_info(info);
     }
 

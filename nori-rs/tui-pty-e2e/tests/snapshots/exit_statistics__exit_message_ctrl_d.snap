@@ -11,7 +11,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 │                                       │
 │  Session: [SESSION_ID]                │
 │                                       │
-│ Messages      User: 1  Assistant: 0  Total: 1 │
+│ Messages      User: 1  Assistant: 1  Total: 2 │
 │  Tool Calls    (none)                 │
 │                                       │
 │  Skills Used                          │

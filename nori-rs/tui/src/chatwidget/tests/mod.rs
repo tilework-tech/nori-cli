@@ -308,6 +308,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         #[cfg(feature = "unstable")]
         acp_handle: None,
         session_stats: crate::session_stats::SessionStats::new(),
+        assistant_stream_seen_for_stats: false,
         login_handler: None,
         active_resume_picker_generation: None,
         first_prompt_text: None,
@@ -343,3 +344,4 @@ mod part4;
 mod part5;
 mod part6;
 mod part7;
+mod part8;
