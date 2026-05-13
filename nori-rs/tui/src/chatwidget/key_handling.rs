@@ -36,6 +36,15 @@ impl ChatWidget {
                 }
                 return;
             }
+            KeyEvent {
+                code: KeyCode::BackTab,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.bottom_pane.has_active_overlay_or_popup()
+                && self.cycle_acp_mode_config() =>
+            {
+                return;
+            }
             other if other.kind == KeyEventKind::Press => {
                 self.bottom_pane.clear_ctrl_c_quit_hint();
             }

@@ -1146,6 +1146,8 @@ pub enum FooterSegment {
     NoriVersion,
     /// Token usage: "Tokens: 77K total (32K cached)"
     TokenUsage,
+    /// ACP mode indicator: "[ Plan ]"
+    ModeIndicator,
 }
 
 impl FooterSegment {
@@ -1162,6 +1164,7 @@ impl FooterSegment {
             Self::NoriProfile => "Skillset",
             Self::NoriVersion => "Skillset Version",
             Self::TokenUsage => "Token Usage",
+            Self::ModeIndicator => "Mode Indicator",
         }
     }
 
@@ -1178,6 +1181,7 @@ impl FooterSegment {
             Self::NoriProfile => "nori_profile",
             Self::NoriVersion => "nori_version",
             Self::TokenUsage => "token_usage",
+            Self::ModeIndicator => "mode_indicator",
         }
     }
 
@@ -1194,6 +1198,7 @@ impl FooterSegment {
             Self::NoriProfile,
             Self::NoriVersion,
             Self::TokenUsage,
+            Self::ModeIndicator,
         ]
     }
 
@@ -1234,6 +1239,8 @@ pub struct FooterSegmentConfigToml {
     pub nori_version: Option<bool>,
     /// Enable/disable token usage segment.
     pub token_usage: Option<bool>,
+    /// Enable/disable ACP mode indicator segment.
+    pub mode_indicator: Option<bool>,
 }
 
 /// Resolved footer segment configuration with defaults applied.
@@ -1259,6 +1266,8 @@ pub struct FooterSegmentConfig {
     pub nori_version: bool,
     /// Enable/disable token usage segment.
     pub token_usage: bool,
+    /// Enable/disable ACP mode indicator segment.
+    pub mode_indicator: bool,
 }
 
 impl Default for FooterSegmentConfig {
@@ -1274,6 +1283,7 @@ impl Default for FooterSegmentConfig {
             nori_profile: true,
             nori_version: true,
             token_usage: true,
+            mode_indicator: true,
         }
     }
 }
@@ -1292,6 +1302,7 @@ impl FooterSegmentConfig {
             nori_profile: toml.nori_profile.unwrap_or(true),
             nori_version: toml.nori_version.unwrap_or(true),
             token_usage: toml.token_usage.unwrap_or(true),
+            mode_indicator: toml.mode_indicator.unwrap_or(true),
         }
     }
 
@@ -1308,6 +1319,7 @@ impl FooterSegmentConfig {
             FooterSegment::NoriProfile => self.nori_profile,
             FooterSegment::NoriVersion => self.nori_version,
             FooterSegment::TokenUsage => self.token_usage,
+            FooterSegment::ModeIndicator => self.mode_indicator,
         }
     }
 
@@ -1324,6 +1336,7 @@ impl FooterSegmentConfig {
             FooterSegment::NoriProfile => self.nori_profile = enabled,
             FooterSegment::NoriVersion => self.nori_version = enabled,
             FooterSegment::TokenUsage => self.token_usage = enabled,
+            FooterSegment::ModeIndicator => self.mode_indicator = enabled,
         }
     }
 
@@ -1333,6 +1346,106 @@ impl FooterSegmentConfig {
             .iter()
             .map(|s| (*s, self.is_enabled(*s)))
             .collect()
+    }
+}
+
+/// TOML-deserializable footer segment placement settings.
+///
+/// Each field replaces that placement when present. Listed segments are moved
+/// out of other default placements so a partial override like
+/// `textarea_top_right = ["mode_indicator"]` moves the mode indicator instead
+/// of duplicating it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FooterLayoutConfigToml {
+    pub footer_left: Option<Vec<FooterSegment>>,
+    pub footer_right: Option<Vec<FooterSegment>>,
+    pub textarea_top_left: Option<Vec<FooterSegment>>,
+    pub textarea_top_right: Option<Vec<FooterSegment>>,
+    pub textarea_bottom_left: Option<Vec<FooterSegment>>,
+    pub textarea_bottom_right: Option<Vec<FooterSegment>>,
+}
+
+/// Resolved footer segment placement configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FooterLayoutConfig {
+    pub footer_left: Vec<FooterSegment>,
+    pub footer_right: Vec<FooterSegment>,
+    pub textarea_top_left: Vec<FooterSegment>,
+    pub textarea_top_right: Vec<FooterSegment>,
+    pub textarea_bottom_left: Vec<FooterSegment>,
+    pub textarea_bottom_right: Vec<FooterSegment>,
+}
+
+impl Default for FooterLayoutConfig {
+    fn default() -> Self {
+        Self {
+            footer_left: vec![
+                FooterSegment::PromptSummary,
+                FooterSegment::VimMode,
+                FooterSegment::GitBranch,
+                FooterSegment::WorktreeName,
+                FooterSegment::GitStats,
+                FooterSegment::Context,
+                FooterSegment::ApprovalMode,
+                FooterSegment::NoriProfile,
+                FooterSegment::NoriVersion,
+                FooterSegment::TokenUsage,
+            ],
+            footer_right: vec![FooterSegment::ModeIndicator],
+            textarea_top_left: Vec::new(),
+            textarea_top_right: Vec::new(),
+            textarea_bottom_left: Vec::new(),
+            textarea_bottom_right: Vec::new(),
+        }
+    }
+}
+
+impl FooterLayoutConfig {
+    pub fn from_toml(toml: &FooterLayoutConfigToml) -> Self {
+        let mut config = Self::default();
+
+        if let Some(segments) = &toml.footer_left {
+            config.remove_segments(segments);
+            config.footer_left = segments.clone();
+        }
+        if let Some(segments) = &toml.footer_right {
+            config.remove_segments(segments);
+            config.footer_right = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_top_left {
+            config.remove_segments(segments);
+            config.textarea_top_left = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_top_right {
+            config.remove_segments(segments);
+            config.textarea_top_right = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_bottom_left {
+            config.remove_segments(segments);
+            config.textarea_bottom_left = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_bottom_right {
+            config.remove_segments(segments);
+            config.textarea_bottom_right = segments.clone();
+        }
+
+        config
+    }
+
+    fn remove_segments(&mut self, segments: &[FooterSegment]) {
+        self.footer_left
+            .retain(|segment| !segments.contains(segment));
+        self.footer_right
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_top_left
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_top_right
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_bottom_left
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_bottom_right
+            .retain(|segment| !segments.contains(segment));
     }
 }
 
@@ -1366,6 +1479,10 @@ pub struct TuiConfigToml {
     /// Footer segment visibility settings.
     #[serde(default)]
     pub footer_segments: FooterSegmentConfigToml,
+
+    /// Footer segment placement settings.
+    #[serde(default)]
+    pub footer_layout: FooterLayoutConfigToml,
 
     /// Timeout for custom prompt script execution.
     pub script_timeout: Option<ScriptTimeout>,
@@ -1580,6 +1697,9 @@ pub struct NoriConfig {
     /// Footer segment visibility configuration.
     pub footer_segment_config: FooterSegmentConfig,
 
+    /// Footer segment placement configuration.
+    pub footer_layout_config: FooterLayoutConfig,
+
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
 
@@ -1672,6 +1792,7 @@ impl Default for NoriConfig {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: FooterLayoutConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),

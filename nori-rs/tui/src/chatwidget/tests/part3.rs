@@ -468,6 +468,68 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
 }
 
 #[test]
+fn acp_mode_snapshot_updates_composer_label() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation(),
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "plan".to_string(),
+            vec![
+                ("plan".to_string(), "Plan".to_string()),
+                ("build".to_string(), "Build".to_string()),
+            ],
+        ),
+    );
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with mode label");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("[ Plan"),
+        "expected ACP mode label in composer, got: {contents:?}"
+    );
+}
+
+#[test]
+fn acp_mode_snapshot_ignores_stale_generation() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation() + 1,
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "plan".to_string(),
+            vec![
+                ("plan".to_string(), "Plan".to_string()),
+                ("build".to_string(), "Build".to_string()),
+            ],
+        ),
+    );
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat after stale mode snapshot");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        !contents.contains("[ Plan"),
+        "expected stale ACP mode snapshot to be ignored, got: {contents:?}"
+    );
+}
+
+#[test]
 fn approval_modal_patch_from_client_event_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     chat.config.approval_policy = AskForApproval::OnRequest;

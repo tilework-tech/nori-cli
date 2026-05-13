@@ -178,6 +178,9 @@ impl NoriConfig {
             footer_segment_config: super::types::FooterSegmentConfig::from_toml(
                 &toml.tui.footer_segments,
             ),
+            footer_layout_config: super::types::FooterLayoutConfig::from_toml(
+                &toml.tui.footer_layout,
+            ),
             nori_home,
             cwd,
             mcp_servers,

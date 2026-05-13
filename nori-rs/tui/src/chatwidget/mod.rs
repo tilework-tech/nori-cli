@@ -130,6 +130,7 @@ mod helpers;
 mod key_handling;
 mod login;
 mod pickers;
+mod session_config_mode;
 mod user_input;
 use self::session_header::SessionHeader;
 use crate::streaming::controller::StreamController;
@@ -316,6 +317,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
     /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching agent. This prevents race conditions when switching agents.
@@ -403,6 +405,8 @@ pub(crate) struct ChatWidget {
     session_configured_received: bool,
     // ACP agent handle for session config and model switching (only present in ACP mode)
     acp_handle: Option<AcpAgentHandle>,
+    acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
+    acp_mode_config_generation: i64,
     // Session statistics tracking
     session_stats: SessionStats,
     assistant_stream_seen_for_stats: bool,

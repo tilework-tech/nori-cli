@@ -262,6 +262,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         custom_working_message_list: cfg.custom_working_message_list.clone(),
         vertical_footer: false,
         footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         agent_display_name: String::new(),
         agent_slug: String::new(),
     });
@@ -307,6 +308,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         session_configured_received: false,
         #[cfg(feature = "unstable")]
         acp_handle: None,
+        acp_mode_config: None,
+        acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(),
         session_stats: crate::session_stats::SessionStats::new(),
         assistant_stream_seen_for_stats: false,
         login_handler: None,

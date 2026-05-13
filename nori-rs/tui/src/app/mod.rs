@@ -214,6 +214,7 @@ pub(crate) struct App {
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: Config,
     pub(crate) vertical_footer: bool,
+    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
     pub(crate) active_profile: Option<String>,
 
     pub(crate) file_search: FileSearchManager,
@@ -340,6 +341,7 @@ impl App {
                 auth_manager: auth_manager.clone(),
                 vertical_footer,
                 footer_segment_config: nori_config.footer_segment_config.clone(),
+                footer_layout_config: nori_config.footer_layout_config.clone(),
                 expected_agent: None,
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
@@ -391,6 +393,7 @@ impl App {
             hotkey_config: nori_acp::config::HotkeyConfig::default(),
             vim_mode: nori_acp::config::VimEnterBehavior::Off,
             footer_segment_config: nori_config.footer_segment_config.clone(),
+            footer_layout_config: nori_config.footer_layout_config.clone(),
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
@@ -526,6 +529,7 @@ impl App {
             auth_manager: self.auth_manager.clone(),
             vertical_footer: self.vertical_footer,
             footer_segment_config: self.footer_segment_config.clone(),
+            footer_layout_config: self.footer_layout_config.clone(),
             expected_agent,
             deferred_spawn,
             fork_context,

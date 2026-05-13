@@ -749,11 +749,18 @@ impl ChatWidget {
     ) {
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
+            let generation = self.acp_mode_config_generation;
             let option_name_for_result = option_name.clone();
             let value_name_for_result = value_name.clone();
             tokio::spawn(async move {
                 match handle.set_session_config_option(config_id, value).await {
-                    Ok(()) => {
+                    Ok(config_options) => {
+                        app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                            generation,
+                            mode: crate::nori::session_config_mode::acp_mode_config_from_options(
+                                &config_options,
+                            ),
+                        });
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: true,
                             option_name: option_name_for_result,

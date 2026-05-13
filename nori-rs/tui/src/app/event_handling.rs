@@ -751,6 +751,10 @@ impl App {
                     );
                 }
             }
+            AppEvent::AcpModeConfigSnapshot { generation, mode } => {
+                self.chat_widget
+                    .apply_acp_mode_config_snapshot(generation, mode);
+            }
             AppEvent::LoginComplete { success } => {
                 self.chat_widget.handle_login_complete(success);
             }
