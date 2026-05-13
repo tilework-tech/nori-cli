@@ -74,7 +74,7 @@ pub(crate) enum AcpAgentCommand {
     SetSessionConfigOption {
         config_id: String,
         value: String,
-        response_tx: oneshot::Sender<anyhow::Result<()>>,
+        response_tx: oneshot::Sender<anyhow::Result<Vec<SessionConfigOption>>>,
     },
 }
 
@@ -135,7 +135,7 @@ impl AcpAgentHandle {
         &self,
         config_id: String,
         value: String,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<SessionConfigOption>> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(AcpAgentCommand::SetSessionConfigOption {
@@ -373,7 +373,10 @@ fn spawn_acp_agent(
                         value,
                         response_tx,
                     } => {
-                        let result = backend_for_agent.set_config_option(config_id, value).await;
+                        let result = backend_for_agent
+                            .set_config_option(config_id, value)
+                            .await
+                            .map(|()| backend_for_agent.config_options());
                         let _ = response_tx.send(result);
                     }
                 }
@@ -561,7 +564,10 @@ pub(crate) fn spawn_acp_agent_resume(
                         value,
                         response_tx,
                     } => {
-                        let result = backend_for_agent.set_config_option(config_id, value).await;
+                        let result = backend_for_agent
+                            .set_config_option(config_id, value)
+                            .await
+                            .map(|()| backend_for_agent.config_options());
                         let _ = response_tx.send(result);
                     }
                 }
@@ -585,5 +591,49 @@ pub(crate) fn spawn_acp_agent_resume(
     SpawnAgentResult {
         op_tx: codex_op_tx,
         acp_handle,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn mode_option(current_value: &str) -> SessionConfigOption {
+        SessionConfigOption::select(
+            "mode",
+            "Mode",
+            current_value.to_string(),
+            vec![
+                nori_acp::SessionConfigSelectOption::new("plan", "Plan"),
+                nori_acp::SessionConfigSelectOption::new("build", "Build"),
+            ],
+        )
+        .category(nori_acp::SessionConfigOptionCategory::Mode)
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_returns_refreshed_config_snapshot() {
+        let (command_tx, mut command_rx) = unbounded_channel::<AcpAgentCommand>();
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if let AcpAgentCommand::SetSessionConfigOption {
+                    config_id: _,
+                    value,
+                    response_tx,
+                } = command
+                {
+                    let _ = response_tx.send(Ok(vec![mode_option(&value)]));
+                }
+            }
+        });
+        let handle = AcpAgentHandle { command_tx };
+
+        let config_options = handle
+            .set_session_config_option("mode".to_string(), "build".to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(config_options, vec![mode_option("build")]);
     }
 }
