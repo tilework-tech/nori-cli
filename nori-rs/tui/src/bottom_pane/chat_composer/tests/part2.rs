@@ -146,23 +146,23 @@ fn slash_popup_model_first_for_mo_logic() {
 }
 
 #[test]
-fn composer_renders_acp_mode_label_at_top_right() {
-    snapshot_composer_state("composer_acp_mode_label", false, |composer| {
+fn composer_renders_acp_mode_label_in_footer_by_default() {
+    snapshot_composer_state("composer_acp_mode_footer_default", false, |composer| {
         composer.set_acp_mode_label(Some("Plan".to_string()));
     });
 }
 
 #[test]
-fn acp_mode_label_is_fixed_width_and_truncated() {
-    assert_eq!(format_acp_mode_label("Plan"), "[ Plan                 ]");
-    assert_eq!(
-        format_acp_mode_label("Bypass Permissions"),
-        "[ Bypass Permissions   ]"
-    );
-    assert_eq!(
-        format_acp_mode_label("Very Long Alternate Mode"),
-        "[ Very Long Alternate… ]"
-    );
+fn composer_can_render_mode_segment_in_textarea_top_right() {
+    snapshot_composer_state("composer_acp_mode_textarea_top_right", false, |composer| {
+        composer.set_footer_layout_config(nori_acp::config::FooterLayoutConfig::from_toml(
+            &nori_acp::config::FooterLayoutConfigToml {
+                textarea_top_right: Some(vec![nori_acp::config::FooterSegment::ModeIndicator]),
+                ..Default::default()
+            },
+        ));
+        composer.set_acp_mode_label(Some("Plan".to_string()));
+    });
 }
 
 #[test]

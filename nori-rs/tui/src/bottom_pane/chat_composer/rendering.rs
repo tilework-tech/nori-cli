@@ -128,6 +128,8 @@ impl ChatComposer {
                 .as_ref()
                 .and_then(|s| s.worktree_name.clone()),
             footer_segment_config: self.footer_segment_config.clone(),
+            footer_layout_config: self.footer_layout_config.clone(),
+            acp_mode_label: self.acp_mode_label.clone(),
         }
     }
 

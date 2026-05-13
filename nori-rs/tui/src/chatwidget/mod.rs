@@ -317,6 +317,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
     /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching agent. This prevents race conditions when switching agents.
