@@ -79,7 +79,7 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 `SessionRuntime` is the authoritative model for:
 - whether the ACP session is idle, loading, or in a prompt turn
 - queued user prompts and compact prompts waiting behind an active request
-- request-local message assembly for assistant/reasoning streams
+- request-local message assembly for user/assistant/reasoning streams, including flushing the prior open text buffer when the ACP session update type changes
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
 - final assistant message extraction used for `PromptCompleted { last_agent_message, .. }`
@@ -89,7 +89,7 @@ The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.
 
 Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
 
-`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
+`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. Message replay preserves chronological stream-kind boundaries: an answer -> reasoning -> answer sequence becomes three replay entries, while adjacent deltas of the same stream are still coalesced. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
@@ -168,6 +168,8 @@ The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_
 **TUI Display Configuration** (`config/types/mod.rs`):
 
 The `[tui]` section also owns display-only preferences consumed by `@/nori-rs/tui/`. `custom_working_messages` defaults to `true`; setting it to `false` disables the rotating whimsical status header list and lets the TUI use a plain "Working" label while a task starts. The companion `custom_working_message_list` accepts an array of strings; when non-empty and `custom_working_messages` is `true`, the TUI samples from the user's list instead of the builtin whimsical messages. Both values are resolved onto `NoriConfig` in `loader.rs` and mirrored through `codex-core`'s config. The `/config` menu only toggles the boolean; the user list is TOML-only and the menu's "Custom Working Messages" entry advertises when a custom list is active.
+
+Footer visibility and placement are also config-owned. `[tui.footer_segments]` enables or disables named segments, including the ACP-only `mode_indicator` segment. `[tui.footer_layout]` controls where enabled segments render: `footer_left`, `footer_right`, and the four textarea corners. The default layout keeps legacy status segments on the footer's left side and puts `mode_indicator` on the footer's right side; partial layout overrides move listed segments out of their default placement to avoid duplicates.
 
 
 **Hotkey Configuration** (`config/types/mod.rs`):
@@ -288,6 +290,7 @@ ACP agents can expose runtime session configuration through `NewSessionResponse.
 This first implementation is deliberately live-session only:
 - `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
 - `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
+- If the snapshot includes a select option categorized as `Mode` (or with id `mode`), the TUI derives the current mode label from the same live options, displays it through the normal `mode_indicator` footer segment, and uses `Shift-Tab` to cycle to the next value via `session/set_config_option`.
 - No config form is shown during `/agent` switching yet.
 - No ACP session config selections are persisted to `config.toml` yet.
 
@@ -542,6 +545,7 @@ Claude Code logs multiple JSONL entries per API request due to streaming (each s
 
 The `TranscriptLocation` struct returned by discovery functions includes:
 - `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for input, output, and cached tokens
+- `subagents_used: Vec<String>` - Unique subagent names found in the discovered transcript for agents that do not emit every delegated subagent launch as visible ACP tool events
 
 Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
 
@@ -556,7 +560,10 @@ discover_transcript_for_agent_with_message(cwd, agent_kind, first_message)
 parse_transcript_tokens(path, agent_kind)
     |
     v
-TranscriptLocation { ..., token_breakdown }
+parse_transcript_subagents(path)
+    |
+    v
+TranscriptLocation { ..., token_breakdown, subagents_used }
     |
     v
 FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
@@ -564,6 +571,8 @@ FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
     v
 Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
+
+`subagents_used` is consumed by `nori-tui` during system-info refresh and merged into the goodbye-card session stats. It does not affect footer token rendering.
 **Connection Management** (`connection/`):
 
 The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
@@ -736,6 +745,8 @@ Approval request         → client_event entry
 ```
 
 Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remain in the schema for legacy read compatibility, but ACP live recording now uses normalized `ClientEvent` entries so transcript persistence matches the live TUI path.
+
+Reducer-owned transcript assembly preserves ACP session update type boundaries. When text changes from assistant to reasoning, reasoning to assistant, or user to either agent stream, the previous open message is flushed before the new stream is accumulated. Consecutive chunks with the same stream are still treated as one message because stable ACP does not provide a durable same-type message boundary.
 
 Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers in the crate -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 

@@ -266,6 +266,58 @@ fn normalized_reasoning_message_delta_updates_status_header() {
 }
 
 #[test]
+fn normalized_reasoning_message_delta_separates_adjacent_answer_blocks() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "CI is green.".into(),
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Reasoning,
+            delta: "**Preparing PR**".into(),
+        },
+    ));
+
+    let first_answer = drain_insert_history(&mut rx);
+    let first_answer_text = first_answer
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<String>();
+    assert!(
+        first_answer_text.contains("CI is green."),
+        "reasoning should flush the prior answer block before later answer text arrives: {first_answer_text:?}"
+    );
+    assert!(
+        !first_answer_text.contains("The PR is up"),
+        "first flushed answer block must not contain later answer text: {first_answer_text:?}"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "The PR is up.".into(),
+        },
+    ));
+    chat.on_task_complete(None);
+
+    let final_answer = drain_insert_history(&mut rx);
+    let final_answer_text = final_answer
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<String>();
+    assert!(
+        final_answer_text.contains("The PR is up."),
+        "later answer text should render as a separate answer block: {final_answer_text:?}"
+    );
+}
+
+#[test]
 fn normalized_prompt_phase_sets_task_running() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
@@ -377,6 +429,7 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
                 cached_tokens: 500_000,
                 last_context_tokens: Some(69_246),
             }),
+            subagents_used: Vec::new(),
         }),
         ..Default::default()
     });
@@ -411,6 +464,68 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
     assert!(
         !contents.contains("Context: 69.2K (27%)"),
         "expected transcript fallback to be disabled, got: {contents:?}"
+    );
+}
+
+#[test]
+fn acp_mode_snapshot_updates_composer_label() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation(),
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "plan".to_string(),
+            vec![
+                ("plan".to_string(), "Plan".to_string()),
+                ("build".to_string(), "Build".to_string()),
+            ],
+        ),
+    );
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with mode label");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("[ Plan"),
+        "expected ACP mode label in composer, got: {contents:?}"
+    );
+}
+
+#[test]
+fn acp_mode_snapshot_ignores_stale_generation() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation() + 1,
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "plan".to_string(),
+            vec![
+                ("plan".to_string(), "Plan".to_string()),
+                ("build".to_string(), "Build".to_string()),
+            ],
+        ),
+    );
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat after stale mode snapshot");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        !contents.contains("[ Plan"),
+        "expected stale ACP mode snapshot to be ignored, got: {contents:?}"
     );
 }
 
