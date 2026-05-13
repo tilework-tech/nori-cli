@@ -266,6 +266,58 @@ fn normalized_reasoning_message_delta_updates_status_header() {
 }
 
 #[test]
+fn normalized_reasoning_message_delta_separates_adjacent_answer_blocks() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "CI is green.".into(),
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Reasoning,
+            delta: "**Preparing PR**".into(),
+        },
+    ));
+
+    let first_answer = drain_insert_history(&mut rx);
+    let first_answer_text = first_answer
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<String>();
+    assert!(
+        first_answer_text.contains("CI is green."),
+        "reasoning should flush the prior answer block before later answer text arrives: {first_answer_text:?}"
+    );
+    assert!(
+        !first_answer_text.contains("The PR is up"),
+        "first flushed answer block must not contain later answer text: {first_answer_text:?}"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "The PR is up.".into(),
+        },
+    ));
+    chat.on_task_complete(None);
+
+    let final_answer = drain_insert_history(&mut rx);
+    let final_answer_text = final_answer
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<String>();
+    assert!(
+        final_answer_text.contains("The PR is up."),
+        "later answer text should render as a separate answer block: {final_answer_text:?}"
+    );
+}
+
+#[test]
 fn normalized_prompt_phase_sets_task_running() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 

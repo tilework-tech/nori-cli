@@ -127,7 +127,7 @@ The trade-off: incomplete cells may appear in scrollback showing "Running"/"Expl
 
 **Interrupt Queue & Tool Event Deferral** (`chatwidget/event_handlers.rs`):
 
-When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. All ACP tool kinds route directly through `ClientToolCell` via `handle_client_native_tool_snapshot`, and the handler calls `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
+When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive concurrently with answer or reasoning deltas. All ACP tool kinds route directly through `ClientToolCell` via `handle_client_native_tool_snapshot`, and the handler calls `flush_answer_stream_with_separator()` before deferring or rendering so tool cells appear in their correct interleaved position relative to text rather than being grouped after all text. Reasoning deltas also flush any open answer stream before updating the status header, preserving the visible boundary for answer -> reasoning -> answer sequences. The `InterruptManager` queues events via `defer_or_handle()` when the queue is already non-empty, preserving FIFO ordering for events that arrive while earlier deferred events are pending.
 
 One operation consumes the queue:
 
