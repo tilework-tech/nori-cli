@@ -440,7 +440,7 @@ fn acp_mode_snapshot_updates_composer_label() {
     let contents = terminal.backend().vt100().screen().contents();
 
     assert!(
-        contents.contains("Mode: Plan"),
+        contents.contains("[ Plan"),
         "expected ACP mode label in composer, got: {contents:?}"
     );
 }
@@ -471,7 +471,7 @@ fn acp_mode_snapshot_ignores_stale_generation() {
     let contents = terminal.backend().vt100().screen().contents();
 
     assert!(
-        !contents.contains("Mode: Plan"),
+        !contents.contains("[ Plan"),
         "expected stale ACP mode snapshot to be ignored, got: {contents:?}"
     );
 }

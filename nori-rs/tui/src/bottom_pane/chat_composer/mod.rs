@@ -68,6 +68,7 @@ use std::time::Instant;
 /// If the pasted content exceeds this number of characters, replace it with a
 /// placeholder in the UI.
 const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
+const ACP_MODE_LABEL_TEXT_WIDTH: usize = 20;
 
 /// Result returned when the user interacts with the text area.
 #[derive(Debug, PartialEq)]
@@ -512,7 +513,7 @@ impl Renderable for ChatComposer {
         let style = user_message_style();
         Block::default().style(style).render_ref(composer_rect, buf);
         if let Some(mode_label) = &self.acp_mode_label {
-            let label = format!("Mode: {mode_label}");
+            let label = format_acp_mode_label(mode_label);
             let label_width = label.chars().count() as u16;
             if composer_rect.width > label_width + 2 {
                 let x = composer_rect
@@ -538,6 +539,22 @@ impl Renderable for ChatComposer {
             Line::from(vec![placeholder]).render_ref(textarea_rect.inner(Margin::new(0, 0)), buf);
         }
     }
+}
+
+fn format_acp_mode_label(mode_label: &str) -> String {
+    let label_len = mode_label.chars().count();
+    let text = if label_len > ACP_MODE_LABEL_TEXT_WIDTH {
+        let mut truncated = mode_label
+            .chars()
+            .take(ACP_MODE_LABEL_TEXT_WIDTH - 1)
+            .collect::<String>();
+        truncated.push('…');
+        truncated
+    } else {
+        mode_label.to_string()
+    };
+
+    format!("[ {text:<ACP_MODE_LABEL_TEXT_WIDTH$} ]")
 }
 
 fn prompt_selection_action(

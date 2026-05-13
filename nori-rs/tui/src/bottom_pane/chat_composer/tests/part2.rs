@@ -153,6 +153,19 @@ fn composer_renders_acp_mode_label_at_top_right() {
 }
 
 #[test]
+fn acp_mode_label_is_fixed_width_and_truncated() {
+    assert_eq!(format_acp_mode_label("Plan"), "[ Plan                 ]");
+    assert_eq!(
+        format_acp_mode_label("Bypass Permissions"),
+        "[ Bypass Permissions   ]"
+    );
+    assert_eq!(
+        format_acp_mode_label("Very Long Alternate Mode"),
+        "[ Very Long Alternate… ]"
+    );
+}
+
+#[test]
 fn slash_init_dispatches_command_and_does_not_submit_literal_text() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;

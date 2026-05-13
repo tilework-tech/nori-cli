@@ -2,7 +2,7 @@
 source: tui/src/bottom_pane/chat_composer/tests/mod.rs
 expression: terminal.backend()
 ---
-"                                                                                         Mode: Plan "
+"                                                                           [ Plan                 ] "
 "› Ask Nori to do anything                                                                           "
 "                                                                                                    "
 "                                                                                                    "
