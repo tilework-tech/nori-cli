@@ -15,6 +15,8 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Widget;
 
+const MODE_INDICATOR_LABEL_MAX_CHARS: usize = 20;
+
 #[derive(Clone, Debug)]
 pub(crate) struct FooterProps {
     pub(crate) mode: FooterMode,
@@ -495,11 +497,37 @@ fn footer_segment(props: &FooterProps, segment: FooterSegment) -> Option<Line<'s
             ])
         }),
         FooterSegment::TokenUsage => token_usage_segment(props),
-        FooterSegment::ModeIndicator => props
-            .acp_mode_label
-            .as_ref()
-            .map(|label| Line::from(format!("[ {label} ]")).dim()),
+        FooterSegment::ModeIndicator => props.acp_mode_label.as_ref().map(|raw_label| {
+            let label = mode_indicator_label(raw_label);
+            let text = format!("[ {label} ]");
+            let lower = raw_label.to_lowercase();
+            let span = if lower.contains("plan") {
+                Span::from(text).green()
+            } else if lower.contains("bypass") {
+                Span::from(text).red()
+            } else if lower.contains("accept")
+                || lower.contains("implement")
+                || lower.contains("build")
+            {
+                Span::from(text).cyan()
+            } else {
+                Span::from(text).dim()
+            };
+            Line::from(span)
+        }),
     }
+}
+
+fn mode_indicator_label(label: &str) -> String {
+    if label.chars().count() <= MODE_INDICATOR_LABEL_MAX_CHARS {
+        return label.to_string();
+    }
+
+    label
+        .chars()
+        .take(MODE_INDICATOR_LABEL_MAX_CHARS.saturating_sub(1))
+        .chain(std::iter::once('…'))
+        .collect()
 }
 
 fn git_stats_segment(props: &FooterProps) -> Option<Line<'static>> {
@@ -1034,6 +1062,84 @@ mod tests {
 
         assert!(!rendered.contains("[ Plan ]"));
         assert!(!rendered.contains("Mode"));
+    }
+
+    #[test]
+    fn footer_mode_indicator_truncates_long_labels() {
+        let rendered = render_footer_text(FooterProps {
+            git_branch: Some("main".to_string()),
+            acp_mode_label: Some("ABCDEFGHIJKLMNOPQRSTUV".to_string()),
+            ..default_props()
+        });
+
+        let first_line = rendered.lines().next().unwrap_or_default();
+        assert!(first_line.ends_with("[ ABCDEFGHIJKLMNOPQRS… ]"));
+        assert!(!first_line.contains("ABCDEFGHIJKLMNOPQRSTUV"));
+    }
+
+    fn mode_indicator_fg(label: &str) -> ratatui::style::Color {
+        let props = FooterProps {
+            git_branch: Some("main".to_string()),
+            acp_mode_label: Some(label.to_string()),
+            ..default_props()
+        };
+        let height = footer_height(&props).max(1);
+        let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, f.area().width, height);
+                render_footer(area, f.buffer_mut(), &props);
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let bracket = format!("[ {label} ]");
+        let row = &buffer.content[..buffer.area.width as usize];
+        let text: String = row
+            .iter()
+            .map(|c| c.symbol().chars().next().unwrap_or(' '))
+            .collect();
+        let offset = text
+            .find(&bracket)
+            .expect("mode indicator bracket not found");
+        row[offset].fg
+    }
+
+    #[test]
+    fn footer_mode_indicator_plan_is_green() {
+        assert_eq!(mode_indicator_fg("Plan"), ratatui::style::Color::Green);
+    }
+
+    #[test]
+    fn footer_mode_indicator_plan_case_insensitive() {
+        assert_eq!(mode_indicator_fg("PLAN MODE"), ratatui::style::Color::Green);
+    }
+
+    #[test]
+    fn footer_mode_indicator_bypass_is_red() {
+        assert_eq!(mode_indicator_fg("Bypass"), ratatui::style::Color::Red);
+    }
+
+    #[test]
+    fn footer_mode_indicator_accept_is_cyan() {
+        assert_eq!(mode_indicator_fg("Accept All"), ratatui::style::Color::Cyan);
+    }
+
+    #[test]
+    fn footer_mode_indicator_implement_is_cyan() {
+        assert_eq!(mode_indicator_fg("Implement"), ratatui::style::Color::Cyan);
+    }
+
+    #[test]
+    fn footer_mode_indicator_build_is_cyan() {
+        assert_eq!(mode_indicator_fg("Build"), ratatui::style::Color::Cyan);
+    }
+
+    #[test]
+    fn footer_mode_indicator_unknown_is_default() {
+        assert_eq!(
+            mode_indicator_fg("Custom Mode"),
+            ratatui::style::Color::Reset
+        );
     }
 
     #[test]
