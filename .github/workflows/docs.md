@@ -58,6 +58,7 @@ validate -> test -> build-native (matrix: 4 targets) -> stage-npm -> create-next
 - Main branch `@next` publishes reuse the exact same version detection, tag creation, npm publish, and GitHub Release creation code paths as manual `publish_next` dispatches
 - The `dry_run` input only applies to `workflow_dispatch` -- tag pushes and main branch pushes always publish for real
 - Build runners use Blacksmith (e.g., `blacksmith-4vcpu-ubuntu-2404`) for most jobs, with standard `ubuntu-24.04` for npm publish (which needs the `npm-publish` environment)
+- Rust CI caches Cargo registry and git dependency data, but intentionally does not cache `~/.cargo/bin/`; restoring cached binaries after toolchain setup can overwrite rustup-managed `cargo` shims on hosted runners.
 - Git tags are the source of truth for all version numbering -- both the `validate` job (via `create_nori_release --get-next-version`) and the `create_nori_release` script's `determine_version()` function use `list_tags()` to enumerate existing versions; GitHub Releases are not consulted for version counting
 
 Created and maintained by Nori.
