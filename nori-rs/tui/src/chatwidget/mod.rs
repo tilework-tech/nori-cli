@@ -130,6 +130,7 @@ mod helpers;
 mod key_handling;
 mod login;
 mod pickers;
+mod session_config_mode;
 mod user_input;
 use self::session_header::SessionHeader;
 use crate::streaming::controller::StreamController;
@@ -403,6 +404,8 @@ pub(crate) struct ChatWidget {
     session_configured_received: bool,
     // ACP agent handle for session config and model switching (only present in ACP mode)
     acp_handle: Option<AcpAgentHandle>,
+    acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
+    acp_mode_config_generation: i64,
     // Session statistics tracking
     session_stats: SessionStats,
     // Login handler for /login command

@@ -124,6 +124,7 @@ pub(crate) struct ChatComposer {
     system_info: Option<crate::system_info::SystemInfo>,
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
+    acp_mode_label: Option<String>,
     vim_enter_behavior: nori_acp::config::VimEnterBehavior,
     vertical_footer: bool,
     prompt_summary: Option<String>,
@@ -183,6 +184,7 @@ impl ChatComposer {
             session_usage: None,
             system_info: None,
             approval_mode_label: None,
+            acp_mode_label: None,
             vim_enter_behavior: nori_acp::config::VimEnterBehavior::Off,
             vertical_footer: false,
             prompt_summary: None,
@@ -386,6 +388,10 @@ impl ChatComposer {
         self.approval_mode_label = label;
     }
 
+    pub(crate) fn set_acp_mode_label(&mut self, label: Option<String>) {
+        self.acp_mode_label = label;
+    }
+
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.prompt_summary = summary;
     }
@@ -505,6 +511,17 @@ impl Renderable for ChatComposer {
         }
         let style = user_message_style();
         Block::default().style(style).render_ref(composer_rect, buf);
+        if let Some(mode_label) = &self.acp_mode_label {
+            let label = format!("Mode: {mode_label}");
+            let label_width = label.chars().count() as u16;
+            if composer_rect.width > label_width + 2 {
+                let x = composer_rect
+                    .right()
+                    .saturating_sub(label_width)
+                    .saturating_sub(1);
+                buf.set_span(x, composer_rect.y, &label.dim(), label_width);
+            }
+        }
         if !textarea_rect.is_empty() {
             buf.set_span(
                 textarea_rect.x - LIVE_PREFIX_COLS,

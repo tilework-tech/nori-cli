@@ -95,6 +95,9 @@ impl ChatWidget {
             expected_agent,
             session_configured_received: false,
             acp_handle: spawn_result.acp_handle,
+            acp_mode_config: None,
+            acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
+            ),
             session_stats: SessionStats::new(),
             login_handler: None,
             active_resume_picker_generation: None,
@@ -209,6 +212,9 @@ impl ChatWidget {
             expected_agent,
             session_configured_received: false,
             acp_handle: spawn_result.acp_handle,
+            acp_mode_config: None,
+            acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
+            ),
             session_stats: SessionStats::new(),
             login_handler: None,
             active_resume_picker_generation: None,

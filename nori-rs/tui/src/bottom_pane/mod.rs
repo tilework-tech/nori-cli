@@ -588,6 +588,11 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn set_acp_mode_label(&mut self, label: Option<String>) {
+        self.composer.set_acp_mode_label(label);
+        self.request_redraw();
+    }
+
     /// Update the prompt summary displayed in the footer.
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.composer.set_prompt_summary(summary);
@@ -621,11 +626,15 @@ impl BottomPane {
         self.is_task_running
     }
 
+    pub(crate) fn has_active_overlay_or_popup(&self) -> bool {
+        !self.view_stack.is_empty() || self.composer.popup_active()
+    }
+
     /// Return true when the pane is in the regular composer state without any
     /// overlays or popups and not running a task. This is the safe context to
     /// use Esc-Esc for backtracking from the main view.
     pub(crate) fn is_normal_backtrack_mode(&self) -> bool {
-        !self.is_task_running && self.view_stack.is_empty() && !self.composer.popup_active()
+        !self.is_task_running && !self.has_active_overlay_or_popup()
     }
 
     pub(crate) fn show_view(&mut self, view: Box<dyn BottomPaneView>) {
@@ -851,6 +860,37 @@ mod tests {
             reason: None,
             risk: None,
         }
+    }
+
+    fn test_bottom_pane() -> BottomPane {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Nori to do anything".to_string(),
+            disable_paste_burst: true,
+            animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
+            vertical_footer: false,
+            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            agent_display_name: String::new(),
+            agent_slug: String::new(),
+        })
+    }
+
+    #[test]
+    fn active_overlay_or_popup_includes_active_views() {
+        let mut pane = test_bottom_pane();
+
+        assert!(!pane.has_active_overlay_or_popup());
+
+        pane.push_approval_request(exec_request());
+
+        assert!(pane.has_active_overlay_or_popup());
     }
 
     #[test]

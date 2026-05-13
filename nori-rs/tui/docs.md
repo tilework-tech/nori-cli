@@ -199,6 +199,10 @@ The config persists a boolean `pinned_plan_drawer` in `[tui]` of `config.toml`. 
 
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents. It also exposes the ACP wire JSONL recorder as a same-line footer hint: `Shift-Tab` toggles `[acp_proxy].enabled` through the app config persistence path, updates the open picker and slash-command status text, and applies to future ACP child subprocesses. Existing running ACP subprocesses keep the proxy setting they were spawned with.
 
+**ACP Session Config Mode Shortcut** (`nori/session_config_mode.rs`, `chatwidget/session_config_mode.rs`, `bottom_pane/chat_composer/mod.rs`):
+
+When an ACP agent exposes a select-style session config option categorized as `Mode` (or using id `mode`), the TUI derives a compact mode snapshot from the same live `config_options` data used by `/config`. The current mode label is rendered at the top right of the composer. While the composer has focus and no popup is active, `Shift-Tab` fetches the current ACP session config snapshot from the agent handle, chooses the next mode value in the agent-provided option order (including grouped options), and applies it through `session/set_config_option`. The UI then refreshes the composer label through `AppEvent::AcpModeConfigSnapshot`. This remains live-session only and does not persist mode selections to `config.toml`.
+
 **System Info Collection** (`system_info.rs`):
 
 The `SystemInfo` struct collects environment data in a background thread to avoid blocking TUI startup:

@@ -9,6 +9,7 @@ use nori_acp::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
+use crate::nori::session_config_mode::AcpModeConfig;
 use crate::system_info::SystemInfo;
 
 use codex_core::protocol::AskForApproval;
@@ -260,6 +261,12 @@ pub(crate) enum AppEvent {
         option_name: String,
         value_name: String,
         error: Option<String>,
+    },
+
+    /// Latest derived ACP mode config for the active session.
+    AcpModeConfigSnapshot {
+        generation: i64,
+        mode: Option<AcpModeConfig>,
     },
 
     /// Result of OAuth login flow completion.

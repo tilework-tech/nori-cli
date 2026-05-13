@@ -146,6 +146,13 @@ fn slash_popup_model_first_for_mo_logic() {
 }
 
 #[test]
+fn composer_renders_acp_mode_label_at_top_right() {
+    snapshot_composer_state("composer_acp_mode_label", false, |composer| {
+        composer.set_acp_mode_label(Some("Plan".to_string()));
+    });
+}
+
+#[test]
 fn slash_init_dispatches_command_and_does_not_submit_literal_text() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
