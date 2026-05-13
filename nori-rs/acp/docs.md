@@ -79,7 +79,7 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 `SessionRuntime` is the authoritative model for:
 - whether the ACP session is idle, loading, or in a prompt turn
 - queued user prompts and compact prompts waiting behind an active request
-- request-local message assembly for assistant/reasoning streams
+- request-local message assembly for user/assistant/reasoning streams, including flushing the prior open text buffer when the ACP session update type changes
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
 - final assistant message extraction used for `PromptCompleted { last_agent_message, .. }`
@@ -89,7 +89,7 @@ The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.
 
 Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
 
-`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
+`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. Message replay preserves chronological stream-kind boundaries: an answer -> reasoning -> answer sequence becomes three replay entries, while adjacent deltas of the same stream are still coalesced. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
@@ -739,6 +739,8 @@ Approval request         → client_event entry
 ```
 
 Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remain in the schema for legacy read compatibility, but ACP live recording now uses normalized `ClientEvent` entries so transcript persistence matches the live TUI path.
+
+Reducer-owned transcript assembly preserves ACP session update type boundaries. When text changes from assistant to reasoning, reasoning to assistant, or user to either agent stream, the previous open message is flushed before the new stream is accumulated. Consecutive chunks with the same stream are still treated as one message because stable ACP does not provide a durable same-type message boundary.
 
 Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers in the crate -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 

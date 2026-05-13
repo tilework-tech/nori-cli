@@ -83,6 +83,7 @@ pub struct ActiveRequestState {
     pub open_agent_message: Option<OpenMessage>,
     pub open_thought_message: Option<OpenMessage>,
     pub open_user_message: Option<OpenMessage>,
+    pub last_agent_message: Option<String>,
     /// Tool call IDs created during this request, in insertion order.
     pub tool_call_ids: Vec<String>,
     /// Permission request IDs pending for this request.
@@ -98,6 +99,7 @@ impl ActiveRequestState {
             open_agent_message: None,
             open_thought_message: None,
             open_user_message: None,
+            last_agent_message: None,
             tool_call_ids: Vec::new(),
             pending_permission_requests: HashSet::new(),
         }

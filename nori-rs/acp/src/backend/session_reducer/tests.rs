@@ -615,6 +615,71 @@ fn multiple_chunks_assembled_into_one_transcript_entry() {
     assert_eq!(agent_messages[0].content, "hello world!");
 }
 
+#[test]
+fn mixed_agent_and_thought_chunks_preserve_transcript_order() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+
+    let updates = [
+        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(acp::ContentBlock::Text(
+            acp::TextContent::new("CI is green."),
+        ))),
+        acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk::new(acp::ContentBlock::Text(
+            acp::TextContent::new("Preparing PR."),
+        ))),
+        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(acp::ContentBlock::Text(
+            acp::TextContent::new("The PR is up."),
+        ))),
+    ];
+
+    for update in updates {
+        reduce(&mut rt, notification(update), &mut norm);
+    }
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptResponse {
+            stop_reason: acp::StopReason::EndTurn,
+        },
+        &mut norm,
+    );
+
+    let transcript: Vec<_> = rt
+        .persisted
+        .transcript
+        .iter()
+        .map(|message| (message.role, message.content.as_str()))
+        .collect();
+
+    assert_eq!(
+        transcript,
+        vec![
+            (
+                nori_protocol::session_runtime::TranscriptRole::User,
+                "hello",
+            ),
+            (
+                nori_protocol::session_runtime::TranscriptRole::Agent,
+                "CI is green.",
+            ),
+            (
+                nori_protocol::session_runtime::TranscriptRole::Thought,
+                "Preparing PR.",
+            ),
+            (
+                nori_protocol::session_runtime::TranscriptRole::Agent,
+                "The PR is up.",
+            ),
+        ]
+    );
+}
+
 // =========================================================================
 // 9. Load lifecycle
 // =========================================================================
