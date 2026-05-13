@@ -429,6 +429,7 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
                 cached_tokens: 500_000,
                 last_context_tokens: Some(69_246),
             }),
+            subagents_used: Vec::new(),
         }),
         ..Default::default()
     });

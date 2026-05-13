@@ -409,6 +409,7 @@ pub(crate) struct ChatWidget {
     acp_mode_config_generation: i64,
     // Session statistics tracking
     session_stats: SessionStats,
+    assistant_stream_seen_for_stats: bool,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
     active_resume_picker_generation: Option<u64>,

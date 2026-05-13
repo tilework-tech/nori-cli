@@ -311,6 +311,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         acp_mode_config: None,
         acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(),
         session_stats: crate::session_stats::SessionStats::new(),
+        assistant_stream_seen_for_stats: false,
         login_handler: None,
         active_resume_picker_generation: None,
         first_prompt_text: None,
@@ -346,3 +347,4 @@ mod part4;
 mod part5;
 mod part6;
 mod part7;
+mod part8;

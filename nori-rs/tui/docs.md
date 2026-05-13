@@ -218,7 +218,17 @@ The `SystemInfo` struct collects environment data in a background thread to avoi
 | `transcript_location` | Discovered transcript path and token usage when running within an agent environment |
 | `worktree_cleanup_warning` | Warning when git worktrees exist and disk space is below 10% free (unix only) |
 
-The `transcript_location` field includes both `token_usage` (total tokens) and `token_breakdown` (detailed input/output/cached breakdown) which are displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini.
+The `transcript_location` field includes `token_breakdown` (detailed input/output/cached breakdown), which is displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini. It can also include `subagents_used`, which is merged into goodbye-card session stats when visible ACP events do not expose delegated subagent launches.
+
+**Goodbye Card Session Stats**:
+
+The goodbye card renders from `SessionStats` and does not parse transcripts directly. ACP sessions update those stats from normalized `ClientEvent` values:
+
+- `ToolSnapshot` increments one tool group for each completed or failed `call_id`.
+- Tool snapshots are scanned for `*/SKILL.md` paths in locations, invocations, artifacts, raw input, and raw output so skills are listed once by directory name.
+- Agent-style snapshots with generic `Other("Other")` kinds fall back to the snapshot title for display, allowing `Agent` to appear as a tool group.
+- ACP answer streams are counted as one assistant message at `PromptCompleted`, whether the final message arrives in `last_agent_message` or only as prior `MessageDelta { stream: Answer, .. }` chunks.
+- `TranscriptLocation.subagents_used` is merged during system-info refresh as a narrow fallback for subagent launches that do not appear as visible ACP tool snapshots.
 
 The footer git stats are intentionally scoped to uncommitted tracked-file
 changes so the statusline stays compact in long-lived branches or repositories

@@ -101,6 +101,7 @@ impl ChatWidget {
             acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
             ),
             session_stats: SessionStats::new(),
+            assistant_stream_seen_for_stats: false,
             login_handler: None,
             active_resume_picker_generation: None,
             first_prompt_text,
@@ -220,6 +221,7 @@ impl ChatWidget {
             acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
             ),
             session_stats: SessionStats::new(),
+            assistant_stream_seen_for_stats: false,
             login_handler: None,
             active_resume_picker_generation: None,
             first_prompt_text,

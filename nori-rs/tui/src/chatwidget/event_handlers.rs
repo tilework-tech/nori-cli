@@ -189,6 +189,7 @@ impl ChatWidget {
         self.full_reasoning_buffer.clear();
         self.reasoning_buffer.clear();
         self.completed_client_tool_calls.clear();
+        self.assistant_stream_seen_for_stats = false;
         self.request_redraw();
         self.refresh_terminal_title();
     }
@@ -1175,6 +1176,7 @@ impl ChatWidget {
         match message_delta.stream {
             nori_protocol::MessageStream::User => {}
             nori_protocol::MessageStream::Answer => {
+                self.assistant_stream_seen_for_stats = true;
                 self.on_agent_message_delta(message_delta.delta)
             }
             nori_protocol::MessageStream::Reasoning => {
@@ -1241,6 +1243,14 @@ impl ChatWidget {
 
     fn handle_client_prompt_completed(&mut self, completed: nori_protocol::PromptCompleted) {
         let interrupted = completed.stop_reason == nori_protocol::StopReason::Cancelled;
+        let has_final_message = completed
+            .last_agent_message
+            .as_ref()
+            .is_some_and(|message| !message.is_empty());
+        if has_final_message || self.assistant_stream_seen_for_stats {
+            self.session_stats.record_assistant_message();
+        }
+        self.assistant_stream_seen_for_stats = false;
         self.on_task_complete(completed.last_agent_message);
         if interrupted {
             self.add_to_history(history_cell::new_error_event(
@@ -1310,8 +1320,10 @@ impl ChatWidget {
     /// them with "Explored" format, while Execute uses shell-style transcript.
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
         self.flush_answer_stream_with_separator();
+        self.session_stats
+            .record_client_tool_snapshot(&tool_snapshot);
 
-        // For completed Create/Edit/Delete/Move, observe directories and record stats
+        // For completed Create/Edit/Delete/Move, observe directories for footer refreshes.
         if matches!(
             tool_snapshot.kind,
             nori_protocol::ToolKind::Create
@@ -1323,10 +1335,6 @@ impl ChatWidget {
             self.observe_directories_from_paths(
                 tool_snapshot.locations.iter().map(|l| l.path.as_path()),
             );
-            self.session_stats
-                .record_tool_call(crate::client_event_format::format_tool_kind(
-                    &tool_snapshot.kind,
-                ));
         }
 
         // Update existing active ClientToolCell if same call_id

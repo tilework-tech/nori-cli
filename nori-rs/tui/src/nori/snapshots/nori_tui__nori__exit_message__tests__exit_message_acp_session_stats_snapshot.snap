@@ -1,0 +1,18 @@
+---
+source: tui/src/nori/exit_message.rs
+expression: rendered
+---
+╭───────────────────────────────────────────────╮
+│ Goodbye! Thanks for using Nori.               │
+│                                               │
+│ Session: sess_acp                             │
+│                                               │
+│ Messages      User: 1  Assistant: 1  Total: 2 │
+│ Tool Calls    Agent: 1  execute: 1  read: 1   │
+│                                               │
+│ Skills Used                                   │
+│   repro-skill                                 │
+│                                               │
+│ Subagents Used                                │
+│   nori-task-runner                            │
+╰───────────────────────────────────────────────╯
