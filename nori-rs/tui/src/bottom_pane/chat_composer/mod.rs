@@ -27,6 +27,7 @@ use super::footer::esc_hint_mode;
 use super::footer::footer_height;
 use super::footer::render_footer;
 use super::footer::reset_mode_after_activity;
+use super::footer::textarea_corner_segments;
 use super::footer::toggle_shortcut_mode;
 use super::history_search_popup::HistorySearchPopup;
 use super::paste_burst::CharDecision;
@@ -68,8 +69,6 @@ use std::time::Instant;
 /// If the pasted content exceeds this number of characters, replace it with a
 /// placeholder in the UI.
 const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
-const ACP_MODE_LABEL_TEXT_WIDTH: usize = 20;
-
 /// Result returned when the user interacts with the text area.
 #[derive(Debug, PartialEq)]
 pub enum InputResult {
@@ -130,6 +129,7 @@ pub(crate) struct ChatComposer {
     vertical_footer: bool,
     prompt_summary: Option<String>,
     footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    footer_layout_config: nori_acp::config::FooterLayoutConfig,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -190,6 +190,7 @@ impl ChatComposer {
             vertical_footer: false,
             prompt_summary: None,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -216,6 +217,13 @@ impl ChatComposer {
         config: nori_acp::config::FooterSegmentConfig,
     ) {
         self.footer_segment_config = config;
+    }
+
+    pub(crate) fn set_footer_layout_config(
+        &mut self,
+        config: nori_acp::config::FooterLayoutConfig,
+    ) {
+        self.footer_layout_config = config;
     }
 
     #[cfg(test)]
@@ -512,17 +520,11 @@ impl Renderable for ChatComposer {
         }
         let style = user_message_style();
         Block::default().style(style).render_ref(composer_rect, buf);
-        if let Some(mode_label) = &self.acp_mode_label {
-            let label = format_acp_mode_label(mode_label);
-            let label_width = label.chars().count() as u16;
-            if composer_rect.width > label_width + 2 {
-                let x = composer_rect
-                    .right()
-                    .saturating_sub(label_width)
-                    .saturating_sub(1);
-                buf.set_span(x, composer_rect.y, &label.dim(), label_width);
-            }
-        }
+        render_textarea_corner_segments(
+            composer_rect,
+            buf,
+            textarea_corner_segments(&self.footer_props()),
+        );
         if !textarea_rect.is_empty() {
             buf.set_span(
                 textarea_rect.x - LIVE_PREFIX_COLS,
@@ -541,20 +543,47 @@ impl Renderable for ChatComposer {
     }
 }
 
-fn format_acp_mode_label(mode_label: &str) -> String {
-    let label_len = mode_label.chars().count();
-    let text = if label_len > ACP_MODE_LABEL_TEXT_WIDTH {
-        let mut truncated = mode_label
-            .chars()
-            .take(ACP_MODE_LABEL_TEXT_WIDTH - 1)
-            .collect::<String>();
-        truncated.push('…');
-        truncated
-    } else {
-        mode_label.to_string()
-    };
+fn render_textarea_corner_segments(
+    composer_rect: Rect,
+    buf: &mut Buffer,
+    segments: super::footer::TextareaCornerSegments,
+) {
+    if composer_rect.is_empty() {
+        return;
+    }
 
-    format!("[ {text:<ACP_MODE_LABEL_TEXT_WIDTH$} ]")
+    render_left_corner(composer_rect.x + 1, composer_rect.y, buf, segments.top_left);
+    render_right_corner(
+        composer_rect.right().saturating_sub(1),
+        composer_rect.y,
+        buf,
+        segments.top_right,
+    );
+
+    let bottom_y = composer_rect.bottom().saturating_sub(1);
+    render_left_corner(composer_rect.x + 1, bottom_y, buf, segments.bottom_left);
+    render_right_corner(
+        composer_rect.right().saturating_sub(1),
+        bottom_y,
+        buf,
+        segments.bottom_right,
+    );
+}
+
+fn render_left_corner(x: u16, y: u16, buf: &mut Buffer, line: Line<'static>) {
+    let width = line.width() as u16;
+    if width > 0 {
+        line.render(Rect::new(x, y, width, 1), buf);
+    }
+}
+
+fn render_right_corner(right_edge: u16, y: u16, buf: &mut Buffer, line: Line<'static>) {
+    let width = line.width() as u16;
+    if width == 0 {
+        return;
+    }
+    let x = right_edge.saturating_sub(width).saturating_add(1);
+    line.render(Rect::new(x, y, width, 1), buf);
 }
 
 fn prompt_selection_action(

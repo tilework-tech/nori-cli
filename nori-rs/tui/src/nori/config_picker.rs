@@ -661,6 +661,7 @@ mod tests {
             loop_count: None,
             auto_worktree: nori_acp::config::AutoWorktree::Off,
             footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),

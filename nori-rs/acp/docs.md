@@ -169,6 +169,8 @@ The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_
 
 The `[tui]` section also owns display-only preferences consumed by `@/nori-rs/tui/`. `custom_working_messages` defaults to `true`; setting it to `false` disables the rotating whimsical status header list and lets the TUI use a plain "Working" label while a task starts. The companion `custom_working_message_list` accepts an array of strings; when non-empty and `custom_working_messages` is `true`, the TUI samples from the user's list instead of the builtin whimsical messages. Both values are resolved onto `NoriConfig` in `loader.rs` and mirrored through `codex-core`'s config. The `/config` menu only toggles the boolean; the user list is TOML-only and the menu's "Custom Working Messages" entry advertises when a custom list is active.
 
+Footer visibility and placement are also config-owned. `[tui.footer_segments]` enables or disables named segments, including the ACP-only `mode_indicator` segment. `[tui.footer_layout]` controls where enabled segments render: `footer_left`, `footer_right`, and the four textarea corners. The default layout keeps legacy status segments on the footer's left side and puts `mode_indicator` on the footer's right side; partial layout overrides move listed segments out of their default placement to avoid duplicates.
+
 
 **Hotkey Configuration** (`config/types/mod.rs`):
 
@@ -288,7 +290,7 @@ ACP agents can expose runtime session configuration through `NewSessionResponse.
 This first implementation is deliberately live-session only:
 - `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
 - `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
-- If the snapshot includes a select option categorized as `Mode` (or with id `mode`), the TUI derives the current mode label from the same live options, displays it on the composer, and uses `Shift-Tab` to cycle to the next value via `session/set_config_option`.
+- If the snapshot includes a select option categorized as `Mode` (or with id `mode`), the TUI derives the current mode label from the same live options, displays it through the normal `mode_indicator` footer segment, and uses `Shift-Tab` to cycle to the next value via `session/set_config_option`.
 - No config form is shown during `/agent` switching yet.
 - No ACP session config selections are persisted to `config.toml` yet.
 

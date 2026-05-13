@@ -101,6 +101,7 @@ pub(crate) struct BottomPaneParams {
     pub(crate) custom_working_message_list: Vec<String>,
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
     pub(crate) agent_display_name: String,
     pub(crate) agent_slug: String,
 }
@@ -119,6 +120,7 @@ impl BottomPane {
             custom_working_message_list,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             agent_display_name,
             agent_slug,
         } = params;
@@ -131,6 +133,7 @@ impl BottomPane {
         );
         composer.set_vertical_footer(vertical_footer);
         composer.set_footer_segment_config(footer_segment_config);
+        composer.set_footer_layout_config(footer_layout_config);
 
         // In debug builds, allow synchronous system info collection for E2E tests
         // via NORI_SYNC_SYSTEM_INFO=1. In release builds, always use default to
@@ -877,6 +880,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         })
@@ -909,6 +913,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -936,6 +941,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -971,6 +977,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: "ElizACP".to_string(),
             agent_slug: "elizacp".to_string(),
         });
@@ -1014,6 +1021,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1090,6 +1098,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1124,6 +1133,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1161,6 +1171,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1194,6 +1205,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1227,6 +1239,7 @@ mod tests {
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });

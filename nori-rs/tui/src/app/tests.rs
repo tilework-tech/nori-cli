@@ -37,6 +37,7 @@ fn make_test_app() -> App {
         auth_manager,
         config,
         vertical_footer: false,
+        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         active_profile: None,
         file_search,
         transcript_cells: Vec::new(),
@@ -82,6 +83,7 @@ fn make_test_app_with_channels() -> (
             auth_manager,
             config,
             vertical_footer: false,
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             active_profile: None,
             file_search,
             transcript_cells: Vec::new(),
@@ -266,6 +268,30 @@ fn chat_widget_init_carries_footer_segment_config() {
             "segment {segment:?}"
         );
     }
+}
+
+#[cfg(feature = "nori-config")]
+#[test]
+fn chat_widget_init_carries_footer_layout_config() {
+    let mut app = make_test_app();
+    let footer_layout_config = nori_acp::config::FooterLayoutConfig::from_toml(
+        &nori_acp::config::FooterLayoutConfigToml {
+            textarea_top_right: Some(vec![nori_acp::config::FooterSegment::ModeIndicator]),
+            ..Default::default()
+        },
+    );
+    app.footer_layout_config = footer_layout_config.clone();
+
+    let init = app.chat_widget_init(
+        crate::tui::FrameRequester::test_dummy(),
+        None,
+        Vec::new(),
+        None,
+        false,
+        None,
+    );
+
+    assert_eq!(init.footer_layout_config, footer_layout_config);
 }
 
 #[cfg(feature = "nori-config")]

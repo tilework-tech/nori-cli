@@ -13,6 +13,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             expected_agent,
             deferred_spawn,
             fork_context,
@@ -48,6 +49,7 @@ impl ChatWidget {
                 custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
+                footer_layout_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -135,6 +137,7 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             expected_agent,
             deferred_spawn: _,
             fork_context: _,
@@ -165,6 +168,7 @@ impl ChatWidget {
                 custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
+                footer_layout_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),

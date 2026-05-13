@@ -199,9 +199,9 @@ The config persists a boolean `pinned_plan_drawer` in `[tui]` of `config.toml`. 
 
 The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing users to select between available ACP agents. It also exposes the ACP wire JSONL recorder as a same-line footer hint: `Shift-Tab` toggles `[acp_proxy].enabled` through the app config persistence path, updates the open picker and slash-command status text, and applies to future ACP child subprocesses. Existing running ACP subprocesses keep the proxy setting they were spawned with.
 
-**ACP Session Config Mode Shortcut** (`nori/session_config_mode.rs`, `chatwidget/session_config_mode.rs`, `bottom_pane/chat_composer/mod.rs`):
+**ACP Session Config Mode Shortcut** (`nori/session_config_mode.rs`, `chatwidget/session_config_mode.rs`, `bottom_pane/footer.rs`):
 
-When an ACP agent exposes a select-style session config option categorized as `Mode` (or using id `mode`), the TUI derives a compact mode snapshot from the same live `config_options` data used by `/config`. The current mode label is rendered at the top right of the composer. While the composer has focus and no popup is active, `Shift-Tab` fetches the current ACP session config snapshot from the agent handle, chooses the next mode value in the agent-provided option order (including grouped options), and applies it through `session/set_config_option`. The UI then refreshes the composer label through `AppEvent::AcpModeConfigSnapshot`. This remains live-session only and does not persist mode selections to `config.toml`.
+When an ACP agent exposes a select-style session config option categorized as `Mode` (or using id `mode`), the TUI derives a compact mode snapshot from the same live `config_options` data used by `/config`. The current mode label flows into the normal footer segment pipeline as the `mode_indicator` segment, rendered as compact bracketed text such as `[ Plan ]`. By default, the segment appears in the right side of the footer line and is skipped entirely when the selected agent does not expose mode options. While the composer has focus and no popup is active, `Shift-Tab` fetches the current ACP session config snapshot from the agent handle, chooses the next mode value in the agent-provided option order (including grouped options), and applies it through `session/set_config_option`. The UI then refreshes the footer segment through `AppEvent::AcpModeConfigSnapshot`. This remains live-session only and does not persist mode selections to `config.toml`.
 
 **System Info Collection** (`system_info.rs`):
 
@@ -669,6 +669,7 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Nori Profile | `nori_profile` | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
 | Nori Version | `nori_version` | "Skillsets v<version>" |
 | Token Usage | `token_usage` | "Tokens: 123K total (32K cached)" when running within an agent environment |
+| Mode Indicator | `mode_indicator` | "[ Plan ]" style ACP mode label, shown only when the active ACP agent exposes a mode config option |
 
 Example config.toml to disable specific segments:
 ```toml
@@ -677,12 +678,20 @@ token_usage = false
 git_stats = false
 ```
 
-All segments are enabled by default. The order of segments in the footer is fixed (cannot be reordered via config).
+All segments are enabled by default, though individual segments still render only when their backing data exists.
+
+Segment placement is configurable through `[tui.footer_layout]`. Missing layout fields use defaults: legacy status segments render on `footer_left`, and `mode_indicator` renders on `footer_right`. A field that is present replaces that placement; listed segments are moved out of other default placements so a partial override can move one segment without duplicating it. The layout supports `footer_left`, `footer_right`, `textarea_top_left`, `textarea_top_right`, `textarea_bottom_left`, and `textarea_bottom_right`.
+
+Example config.toml to move the mode indicator into the textarea's top-right corner:
+```toml
+[tui.footer_layout]
+textarea_top_right = ["mode_indicator"]
+```
 
 Token data flows from `TranscriptLocation.token_breakdown` (provided by `nori_acp::discover_transcript_for_agent_with_message()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
 Footer context usage is sourced in priority order: ACP `SessionUpdateInfo { kind: Usage, usage: Some(..) }` updates drive the footer when available, while `TranscriptLocation.token_breakdown` remains the provider-specific fallback for older sessions or agents that do not emit ACP usage updates.
 
-The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `footer_segments()` renderer.
+The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `segments_for()` renderer.
 
 The TUI detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree.is_enabled()` (true for both `Automatic` and `Ask` variants) and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig` (see `chatwidget/agent.rs`). The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
 
