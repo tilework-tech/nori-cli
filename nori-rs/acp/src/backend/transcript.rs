@@ -68,46 +68,43 @@ pub fn client_events_to_replay_client_events(
     client_events: Vec<nori_protocol::ClientEvent>,
 ) -> Vec<nori_protocol::ClientEvent> {
     let mut replay = Vec::new();
-    let mut user = String::new();
-    let mut assistant = String::new();
-    let mut reasoning = String::new();
+    let mut current_stream: Option<nori_protocol::MessageStream> = None;
+    let mut current_text = String::new();
 
-    let flush_buffers = |replay: &mut Vec<nori_protocol::ClientEvent>,
-                         user: &mut String,
-                         assistant: &mut String,
-                         reasoning: &mut String| {
-        if !user.is_empty() {
-            replay.push(nori_protocol::ClientEvent::ReplayEntry(
-                nori_protocol::ReplayEntry::UserMessage {
-                    text: std::mem::take(user),
-                },
-            ));
+    let flush_message = |replay: &mut Vec<nori_protocol::ClientEvent>,
+                         stream: &mut Option<nori_protocol::MessageStream>,
+                         text: &mut String| {
+        let Some(stream) = stream.take() else {
+            return;
+        };
+        if text.is_empty() {
+            return;
         }
-        if !reasoning.is_empty() {
-            replay.push(nori_protocol::ClientEvent::ReplayEntry(
-                nori_protocol::ReplayEntry::ReasoningMessage {
-                    text: std::mem::take(reasoning),
-                },
-            ));
-        }
-        if !assistant.is_empty() {
-            replay.push(nori_protocol::ClientEvent::ReplayEntry(
-                nori_protocol::ReplayEntry::AssistantMessage {
-                    text: std::mem::take(assistant),
-                },
-            ));
-        }
+
+        let text = std::mem::take(text);
+        let entry = match stream {
+            nori_protocol::MessageStream::User => nori_protocol::ReplayEntry::UserMessage { text },
+            nori_protocol::MessageStream::Answer => {
+                nori_protocol::ReplayEntry::AssistantMessage { text }
+            }
+            nori_protocol::MessageStream::Reasoning => {
+                nori_protocol::ReplayEntry::ReasoningMessage { text }
+            }
+        };
+        replay.push(nori_protocol::ClientEvent::ReplayEntry(entry));
     };
 
     for event in client_events {
         match event {
-            nori_protocol::ClientEvent::MessageDelta(message_delta) => match message_delta.stream {
-                nori_protocol::MessageStream::User => user.push_str(&message_delta.delta),
-                nori_protocol::MessageStream::Answer => assistant.push_str(&message_delta.delta),
-                nori_protocol::MessageStream::Reasoning => reasoning.push_str(&message_delta.delta),
-            },
+            nori_protocol::ClientEvent::MessageDelta(message_delta) => {
+                if current_stream.as_ref() != Some(&message_delta.stream) {
+                    flush_message(&mut replay, &mut current_stream, &mut current_text);
+                    current_stream = Some(message_delta.stream);
+                }
+                current_text.push_str(&message_delta.delta);
+            }
             other => {
-                flush_buffers(&mut replay, &mut user, &mut assistant, &mut reasoning);
+                flush_message(&mut replay, &mut current_stream, &mut current_text);
                 if let Some(replay_entry) = replay_entry_from_client_event(&other) {
                     replay.push(nori_protocol::ClientEvent::ReplayEntry(replay_entry));
                 } else if should_pass_through_replay_client_event(&other) {
@@ -117,7 +114,7 @@ pub fn client_events_to_replay_client_events(
         }
     }
 
-    flush_buffers(&mut replay, &mut user, &mut assistant, &mut reasoning);
+    flush_message(&mut replay, &mut current_stream, &mut current_text);
     replay
 }
 
@@ -380,6 +377,45 @@ mod tests {
                 nori_protocol::ClientEvent::ReplayEntry(
                     nori_protocol::ReplayEntry::AssistantMessage {
                         text: "Loaded.".into(),
+                    },
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn client_events_to_replay_client_events_preserves_mixed_message_delta_order() {
+        let replay = client_events_to_replay_client_events(vec![
+            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                stream: nori_protocol::MessageStream::Answer,
+                delta: "CI is green.".into(),
+            }),
+            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                stream: nori_protocol::MessageStream::Reasoning,
+                delta: "Preparing PR.".into(),
+            }),
+            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
+                stream: nori_protocol::MessageStream::Answer,
+                delta: "The PR is up.".into(),
+            }),
+        ]);
+
+        assert_eq!(
+            replay,
+            vec![
+                nori_protocol::ClientEvent::ReplayEntry(
+                    nori_protocol::ReplayEntry::AssistantMessage {
+                        text: "CI is green.".into(),
+                    },
+                ),
+                nori_protocol::ClientEvent::ReplayEntry(
+                    nori_protocol::ReplayEntry::ReasoningMessage {
+                        text: "Preparing PR.".into(),
+                    },
+                ),
+                nori_protocol::ClientEvent::ReplayEntry(
+                    nori_protocol::ReplayEntry::AssistantMessage {
+                        text: "The PR is up.".into(),
                     },
                 ),
             ]
