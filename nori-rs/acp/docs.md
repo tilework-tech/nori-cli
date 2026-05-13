@@ -542,6 +542,7 @@ Claude Code logs multiple JSONL entries per API request due to streaming (each s
 
 The `TranscriptLocation` struct returned by discovery functions includes:
 - `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for input, output, and cached tokens
+- `subagents_used: Vec<String>` - Unique subagent names found in the discovered transcript for agents that do not emit every delegated subagent launch as visible ACP tool events
 
 Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
 
@@ -556,7 +557,10 @@ discover_transcript_for_agent_with_message(cwd, agent_kind, first_message)
 parse_transcript_tokens(path, agent_kind)
     |
     v
-TranscriptLocation { ..., token_breakdown }
+parse_transcript_subagents(path)
+    |
+    v
+TranscriptLocation { ..., token_breakdown, subagents_used }
     |
     v
 FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
@@ -564,6 +568,8 @@ FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
     v
 Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
+
+`subagents_used` is consumed by `nori-tui` during system-info refresh and merged into the goodbye-card session stats. It does not affect footer token rendering.
 **Connection Management** (`connection/`):
 
 The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
