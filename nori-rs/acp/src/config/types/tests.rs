@@ -936,14 +936,48 @@ fn test_footer_segment_default_order() {
 }
 
 #[test]
-fn test_footer_segment_config_default_all_enabled() {
+fn test_footer_segment_config_default_is_lean_subset() {
     let config = FooterSegmentConfig::default();
-    for segment in FooterSegment::all_variants() {
+
+    // Segments enabled by default: broadly useful or cheap-when-absent.
+    let expected_enabled = [
+        FooterSegment::Context,
+        FooterSegment::GitBranch,
+        FooterSegment::ApprovalMode,
+        FooterSegment::ModeIndicator,
+        FooterSegment::WorktreeName,
+        FooterSegment::TokenUsage,
+    ];
+    // Segments disabled by default: only meaningful after opting into the
+    // related workflow (vim mode, skillsets, prompt summary, git stats).
+    let expected_disabled = [
+        FooterSegment::VimMode,
+        FooterSegment::PromptSummary,
+        FooterSegment::GitStats,
+        FooterSegment::NoriProfile,
+        FooterSegment::NoriVersion,
+    ];
+
+    for segment in expected_enabled {
         assert!(
-            config.is_enabled(*segment),
+            config.is_enabled(segment),
             "Segment {segment:?} should be enabled by default"
         );
     }
+    for segment in expected_disabled {
+        assert!(
+            !config.is_enabled(segment),
+            "Segment {segment:?} should be disabled by default"
+        );
+    }
+    // Exhaustiveness: any new segment added to FooterSegment must be
+    // classified above. Bump one of the arrays and the matching field in
+    // FooterSegmentConfig::default().
+    assert_eq!(
+        expected_enabled.len() + expected_disabled.len(),
+        FooterSegment::all_variants().len(),
+        "every FooterSegment variant must be classified as enabled or disabled by default"
+    );
 }
 
 #[test]
@@ -955,13 +989,27 @@ fn test_footer_segment_config_disable_segment() {
 }
 
 #[test]
-fn test_footer_segment_config_from_toml_empty() {
+fn test_footer_segment_config_from_toml_empty_matches_default() {
     let toml = FooterSegmentConfigToml::default();
+    let from_toml = FooterSegmentConfig::from_toml(&toml).all_settings();
+    let from_default = FooterSegmentConfig::default().all_settings();
+    assert_eq!(from_toml, from_default);
+}
+
+#[test]
+fn test_footer_segment_config_from_toml_can_enable_default_off_segments() {
+    let toml = FooterSegmentConfigToml {
+        vim_mode: Some(true),
+        nori_profile: Some(true),
+        ..Default::default()
+    };
     let config = FooterSegmentConfig::from_toml(&toml);
-    // All segments enabled by default
-    for segment in FooterSegment::all_variants() {
-        assert!(config.is_enabled(*segment));
-    }
+    assert!(config.is_enabled(FooterSegment::VimMode));
+    assert!(config.is_enabled(FooterSegment::NoriProfile));
+    // Other default-off segments stay off when unset.
+    assert!(!config.is_enabled(FooterSegment::PromptSummary));
+    assert!(!config.is_enabled(FooterSegment::GitStats));
+    assert!(!config.is_enabled(FooterSegment::NoriVersion));
 }
 
 #[test]
