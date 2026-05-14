@@ -300,6 +300,7 @@ fn spawn_acp_agent(
             session_context: Some(include_str!("../../session_context.md").to_string()),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            prompt_summary_enabled: nori_config.footer_segment_config.prompt_summary,
         };
 
         // Race backend init against shutdown requests and a timeout.
@@ -488,6 +489,7 @@ pub(crate) fn spawn_acp_agent_resume(
             session_context: Some(include_str!("../../session_context.md").to_string()),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            prompt_summary_enabled: nori_config.footer_segment_config.prompt_summary,
         };
 
         // Race backend resume against shutdown requests and a timeout.

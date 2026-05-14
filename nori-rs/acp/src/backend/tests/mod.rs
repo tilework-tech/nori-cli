@@ -269,6 +269,7 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
         session_context: None,
         mcp_servers: std::collections::HashMap::new(),
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
+        prompt_summary_enabled: false,
     }
 }
 

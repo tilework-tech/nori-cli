@@ -81,7 +81,8 @@ impl AcpBackend {
             if *is_first {
                 *is_first = false;
                 let skip_summary = cfg!(debug_assertions) && self.agent_name.starts_with("mock-");
-                if !skip_summary {
+                if !skip_summary && (self.prompt_summary_enabled || self.auto_worktree.is_enabled())
+                {
                     let event_tx = self.event_tx.clone();
                     let agent_name = self.agent_name.clone();
                     let cwd = self.cwd.clone();

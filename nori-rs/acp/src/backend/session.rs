@@ -312,6 +312,7 @@ impl AcpBackend {
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(is_first_prompt_val)),
+            prompt_summary_enabled: config.prompt_summary_enabled,
             agent_name: config.agent.clone(),
             auto_worktree: config.auto_worktree,
             auto_worktree_repo_root: config.auto_worktree_repo_root.clone(),
