@@ -961,9 +961,11 @@ A new `TranscriptRecorder` is created for the resumed session in all paths, pers
 
 **Prompt Summary** (`backend/mod.rs`):
 
-On the first user prompt of a session, the ACP backend spawns a fire-and-forget task that generates a short summary of the prompt and emits it as a `PromptSummary` event for display in the TUI footer.
+On the first user prompt of a session, the ACP backend conditionally spawns a fire-and-forget task that generates a short summary of the prompt and emits it as a `PromptSummary` event for display in the TUI footer.
 
-The summarization uses a completely separate ACP connection (`SacpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/mod.rs` handles this:
+The background session is gated on configuration: it only spawns when the `prompt_summary` footer segment is enabled (via `NoriConfig::load()`) or `auto_worktree.is_enabled()`. Since `prompt_summary` defaults to `false` in the lean footer defaults and `auto_worktree` defaults to `Off`, the background ACP session does not spawn by default, keeping the wire protocol clean for debugging.
+
+The summarization uses a completely separate ACP connection (`SacpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/hooks.rs` handles this:
 1. Spawns a new agent subprocess via `get_agent_config()` with the same agent name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
 3. Collects the streamed text response via an `mpsc` channel and a collector task
