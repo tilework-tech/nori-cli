@@ -685,14 +685,15 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Token Usage | `token_usage` | "Tokens: 123K total (32K cached)" when running within an agent environment |
 | Mode Indicator | `mode_indicator` | "[ Plan ]" style ACP mode label, shown only when the active ACP agent exposes a mode config option |
 
-Example config.toml to disable specific segments:
+Example config.toml to disable specific segments and opt in to ones that are off by default:
 ```toml
 [tui.footer_segments]
 token_usage = false
-git_stats = false
+git_stats = true
+vim_mode = true
 ```
 
-All segments are enabled by default, though individual segments still render only when their backing data exists.
+`FooterSegmentConfig::default()` (in `@/nori-rs/acp/src/config/types/mod.rs`) ships a lean subset enabled by default: `context`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, and `mode_indicator`. The remaining segments -- `prompt_summary`, `vim_mode`, `git_stats`, `nori_profile`, and `nori_version` -- are off by default and require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible.
 
 Segment placement is configurable through `[tui.footer_layout]`. Missing layout fields use defaults: legacy status segments render on `footer_left`, and `mode_indicator` renders on `footer_right`. A field that is present replaces that placement; listed segments are moved out of other default placements so a partial override can move one segment without duplicating it. The layout supports `footer_left`, `footer_right`, `textarea_top_left`, `textarea_top_right`, `textarea_bottom_left`, and `textarea_bottom_right`.
 

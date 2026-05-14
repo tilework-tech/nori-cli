@@ -1272,16 +1272,21 @@ pub struct FooterSegmentConfig {
 
 impl Default for FooterSegmentConfig {
     fn default() -> Self {
+        // Lean defaults: only segments that are useful for everyone (or
+        // self-hiding when irrelevant) ship enabled. Niche segments such as
+        // vim mode, prompt summary, git stats, and skillset info are gated
+        // behind explicit opt-in so the footer stays readable on smaller
+        // terminals.
         Self {
-            prompt_summary: true,
-            vim_mode: true,
+            prompt_summary: false,
+            vim_mode: false,
             git_branch: true,
             worktree_name: true,
-            git_stats: true,
+            git_stats: false,
             context: true,
             approval_mode: true,
-            nori_profile: true,
-            nori_version: true,
+            nori_profile: false,
+            nori_version: false,
             token_usage: true,
             mode_indicator: true,
         }
@@ -1291,18 +1296,19 @@ impl Default for FooterSegmentConfig {
 impl FooterSegmentConfig {
     /// Resolve from TOML config, applying defaults for missing values.
     pub fn from_toml(toml: &FooterSegmentConfigToml) -> Self {
+        let defaults = Self::default();
         Self {
-            prompt_summary: toml.prompt_summary.unwrap_or(true),
-            vim_mode: toml.vim_mode.unwrap_or(true),
-            git_branch: toml.git_branch.unwrap_or(true),
-            worktree_name: toml.worktree_name.unwrap_or(true),
-            git_stats: toml.git_stats.unwrap_or(true),
-            context: toml.context.unwrap_or(true),
-            approval_mode: toml.approval_mode.unwrap_or(true),
-            nori_profile: toml.nori_profile.unwrap_or(true),
-            nori_version: toml.nori_version.unwrap_or(true),
-            token_usage: toml.token_usage.unwrap_or(true),
-            mode_indicator: toml.mode_indicator.unwrap_or(true),
+            prompt_summary: toml.prompt_summary.unwrap_or(defaults.prompt_summary),
+            vim_mode: toml.vim_mode.unwrap_or(defaults.vim_mode),
+            git_branch: toml.git_branch.unwrap_or(defaults.git_branch),
+            worktree_name: toml.worktree_name.unwrap_or(defaults.worktree_name),
+            git_stats: toml.git_stats.unwrap_or(defaults.git_stats),
+            context: toml.context.unwrap_or(defaults.context),
+            approval_mode: toml.approval_mode.unwrap_or(defaults.approval_mode),
+            nori_profile: toml.nori_profile.unwrap_or(defaults.nori_profile),
+            nori_version: toml.nori_version.unwrap_or(defaults.nori_version),
+            token_usage: toml.token_usage.unwrap_or(defaults.token_usage),
+            mode_indicator: toml.mode_indicator.unwrap_or(defaults.mode_indicator),
         }
     }
 
