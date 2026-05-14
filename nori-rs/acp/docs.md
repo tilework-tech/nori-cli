@@ -79,7 +79,7 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 `SessionRuntime` is the authoritative model for:
 - whether the ACP session is idle, loading, or in a prompt turn
 - queued user prompts and compact prompts waiting behind an active request
-- request-local message assembly for assistant/reasoning streams
+- request-local message assembly for user/assistant/reasoning streams, including flushing the prior open text buffer when the ACP session update type changes
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
 - final assistant message extraction used for `PromptCompleted { last_agent_message, .. }`
@@ -89,7 +89,7 @@ The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.
 
 Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
 
-`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
+`session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. Message replay preserves chronological stream-kind boundaries: an answer -> reasoning -> answer sequence becomes three replay entries, while adjacent deltas of the same stream are still coalesced. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
@@ -129,6 +129,21 @@ The config module provides the **canonical source of truth** for Nori home path 
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
 - `DEFAULT_AGENT`: Default agent (`"claude-code"`)
 
+**ACP Wire Proxy Configuration** (`config/types/mod.rs`, `connection/`):
+
+Nori can optionally wrap ACP subprocess transports with an append-only wire logger. The setting is top-level in `config.toml`:
+
+```toml
+[acp_proxy]
+enabled = true
+```
+
+When enabled, the resolved `AcpProxyConfig` stores logs under `$NORI_HOME/acp-wire`. The config layer intentionally owns this path resolution so every ACP entry point uses the same home directory semantics. The TUI passes the resolved proxy config into `AcpBackendConfig`; the backend passes it to each `SacpConnection::spawn()` call, including prompt-summary subprocesses, so every ACP child process gets its own log file.
+
+The connection layer uses `sacp::Lines` to observe raw newline-delimited JSON-RPC messages at the transport boundary before or after SACP parsing. Each child process gets a distinct JSONL file named from the launch timestamp, child PID, and sanitized agent slug. Records include the timestamp, direction (`client_to_agent` or `agent_to_client`), agent slug, child PID, and the parsed JSON message. If a line cannot be parsed as JSON, the logger preserves the raw line and parse error instead of disrupting the live session.
+
+The TUI's `/agent` picker can persistently toggle this setting with `Shift-Tab`. Because the proxy wraps subprocess transports at spawn time, the toggle is intentionally a future-process setting: newly spawned ACP child subprocesses observe the updated config, while already-running subprocesses continue with the proxy state they started with.
+
 **Agent Config Field Resolution:**
 
 | Field | Purpose | Persistence |
@@ -149,6 +164,12 @@ Three config enums control notification behavior, all stored in the `[tui]` sect
 `NotifyAfterIdle` accepts serde-renamed string values: `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"`. Its `as_duration()` method returns `Option<Duration>` (`None` when `Disabled`). The idle timer in `backend/mod.rs` is conditionally spawned only when `as_duration()` returns `Some` -- when `Disabled`, no timer task or abort handle is created.
 
 The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_idle` so the backend can configure the `UserNotifier` and the idle timer respectively. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
+
+**TUI Display Configuration** (`config/types/mod.rs`):
+
+The `[tui]` section also owns display-only preferences consumed by `@/nori-rs/tui/`. `custom_working_messages` defaults to `true`; setting it to `false` disables the rotating whimsical status header list and lets the TUI use a plain "Working" label while a task starts. The companion `custom_working_message_list` accepts an array of strings; when non-empty and `custom_working_messages` is `true`, the TUI samples from the user's list instead of the builtin whimsical messages. Both values are resolved onto `NoriConfig` in `loader.rs` and mirrored through `codex-core`'s config. The `/config` menu only toggles the boolean; the user list is TOML-only and the menu's "Custom Working Messages" entry advertises when a custom list is active.
+
+Footer visibility and placement are also config-owned. `[tui.footer_segments]` enables or disables named segments, including the ACP-only `mode_indicator` segment. `[tui.footer_layout]` controls where enabled segments render: `footer_left`, `footer_right`, and the four textarea corners. The default layout keeps legacy status segments on the footer's left side and puts `mode_indicator` on the footer's right side; partial layout overrides move listed segments out of their default placement to avoid duplicates.
 
 
 **Hotkey Configuration** (`config/types/mod.rs`):
@@ -226,7 +247,7 @@ The `FileManager` enum (`types/mod.rs`) represents supported terminal file manag
 - `chooser_args(output_path)` -- CLI arguments that put the file manager into chooser mode, writing the selected file path to a temp file. Each file manager uses a different flag convention (e.g. vifm uses `--choose-files`, ranger uses `--choosefile=`, lf uses `-selection-path`, nnn uses `-p`)
 - `display_name()` -- human-friendly label for the config picker
 
-The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/config` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
+The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
 
 Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
 
@@ -261,6 +282,17 @@ The model is only applied if:
 - The session was successfully created
 
 Failures to apply the default model (e.g., model unavailable, API error) produce warnings but do not block session startup. When users switch models via `/model` command, the TUI persists the selection by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md`).
+
+**Live Session Configuration** (`connection/sacp_connection.rs`, `backend/submit_and_ops.rs`):
+
+ACP agents can expose runtime session configuration through `NewSessionResponse.config_options`, `LoadSessionResponse.config_options`, idle `SessionUpdate::ConfigOptionUpdate` notifications, and the `session/set_config_option` RPC. `SacpConnection` owns the latest live config snapshot in `AcpSessionConfigState`, updates it when a session is created/loaded or when config-option notifications arrive, and replaces it with the full response snapshot after `set_config_option()`.
+
+This first implementation is deliberately live-session only:
+- `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
+- `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
+- If the snapshot includes a select option categorized as `Mode` (or with id `mode`), the TUI derives the current mode label from the same live options, displays it through the normal `mode_indicator` footer segment, and uses `Shift-Tab` to cycle to the next value via `session/set_config_option`.
+- No config form is shown during `/agent` switching yet.
+- No ACP session config selections are persisted to `config.toml` yet.
 
 **Hooks System** (`config/types/mod.rs`, `hooks.rs`, `backend/mod.rs`):
 
@@ -513,6 +545,7 @@ Claude Code logs multiple JSONL entries per API request due to streaming (each s
 
 The `TranscriptLocation` struct returned by discovery functions includes:
 - `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for input, output, and cached tokens
+- `subagents_used: Vec<String>` - Unique subagent names found in the discovered transcript for agents that do not emit every delegated subagent launch as visible ACP tool events
 
 Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
 
@@ -527,7 +560,10 @@ discover_transcript_for_agent_with_message(cwd, agent_kind, first_message)
 parse_transcript_tokens(path, agent_kind)
     |
     v
-TranscriptLocation { ..., token_breakdown }
+parse_transcript_subagents(path)
+    |
+    v
+TranscriptLocation { ..., token_breakdown, subagents_used }
     |
     v
 FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
@@ -535,6 +571,8 @@ FooterProps { input_tokens, output_tokens, cached_tokens, context_tokens }
     v
 Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
+
+`subagents_used` is consumed by `nori-tui` during system-info refresh and merged into the goodbye-card session stats. It does not affect footer token rendering.
 **Connection Management** (`connection/`):
 
 The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
@@ -670,16 +708,24 @@ The `TranscriptLoader` (in `@/nori-rs/acp/src/transcript/loader.rs`) reads trans
 Key methods:
 - `list_projects()`: List all projects with transcripts
 - `list_sessions()`: List sessions for a specific project
+- `list_session_metadata()`: List first-line-only session metadata for a specific project
 - `find_sessions_for_cwd()`: Find sessions for current working directory
+- `find_session_metadata_for_cwd()`: Find first-line-only session metadata for current working directory
+- `find_session_metadata_by_id()`: Find first-line-only session metadata by transcript session ID across all projects
+- `list_resumable_session_metadata()`: List first-line-only session metadata for startup resume, optionally scoped to a cwd and/or agent
 - `load_transcript()`: Load complete transcript with all entries
 - `load_session_meta()`: Load just session metadata (for quick listing)
+- `load_first_user_preview()`: Stream lines until the first user entry, bounded for picker preview loading
+- `count_user_turns()`: Stream transcript lines and count only `type=user` entries for turn counts
 
 **Forward/backward compatibility:** `load_transcript_from_path()` gracefully skips JSONL lines that fail to deserialize after the first line (session metadata). This means transcripts remain loadable across schema changes -- older binaries skip unknown entry types written by newer versions, and newer binaries skip removed entry types from older transcripts (e.g., the removed `turn_lifecycle` variant). The first line must always be valid `SessionMeta`; a deserialization failure there is a hard error. Skipped lines are logged at `tracing::debug` level. `load_session_meta_from_path()` is unaffected since it only reads the first line.
+
+Large transcript paths avoid full-file reads when building `/resume` and startup `nori resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after picker rows are visible.
 
 **ACP Integration:**
 
 The `AcpBackend` automatically:
-1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support
+1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
 4. Records normalized ACP session events via `record_client_event()` in the update and approval handlers
@@ -700,6 +746,8 @@ Approval request         → client_event entry
 
 Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remain in the schema for legacy read compatibility, but ACP live recording now uses normalized `ClientEvent` entries so transcript persistence matches the live TUI path.
 
+Reducer-owned transcript assembly preserves ACP session update type boundaries. When text changes from assistant to reasoning, reasoning to assistant, or user to either agent stream, the previous open message is flushed before the new stream is accumulated. Consecutive chunks with the same stream are still treated as one message because stable ACP does not provide a durable same-type message boundary.
+
 Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers in the crate -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 
 Configuration:
@@ -712,7 +760,7 @@ Configuration:
 
 Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
 - `TranscriptRecorder`, `TranscriptLoader`
-- `ProjectId`, `ProjectInfo`, `SessionInfo`, `Transcript`
+- `ProjectId`, `ProjectInfo`, `SessionInfo`, `SessionMetadata`, `Transcript`
 - Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, `ToolCallEntry`, `ToolResultEntry`, `PatchApplyEntry`
 - `PatchOperationType`: Enum for patch operations (Edit, Write, Delete)
 - `ContentBlock` (Text and Thinking variants), `Attachment`, `GitInfo`

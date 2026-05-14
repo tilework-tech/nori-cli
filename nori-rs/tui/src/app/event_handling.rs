@@ -80,6 +80,7 @@ impl App {
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
+                    self.chat_widget.session_stats().has_activity(),
                 );
                 self.shutdown_current_conversation();
                 let init = self.chat_widget_init(
@@ -93,10 +94,13 @@ impl App {
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
                 if let Some(summary) = summary {
-                    let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
+                    let mut lines: Vec<Line<'static>> = Vec::new();
+                    if let Some(usage_line) = summary.usage_line {
+                        lines.push(usage_line.into());
+                    }
                     if let Some(command) = summary.resume_command {
-                        let spans = vec!["To continue this session, run ".into(), command.cyan()];
-                        lines.push(spans.into());
+                        lines.push(RESUME_HINT_LEAD.into());
+                        lines.push(command.cyan().into());
                     }
                     self.chat_widget.add_plain_history_lines(lines);
                 }
@@ -528,11 +532,15 @@ impl App {
                             | nori_protocol::ToolKind::Delete
                             | nori_protocol::ToolKind::Move
                     ) {
-                        let mut changes =
-                            client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts);
+                        let mut changes = client_tool_cell::diff_changes_from_artifacts(
+                            &snapshot.artifacts,
+                            &cwd,
+                        );
                         if changes.is_empty() {
-                            changes =
-                                client_tool_cell::changes_from_invocation(&snapshot.invocation);
+                            changes = client_tool_cell::changes_from_invocation(
+                                &snapshot.invocation,
+                                &cwd,
+                            );
                         }
                         if changes.is_empty() {
                             None
@@ -705,6 +713,48 @@ impl App {
                         .add_info_message(format!("Failed to switch model: {error_msg}"), None);
                 }
             }
+            AppEvent::OpenAcpSessionConfigPicker { config_options } => {
+                self.chat_widget
+                    .open_acp_session_config_picker(config_options);
+            }
+            AppEvent::OpenAcpSessionConfigValuePicker { option } => {
+                self.chat_widget
+                    .open_acp_session_config_value_picker(option);
+            }
+            AppEvent::SetAcpSessionConfigOption {
+                config_id,
+                value,
+                option_name,
+                value_name,
+            } => {
+                self.chat_widget.set_acp_session_config_option(
+                    config_id,
+                    value,
+                    option_name,
+                    value_name,
+                );
+            }
+            AppEvent::AcpSessionConfigSetResult {
+                success,
+                option_name,
+                value_name,
+                error,
+            } => {
+                if success {
+                    self.chat_widget
+                        .add_info_message(format!("{option_name} set to: {value_name}"), None);
+                } else {
+                    let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
+                    self.chat_widget.add_info_message(
+                        format!("Failed to set {option_name}: {error_msg}"),
+                        None,
+                    );
+                }
+            }
+            AppEvent::AcpModeConfigSnapshot { generation, mode } => {
+                self.chat_widget
+                    .apply_acp_mode_config_snapshot(generation, mode);
+            }
             AppEvent::LoginComplete { success } => {
                 self.chat_widget.handle_login_complete(success);
             }
@@ -795,6 +845,14 @@ impl App {
             #[cfg(feature = "nori-config")]
             AppEvent::SetConfigPinnedPlanDrawer(enabled) => {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigAcpWireRecording(enabled) => {
+                self.persist_acp_wire_recording_setting(enabled).await;
+            }
+            #[cfg(feature = "nori-config")]
+            AppEvent::SetConfigCustomWorkingMessages(enabled) => {
+                self.persist_custom_working_messages_setting(enabled).await;
             }
             #[cfg(feature = "nori-config")]
             AppEvent::OpenSkillsetPerSessionWorktreeChoice => {
@@ -993,13 +1051,30 @@ impl App {
             AppEvent::ShowResumeSessionPicker {
                 sessions,
                 nori_home,
+                generation,
             } => {
                 let params = crate::nori::resume_session_picker::resume_session_picker_params(
                     sessions,
                     nori_home,
                     self.app_event_tx.clone(),
                 );
-                self.chat_widget.show_selection_view(params);
+                self.chat_widget
+                    .show_resume_session_picker(params, generation);
+            }
+            AppEvent::ResumeSessionSummaryReady {
+                generation,
+                session_id,
+                started_at,
+                first_message_preview,
+                user_turn_count,
+            } => {
+                self.chat_widget.update_resume_session_picker_item(
+                    generation,
+                    &session_id,
+                    &started_at,
+                    first_message_preview.as_deref(),
+                    user_turn_count,
+                );
             }
             AppEvent::ResumeSession {
                 nori_home,

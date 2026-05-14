@@ -1,11 +1,11 @@
 use crate::bottom_pane::textarea::VimModeState;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
-use crate::render::line_utils::prefix_lines;
 use crate::system_info::NoriVersionSource;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use codex_protocol::num_format::format_si_suffix;
 use crossterm::event::KeyCode;
+use nori_acp::config::FooterLayoutConfig;
 use nori_acp::config::FooterSegment;
 use nori_acp::config::FooterSegmentConfig;
 use ratatui::buffer::Buffer;
@@ -13,8 +13,9 @@ use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
+
+const MODE_INDICATOR_LABEL_MAX_CHARS: usize = 20;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FooterProps {
@@ -36,6 +37,7 @@ pub(crate) struct FooterProps {
     pub(crate) nori_version_source: Option<NoriVersionSource>,
     pub(crate) git_lines_added: Option<i32>,
     pub(crate) git_lines_removed: Option<i32>,
+    pub(crate) git_has_untracked: bool,
     /// Whether the current directory is a git worktree (not the main repo).
     /// When true, the git branch indicator is shown in orange instead of yellow.
     pub(crate) is_worktree: bool,
@@ -53,6 +55,10 @@ pub(crate) struct FooterProps {
     pub(crate) worktree_name: Option<String>,
     /// Configuration for which footer segments to show.
     pub(crate) footer_segment_config: FooterSegmentConfig,
+    /// Configuration for where footer segments render.
+    pub(crate) footer_layout_config: FooterLayoutConfig,
+    /// ACP agent mode label to display when the agent exposes a mode option.
+    pub(crate) acp_mode_label: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -98,54 +104,148 @@ pub(crate) fn footer_height(props: &FooterProps) -> u16 {
 }
 
 pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: &FooterProps) {
-    Paragraph::new(prefix_lines(
-        footer_lines(props),
-        " ".repeat(FOOTER_INDENT_COLS).into(),
-        " ".repeat(FOOTER_INDENT_COLS).into(),
-    ))
-    .render(area, buf);
+    for (line_index, row) in footer_rows(props).into_iter().enumerate() {
+        let Ok(line_offset) = u16::try_from(line_index) else {
+            break;
+        };
+        if line_offset >= area.height {
+            break;
+        }
+
+        let row_area = Rect {
+            x: area.x,
+            y: area.y + line_offset,
+            width: area.width,
+            height: 1,
+        };
+        render_footer_row(row_area, buf, row);
+    }
 }
 
 fn footer_lines(props: &FooterProps) -> Vec<Line<'static>> {
+    footer_rows(props)
+        .into_iter()
+        .map(FooterRow::joined)
+        .collect()
+}
+
+#[derive(Clone, Debug, Default)]
+struct FooterRow {
+    left: Line<'static>,
+    right: Line<'static>,
+}
+
+impl FooterRow {
+    fn left(left: Line<'static>) -> Self {
+        Self {
+            left,
+            right: Line::from(""),
+        }
+    }
+
+    fn joined(self) -> Line<'static> {
+        if self.right.spans.is_empty() {
+            self.left
+        } else if self.left.spans.is_empty() {
+            self.right
+        } else {
+            let mut line = self.left;
+            line.push_span(" · ".dim());
+            line.extend(self.right.spans);
+            line
+        }
+    }
+}
+
+fn render_footer_row(area: Rect, buf: &mut Buffer, row: FooterRow) {
+    if area.is_empty() {
+        return;
+    }
+
+    let footer_indent = u16::try_from(FOOTER_INDENT_COLS).unwrap_or(0);
+    let left_area = Rect {
+        x: area.x + footer_indent,
+        y: area.y,
+        width: area.width.saturating_sub(footer_indent),
+        height: 1,
+    };
+    row.left.render(left_area, buf);
+
+    let right_width = row.right.width() as u16;
+    if right_width == 0 {
+        return;
+    }
+
+    let right_area = Rect {
+        x: area.right().saturating_sub(right_width),
+        y: area.y,
+        width: right_width.min(area.width),
+        height: 1,
+    };
+    row.right.render(right_area, buf);
+}
+
+fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
     // Show the context indicator on the left, appended after the primary hint
     // (e.g., "? for shortcuts"). Keep it visible even when typing (i.e., when
     // the shortcut hint is hidden). Hide it only for the multi-line
     // ShortcutOverlay.
     match props.mode {
-        FooterMode::CtrlCReminder => vec![ctrl_c_reminder_line(CtrlCReminderState {
-            is_task_running: props.is_task_running,
-        })],
+        FooterMode::CtrlCReminder => {
+            vec![FooterRow::left(ctrl_c_reminder_line(CtrlCReminderState {
+                is_task_running: props.is_task_running,
+            }))]
+        }
         FooterMode::ShortcutSummary => {
-            let segments = footer_segments(props);
+            let footer_segments = footer_segment_groups(props);
             if props.vertical_footer {
-                let mut lines = segments;
-                lines.push(shortcuts_hint_line());
-                lines
+                let mut rows = footer_segments
+                    .left
+                    .into_iter()
+                    .chain(footer_segments.right)
+                    .map(FooterRow::left)
+                    .collect::<Vec<_>>();
+                rows.push(FooterRow::left(shortcuts_hint_line()));
+                rows
             } else {
-                let mut line = join_footer_segments(&segments);
+                let mut line = join_footer_segments(&footer_segments.left);
                 // Only add separator if there's already content
                 if !line.spans.is_empty() {
                     line.push_span(" · ".dim());
                 }
                 line.extend(shortcuts_hint_line().spans);
-                vec![line]
+                vec![FooterRow {
+                    left: line,
+                    right: join_footer_segments(&footer_segments.right),
+                }]
             }
         }
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(ShortcutsState {
             use_shift_enter_hint: props.use_shift_enter_hint,
             esc_backtrack_hint: props.esc_backtrack_hint,
-        }),
-        FooterMode::EscHint => vec![esc_hint_line(props.esc_backtrack_hint)],
+        })
+        .into_iter()
+        .map(FooterRow::left)
+        .collect(),
+        FooterMode::EscHint => vec![FooterRow::left(esc_hint_line(props.esc_backtrack_hint))],
         FooterMode::ContextOnly => {
-            let segments = footer_segments(props);
+            let footer_segments = footer_segment_groups(props);
             if props.vertical_footer {
+                let segments = footer_segments
+                    .left
+                    .into_iter()
+                    .chain(footer_segments.right)
+                    .collect::<Vec<_>>();
                 if segments.is_empty() {
-                    vec![Line::from("")]
+                    vec![FooterRow::left(Line::from(""))]
                 } else {
-                    segments
+                    segments.into_iter().map(FooterRow::left).collect()
                 }
             } else {
-                vec![build_footer_line(props)]
+                vec![FooterRow {
+                    left: join_footer_segments(&footer_segments.left),
+                    right: join_footer_segments(&footer_segments.right),
+                }]
             }
         }
     }
@@ -280,10 +380,6 @@ fn build_columns(entries: Vec<Line<'static>>) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn build_footer_line(props: &FooterProps) -> Line<'static> {
-    join_footer_segments(&footer_segments(props))
-}
-
 fn shortcuts_hint_line() -> Line<'static> {
     Line::from(vec![
         key_hint::plain(KeyCode::Char('?')).into(),
@@ -291,157 +387,218 @@ fn shortcuts_hint_line() -> Line<'static> {
     ])
 }
 
-fn footer_segments(props: &FooterProps) -> Vec<Line<'static>> {
-    let mut segments = Vec::new();
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TextareaCornerSegments {
+    pub(crate) top_left: Line<'static>,
+    pub(crate) top_right: Line<'static>,
+    pub(crate) bottom_left: Line<'static>,
+    pub(crate) bottom_right: Line<'static>,
+}
+
+pub(crate) fn textarea_corner_segments(props: &FooterProps) -> TextareaCornerSegments {
+    TextareaCornerSegments {
+        top_left: join_footer_segments(&segments_for(
+            props,
+            &props.footer_layout_config.textarea_top_left,
+        )),
+        top_right: join_footer_segments(&segments_for(
+            props,
+            &props.footer_layout_config.textarea_top_right,
+        )),
+        bottom_left: join_footer_segments(&segments_for(
+            props,
+            &props.footer_layout_config.textarea_bottom_left,
+        )),
+        bottom_right: join_footer_segments(&segments_for(
+            props,
+            &props.footer_layout_config.textarea_bottom_right,
+        )),
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct FooterSegmentGroups {
+    left: Vec<Line<'static>>,
+    right: Vec<Line<'static>>,
+}
+
+fn footer_segment_groups(props: &FooterProps) -> FooterSegmentGroups {
+    FooterSegmentGroups {
+        left: segments_for(props, &props.footer_layout_config.footer_left),
+        right: segments_for(props, &props.footer_layout_config.footer_right),
+    }
+}
+
+fn segments_for(props: &FooterProps, segment_order: &[FooterSegment]) -> Vec<Line<'static>> {
+    segment_order
+        .iter()
+        .filter_map(|segment| footer_segment(props, *segment))
+        .collect()
+}
+
+fn footer_segment(props: &FooterProps, segment: FooterSegment) -> Option<Line<'static>> {
     let config = &props.footer_segment_config;
 
-    // Add prompt summary if available and enabled: "Task: <summary>" (dim)
-    if config.is_enabled(FooterSegment::PromptSummary)
-        && let Some(summary) = &props.prompt_summary
-    {
-        segments.push(Line::from(vec![
-            "Task: ".dim(),
-            Span::from(summary.clone()).dim(),
-        ]));
+    if !config.is_enabled(segment) {
+        return None;
     }
 
-    // Add vim mode indicator if vim mode is enabled and segment is enabled
-    if config.is_enabled(FooterSegment::VimMode)
-        && let Some(vim_state) = props.vim_mode_state
-    {
-        let (label, style_fn): (&str, fn(Span<'static>) -> Span<'static>) = match vim_state {
-            VimModeState::Normal => ("NORMAL", |s| s.light_blue().bold()),
-            VimModeState::Insert => ("INSERT", |s| s.green()),
-        };
-        segments.push(Line::from(vec![style_fn(Span::from(label))]));
-    }
-
-    // Add git branch if available and enabled: "⎇ branch-name"
-    // Yellow for main repo, light red (orange-ish) for worktree
-    if config.is_enabled(FooterSegment::GitBranch)
-        && let Some(branch) = &props.git_branch
-    {
-        let line = if props.is_worktree {
-            // Light red for worktree (distinguishable from yellow, works with ANSI)
+    match segment {
+        FooterSegment::PromptSummary => props
+            .prompt_summary
+            .as_ref()
+            .map(|summary| Line::from(vec!["Task: ".dim(), Span::from(summary.clone()).dim()])),
+        FooterSegment::VimMode => props.vim_mode_state.map(|vim_state| {
+            let (label, style_fn): (&str, fn(Span<'static>) -> Span<'static>) = match vim_state {
+                VimModeState::Normal => ("NORMAL", |s| s.light_blue().bold()),
+                VimModeState::Insert => ("INSERT", |s| s.green()),
+            };
+            Line::from(vec![style_fn(Span::from(label))])
+        }),
+        FooterSegment::GitBranch => props.git_branch.as_ref().map(|branch| {
+            if props.is_worktree {
+                #[allow(clippy::disallowed_methods)]
+                Line::from(vec![
+                    Span::from("⎇ ").light_red(),
+                    Span::from(branch.clone()).light_red(),
+                ])
+            } else {
+                #[allow(clippy::disallowed_methods)]
+                Line::from(vec![
+                    Span::from("⎇ ").yellow(),
+                    Span::from(branch.clone()).yellow(),
+                ])
+            }
+        }),
+        FooterSegment::WorktreeName => props.worktree_name.as_ref().map(|name| {
             #[allow(clippy::disallowed_methods)]
             Line::from(vec![
-                Span::from("⎇ ").light_red(),
-                Span::from(branch.clone()).light_red(),
+                Span::from("Worktree: ").light_red(),
+                Span::from(name.clone()).light_red(),
             ])
-        } else {
-            // Yellow for main repo
-            #[allow(clippy::disallowed_methods)]
+        }),
+        FooterSegment::GitStats => git_stats_segment(props),
+        FooterSegment::Context => context_segment(props),
+        FooterSegment::ApprovalMode => props.approval_mode_label.as_ref().map(|label| {
             Line::from(vec![
-                Span::from("⎇ ").yellow(),
-                Span::from(branch.clone()).yellow(),
+                Span::from("Approvals: ").magenta(),
+                Span::from(label.clone()).magenta(),
             ])
-        };
-        segments.push(line);
+        }),
+        FooterSegment::NoriProfile => nori_profile_segment(props),
+        FooterSegment::NoriVersion => props.nori_version.as_ref().map(|version| {
+            let label = props
+                .nori_version_source
+                .map(NoriVersionSource::label)
+                .unwrap_or("Skillsets");
+            Line::from(vec![
+                Span::from(format!("{label} v")).green(),
+                Span::from(version.clone()).green(),
+            ])
+        }),
+        FooterSegment::TokenUsage => token_usage_segment(props),
+        FooterSegment::ModeIndicator => props.acp_mode_label.as_ref().map(|raw_label| {
+            let label = mode_indicator_label(raw_label);
+            let text = format!("[ {label} ]");
+            let lower = raw_label.to_lowercase();
+            let span = if lower.contains("plan") {
+                Span::from(text).green()
+            } else if lower.contains("bypass") {
+                Span::from(text).red()
+            } else if lower.contains("accept")
+                || lower.contains("implement")
+                || lower.contains("build")
+            {
+                Span::from(text).cyan()
+            } else {
+                Span::from(text).dim()
+            };
+            Line::from(span)
+        }),
+    }
+}
+
+fn mode_indicator_label(label: &str) -> String {
+    if label.chars().count() <= MODE_INDICATOR_LABEL_MAX_CHARS {
+        return label.to_string();
     }
 
-    // Add worktree directory name if available and enabled: "Worktree: name" (light red)
-    if config.is_enabled(FooterSegment::WorktreeName)
-        && let Some(name) = &props.worktree_name
-    {
-        #[allow(clippy::disallowed_methods)]
-        segments.push(Line::from(vec![
-            Span::from("Worktree: ").light_red(),
-            Span::from(name.clone()).light_red(),
-        ]));
-    }
+    label
+        .chars()
+        .take(MODE_INDICATOR_LABEL_MAX_CHARS.saturating_sub(1))
+        .chain(std::iter::once('…'))
+        .collect()
+}
 
-    // Add git stats if available and enabled: "+10 -3" (green for added, red for removed)
-    if config.is_enabled(FooterSegment::GitStats)
-        && let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
+fn git_stats_segment(props: &FooterProps) -> Option<Line<'static>> {
+    let mut spans = Vec::new();
+    if let (Some(added), Some(removed)) = (props.git_lines_added, props.git_lines_removed)
         && (added > 0 || removed > 0)
     {
-        segments.push(Line::from(vec![
+        spans.extend([
             Span::from(format!("+{added}")).green(),
             Span::from(" ").dim(),
             Span::from(format!("-{removed}")).red(),
-        ]));
+        ]);
     }
-
-    // Add context window info if available and enabled: "Context 27% (34K)".
-    if config.is_enabled(FooterSegment::Context) {
-        let formatted_tokens = props
-            .context_tokens
-            .filter(|&tokens| tokens > 0)
-            .map(format_si_suffix);
-        let context_text = match (props.context_window_percent, formatted_tokens) {
-            (Some(pct), Some(tokens)) => Some(format!("Context {pct}% ({tokens})")),
-            (Some(pct), None) => Some(format!("Context {pct}%")),
-            (None, Some(tokens)) => Some(format!("Context {tokens}")),
-            (None, None) => None,
-        };
-        if let Some(context_text) = context_text {
-            segments.push(Line::from(context_text));
+    if props.git_has_untracked {
+        if !spans.is_empty() {
+            spans.push(Span::from(" ").dim());
         }
+        spans.push(Span::from("!").red().bold());
+    }
+    (!spans.is_empty()).then(|| Line::from(spans))
+}
+
+fn context_segment(props: &FooterProps) -> Option<Line<'static>> {
+    let formatted_tokens = props
+        .context_tokens
+        .filter(|&tokens| tokens > 0)
+        .map(format_si_suffix);
+    let context_text = match (props.context_window_percent, formatted_tokens) {
+        (Some(pct), Some(tokens)) => Some(format!("Context {pct}% ({tokens})")),
+        (Some(pct), None) => Some(format!("Context {pct}%")),
+        (None, Some(tokens)) => Some(format!("Context {tokens}")),
+        (None, None) => None,
+    };
+    context_text.map(Line::from)
+}
+
+fn nori_profile_segment(props: &FooterProps) -> Option<Line<'static>> {
+    if props.active_skillsets.is_empty() {
+        return None;
+    }
+    let label = if props.active_skillsets.len() == 1 {
+        "Skillset: "
+    } else {
+        "Skillsets: "
+    };
+    Some(Line::from(vec![
+        Span::from(label).cyan(),
+        Span::from(props.active_skillsets.join(", ")).cyan(),
+    ]))
+}
+
+fn token_usage_segment(props: &FooterProps) -> Option<Line<'static>> {
+    let input = props.input_tokens.unwrap_or(0);
+    let output = props.output_tokens.unwrap_or(0);
+    let cached = props.cached_tokens.unwrap_or(0);
+    let total = input.saturating_add(output).saturating_add(cached);
+    if total == 0 {
+        return None;
     }
 
-    // Add approval mode if available and enabled: "Approvals: Agent" (magenta)
-    if config.is_enabled(FooterSegment::ApprovalMode)
-        && let Some(label) = &props.approval_mode_label
-    {
-        segments.push(Line::from(vec![
-            Span::from("Approvals: ").magenta(),
-            Span::from(label.clone()).magenta(),
-        ]));
+    let total_fmt = format_si_suffix(total);
+    let mut spans = vec![
+        "Tokens: ".dim(),
+        Span::from(format!("{total_fmt} total")).dim(),
+    ];
+    if cached > 0 {
+        let cached_fmt = format_si_suffix(cached);
+        spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
     }
 
-    // Add active skillsets if available and enabled: "Skillset: name" or "Skillsets: a, b" (cyan)
-    if config.is_enabled(FooterSegment::NoriProfile) && !props.active_skillsets.is_empty() {
-        let label = if props.active_skillsets.len() == 1 {
-            "Skillset: "
-        } else {
-            "Skillsets: "
-        };
-        segments.push(Line::from(vec![
-            Span::from(label).cyan(),
-            Span::from(props.active_skillsets.join(", ")).cyan(),
-        ]));
-    }
-
-    // Add nori version if available and enabled: "Skillsets v19.1.1" or "Profiles v19.1.1" (green)
-    if config.is_enabled(FooterSegment::NoriVersion)
-        && let Some(version) = &props.nori_version
-    {
-        let label = props
-            .nori_version_source
-            .map(NoriVersionSource::label)
-            .unwrap_or("Skillsets");
-        segments.push(Line::from(vec![
-            Span::from(format!("{label} v")).green(),
-            Span::from(version.clone()).green(),
-        ]));
-    }
-
-    // Add token usage if available and enabled: "Tokens: 77K total (32K cached)" (dim/gray)
-    // Total = input + output + cached (cached tokens are read from cache, so they
-    // count toward total tokens processed but are shown separately as "cached").
-    if config.is_enabled(FooterSegment::TokenUsage) {
-        let input = props.input_tokens.unwrap_or(0);
-        let output = props.output_tokens.unwrap_or(0);
-        let cached = props.cached_tokens.unwrap_or(0);
-        let total = input.saturating_add(output).saturating_add(cached);
-        if total > 0 {
-            let total_fmt = format_si_suffix(total);
-            let mut spans = vec![
-                "Tokens: ".dim(),
-                Span::from(format!("{total_fmt} total")).dim(),
-            ];
-
-            // Add cached portion if non-zero
-            if cached > 0 {
-                let cached_fmt = format_si_suffix(cached);
-                spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
-            }
-
-            segments.push(Line::from(spans));
-        }
-    }
-
-    segments
+    Some(Line::from(spans))
 }
 
 fn join_footer_segments(segments: &[Line<'static>]) -> Line<'static> {
@@ -644,6 +801,7 @@ mod tests {
             nori_version_source: None,
             git_lines_added: None,
             git_lines_removed: None,
+            git_has_untracked: false,
             is_worktree: false,
             input_tokens: None,
             output_tokens: None,
@@ -652,6 +810,8 @@ mod tests {
             prompt_summary: None,
             worktree_name: None,
             footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            acp_mode_label: None,
         }
     }
 
@@ -797,6 +957,18 @@ mod tests {
     }
 
     #[test]
+    fn footer_with_untracked_alert() {
+        snapshot_footer(
+            "footer_with_untracked_alert",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                git_has_untracked: true,
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
     fn footer_with_no_nori_info() {
         snapshot_footer(
             "footer_with_no_nori",
@@ -864,6 +1036,109 @@ mod tests {
                 approval_mode_label: Some("Full Access".to_string()),
                 ..default_props()
             },
+        );
+    }
+
+    #[test]
+    fn footer_with_mode_indicator_uses_right_aligned_footer_segment() {
+        let rendered = render_footer_text(FooterProps {
+            git_branch: Some("main".to_string()),
+            acp_mode_label: Some("Plan".to_string()),
+            ..default_props()
+        });
+
+        let first_line = rendered.lines().next().unwrap_or_default();
+        assert!(first_line.ends_with("[ Plan ]"));
+        assert!(first_line.contains("⎇ main"));
+        assert!(!first_line.contains("Mode:"));
+    }
+
+    #[test]
+    fn footer_skips_mode_indicator_without_agent_mode() {
+        let rendered = render_footer_text(FooterProps {
+            git_branch: Some("main".to_string()),
+            ..default_props()
+        });
+
+        assert!(!rendered.contains("[ Plan ]"));
+        assert!(!rendered.contains("Mode"));
+    }
+
+    #[test]
+    fn footer_mode_indicator_truncates_long_labels() {
+        let rendered = render_footer_text(FooterProps {
+            git_branch: Some("main".to_string()),
+            acp_mode_label: Some("ABCDEFGHIJKLMNOPQRSTUV".to_string()),
+            ..default_props()
+        });
+
+        let first_line = rendered.lines().next().unwrap_or_default();
+        assert!(first_line.ends_with("[ ABCDEFGHIJKLMNOPQRS… ]"));
+        assert!(!first_line.contains("ABCDEFGHIJKLMNOPQRSTUV"));
+    }
+
+    fn mode_indicator_fg(label: &str) -> ratatui::style::Color {
+        let props = FooterProps {
+            git_branch: Some("main".to_string()),
+            acp_mode_label: Some(label.to_string()),
+            ..default_props()
+        };
+        let height = footer_height(&props).max(1);
+        let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, f.area().width, height);
+                render_footer(area, f.buffer_mut(), &props);
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let bracket = format!("[ {label} ]");
+        let row = &buffer.content[..buffer.area.width as usize];
+        let text: String = row
+            .iter()
+            .map(|c| c.symbol().chars().next().unwrap_or(' '))
+            .collect();
+        let offset = text
+            .find(&bracket)
+            .expect("mode indicator bracket not found");
+        row[offset].fg
+    }
+
+    #[test]
+    fn footer_mode_indicator_plan_is_green() {
+        assert_eq!(mode_indicator_fg("Plan"), ratatui::style::Color::Green);
+    }
+
+    #[test]
+    fn footer_mode_indicator_plan_case_insensitive() {
+        assert_eq!(mode_indicator_fg("PLAN MODE"), ratatui::style::Color::Green);
+    }
+
+    #[test]
+    fn footer_mode_indicator_bypass_is_red() {
+        assert_eq!(mode_indicator_fg("Bypass"), ratatui::style::Color::Red);
+    }
+
+    #[test]
+    fn footer_mode_indicator_accept_is_cyan() {
+        assert_eq!(mode_indicator_fg("Accept All"), ratatui::style::Color::Cyan);
+    }
+
+    #[test]
+    fn footer_mode_indicator_implement_is_cyan() {
+        assert_eq!(mode_indicator_fg("Implement"), ratatui::style::Color::Cyan);
+    }
+
+    #[test]
+    fn footer_mode_indicator_build_is_cyan() {
+        assert_eq!(mode_indicator_fg("Build"), ratatui::style::Color::Cyan);
+    }
+
+    #[test]
+    fn footer_mode_indicator_unknown_is_default() {
+        assert_eq!(
+            mode_indicator_fg("Custom Mode"),
+            ratatui::style::Color::Reset
         );
     }
 
@@ -1136,6 +1411,7 @@ mod tests {
             nori_profile: false,
             nori_version: false,
             token_usage: false,
+            mode_indicator: false,
         };
 
         snapshot_footer(

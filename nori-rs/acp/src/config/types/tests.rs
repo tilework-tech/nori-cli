@@ -863,6 +863,8 @@ fn test_footer_segment_deserialize_all_variants() {
 
     let w: Wrapper = toml::from_str(r#"segment = "token_usage""#).unwrap();
     assert_eq!(w.segment, FooterSegment::TokenUsage);
+    let w: Wrapper = toml::from_str(r#"segment = "mode_indicator""#).unwrap();
+    assert_eq!(w.segment, FooterSegment::ModeIndicator);
 }
 
 #[test]
@@ -899,6 +901,10 @@ fn test_footer_segment_display_name() {
         "Skillset Version"
     );
     assert_eq!(FooterSegment::TokenUsage.display_name(), "Token Usage");
+    assert_eq!(
+        FooterSegment::ModeIndicator.display_name(),
+        "Mode Indicator"
+    );
 }
 
 #[test]
@@ -917,6 +923,7 @@ fn test_footer_segment_all_variants() {
             FooterSegment::NoriProfile,
             FooterSegment::NoriVersion,
             FooterSegment::TokenUsage,
+            FooterSegment::ModeIndicator,
         ]
     );
 }
@@ -963,14 +970,52 @@ fn test_footer_segment_config_from_toml_some_disabled() {
         prompt_summary: Some(false),
         git_branch: Some(false),
         token_usage: Some(false),
+        mode_indicator: Some(false),
         ..Default::default()
     };
     let config = FooterSegmentConfig::from_toml(&toml);
     assert!(!config.is_enabled(FooterSegment::PromptSummary));
     assert!(!config.is_enabled(FooterSegment::GitBranch));
     assert!(!config.is_enabled(FooterSegment::TokenUsage));
+    assert!(!config.is_enabled(FooterSegment::ModeIndicator));
     assert!(config.is_enabled(FooterSegment::Context));
     assert!(config.is_enabled(FooterSegment::ApprovalMode));
+}
+
+#[test]
+fn test_footer_layout_default_puts_mode_in_footer_right() {
+    assert_eq!(
+        FooterLayoutConfig::default().footer_right,
+        vec![FooterSegment::ModeIndicator]
+    );
+    assert!(
+        FooterLayoutConfig::default()
+            .footer_left
+            .contains(&FooterSegment::GitBranch)
+    );
+    assert!(
+        !FooterLayoutConfig::default()
+            .footer_left
+            .contains(&FooterSegment::ModeIndicator)
+    );
+}
+
+#[test]
+fn test_footer_layout_toml_moves_segment_to_textarea_corner() {
+    let config: TuiConfigToml = toml::from_str(
+        r#"
+[footer_layout]
+textarea_top_right = ["mode_indicator"]
+"#,
+    )
+    .unwrap();
+
+    let layout = FooterLayoutConfig::from_toml(&config.footer_layout);
+    assert_eq!(
+        layout.textarea_top_right,
+        vec![FooterSegment::ModeIndicator]
+    );
+    assert!(layout.footer_right.is_empty());
 }
 
 #[test]
@@ -980,11 +1025,13 @@ fn test_tui_config_toml_with_footer_segments() {
 [footer_segments]
 git_branch = false
 token_usage = false
+mode_indicator = false
 "#,
     )
     .unwrap();
     assert_eq!(config.footer_segments.git_branch, Some(false));
     assert_eq!(config.footer_segments.token_usage, Some(false));
+    assert_eq!(config.footer_segments.mode_indicator, Some(false));
     assert_eq!(config.footer_segments.context, None);
 }
 
@@ -1001,6 +1048,9 @@ vertical_footer = true
 prompt_summary = false
 vim_mode = false
 nori_profile = true
+
+[tui.footer_layout]
+textarea_top_right = ["mode_indicator"]
 "#,
     )
     .unwrap();
@@ -1008,6 +1058,10 @@ nori_profile = true
     assert_eq!(config.tui.footer_segments.vim_mode, Some(false));
     assert_eq!(config.tui.footer_segments.nori_profile, Some(true));
     assert_eq!(config.tui.footer_segments.git_branch, None);
+    assert_eq!(
+        config.tui.footer_layout.textarea_top_right,
+        Some(vec![FooterSegment::ModeIndicator])
+    );
 }
 
 // ========================================================================
@@ -1023,7 +1077,7 @@ name = "Claude Code"
 slug = "claude-code"
 
 [agents.distribution.npx]
-package = "@zed-industries/claude-agent-acp"
+package = "@agentclientprotocol/claude-agent-acp"
 "#,
     )
     .unwrap();
@@ -1033,7 +1087,7 @@ package = "@zed-industries/claude-agent-acp"
     assert!(config.agents[0].distribution.npx.is_some());
     assert_eq!(
         config.agents[0].distribution.npx.as_ref().unwrap().package,
-        "@zed-industries/claude-agent-acp"
+        "@agentclientprotocol/claude-agent-acp"
     );
 }
 
@@ -1130,7 +1184,7 @@ name = "Claude Code"
 slug = "claude-code"
 
 [agents.distribution.npx]
-package = "@zed-industries/claude-agent-acp"
+package = "@agentclientprotocol/claude-agent-acp"
 
 [[agents]]
 name = "Kimi"
@@ -1217,7 +1271,7 @@ fn test_agent_distribution_resolve_rejects_multiple() {
 fn test_agent_distribution_resolve_npx() {
     let dist = AgentDistributionToml {
         npx: Some(PackageDistribution {
-            package: "@zed-industries/claude-agent-acp".to_string(),
+            package: "@agentclientprotocol/claude-agent-acp".to_string(),
             args: vec![],
         }),
         ..Default::default()
@@ -1225,7 +1279,7 @@ fn test_agent_distribution_resolve_npx() {
     let resolved = dist.resolve().unwrap();
     assert!(matches!(resolved, ResolvedDistribution::Npx { .. }));
     if let ResolvedDistribution::Npx { package, args } = resolved {
-        assert_eq!(package, "@zed-industries/claude-agent-acp");
+        assert_eq!(package, "@agentclientprotocol/claude-agent-acp");
         assert!(args.is_empty());
     }
 }

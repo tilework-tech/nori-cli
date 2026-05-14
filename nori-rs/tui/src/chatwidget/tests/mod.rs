@@ -258,8 +258,11 @@ pub(crate) fn make_chatwidget_manual() -> (
         placeholder_text: "Ask Nori to do anything".to_string(),
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
+        custom_working_messages: cfg.custom_working_messages,
+        custom_working_message_list: cfg.custom_working_message_list.clone(),
         vertical_footer: false,
         footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         agent_display_name: String::new(),
         agent_slug: String::new(),
     });
@@ -305,8 +308,12 @@ pub(crate) fn make_chatwidget_manual() -> (
         session_configured_received: false,
         #[cfg(feature = "unstable")]
         acp_handle: None,
+        acp_mode_config: None,
+        acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(),
         session_stats: crate::session_stats::SessionStats::new(),
+        assistant_stream_seen_for_stats: false,
         login_handler: None,
+        active_resume_picker_generation: None,
         first_prompt_text: None,
         loop_remaining: None,
         loop_total: None,
@@ -340,3 +347,4 @@ mod part4;
 mod part5;
 mod part6;
 mod part7;
+mod part8;

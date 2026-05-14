@@ -64,34 +64,43 @@ use crate::history_cell::UpdateAvailableHistoryCell;
 
 const GPT_5_1_MIGRATION_AUTH_MODES: [AuthMode; 2] = [AuthMode::ChatGPT, AuthMode::ApiKey];
 const GPT_5_1_CODEX_MIGRATION_AUTH_MODES: [AuthMode; 1] = [AuthMode::ChatGPT];
+pub const RESUME_HINT_LEAD: &str = "To continue this session, run:";
 
 #[derive(Debug, Clone)]
 pub struct AppExitInfo {
     pub token_usage: TokenUsage,
     pub conversation_id: Option<ConversationId>,
+    pub conversation_has_activity: bool,
     pub update_action: Option<UpdateAction>,
 }
 
 fn session_summary(
     token_usage: TokenUsage,
     conversation_id: Option<ConversationId>,
+    conversation_has_activity: bool,
 ) -> Option<SessionSummary> {
-    if token_usage.is_zero() {
+    let usage_line = (!token_usage.is_zero()).then(|| FinalOutput::from(token_usage).to_string());
+    let resume_command = conversation_id
+        .filter(|_| conversation_has_activity)
+        .map(|conversation_id| resume_command_for_conversation(&conversation_id));
+
+    if usage_line.is_none() && resume_command.is_none() {
         return None;
     }
 
-    let usage_line = FinalOutput::from(token_usage).to_string();
-    let resume_command =
-        conversation_id.map(|conversation_id| format!("codex resume {conversation_id}"));
     Some(SessionSummary {
         usage_line,
         resume_command,
     })
 }
 
+pub fn resume_command_for_conversation(conversation_id: &ConversationId) -> String {
+    format!("nori resume {conversation_id}")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SessionSummary {
-    usage_line: String,
+    usage_line: Option<String>,
     resume_command: Option<String>,
 }
 
@@ -187,6 +196,7 @@ async fn handle_model_migration_prompt_if_needed(
                 return Some(AppExitInfo {
                     token_usage: TokenUsage::default(),
                     conversation_id: None,
+                    conversation_has_activity: false,
                     update_action: None,
                 });
             }
@@ -204,6 +214,7 @@ pub(crate) struct App {
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: Config,
     pub(crate) vertical_footer: bool,
+    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
     pub(crate) active_profile: Option<String>,
 
     pub(crate) file_search: FileSearchManager,
@@ -236,7 +247,7 @@ pub(crate) struct App {
     /// prompt submission. This avoids disrupting active prompt turns.
     pending_agent: Option<PendingAgentSelection>,
 
-    /// Ephemeral per-session loop count override (set via /config menu).
+    /// Ephemeral per-session loop count override (set via /settings menu).
     /// Outer Option: whether overridden; inner Option<i32>: the value.
     #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,
@@ -293,13 +304,6 @@ impl App {
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
-        if matches!(resume_selection, ResumeSelection::Resume(_)) {
-            tracing::warn!(
-                "Startup resume via --resume is not supported with ACP backend. \
-                 Use the /resume command within a session instead."
-            );
-        }
-
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
 
@@ -337,11 +341,22 @@ impl App {
                 auth_manager: auth_manager.clone(),
                 vertical_footer,
                 footer_segment_config: nori_config.footer_segment_config.clone(),
+                footer_layout_config: nori_config.footer_layout_config.clone(),
                 expected_agent: None,
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
             };
-            ChatWidget::new(init)
+            match resume_selection {
+                ResumeSelection::Resume(target) => {
+                    let loader = nori_acp::transcript::TranscriptLoader::new(target.nori_home);
+                    let transcript = loader
+                        .load_transcript(&target.project_id, &target.session_id)
+                        .await?;
+                    let acp_session_id = transcript.meta.acp_session_id.clone();
+                    ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
+                }
+                ResumeSelection::StartFresh | ResumeSelection::Exit => ChatWidget::new(init),
+            }
         };
 
         chat_widget.maybe_prompt_windows_sandbox_enable();
@@ -378,6 +393,7 @@ impl App {
             hotkey_config: nori_acp::config::HotkeyConfig::default(),
             vim_mode: nori_acp::config::VimEnterBehavior::Off,
             footer_segment_config: nori_config.footer_segment_config.clone(),
+            footer_layout_config: nori_config.footer_layout_config.clone(),
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
@@ -478,6 +494,7 @@ impl App {
         Ok(AppExitInfo {
             token_usage: app.token_usage(),
             conversation_id: app.chat_widget.conversation_id(),
+            conversation_has_activity: app.chat_widget.session_stats().has_activity(),
             update_action: app.pending_update_action,
         })
     }
@@ -512,6 +529,7 @@ impl App {
             auth_manager: self.auth_manager.clone(),
             vertical_footer: self.vertical_footer,
             footer_segment_config: self.footer_segment_config.clone(),
+            footer_layout_config: self.footer_layout_config.clone(),
             expected_agent,
             deferred_spawn,
             fork_context,

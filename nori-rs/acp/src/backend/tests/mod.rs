@@ -242,6 +242,7 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
         os_notifications: crate::config::OsNotifications::Disabled,
         nori_home: temp_dir.to_path_buf(),
         history_persistence: crate::config::HistoryPersistence::SaveAll,
+        acp_proxy: crate::config::AcpProxyConfig::disabled(),
         cli_version: "test".to_string(),
         notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
         auto_worktree: crate::config::AutoWorktree::Off,

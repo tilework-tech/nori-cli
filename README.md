@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/nori-ai-cli)](https://github.com/tilework-tech/nori-cli/blob/main/LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/nori-ai-cli)](https://www.npmjs.com/package/nori-ai-cli)
 
-**One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Gemini, and Codex. All from the same native CLI.
+**One CLI, multiple AI providers.** Nori is a local AI coding agent that lets you switch between Claude, Codex, Gemini, or any ACP compatible agent. All from the same native CLI.
 
 ![Nori TUI Screenshot](https://raw.githubusercontent.com/tilework-tech/nori-cli/refs/heads/main/assets/nori-cli_2026-01-13.png)
 
@@ -32,11 +32,11 @@ Each provider you plan to use needs to be authenticated separately before use. T
 Currently each agent relies on an existing authenticated session on your system. If you're coming in from another CLI tool, great!
 You should be good to go. If not, first follow the authentication for your desired provider:
 
-| Provider | Authentication                                                                                                                                          |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude   | Run `npx @anthropic-ai/claude-code` in your terminal, then when the Claude CLI opens, type `/login` there.                                              |
-| Gemini   | Run `npx @google/gemini-cli` in your terminal, then when the Gemini CLI opens, type `/auth` there.                                                      |
-| OpenAI   | In Nori, use `/agent` to switch to Codex, then run `/login` inside the Nori interface. Nori will prompt you to install OpenAI via npm if needed.        |
+| Provider | Authentication                                                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Claude   | Run `npx @anthropic-ai/claude-code` in your terminal, then when the Claude CLI opens, type `/login` there.                                       |
+| Gemini   | Run `npx @google/gemini-cli` in your terminal, then when the Gemini CLI opens, type `/auth` there.                                               |
+| OpenAI   | In Nori, use `/agent` to switch to Codex, then run `/login` inside the Nori interface. Nori will prompt you to install OpenAI via npm if needed. |
 
 ## Bring Your Own Agent
 
@@ -65,29 +65,30 @@ Then switch to your agent with `/agent` inside Nori.
 
 **Example agents to try:**
 
-| Agent | Install | Notes |
-|-------|---------|-------|
+| Agent                                                                     | Install                                                 | Notes                                                                              |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [Mistral Vibe](https://docs.mistral.ai/mistral-vibe/introduction/install) | `curl -LsSf https://mistral.ai/vibe/install.sh \| bash` | Installs both `vibe` and `vibe-acp`. Run `vibe --setup` to configure your API key. |
-| [ElizACP](https://github.com/agentclientprotocol/symposium-acp) | `cargo install --locked elizacp` | Minimal Eliza chatbot, useful for testing. |
-| [Kimi](https://github.com/nicepkg/kimi-cli) | No install needed — uses `uvx` | First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login`. |
+| [ElizACP](https://github.com/agentclientprotocol/symposium-acp)           | `cargo install --locked elizacp`                        | Minimal Eliza chatbot, useful for testing.                                         |
+| [Kimi](https://github.com/nicepkg/kimi-cli)                               | No install needed — uses `uvx`                          | First-time auth: run `uvx --python 3.13 kimi-cli`, then `/login`.                  |
 
 Want your AI agent to configure this automatically? Point it at the raw skill file: https://github.com/tilework-tech/nori-cli/blob/main/.claude/skills/registering-custom-acp-agent/SKILL.md
 
 ## Features
 
-- **Multi-provider**: Anthropic's Claude Code, Google DeepMind's Gemini, and OpenAI's Codex
-- **Improved terminal interface**: Fast incremental renders in Ratatui, double buffered scrollback history, and built in Rust for performance
-- **Coming Soon!**
-  - **Sandboxed execution**: Commands run in OS-level security sandboxes
-  - **MCP integration**: Connect to Model Context Protocol servers for extended tools
-  - **Session persistence**: Save and resume conversations with `nori resume`
-  - **Multi-agent orchestration**: Alternate between multiple agent sessions
+- **Multi-provider**: Use Claude Code, Codex, Gemini, or your own ACP-compatible agent from the same CLI.
+- **Fast native interface**: Incremental Ratatui rendering, double-buffered scrollback history, and a Rust core keep long sessions responsive.
+- **Solid ACP client support**: Nori supports ACP session listing, loading, resume, context and usage metadata.
+- **Agent Integrations**: Your agents keep their configurations, whether that's slash commands, skills, and MCP server forwarding.
+- **Session continuity**: Pick up prior work with resume, and rewind agent changes with escape-to-undo.
+- **Project context**: Reference files with `@`, flip between an editor or a file picker, and keep useful context visible without leaving the terminal.
+
+See the [ACP roadmap](ROADMAP.md) for what is done, what is in progress, and what is planned next.
 
 ## Attribution
 
 Nori CLI is built on the great work within [OpenAI Codex CLI](https://github.com/openai/codex).
 
-Nori CLI is working with the great protocol led by [Zed Industries](https://github.com/agentclientprotocol/agent-client-protocol) for orchestrating agents.
+Nori CLI relies on the great contributions within the [ACP project](https://github.com/agentclientprotocol/agent-client-protocol), from Zed Editor, JetBrains, and others.
 
 ## License
 

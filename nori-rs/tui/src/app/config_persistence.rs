@@ -1,4 +1,12 @@
 use super::*;
+use std::path::Path;
+
+async fn persist_acp_wire_recording_config(codex_home: &Path, enabled: bool) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(codex_home)
+        .set_path(&["acp_proxy", "enabled"], toml_value(enabled))
+        .apply()
+        .await
+}
 
 impl App {
     /// Persist a TUI config setting to config.toml and apply it immediately.
@@ -189,6 +197,44 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Pinned plan drawer {status}."), None);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
+        if let Err(err) = persist_acp_wire_recording_config(&self.config.codex_home, enabled).await
+        {
+            tracing::error!(error = %err, "failed to persist acp wire recording setting");
+            self.chat_widget
+                .add_error_message(format!("Failed to save ACP wire recording setting: {err}"));
+            return;
+        }
+
+        self.chat_widget.set_acp_wire_recording_enabled(enabled);
+        self.chat_widget.replace_agent_popup(enabled);
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("ACP wire recording {status}."), None);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(super) async fn persist_custom_working_messages_setting(&mut self, enabled: bool) {
+        self.config.custom_working_messages = enabled;
+        self.chat_widget.set_custom_working_messages(enabled);
+
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "custom_working_messages"], toml_value(enabled))
+            .apply()
+            .await
+        {
+            tracing::error!(error = %err, "failed to persist custom_working_messages setting");
+            self.chat_widget.add_error_message(format!(
+                "Failed to save custom_working_messages setting: {err}"
+            ));
+            return;
+        }
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("Custom working messages {status}."), None);
     }
 
     #[cfg(feature = "nori-config")]
@@ -399,7 +445,7 @@ impl App {
         {
             Ok(handle) => {
                 self.chat_widget.add_info_message(
-                    format!("Opening browser to authenticate `{server_name}`..."),
+                    mcp_oauth_login_started_message(&server_name, &handle.authorization_url),
                     Some("Press Esc in the MCP picker to cancel".to_string()),
                 );
 
@@ -412,7 +458,7 @@ impl App {
                     let result = task.await;
                     let (success, error) = match result {
                         Ok(Ok(())) => (true, None),
-                        Ok(Err(e)) => (false, Some(e.to_string())),
+                        Ok(Err(e)) => (false, Some(format_mcp_oauth_error(&e))),
                         Err(e) => (false, Some(format!("OAuth task panicked: {e}"))),
                     };
                     tx.send(crate::app_event::AppEvent::McpOAuthLoginComplete {
@@ -439,5 +485,64 @@ impl App {
         if let Some(tx) = self.mcp_oauth_cancel_tx.take() {
             let _ = tx.send(());
         }
+    }
+}
+
+fn mcp_oauth_login_started_message(server_name: &str, authorization_url: &str) -> String {
+    format!(
+        "Opening browser to authenticate `{server_name}`...\n\nIf the browser doesn't open automatically, visit:\n{authorization_url}\n\nWaiting for authentication to complete..."
+    )
+}
+
+fn format_mcp_oauth_error(error: &anyhow::Error) -> String {
+    format!("{error:#}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn mcp_oauth_login_started_message_includes_manual_url() {
+        let message = mcp_oauth_login_started_message("linear", "https://linear.example.com/oauth");
+
+        assert!(message.contains("Opening browser to authenticate `linear`"));
+        assert!(message.contains("If the browser doesn't open automatically, visit:"));
+        assert!(message.contains("https://linear.example.com/oauth"));
+        assert!(message.contains("Waiting for authentication to complete"));
+    }
+
+    #[test]
+    fn mcp_oauth_error_message_includes_error_chain() {
+        let err = anyhow::anyhow!("OAuth token exchange failed: server returned 400")
+            .context("failed to handle OAuth callback");
+
+        let message = format_mcp_oauth_error(&err);
+
+        assert_eq!(
+            message,
+            "failed to handle OAuth callback: OAuth token exchange failed: server returned 400"
+        );
+    }
+
+    #[tokio::test]
+    async fn persists_acp_wire_recording_to_top_level_acp_proxy_section() {
+        let temp = TempDir::new().expect("temp home");
+
+        persist_acp_wire_recording_config(temp.path(), true)
+            .await
+            .expect("persist recording enabled");
+
+        let content = std::fs::read_to_string(temp.path().join("config.toml"))
+            .expect("read persisted config");
+        let parsed: toml::Value = toml::from_str(&content).expect("config toml");
+        assert_eq!(
+            parsed
+                .get("acp_proxy")
+                .and_then(|section| section.get("enabled"))
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
     }
 }

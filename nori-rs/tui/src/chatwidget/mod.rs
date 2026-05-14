@@ -118,7 +118,6 @@ use self::interrupts::InterruptManager;
 mod pending_exec_cells;
 use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
-#[cfg(feature = "unstable")]
 pub(crate) use self::agent::AcpAgentHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
@@ -131,6 +130,7 @@ mod helpers;
 mod key_handling;
 mod login;
 mod pickers;
+mod session_config_mode;
 mod user_input;
 use self::session_header::SessionHeader;
 use crate::streaming::controller::StreamController;
@@ -317,6 +317,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
     /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching agent. This prevents race conditions when switching agents.
@@ -402,20 +403,23 @@ pub(crate) struct ChatWidget {
     // Whether SessionConfigured has been received for this widget.
     // Used with expected_agent to filter events from previous agents.
     session_configured_received: bool,
-    // ACP agent handle for model switching (only present in ACP mode)
-    #[cfg(feature = "unstable")]
+    // ACP agent handle for session config and model switching (only present in ACP mode)
     acp_handle: Option<AcpAgentHandle>,
+    acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
+    acp_mode_config_generation: i64,
     // Session statistics tracking
     session_stats: SessionStats,
+    assistant_stream_seen_for_stats: bool,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
+    active_resume_picker_generation: Option<u64>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
     // Loop mode state: remaining iterations (None = not looping)
     loop_remaining: Option<i32>,
     // Loop mode state: total iterations configured
     loop_total: Option<i32>,
-    // Ephemeral per-session override for loop_count (set via /config menu).
+    // Ephemeral per-session override for loop_count (set via /settings menu).
     // Outer Option: whether overridden; inner Option<i32>: the value.
     #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,

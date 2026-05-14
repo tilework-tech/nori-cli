@@ -29,7 +29,8 @@ impl AcpBackend {
         debug!("Spawning ACP backend for agent: {}", config.agent);
 
         // Spawn the ACP connection with enhanced error handling
-        let connection_result = SacpConnection::spawn(&agent_config, &cwd).await;
+        let connection_result =
+            SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await;
 
         let mut connection = match connection_result {
             Ok(conn) => conn,
@@ -54,7 +55,10 @@ impl AcpBackend {
         };
 
         // Create a session with enhanced error handling, forwarding CLI MCP servers.
-        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+            &config.mcp_servers,
+            config.mcp_oauth_credentials_store_mode,
+        );
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
             Ok(id) => id,
@@ -122,9 +126,6 @@ impl AcpBackend {
         // Create watch channel for dynamic approval policy updates
         let (approval_policy_tx, approval_policy_rx) = watch::channel(config.approval_policy);
 
-        // Create conversation ID for this session
-        let conversation_id = ConversationId::new();
-
         // Get history metadata
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
@@ -145,6 +146,10 @@ impl AcpBackend {
                 None
             }
         };
+        let conversation_id = transcript_recorder
+            .as_ref()
+            .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
+            .unwrap_or_default();
 
         let backend = Self {
             connection,
@@ -157,6 +162,7 @@ impl AcpBackend {
             idle_timer_abort: Arc::clone(&idle_timer_abort),
             nori_home: config.nori_home.clone(),
             history_persistence: config.history_persistence,
+            acp_proxy: config.acp_proxy.clone(),
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(config.initial_context.clone())),
@@ -181,6 +187,7 @@ impl AcpBackend {
             script_timeout: config.script_timeout,
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         let runtime_backend = backend.clone();
