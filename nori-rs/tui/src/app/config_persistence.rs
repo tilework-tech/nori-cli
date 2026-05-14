@@ -391,8 +391,14 @@ impl App {
             return;
         }
 
+        // Sync in-memory state so that ComputeMcpAuthStatuses (which reads
+        // chat_widget.config_ref().mcp_servers) sees the newly added servers.
+        self.config.mcp_servers = servers.into_iter().collect();
+        self.chat_widget
+            .set_mcp_servers(self.config.mcp_servers.clone());
+
         self.chat_widget.add_info_message(
-            "MCP servers updated. Restart to apply changes.".to_string(),
+            "MCP servers saved. Start a new session to use them.".to_string(),
             None,
         );
     }
