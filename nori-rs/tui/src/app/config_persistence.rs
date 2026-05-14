@@ -398,7 +398,7 @@ impl App {
             .set_mcp_servers(self.config.mcp_servers.clone());
 
         self.chat_widget.add_info_message(
-            "MCP servers updated. Restart to apply changes.".to_string(),
+            "MCP servers saved. Start a new session to use them.".to_string(),
             None,
         );
     }
