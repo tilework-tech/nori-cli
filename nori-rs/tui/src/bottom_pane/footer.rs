@@ -785,6 +785,25 @@ mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
+    /// Test baseline: every segment enabled. Snapshot tests opt out
+    /// individual segments rather than depending on production defaults so
+    /// renderings stay stable when shipped defaults change.
+    fn fully_enabled_segments() -> FooterSegmentConfig {
+        FooterSegmentConfig {
+            prompt_summary: true,
+            vim_mode: true,
+            git_branch: true,
+            worktree_name: true,
+            git_stats: true,
+            context: true,
+            approval_mode: true,
+            nori_profile: true,
+            nori_version: true,
+            token_usage: true,
+            mode_indicator: true,
+        }
+    }
+
     fn default_props() -> FooterProps {
         FooterProps {
             mode: FooterMode::ShortcutSummary,
@@ -809,7 +828,7 @@ mod tests {
             vim_mode_state: None,
             prompt_summary: None,
             worktree_name: None,
-            footer_segment_config: FooterSegmentConfig::default(),
+            footer_segment_config: fully_enabled_segments(),
             footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             acp_mode_label: None,
         }
@@ -1295,7 +1314,7 @@ mod tests {
     fn footer_with_worktree_name_disabled() {
         let segment_config = FooterSegmentConfig {
             worktree_name: false,
-            ..Default::default()
+            ..fully_enabled_segments()
         };
 
         snapshot_footer(
@@ -1356,7 +1375,7 @@ mod tests {
     fn footer_with_git_branch_disabled() {
         let segment_config = FooterSegmentConfig {
             git_branch: false,
-            ..Default::default()
+            ..fully_enabled_segments()
         };
 
         snapshot_footer(
@@ -1377,7 +1396,7 @@ mod tests {
             git_branch: false,
             git_stats: false,
             token_usage: false,
-            ..Default::default()
+            ..fully_enabled_segments()
         };
 
         snapshot_footer(
@@ -1440,7 +1459,7 @@ mod tests {
         let segment_config = FooterSegmentConfig {
             nori_profile: false,
             nori_version: false,
-            ..Default::default()
+            ..fully_enabled_segments()
         };
 
         snapshot_footer(

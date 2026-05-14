@@ -91,10 +91,23 @@ fn test_footer_full_startup_with_all_info() {
     std::fs::set_permissions(&mock_nori, std::fs::Permissions::from_mode(0o755))
         .expect("Failed to set permissions on mock nori-skillsets");
 
+    // Enable the segments this test validates explicitly — they're off
+    // by default in the lean shipped footer config. Use the additive
+    // form so the auto-generated trust block (which keeps approval mode
+    // at the trusted default) is preserved.
+    let extra_config_toml = r#"
+[tui.footer_segments]
+nori_profile = true
+nori_version = true
+git_stats = true
+"#;
+
     let mut session = TuiSession::spawn_with_config(
         24,
         120, // Wide terminal to fit full footer
-        SessionConfig::new().with_extra_path(mock_bin_dir.path().to_path_buf()),
+        SessionConfig::new()
+            .with_extra_path(mock_bin_dir.path().to_path_buf())
+            .with_extra_config_toml(extra_config_toml),
     )
     .expect("Failed to spawn");
 
