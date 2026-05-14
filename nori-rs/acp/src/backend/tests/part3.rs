@@ -402,7 +402,6 @@ async fn test_mock_agent_auth_failure_produces_actionable_error() {
         session_context: None,
         mcp_servers: std::collections::HashMap::new(),
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
-        prompt_summary_enabled: false,
     };
 
     let result = spawn_test_backend(&config, event_tx, None).await;
@@ -1628,7 +1627,6 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
         session_context: None,
         mcp_servers: std::collections::HashMap::new(),
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
-        prompt_summary_enabled: false,
     };
 
     let backend = spawn_test_backend(&config, event_tx, Some(client_event_tx))

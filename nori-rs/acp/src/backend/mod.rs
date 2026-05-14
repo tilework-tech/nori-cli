@@ -240,10 +240,6 @@ pub struct AcpBackendConfig {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
-    /// Whether the prompt_summary footer segment is enabled. When false (and
-    /// auto_worktree is off), the background ACP summarization session is
-    /// skipped to keep the wire protocol clean.
-    pub prompt_summary_enabled: bool,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -304,8 +300,6 @@ pub struct AcpBackend {
     ghost_snapshots: Arc<GhostSnapshotStack>,
     /// Whether the first user prompt has been sent (for prompt summary)
     is_first_prompt: Arc<Mutex<bool>>,
-    /// Whether the prompt_summary footer segment is enabled
-    prompt_summary_enabled: bool,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
     /// Auto-worktree mode (whether a worktree was created at startup)
