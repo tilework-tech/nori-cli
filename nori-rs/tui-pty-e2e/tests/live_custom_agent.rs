@@ -74,7 +74,7 @@ fn test_elizacp_custom_agent_startup_and_response() {
 
     // Wait for the TUI to start and show the prompt
     session
-        .wait_for_text("? for shortcuts", LIVE_TIMEOUT)
+        .wait_for_text("›", LIVE_TIMEOUT)
         .expect("TUI should start successfully with elizacp agent");
 
     // Send a simple message
@@ -126,7 +126,7 @@ fn test_elizacp_custom_agent_display_name() {
 
     // Wait for startup
     session
-        .wait_for_text("? for shortcuts", LIVE_TIMEOUT)
+        .wait_for_text("›", LIVE_TIMEOUT)
         .expect("TUI should start successfully");
 
     let contents = session.screen_contents();

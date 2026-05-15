@@ -2,4 +2,4 @@
 source: tui/src/bottom_pane/footer.rs
 expression: terminal.backend()
 ---
-"  ⎇ main · Approvals: Read Only · ? for shortcuts                               "
+"  ⎇ main · Approvals: Read Only                                                 "

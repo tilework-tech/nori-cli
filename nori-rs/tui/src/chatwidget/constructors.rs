@@ -19,7 +19,9 @@ impl ChatWidget {
             fork_context,
         } = common;
         let mut rng = rand::rng();
-        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
+        let placeholder = PROMPT_MODE_PLACEHOLDERS
+            [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
+        .to_string();
         let spawn_result = if deferred_spawn {
             // Deferred spawn: create a dummy channel. The real agent will be
             // spawned later via `spawn_deferred_agent()`.
@@ -144,7 +146,9 @@ impl ChatWidget {
             fork_context: _,
         } = common;
         let mut rng = rand::rng();
-        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
+        let placeholder = PROMPT_MODE_PLACEHOLDERS
+            [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
+        .to_string();
         let spawn_result = spawn_acp_agent_resume(
             config.clone(),
             acp_session_id,
