@@ -9,6 +9,7 @@ use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
 use ratatui::layout::Margin;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -93,6 +94,20 @@ enum PromptSelectionMode {
 enum PromptSelectionAction {
     Insert { text: String, cursor: Option<usize> },
     Submit { text: String },
+}
+
+#[derive(Clone, Copy)]
+enum PromptIndicator {
+    Normal,
+    Shortcut,
+    Slash,
+    Shell,
+}
+
+impl PromptIndicator {
+    fn hides_textarea_prefix(self) -> bool {
+        matches!(self, PromptIndicator::Slash)
+    }
 }
 
 pub(crate) struct ChatComposer {
@@ -459,7 +474,7 @@ impl ChatComposer {
 impl Renderable for ChatComposer {
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
         let [_, textarea_rect, _] = self.layout_areas(area);
-        let textarea_rect = self.shell_body_rect(textarea_rect);
+        let textarea_rect = Self::textarea_body_rect(textarea_rect, self.prompt_indicator());
         let state = *self.textarea_state.borrow();
         self.textarea.cursor_pos_with_state(textarea_rect, state)
     }
@@ -472,10 +487,16 @@ impl Renderable for ChatComposer {
         let footer_spacing = Self::footer_spacing(footer_hint_height);
         let footer_total_height = footer_hint_height + footer_spacing;
         const COLS_WITH_MARGIN: u16 = LIVE_PREFIX_COLS + 1;
-        let shell_prefix_cols = if self.is_shell_mode { 1 } else { 0 };
-        self.textarea
-            .desired_height(width.saturating_sub(COLS_WITH_MARGIN + shell_prefix_cols))
-            + 2
+        let hidden_prefix_cols = if self.prompt_indicator().hides_textarea_prefix() {
+            1
+        } else {
+            0
+        };
+        self.textarea.desired_height(
+            width
+                .saturating_sub(COLS_WITH_MARGIN)
+                .saturating_add(hidden_prefix_cols),
+        ) + 2
             + match &self.active_popup {
                 ActivePopup::None => footer_total_height,
                 ActivePopup::Command(c) => c.calculate_required_height(width),
@@ -546,39 +567,91 @@ impl Renderable for ChatComposer {
             buf,
             textarea_corner_segments(&self.footer_props()),
         );
+        let prompt_indicator = self.prompt_indicator();
         if !textarea_rect.is_empty() {
+            let prompt = match prompt_indicator {
+                PromptIndicator::Normal => "›".bold(),
+                PromptIndicator::Shortcut => {
+                    Span::styled("?", Style::default().fg(Color::DarkGray))
+                }
+                PromptIndicator::Slash => "/".cyan(),
+                PromptIndicator::Shell => "!".red(),
+            };
             buf.set_span(
                 textarea_rect.x - LIVE_PREFIX_COLS,
                 textarea_rect.y,
-                &"›".bold(),
+                &prompt,
                 textarea_rect.width,
             );
         }
 
-        if self.is_shell_mode && !textarea_rect.is_empty() {
-            buf.set_span(textarea_rect.x, textarea_rect.y, &"!".bold(), 1);
-        }
-        let body_rect = self.shell_body_rect(textarea_rect);
+        let body_rect = Self::textarea_body_rect(textarea_rect, prompt_indicator);
         let mut state = self.textarea_state.borrow_mut();
         StatefulWidgetRef::render_ref(&(&self.textarea), body_rect, buf, &mut state);
+        if prompt_indicator.hides_textarea_prefix() && !textarea_rect.is_empty() {
+            buf.set_string(
+                textarea_rect.x.saturating_sub(1),
+                textarea_rect.y,
+                " ",
+                user_message_style(),
+            );
+        }
         if !self.is_shell_mode && self.textarea.text().is_empty() {
-            let placeholder = Span::from(self.placeholder_text.as_str()).dim();
+            let placeholder_text = if matches!(prompt_indicator, PromptIndicator::Shortcut) {
+                self.placeholder_text
+                    .strip_prefix("? ")
+                    .unwrap_or(&self.placeholder_text)
+            } else {
+                &self.placeholder_text
+            };
+            let placeholder = Span::from(placeholder_text).dim();
             Line::from(vec![placeholder]).render_ref(body_rect.inner(Margin::new(0, 0)), buf);
         }
     }
 }
 
 impl ChatComposer {
-    fn shell_body_rect(&self, textarea_rect: Rect) -> Rect {
-        if self.is_shell_mode {
+    fn textarea_body_rect(textarea_rect: Rect, prompt_indicator: PromptIndicator) -> Rect {
+        if prompt_indicator.hides_textarea_prefix() {
             Rect {
-                x: textarea_rect.x.saturating_add(1),
-                width: textarea_rect.width.saturating_sub(1),
+                x: textarea_rect.x.saturating_sub(1),
+                width: textarea_rect.width.saturating_add(1),
                 ..textarea_rect
             }
         } else {
             textarea_rect
         }
+    }
+
+    fn prompt_indicator(&self) -> PromptIndicator {
+        if self.is_shell_mode {
+            PromptIndicator::Shell
+        } else if self.is_editing_slash_command_name() {
+            PromptIndicator::Slash
+        } else if matches!(self.footer_mode(), FooterMode::ShortcutOverlay) {
+            PromptIndicator::Shortcut
+        } else {
+            PromptIndicator::Normal
+        }
+    }
+
+    pub(super) fn is_editing_slash_command_name(&self) -> bool {
+        let text = self.textarea.text();
+        let first_line_end = text.find('\n').unwrap_or(text.len());
+        let first_line = &text[..first_line_end];
+        let cursor = self.textarea.cursor();
+        let caret_on_first_line = cursor <= first_line_end;
+
+        if !first_line.starts_with('/') || !caret_on_first_line {
+            return false;
+        }
+
+        let token_end = first_line
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+            .map(|(i, _)| i)
+            .unwrap_or(first_line.len());
+        cursor <= token_end
     }
 }
 

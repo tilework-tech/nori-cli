@@ -4,10 +4,14 @@ use crate::app_event::AppEvent;
 use crate::bottom_pane::AppEventSender;
 use crate::bottom_pane::ChatComposer;
 use crate::bottom_pane::InputResult;
+use crate::render::renderable::Renderable;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use pretty_assertions::assert_eq;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
 use tokio::sync::mpsc::unbounded_channel;
 
 fn make_composer_with_agent_commands()
@@ -64,6 +68,19 @@ fn make_composer_with_commands(
         prefix.to_string(),
     );
     (composer, rx)
+}
+
+fn render_composer(composer: &ChatComposer) -> Buffer {
+    let area = Rect::new(0, 0, 100, 8);
+    let mut buf = Buffer::empty(area);
+    composer.render(area, &mut buf);
+    buf
+}
+
+fn input_row(buf: &Buffer) -> String {
+    (0..100)
+        .map(|x| buf[(x, 1)].symbol().chars().next().unwrap_or(' '))
+        .collect()
 }
 
 #[test]
@@ -434,4 +451,70 @@ fn shell_mode_renders_bang_prefix() {
     snapshot_composer_state("shell_mode_bang_prefix", false, |composer| {
         type_chars_humanlike(composer, &['!', 'p', 'w', 'd']);
     });
+}
+
+#[test]
+fn shortcut_mode_prompt_uses_gray_question_mark_without_duplicate_prefix() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(true, sender, false, "? for shortcuts".to_string(), false);
+
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "?");
+    assert_eq!(buf[(0, 1)].fg, Color::DarkGray);
+    assert!(
+        input_row(&buf).starts_with("? for shortcuts"),
+        "shortcut prompt should not duplicate the placeholder sigil: {:?}",
+        input_row(&buf)
+    );
+}
+
+#[test]
+fn slash_mode_prompt_uses_cyan_slash_without_duplicate_prefix() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    type_chars_humanlike(&mut composer, &['/', 'i', 'n', 'i', 't']);
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "/");
+    assert_eq!(buf[(0, 1)].fg, Color::Cyan);
+    assert!(
+        input_row(&buf).starts_with("/ init"),
+        "slash prompt should hide the editable leading slash: {:?}",
+        input_row(&buf)
+    );
+}
+
+#[test]
+fn shell_mode_prompt_uses_red_bang_without_duplicate_prefix() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    type_chars_humanlike(&mut composer, &['!', 'p', 'w', 'd']);
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "!");
+    assert_eq!(buf[(0, 1)].fg, Color::Red);
+    assert!(
+        input_row(&buf).starts_with("! pwd"),
+        "shell prompt should render the shell sigil as the prompt character: {:?}",
+        input_row(&buf)
+    );
 }
