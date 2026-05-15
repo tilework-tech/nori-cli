@@ -74,6 +74,7 @@ impl ChatWidget {
                             success: true,
                             option_name: "Mode".to_string(),
                             value_name,
+                            config_options: Some(config_options),
                             error: None,
                         });
                     }
@@ -82,6 +83,7 @@ impl ChatWidget {
                             success: false,
                             option_name: "Mode".to_string(),
                             value_name: value_name.clone(),
+                            config_options: None,
                             error: Some(err.to_string()),
                         });
                         if let Some(config_options) = handle.get_session_config().await {
@@ -129,6 +131,7 @@ impl ChatWidget {
                         success: true,
                         option_name: "Mode".to_string(),
                         value_name,
+                        config_options: Some(config_options),
                         error: None,
                     });
                 }
@@ -137,6 +140,7 @@ impl ChatWidget {
                         success: false,
                         option_name: "Mode".to_string(),
                         value_name: mode.next_label,
+                        config_options: None,
                         error: Some(err.to_string()),
                     });
                 }

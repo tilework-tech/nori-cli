@@ -308,6 +308,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         session_configured_received: false,
         #[cfg(feature = "unstable")]
         acp_handle: None,
+        acp_config_option_snapshot: None,
         acp_mode_config: None,
         acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(),
         session_stats: crate::session_stats::SessionStats::new(),

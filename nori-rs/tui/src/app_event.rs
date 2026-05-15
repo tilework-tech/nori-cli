@@ -260,6 +260,7 @@ pub(crate) enum AppEvent {
         success: bool,
         option_name: String,
         value_name: String,
+        config_options: Option<Vec<SessionConfigOption>>,
         error: Option<String>,
     },
 

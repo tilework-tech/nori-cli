@@ -24,6 +24,7 @@ pub enum ClientEvent {
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
     SessionUpdateInfo(SessionUpdateInfo),
+    SessionConfigUpdate(SessionConfigUpdate),
     Warning(WarningInfo),
 }
 
@@ -68,6 +69,12 @@ pub struct AgentCommandInfo {
     pub name: String,
     pub description: String,
     pub input_hint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SessionConfigUpdate {
+    pub config_options: Vec<acp::SessionConfigOption>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -371,9 +378,9 @@ impl ClientEventNormalizer {
                 )]
             }
             acp::SessionUpdate::ConfigOptionUpdate(update) => {
-                vec![ClientEvent::SessionUpdateInfo(
-                    session_update_info_from_config_options(update),
-                )]
+                vec![ClientEvent::SessionConfigUpdate(SessionConfigUpdate {
+                    config_options: update.config_options.clone(),
+                })]
             }
             acp::SessionUpdate::SessionInfoUpdate(update) => {
                 vec![ClientEvent::SessionUpdateInfo(
@@ -960,26 +967,6 @@ fn session_update_info_from_current_mode(update: &acp::CurrentModeUpdate) -> Ses
     SessionUpdateInfo {
         kind: SessionUpdateKind::CurrentMode,
         message: format!("ACP mode changed to {}", update.current_mode_id),
-        hint: None,
-        usage: None,
-    }
-}
-
-fn session_update_info_from_config_options(update: &acp::ConfigOptionUpdate) -> SessionUpdateInfo {
-    let names = update
-        .config_options
-        .iter()
-        .map(|option| option.name.as_str())
-        .collect::<Vec<_>>();
-    let message = if names.is_empty() {
-        "ACP config options updated".to_string()
-    } else {
-        format!("ACP config options updated: {}", names.join(", "))
-    };
-
-    SessionUpdateInfo {
-        kind: SessionUpdateKind::ConfigOptions,
-        message,
         hint: None,
         usage: None,
     }
@@ -2131,13 +2118,11 @@ mod tests {
         let events = normalizer.push_session_update(&update);
         assert_eq!(events.len(), 1);
 
-        let ClientEvent::SessionUpdateInfo(info) = &events[0] else {
-            panic!("expected SessionUpdateInfo");
+        let ClientEvent::SessionConfigUpdate(update) = &events[0] else {
+            panic!("expected SessionConfigUpdate");
         };
 
-        assert_eq!(info.kind, SessionUpdateKind::ConfigOptions);
-        assert_eq!(info.message, "ACP config options updated: Verbosity");
-        assert_eq!(info.hint, None);
+        assert_eq!(update.config_options, vec![sample_config_option()]);
     }
 
     #[test]
