@@ -543,6 +543,44 @@ fn synced_session_config_snapshot_prevents_duplicate_update_history() {
 }
 
 #[test]
+fn session_config_snapshot_seeds_first_update_history_baseline() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+    let baseline = vec![select_config_option(
+        "effort",
+        "Effort",
+        "medium",
+        &[("medium", "Medium"), ("high", "High")],
+    )];
+
+    chat.handle_acp_session_config_snapshot(chat.acp_mode_config_generation(), &baseline);
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "initial session config fetched for the footer should not add history noise"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![select_config_option(
+                "effort",
+                "Effort",
+                "high",
+                &[("medium", "Medium"), ("high", "High")],
+            )],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_eq!(rendered, "• Claude Code option updated: Effort=High\n");
+}
+
+#[test]
 fn session_usage_updates_footer_and_disables_transcript_fallback() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 

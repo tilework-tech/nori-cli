@@ -98,6 +98,18 @@ impl ChatWidget {
         );
     }
 
+    pub(crate) fn handle_acp_session_config_snapshot(
+        &mut self,
+        generation: i64,
+        config_options: &[nori_acp::SessionConfigOption],
+    ) {
+        if generation != self.acp_mode_config_generation {
+            return;
+        }
+
+        self.sync_acp_session_config_snapshot(config_options);
+    }
+
     pub(crate) fn add_acp_session_config_set_message(
         &mut self,
         option_name: &str,

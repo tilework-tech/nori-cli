@@ -39,11 +39,9 @@ impl ChatWidget {
             let Some(config_options) = handle.get_session_config().await else {
                 return;
             };
-            app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+            app_event_tx.send(AppEvent::AcpSessionConfigSnapshot {
                 generation,
-                mode: crate::nori::session_config_mode::acp_mode_config_from_options(
-                    &config_options,
-                ),
+                config_options,
             });
         });
     }

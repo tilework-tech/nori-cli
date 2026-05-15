@@ -756,6 +756,13 @@ impl App {
                     );
                 }
             }
+            AppEvent::AcpSessionConfigSnapshot {
+                generation,
+                config_options,
+            } => {
+                self.chat_widget
+                    .handle_acp_session_config_snapshot(generation, &config_options);
+            }
             AppEvent::AcpModeConfigSnapshot { generation, mode } => {
                 self.chat_widget
                     .apply_acp_mode_config_snapshot(generation, mode);
