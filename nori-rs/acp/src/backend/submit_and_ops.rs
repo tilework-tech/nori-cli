@@ -214,7 +214,13 @@ impl AcpBackend {
                 .await;
             }
             Op::RunUserShellCommand { command } => {
-                user_shell::run_user_shell_command(&self.event_tx, &id, &self.cwd, command).await;
+                let event_tx = self.event_tx.clone();
+                let cwd = self.cwd.clone();
+                let id = id.clone();
+                let shell_task = tokio::spawn(async move {
+                    user_shell::run_user_shell_command(&event_tx, &id, &cwd, command).await;
+                });
+                drop(shell_task);
             }
             Op::OverrideTurnContext {
                 approval_policy, ..

@@ -415,6 +415,28 @@ fn shell_mode_slash_text_submits_without_slash_dispatch() {
 }
 
 #[test]
+fn bang_enter_exits_shell_mode_without_submitting_empty_command() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    type_chars_humanlike(&mut composer, &['!']);
+
+    let (result, handled) =
+        composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(handled);
+    assert!(matches!(result, InputResult::None));
+    assert_eq!(composer.current_text(), "");
+
+    type_chars_humanlike(&mut composer, &['x']);
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "x"),
+        other => panic!("expected plain text submission after shell mode exit, got {other:?}"),
+    }
+}
+
+#[test]
 fn bang_mid_prose_is_plain_text() {
     let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
 

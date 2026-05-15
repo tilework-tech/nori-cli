@@ -669,6 +669,9 @@ impl ChatComposer {
                     self.pending_pastes.clear();
                     self.textarea.set_text("");
                     self.is_shell_mode = false;
+                    if body.trim().is_empty() {
+                        return (InputResult::None, true);
+                    }
                     let text = format!("!{body}");
                     self.history.record_local_submission(&text);
                     return (InputResult::Submitted(text), true);

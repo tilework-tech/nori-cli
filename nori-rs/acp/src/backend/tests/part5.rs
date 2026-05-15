@@ -78,6 +78,63 @@ async fn user_shell_command_executes_locally_and_emits_exec_lifecycle() {
     assert!(saw_complete, "expected TaskComplete");
 }
 
+#[tokio::test]
+#[serial]
+async fn user_shell_command_submit_returns_while_command_is_running() {
+    use pretty_assertions::assert_eq;
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let submit_result = tokio::time::timeout(
+        Duration::from_millis(250),
+        backend.submit(Op::RunUserShellCommand {
+            command: "printf nori-start; sleep 1; printf nori-end".to_string(),
+        }),
+    )
+    .await
+    .expect("shell command submission should not wait for command completion")
+    .expect("Failed to submit shell command");
+
+    assert_eq!(submit_result.is_empty(), false);
+
+    let mut saw_complete = false;
+    for _ in 0..8 {
+        let event = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+            .await
+            .expect("expected shell command event");
+        if let EventMsg::TaskComplete(ev) = event.msg {
+            assert_eq!(ev.last_agent_message, None);
+            saw_complete = true;
+            break;
+        }
+    }
+
+    assert!(
+        saw_complete,
+        "expected TaskComplete after shell command exits"
+    );
+}
+
 /// Test that session_context is prepended to the first user prompt.
 ///
 /// When `session_context` is set on `AcpBackendConfig`, its value should appear
