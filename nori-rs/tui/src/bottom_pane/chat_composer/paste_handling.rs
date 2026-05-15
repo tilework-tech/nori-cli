@@ -14,14 +14,7 @@ impl ChatComposer {
         }
         // Explicit paste events should not trigger Enter suppression.
         self.paste_burst.clear_after_explicit_paste();
-        // Keep popup sync consistent with key handling: prefer slash popup; only
-        // sync file popup when slash popup is NOT active.
-        self.sync_command_popup();
-        if matches!(self.active_popup, ActivePopup::Command(_)) {
-            self.dismissed_file_popup_token = None;
-        } else {
-            self.sync_file_search_popup();
-        }
+        self.sync_selection_popups();
         true
     }
 
@@ -74,14 +67,7 @@ impl ChatComposer {
                 // Mirror insert_str() behavior so popups stay in sync when a
                 // pending fast char flushes as normal typed input.
                 self.textarea.insert_str(ch.to_string().as_str());
-                // Keep popup sync consistent with key handling: prefer slash popup; only
-                // sync file popup when slash popup is NOT active.
-                self.sync_command_popup();
-                if matches!(self.active_popup, ActivePopup::Command(_)) {
-                    self.dismissed_file_popup_token = None;
-                } else {
-                    self.sync_file_search_popup();
-                }
+                self.sync_selection_popups();
                 true
             }
             FlushResult::None => false,

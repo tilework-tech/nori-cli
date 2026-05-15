@@ -99,6 +99,10 @@ impl CommandPopup {
         self.agent_command_prefix = prefix;
     }
 
+    fn is_slash_agent_command(cmd: &AgentCommandInfo, builtin_names: &HashSet<&str>) -> bool {
+        !cmd.name.starts_with('$') && !builtin_names.contains(cmd.name.as_str())
+    }
+
     /// Update the filter string based on the current composer text. The text
     /// passed in is expected to start with a leading '/'. Everything after the
     /// *first* '/" on the *first* line becomes the active filter that is used
@@ -165,7 +169,7 @@ impl CommandPopup {
             }
             // Agent commands next, excluding collisions with builtins.
             for (idx, cmd) in self.agent_commands.iter().enumerate() {
-                if !builtin_names.contains(cmd.name.as_str()) {
+                if Self::is_slash_agent_command(cmd, &builtin_names) {
                     out.push((CommandItem::AgentCommand(idx), None, 0));
                 }
             }
@@ -183,7 +187,7 @@ impl CommandPopup {
         }
         // Agent commands with prefix-based display key.
         for (idx, cmd) in self.agent_commands.iter().enumerate() {
-            if builtin_names.contains(cmd.name.as_str()) {
+            if !Self::is_slash_agent_command(cmd, &builtin_names) {
                 continue;
             }
             let display = self.agent_command_display_key(idx);
@@ -513,6 +517,43 @@ mod tests {
             .filter(|it| matches!(it, CommandItem::AgentCommand(_)))
             .count();
         assert_eq!(agent_count, 2);
+    }
+
+    #[test]
+    fn dollar_prefixed_agent_commands_are_excluded_from_slash_popup() {
+        let agent_commands = vec![
+            AgentCommandInfo {
+                name: "$using-skills".to_string(),
+                description: "Use skill instructions".to_string(),
+                input_hint: None,
+            },
+            AgentCommandInfo {
+                name: "loop".to_string(),
+                description: "Run a prompt on a recurring interval".to_string(),
+                input_hint: None,
+            },
+        ];
+        let mut popup = CommandPopup::new_full(
+            Vec::new(),
+            agent_commands,
+            "codex".to_string(),
+            HashMap::new(),
+        );
+        popup.on_composer_text_change("/".to_string());
+        let items = popup.filtered_items();
+
+        let has_dollar_skill = items.iter().any(|it| {
+            matches!(it, CommandItem::AgentCommand(i) if popup.agent_command(*i).is_some_and(|c| c.name == "$using-skills"))
+        });
+        let has_loop = items.iter().any(|it| {
+            matches!(it, CommandItem::AgentCommand(i) if popup.agent_command(*i).is_some_and(|c| c.name == "loop"))
+        });
+
+        assert!(
+            !has_dollar_skill,
+            "Codex $ skills belong in the skill picker, not slash popup"
+        );
+        assert!(has_loop, "regular agent slash commands should still appear");
     }
 
     #[test]
