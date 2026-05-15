@@ -32,6 +32,8 @@ use super::footer::toggle_shortcut_mode;
 use super::history_search_popup::HistorySearchPopup;
 use super::paste_burst::CharDecision;
 use super::paste_burst::PasteBurst;
+use super::skill_popup::SkillPickerItem;
+use super::skill_popup::SkillPopup;
 use crate::bottom_pane::paste_burst::FlushResult;
 use crate::bottom_pane::prompt_args::expand_custom_prompt;
 use crate::bottom_pane::prompt_args::expand_if_numeric_with_positional_args;
@@ -103,6 +105,7 @@ pub(crate) struct ChatComposer {
     esc_backtrack_hint: bool,
     use_shift_enter_hint: bool,
     dismissed_file_popup_token: Option<String>,
+    dismissed_skill_popup_token: Option<String>,
     current_file_query: Option<String>,
     pending_pastes: Vec<(String, String)>,
     has_focus: bool,
@@ -136,6 +139,7 @@ pub(crate) struct ChatComposer {
 enum ActivePopup {
     None,
     Command(CommandPopup),
+    Skill(SkillPopup),
     File(FileSearchPopup),
     HistorySearch(HistorySearchPopup),
 }
@@ -167,6 +171,7 @@ impl ChatComposer {
             esc_backtrack_hint: false,
             use_shift_enter_hint,
             dismissed_file_popup_token: None,
+            dismissed_skill_popup_token: None,
             current_file_query: None,
             pending_pastes: Vec::new(),
             has_focus: has_input_focus,
@@ -296,8 +301,7 @@ impl ChatComposer {
         self.attached_images.clear();
         self.textarea.set_text(&text);
         self.textarea.set_cursor(0);
-        self.sync_command_popup();
-        self.sync_file_search_popup();
+        self.sync_selection_popups();
     }
 
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
@@ -364,8 +368,7 @@ impl ChatComposer {
 
     pub(crate) fn insert_str(&mut self, text: &str) {
         self.textarea.insert_str(text);
-        self.sync_command_popup();
-        self.sync_file_search_popup();
+        self.sync_selection_popups();
     }
 
     fn set_has_focus(&mut self, has_focus: bool) {
@@ -462,6 +465,7 @@ impl Renderable for ChatComposer {
             + match &self.active_popup {
                 ActivePopup::None => footer_total_height,
                 ActivePopup::Command(c) => c.calculate_required_height(width),
+                ActivePopup::Skill(c) => c.calculate_required_height(width),
                 ActivePopup::File(c) => c.calculate_required_height(),
                 ActivePopup::HistorySearch(c) => c.calculate_required_height(),
             }
@@ -471,6 +475,9 @@ impl Renderable for ChatComposer {
         let [composer_rect, textarea_rect, popup_rect] = self.layout_areas(area);
         match &self.active_popup {
             ActivePopup::Command(popup) => {
+                popup.render_ref(popup_rect, buf);
+            }
+            ActivePopup::Skill(popup) => {
                 popup.render_ref(popup_rect, buf);
             }
             ActivePopup::File(popup) => {

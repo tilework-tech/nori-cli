@@ -38,6 +38,7 @@ pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
 mod selection_popup_common;
+mod skill_popup;
 mod textarea;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

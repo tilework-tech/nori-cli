@@ -7,21 +7,13 @@ impl ChatComposer {
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
         let result = match &mut self.active_popup {
             ActivePopup::Command(_) => self.handle_key_event_with_slash_popup(key_event),
+            ActivePopup::Skill(_) => self.handle_key_event_with_skill_popup(key_event),
             ActivePopup::File(_) => self.handle_key_event_with_file_popup(key_event),
             ActivePopup::HistorySearch(_) => self.handle_key_event_with_history_popup(key_event),
             ActivePopup::None => self.handle_key_event_without_popup(key_event),
         };
 
-        // The history search popup manages its own lifecycle; skip the
-        // slash/file popup sync that would otherwise clobber it.
-        if !matches!(self.active_popup, ActivePopup::HistorySearch(_)) {
-            self.sync_command_popup();
-            if matches!(self.active_popup, ActivePopup::Command(_)) {
-                self.dismissed_file_popup_token = None;
-            } else {
-                self.sync_file_search_popup();
-            }
-        }
+        self.sync_selection_popups();
 
         result
     }
@@ -203,6 +195,91 @@ impl ChatComposer {
                 }
                 // Fallback to default newline handling if no command selected.
                 self.handle_key_event_without_popup(key_event)
+            }
+            input => self.handle_input_basic(input),
+        }
+    }
+
+    /// Handle key event when the skill popup is visible.
+    pub(super) fn handle_key_event_with_skill_popup(
+        &mut self,
+        key_event: KeyEvent,
+    ) -> (InputResult, bool) {
+        if self.handle_shortcut_overlay_key(&key_event) {
+            return (InputResult::None, true);
+        }
+        if key_event.code == KeyCode::Esc {
+            let next_mode = esc_hint_mode(self.footer_mode, self.is_task_running);
+            if next_mode != self.footer_mode {
+                self.footer_mode = next_mode;
+                return (InputResult::None, true);
+            }
+        } else {
+            self.footer_mode = reset_mode_after_activity(self.footer_mode);
+        }
+
+        match key_event {
+            KeyEvent {
+                code: KeyCode::Up, ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('p'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            } => {
+                let ActivePopup::Skill(popup) = &mut self.active_popup else {
+                    unreachable!();
+                };
+                popup.move_up();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Down,
+                ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('n'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            } => {
+                let ActivePopup::Skill(popup) = &mut self.active_popup else {
+                    unreachable!();
+                };
+                popup.move_down();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Esc, ..
+            } => {
+                if let Some(token) = Self::current_dollar_token(&self.textarea) {
+                    self.dismissed_skill_popup_token = Some(token.query);
+                }
+                self.active_popup = ActivePopup::None;
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Tab, ..
+            }
+            | KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                let selected = match &self.active_popup {
+                    ActivePopup::Skill(popup) => popup.selected_item(),
+                    ActivePopup::None
+                    | ActivePopup::Command(_)
+                    | ActivePopup::File(_)
+                    | ActivePopup::HistorySearch(_) => None,
+                };
+                if let Some(item) = selected {
+                    self.insert_selected_skill(&item.insert_text);
+                    if let Some(query) = item.insert_text.strip_prefix('$') {
+                        self.dismissed_skill_popup_token = Some(query.to_string());
+                    }
+                }
+                self.active_popup = ActivePopup::None;
+                (InputResult::None, true)
             }
             input => self.handle_input_basic(input),
         }
