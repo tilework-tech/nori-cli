@@ -560,13 +560,12 @@ impl Notification {
 
 const AGENT_NOTIFICATION_PREVIEW_GRAPHEMES: usize = 200;
 
-const EXAMPLE_PROMPTS: [&str; 6] = [
-    "Explain this codebase",
-    "Summarize recent commits",
-    "Implement {feature}",
-    "Find and fix a bug in @filename",
-    "Write tests for @filename",
-    "Improve documentation in @filename",
+const PROMPT_MODE_PLACEHOLDERS: [&str; 5] = [
+    "? for shortcuts",
+    "/ for slash command menu",
+    "$ for skill listing",
+    "! for shell commands",
+    "@ for file mentions",
 ];
 
 // Extract the first bold (Markdown) element in the form **...** from `s`.

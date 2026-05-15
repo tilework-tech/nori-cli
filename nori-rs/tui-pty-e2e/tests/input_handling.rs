@@ -12,7 +12,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 #[cfg(target_os = "linux")]
 fn test_ctrl_c_clears_input() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Type some text
     session.send_str("draft message").unwrap();
@@ -37,7 +37,7 @@ fn test_ctrl_c_clears_input() {
 #[cfg(target_os = "linux")]
 fn test_backspace() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     session.send_str("Hello").unwrap();
     session.wait_for_text("Hello", TIMEOUT).unwrap();

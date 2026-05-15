@@ -16,17 +16,17 @@ fn test_footer_displays_git_branch() {
     .expect("Failed to spawn");
 
     // Wait for the TUI to start
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
 
     // The footer should contain git branch info (master, since we use git init -b master)
-    // Check for the branch symbol and "? for shortcuts" which should always be present
+    // and approval mode.
     assert!(
-        contents.contains("⎇") && contents.contains("? for shortcuts"),
-        "Footer should contain git branch symbol and shortcuts hint. Contents: {}",
+        contents.contains("⎇") && contents.contains("Approvals"),
+        "Footer should contain git branch symbol and approval mode. Contents: {}",
         contents
     );
 
@@ -49,7 +49,7 @@ fn test_footer_without_git_repo() {
     .expect("Failed to spawn");
 
     // Wait for the TUI to start
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
@@ -62,10 +62,10 @@ fn test_footer_without_git_repo() {
         contents
     );
 
-    // But it should still show shortcuts
+    // But it should still show the configured non-git footer segments.
     assert!(
-        contents.contains("? for shortcuts"),
-        "Footer should still show shortcuts hint. Contents: {}",
+        contents.contains("Approvals"),
+        "Footer should still show approval mode. Contents: {}",
         contents
     );
 }
@@ -74,7 +74,7 @@ fn test_footer_without_git_repo() {
 #[cfg(target_os = "linux")]
 fn test_footer_full_startup_with_all_info() {
     // This test verifies the complete footer display similar to startup.rs tests
-    // It should show: git branch, nori profile, nori version, git diff stats, and shortcuts
+    // It should show: git branch, nori profile, nori version, and git diff stats
 
     use std::os::unix::fs::PermissionsExt;
 
@@ -117,7 +117,7 @@ git_stats = true
         .expect("TUI did not start");
 
     // Wait for footer to render
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
@@ -139,13 +139,6 @@ git_stats = true
     assert!(
         contents.contains("Skillsets v19.1.1") || contents.contains("Skillsets v0"), // v0 if mock didn't work
         "Footer should contain Nori version. Contents: {}",
-        contents
-    );
-
-    // Verify shortcuts hint is always present
-    assert!(
-        contents.contains("? for shortcuts"),
-        "Footer should show shortcuts hint. Contents: {}",
         contents
     );
 
@@ -187,7 +180,7 @@ vertical_footer = true
         TuiSession::spawn_with_config(24, 60, SessionConfig::new().with_config_toml(config_toml))
             .expect("Failed to spawn");
 
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
@@ -198,25 +191,25 @@ vertical_footer = true
         .iter()
         .position(|line| line.contains("⎇") && line.contains("master"))
         .expect("Footer should contain git branch line");
-    let shortcuts_line_idx = lines
+    let approvals_line_idx = lines
         .iter()
-        .position(|line| line.contains("? for shortcuts"))
-        .expect("Footer should contain shortcuts line");
+        .position(|line| line.contains("Approvals"))
+        .expect("Footer should contain approvals line");
 
     assert_ne!(
-        branch_line_idx, shortcuts_line_idx,
-        "Branch and shortcuts should render on separate lines in vertical footer. Contents: {contents}"
+        branch_line_idx, approvals_line_idx,
+        "Branch and approvals should render on separate lines in vertical footer. Contents: {contents}"
     );
 
     let branch_line = lines[branch_line_idx];
-    let shortcuts_line = lines[shortcuts_line_idx];
+    let approvals_line = lines[approvals_line_idx];
     assert!(
         !branch_line.contains('·'),
         "Branch line should not include separators in vertical footer. Line: {branch_line}"
     );
     assert!(
-        !shortcuts_line.contains('·'),
-        "Shortcuts line should not include separators in vertical footer. Line: {shortcuts_line}"
+        !approvals_line.contains('·'),
+        "Approvals line should not include separators in vertical footer. Line: {approvals_line}"
     );
 
     assert_snapshot!("vertical_footer", normalize_for_input_snapshot(contents));
@@ -243,7 +236,7 @@ approval_mode = false
             .expect("Failed to spawn");
 
     // Wait for the TUI to fully start (session header contains "Nori CLI")
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
     session
         .wait_for_text("Nori CLI", TIMEOUT)
         .expect("Session header should appear");
@@ -267,13 +260,6 @@ approval_mode = false
     assert!(
         !contents.contains("Approvals"),
         "Footer should NOT contain Approvals when disabled. Contents: {}",
-        contents
-    );
-
-    // Shortcuts hint should still be present (always shown)
-    assert!(
-        contents.contains("? for shortcuts"),
-        "Footer should still show shortcuts hint. Contents: {}",
         contents
     );
 
