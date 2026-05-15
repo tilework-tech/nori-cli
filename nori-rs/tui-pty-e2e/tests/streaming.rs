@@ -25,7 +25,7 @@ fn test_submit_text() {
     session.send_key(Key::Enter).unwrap();
 
     std::thread::sleep(TIMEOUT_INPUT);
-    session.wait_for_text("? for shortcuts", TIMEOUT).unwrap();
+    session.wait_for_text("›", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);

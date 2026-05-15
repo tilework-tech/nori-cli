@@ -1024,12 +1024,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         .lines()
         .map(|line| {
             if line.trim_start().starts_with("› ")
-                && (line.trim_start().starts_with("› Find and fix a bug")
-                    || line.trim_start().starts_with("› Explain this codebase")
-                    || line.trim_start().starts_with("› Write tests for")
-                    || line.trim_start().starts_with("› Improve documentation")
-                    || line.trim_start().starts_with("› Summarize recent commits")
-                    || line.trim_start().starts_with("› Implement {feature}")
+                && (line.trim_start().starts_with("› ? for shortcuts")
+                    || line.trim_start().starts_with("› / for slash command menu")
+                    || line.trim_start().starts_with("› $ for skill listing")
+                    || line.trim_start().starts_with("› ! for shell commands")
+                    || line.trim_start().starts_with("› @ for file mentions")
                     || line.contains("@filename"))
             {
                 "› [DEFAULT_PROMPT]".to_string()
@@ -1272,6 +1271,20 @@ mod tests {
             normalize_for_input_snapshot(input_similar.to_string()),
             input_similar
         );
+    }
+
+    #[test]
+    fn test_normalize_prompt_capability_placeholders() {
+        for placeholder in [
+            "? for shortcuts",
+            "/ for slash command menu",
+            "$ for skill listing",
+            "! for shell commands",
+            "@ for file mentions",
+        ] {
+            let input = format!("› {placeholder}\n");
+            assert_eq!(normalize_for_input_snapshot(input), "› [DEFAULT_PROMPT]\n");
+        }
     }
 
     #[test]

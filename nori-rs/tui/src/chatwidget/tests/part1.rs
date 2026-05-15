@@ -2,6 +2,20 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn composer_placeholder_pool_advertises_prompt_capabilities() {
+    assert_eq!(
+        PROMPT_MODE_PLACEHOLDERS,
+        [
+            "? for shortcuts",
+            "/ for slash command menu",
+            "$ for skill listing",
+            "! for shell commands",
+            "@ for file mentions",
+        ],
+    );
+}
+
+#[test]
 fn resumed_initial_messages_render_history() {
     let (mut chat, mut rx, _ops) = make_chatwidget_manual();
 

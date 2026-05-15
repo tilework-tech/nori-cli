@@ -186,10 +186,9 @@ fn render_footer_row(area: Rect, buf: &mut Buffer, row: FooterRow) {
 }
 
 fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
-    // Show the context indicator on the left, appended after the primary hint
-    // (e.g., "? for shortcuts"). Keep it visible even when typing (i.e., when
-    // the shortcut hint is hidden). Hide it only for the multi-line
-    // ShortcutOverlay.
+    // Keep footer metadata visible while typing. Hide it only for the
+    // multi-line ShortcutOverlay so the expanded shortcut table owns the
+    // footer area.
     match props.mode {
         FooterMode::CtrlCReminder => {
             vec![FooterRow::left(ctrl_c_reminder_line(CtrlCReminderState {
@@ -199,25 +198,14 @@ fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
         FooterMode::ShortcutSummary => {
             let footer_segments = footer_segment_groups(props);
             if props.vertical_footer {
-                let mut rows = footer_segments
+                footer_segments
                     .left
                     .into_iter()
                     .chain(footer_segments.right)
                     .map(FooterRow::left)
-                    .collect::<Vec<_>>();
-                rows.push(FooterRow::left(shortcuts_hint_line()));
-                rows
+                    .collect()
             } else {
-                let mut line = join_footer_segments(&footer_segments.left);
-                // Only add separator if there's already content
-                if !line.spans.is_empty() {
-                    line.push_span(" · ".dim());
-                }
-                line.extend(shortcuts_hint_line().spans);
-                vec![FooterRow {
-                    left: line,
-                    right: join_footer_segments(&footer_segments.right),
-                }]
+                footer_row_for_segment_groups(footer_segments)
             }
         }
         FooterMode::ShortcutOverlay => shortcut_overlay_lines(ShortcutsState {
@@ -237,17 +225,26 @@ fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
                     .chain(footer_segments.right)
                     .collect::<Vec<_>>();
                 if segments.is_empty() {
-                    vec![FooterRow::left(Line::from(""))]
+                    Vec::new()
                 } else {
                     segments.into_iter().map(FooterRow::left).collect()
                 }
             } else {
-                vec![FooterRow {
-                    left: join_footer_segments(&footer_segments.left),
-                    right: join_footer_segments(&footer_segments.right),
-                }]
+                footer_row_for_segment_groups(footer_segments)
             }
         }
+    }
+}
+
+fn footer_row_for_segment_groups(footer_segments: FooterSegmentGroups) -> Vec<FooterRow> {
+    let row = FooterRow {
+        left: join_footer_segments(&footer_segments.left),
+        right: join_footer_segments(&footer_segments.right),
+    };
+    if row.left.spans.is_empty() && row.right.spans.is_empty() {
+        Vec::new()
+    } else {
+        vec![row]
     }
 }
 
@@ -378,13 +375,6 @@ fn build_columns(entries: Vec<Line<'static>>) -> Vec<Line<'static>> {
             line.dim()
         })
         .collect()
-}
-
-fn shortcuts_hint_line() -> Line<'static> {
-    Line::from(vec![
-        key_hint::plain(KeyCode::Char('?')).into(),
-        " for shortcuts".dim(),
-    ])
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1257,7 +1247,7 @@ mod tests {
             ..default_props()
         });
 
-        assert_eq!(rendered.trim(), "Context 16% (42.6K) · ? for shortcuts");
+        assert_eq!(rendered.trim(), "Context 16% (42.6K)");
     }
 
     #[test]
