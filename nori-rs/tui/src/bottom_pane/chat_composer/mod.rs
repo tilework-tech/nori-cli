@@ -626,7 +626,7 @@ impl ChatComposer {
     fn prompt_indicator(&self) -> PromptIndicator {
         if self.is_shell_mode {
             PromptIndicator::Shell
-        } else if self.is_editing_slash_command_name() {
+        } else if self.textarea.text().starts_with('/') {
             PromptIndicator::Slash
         } else if matches!(self.footer_mode(), FooterMode::ShortcutOverlay) {
             PromptIndicator::Shortcut

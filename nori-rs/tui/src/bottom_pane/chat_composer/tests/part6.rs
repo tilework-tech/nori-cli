@@ -496,6 +496,33 @@ fn slash_mode_prompt_uses_cyan_slash_without_duplicate_prefix() {
 }
 
 #[test]
+fn slash_mode_prompt_stays_active_after_command_arguments() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    type_chars_humanlike(
+        &mut composer,
+        &['/', 'm', 'o', 'd', 'e', 'l', ' ', 'm', 'o', 'c', 'k'],
+    );
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "/");
+    assert_eq!(buf[(0, 1)].fg, Color::Cyan);
+    assert!(
+        input_row(&buf).starts_with("/ model mock"),
+        "slash prompt should stay active for command arguments: {:?}",
+        input_row(&buf)
+    );
+}
+
+#[test]
 fn shell_mode_prompt_uses_red_bang_without_duplicate_prefix() {
     let (tx, _rx) = unbounded_channel::<AppEvent>();
     let sender = AppEventSender::new(tx);
