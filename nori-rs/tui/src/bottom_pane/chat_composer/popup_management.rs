@@ -219,6 +219,11 @@ impl ChatComposer {
             return;
         }
 
+        if self.is_shell_mode {
+            self.active_popup = ActivePopup::None;
+            return;
+        }
+
         if Self::current_at_token(&self.textarea).is_some() {
             self.sync_file_search_popup();
             return;

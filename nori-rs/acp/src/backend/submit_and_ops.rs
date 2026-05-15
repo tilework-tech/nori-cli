@@ -213,15 +213,8 @@ impl AcpBackend {
                 )
                 .await;
             }
-            // Unsupported operations - only show error in debug builds
-            Op::RunUserShellCommand { .. } => {
-                let op_name = get_op_name(&op);
-                warn!("Unsupported Op in ACP mode: {op_name}");
-                #[cfg(debug_assertions)]
-                self.send_error(&format!(
-                    "Operation '{op_name}' is not supported in ACP mode"
-                ))
-                .await;
+            Op::RunUserShellCommand { command } => {
+                user_shell::run_user_shell_command(&self.event_tx, &id, &self.cwd, command).await;
             }
             Op::OverrideTurnContext {
                 approval_policy, ..

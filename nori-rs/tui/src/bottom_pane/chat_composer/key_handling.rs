@@ -558,7 +558,14 @@ impl ChatComposer {
         &mut self,
         key_event: KeyEvent,
     ) -> (InputResult, bool) {
-        if self.handle_shortcut_overlay_key(&key_event) {
+        if !self.is_shell_mode && self.handle_shortcut_overlay_key(&key_event) {
+            return (InputResult::None, true);
+        }
+        if self.is_shell_mode
+            && self.textarea.text().is_empty()
+            && matches!(key_event.code, KeyCode::Esc | KeyCode::Backspace)
+        {
+            self.is_shell_mode = false;
             return (InputResult::None, true);
         }
         if key_event.code == KeyCode::Esc {
@@ -650,6 +657,21 @@ impl ChatComposer {
                         }
                         _ => {} // fall through to submit
                     }
+                }
+
+                if self.is_shell_mode {
+                    let mut body = self.textarea.text().to_string();
+                    for (placeholder, actual) in &self.pending_pastes {
+                        if body.contains(placeholder) {
+                            body = body.replace(placeholder, actual);
+                        }
+                    }
+                    self.pending_pastes.clear();
+                    self.textarea.set_text("");
+                    self.is_shell_mode = false;
+                    let text = format!("!{body}");
+                    self.history.record_local_submission(&text);
+                    return (InputResult::Submitted(text), true);
                 }
 
                 // If the first line is a bare built-in slash command (no args),
@@ -898,7 +920,7 @@ impl ChatComposer {
                 }
             }
             if let Some(pasted) = self.paste_burst.flush_before_modified_input() {
-                self.handle_paste(pasted);
+                self.handle_paste_with_shell_detection(pasted, false);
             }
         }
 

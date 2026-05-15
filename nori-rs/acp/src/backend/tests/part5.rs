@@ -1,5 +1,83 @@
 use super::*;
 
+#[tokio::test]
+#[serial]
+async fn user_shell_command_executes_locally_and_emits_exec_lifecycle() {
+    use codex_protocol::protocol::ExecCommandSource;
+    use codex_protocol::protocol::ExecOutputStream;
+    use pretty_assertions::assert_eq;
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::RunUserShellCommand {
+            command: "printf nori-shell-mode".to_string(),
+        })
+        .await
+        .expect("Failed to submit shell command");
+
+    let mut saw_begin = false;
+    let mut saw_stdout = false;
+    let mut saw_end = false;
+    let mut saw_complete = false;
+    for _ in 0..8 {
+        let event = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+            .await
+            .expect("expected shell command event");
+        match event.msg {
+            EventMsg::ExecCommandBegin(ev) => {
+                assert_eq!(ev.source, ExecCommandSource::UserShell);
+                assert_eq!(ev.cwd, temp_dir.path());
+                saw_begin = true;
+            }
+            EventMsg::ExecCommandOutputDelta(ev) => {
+                if ev.stream == ExecOutputStream::Stdout && ev.chunk == b"nori-shell-mode" {
+                    saw_stdout = true;
+                }
+            }
+            EventMsg::ExecCommandEnd(ev) => {
+                assert_eq!(ev.source, ExecCommandSource::UserShell);
+                assert_eq!(ev.stdout, "nori-shell-mode");
+                assert_eq!(ev.stderr, "");
+                assert_eq!(ev.aggregated_output, "nori-shell-mode");
+                assert_eq!(ev.exit_code, 0);
+                saw_end = true;
+            }
+            EventMsg::TaskComplete(ev) => {
+                assert_eq!(ev.last_agent_message, None);
+                saw_complete = true;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    assert!(saw_begin, "expected ExecCommandBegin");
+    assert!(saw_stdout, "expected stdout delta");
+    assert!(saw_end, "expected ExecCommandEnd");
+    assert!(saw_complete, "expected TaskComplete");
+}
+
 /// Test that session_context is prepended to the first user prompt.
 ///
 /// When `session_context` is set on `AcpBackendConfig`, its value should appear

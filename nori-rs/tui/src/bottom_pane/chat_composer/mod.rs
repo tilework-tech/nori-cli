@@ -108,6 +108,7 @@ pub(crate) struct ChatComposer {
     dismissed_skill_popup_token: Option<String>,
     current_file_query: Option<String>,
     pending_pastes: Vec<(String, String)>,
+    is_shell_mode: bool,
     has_focus: bool,
     attached_images: Vec<AttachedImage>,
     placeholder_text: String,
@@ -174,6 +175,7 @@ impl ChatComposer {
             dismissed_skill_popup_token: None,
             current_file_query: None,
             pending_pastes: Vec::new(),
+            is_shell_mode: false,
             has_focus: has_input_focus,
             attached_images: Vec::new(),
             placeholder_text,
@@ -204,7 +206,7 @@ impl ChatComposer {
 
     /// Returns true if the composer currently contains no user input.
     pub(crate) fn is_empty(&self) -> bool {
-        self.textarea.is_empty()
+        !self.is_shell_mode && self.textarea.is_empty()
     }
 
     /// Record the history metadata advertised by `SessionConfiguredEvent` so
@@ -299,7 +301,13 @@ impl ChatComposer {
         self.textarea.set_text("");
         self.pending_pastes.clear();
         self.attached_images.clear();
-        self.textarea.set_text(&text);
+        if let Some(shell_body) = text.strip_prefix('!') {
+            self.is_shell_mode = true;
+            self.textarea.set_text(shell_body);
+        } else {
+            self.is_shell_mode = false;
+            self.textarea.set_text(&text);
+        }
         self.textarea.set_cursor(0);
         self.sync_selection_popups();
     }
@@ -317,7 +325,11 @@ impl ChatComposer {
 
     /// Get the current composer text.
     pub(crate) fn current_text(&self) -> String {
-        self.textarea.text().to_string()
+        if self.is_shell_mode {
+            format!("!{}", self.textarea.text())
+        } else {
+            self.textarea.text().to_string()
+        }
     }
 
     /// Attempt to start a burst by retro-capturing recent chars before the cursor.
@@ -447,6 +459,7 @@ impl ChatComposer {
 impl Renderable for ChatComposer {
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
         let [_, textarea_rect, _] = self.layout_areas(area);
+        let textarea_rect = self.shell_body_rect(textarea_rect);
         let state = *self.textarea_state.borrow();
         self.textarea.cursor_pos_with_state(textarea_rect, state)
     }
@@ -459,8 +472,9 @@ impl Renderable for ChatComposer {
         let footer_spacing = Self::footer_spacing(footer_hint_height);
         let footer_total_height = footer_hint_height + footer_spacing;
         const COLS_WITH_MARGIN: u16 = LIVE_PREFIX_COLS + 1;
+        let shell_prefix_cols = if self.is_shell_mode { 1 } else { 0 };
         self.textarea
-            .desired_height(width.saturating_sub(COLS_WITH_MARGIN))
+            .desired_height(width.saturating_sub(COLS_WITH_MARGIN + shell_prefix_cols))
             + 2
             + match &self.active_popup {
                 ActivePopup::None => footer_total_height,
@@ -541,11 +555,29 @@ impl Renderable for ChatComposer {
             );
         }
 
+        if self.is_shell_mode && !textarea_rect.is_empty() {
+            buf.set_span(textarea_rect.x, textarea_rect.y, &"!".bold(), 1);
+        }
+        let body_rect = self.shell_body_rect(textarea_rect);
         let mut state = self.textarea_state.borrow_mut();
-        StatefulWidgetRef::render_ref(&(&self.textarea), textarea_rect, buf, &mut state);
-        if self.textarea.text().is_empty() {
+        StatefulWidgetRef::render_ref(&(&self.textarea), body_rect, buf, &mut state);
+        if !self.is_shell_mode && self.textarea.text().is_empty() {
             let placeholder = Span::from(self.placeholder_text.as_str()).dim();
-            Line::from(vec![placeholder]).render_ref(textarea_rect.inner(Margin::new(0, 0)), buf);
+            Line::from(vec![placeholder]).render_ref(body_rect.inner(Margin::new(0, 0)), buf);
+        }
+    }
+}
+
+impl ChatComposer {
+    fn shell_body_rect(&self, textarea_rect: Rect) -> Rect {
+        if self.is_shell_mode {
+            Rect {
+                x: textarea_rect.x.saturating_add(1),
+                width: textarea_rect.width.saturating_sub(1),
+                ..textarea_rect
+            }
+        } else {
+            textarea_rect
         }
     }
 }

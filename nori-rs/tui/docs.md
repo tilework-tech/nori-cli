@@ -679,6 +679,8 @@ Vim mode is inherited from the composer's current vim state. When vim mode is en
 
 When the composer is empty, `ChatWidget` seeds its placeholder from concise capability hints instead of task examples: `?` for the shortcuts overlay, `/` for the slash command menu, `$` for skill listing, `!` for shell commands, and `@` for file mentions. The always-visible `? for shortcuts` footer hint is intentionally omitted; pressing `?` as the first composer character still opens the full shortcut overlay below the prompt, and typing `/` still opens the slash command popup.
 
+The `!` shell command affordance is a prompt-initial composer mode, not a slash command or popup. Typing `!` into an empty composer stores the marker as mode state and shows the command body after it; `current_text()` reconstructs the submitted text as `!{body}`. While this mode is active, `/`, `$`, `@`, and `?` are treated as literal shell text so nested pickers and the shortcut overlay do not open. `Esc` or `Backspace` with an empty shell body exits the mode, and recalling a history item that starts with `!` restores shell mode.
+
 **Status Line Footer:**
 
 The footer displays configurable segments, each of which can be enabled/disabled via `/settings` -> "Footer Segments" or via `[tui.footer_segments]` in config.toml:

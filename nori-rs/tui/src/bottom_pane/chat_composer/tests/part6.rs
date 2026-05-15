@@ -368,3 +368,70 @@ fn dollar_skill_popup_renders_de_sigiled_names() {
         type_chars_humanlike(composer, &['$', 'w']);
     });
 }
+
+#[test]
+fn bang_escape_exits_shell_mode_without_submitting_text() {
+    let (mut composer, _rx) =
+        make_composer_with_commands(vec!["$using-skills", "$writing-plans"], "codex");
+
+    type_chars_humanlike(&mut composer, &['!']);
+    assert_eq!(composer.current_text(), "!");
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert!(matches!(result, InputResult::None));
+    assert_eq!(composer.current_text(), "");
+}
+
+#[test]
+fn shell_mode_slash_text_submits_without_slash_dispatch() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    type_chars_humanlike(&mut composer, &['!', '/', 'd', 'i', 'f', 'f']);
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "!/diff"),
+        other => panic!("expected shell text submission, got {other:?}"),
+    }
+}
+
+#[test]
+fn bang_mid_prose_is_plain_text() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    type_chars_humanlike(&mut composer, &['U', 's', 'e', ' ', '!', 'p', 'w', 'd']);
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "Use !pwd"),
+        other => panic!("expected plain text submission, got {other:?}"),
+    }
+}
+
+#[test]
+fn fast_text_ending_with_bang_does_not_enter_shell_mode() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    for ch in "testing!!!".chars() {
+        let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+    }
+    std::thread::sleep(ChatComposer::recommended_paste_flush_delay());
+    let _ = composer.flush_paste_burst_if_due();
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "testing!!!"),
+        other => panic!("expected plain text submission, got {other:?}"),
+    }
+}
+
+#[test]
+fn shell_mode_renders_bang_prefix() {
+    snapshot_composer_state("shell_mode_bang_prefix", false, |composer| {
+        type_chars_humanlike(composer, &['!', 'p', 'w', 'd']);
+    });
+}
