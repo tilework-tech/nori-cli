@@ -339,6 +339,7 @@ mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;
+mod user_shell;
 use helpers::get_op_name;
 mod tool_display;
 #[cfg(test)]

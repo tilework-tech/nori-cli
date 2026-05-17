@@ -1,10 +1,9 @@
 ---
 source: tui/src/bottom_pane/chat_composer/tests/part2.rs
-assertion_line: 117
 expression: terminal.backend()
 ---
 "                                                            "
-"› /mo                                                       "
+"/ mo                                                        "
 "                                                            "
 "  /model   choose what model and reasoning effort to use    "
 "  /memory  show the contents of all active instruction files"

@@ -2,6 +2,24 @@ use super::*;
 
 impl ChatComposer {
     pub fn handle_paste(&mut self, pasted: String) -> bool {
+        self.handle_paste_with_shell_detection(pasted, true)
+    }
+
+    pub(super) fn handle_paste_with_shell_detection(
+        &mut self,
+        mut pasted: String,
+        detect_shell_mode: bool,
+    ) -> bool {
+        if detect_shell_mode
+            && !self.is_shell_mode
+            && self.textarea.text().is_empty()
+            && self.textarea.cursor() == 0
+            && let Some(shell_body) = pasted.strip_prefix('!')
+        {
+            self.is_shell_mode = true;
+            pasted = shell_body.to_string();
+        }
+
         let char_count = pasted.chars().count();
         if char_count > LARGE_PASTE_CHAR_THRESHOLD {
             let placeholder = format!("[Pasted Content {char_count} chars]");
@@ -60,13 +78,21 @@ impl ChatComposer {
     pub(super) fn handle_paste_burst_flush(&mut self, now: Instant) -> bool {
         match self.paste_burst.flush_if_due(now) {
             FlushResult::Paste(pasted) => {
-                self.handle_paste(pasted);
+                self.handle_paste_with_shell_detection(pasted, false);
                 true
             }
             FlushResult::Typed(ch) => {
                 // Mirror insert_str() behavior so popups stay in sync when a
                 // pending fast char flushes as normal typed input.
-                self.textarea.insert_str(ch.to_string().as_str());
+                if ch == '!'
+                    && !self.is_shell_mode
+                    && self.textarea.text().is_empty()
+                    && self.textarea.cursor() == 0
+                {
+                    self.is_shell_mode = true;
+                } else {
+                    self.textarea.insert_str(ch.to_string().as_str());
+                }
                 self.sync_selection_popups();
                 true
             }
