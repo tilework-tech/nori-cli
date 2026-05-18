@@ -178,6 +178,7 @@ fn format_client_event(event: &nori_protocol::ClientEvent) -> Option<String> {
         | nori_protocol::ClientEvent::ReplayEntry(_)
         | nori_protocol::ClientEvent::AgentCommandsUpdate(_)
         | nori_protocol::ClientEvent::SessionConfigUpdate(_)
+        | nori_protocol::ClientEvent::SessionModeChanged(_)
         | nori_protocol::ClientEvent::Warning(_) => None,
     }
 }

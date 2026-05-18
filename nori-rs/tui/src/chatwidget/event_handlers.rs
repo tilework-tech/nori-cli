@@ -1171,6 +1171,9 @@ impl ChatWidget {
                 }
                 self.request_redraw();
             }
+            nori_protocol::ClientEvent::SessionModeChanged(update) => {
+                self.handle_acp_session_mode_changed(&update.current_mode_id);
+            }
             nori_protocol::ClientEvent::Warning(warning) => {
                 self.on_warning(warning.message);
             }

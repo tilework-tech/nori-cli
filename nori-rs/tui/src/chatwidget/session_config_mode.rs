@@ -29,6 +29,38 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(super) fn handle_acp_session_mode_changed(&mut self, current_mode_id: &str) {
+        // Dedup: the picker path optimistically updates `acp_mode_config` before
+        // dispatching the request, so by the time the agent echoes its
+        // `CurrentModeUpdate` the cache already reflects the new value. Skip
+        // the duplicate history line (the picker's "Mode set to: X" cell
+        // already confirmed the change). Agent-autonomous mode changes still
+        // render because the cache is on the previous value.
+        if let Some(mode) = self.acp_mode_config.as_ref()
+            && mode.current_value() == current_mode_id
+        {
+            self.refresh_acp_mode_config_snapshot();
+            return;
+        }
+
+        let label = self
+            .acp_mode_config
+            .as_ref()
+            .and_then(|mode| mode.label_for_value(current_mode_id))
+            .map(str::to_string)
+            .unwrap_or_else(|| current_mode_id.to_string());
+
+        let agent_display_name = nori_acp::get_agent_display_name(&self.config.model);
+        self.add_to_history(
+            crate::nori::agent_mode_history::new_agent_mode_changed_cell(
+                &agent_display_name,
+                &label,
+            ),
+        );
+        self.refresh_acp_mode_config_snapshot();
+        self.request_redraw();
+    }
+
     pub(super) fn refresh_acp_mode_config_snapshot(&self) {
         let Some(handle) = self.acp_handle.clone() else {
             return;
