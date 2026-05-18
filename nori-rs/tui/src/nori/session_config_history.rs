@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use nori_acp as acp;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
+use ratatui::text::Span;
 
 use crate::history_cell::PlainHistoryCell;
 
@@ -59,7 +60,7 @@ pub(crate) fn new_agent_options_initial_history_cell(
         if index > 0 {
             line.push(", ".into());
         }
-        line.push(format!("{}={}", value.name, value.value).cyan().bold());
+        line.extend(option_assignment_spans(&value.name, &value.value));
     }
     line.push(" (/config to change)".dim());
 
@@ -89,7 +90,7 @@ pub(crate) fn new_agent_options_history_cell(
         if index > 0 {
             line.push(", ".into());
         }
-        line.push(format!("{}={}", change.name, change.value).cyan().bold());
+        line.extend(option_assignment_spans(&change.name, &change.value));
     }
 
     PlainHistoryCell::new(vec![Line::from(line)])
@@ -105,11 +106,21 @@ pub(crate) fn new_agent_option_set_history_cell(
     } else {
         agent_display_name
     };
-    PlainHistoryCell::new(vec![Line::from(vec![
+    let mut line = vec![
         "• ".dim(),
         format!("{agent_display_name} option set: ").into(),
-        format!("{option_name}={value_name}").cyan().bold(),
-    ])])
+    ];
+    line.extend(option_assignment_spans(option_name, value_name));
+
+    PlainHistoryCell::new(vec![Line::from(line)])
+}
+
+fn option_assignment_spans(name: &str, value: &str) -> Vec<Span<'static>> {
+    vec![
+        name.to_string().into(),
+        "=".into(),
+        value.to_string().cyan().bold(),
+    ]
 }
 
 fn display_value(option: &acp::SessionConfigOption) -> Option<SessionConfigDisplayValue> {
@@ -135,4 +146,79 @@ fn display_value(option: &acp::SessionConfigOption) -> Option<SessionConfigDispl
         name: option.name.clone(),
         value,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+    use ratatui::style::Color;
+    use ratatui::style::Modifier;
+    use ratatui::style::Style;
+
+    use super::*;
+    use crate::history_cell::HistoryCell;
+
+    #[test]
+    fn history_cells_highlight_values_not_names() {
+        let cell = new_agent_options_initial_history_cell(
+            "Claude Code",
+            &[acp::SessionConfigOption::select(
+                "mode",
+                "Mode",
+                "default",
+                vec![acp::SessionConfigSelectOption::new("default", "Default")],
+            )],
+        );
+
+        let lines = cell.display_lines(80);
+        assert_value_highlighted(&lines[0].spans, "Mode", "Default");
+
+        let cell = new_agent_options_history_cell(
+            "Claude Code",
+            &[SessionConfigDisplayValue {
+                name: "Effort".to_string(),
+                value: "High".to_string(),
+            }],
+        );
+        let lines = cell.display_lines(80);
+        assert_value_highlighted(&lines[0].spans, "Effort", "High");
+
+        let cell = new_agent_option_set_history_cell("Claude Code", "Model", "Opus 4.6");
+        let lines = cell.display_lines(80);
+        assert_value_highlighted(&lines[0].spans, "Model", "Opus 4.6");
+
+        insta::assert_snapshot!(spans_to_style_snapshot(&lines[0].spans));
+    }
+
+    fn assert_value_highlighted(
+        spans: &[ratatui::text::Span<'static>],
+        expected_name: &str,
+        expected_value: &str,
+    ) {
+        let name = spans
+            .iter()
+            .find(|span| span.content.as_ref() == expected_name)
+            .expect("option name should be its own span");
+        let separator = spans
+            .iter()
+            .find(|span| span.content.as_ref() == "=")
+            .expect("separator should be its own span");
+        let value = spans
+            .iter()
+            .find(|span| span.content.as_ref() == expected_value)
+            .expect("option value should be its own span");
+
+        assert_eq!(name.style, Style::default());
+        assert_eq!(separator.style, Style::default());
+        assert_eq!(value.style.fg, Some(Color::Cyan));
+        assert!(value.style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    fn spans_to_style_snapshot(spans: &[ratatui::text::Span<'static>]) -> String {
+        spans
+            .iter()
+            .map(|span| format!("{:?} {:?}", span.content, span.style))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
