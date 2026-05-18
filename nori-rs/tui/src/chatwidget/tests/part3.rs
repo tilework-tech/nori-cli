@@ -590,6 +590,36 @@ fn session_config_snapshot_seeds_first_update_history_baseline() {
 }
 
 #[test]
+fn session_mode_changed_dedups_when_cache_already_reflects_new_mode() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation(),
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "review".to_string(),
+            vec![
+                ("default".to_string(), "Default".to_string()),
+                ("review".to_string(), "Review".to_string()),
+            ],
+        ),
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionModeChanged(
+        nori_protocol::SessionModeChanged {
+            current_mode_id: "review".into(),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(
+        cells,
+        Vec::<Vec<ratatui::text::Line<'static>>>::new(),
+        "agent-initiated echo of an already-applied mode change should not add history"
+    );
+}
+
+#[test]
 fn session_usage_updates_footer_and_disables_transcript_fallback() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 

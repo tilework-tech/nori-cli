@@ -81,6 +81,10 @@ impl AcpModeConfig {
             .find(|entry| entry.value == value)
             .map(|entry| entry.label.as_str())
     }
+
+    pub(crate) fn current_value(&self) -> &str {
+        &self.values[self.current_idx].value
+    }
 }
 
 pub(crate) fn acp_mode_config_from_options(
