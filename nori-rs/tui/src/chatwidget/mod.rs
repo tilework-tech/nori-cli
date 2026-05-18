@@ -405,6 +405,7 @@ pub(crate) struct ChatWidget {
     session_configured_received: bool,
     // ACP agent handle for session config and model switching (only present in ACP mode)
     acp_handle: Option<AcpAgentHandle>,
+    acp_config_option_snapshot: Option<crate::nori::session_config_history::SessionConfigSnapshot>,
     acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
     acp_mode_config_generation: i64,
     // Session statistics tracking

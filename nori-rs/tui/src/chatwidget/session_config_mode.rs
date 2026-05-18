@@ -39,11 +39,9 @@ impl ChatWidget {
             let Some(config_options) = handle.get_session_config().await else {
                 return;
             };
-            app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+            app_event_tx.send(AppEvent::AcpSessionConfigSnapshot {
                 generation,
-                mode: crate::nori::session_config_mode::acp_mode_config_from_options(
-                    &config_options,
-                ),
+                config_options,
             });
         });
     }
@@ -74,6 +72,7 @@ impl ChatWidget {
                             success: true,
                             option_name: "Mode".to_string(),
                             value_name,
+                            config_options: Some(config_options),
                             error: None,
                         });
                     }
@@ -82,6 +81,7 @@ impl ChatWidget {
                             success: false,
                             option_name: "Mode".to_string(),
                             value_name: value_name.clone(),
+                            config_options: None,
                             error: Some(err.to_string()),
                         });
                         if let Some(config_options) = handle.get_session_config().await {
@@ -129,6 +129,7 @@ impl ChatWidget {
                         success: true,
                         option_name: "Mode".to_string(),
                         value_name,
+                        config_options: Some(config_options),
                         error: None,
                     });
                 }
@@ -137,6 +138,7 @@ impl ChatWidget {
                         success: false,
                         option_name: "Mode".to_string(),
                         value_name: mode.next_label,
+                        config_options: None,
                         error: Some(err.to_string()),
                     });
                 }

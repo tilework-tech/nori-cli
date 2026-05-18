@@ -414,6 +414,172 @@ fn session_update_info_events_only_render_non_usage_history() {
     assert_snapshot!("session_update_info_history", combined);
 }
 
+fn select_config_option(
+    id: &'static str,
+    name: &'static str,
+    current_value: &'static str,
+    values: &[(&'static str, &'static str)],
+) -> nori_acp::SessionConfigOption {
+    nori_acp::SessionConfigOption::select(
+        id,
+        name,
+        current_value,
+        values
+            .iter()
+            .map(|(value, label)| nori_acp::SessionConfigSelectOption::new(*value, *label))
+            .collect::<Vec<_>>(),
+    )
+}
+
+#[test]
+fn session_config_update_history_shows_only_changed_values_after_baseline() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![
+                select_config_option(
+                    "mode",
+                    "Mode",
+                    "default",
+                    &[("default", "Default"), ("plan", "Plan")],
+                ),
+                select_config_option(
+                    "model",
+                    "Model",
+                    "opus-4-6",
+                    &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+                ),
+                select_config_option(
+                    "effort",
+                    "Effort",
+                    "medium",
+                    &[("medium", "Medium"), ("high", "High")],
+                ),
+            ],
+        },
+    ));
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "the first config snapshot should establish a baseline without history noise"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![
+                select_config_option(
+                    "mode",
+                    "Mode",
+                    "default",
+                    &[("default", "Default"), ("plan", "Plan")],
+                ),
+                select_config_option(
+                    "model",
+                    "Model",
+                    "opus-4-6",
+                    &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+                ),
+                select_config_option(
+                    "effort",
+                    "Effort",
+                    "high",
+                    &[("medium", "Medium"), ("high", "High")],
+                ),
+            ],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!("session_config_update_changed_values_history", rendered);
+}
+
+#[test]
+fn session_config_set_history_uses_final_agent_named_message() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+
+    chat.add_acp_session_config_set_message("Model", "Opus 4.6");
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!("session_config_set_history", rendered);
+}
+
+#[test]
+fn synced_session_config_snapshot_prevents_duplicate_update_history() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+    let config_options = vec![select_config_option(
+        "model",
+        "Model",
+        "opus-4-6",
+        &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+    )];
+
+    chat.add_acp_session_config_set_message("Model", "Opus 4.6");
+    chat.sync_acp_session_config_snapshot(&config_options);
+    assert_eq!(drain_insert_history(&mut rx).len(), 1);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate { config_options },
+    ));
+
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "a backend echo of a synced picker result should not duplicate history"
+    );
+}
+
+#[test]
+fn session_config_snapshot_seeds_first_update_history_baseline() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+    let baseline = vec![select_config_option(
+        "effort",
+        "Effort",
+        "medium",
+        &[("medium", "Medium"), ("high", "High")],
+    )];
+
+    chat.handle_acp_session_config_snapshot(chat.acp_mode_config_generation(), &baseline);
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "initial session config fetched for the footer should not add history noise"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![select_config_option(
+                "effort",
+                "Effort",
+                "high",
+                &[("medium", "Medium"), ("high", "High")],
+            )],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_eq!(rendered, "• Claude Code option updated: Effort=High\n");
+}
+
 #[test]
 fn session_usage_updates_footer_and_disables_transcript_fallback() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();

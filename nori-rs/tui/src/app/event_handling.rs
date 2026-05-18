@@ -738,11 +738,16 @@ impl App {
                 success,
                 option_name,
                 value_name,
+                config_options,
                 error,
             } => {
                 if success {
                     self.chat_widget
-                        .add_info_message(format!("{option_name} set to: {value_name}"), None);
+                        .add_acp_session_config_set_message(&option_name, &value_name);
+                    if let Some(config_options) = config_options {
+                        self.chat_widget
+                            .sync_acp_session_config_snapshot(&config_options);
+                    }
                 } else {
                     let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
                     self.chat_widget.add_info_message(
@@ -750,6 +755,13 @@ impl App {
                         None,
                     );
                 }
+            }
+            AppEvent::AcpSessionConfigSnapshot {
+                generation,
+                config_options,
+            } => {
+                self.chat_widget
+                    .handle_acp_session_config_snapshot(generation, &config_options);
             }
             AppEvent::AcpModeConfigSnapshot { generation, mode } => {
                 self.chat_widget

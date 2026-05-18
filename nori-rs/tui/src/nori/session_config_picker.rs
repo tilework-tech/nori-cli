@@ -187,14 +187,18 @@ fn value_item(
     let value_name = option_value.name.clone();
     let group_name = group_name.map(str::to_string);
 
-    let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-        tx.send(AppEvent::SetAcpSessionConfigOption {
-            config_id: config_id.clone(),
-            value: value.clone(),
-            option_name: option_name.clone(),
-            value_name: value_name.clone(),
-        });
-    })];
+    let actions: Vec<SelectionAction> = if is_current {
+        Vec::new()
+    } else {
+        vec![Box::new(move |tx| {
+            tx.send(AppEvent::SetAcpSessionConfigOption {
+                config_id: config_id.clone(),
+                value: value.clone(),
+                option_name: option_name.clone(),
+                value_name: value_name.clone(),
+            });
+        })]
+    };
 
     let description = match (&option_value.description, group_name) {
         (Some(description), Some(group_name)) => Some(format!("[{group_name}] {description}")),
@@ -291,6 +295,62 @@ mod tests {
         assert_eq!(names, vec!["[Safe]", "Ask", "[Active]", "Plan", "Build"]);
         assert!(params.items[3].is_current);
         assert_eq!(params.initial_selected_idx, Some(3));
+    }
+
+    #[test]
+    fn value_picker_current_value_has_no_set_action() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let app_event_tx = crate::app_event_sender::AppEventSender::new(tx);
+        let mut current_view = crate::bottom_pane::ListSelectionView::new(
+            super::acp_session_config_value_picker_params(&model_option()),
+            app_event_tx.clone(),
+        );
+
+        crate::bottom_pane::BottomPaneView::handle_key_event(
+            &mut current_view,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+        );
+        assert!(
+            rx.try_recv().is_err(),
+            "accepting the already-current value should not request a config change"
+        );
+
+        let mut alternate_view = crate::bottom_pane::ListSelectionView::new(
+            super::acp_session_config_value_picker_params(&model_option()),
+            app_event_tx,
+        );
+        crate::bottom_pane::BottomPaneView::handle_key_event(
+            &mut alternate_view,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Down,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+        );
+        crate::bottom_pane::BottomPaneView::handle_key_event(
+            &mut alternate_view,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+        );
+
+        let event = rx.try_recv().expect("alternate value emits config change");
+        assert!(matches!(
+            event,
+            AppEvent::SetAcpSessionConfigOption {
+                config_id,
+                value,
+                option_name,
+                value_name,
+            } if config_id == "model"
+                && value == "mock-model-fast"
+                && option_name == "Model"
+                && value_name == "Mock Fast Model"
+        ));
+        assert!(rx.try_recv().is_err(), "expected a single config event");
     }
 
     #[test]

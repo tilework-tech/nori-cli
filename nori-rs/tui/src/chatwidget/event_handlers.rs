@@ -1153,9 +1153,14 @@ impl ChatWidget {
             nori_protocol::ClientEvent::AgentCommandsUpdate(update) => {
                 self.bottom_pane.set_agent_commands(update.commands);
             }
+            nori_protocol::ClientEvent::SessionConfigUpdate(update) => {
+                self.handle_acp_session_config_update(&update.config_options);
+            }
             nori_protocol::ClientEvent::SessionUpdateInfo(update) => {
                 if update.kind == nori_protocol::SessionUpdateKind::ConfigOptions {
                     self.refresh_acp_mode_config_snapshot();
+                    self.request_redraw();
+                    return;
                 }
                 if update.kind == nori_protocol::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
