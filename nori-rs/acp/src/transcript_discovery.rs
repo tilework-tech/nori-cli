@@ -384,13 +384,7 @@ fn collect_subagents_from_value(value: &serde_json::Value, subagents: &mut Vec<S
             }
         }
         serde_json::Value::Object(map) => {
-            for key in [
-                "subagent_type",
-                "agentType",
-                "agent_type",
-                "agentId",
-                "agent_id",
-            ] {
+            for key in ["subagent_type", "agentType", "agent_type"] {
                 if let Some(subagent) = map.get(key).and_then(serde_json::Value::as_str) {
                     let subagent = subagent.to_string();
                     if !subagents.contains(&subagent) {
@@ -724,6 +718,51 @@ mod tests {
         assert_eq!(
             parse_transcript_subagents(&transcript_file),
             vec!["nori-code-reviewer".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_parse_transcript_subagents_ignores_internal_agent_ids() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"agent_spawned","agentId":"019e3cb4-f515-7d62-af6a-e0016ef364f3","agent_type":"nori-code-researcher"}}}}"#
+            )
+            .unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"agent_update","agent_id":"a74c49cc919c22c12","status":"completed"}}}}"#
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            parse_transcript_subagents(&transcript_file),
+            vec!["nori-code-researcher".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_parse_transcript_subagents_keeps_camel_case_agent_type() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"agent_spawned","agentId":"019e3cb4-f515-7d62-af6a-e0016ef364f3","agentType":"nori-code-researcher"}}}}"#
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            parse_transcript_subagents(&transcript_file),
+            vec!["nori-code-researcher".to_string()]
         );
     }
 
