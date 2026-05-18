@@ -211,6 +211,7 @@ fn replay_entry_from_client_event(
         | nori_protocol::ClientEvent::AgentCommandsUpdate(_)
         | nori_protocol::ClientEvent::SessionUpdateInfo(_)
         | nori_protocol::ClientEvent::SessionConfigUpdate(_)
+        | nori_protocol::ClientEvent::SessionModeChanged(_)
         | nori_protocol::ClientEvent::Warning(_) => None,
     }
 }

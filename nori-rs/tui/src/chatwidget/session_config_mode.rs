@@ -29,6 +29,25 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(super) fn handle_acp_session_mode_changed(&mut self, current_mode_id: &str) {
+        let label = self
+            .acp_mode_config
+            .as_ref()
+            .and_then(|mode| mode.label_for_value(current_mode_id))
+            .map(str::to_string)
+            .unwrap_or_else(|| current_mode_id.to_string());
+
+        let agent_display_name = nori_acp::get_agent_display_name(&self.config.model);
+        self.add_to_history(
+            crate::nori::agent_mode_history::new_agent_mode_changed_cell(
+                &agent_display_name,
+                &label,
+            ),
+        );
+        self.refresh_acp_mode_config_snapshot();
+        self.request_redraw();
+    }
+
     pub(super) fn refresh_acp_mode_config_snapshot(&self) {
         let Some(handle) = self.acp_handle.clone() else {
             return;

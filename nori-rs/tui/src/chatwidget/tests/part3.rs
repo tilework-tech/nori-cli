@@ -383,12 +383,21 @@ fn replay_entry_user_and_assistant_render_history() {
 fn session_update_info_events_only_render_non_usage_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
-        nori_protocol::SessionUpdateInfo {
-            kind: nori_protocol::SessionUpdateKind::CurrentMode,
-            message: "ACP mode changed to review".into(),
-            hint: None,
-            usage: None,
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation(),
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "default".to_string(),
+            vec![
+                ("default".to_string(), "Default".to_string()),
+                ("review".to_string(), "Review".to_string()),
+            ],
+        ),
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionModeChanged(
+        nori_protocol::SessionModeChanged {
+            current_mode_id: "review".into(),
         },
     ));
     chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
