@@ -8,6 +8,8 @@ use codex_core::config::ConfigToml;
 use codex_protocol::parse_command::ParsedCommand;
 use dirs::home_dir;
 use pretty_assertions::assert_eq;
+use ratatui::style::Color;
+use ratatui::style::Style;
 use serde_json::json;
 
 use codex_core::protocol::ExecCommandSource;
@@ -85,6 +87,51 @@ fn active_mcp_tool_call_snapshot() {
     let rendered = render_lines(&cell.display_lines(80)).join("\n");
 
     insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn mcp_tool_call_highlights_argument_values_not_names() {
+    let invocation = McpInvocation {
+        server: "search".into(),
+        tool: "find_docs".into(),
+        arguments: Some(json!({
+            "query": "ratatui styling",
+            "limit": 3,
+        })),
+    };
+
+    let cell = new_active_mcp_tool_call("call-values".into(), invocation, false);
+    let rendered = cell.display_lines(120);
+    let spans = &rendered[0].spans;
+    let styled_spans = spans
+        .iter()
+        .map(|span| format!("{:?} {:?}", span.content, span.style))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    insta::assert_snapshot!(styled_spans);
+
+    let query_name = spans
+        .iter()
+        .find(|span| span.content.as_ref() == "\"query\"")
+        .expect("argument name should render as its own span");
+    let query_value = spans
+        .iter()
+        .find(|span| span.content.as_ref() == "\"ratatui styling\"")
+        .expect("argument value should render as its own span");
+    let limit_name = spans
+        .iter()
+        .find(|span| span.content.as_ref() == "\"limit\"")
+        .expect("argument name should render as its own span");
+    let limit_value = spans
+        .iter()
+        .find(|span| span.content.as_ref() == "3")
+        .expect("numeric argument value should render as its own span");
+
+    assert_eq!(query_name.style, Style::default());
+    assert_eq!(limit_name.style, Style::default());
+    assert_eq!(query_value.style.fg, Some(Color::Cyan));
+    assert_eq!(limit_value.style.fg, Some(Color::Cyan));
 }
 
 #[test]

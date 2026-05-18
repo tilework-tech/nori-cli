@@ -1,0 +1,22 @@
+---
+source: tui/src/history_cell/tests.rs
+expression: styled_spans
+---
+"•" Style::new().dim()
+" " Style::new()
+"Calling" Style::new().bold()
+" " Style::new()
+"search" Style::new().cyan()
+"." Style::new()
+"find_docs" Style::new().cyan()
+"(" Style::new()
+"{" Style::new().dim()
+"\"query\"" Style::new()
+":" Style::new().dim()
+"\"ratatui styling\"" Style::new().cyan()
+"," Style::new().dim()
+"\"limit\"" Style::new()
+":" Style::new().dim()
+"3" Style::new().cyan()
+"}" Style::new().dim()
+")" Style::new()
