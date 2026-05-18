@@ -3,11 +3,13 @@
 //! This module contains Nori-branded components that replace or extend
 //! the default Codex TUI behavior.
 
+pub(crate) mod agent_mode_history;
 pub(crate) mod agent_picker;
 pub(crate) mod exit_message;
 pub(crate) mod fork_picker;
 pub(crate) mod onboarding;
 pub(crate) mod resume_session_picker;
+pub(crate) mod session_config_history;
 pub(crate) mod session_config_mode;
 pub(crate) mod session_config_picker;
 pub(crate) mod session_header;

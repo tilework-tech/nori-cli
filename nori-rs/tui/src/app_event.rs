@@ -260,7 +260,14 @@ pub(crate) enum AppEvent {
         success: bool,
         option_name: String,
         value_name: String,
+        config_options: Option<Vec<SessionConfigOption>>,
         error: Option<String>,
+    },
+
+    /// Latest raw ACP session config for silently seeding local UI state.
+    AcpSessionConfigSnapshot {
+        generation: i64,
+        config_options: Vec<SessionConfigOption>,
     },
 
     /// Latest derived ACP mode config for the active session.

@@ -430,6 +430,10 @@ impl BottomPane {
         self.refresh_agent_command_descriptions();
     }
 
+    pub(crate) fn agent_display_name(&self) -> &str {
+        &self.agent_display_name
+    }
+
     pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
         self.acp_wire_recording_enabled = enabled;
         self.refresh_agent_command_descriptions();

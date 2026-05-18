@@ -782,8 +782,7 @@ fn current_mode_update_is_accepted_while_idle_and_emits_info_event() {
     )));
     assert!(has_event(&out.events, |e| matches!(
         e,
-        ClientEvent::SessionUpdateInfo(info)
-            if info.kind == nori_protocol::SessionUpdateKind::CurrentMode
+        ClientEvent::SessionModeChanged(_)
     )));
 }
 
@@ -804,8 +803,8 @@ fn config_option_update_is_accepted_while_idle_and_emits_info_event() {
     )));
     assert!(has_event(&out.events, |e| matches!(
         e,
-        ClientEvent::SessionUpdateInfo(info)
-            if info.kind == nori_protocol::SessionUpdateKind::ConfigOptions
+        ClientEvent::SessionConfigUpdate(update)
+            if update.config_options == vec![sample_config_option()]
     )));
 }
 

@@ -750,8 +750,8 @@ impl ChatWidget {
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             let generation = self.acp_mode_config_generation;
-            let option_name_for_result = option_name.clone();
-            let value_name_for_result = value_name.clone();
+            let option_name_for_result = option_name;
+            let value_name_for_result = value_name;
             tokio::spawn(async move {
                 match handle.set_session_config_option(config_id, value).await {
                     Ok(config_options) => {
@@ -765,6 +765,7 @@ impl ChatWidget {
                             success: true,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
+                            config_options: Some(config_options),
                             error: None,
                         });
                     }
@@ -773,12 +774,12 @@ impl ChatWidget {
                             success: false,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
+                            config_options: None,
                             error: Some(err.to_string()),
                         });
                     }
                 }
             });
-            self.add_info_message(format!("Updating {option_name} to: {value_name}..."), None);
         } else {
             self.add_info_message(
                 "No ACP agent handle available for session config".to_string(),

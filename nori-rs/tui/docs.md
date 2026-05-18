@@ -203,6 +203,10 @@ The Nori-specific agent picker UI lives in `nori/agent_picker.rs`, allowing user
 
 When an ACP agent exposes a select-style session config option categorized as `Mode` (or using id `mode`), the TUI derives a compact mode snapshot from the same live `config_options` data used by `/config`. The current mode label flows into the normal footer segment pipeline as the `mode_indicator` segment, rendered as compact bracketed text such as `[ Plan ]`; labels longer than 20 characters are truncated with an ellipsis. By default, the segment appears in the right side of the footer line and is skipped entirely when the selected agent does not expose mode options. While the composer has focus and no popup is active, `Shift-Tab` fetches the current ACP session config snapshot from the agent handle, chooses the next mode value in the agent-provided option order (including grouped options), and applies it through `session/set_config_option`. Successful changes from either `Shift-Tab` or the ACP `/config` menu refresh the footer segment through `AppEvent::AcpModeConfigSnapshot`. This remains live-session only and does not persist mode selections to `config.toml`.
 
+**Agent Options History** (`nori/session_config_history.rs`, `chatwidget/event_handlers.rs`, `chatwidget/pickers.rs`):
+
+Live `ClientEvent::SessionConfigUpdate` events carry the full ACP session config snapshot into the TUI. `ChatWidget` stores the first supported select-option snapshot as a silent baseline, then compares later snapshots against it and writes a user-facing history line only for values that actually changed, such as `Claude Code option updated: Effort=High`. User-triggered `/config` changes skip the old intermediate "updating" history line and render a single final message, such as `Claude Code option set: Model=Opus 4.6`; the returned snapshot is synced immediately so a later backend echo does not duplicate the same update. Unsupported config kinds, newly added options, and removed options are ignored for history noise while still allowing the mode footer snapshot to refresh from supported values.
+
 **System Info Collection** (`system_info.rs`):
 
 The `SystemInfo` struct collects environment data in a background thread to avoid blocking TUI startup:
@@ -369,7 +373,7 @@ Claude-backed agents have an additional compatibility path in `skill_picker_item
 
 **Live ACP Session Config Picker** (`chatwidget/pickers.rs`, `nori/session_config_picker.rs`):
 
-`/config` opens a two-step picker for the current ACP session. `ChatWidget::open_session_config_popup()` asks the `AcpAgentHandle` for the live `AcpBackend::config_options()` snapshot, renders supported `select` options, then opens a value picker for the selected option. Selecting a value sends `session/set_config_option` through `AcpBackend::set_config_option()` and shows an info or error message when the RPC finishes.
+`/config` opens a two-step picker for the current ACP session. `ChatWidget::open_session_config_popup()` asks the `AcpAgentHandle` for the live `AcpBackend::config_options()` snapshot, renders supported `select` options, then opens a value picker for the selected option. Selecting a value sends `session/set_config_option` through `AcpBackend::set_config_option()` and shows a single final info or error message when the RPC finishes.
 
 The picker intentionally only edits the active session. It does not run during `/agent` switching and it does not persist selected values. Unsupported ACP config kinds and future non-exhaustive select layouts are treated as unavailable rather than guessed.
 
@@ -677,7 +681,9 @@ Vim mode is inherited from the composer's current vim state. When vim mode is en
 
 **Composer Placeholder Hints:**
 
-When the composer is empty, `ChatWidget` seeds its placeholder from concise capability hints instead of task examples: `?` for the shortcuts overlay, `/` for the slash command menu, `$` for skill listing, `!` for shell commands, and `@` for file mentions. The always-visible `? for shortcuts` footer hint is intentionally omitted; pressing `?` as the first composer character still opens the full shortcut overlay below the prompt, and typing `/` still opens the slash command popup.
+When the composer is empty, `ChatWidget` seeds its placeholder from concise capability hints instead of task examples: `?` for the shortcuts overlay, `/` for the slash command menu, `$` for skill listing, `!` for shell commands, and `@` for file mentions. The always-visible `? for shortcuts` footer hint is intentionally omitted; pressing `?` as the first composer character still opens the full shortcut overlay below the prompt, and typing `/` still opens the slash command popup. Prompt-initial modes replace the normal `›` prompt marker with the active sigil (`?`, `/`, or `!`) using terminal-palette colors, and the duplicated leading sigil is hidden from the editable body.
+
+The `!` shell command affordance is a prompt-initial composer mode, not a slash command or popup. Typing `!` into an empty composer stores the marker as mode state and shows the command body after the `!` prompt marker; `current_text()` reconstructs submitted command text as `!{body}`. While this mode is active, `/`, `$`, `@`, and `?` are treated as literal shell text so nested pickers and the shortcut overlay do not open. `Esc`, `Backspace`, or `Enter` with an empty shell body exits the mode without submitting, and recalling a history item that starts with `!` restores shell mode.
 
 **Status Line Footer:**
 

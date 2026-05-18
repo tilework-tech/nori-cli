@@ -24,6 +24,8 @@ pub enum ClientEvent {
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
     SessionUpdateInfo(SessionUpdateInfo),
+    SessionConfigUpdate(SessionConfigUpdate),
+    SessionModeChanged(SessionModeChanged),
     Warning(WarningInfo),
 }
 
@@ -72,6 +74,12 @@ pub struct AgentCommandInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub struct SessionConfigUpdate {
+    pub config_options: Vec<acp::SessionConfigOption>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct SessionUpdateInfo {
     pub kind: SessionUpdateKind,
     pub message: String,
@@ -80,10 +88,19 @@ pub struct SessionUpdateInfo {
     pub usage: Option<session_runtime::SessionUsageState>,
 }
 
+/// Emitted when the agent reports its active mode has changed.
+///
+/// The TUI resolves `current_mode_id` to a human label using its cached mode
+/// list; the protocol does not carry the label so it stays UI-agnostic.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SessionModeChanged {
+    pub current_mode_id: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionUpdateKind {
-    CurrentMode,
     ConfigOptions,
     SessionInfo,
     Usage,
@@ -366,14 +383,14 @@ impl ClientEventNormalizer {
                 })]
             }
             acp::SessionUpdate::CurrentModeUpdate(update) => {
-                vec![ClientEvent::SessionUpdateInfo(
-                    session_update_info_from_current_mode(update),
-                )]
+                vec![ClientEvent::SessionModeChanged(SessionModeChanged {
+                    current_mode_id: update.current_mode_id.to_string(),
+                })]
             }
             acp::SessionUpdate::ConfigOptionUpdate(update) => {
-                vec![ClientEvent::SessionUpdateInfo(
-                    session_update_info_from_config_options(update),
-                )]
+                vec![ClientEvent::SessionConfigUpdate(SessionConfigUpdate {
+                    config_options: update.config_options.clone(),
+                })]
             }
             acp::SessionUpdate::SessionInfoUpdate(update) => {
                 vec![ClientEvent::SessionUpdateInfo(
@@ -953,35 +970,6 @@ fn message_delta_from_chunk(
             delta: text.text.clone(),
         }),
         _ => None,
-    }
-}
-
-fn session_update_info_from_current_mode(update: &acp::CurrentModeUpdate) -> SessionUpdateInfo {
-    SessionUpdateInfo {
-        kind: SessionUpdateKind::CurrentMode,
-        message: format!("ACP mode changed to {}", update.current_mode_id),
-        hint: None,
-        usage: None,
-    }
-}
-
-fn session_update_info_from_config_options(update: &acp::ConfigOptionUpdate) -> SessionUpdateInfo {
-    let names = update
-        .config_options
-        .iter()
-        .map(|option| option.name.as_str())
-        .collect::<Vec<_>>();
-    let message = if names.is_empty() {
-        "ACP config options updated".to_string()
-    } else {
-        format!("ACP config options updated: {}", names.join(", "))
-    };
-
-    SessionUpdateInfo {
-        kind: SessionUpdateKind::ConfigOptions,
-        message,
-        hint: None,
-        usage: None,
     }
 }
 
@@ -2109,15 +2097,13 @@ mod tests {
         let update = acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new("review"));
 
         let events = normalizer.push_session_update(&update);
-        assert_eq!(events.len(), 1);
 
-        let ClientEvent::SessionUpdateInfo(info) = &events[0] else {
-            panic!("expected SessionUpdateInfo");
-        };
-
-        assert_eq!(info.kind, SessionUpdateKind::CurrentMode);
-        assert_eq!(info.message, "ACP mode changed to review");
-        assert_eq!(info.hint, None);
+        assert_eq!(
+            events,
+            vec![ClientEvent::SessionModeChanged(SessionModeChanged {
+                current_mode_id: "review".to_string(),
+            })]
+        );
     }
 
     #[test]
@@ -2131,13 +2117,11 @@ mod tests {
         let events = normalizer.push_session_update(&update);
         assert_eq!(events.len(), 1);
 
-        let ClientEvent::SessionUpdateInfo(info) = &events[0] else {
-            panic!("expected SessionUpdateInfo");
+        let ClientEvent::SessionConfigUpdate(update) = &events[0] else {
+            panic!("expected SessionConfigUpdate");
         };
 
-        assert_eq!(info.kind, SessionUpdateKind::ConfigOptions);
-        assert_eq!(info.message, "ACP config options updated: Verbosity");
-        assert_eq!(info.hint, None);
+        assert_eq!(update.config_options, vec![sample_config_option()]);
     }
 
     #[test]

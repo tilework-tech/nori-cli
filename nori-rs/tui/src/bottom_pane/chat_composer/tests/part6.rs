@@ -4,10 +4,14 @@ use crate::app_event::AppEvent;
 use crate::bottom_pane::AppEventSender;
 use crate::bottom_pane::ChatComposer;
 use crate::bottom_pane::InputResult;
+use crate::render::renderable::Renderable;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use pretty_assertions::assert_eq;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
 use tokio::sync::mpsc::unbounded_channel;
 
 fn make_composer_with_agent_commands()
@@ -64,6 +68,19 @@ fn make_composer_with_commands(
         prefix.to_string(),
     );
     (composer, rx)
+}
+
+fn render_composer(composer: &ChatComposer) -> Buffer {
+    let area = Rect::new(0, 0, 100, 8);
+    let mut buf = Buffer::empty(area);
+    composer.render(area, &mut buf);
+    buf
+}
+
+fn input_row(buf: &Buffer) -> String {
+    (0..100)
+        .map(|x| buf[(x, 1)].symbol().chars().next().unwrap_or(' '))
+        .collect()
 }
 
 #[test]
@@ -367,4 +384,186 @@ fn dollar_skill_popup_renders_de_sigiled_names() {
         );
         type_chars_humanlike(composer, &['$', 'w']);
     });
+}
+
+#[test]
+fn bang_escape_exits_shell_mode_without_submitting_text() {
+    let (mut composer, _rx) =
+        make_composer_with_commands(vec!["$using-skills", "$writing-plans"], "codex");
+
+    type_chars_humanlike(&mut composer, &['!']);
+    assert_eq!(composer.current_text(), "!");
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert!(matches!(result, InputResult::None));
+    assert_eq!(composer.current_text(), "");
+}
+
+#[test]
+fn shell_mode_slash_text_submits_without_slash_dispatch() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    type_chars_humanlike(&mut composer, &['!', '/', 'd', 'i', 'f', 'f']);
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "!/diff"),
+        other => panic!("expected shell text submission, got {other:?}"),
+    }
+}
+
+#[test]
+fn bang_enter_exits_shell_mode_without_submitting_empty_command() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    type_chars_humanlike(&mut composer, &['!']);
+
+    let (result, handled) =
+        composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(handled);
+    assert!(matches!(result, InputResult::None));
+    assert_eq!(composer.current_text(), "");
+
+    type_chars_humanlike(&mut composer, &['x']);
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "x"),
+        other => panic!("expected plain text submission after shell mode exit, got {other:?}"),
+    }
+}
+
+#[test]
+fn bang_mid_prose_is_plain_text() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    type_chars_humanlike(&mut composer, &['U', 's', 'e', ' ', '!', 'p', 'w', 'd']);
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "Use !pwd"),
+        other => panic!("expected plain text submission, got {other:?}"),
+    }
+}
+
+#[test]
+fn fast_text_ending_with_bang_does_not_enter_shell_mode() {
+    let (mut composer, _rx) = make_composer_with_commands(Vec::new(), "codex");
+
+    for ch in "testing!!!".chars() {
+        let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+    }
+    std::thread::sleep(ChatComposer::recommended_paste_flush_delay());
+    let _ = composer.flush_paste_burst_if_due();
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    match result {
+        InputResult::Submitted(text) => assert_eq!(text, "testing!!!"),
+        other => panic!("expected plain text submission, got {other:?}"),
+    }
+}
+
+#[test]
+fn shell_mode_renders_bang_prefix() {
+    snapshot_composer_state("shell_mode_bang_prefix", false, |composer| {
+        type_chars_humanlike(composer, &['!', 'p', 'w', 'd']);
+    });
+}
+
+#[test]
+fn shortcut_mode_prompt_uses_gray_question_mark_without_duplicate_prefix() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(true, sender, false, "? for shortcuts".to_string(), false);
+
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "?");
+    assert_eq!(buf[(0, 1)].fg, Color::DarkGray);
+    assert!(
+        input_row(&buf).starts_with("? for shortcuts"),
+        "shortcut prompt should not duplicate the placeholder sigil: {:?}",
+        input_row(&buf)
+    );
+}
+
+#[test]
+fn slash_mode_prompt_uses_cyan_slash_without_duplicate_prefix() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    type_chars_humanlike(&mut composer, &['/', 'i', 'n', 'i', 't']);
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "/");
+    assert_eq!(buf[(0, 1)].fg, Color::Cyan);
+    assert!(
+        input_row(&buf).starts_with("/ init"),
+        "slash prompt should hide the editable leading slash: {:?}",
+        input_row(&buf)
+    );
+}
+
+#[test]
+fn slash_mode_prompt_stays_active_after_command_arguments() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    type_chars_humanlike(
+        &mut composer,
+        &['/', 'm', 'o', 'd', 'e', 'l', ' ', 'm', 'o', 'c', 'k'],
+    );
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "/");
+    assert_eq!(buf[(0, 1)].fg, Color::Cyan);
+    assert!(
+        input_row(&buf).starts_with("/ model mock"),
+        "slash prompt should stay active for command arguments: {:?}",
+        input_row(&buf)
+    );
+}
+
+#[test]
+fn shell_mode_prompt_uses_red_bang_without_duplicate_prefix() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    type_chars_humanlike(&mut composer, &['!', 'p', 'w', 'd']);
+
+    let buf = render_composer(&composer);
+    assert_eq!(buf[(0, 1)].symbol(), "!");
+    assert_eq!(buf[(0, 1)].fg, Color::Red);
+    assert!(
+        input_row(&buf).starts_with("! pwd"),
+        "shell prompt should render the shell sigil as the prompt character: {:?}",
+        input_row(&buf)
+    );
 }

@@ -74,6 +74,17 @@ impl AcpModeConfig {
             (self.current_idx + 1) % self.values.len(),
         )
     }
+
+    pub(crate) fn label_for_value(&self, value: &str) -> Option<&str> {
+        self.values
+            .iter()
+            .find(|entry| entry.value == value)
+            .map(|entry| entry.label.as_str())
+    }
+
+    pub(crate) fn current_value(&self) -> &str {
+        &self.values[self.current_idx].value
+    }
 }
 
 pub(crate) fn acp_mode_config_from_options(
