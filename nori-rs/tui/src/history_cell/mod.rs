@@ -1332,54 +1332,24 @@ impl HistoryCell for FinalMessageSeparator {
 }
 
 fn format_mcp_invocation<'a>(invocation: McpInvocation) -> Line<'a> {
-    let mut invocation_spans = vec![
+    let args_str = invocation
+        .arguments
+        .as_ref()
+        .map(|v: &serde_json::Value| {
+            // Use compact form to keep things short but readable.
+            serde_json::to_string(v).unwrap_or_else(|_| v.to_string())
+        })
+        .unwrap_or_default();
+
+    let invocation_spans = vec![
         invocation.server.clone().cyan(),
         ".".into(),
         invocation.tool.cyan(),
         "(".into(),
+        args_str.dim(),
+        ")".into(),
     ];
-    if let Some(arguments) = invocation.arguments.as_ref() {
-        invocation_spans.extend(json_argument_spans(arguments));
-    }
-    invocation_spans.push(")".into());
     invocation_spans.into()
-}
-
-fn json_argument_spans(value: &serde_json::Value) -> Vec<Span<'static>> {
-    match value {
-        serde_json::Value::Null
-        | serde_json::Value::Bool(_)
-        | serde_json::Value::Number(_)
-        | serde_json::Value::String(_) => {
-            let text = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
-            vec![text.cyan()]
-        }
-        serde_json::Value::Array(values) => {
-            let mut spans = vec!["[".dim()];
-            for (idx, item) in values.iter().enumerate() {
-                if idx > 0 {
-                    spans.push(",".dim());
-                }
-                spans.extend(json_argument_spans(item));
-            }
-            spans.push("]".dim());
-            spans
-        }
-        serde_json::Value::Object(map) => {
-            let mut spans = vec!["{".dim()];
-            for (idx, (key, item)) in map.iter().enumerate() {
-                if idx > 0 {
-                    spans.push(",".dim());
-                }
-                let key_text = serde_json::to_string(key).unwrap_or_else(|_| format!("\"{key}\""));
-                spans.push(key_text.into());
-                spans.push(":".dim());
-                spans.extend(json_argument_spans(item));
-            }
-            spans.push("}".dim());
-            spans
-        }
-    }
 }
 
 #[cfg(test)]
