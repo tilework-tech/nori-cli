@@ -270,13 +270,7 @@ fn extract_subagent_from_value(value: &serde_json::Value) -> Option<String> {
         | serde_json::Value::String(_) => None,
         serde_json::Value::Array(values) => values.iter().find_map(extract_subagent_from_value),
         serde_json::Value::Object(map) => {
-            for key in [
-                "subagent_type",
-                "agentType",
-                "agent_type",
-                "agentId",
-                "agent_id",
-            ] {
+            for key in ["subagent_type", "agentType", "agent_type"] {
                 if let Some(value) = map.get(key).and_then(serde_json::Value::as_str) {
                     return Some(value.to_string());
                 }
@@ -477,6 +471,37 @@ mod tests {
         let raw_input = json!({"description": "test", "prompt": "test"});
         let result = extract_subagent_from_raw_input(Some(&raw_input));
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_subagent_ignores_internal_agent_id_fields() {
+        let raw_input = json!({
+            "agentId": "019e3cb4-f515-7d62-af6a-e0016ef364f3",
+            "agent_id": "a74c49cc919c22c12",
+            "message": "subagent lifecycle update"
+        });
+        let result = extract_subagent_from_raw_input(Some(&raw_input));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_subagent_prefers_type_over_internal_agent_id() {
+        let raw_input = json!({
+            "agent_type": "nori-code-researcher",
+            "agentId": "019e3cb4-f515-7d62-af6a-e0016ef364f3"
+        });
+        let result = extract_subagent_from_raw_input(Some(&raw_input));
+        assert_eq!(result, Some("nori-code-researcher".to_string()));
+    }
+
+    #[test]
+    fn extract_subagent_prefers_camel_case_type_over_internal_agent_id() {
+        let raw_input = json!({
+            "agentType": "nori-code-researcher",
+            "agentId": "019e3cb4-f515-7d62-af6a-e0016ef364f3"
+        });
+        let result = extract_subagent_from_raw_input(Some(&raw_input));
+        assert_eq!(result, Some("nori-code-researcher".to_string()));
     }
 
     // =========================================================================
