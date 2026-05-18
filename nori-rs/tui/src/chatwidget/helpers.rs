@@ -75,6 +75,13 @@ impl ChatWidget {
                     ),
                 );
             }
+        } else if !next_snapshot.is_empty() {
+            self.add_to_history(
+                crate::nori::session_config_history::new_agent_options_initial_history_cell(
+                    self.bottom_pane.agent_display_name(),
+                    config_options,
+                ),
+            );
         }
 
         self.acp_config_option_snapshot = Some(next_snapshot);

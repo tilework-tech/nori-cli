@@ -39,6 +39,33 @@ pub(crate) fn changed_values(
         .collect()
 }
 
+/// Initial-snapshot banner shown the first time the agent announces its
+/// session config options. Lists every option's current value and surfaces
+/// the `/config` affordance so the user knows how to change them.
+pub(crate) fn new_agent_options_initial_history_cell(
+    agent_display_name: &str,
+    config_options: &[acp::SessionConfigOption],
+) -> PlainHistoryCell {
+    let agent_display_name = if agent_display_name.is_empty() {
+        "Agent"
+    } else {
+        agent_display_name
+    };
+    let values: Vec<SessionConfigDisplayValue> =
+        config_options.iter().filter_map(display_value).collect();
+
+    let mut line = vec!["• ".dim(), format!("{agent_display_name} options: ").into()];
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            line.push(", ".into());
+        }
+        line.push(format!("{}={}", value.name, value.value).cyan().bold());
+    }
+    line.push(" (/config to change)".dim());
+
+    PlainHistoryCell::new(vec![Line::from(line)])
+}
+
 pub(crate) fn new_agent_options_history_cell(
     agent_display_name: &str,
     changes: &[SessionConfigDisplayValue],

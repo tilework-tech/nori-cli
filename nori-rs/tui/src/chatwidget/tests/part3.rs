@@ -469,10 +469,10 @@ fn session_config_update_history_shows_only_changed_values_after_baseline() {
             ],
         },
     ));
-    assert!(
-        drain_insert_history(&mut rx).is_empty(),
-        "the first config snapshot should establish a baseline without history noise"
-    );
+    // Drain (and discard) the initial-snapshot banner so the snapshot below
+    // captures only the subsequent change-diff cell. The banner is covered
+    // by `session_config_update_history_renders_startup_banner_on_first_snapshot`.
+    let _ = drain_insert_history(&mut rx);
 
     chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
         nori_protocol::SessionConfigUpdate {
@@ -507,6 +507,46 @@ fn session_config_update_history_shows_only_changed_values_after_baseline() {
         .join("\n");
 
     assert_snapshot!("session_config_update_changed_values_history", rendered);
+}
+
+#[test]
+fn session_config_update_history_renders_startup_banner_on_first_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![
+                select_config_option(
+                    "mode",
+                    "Mode",
+                    "default",
+                    &[("default", "Default"), ("plan", "Plan")],
+                ),
+                select_config_option(
+                    "model",
+                    "Model",
+                    "opus-4-6",
+                    &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+                ),
+                select_config_option(
+                    "effort",
+                    "Effort",
+                    "medium",
+                    &[("medium", "Medium"), ("high", "High")],
+                ),
+            ],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!("session_config_update_startup_banner", rendered);
 }
 
 #[test]
