@@ -623,6 +623,7 @@ async fn test_compact_prepends_summary_to_next_prompt() {
         session_context: None,
         mcp_servers: std::collections::HashMap::new(),
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
+        cloud_connection: None,
     };
 
     let backend = spawn_test_backend(&config, event_tx, Some(client_event_tx))
@@ -786,6 +787,7 @@ async fn test_compact_not_in_unsupported_ops() {
         session_context: None,
         mcp_servers: std::collections::HashMap::new(),
         mcp_oauth_credentials_store_mode: codex_rmcp_client::OAuthCredentialsStoreMode::default(),
+        cloud_connection: None,
     };
 
     let backend = spawn_test_backend(&config, event_tx, None)

@@ -37,6 +37,7 @@ This crate is the primary entry point that ties together the core crates:
 match subcommand {
     None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Resume(cmd)) => nori_tui::run_main(...),
+    Some(Subcommand::Cloud(cmd)) => nori_tui::run_main(...),  // Cloud VM session
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
@@ -44,6 +45,13 @@ match subcommand {
     // ... other subcommands
 }
 ```
+
+**CloudCommand**: Runs a TUI session backed by a cloud VM via the nori-sessions broker:
+- `nori cloud` - Connects to a cloud session using the broker URL from `config.toml`
+- `nori cloud --broker-url https://broker.example.com` - Overrides the broker URL
+- TUI flags such as `--agent`, `--profile`, `--sandbox` can be passed after `cloud`
+- The dispatch flow: resolves broker URL (flag > config), creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, acquires a session, then sets `TuiCli.cloud_connection` and calls `nori_tui::run_main()`
+- The `CloudConnectionInfo` flows through the TUI unchanged until it reaches `AcpBackend::spawn()`, which uses `SacpConnection::connect_remote()` instead of spawning a local subprocess
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 

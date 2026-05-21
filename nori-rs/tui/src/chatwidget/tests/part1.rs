@@ -116,6 +116,7 @@ async fn helpers_are_available_and_do_not_panic() {
         footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         expected_agent: None,
         deferred_spawn: false,
+        cloud_connection: None,
         fork_context: None,
     };
     let mut w = ChatWidget::new(init);

@@ -6,6 +6,12 @@ use std::path::PathBuf;
 
 const CLOUD_AUTH_FILE: &str = "cloud-auth.json";
 
+#[derive(Debug, Clone)]
+pub struct CloudConnectionInfo {
+    pub ws_url: String,
+    pub auth_token: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CloudCredentials {
     pub broker_url: String,
@@ -56,6 +62,10 @@ impl BrokerClient {
             nori_home,
             http: reqwest::Client::new(),
         }
+    }
+
+    pub fn auth_token(&self) -> Option<&str> {
+        self.auth_token.as_deref()
     }
 
     pub fn has_valid_token(&self) -> bool {
@@ -128,9 +138,7 @@ impl BrokerClient {
                         "<html><body><h1>Authentication failed</h1><p>No token received.</p></body></html>"
                     };
                     let mut response = tiny_http::Response::from_string(html);
-                    if let Ok(header) =
-                        "Content-Type: text/html".parse::<tiny_http::Header>()
-                    {
+                    if let Ok(header) = "Content-Type: text/html".parse::<tiny_http::Header>() {
                         response = response.with_header(header);
                     }
                     let _ = request.respond(response);

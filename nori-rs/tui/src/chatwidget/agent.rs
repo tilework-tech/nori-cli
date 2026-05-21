@@ -167,9 +167,13 @@ pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
     fork_context: Option<String>,
+    cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
 ) -> SpawnAgentResult {
+    if cloud_connection.is_some() {
+        return spawn_acp_agent(config, app_event_tx, fork_context, cloud_connection);
+    }
     match get_agent_config(&config.model) {
-        Ok(_) => spawn_acp_agent(config, app_event_tx, fork_context),
+        Ok(_) => spawn_acp_agent(config, app_event_tx, fork_context, None),
         Err(_) => {
             let agent_name = config.model;
             let known: Vec<String> = list_available_agents()
@@ -220,6 +224,7 @@ fn spawn_acp_agent(
     config: Config,
     app_event_tx: AppEventSender,
     fork_context: Option<String>,
+    cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
 ) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
@@ -300,6 +305,7 @@ fn spawn_acp_agent(
             session_context: Some(include_str!("../../session_context.md").to_string()),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            cloud_connection,
         };
 
         // Race backend init against shutdown requests and a timeout.
@@ -488,6 +494,7 @@ pub(crate) fn spawn_acp_agent_resume(
             session_context: Some(include_str!("../../session_context.md").to_string()),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            cloud_connection: None,
         };
 
         // Race backend resume against shutdown requests and a timeout.

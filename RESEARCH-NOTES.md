@@ -84,3 +84,47 @@ Lines matches the semantics directly.
 - New module: `acp/src/broker/mod.rs` — `BrokerClient` struct
 - `sacp_connection.rs` is already 910 lines (over 500 LoC guideline) — keep broker logic separate
 - Credential storage: separate file `{nori_home}/cloud-auth.json` keeps secrets out of main config; broker_url stays in config.toml `[cloud]` section
+
+## Commit 3: CLI cloud Subcommand + Backend Integration Research
+
+### Data Flow Architecture
+Cloud connection info needs to flow: CLI → TUI → ChatWidget → spawn_agent → AcpBackend::spawn.
+- `CloudConnectionInfo { ws_url, auth_token }` struct in broker module
+- Threaded via `#[clap(skip)]` field on `TuiCli`, through `ChatWidgetInit`, `spawn_agent()`, `AcpBackendConfig`
+- `AcpBackend::spawn()` branches: cloud → `connect_remote()`, local → existing `spawn()` path
+- After connection established, everything converges: `create_session()`, event relay, transcript, hooks all shared
+
+### CLI Layer (cli/src/main.rs)
+- `Subcommand` enum at line 63-93: Add `Cloud(CloudCommand)` variant
+- `CloudCommand` struct: `--broker-url` optional flag (falls back to config `[cloud].broker_url`)
+- Dispatch at line 397: cloud handler does pre-TUI auth+acquire, then calls `nori_tui::run_main()`
+- Auth/acquire must happen BEFORE TUI takes over terminal (browser needs normal terminal mode)
+- Pattern: set `interactive.cloud_connection = Some(CloudConnectionInfo { ws_url, auth_token })`
+
+### TUI Layer Threading
+- `TuiCli` (tui/src/cli.rs): add `#[clap(skip)] cloud_connection: Option<CloudConnectionInfo>`
+- `ChatWidgetInit` (tui/src/chatwidget/mod.rs:310): add `cloud_connection` field
+- `App::chat_widget_init()` (tui/src/app/mod.rs:513): pass cloud_connection through
+- `spawn_agent()` (agent.rs:166): accept cloud_connection, skip `get_agent_config()` check for cloud mode
+- `spawn_acp_agent()` (agent.rs:219): accept cloud_connection, set on `AcpBackendConfig`
+
+### AcpBackend::spawn() Cloud Branch
+- `AcpBackendConfig` (backend/mod.rs:164): add `cloud_connection: Option<CloudConnectionInfo>`
+- In `spawn()`: branch on `config.cloud_connection`
+  - Cloud: `SacpConnection::connect_remote(ws_url, auth_token, cwd)` with simple error message
+  - Local: existing path with `get_agent_config()`, `SacpConnection::spawn()`, categorized errors
+  - Both: `agent_config` is `Option<AcpAgentConfig>` — `Some` for local, `None` for cloud
+- `create_session()` still called for both (ACP protocol required through tunnel)
+- Error handling for `create_session` uses agent_config if available, else simple cloud error
+- Everything after create_session is identical (event relay, transcript, hooks, etc.)
+
+### Agent Name for Cloud Mode
+- `config.agent` set to "cloud" by CLI dispatch
+- `get_agent_config()` skipped (agent not in local registry)
+- Model display and transcript metadata show "cloud"
+
+### Test Implications
+- `build_test_config()` (backend/tests/mod.rs:235) must add `cloud_connection: None`
+- ChatWidgetInit test constructors must add `cloud_connection: None`
+- New unit test: `spawn_agent` with `cloud_connection: Some(...)` skips agent config check
+- Integration test: `AcpBackend::spawn()` with cloud_connection connects via mock WS server

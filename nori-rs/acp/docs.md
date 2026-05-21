@@ -28,6 +28,7 @@ The ACP crate serves as a bridge between:
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
 - `connection/` - SACP v11-based agent communication (local subprocess and remote WebSocket)
+- `broker/` - Cloud session broker client: OAuth auth, JWT management, session acquisition, and `CloudConnectionInfo` (see `@/nori-rs/acp/src/broker/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -128,6 +129,17 @@ The config module provides the **canonical source of truth** for Nori home path 
 - `NORI_HOME_DIR`: Default relative path (`".nori/cli"`)
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
 - `DEFAULT_AGENT`: Default agent (`"claude-code"`)
+
+**Cloud Broker Configuration** (`config/types/mod.rs`, `loader.rs`):
+
+The `[cloud]` TOML section stores the broker URL for cloud sessions:
+
+```toml
+[cloud]
+broker_url = "https://nori-broker.myorg.fly.dev"
+```
+
+The value is resolved onto `NoriConfig.cloud_broker_url` during config loading. The CLI's `nori cloud` subcommand uses this as a fallback when `--broker-url` is not passed on the command line. See `@/nori-rs/acp/src/broker/docs.md` for the broker client and `@/nori-rs/cli/docs.md` for the CLI subcommand.
 
 **ACP Wire Proxy Configuration** (`config/types/mod.rs`, `connection/`):
 
@@ -771,6 +783,7 @@ Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 - `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
+- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, `AcpBackend::spawn()` uses `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`).
 - `AcpBackendConfig.session_context`: Optional string injected into `pending_hook_context` at spawn time (`spawn_and_relay.rs`). Unlike `initial_context`, session context is prepended to the first user prompt **without** `SUMMARY_PREFIX` framing -- it appears as raw text before the user's message. If session start hooks also produce `::context::` lines, those are appended to the session context (both accumulate in the same `pending_hook_context` mutex). The context is consumed on the first prompt and not repeated. The TUI populates this with an embedded markdown blurb (`@/nori-rs/tui/session_context.md`) that tells the agent it is running inside the nori CLI.
 
 **Re-exported Types:**
@@ -1044,7 +1057,7 @@ Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `ws_transport.rs`, `mcp.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `broker/` (with `mod.rs`, `tests.rs`), `connection/` (with `sacp_connection.rs`, `ws_transport.rs`, `mcp.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1

@@ -20,65 +20,63 @@ impl AcpBackend {
         config: &AcpBackendConfig,
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
-        let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
 
         let (event_tx, event_rx) = mpsc::channel(32);
         tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
 
-        debug!("Spawning ACP backend for agent: {}", config.agent);
-
-        // Spawn the ACP connection with enhanced error handling
-        let connection_result =
-            SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await;
-
-        let mut connection = match connection_result {
-            Ok(conn) => conn,
-            Err(e) => {
-                // Get the full error chain to check for nested auth errors
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-
-                // Use the display format for the user-facing message
-                let display_error = format!("{e}");
-                let enhanced_message = enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                );
-
-                return Err(anyhow::anyhow!(enhanced_message));
-            }
+        let (mut connection, agent_config) = if let Some(ref cloud) = config.cloud_connection {
+            debug!("Connecting to cloud session: {}", cloud.ws_url);
+            let conn = SacpConnection::connect_remote(&cloud.ws_url, &cloud.auth_token, &cwd)
+                .await
+                .map_err(|e| anyhow::anyhow!("Cloud connection failed: {e}"))?;
+            (conn, None)
+        } else {
+            let agent_config = get_agent_config(&config.agent)?;
+            debug!("Spawning ACP backend for agent: {}", config.agent);
+            let conn =
+                match SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        let error_string = format!("{e:?}");
+                        let category = categorize_acp_error(&error_string);
+                        let display_error = format!("{e}");
+                        let enhanced_message = enhanced_error_message(
+                            category,
+                            &display_error,
+                            &agent_config.provider_info.name,
+                            &agent_config.auth_hint,
+                            &agent_config.display_name,
+                            &agent_config.install_hint,
+                        );
+                        return Err(anyhow::anyhow!(enhanced_message));
+                    }
+                };
+            (conn, Some(agent_config))
         };
 
-        // Create a session with enhanced error handling, forwarding CLI MCP servers.
         let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
             &config.mcp_servers,
             config.mcp_oauth_credentials_store_mode,
         );
-        let session_result = connection.create_session(&cwd, mcp_servers).await;
-        let session_id = match session_result {
+        let session_id = match connection.create_session(&cwd, mcp_servers).await {
             Ok(id) => id,
             Err(e) => {
-                // Get the full error chain to check for nested auth errors
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-
-                // Use the display format for the user-facing message
-                let display_error = format!("{e}");
-                let enhanced_message = enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                );
-
-                return Err(anyhow::anyhow!(enhanced_message));
+                if let Some(ref ac) = agent_config {
+                    let error_string = format!("{e:?}");
+                    let category = categorize_acp_error(&error_string);
+                    let display_error = format!("{e}");
+                    let enhanced_message = enhanced_error_message(
+                        category,
+                        &display_error,
+                        &ac.provider_info.name,
+                        &ac.auth_hint,
+                        &ac.display_name,
+                        &ac.install_hint,
+                    );
+                    return Err(anyhow::anyhow!(enhanced_message));
+                }
+                return Err(anyhow::anyhow!("Cloud session creation failed: {e}"));
             }
         };
 

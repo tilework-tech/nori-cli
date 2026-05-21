@@ -240,6 +240,8 @@ pub struct AcpBackendConfig {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+    /// Cloud connection info for remote WebSocket sessions (None for local mode)
+    pub cloud_connection: Option<crate::broker::CloudConnectionInfo>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.

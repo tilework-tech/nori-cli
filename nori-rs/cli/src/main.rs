@@ -90,6 +90,9 @@ enum Subcommand {
 
     /// Resume a previous interactive session (picker by default; use --last to continue the most recent).
     Resume(ResumeCommand),
+
+    /// Run a TUI session backed by a cloud VM via the nori-sessions broker.
+    Cloud(CloudCommand),
 }
 
 #[derive(Debug, Parser)]
@@ -111,6 +114,16 @@ struct ResumeCommand {
     /// Show all sessions instead of filtering to the current working directory.
     #[arg(long = "all", default_value_t = false)]
     all: bool,
+
+    #[clap(flatten)]
+    config_overrides: TuiCli,
+}
+
+#[derive(Debug, Parser)]
+struct CloudCommand {
+    /// Broker URL (overrides config.toml [cloud] broker_url).
+    #[arg(long = "broker-url")]
+    broker_url: Option<String>,
 
     #[clap(flatten)]
     config_overrides: TuiCli,
@@ -505,6 +518,49 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let socket_path = cmd.socket_path;
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
+        }
+        Some(Subcommand::Cloud(cloud_cmd)) => {
+            let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+            let broker_url = cloud_cmd
+                .broker_url
+                .or(nori_config.cloud_broker_url)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "No broker URL configured. Use --broker-url or set [cloud] broker_url in ~/.nori/cli/config.toml"
+                    )
+                })?;
+
+            let nori_home = find_nori_home()?;
+            let mut broker = nori_acp::broker::BrokerClient::new(broker_url, nori_home);
+
+            if !broker.has_valid_token() {
+                eprintln!("Opening browser for authentication...");
+                broker.authenticate().await?;
+                eprintln!("Authenticated.");
+            }
+
+            eprintln!("Acquiring cloud session...");
+            let session_info = broker
+                .acquire_session()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to acquire cloud session: {e}"))?;
+            eprintln!("Connected to session {}", session_info.session_id);
+
+            interactive = cloud_cmd.config_overrides;
+            prepend_config_flags(
+                &mut interactive.config_overrides,
+                root_config_overrides.clone(),
+            );
+            interactive.cloud_connection = Some(nori_acp::broker::CloudConnectionInfo {
+                ws_url: session_info.ws_url,
+                auth_token: broker
+                    .auth_token()
+                    .expect("token must be present after authenticate + acquire_session")
+                    .to_string(),
+            });
+
+            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Completions(cmd)) => {
             clap_complete::generate(
@@ -941,6 +997,40 @@ mod tests {
                 );
             }
             _ => panic!("expected Skillsets subcommand"),
+        }
+    }
+
+    #[test]
+    fn cloud_subcommand_parses_without_broker_url() {
+        let cli = MultitoolCli::try_parse_from(["nori", "cloud"]).expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Cloud(cmd)) => {
+                assert!(
+                    cmd.broker_url.is_none(),
+                    "broker_url should be None when not provided"
+                );
+            }
+            _ => panic!("expected Cloud subcommand"),
+        }
+    }
+
+    #[test]
+    fn cloud_subcommand_parses_with_broker_url() {
+        let cli = MultitoolCli::try_parse_from([
+            "nori",
+            "cloud",
+            "--broker-url",
+            "https://broker.example.com",
+        ])
+        .expect("should parse");
+        match cli.subcommand {
+            Some(Subcommand::Cloud(cmd)) => {
+                assert_eq!(
+                    cmd.broker_url.as_deref(),
+                    Some("https://broker.example.com")
+                );
+            }
+            _ => panic!("expected Cloud subcommand"),
         }
     }
 }

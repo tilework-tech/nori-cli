@@ -588,7 +588,12 @@ async fn run_ratatui_app(
         config.model = agent.clone();
     }
 
-    let Cli { prompt, images, .. } = cli;
+    let Cli {
+        prompt,
+        images,
+        cloud_connection,
+        ..
+    } = cli;
 
     let app_result = App::run(
         &mut tui,
@@ -599,6 +604,7 @@ async fn run_ratatui_app(
         images,
         resume_selection,
         vertical_footer,
+        cloud_connection,
     )
     .await;
 
