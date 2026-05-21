@@ -323,4 +323,22 @@ mod tests {
 
         insta::assert_snapshot!(rendered);
     }
+
+    #[test]
+    fn exit_message_acp_session_stats_snapshot() {
+        let mut stats = SessionStats::new();
+        stats.user_messages = 1;
+        stats.assistant_messages = 1;
+        stats.tool_calls.insert("Agent".to_string(), 1);
+        stats.tool_calls.insert("execute".to_string(), 1);
+        stats.tool_calls.insert("read".to_string(), 1);
+        stats.skills_used.push("repro-skill".to_string());
+        stats.subagents_used.push("nori-task-runner".to_string());
+
+        let cell = ExitMessageCell::new("sess_acp".to_string(), stats);
+        let lines = cell.display_lines(80);
+        let rendered = render_lines(&lines).join("\n");
+
+        insta::assert_snapshot!(rendered);
+    }
 }

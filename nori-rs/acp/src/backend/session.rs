@@ -25,7 +25,7 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
-        let mut connection = SacpConnection::spawn(&agent_config, &cwd)
+        let mut connection = SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
             .await
             .map_err(|e| {
                 let error_string = format!("{e:?}");
@@ -159,8 +159,10 @@ impl AcpBackend {
                         anyhow::anyhow!("load session collector task panicked: {err}")
                     })?;
 
-                    let mcp_servers =
-                        crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+                    let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                        &config.mcp_servers,
+                        config.mcp_oauth_credentials_store_mode,
+                    );
                     let session_id =
                         connection
                             .create_session(&cwd, mcp_servers)
@@ -206,7 +208,10 @@ impl AcpBackend {
         } else {
             debug!("Agent does not support session/load — using client-side replay");
 
-            let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&config.mcp_servers);
+            let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                &config.mcp_servers,
+                config.mcp_oauth_credentials_store_mode,
+            );
             let session_id = connection
                 .create_session(&cwd, mcp_servers)
                 .await
@@ -262,7 +267,6 @@ impl AcpBackend {
         ));
         let idle_timer_abort = Arc::new(Mutex::new(None));
         let (approval_policy_tx, approval_policy_rx) = watch::channel(config.approval_policy);
-        let conversation_id = ConversationId::new();
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
 
@@ -281,6 +285,10 @@ impl AcpBackend {
                 None
             }
         };
+        let conversation_id = transcript_recorder
+            .as_ref()
+            .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
+            .unwrap_or_default();
 
         let backend = Self {
             connection,
@@ -293,6 +301,7 @@ impl AcpBackend {
             idle_timer_abort: Arc::clone(&idle_timer_abort),
             nori_home: config.nori_home.clone(),
             history_persistence: config.history_persistence,
+            acp_proxy: config.acp_proxy.clone(),
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
@@ -317,6 +326,7 @@ impl AcpBackend {
             script_timeout: config.script_timeout,
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
         };
 
         let runtime_backend = backend.clone();

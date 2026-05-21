@@ -63,13 +63,14 @@ jobs:
           echo "hash=${{ hashFiles('nori-rs/Cargo.lock') }}" >> "$GITHUB_OUTPUT"
           echo "toolchain_hash=${{ hashFiles('nori-rs/rust-toolchain.toml') }}" >> "$GITHUB_OUTPUT"
 
-      # Cache cargo home directory (registry, git deps, etc.)
+      # Cache registry and git deps only. Do not cache ~/.cargo/bin because
+      # restoring tool binaries after rust-toolchain setup can overwrite
+      # rustup-managed cargo shims on hosted runners.
       - name: Restore cargo home cache
         id: cache_cargo_home_restore
         uses: actions/cache/restore@v4
         with:
           path: |
-            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
@@ -146,7 +147,6 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/

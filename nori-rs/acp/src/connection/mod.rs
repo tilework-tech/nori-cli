@@ -12,6 +12,7 @@ use tokio::sync::oneshot;
 
 pub mod mcp;
 pub mod sacp_connection;
+mod wire_log;
 pub(crate) mod ws_transport;
 
 #[cfg(test)]
@@ -93,6 +94,21 @@ pub struct AcpModelState {
     pub current_model_id: Option<acp::ModelId>,
     /// List of available models from the agent
     pub available_models: Vec<acp::ModelInfo>,
+}
+
+/// Session config state captured from ACP session setup and updates.
+///
+/// This stores the complete current `configOptions` snapshot for the active
+/// session. ACP responses and notifications replace the full list.
+#[derive(Debug, Clone, Default)]
+pub struct AcpSessionConfigState {
+    pub config_options: Vec<acp::SessionConfigOption>,
+}
+
+impl AcpSessionConfigState {
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 impl AcpModelState {

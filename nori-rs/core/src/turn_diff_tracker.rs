@@ -161,7 +161,7 @@ impl TurnDiffTracker {
         let mut cur = dir.to_path_buf();
         loop {
             let git_marker = cur.join(".git");
-            if git_marker.is_dir() || git_marker.is_file() {
+            if git_marker.is_file() || git_marker.join("HEAD").is_file() {
                 if !self.git_root_cache.iter().any(|r| r == &cur) {
                     self.git_root_cache.push(cur.clone());
                 }

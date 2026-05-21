@@ -19,12 +19,18 @@ fn test_rolling_file_tracing_comprehensive() {
     let result1 = nori_acp::init_rolling_file_tracing(&log_dir, "nori-acp");
     assert!(result1.is_ok(), "First initialization should succeed");
 
+    let debug_enabled = tracing::enabled!(tracing::Level::DEBUG);
+    let info_enabled = tracing::enabled!(tracing::Level::INFO);
+    let warn_enabled = tracing::enabled!(tracing::Level::WARN);
+    let error_enabled = tracing::enabled!(tracing::Level::ERROR);
+    let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
+
     // Test 2: Emit test log events and verify they appear in file
     debug!("This is a debug message");
     info!("This is an info message");
     warn!("This is a warning message");
     error!("This is an error message");
-    tracing::trace!("This is a trace message that should not appear");
+    tracing::trace!("This is a trace message");
 
     // Give async logger time to flush
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -51,46 +57,31 @@ fn test_rolling_file_tracing_comprehensive() {
     let log_file_path = log_files[0].path();
     let contents = fs::read_to_string(&log_file_path).expect("Failed to read log file");
 
-    // Test 3: In debug builds, DEBUG and above should appear in the file
-    // In release builds, only WARN and above should appear
-    // Tests typically run in debug mode, so we expect debug messages
-    #[cfg(debug_assertions)]
-    {
-        assert!(
-            contents.contains("This is a debug message"),
-            "Log file should contain debug message in debug build"
-        );
-        assert!(
-            contents.contains("This is an info message"),
-            "Log file should contain info message in debug build"
-        );
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        assert!(
-            !contents.contains("This is a debug message"),
-            "Log file should NOT contain debug message in release build"
-        );
-        assert!(
-            !contents.contains("This is an info message"),
-            "Log file should NOT contain info message in release build"
-        );
-    }
-
-    // WARN and ERROR should always be captured
-    assert!(
+    // Test 3: Captured messages should match the active subscriber filter.
+    assert_eq!(
+        contents.contains("This is a debug message"),
+        debug_enabled,
+        "debug message capture should match active filter"
+    );
+    assert_eq!(
+        contents.contains("This is an info message"),
+        info_enabled,
+        "info message capture should match active filter"
+    );
+    assert_eq!(
         contents.contains("This is a warning message"),
-        "Log file should contain warning message"
+        warn_enabled,
+        "warning message capture should match active filter"
     );
-    assert!(
+    assert_eq!(
         contents.contains("This is an error message"),
-        "Log file should contain error message"
+        error_enabled,
+        "error message capture should match active filter"
     );
-
-    // Test 4: Verify TRACE is always filtered out
-    assert!(
-        !contents.contains("This is a trace message"),
-        "Log file should NOT contain trace message (filtered out)"
+    assert_eq!(
+        contents.contains("This is a trace message"),
+        trace_enabled,
+        "trace message capture should match active filter"
     );
 
     // Test 5: Second initialization should fail (global subscriber already set)

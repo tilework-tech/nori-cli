@@ -18,6 +18,11 @@ impl ChatWidget {
         self.bottom_pane.set_vertical_footer(enabled);
     }
 
+    pub(crate) fn set_custom_working_messages(&mut self, enabled: bool) {
+        self.config.custom_working_messages = enabled;
+        self.bottom_pane.set_custom_working_messages(enabled);
+    }
+
     /// Set the plan drawer mode. The latest plan state is always retained so
     /// that switching to a visible mode shows the most recent plan immediately.
     pub(crate) fn set_plan_drawer_mode(&mut self, mode: PlanDrawerMode) {
@@ -47,6 +52,83 @@ impl ChatWidget {
 
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {
         self.add_to_history(history_cell::new_info_event(message, hint));
+        self.request_redraw();
+    }
+
+    pub(crate) fn handle_acp_session_config_update(
+        &mut self,
+        config_options: &[nori_acp::SessionConfigOption],
+    ) {
+        let next_snapshot =
+            crate::nori::session_config_history::snapshot_from_options(config_options);
+
+        if let Some(previous_snapshot) = &self.acp_config_option_snapshot {
+            let changes = crate::nori::session_config_history::changed_values(
+                previous_snapshot,
+                config_options,
+            );
+            if !changes.is_empty() {
+                self.add_to_history(
+                    crate::nori::session_config_history::new_agent_options_history_cell(
+                        self.bottom_pane.agent_display_name(),
+                        &changes,
+                    ),
+                );
+            }
+        } else if !next_snapshot.is_empty() {
+            self.add_to_history(
+                crate::nori::session_config_history::new_agent_options_initial_history_cell(
+                    self.bottom_pane.agent_display_name(),
+                    config_options,
+                ),
+            );
+        }
+
+        self.acp_config_option_snapshot = Some(next_snapshot);
+        self.apply_acp_mode_config_snapshot(
+            self.acp_mode_config_generation,
+            crate::nori::session_config_mode::acp_mode_config_from_options(config_options),
+        );
+        self.request_redraw();
+    }
+
+    pub(crate) fn sync_acp_session_config_snapshot(
+        &mut self,
+        config_options: &[nori_acp::SessionConfigOption],
+    ) {
+        self.acp_config_option_snapshot = Some(
+            crate::nori::session_config_history::snapshot_from_options(config_options),
+        );
+        self.apply_acp_mode_config_snapshot(
+            self.acp_mode_config_generation,
+            crate::nori::session_config_mode::acp_mode_config_from_options(config_options),
+        );
+    }
+
+    pub(crate) fn handle_acp_session_config_snapshot(
+        &mut self,
+        generation: i64,
+        config_options: &[nori_acp::SessionConfigOption],
+    ) {
+        if generation != self.acp_mode_config_generation {
+            return;
+        }
+
+        self.sync_acp_session_config_snapshot(config_options);
+    }
+
+    pub(crate) fn add_acp_session_config_set_message(
+        &mut self,
+        option_name: &str,
+        value_name: &str,
+    ) {
+        self.add_to_history(
+            crate::nori::session_config_history::new_agent_option_set_history_cell(
+                self.bottom_pane.agent_display_name(),
+                option_name,
+                value_name,
+            ),
+        );
         self.request_redraw();
     }
 
@@ -122,6 +204,11 @@ impl ChatWidget {
 
     /// Update system info in the footer (for background refresh).
     pub(crate) fn apply_system_info_refresh(&mut self, info: crate::system_info::SystemInfo) {
+        if let Some(transcript_location) = &info.transcript_location {
+            for subagent in &transcript_location.subagents_used {
+                self.session_stats.record_subagent(subagent);
+            }
+        }
         self.bottom_pane.set_system_info(info);
     }
 
@@ -201,6 +288,15 @@ impl ChatWidget {
     /// runtime overrides applied via TUI, e.g., model or approval policy).
     pub(crate) fn config_ref(&self) -> &Config {
         &self.config
+    }
+
+    /// Update the in-memory MCP server map so that subsequent reads via
+    /// `config_ref().mcp_servers` reflect the latest persisted state.
+    pub(crate) fn set_mcp_servers(
+        &mut self,
+        servers: std::collections::HashMap<String, codex_core::config::types::McpServerConfig>,
+    ) {
+        self.config.mcp_servers = servers;
     }
 
     /// Forward MCP auth statuses to the active bottom pane view.

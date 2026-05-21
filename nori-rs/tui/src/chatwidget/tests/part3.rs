@@ -266,6 +266,58 @@ fn normalized_reasoning_message_delta_updates_status_header() {
 }
 
 #[test]
+fn normalized_reasoning_message_delta_separates_adjacent_answer_blocks() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.on_task_started();
+    drain_insert_history(&mut rx);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "CI is green.".into(),
+        },
+    ));
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Reasoning,
+            delta: "**Preparing PR**".into(),
+        },
+    ));
+
+    let first_answer = drain_insert_history(&mut rx);
+    let first_answer_text = first_answer
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<String>();
+    assert!(
+        first_answer_text.contains("CI is green."),
+        "reasoning should flush the prior answer block before later answer text arrives: {first_answer_text:?}"
+    );
+    assert!(
+        !first_answer_text.contains("The PR is up"),
+        "first flushed answer block must not contain later answer text: {first_answer_text:?}"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+        nori_protocol::MessageDelta {
+            stream: nori_protocol::MessageStream::Answer,
+            delta: "The PR is up.".into(),
+        },
+    ));
+    chat.on_task_complete(None);
+
+    let final_answer = drain_insert_history(&mut rx);
+    let final_answer_text = final_answer
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<String>();
+    assert!(
+        final_answer_text.contains("The PR is up."),
+        "later answer text should render as a separate answer block: {final_answer_text:?}"
+    );
+}
+
+#[test]
 fn normalized_prompt_phase_sets_task_running() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
@@ -331,12 +383,21 @@ fn replay_entry_user_and_assistant_render_history() {
 fn session_update_info_events_only_render_non_usage_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
-        nori_protocol::SessionUpdateInfo {
-            kind: nori_protocol::SessionUpdateKind::CurrentMode,
-            message: "ACP mode changed to review".into(),
-            hint: None,
-            usage: None,
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation(),
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "default".to_string(),
+            vec![
+                ("default".to_string(), "Default".to_string()),
+                ("review".to_string(), "Review".to_string()),
+            ],
+        ),
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionModeChanged(
+        nori_protocol::SessionModeChanged {
+            current_mode_id: "review".into(),
         },
     ));
     chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
@@ -362,6 +423,242 @@ fn session_update_info_events_only_render_non_usage_history() {
     assert_snapshot!("session_update_info_history", combined);
 }
 
+fn select_config_option(
+    id: &'static str,
+    name: &'static str,
+    current_value: &'static str,
+    values: &[(&'static str, &'static str)],
+) -> nori_acp::SessionConfigOption {
+    nori_acp::SessionConfigOption::select(
+        id,
+        name,
+        current_value,
+        values
+            .iter()
+            .map(|(value, label)| nori_acp::SessionConfigSelectOption::new(*value, *label))
+            .collect::<Vec<_>>(),
+    )
+}
+
+#[test]
+fn session_config_update_history_shows_only_changed_values_after_baseline() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![
+                select_config_option(
+                    "mode",
+                    "Mode",
+                    "default",
+                    &[("default", "Default"), ("plan", "Plan")],
+                ),
+                select_config_option(
+                    "model",
+                    "Model",
+                    "opus-4-6",
+                    &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+                ),
+                select_config_option(
+                    "effort",
+                    "Effort",
+                    "medium",
+                    &[("medium", "Medium"), ("high", "High")],
+                ),
+            ],
+        },
+    ));
+    // Drain (and discard) the initial-snapshot banner so the snapshot below
+    // captures only the subsequent change-diff cell. The banner is covered
+    // by `session_config_update_history_renders_startup_banner_on_first_snapshot`.
+    let _ = drain_insert_history(&mut rx);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![
+                select_config_option(
+                    "mode",
+                    "Mode",
+                    "default",
+                    &[("default", "Default"), ("plan", "Plan")],
+                ),
+                select_config_option(
+                    "model",
+                    "Model",
+                    "opus-4-6",
+                    &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+                ),
+                select_config_option(
+                    "effort",
+                    "Effort",
+                    "high",
+                    &[("medium", "Medium"), ("high", "High")],
+                ),
+            ],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!("session_config_update_changed_values_history", rendered);
+}
+
+#[test]
+fn session_config_update_history_renders_startup_banner_on_first_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![
+                select_config_option(
+                    "mode",
+                    "Mode",
+                    "default",
+                    &[("default", "Default"), ("plan", "Plan")],
+                ),
+                select_config_option(
+                    "model",
+                    "Model",
+                    "opus-4-6",
+                    &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+                ),
+                select_config_option(
+                    "effort",
+                    "Effort",
+                    "medium",
+                    &[("medium", "Medium"), ("high", "High")],
+                ),
+            ],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!("session_config_update_startup_banner", rendered);
+}
+
+#[test]
+fn session_config_set_history_uses_final_agent_named_message() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+
+    chat.add_acp_session_config_set_message("Model", "Opus 4.6");
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!("session_config_set_history", rendered);
+}
+
+#[test]
+fn synced_session_config_snapshot_prevents_duplicate_update_history() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+    let config_options = vec![select_config_option(
+        "model",
+        "Model",
+        "opus-4-6",
+        &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
+    )];
+
+    chat.add_acp_session_config_set_message("Model", "Opus 4.6");
+    chat.sync_acp_session_config_snapshot(&config_options);
+    assert_eq!(drain_insert_history(&mut rx).len(), 1);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate { config_options },
+    ));
+
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "a backend echo of a synced picker result should not duplicate history"
+    );
+}
+
+#[test]
+fn session_config_snapshot_seeds_first_update_history_baseline() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.set_agent("claude-code");
+    let baseline = vec![select_config_option(
+        "effort",
+        "Effort",
+        "medium",
+        &[("medium", "Medium"), ("high", "High")],
+    )];
+
+    chat.handle_acp_session_config_snapshot(chat.acp_mode_config_generation(), &baseline);
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "initial session config fetched for the footer should not add history noise"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionConfigUpdate(
+        nori_protocol::SessionConfigUpdate {
+            config_options: vec![select_config_option(
+                "effort",
+                "Effort",
+                "high",
+                &[("medium", "Medium"), ("high", "High")],
+            )],
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_eq!(rendered, "• Claude Code option updated: Effort=High\n");
+}
+
+#[test]
+fn session_mode_changed_dedups_when_cache_already_reflects_new_mode() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation(),
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "review".to_string(),
+            vec![
+                ("default".to_string(), "Default".to_string()),
+                ("review".to_string(), "Review".to_string()),
+            ],
+        ),
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionModeChanged(
+        nori_protocol::SessionModeChanged {
+            current_mode_id: "review".into(),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(
+        cells,
+        Vec::<Vec<ratatui::text::Line<'static>>>::new(),
+        "agent-initiated echo of an already-applied mode change should not add history"
+    );
+}
+
 #[test]
 fn session_usage_updates_footer_and_disables_transcript_fallback() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
@@ -377,6 +674,7 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
                 cached_tokens: 500_000,
                 last_context_tokens: Some(69_246),
             }),
+            subagents_used: Vec::new(),
         }),
         ..Default::default()
     });
@@ -411,6 +709,68 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
     assert!(
         !contents.contains("Context: 69.2K (27%)"),
         "expected transcript fallback to be disabled, got: {contents:?}"
+    );
+}
+
+#[test]
+fn acp_mode_snapshot_updates_composer_label() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation(),
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "plan".to_string(),
+            vec![
+                ("plan".to_string(), "Plan".to_string()),
+                ("build".to_string(), "Build".to_string()),
+            ],
+        ),
+    );
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with mode label");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("[ Plan"),
+        "expected ACP mode label in composer, got: {contents:?}"
+    );
+}
+
+#[test]
+fn acp_mode_snapshot_ignores_stale_generation() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_acp_mode_config_snapshot(
+        chat.acp_mode_config_generation() + 1,
+        crate::nori::session_config_mode::AcpModeConfig::from_values(
+            "mode".to_string(),
+            "plan".to_string(),
+            vec![
+                ("plan".to_string(), "Plan".to_string()),
+                ("build".to_string(), "Build".to_string()),
+            ],
+        ),
+    );
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat after stale mode snapshot");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        !contents.contains("[ Plan"),
+        "expected stale ACP mode snapshot to be ignored, got: {contents:?}"
     );
 }
 

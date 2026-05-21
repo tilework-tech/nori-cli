@@ -7,6 +7,18 @@ use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
+fn has_prompt_mode_placeholder(contents: &str) -> bool {
+    [
+        "? for shortcuts",
+        "/ for slash command menu",
+        "$ for skill listing",
+        "! for shell commands",
+        "@ for file mentions",
+    ]
+    .iter()
+    .any(|placeholder| contents.contains(placeholder))
+}
+
 #[test]
 // Testing that ACP mode with a nonexistent model shows the error in the TUI
 // and opens the agent picker for recovery, instead of fatally exiting.
@@ -73,10 +85,9 @@ fn test_startup_with_dimensions() {
     let mut session =
         TuiSession::spawn_with_config(10, 120, SessionConfig::default()).expect("Failed to spawn");
 
-    // Wait for prompt - in a 10-row terminal, the header may scroll off
-    // so we wait for footer elements that are always visible
+    // Wait for prompt - in a 10-row terminal, the header may scroll off.
     session
-        .wait_for_text("? for shortcuts", TIMEOUT)
+        .wait_for_text("›", TIMEOUT)
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
@@ -138,8 +149,8 @@ fn test_trust_screen_is_skipped_with_default_config() {
 
     // Should show the main prompt directly (skipping onboarding)
     assert!(
-        contents.contains("›") && contents.contains("? for shortcuts"),
-        "Should show main prompt with help indicator, got: {}",
+        contents.contains("›") && has_prompt_mode_placeholder(&contents),
+        "Should show main prompt with a prompt-mode placeholder, got: {}",
         contents
     );
 }
@@ -269,11 +280,12 @@ fn test_trust_directory_saves_to_config() {
         .send_key(Key::Char('y'))
         .expect("Failed to send 'y' key");
 
-    // Step 5: Wait for the main prompt to appear (onboarding complete)
-    // We wait for "?" which only appears in the main prompt,
-    // not "›" which also appears as a selection marker in the trust screen
+    // Step 5: Wait for the main prompt to appear (onboarding complete).
     session
-        .wait_for_text("? for shortcuts", TIMEOUT)
+        .wait_for(
+            |contents| contents.contains("›") && contents.contains("Approvals"),
+            TIMEOUT,
+        )
         .expect("Main prompt did not appear after trust selection");
 
     // Give a moment for config to be written

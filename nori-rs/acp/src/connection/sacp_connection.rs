@@ -13,9 +13,10 @@ use agent_client_protocol_schema as acp;
 use anyhow::Context;
 use anyhow::Result;
 use futures::AsyncBufReadExt;
+use futures::AsyncWriteExt;
+use futures::StreamExt;
 use futures::io::BufReader;
 use sacp::Agent;
-use sacp::ByteStreams;
 use sacp::Client;
 use sacp::ConnectionTo;
 use sacp::Lines;
@@ -30,10 +31,14 @@ use tracing::debug;
 use tracing::warn;
 
 use super::AcpModelState;
+use super::AcpSessionConfigState;
 use super::ApprovalEventType;
 use super::ApprovalRequest;
 use super::ConnectionEvent;
+use super::wire_log::WireDirection;
+use super::wire_log::WireLogger;
 use super::ws_transport;
+use crate::config::AcpProxyConfig;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
@@ -54,6 +59,7 @@ struct EstablishResult {
     agent_capabilities: acp::AgentCapabilities,
     event_rx: mpsc::Receiver<ConnectionEvent>,
     prompt_state: std::sync::Arc<Mutex<HashMap<String, SessionPromptState>>>,
+    session_config_state: std::sync::Arc<std::sync::RwLock<AcpSessionConfigState>>,
     connection_task: tokio::task::JoinHandle<()>,
 }
 
@@ -85,6 +91,9 @@ pub struct SacpConnection {
     /// Thread-safe model state, updated on session creation and model switch.
     model_state: std::sync::Arc<std::sync::RwLock<AcpModelState>>,
 
+    /// Thread-safe session config state, updated from complete ACP snapshots.
+    session_config_state: std::sync::Arc<std::sync::RwLock<AcpSessionConfigState>>,
+
     /// Handle to the background task driving the SACP connection.
     connection_task: tokio::task::JoinHandle<()>,
 
@@ -109,6 +118,9 @@ async fn establish_connection(
     let prompt_state =
         std::sync::Arc::new(Mutex::new(HashMap::<String, SessionPromptState>::new()));
     let prompt_state_for_notifications = prompt_state.clone();
+    let session_config_state =
+        std::sync::Arc::new(std::sync::RwLock::new(AcpSessionConfigState::new()));
+    let session_config_state_for_notifications = session_config_state.clone();
     let approval_cwd = cwd.to_path_buf();
     let write_cwd = cwd.to_path_buf();
     let read_cwd = cwd.to_path_buf();
@@ -123,6 +135,7 @@ async fn establish_connection(
                 {
                     let event_tx = event_tx_for_notifications;
                     let prompt_state = prompt_state_for_notifications;
+                    let session_config_state = session_config_state_for_notifications;
                     async move |notification: acp::SessionNotification, _connection| {
                         let session_id = notification.session_id.to_string();
                         {
@@ -138,6 +151,11 @@ async fn establish_connection(
                             update_kind = super::session_update_kind(&notification.update),
                             "Transport received ACP session/update notification"
                         );
+                        if let acp::SessionUpdate::ConfigOptionUpdate(update) = &notification.update
+                            && let Ok(mut state) = session_config_state.write()
+                        {
+                            state.config_options = update.config_options.clone();
+                        }
                         if event_tx
                             .send(ConnectionEvent::SessionUpdate(notification.update))
                             .await
@@ -158,7 +176,7 @@ async fn establish_connection(
                                 responder: sacp::Responder<acp::RequestPermissionResponse>,
                                 connection: ConnectionTo<Agent>| {
                         let event = if let Some(patch_event) =
-                            translator::permission_request_to_patch_approval_event(&request)
+                            translator::permission_request_to_patch_approval_event(&request, &cwd)
                         {
                             ApprovalEventType::Patch(patch_event)
                         } else {
@@ -408,13 +426,18 @@ async fn establish_connection(
         agent_capabilities: capabilities,
         event_rx,
         prompt_state,
+        session_config_state,
         connection_task,
     })
 }
 
 impl SacpConnection {
     /// Spawn a new ACP agent subprocess and establish a SACP v11 connection.
-    pub async fn spawn(config: &AcpAgentConfig, cwd: &Path) -> Result<Self> {
+    pub async fn spawn(
+        config: &AcpAgentConfig,
+        cwd: &Path,
+        proxy_config: AcpProxyConfig,
+    ) -> Result<Self> {
         debug!(
             "Spawning ACP agent (SACP v11): {} {:?} in {}",
             config.command,
@@ -468,6 +491,13 @@ impl SacpConnection {
 
         debug!("ACP agent spawned (pid: {:?})", child.id());
 
+        let wire_logger = if proxy_config.enabled {
+            let pid = child.id().unwrap_or(0);
+            Some(WireLogger::new(&proxy_config, config, pid)?)
+        } else {
+            None
+        };
+
         // Log stderr in background.
         let stderr_task = tokio::spawn(async move {
             let mut stderr = BufReader::new(stderr.compat());
@@ -481,8 +511,37 @@ impl SacpConnection {
             }
         });
 
-        let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
         let child = std::sync::Arc::new(Mutex::new(child));
+
+        let outgoing_logger = wire_logger.clone();
+        let outgoing_sink = futures::sink::unfold(
+            Box::pin(stdin.compat_write()),
+            move |mut writer, line: String| {
+                let logger = outgoing_logger.clone();
+                async move {
+                    if let Some(logger) = &logger {
+                        logger.record(WireDirection::ClientToAgent, &line);
+                    }
+                    let mut bytes = line.into_bytes();
+                    bytes.push(b'\n');
+                    writer.write_all(&bytes).await?;
+                    Ok::<_, std::io::Error>(writer)
+                }
+            },
+        );
+
+        let incoming_logger = wire_logger;
+        let incoming_lines = Box::pin(BufReader::new(stdout.compat()).lines().map(
+            move |line_result| {
+                if let Ok(line) = &line_result
+                    && let Some(logger) = &incoming_logger
+                {
+                    logger.record(WireDirection::AgentToClient, line);
+                }
+                line_result
+            },
+        ));
+        let transport = Lines::new(outgoing_sink, incoming_lines);
 
         let result = establish_connection(transport, cwd).await?;
 
@@ -492,6 +551,7 @@ impl SacpConnection {
             event_rx: result.event_rx,
             prompt_state: result.prompt_state,
             model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
+            session_config_state: result.session_config_state,
             connection_task: result.connection_task,
             child: Some(child),
             stderr_task: Some(stderr_task),
@@ -499,12 +559,6 @@ impl SacpConnection {
     }
 
     /// Connect to a remote ACP agent over WebSocket.
-    ///
-    /// This is the cloud counterpart of `spawn()`. Instead of starting a local
-    /// subprocess, it opens a WebSocket to `ws_url` (with Bearer `auth_token`),
-    /// wraps the connection as a `sacp::Lines` transport, and performs the same
-    /// SACP v11 initialization handshake. The returned `SacpConnection` has no
-    /// child process — shutdown just closes the WebSocket.
     pub async fn connect_remote(ws_url: &str, auth_token: &str, cwd: &Path) -> Result<Self> {
         debug!("Connecting to remote ACP agent at {ws_url}");
 
@@ -521,6 +575,7 @@ impl SacpConnection {
             event_rx: result.event_rx,
             prompt_state: result.prompt_state,
             model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
+            session_config_state: result.session_config_state,
             connection_task: result.connection_task,
             child: None,
             stderr_task: None,
@@ -555,6 +610,12 @@ impl SacpConnection {
             );
         }
 
+        if let Some(config_options) = response.config_options
+            && let Ok(mut state) = self.session_config_state.write()
+        {
+            state.config_options = config_options;
+        }
+
         Ok(response.session_id)
     }
 
@@ -576,6 +637,12 @@ impl SacpConnection {
             && let Ok(mut state) = self.model_state.write()
         {
             *state = AcpModelState::from_session_model_state(models);
+        }
+
+        if let Some(config_options) = response.config_options
+            && let Ok(mut state) = self.session_config_state.write()
+        {
+            state.config_options = config_options;
         }
 
         // The session ID from the request is reused since the response
@@ -696,6 +763,45 @@ impl SacpConnection {
             .read()
             .expect("Model state lock poisoned")
             .clone()
+    }
+
+    /// Get the current ACP session config snapshot.
+    pub fn config_options(&self) -> Vec<acp::SessionConfigOption> {
+        #[expect(
+            clippy::expect_used,
+            reason = "RwLock poisoning indicates a bug elsewhere"
+        )]
+        self.session_config_state
+            .read()
+            .expect("Session config state lock poisoned")
+            .config_options
+            .clone()
+    }
+
+    /// Set an ACP session config option and replace state from the full response snapshot.
+    pub async fn set_config_option(
+        &self,
+        session_id: &acp::SessionId,
+        config_id: impl Into<acp::SessionConfigId>,
+        value: impl Into<acp::SessionConfigValueId>,
+    ) -> Result<()> {
+        let value = acp::SessionConfigOptionValue::value_id(value.into());
+        let response = self
+            .cx
+            .send_request(acp::SetSessionConfigOptionRequest::new(
+                session_id.clone(),
+                config_id,
+                value,
+            ))
+            .block_task()
+            .await
+            .context("Failed to set ACP session config option")?;
+
+        if let Ok(mut state) = self.session_config_state.write() {
+            state.config_options = response.config_options;
+        }
+
+        Ok(())
     }
 
     /// Explicitly tear down the ACP subprocess and background tasks.

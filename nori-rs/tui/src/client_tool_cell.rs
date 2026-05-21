@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -34,6 +35,7 @@ pub(crate) struct ClientToolCell {
     snapshot: nori_protocol::ToolSnapshot,
     exploring_snapshots: Vec<nori_protocol::ToolSnapshot>,
     cwd: PathBuf,
+    edit_changes: HashMap<PathBuf, codex_core::protocol::FileChange>,
     animations_enabled: bool,
     start_time: Option<Instant>,
 }
@@ -49,10 +51,12 @@ impl ClientToolCell {
         } else {
             None
         };
+        let edit_changes = changes_from_snapshot(&snapshot, &cwd);
         Self {
             snapshot,
             exploring_snapshots: Vec::new(),
             cwd,
+            edit_changes,
             animations_enabled,
             start_time,
         }
@@ -126,6 +130,7 @@ impl ClientToolCell {
         {
             *existing = snapshot.clone();
         }
+        self.edit_changes = changes_from_snapshot(&snapshot, &self.cwd);
         self.snapshot = snapshot;
     }
 
@@ -315,16 +320,8 @@ impl ClientToolCell {
             return lines;
         }
 
-        // Render diff content from artifacts or invocation
-        let diff_changes = diff_changes_from_artifacts(&self.snapshot.artifacts);
-        let changes = if !diff_changes.is_empty() {
-            diff_changes
-        } else {
-            changes_from_invocation(&self.snapshot.invocation)
-        };
-
-        if !changes.is_empty() {
-            let diff_lines = create_diff_summary(&changes, &self.cwd, width as usize);
+        if !self.edit_changes.is_empty() {
+            let diff_lines = create_diff_summary(&self.edit_changes, &self.cwd, width as usize);
 
             if let Some((first, rest)) = diff_lines.split_first() {
                 // Replace DiffSummary's dim "• " bullet with our phase-aware
@@ -658,6 +655,7 @@ fn extract_error_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> 
 
 pub(crate) fn diff_changes_from_artifacts(
     artifacts: &[nori_protocol::Artifact],
+    cwd: &std::path::Path,
 ) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
     let mut changes = std::collections::HashMap::new();
     for artifact in artifacts {
@@ -667,7 +665,12 @@ pub(crate) fn diff_changes_from_artifacts(
                     content: change.new_text.clone(),
                 },
                 Some(old_text) => codex_core::protocol::FileChange::Update {
-                    unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+                    unified_diff: create_contextual_patch(
+                        &change.path,
+                        cwd,
+                        old_text,
+                        &change.new_text,
+                    ),
                     move_path: None,
                 },
             };
@@ -679,6 +682,7 @@ pub(crate) fn diff_changes_from_artifacts(
 
 pub(crate) fn changes_from_invocation(
     invocation: &Option<nori_protocol::Invocation>,
+    cwd: &std::path::Path,
 ) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
     let mut changes = std::collections::HashMap::new();
     match invocation.as_ref() {
@@ -689,7 +693,12 @@ pub(crate) fn changes_from_invocation(
                         content: change.new_text.clone(),
                     },
                     Some(old_text) => codex_core::protocol::FileChange::Update {
-                        unified_diff: diffy::create_patch(old_text, &change.new_text).to_string(),
+                        unified_diff: create_contextual_patch(
+                            &change.path,
+                            cwd,
+                            old_text,
+                            &change.new_text,
+                        ),
                         move_path: None,
                     },
                 };
@@ -712,7 +721,7 @@ pub(crate) fn changes_from_invocation(
                     } => (
                         path.clone(),
                         codex_core::protocol::FileChange::Update {
-                            unified_diff: diffy::create_patch(old_text, new_text).to_string(),
+                            unified_diff: create_contextual_patch(path, cwd, old_text, new_text),
                             move_path: None,
                         },
                     ),
@@ -733,7 +742,7 @@ pub(crate) fn changes_from_invocation(
                         (
                             from_path.clone(),
                             codex_core::protocol::FileChange::Update {
-                                unified_diff: diffy::create_patch(&old, &new).to_string(),
+                                unified_diff: create_contextual_patch(from_path, cwd, &old, &new),
                                 move_path: Some(to_path.clone()),
                             },
                         )
@@ -745,6 +754,27 @@ pub(crate) fn changes_from_invocation(
         _ => {}
     }
     changes
+}
+
+fn changes_from_snapshot(
+    snapshot: &nori_protocol::ToolSnapshot,
+    cwd: &std::path::Path,
+) -> HashMap<PathBuf, codex_core::protocol::FileChange> {
+    let diff_changes = diff_changes_from_artifacts(&snapshot.artifacts, cwd);
+    if diff_changes.is_empty() {
+        changes_from_invocation(&snapshot.invocation, cwd)
+    } else {
+        diff_changes
+    }
+}
+
+fn create_contextual_patch(
+    path: &std::path::Path,
+    cwd: &std::path::Path,
+    old_text: &str,
+    new_text: &str,
+) -> String {
+    codex_core::util::create_patch_with_context(path, cwd, old_text, new_text)
 }
 
 impl HistoryCell for ClientToolCell {
@@ -822,6 +852,29 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    fn write_updated_rust_fixture(
+        dir: &std::path::Path,
+        relative_path: &str,
+        changed_line: i32,
+        changed_text: &str,
+    ) -> PathBuf {
+        let file_path = dir.join(relative_path);
+        if let Some(parent) = file_path.parent() {
+            std::fs::create_dir_all(parent).expect("create fixture parent dir");
+        }
+        let file_content = (1..=100)
+            .map(|line| {
+                if line == changed_line {
+                    format!("{changed_text}\n")
+                } else {
+                    format!("fn line_{line}() {{}}\n")
+                }
+            })
+            .collect::<String>();
+        std::fs::write(&file_path, file_content).expect("write fixture file");
+        file_path
     }
 
     fn make_execute_snapshot(
@@ -1977,6 +2030,101 @@ mod tests {
         assert!(
             has_diff,
             "Completed edit with FileOperations should render diff content, got: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn file_operations_update_diff_uses_file_line_numbers() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        write_updated_rust_fixture(dir.path(), "src/lib.rs", 50, "fn line_50_updated() {}");
+
+        let changes = changes_from_invocation(
+            &Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Update {
+                    path: PathBuf::from("src/lib.rs"),
+                    old_text: "fn line_50() {}\n".into(),
+                    new_text: "fn line_50_updated() {}\n".into(),
+                }],
+            }),
+            dir.path(),
+        );
+
+        let change = changes
+            .get(&PathBuf::from("src/lib.rs"))
+            .expect("change should exist");
+        let codex_core::protocol::FileChange::Update { unified_diff, .. } = change else {
+            panic!("expected update diff, got {change:?}");
+        };
+        assert!(
+            unified_diff.contains("@@ -50 +50 @@") || unified_diff.contains("@@ -50,1 +50,1 @@"),
+            "expected contextual hunk header for line 50, got:\n{unified_diff}"
+        );
+    }
+
+    #[test]
+    fn file_operations_move_diff_uses_file_line_numbers() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        write_updated_rust_fixture(dir.path(), "src/old.rs", 75, "fn renamed_line_75() {}");
+
+        let changes = changes_from_invocation(
+            &Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Move {
+                    from_path: PathBuf::from("src/old.rs"),
+                    to_path: PathBuf::from("src/new.rs"),
+                    old_text: Some("fn line_75() {}\n".into()),
+                    new_text: Some("fn renamed_line_75() {}\n".into()),
+                }],
+            }),
+            dir.path(),
+        );
+
+        let change = changes
+            .get(&PathBuf::from("src/old.rs"))
+            .expect("change should exist");
+        let codex_core::protocol::FileChange::Update { unified_diff, .. } = change else {
+            panic!("expected update diff, got {change:?}");
+        };
+        assert!(
+            unified_diff.contains("@@ -75 +75 @@") || unified_diff.contains("@@ -75,1 +75,1 @@"),
+            "expected contextual hunk header for line 75, got:\n{unified_diff}"
+        );
+    }
+
+    #[test]
+    fn edit_cell_keeps_contextual_diff_when_file_disappears_before_render() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let file_path =
+            write_updated_rust_fixture(dir.path(), "src/lib.rs", 50, "fn line_50_updated() {}");
+
+        let snapshot = ToolSnapshot {
+            call_id: "call-edit-ops".into(),
+            title: "Edit src/lib.rs".into(),
+            kind: ToolKind::Edit,
+            phase: ToolPhase::Completed,
+            locations: vec![nori_protocol::ToolLocation {
+                path: PathBuf::from("src/lib.rs"),
+                line: None,
+            }],
+            invocation: Some(nori_protocol::Invocation::FileOperations {
+                operations: vec![nori_protocol::FileOperation::Update {
+                    path: PathBuf::from("src/lib.rs"),
+                    old_text: "fn line_50() {}\n".into(),
+                    new_text: "fn line_50_updated() {}\n".into(),
+                }],
+            }),
+            artifacts: vec![],
+            raw_input: None,
+            raw_output: None,
+            owner_request_id: None,
+        };
+        let cell = ClientToolCell::new(snapshot, dir.path().to_path_buf(), false);
+        std::fs::remove_file(&file_path).expect("remove file before render");
+
+        let lines = render_lines(&cell.display_lines(80));
+
+        assert!(
+            lines.iter().any(|line| line.contains("50 -fn line_50")),
+            "expected cached contextual line number in rendered diff, got: {lines:?}"
         );
     }
 

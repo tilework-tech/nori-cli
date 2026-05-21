@@ -1,7 +1,13 @@
 use super::*;
 
+pub(super) struct DollarToken {
+    pub(super) query: String,
+    pub(super) range: std::ops::Range<usize>,
+    pub(super) slash_command_position: bool,
+}
+
 impl ChatComposer {
-    /// Return true if either the slash-command popup or the file-search popup is active.
+    /// Return true if a composer popup is active.
     pub(crate) fn popup_active(&self) -> bool {
         !matches!(self.active_popup, ActivePopup::None)
     }
@@ -164,28 +170,167 @@ impl ChatComposer {
         self.textarea.set_cursor(new_cursor);
     }
 
+    pub(super) fn current_dollar_token(textarea: &TextArea) -> Option<DollarToken> {
+        let cursor_offset = textarea.cursor();
+        let text = textarea.text();
+        let safe_cursor = Self::clamp_to_char_boundary(text, cursor_offset);
+
+        let before_cursor = &text[..safe_cursor];
+        let after_cursor = &text[safe_cursor..];
+        let start_idx = before_cursor
+            .char_indices()
+            .rfind(|(_, c)| c.is_whitespace())
+            .map(|(idx, c)| idx + c.len_utf8())
+            .unwrap_or(0);
+        let end_rel_idx = after_cursor
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+            .map(|(idx, _)| idx)
+            .unwrap_or(after_cursor.len());
+        let end_idx = safe_cursor + end_rel_idx;
+
+        if start_idx >= end_idx {
+            return None;
+        }
+
+        let token = &text[start_idx..end_idx];
+        let query = token.strip_prefix('$')?.to_string();
+        let slash_command_position = start_idx == 0;
+
+        Some(DollarToken {
+            query,
+            range: start_idx..end_idx,
+            slash_command_position,
+        })
+    }
+
+    pub(super) fn insert_selected_skill(&mut self, insert_text: &str) {
+        let Some(token) = Self::current_dollar_token(&self.textarea) else {
+            return;
+        };
+
+        let cursor = token.range.start + insert_text.len();
+        self.textarea.replace_range(token.range, insert_text);
+        self.textarea.set_cursor(cursor);
+    }
+
+    pub(super) fn sync_selection_popups(&mut self) {
+        if matches!(self.active_popup, ActivePopup::HistorySearch(_)) {
+            return;
+        }
+
+        if self.is_shell_mode {
+            self.active_popup = ActivePopup::None;
+            return;
+        }
+
+        if Self::current_at_token(&self.textarea).is_some() {
+            self.sync_file_search_popup();
+            return;
+        }
+
+        self.sync_skill_popup();
+        if matches!(self.active_popup, ActivePopup::Skill(_)) {
+            self.dismissed_file_popup_token = None;
+            return;
+        }
+
+        self.sync_command_popup();
+        if matches!(self.active_popup, ActivePopup::Command(_)) {
+            self.dismissed_file_popup_token = None;
+        } else {
+            self.sync_file_search_popup();
+        }
+    }
+
+    pub(super) fn sync_skill_popup(&mut self) {
+        let Some(token) = Self::current_dollar_token(&self.textarea) else {
+            if matches!(self.active_popup, ActivePopup::Skill(_)) {
+                self.active_popup = ActivePopup::None;
+            }
+            self.dismissed_skill_popup_token = None;
+            return;
+        };
+
+        if self.dismissed_skill_popup_token.as_ref() == Some(&token.query) {
+            return;
+        }
+
+        let query = token.query.clone();
+        let items = self.skill_picker_items(&token);
+        if items.is_empty() {
+            if matches!(self.active_popup, ActivePopup::Skill(_)) {
+                self.active_popup = ActivePopup::None;
+            }
+            return;
+        }
+
+        match &mut self.active_popup {
+            ActivePopup::Skill(popup) => {
+                popup.set_items(items);
+                popup.on_query_change(query);
+                if !popup.has_matches() {
+                    self.active_popup = ActivePopup::None;
+                }
+            }
+            _ => {
+                let mut popup = SkillPopup::new(items);
+                popup.on_query_change(query);
+                if popup.has_matches() {
+                    self.active_popup = ActivePopup::Skill(popup);
+                }
+            }
+        }
+
+        self.dismissed_skill_popup_token = None;
+    }
+
+    fn skill_picker_items(&self, token: &DollarToken) -> Vec<SkillPickerItem> {
+        let builtin_names: std::collections::HashSet<&str> = built_in_slash_commands()
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+        let mut items = Vec::new();
+
+        for command in &self.agent_commands {
+            if let Some(display_name) = command.name.strip_prefix('$') {
+                items.push(SkillPickerItem {
+                    display_name: display_name.to_string(),
+                    insert_text: command.name.clone(),
+                    description: command.description.clone(),
+                });
+            }
+        }
+
+        if token.slash_command_position
+            && matches!(self.agent_command_prefix.as_str(), "claude" | "claude-code")
+        {
+            for command in &self.agent_commands {
+                if command.name.starts_with('$') || builtin_names.contains(command.name.as_str()) {
+                    continue;
+                }
+                items.push(SkillPickerItem {
+                    display_name: command.name.clone(),
+                    insert_text: {
+                        let prefix = &self.agent_command_prefix;
+                        format!("/{prefix}:{} ", command.name)
+                    },
+                    description: command.description.clone(),
+                });
+            }
+        }
+
+        items
+    }
+
     /// Synchronize `self.command_popup` with the current text in the
     /// textarea. This must be called after every modification that can change
     /// the text so the popup is shown/updated/hidden as appropriate.
     pub(super) fn sync_command_popup(&mut self) {
-        // Determine whether the caret is inside the initial '/name' token on the first line.
         let text = self.textarea.text();
         let first_line_end = text.find('\n').unwrap_or(text.len());
         let first_line = &text[..first_line_end];
-        let cursor = self.textarea.cursor();
-        let caret_on_first_line = cursor <= first_line_end;
-
-        let is_editing_slash_command_name = if first_line.starts_with('/') && caret_on_first_line {
-            // Compute the end of the initial '/name' token (name may be empty yet).
-            let token_end = first_line
-                .char_indices()
-                .find(|(_, c)| c.is_whitespace())
-                .map(|(i, _)| i)
-                .unwrap_or(first_line.len());
-            cursor <= token_end
-        } else {
-            false
-        };
+        let is_editing_slash_command_name = self.is_editing_slash_command_name();
         // If the cursor is currently positioned within an `@token`, prefer the
         // file-search popup over the slash popup so users can insert a file path
         // as an argument to the command (e.g., "/compact @docs/...").
@@ -234,6 +379,8 @@ impl ChatComposer {
         self.agent_command_prefix = prefix.clone();
         if let ActivePopup::Command(popup) = &mut self.active_popup {
             popup.set_agent_commands(commands, prefix);
+        } else if matches!(self.active_popup, ActivePopup::Skill(_)) {
+            self.sync_skill_popup();
         }
     }
 
@@ -241,6 +388,8 @@ impl ChatComposer {
         self.agent_command_prefix = prefix.clone();
         if let ActivePopup::Command(popup) = &mut self.active_popup {
             popup.set_agent_commands(self.agent_commands.clone(), prefix);
+        } else if matches!(self.active_popup, ActivePopup::Skill(_)) {
+            self.sync_skill_popup();
         }
     }
 

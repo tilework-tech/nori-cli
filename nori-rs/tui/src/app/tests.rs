@@ -37,6 +37,7 @@ fn make_test_app() -> App {
         auth_manager,
         config,
         vertical_footer: false,
+        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         active_profile: None,
         file_search,
         transcript_cells: Vec::new(),
@@ -82,6 +83,7 @@ fn make_test_app_with_channels() -> (
             auth_manager,
             config,
             vertical_footer: false,
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             active_profile: None,
             file_search,
             transcript_cells: Vec::new(),
@@ -270,6 +272,30 @@ fn chat_widget_init_carries_footer_segment_config() {
 
 #[cfg(feature = "nori-config")]
 #[test]
+fn chat_widget_init_carries_footer_layout_config() {
+    let mut app = make_test_app();
+    let footer_layout_config = nori_acp::config::FooterLayoutConfig::from_toml(
+        &nori_acp::config::FooterLayoutConfigToml {
+            textarea_top_right: Some(vec![nori_acp::config::FooterSegment::ModeIndicator]),
+            ..Default::default()
+        },
+    );
+    app.footer_layout_config = footer_layout_config.clone();
+
+    let init = app.chat_widget_init(
+        crate::tui::FrameRequester::test_dummy(),
+        None,
+        Vec::new(),
+        None,
+        false,
+        None,
+    );
+
+    assert_eq!(init.footer_layout_config, footer_layout_config);
+}
+
+#[cfg(feature = "nori-config")]
+#[test]
 fn rebuilding_chat_widget_preserves_footer_segment_config() {
     let mut app = make_test_app();
     let mut footer_segment_config = nori_acp::config::FooterSegmentConfig::default();
@@ -391,7 +417,7 @@ fn apply_approval_preset_updates_app_widget_and_backend_for_full_access() {
 
 #[test]
 fn session_summary_skip_zero_usage() {
-    assert!(session_summary(TokenUsage::default(), None).is_none());
+    assert!(session_summary(TokenUsage::default(), None, false).is_none());
 }
 
 #[test]
@@ -404,15 +430,35 @@ fn session_summary_includes_resume_hint() {
     };
     let conversation = ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap();
 
-    let summary = session_summary(usage, Some(conversation)).expect("summary");
+    let summary = session_summary(usage, Some(conversation), true).expect("summary");
     assert_eq!(
         summary.usage_line,
-        "Token usage: total=12 input=10 output=2"
+        Some("Token usage: total=12 input=10 output=2".to_string())
     );
     assert_eq!(
         summary.resume_command,
-        Some("codex resume 123e4567-e89b-12d3-a456-426614174000".to_string())
+        Some("nori resume 123e4567-e89b-12d3-a456-426614174000".to_string())
     );
+}
+
+#[test]
+fn session_summary_includes_resume_hint_without_token_usage() {
+    let conversation = ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap();
+
+    let summary =
+        session_summary(TokenUsage::default(), Some(conversation), true).expect("summary");
+    assert_eq!(summary.usage_line, None);
+    assert_eq!(
+        summary.resume_command,
+        Some("nori resume 123e4567-e89b-12d3-a456-426614174000".to_string())
+    );
+}
+
+#[test]
+fn session_summary_skips_resume_hint_without_activity() {
+    let conversation = ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap();
+
+    assert!(session_summary(TokenUsage::default(), Some(conversation), false).is_none());
 }
 
 #[test]

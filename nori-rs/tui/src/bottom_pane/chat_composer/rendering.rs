@@ -12,6 +12,9 @@ impl ChatComposer {
             ActivePopup::Command(popup) => {
                 Constraint::Max(popup.calculate_required_height(area.width))
             }
+            ActivePopup::Skill(popup) => {
+                Constraint::Max(popup.calculate_required_height(area.width))
+            }
             ActivePopup::File(popup) => Constraint::Max(popup.calculate_required_height()),
             ActivePopup::HistorySearch(popup) => Constraint::Max(popup.calculate_required_height()),
             ActivePopup::None => Constraint::Max(footer_total_height),
@@ -38,6 +41,7 @@ impl ChatComposer {
             nori_version_source,
             git_lines_added,
             git_lines_removed,
+            git_has_untracked,
         ) = if let Some(ref info) = self.system_info {
             (
                 info.git_branch.clone(),
@@ -46,9 +50,10 @@ impl ChatComposer {
                 info.nori_version_source,
                 info.git_lines_added,
                 info.git_lines_removed,
+                info.git_has_untracked,
             )
         } else {
-            (None, Vec::new(), None, None, None, None)
+            (None, Vec::new(), None, None, None, None, false)
         };
 
         // Extract token breakdown and agent kind from transcript location
@@ -110,6 +115,7 @@ impl ChatComposer {
             nori_version_source,
             git_lines_added,
             git_lines_removed,
+            git_has_untracked,
             is_worktree: self
                 .system_info
                 .as_ref()
@@ -125,6 +131,8 @@ impl ChatComposer {
                 .as_ref()
                 .and_then(|s| s.worktree_name.clone()),
             footer_segment_config: self.footer_segment_config.clone(),
+            footer_layout_config: self.footer_layout_config.clone(),
+            acp_mode_label: self.acp_mode_label.clone(),
         }
     }
 

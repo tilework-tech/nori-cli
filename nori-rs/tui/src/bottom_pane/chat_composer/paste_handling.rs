@@ -2,6 +2,24 @@ use super::*;
 
 impl ChatComposer {
     pub fn handle_paste(&mut self, pasted: String) -> bool {
+        self.handle_paste_with_shell_detection(pasted, true)
+    }
+
+    pub(super) fn handle_paste_with_shell_detection(
+        &mut self,
+        mut pasted: String,
+        detect_shell_mode: bool,
+    ) -> bool {
+        if detect_shell_mode
+            && !self.is_shell_mode
+            && self.textarea.text().is_empty()
+            && self.textarea.cursor() == 0
+            && let Some(shell_body) = pasted.strip_prefix('!')
+        {
+            self.is_shell_mode = true;
+            pasted = shell_body.to_string();
+        }
+
         let char_count = pasted.chars().count();
         if char_count > LARGE_PASTE_CHAR_THRESHOLD {
             let placeholder = format!("[Pasted Content {char_count} chars]");
@@ -14,14 +32,7 @@ impl ChatComposer {
         }
         // Explicit paste events should not trigger Enter suppression.
         self.paste_burst.clear_after_explicit_paste();
-        // Keep popup sync consistent with key handling: prefer slash popup; only
-        // sync file popup when slash popup is NOT active.
-        self.sync_command_popup();
-        if matches!(self.active_popup, ActivePopup::Command(_)) {
-            self.dismissed_file_popup_token = None;
-        } else {
-            self.sync_file_search_popup();
-        }
+        self.sync_selection_popups();
         true
     }
 
@@ -67,21 +78,22 @@ impl ChatComposer {
     pub(super) fn handle_paste_burst_flush(&mut self, now: Instant) -> bool {
         match self.paste_burst.flush_if_due(now) {
             FlushResult::Paste(pasted) => {
-                self.handle_paste(pasted);
+                self.handle_paste_with_shell_detection(pasted, false);
                 true
             }
             FlushResult::Typed(ch) => {
                 // Mirror insert_str() behavior so popups stay in sync when a
                 // pending fast char flushes as normal typed input.
-                self.textarea.insert_str(ch.to_string().as_str());
-                // Keep popup sync consistent with key handling: prefer slash popup; only
-                // sync file popup when slash popup is NOT active.
-                self.sync_command_popup();
-                if matches!(self.active_popup, ActivePopup::Command(_)) {
-                    self.dismissed_file_popup_token = None;
+                if ch == '!'
+                    && !self.is_shell_mode
+                    && self.textarea.text().is_empty()
+                    && self.textarea.cursor() == 0
+                {
+                    self.is_shell_mode = true;
                 } else {
-                    self.sync_file_search_popup();
+                    self.textarea.insert_str(ch.to_string().as_str());
                 }
+                self.sync_selection_popups();
                 true
             }
             FlushResult::None => false,

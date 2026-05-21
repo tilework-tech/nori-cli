@@ -13,19 +13,21 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             expected_agent,
             deferred_spawn,
             fork_context,
         } = common;
         let mut rng = rand::rng();
-        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
+        let placeholder = PROMPT_MODE_PLACEHOLDERS
+            [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
+        .to_string();
         let spawn_result = if deferred_spawn {
             // Deferred spawn: create a dummy channel. The real agent will be
             // spawned later via `spawn_deferred_agent()`.
             let (op_tx, _) = tokio::sync::mpsc::unbounded_channel();
             SpawnAgentResult {
                 op_tx,
-                #[cfg(feature = "unstable")]
                 acp_handle: None,
             }
         } else {
@@ -45,8 +47,11 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                custom_working_messages: config.custom_working_messages,
+                custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
+                footer_layout_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -75,7 +80,10 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: crate::status_indicator_widget::random_status_message(),
+            current_status_header: crate::status_indicator_widget::pick_status_message(
+                config.custom_working_messages,
+                &config.custom_working_message_list,
+            ),
             retry_status_header: None,
             conversation_id: None,
             show_welcome_banner: true,
@@ -90,10 +98,15 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
+            acp_config_option_snapshot: None,
+            acp_mode_config: None,
+            acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
+            ),
             session_stats: SessionStats::new(),
+            assistant_stream_seen_for_stats: false,
             login_handler: None,
+            active_resume_picker_generation: None,
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
@@ -128,12 +141,15 @@ impl ChatWidget {
             auth_manager,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             expected_agent,
             deferred_spawn: _,
             fork_context: _,
         } = common;
         let mut rng = rand::rng();
-        let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
+        let placeholder = PROMPT_MODE_PLACEHOLDERS
+            [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
+        .to_string();
         let spawn_result = spawn_acp_agent_resume(
             config.clone(),
             acp_session_id,
@@ -154,8 +170,11 @@ impl ChatWidget {
                 placeholder_text: placeholder,
                 disable_paste_burst: config.disable_paste_burst,
                 animations_enabled: config.animations,
+                custom_working_messages: config.custom_working_messages,
+                custom_working_message_list: config.custom_working_message_list.clone(),
                 vertical_footer,
                 footer_segment_config,
+                footer_layout_config,
                 agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| config.model.clone()),
@@ -184,7 +203,10 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
-            current_status_header: crate::status_indicator_widget::random_status_message(),
+            current_status_header: crate::status_indicator_widget::pick_status_message(
+                config.custom_working_messages,
+                &config.custom_working_message_list,
+            ),
             retry_status_header: None,
             conversation_id: None,
             show_welcome_banner: false,
@@ -199,10 +221,15 @@ impl ChatWidget {
             pending_agent: None,
             expected_agent,
             session_configured_received: false,
-            #[cfg(feature = "unstable")]
             acp_handle: spawn_result.acp_handle,
+            acp_config_option_snapshot: None,
+            acp_mode_config: None,
+            acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
+            ),
             session_stats: SessionStats::new(),
+            assistant_stream_seen_for_stats: false,
             login_handler: None,
+            active_resume_picker_generation: None,
             first_prompt_text,
             loop_remaining: None,
             loop_total: None,
@@ -239,9 +266,6 @@ impl ChatWidget {
     pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
         let spawn_result = spawn_agent(config, app_event_tx, None);
         self.codex_op_tx = spawn_result.op_tx;
-        #[cfg(feature = "unstable")]
-        {
-            self.acp_handle = spawn_result.acp_handle;
-        }
+        self.acp_handle = spawn_result.acp_handle;
     }
 }

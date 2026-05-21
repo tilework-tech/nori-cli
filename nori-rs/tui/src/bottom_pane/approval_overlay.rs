@@ -473,11 +473,15 @@ impl From<ApprovalRequest> for ApprovalRequestState {
 
                 // For edit-like tools, try to render a DiffSummary from the snapshot
                 if is_edit_like {
-                    let mut changes =
-                        crate::client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts);
+                    let mut changes = crate::client_tool_cell::diff_changes_from_artifacts(
+                        &snapshot.artifacts,
+                        &cwd,
+                    );
                     if changes.is_empty() {
-                        changes =
-                            crate::client_tool_cell::changes_from_invocation(&snapshot.invocation);
+                        changes = crate::client_tool_cell::changes_from_invocation(
+                            &snapshot.invocation,
+                            &cwd,
+                        );
                     }
                     if !changes.is_empty() {
                         let header: Vec<Box<dyn Renderable>> =

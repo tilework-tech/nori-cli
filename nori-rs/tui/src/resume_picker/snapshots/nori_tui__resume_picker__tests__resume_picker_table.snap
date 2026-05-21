@@ -3,6 +3,5 @@ source: tui/src/resume_picker/tests.rs
 expression: snapshot
 ---
   Updated         Branch  CWD  Conversation
-  42 seconds ago  -       -    Fix resume picker timestamps
-> 35 minutes ago  -       -    Investigate lazy pagination cap
-  2 hours ago     -       -    Explain the codebase
+  42 seconds ago  -       -    session-a
+> 35 minutes ago  -       -    session-b

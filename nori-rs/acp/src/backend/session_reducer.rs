@@ -177,6 +177,7 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
         request_id.clone(),
         prompt.clone(),
     ));
+    runtime.orphan_update_warning_emitted = false;
 
     // Add user message to transcript.
     if let Some(display_text) = &prompt.display_text
@@ -372,6 +373,7 @@ fn reduce_load_submit(runtime: &mut SessionRuntime, request_id: String, out: &mu
         request_id,
         ActiveRequestKind::Loading,
     ));
+    runtime.orphan_update_warning_emitted = false;
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
 }
@@ -422,9 +424,13 @@ fn reduce_notification(
 
     // Request-owned content requires an active request.
     if runtime.active.is_none() {
-        out.events.push(ClientEvent::Warning(WarningInfo {
-            message: "Received request-owned content update while no request is active".to_string(),
-        }));
+        if !runtime.orphan_update_warning_emitted {
+            out.events.push(ClientEvent::Warning(WarningInfo {
+                message: "Received request-owned content update while no request is active"
+                    .to_string(),
+            }));
+            runtime.orphan_update_warning_emitted = true;
+        }
         let client_events = normalizer.push_session_update(&update);
         out.events.extend(client_events);
         return;
@@ -592,6 +598,7 @@ fn reduce_permission_request(
 // Message assembly
 // ---------------------------------------------------------------------------
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum MessageKind {
     Agent,
     Thought,
@@ -603,13 +610,15 @@ fn append_chunk_to_open_message(
     chunk: &acp::ContentChunk,
     kind: MessageKind,
 ) {
-    let Some(active) = &mut runtime.active else {
-        return;
-    };
-
     let text = match &chunk.content {
         acp::ContentBlock::Text(t) => &t.text,
         _ => return,
+    };
+
+    flush_open_messages_except(runtime, kind);
+
+    let Some(active) = &mut runtime.active else {
+        return;
     };
 
     let open = match kind {
@@ -627,6 +636,33 @@ fn append_chunk_to_open_message(
     open.chunks.push(text.clone());
 }
 
+fn flush_open_messages_except(runtime: &mut SessionRuntime, keep: MessageKind) {
+    let (user, thought, agent) = {
+        let Some(active) = &mut runtime.active else {
+            return;
+        };
+        (
+            (keep != MessageKind::User)
+                .then(|| active.open_user_message.take())
+                .flatten(),
+            (keep != MessageKind::Thought)
+                .then(|| active.open_thought_message.take())
+                .flatten(),
+            (keep != MessageKind::Agent)
+                .then(|| active.open_agent_message.take())
+                .flatten(),
+        )
+    };
+
+    push_open_transcript_message(runtime, TranscriptRole::User, user);
+    push_open_transcript_message(runtime, TranscriptRole::Thought, thought);
+    if let Some(text) = push_open_transcript_message(runtime, TranscriptRole::Agent, agent)
+        && let Some(active) = &mut runtime.active
+    {
+        active.last_agent_message = Some(text);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Active request finalization
 // ---------------------------------------------------------------------------
@@ -635,39 +671,41 @@ fn append_chunk_to_open_message(
 /// transcript, clear active, and return the last agent message text.
 fn finalize_active(runtime: &mut SessionRuntime) -> Option<String> {
     let active = runtime.active.take()?;
-    let mut last_agent_message = None;
+    let mut last_agent_message = active.last_agent_message;
 
-    // Finalize open messages in order: user, thought, agent.
-    if let Some(open) = active.open_user_message {
-        let text = open.text();
-        if !text.is_empty() {
-            runtime.persisted.transcript.push(TranscriptMessage {
-                role: TranscriptRole::User,
-                content: text,
-            });
-        }
-    }
-    if let Some(open) = active.open_thought_message {
-        let text = open.text();
-        if !text.is_empty() {
-            runtime.persisted.transcript.push(TranscriptMessage {
-                role: TranscriptRole::Thought,
-                content: text,
-            });
-        }
-    }
-    if let Some(open) = active.open_agent_message {
-        let text = open.text();
-        if !text.is_empty() {
-            last_agent_message = Some(text.clone());
-            runtime.persisted.transcript.push(TranscriptMessage {
-                role: TranscriptRole::Agent,
-                content: text,
-            });
-        }
+    // At most one text kind should still be open because kind switches flush
+    // the previous buffer as chunks arrive.
+    push_open_transcript_message(runtime, TranscriptRole::User, active.open_user_message);
+    push_open_transcript_message(
+        runtime,
+        TranscriptRole::Thought,
+        active.open_thought_message,
+    );
+    if let Some(text) =
+        push_open_transcript_message(runtime, TranscriptRole::Agent, active.open_agent_message)
+    {
+        last_agent_message = Some(text);
     }
 
     last_agent_message
+}
+
+fn push_open_transcript_message(
+    runtime: &mut SessionRuntime,
+    role: TranscriptRole,
+    open: Option<OpenMessage>,
+) -> Option<String> {
+    let text = open?.text();
+    if text.is_empty() {
+        return None;
+    }
+
+    runtime.persisted.transcript.push(TranscriptMessage {
+        role,
+        content: text.clone(),
+    });
+
+    (role == TranscriptRole::Agent).then_some(text)
 }
 
 // ---------------------------------------------------------------------------

@@ -10,10 +10,13 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::git_marker::is_git_marker;
+
 /// Find the git repository root for a given path by walking up the directory tree.
 ///
-/// Returns the directory containing `.git` (either as a directory or a file,
-/// since git worktrees use a `.git` file pointing to the main repository).
+/// Returns the directory containing a real `.git` marker. Worktrees use a
+/// `.git` file pointing to the main repository; regular repositories use a
+/// `.git` directory containing `HEAD`.
 ///
 /// Returns `None` if no git root is found or if the starting path doesn't exist.
 pub(crate) fn find_git_root(start: &Path) -> Option<PathBuf> {
@@ -26,8 +29,7 @@ pub(crate) fn find_git_root(start: &Path) -> Option<PathBuf> {
 
     loop {
         let git_marker = current.join(".git");
-        // .git can be a directory (regular repo) or a file (worktree)
-        if git_marker.is_dir() || git_marker.is_file() {
+        if is_git_marker(&git_marker) {
             return Some(current);
         }
 
@@ -223,6 +225,23 @@ mod tests {
         assert!(
             git_root.is_none(),
             "should not find git root in temp directory"
+        );
+    }
+
+    #[test]
+    fn test_find_git_root_ignores_empty_git_directory() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let root = tmp.path();
+        std::fs::create_dir(root.join(".git")).expect("create empty .git dir");
+
+        let project = root.join("project");
+        std::fs::create_dir(&project).expect("create project");
+
+        let git_root = find_git_root(&project);
+
+        assert!(
+            git_root.is_none(),
+            "empty .git directories should not mark a git root"
         );
     }
 

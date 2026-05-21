@@ -1,5 +1,6 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::text::Line;
 use ratatui::widgets::WidgetRef;
 
 use super::popup_consts::MAX_POPUP_ROWS;
@@ -35,7 +36,7 @@ pub(crate) struct CommandPopup {
     agent_commands: Vec<AgentCommandInfo>,
     agent_command_prefix: String,
     state: ScrollState,
-    description_overrides: HashMap<SlashCommand, String>,
+    description_overrides: HashMap<SlashCommand, Line<'static>>,
 }
 
 impl CommandPopup {
@@ -47,7 +48,7 @@ impl CommandPopup {
     #[cfg(test)]
     pub(crate) fn new_with_overrides(
         prompts: Vec<CustomPrompt>,
-        description_overrides: HashMap<SlashCommand, String>,
+        description_overrides: HashMap<SlashCommand, Line<'static>>,
     ) -> Self {
         Self::new_full(prompts, Vec::new(), String::new(), description_overrides)
     }
@@ -56,7 +57,7 @@ impl CommandPopup {
         mut prompts: Vec<CustomPrompt>,
         agent_commands: Vec<AgentCommandInfo>,
         agent_command_prefix: String,
-        description_overrides: HashMap<SlashCommand, String>,
+        description_overrides: HashMap<SlashCommand, Line<'static>>,
     ) -> Self {
         let builtins = built_in_slash_commands();
         // Exclude prompts that collide with builtin command names and sort by name.
@@ -96,6 +97,10 @@ impl CommandPopup {
     pub(crate) fn set_agent_commands(&mut self, commands: Vec<AgentCommandInfo>, prefix: String) {
         self.agent_commands = commands;
         self.agent_command_prefix = prefix;
+    }
+
+    fn is_slash_agent_command(cmd: &AgentCommandInfo, builtin_names: &HashSet<&str>) -> bool {
+        !cmd.name.starts_with('$') && !builtin_names.contains(cmd.name.as_str())
     }
 
     /// Update the filter string based on the current composer text. The text
@@ -164,7 +169,7 @@ impl CommandPopup {
             }
             // Agent commands next, excluding collisions with builtins.
             for (idx, cmd) in self.agent_commands.iter().enumerate() {
-                if !builtin_names.contains(cmd.name.as_str()) {
+                if Self::is_slash_agent_command(cmd, &builtin_names) {
                     out.push((CommandItem::AgentCommand(idx), None, 0));
                 }
             }
@@ -182,7 +187,7 @@ impl CommandPopup {
         }
         // Agent commands with prefix-based display key.
         for (idx, cmd) in self.agent_commands.iter().enumerate() {
-            if builtin_names.contains(cmd.name.as_str()) {
+            if !Self::is_slash_agent_command(cmd, &builtin_names) {
                 continue;
             }
             let display = self.agent_command_display_key(idx);
@@ -229,14 +234,20 @@ impl CommandPopup {
         matches
             .into_iter()
             .map(|(item, indices, _)| {
-                let (name, description) = match item {
+                let (name, description, styled_description) = match item {
                     CommandItem::Builtin(cmd) => {
-                        let desc = self
-                            .description_overrides
-                            .get(&cmd)
-                            .cloned()
-                            .unwrap_or_else(|| cmd.description().to_string());
-                        (format!("/{}", cmd.command()), desc)
+                        let (description, styled_description) = if let Some(desc_line) =
+                            self.description_overrides.get(&cmd).cloned()
+                        {
+                            (desc_line.to_string(), Some(desc_line))
+                        } else {
+                            (cmd.description().to_string(), None)
+                        };
+                        (
+                            format!("/{}", cmd.command()),
+                            description,
+                            styled_description,
+                        )
                     }
                     CommandItem::UserPrompt(i) => {
                         let prompt = &self.prompts[i];
@@ -247,12 +258,13 @@ impl CommandPopup {
                         (
                             format!("/{PROMPTS_CMD_PREFIX}:{}", prompt.name),
                             description,
+                            None,
                         )
                     }
                     CommandItem::AgentCommand(i) => {
                         let display_key = self.agent_command_display_key(i);
                         let cmd = &self.agent_commands[i];
-                        (format!("/{display_key}"), cmd.description.clone())
+                        (format!("/{display_key}"), cmd.description.clone(), None)
                     }
                 };
                 GenericDisplayRow {
@@ -260,6 +272,7 @@ impl CommandPopup {
                     match_indices: indices.map(|v| v.into_iter().map(|i| i + 1).collect()),
                     display_shortcut: None,
                     description: Some(description),
+                    styled_description,
                 }
             })
             .collect()
@@ -452,7 +465,7 @@ mod tests {
         let mut overrides = HashMap::new();
         overrides.insert(
             SlashCommand::Agent,
-            "switch between available ACP agents (current: Claude Code)".to_string(),
+            Line::from("switch between available ACP agents (current: Claude Code)"),
         );
         let popup = CommandPopup::new_with_overrides(Vec::new(), overrides);
         let rows =
@@ -469,7 +482,7 @@ mod tests {
         let mut overrides = HashMap::new();
         overrides.insert(
             SlashCommand::Agent,
-            "switch between available ACP agents (current: Claude Code)".to_string(),
+            Line::from("switch between available ACP agents (current: Claude Code)"),
         );
         let popup = CommandPopup::new_with_overrides(Vec::new(), overrides);
         let rows =
@@ -504,6 +517,43 @@ mod tests {
             .filter(|it| matches!(it, CommandItem::AgentCommand(_)))
             .count();
         assert_eq!(agent_count, 2);
+    }
+
+    #[test]
+    fn dollar_prefixed_agent_commands_are_excluded_from_slash_popup() {
+        let agent_commands = vec![
+            AgentCommandInfo {
+                name: "$using-skills".to_string(),
+                description: "Use skill instructions".to_string(),
+                input_hint: None,
+            },
+            AgentCommandInfo {
+                name: "loop".to_string(),
+                description: "Run a prompt on a recurring interval".to_string(),
+                input_hint: None,
+            },
+        ];
+        let mut popup = CommandPopup::new_full(
+            Vec::new(),
+            agent_commands,
+            "codex".to_string(),
+            HashMap::new(),
+        );
+        popup.on_composer_text_change("/".to_string());
+        let items = popup.filtered_items();
+
+        let has_dollar_skill = items.iter().any(|it| {
+            matches!(it, CommandItem::AgentCommand(i) if popup.agent_command(*i).is_some_and(|c| c.name == "$using-skills"))
+        });
+        let has_loop = items.iter().any(|it| {
+            matches!(it, CommandItem::AgentCommand(i) if popup.agent_command(*i).is_some_and(|c| c.name == "loop"))
+        });
+
+        assert!(
+            !has_dollar_skill,
+            "Codex $ skills belong in the skill picker, not slash popup"
+        );
+        assert!(has_loop, "regular agent slash commands should still appear");
     }
 
     #[test]
