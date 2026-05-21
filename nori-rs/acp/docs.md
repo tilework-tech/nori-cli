@@ -4,7 +4,7 @@ Path: @/nori-rs/acp
 
 ### Overview
 
-The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers. `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
+The ACP crate implements the Agent Client Protocol integration for Nori. It manages connecting to ACP-compliant agents -- either by spawning local subprocesses (like Claude Code, Codex, or Gemini) or by connecting to remote agents over WebSocket -- communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers. `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 
 ### How it fits into the larger codebase
 
@@ -12,22 +12,22 @@ The ACP crate implements the Agent Client Protocol integration for Nori. It mana
 nori-tui
     |
     v
-nori-acp <---> ACP Agent subprocess (claude-agent-acp, codex-acp, gemini-cli)
-    |
+nori-acp <---> ACP Agent subprocess (local, via stdin/stdout)
+    |      <---> ACP Agent (remote, via WebSocket)
     v
 nori-protocol (normalized ACP session events)
 ```
 
 The ACP crate serves as a bridge between:
 - The TUI layer (`@/nori-rs/tui/`) which displays UI and collects user input
-- External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex, @google/gemini-cli)
+- External ACP agent processes, either local (installed via npm) or remote (cloud sprites connected via WebSocket)
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
 - `SessionRuntime` in `@/nori-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
-- `connection/` - SACP v11-based subprocess spawning and JSON-RPC communication
+- `connection/` - SACP v11-based agent communication (local subprocess and remote WebSocket)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -537,23 +537,38 @@ Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
 **Connection Management** (`connection/`):
 
-The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
+The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with ACP agents via JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread. `SacpConnection` supports two construction paths -- local subprocess (`spawn()`) and remote WebSocket (`connect_remote()`) -- with identical downstream API surface.
 
 ```
-┌─────────────────────────┐   SACP v11 (JSON-RPC)   ┌─────────────────────────┐
-│   Main Tokio Runtime    │◄────────────────────────►│  ACP Agent Subprocess   │
-│                         │   stdin/stdout           │  (spawned child process)│
-│   SacpConnection        │                          │                         │
-│   - spawn()             │                          │  Receives:              │
-│   - create_session()    │                          │  - InitializeRequest    │
-│   - load_session()      │                          │  - NewSessionRequest    │
-│   - prompt()            │                          │  - PromptRequest        │
-│   - cancel()            │                          │  - CancelNotification   │
-│   - set_model() [unst]  │                          │                         │
-└─────────────────────────┘                          └─────────────────────────┘
+                          ┌─────────────────────────┐
+                          │  SacpConnection          │
+                          │  - create_session()      │
+                          │  - load_session()        │
+                          │  - prompt()              │
+                          │  - cancel()              │
+                          │  - set_model() [unstable]│
+                          └────────┬────────────────┘
+                                   │
+                  ┌────────────────┼────────────────┐
+                  │                                  │
+           spawn() path                    connect_remote() path
+                  │                                  │
+    ┌─────────────▼────────────┐    ┌───────────────▼──────────────┐
+    │  sacp::ByteStreams       │    │  sacp::Lines                 │
+    │  (stdin/stdout of child) │    │  (WebSocket via ws_transport)│
+    └─────────────┬────────────┘    └───────────────┬──────────────┘
+                  │                                  │
+    ┌─────────────▼────────────┐    ┌───────────────▼──────────────┐
+    │  Local ACP Agent Process │    │  Remote ACP Agent            │
+    │  (spawned child)         │    │  (cloud sprite via broker)   │
+    └──────────────────────────┘    └──────────────────────────────┘
 ```
 
-**Builder-based handler registration:** `SacpConnection::spawn()` uses `Client.builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `connect_with()` is called.
+**Dual transport architecture:** Both `spawn()` and `connect_remote()` delegate to a shared `establish_connection()` free function that accepts any `sacp::ConnectTo<Client>` transport. This function encapsulates all SACP builder setup -- notification handlers, permission request handlers, file read/write handlers, and the initialization handshake. The local path passes a `sacp::ByteStreams` transport (stdin/stdout of the child process), while the remote path passes a `sacp::Lines` transport (one WebSocket message = one NDJSON line). The `child` and `stderr_task` fields on `SacpConnection` are `Option<>` -- `Some` for local connections, `None` for remote. Shutdown and Drop gracefully handle both cases.
+
+**WebSocket transport adapter** (`connection/ws_transport.rs`): Bridges `tokio-tungstenite` WebSocket streams to the `sacp::Lines` transport format. `connect_ws(url, auth_token)` establishes a WebSocket connection with Bearer auth and returns split adapter halves: `WsSink<S>` (wraps WebSocket write half as `Sink<String>`) and `WsReadStream<S>` (wraps WebSocket read half as `Stream<Item = io::Result<String>>`). The read stream extracts text/binary messages, filters ping/pong/frame control messages, and terminates on close frames. WebSocket errors are mapped to `io::Error` with `ConnectionAborted` kind. This module is the foundation for the `nori cloud` feature, enabling the CLI to connect to remote ACP agents running on cloud sprites via the nori-sessions broker.
+
+**Builder-based handler registration:** The `establish_connection()` function uses `Client.builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `connect_with()` is called.
 
 **Connection initialization:** Inside `connect_with()`, the connection sends `InitializeRequest` to the agent, validates the protocol version (minimum V1), and clones the `ConnectionTo<Agent>` plus agent capabilities out of the callback via a oneshot channel. The background task then awaits `futures::future::pending()` to keep the connection alive until the task is aborted on drop.
 
@@ -743,12 +758,12 @@ The `init_rolling_file_tracing()` function in `@/nori-rs/acp/src/tracing_setup.r
 
 **Subprocess Lifecycle Management:**
 
-Multi-layer cleanup strategy for robust process termination:
+Multi-layer cleanup strategy for robust process termination (local `spawn()` path only -- remote connections via `connect_remote()` have no child process and shutdown just aborts the connection task):
 
 1. **Process Group Isolation (Unix)**: Agent spawns in own process group via `setpgid(0, 0)`. Enables killing entire process tree with `killpg()`.
 2. **Kernel-Level Parent Death Signal (Linux)**: `PR_SET_PDEATHSIG` set to `SIGTERM`. Guarantees agent receives signal if parent crashes.
 3. **Process Group Kill**: On drop, `SIGKILL` is sent to the entire process group via `kill_child_process_group()`, ensuring grandchildren are terminated.
-4. **Async Drop**: `SacpConnection::drop()` aborts the connection and stderr tasks, then kills the child process. No blocking wait is required because SACP v11's `ConnectionTo<Agent>` is `Send + Sync` and runs as a regular tokio task.
+4. **Async Drop**: `SacpConnection::drop()` aborts the connection and stderr tasks, then kills the child process if present. No blocking wait is required because SACP v11's `ConnectionTo<Agent>` is `Send + Sync` and runs as a regular tokio task.
 
 **Environment Isolation** (`sacp_connection.rs`):
 
@@ -977,7 +992,7 @@ Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `ws_transport.rs`, `mcp.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1
