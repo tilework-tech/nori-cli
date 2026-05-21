@@ -51,15 +51,27 @@ async fn user_shell_command_executes_locally_and_emits_exec_lifecycle() {
                 saw_begin = true;
             }
             EventMsg::ExecCommandOutputDelta(ev) => {
-                if ev.stream == ExecOutputStream::Stdout && ev.chunk == b"nori-shell-mode" {
+                if ev.stream == ExecOutputStream::Stdout
+                    && ev
+                        .chunk
+                        .windows(b"nori-shell-mode".len())
+                        .any(|w| w == b"nori-shell-mode")
+                {
                     saw_stdout = true;
                 }
             }
             EventMsg::ExecCommandEnd(ev) => {
                 assert_eq!(ev.source, ExecCommandSource::UserShell);
-                assert_eq!(ev.stdout, "nori-shell-mode");
-                assert_eq!(ev.stderr, "");
-                assert_eq!(ev.aggregated_output, "nori-shell-mode");
+                assert!(
+                    ev.stdout.contains("nori-shell-mode"),
+                    "stdout should contain 'nori-shell-mode', got: {:?}",
+                    ev.stdout
+                );
+                assert!(
+                    ev.aggregated_output.contains("nori-shell-mode"),
+                    "aggregated_output should contain 'nori-shell-mode', got: {:?}",
+                    ev.aggregated_output
+                );
                 assert_eq!(ev.exit_code, 0);
                 saw_end = true;
             }

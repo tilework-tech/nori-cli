@@ -8,6 +8,7 @@
 
 pub mod auto_worktree;
 pub mod backend;
+pub mod broker;
 pub mod config;
 pub mod connection;
 pub mod hooks;

@@ -46,3 +46,41 @@ Lines matches the semantics directly.
 - `child: Arc<Mutex<Child>>` → `Option<Arc<Mutex<Child>>>`
 - `stderr_task: JoinHandle<()>` → `Option<JoinHandle<()>>`
 - shutdown()/Drop: guard on Some before killing process
+
+## Commit 2: Broker Client Research
+
+### Config System (ACP-native path)
+- TOML: `NoriConfigToml` at `acp/src/config/types/mod.rs:183` — all fields `Option<T>`, sub-sections use `#[serde(default)]`
+- Resolved: `NoriConfig` at `acp/src/config/types/mod.rs:1632` — concrete types with defaults
+- Resolution: `NoriConfig::from_toml()` at `acp/src/config/loader.rs:78`
+- Home dir: `find_nori_home()` → `$NORI_HOME` or `~/.nori/cli`, config at `{nori_home}/config.toml`
+- Backend config: `AcpBackendConfig` at `acp/src/backend/mod.rs:164` — subset passed to `AcpBackend::spawn()`
+- Test helper: `build_test_config()` at `acp/src/backend/tests/mod.rs:235` — must update when adding fields
+- Pattern for new section: add `CloudConfigToml` with `#[serde(default)]` on `NoriConfigToml`, add resolved `CloudConfig` to `NoriConfig`, resolve in `from_toml()`
+
+### Existing Login Crate (reference implementation)
+- `nori-rs/login/src/server.rs` — full OAuth 2.0 + PKCE flow using `tiny_http` + `webbrowser`
+- Uses `tiny_http::Server::http("127.0.0.1:1455")` (fixed port) + `webbrowser::open(&url)`
+- Async/sync bridge: `std::thread` runs blocking `server.recv()`, forwards to `tokio::sync::mpsc::channel`
+- Shutdown: `server.unblock()` to release blocking recv thread
+- Broker flow is simpler: no PKCE, no code exchange — just capture JWT from callback query param
+
+### Crate Choices for Broker Client
+- **HTTP server for OAuth callback**: `tiny_http` 0.12 (workspace dep, already used in login crate)
+- **Browser opening**: `webbrowser` 1.0 (workspace dep, already used in login crate)
+- **HTTP client for acquire_session**: `reqwest` 0.12 (workspace dep, already used in core crate)
+- **JWT decoding**: `jsonwebtoken` — use `insecure_disable_signature_validation()` to skip verification, only check `exp` claim. Needs to be added as workspace dep.
+- Neither `tiny_http`, `webbrowser`, `reqwest`, nor `jsonwebtoken` are currently deps of the `acp` crate — need to add them.
+
+### Broker Auth Flow (simplified vs login crate)
+1. CLI starts `tiny_http` server on `127.0.0.1:0` (random port)
+2. Opens browser to `{broker_url}/auth/cli?redirect_uri=http://localhost:{port}/callback`
+3. User authenticates in browser (Firebase)
+4. Broker redirects to `http://localhost:{port}/callback?token={jwt}`
+5. CLI captures JWT from query param, stores it, shuts down server
+- No PKCE, no code exchange, no state parameter needed (broker generates the JWT directly)
+
+### Module Structure
+- New module: `acp/src/broker/mod.rs` — `BrokerClient` struct
+- `sacp_connection.rs` is already 910 lines (over 500 LoC guideline) — keep broker logic separate
+- Credential storage: separate file `{nori_home}/cloud-auth.json` keeps secrets out of main config; broker_url stays in config.toml `[cloud]` section

@@ -202,6 +202,7 @@ impl NoriConfig {
             async_post_agent_response_hooks,
             default_models: toml.default_models,
             agents: toml.agents,
+            cloud_broker_url: toml.cloud.broker_url,
         })
     }
 }
