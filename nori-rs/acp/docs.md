@@ -28,7 +28,7 @@ The ACP crate serves as a bridge between:
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
 - `connection/` - SACP v11-based agent communication (local subprocess and remote WebSocket)
-- `broker/` - Cloud session broker client: OAuth auth, JWT management, session acquisition, and `CloudConnectionInfo` (see `@/nori-rs/acp/src/broker/docs.md`)
+- `broker/` - Cloud session broker client: OAuth auth, JWT management, session acquisition/release, and `CloudConnectionInfo` (see `@/nori-rs/acp/src/broker/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -783,7 +783,7 @@ Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 - `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
-- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, `AcpBackend::spawn()` uses `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`).
+- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, `AcpBackend::spawn()` uses `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`). The backend also stores `is_cloud: bool` (derived from `cloud_connection.is_some()`) to enable cloud-specific behavior in the event relay loop.
 - `AcpBackendConfig.session_context`: Optional string injected into `pending_hook_context` at spawn time (`spawn_and_relay.rs`). Unlike `initial_context`, session context is prepended to the first user prompt **without** `SUMMARY_PREFIX` framing -- it appears as raw text before the user's message. If session start hooks also produce `::context::` lines, those are appended to the session context (both accumulate in the same `pending_hook_context` mutex). The context is consumed on the first prompt and not repeated. The TUI populates this with an embedded markdown blurb (`@/nori-rs/tui/session_context.md`) that tells the agent it is running inside the nori CLI.
 
 **Re-exported Types:**
@@ -893,6 +893,8 @@ The connection layer now exposes exactly one ordered `mpsc::Receiver<ConnectionE
 - temporarily hands it to the `session/load` collector during resume, buffering replay `ClientEvent`s before returning the receiver to the live backend.
 
 This keeps the SACP-specific routing logic inside `connection/` and removes the old split between notification and approval channels.
+
+**Cloud disconnect detection:** When the transport event channel closes (the `ConnectionEvent` receiver yields `None`) during a cloud session (`is_cloud == true`), `run_connection_event_relay()` in `@/nori-rs/acp/src/backend/spawn_and_relay.rs` emits an `EventMsg::Error` with the message "Cloud session disconnected. The remote session may still be active." before exiting the relay loop. For local sessions the relay exits silently since a closed transport simply means the subprocess exited. This provides clear user-facing feedback when a WebSocket connection drops rather than leaving the TUI in an ambiguous state.
 
 **Turn Interrupt Wiring — Reducer-Owned ACP Phase** (`session_reducer.rs`, `session_runtime_driver.rs`, `submit_and_ops.rs`):
 

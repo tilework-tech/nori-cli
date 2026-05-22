@@ -560,6 +560,18 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             });
 
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                broker.release_session(&session_info.session_id),
+            )
+            .await
+            {
+                Ok(Ok(())) => tracing::debug!("Cloud session released"),
+                Ok(Err(e)) => tracing::warn!("Cloud session release failed: {e}"),
+                Err(_) => tracing::warn!("Cloud session release timed out"),
+            }
+
             handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Completions(cmd)) => {

@@ -284,3 +284,107 @@ async fn acquire_session_returns_error_on_server_error() {
 
     server_handle.join().unwrap();
 }
+
+// ── release_session ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn release_session_sends_post_with_auth() {
+    let mock_server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = mock_server.server_addr().to_ip().unwrap().port();
+    let broker_url = format!("http://127.0.0.1:{port}");
+    let token = future_jwt();
+
+    let expected_token = token.clone();
+    let server_handle = std::thread::spawn(move || {
+        let request = mock_server.recv().unwrap();
+        assert_eq!(request.method(), &tiny_http::Method::Post);
+        assert!(request.url().contains("/api/sessions/sess-abc123/release"));
+
+        let auth_header = request
+            .headers()
+            .iter()
+            .find(|h| h.field.equiv("Authorization"))
+            .map(|h| h.value.to_string());
+        assert_eq!(auth_header, Some(format!("Bearer {expected_token}")));
+
+        let response = tiny_http::Response::from_string("{}").with_status_code(200);
+        request.respond(response).unwrap();
+    });
+
+    let dir = tempdir().unwrap();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: token,
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    client.release_session("sess-abc123").await.unwrap();
+    server_handle.join().unwrap();
+}
+
+#[tokio::test]
+async fn release_session_returns_token_expired_on_401() {
+    let mock_server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = mock_server.server_addr().to_ip().unwrap().port();
+    let broker_url = format!("http://127.0.0.1:{port}");
+    let token = future_jwt();
+
+    let server_handle = std::thread::spawn(move || {
+        let request = mock_server.recv().unwrap();
+        let response = tiny_http::Response::from_string("Unauthorized").with_status_code(401);
+        request.respond(response).unwrap();
+    });
+
+    let dir = tempdir().unwrap();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: token,
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.release_session("sess-abc123").await.unwrap_err();
+    assert!(matches!(err, BrokerError::TokenExpired));
+
+    server_handle.join().unwrap();
+}
+
+#[tokio::test]
+async fn release_session_returns_error_on_404() {
+    let mock_server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = mock_server.server_addr().to_ip().unwrap().port();
+    let broker_url = format!("http://127.0.0.1:{port}");
+    let token = future_jwt();
+
+    let server_handle = std::thread::spawn(move || {
+        let request = mock_server.recv().unwrap();
+        let response = tiny_http::Response::from_string("Not Found").with_status_code(404);
+        request.respond(response).unwrap();
+    });
+
+    let dir = tempdir().unwrap();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: token,
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.release_session("sess-abc123").await.unwrap_err();
+    assert!(matches!(
+        err,
+        BrokerError::ReleaseFailed { status: 404, .. }
+    ));
+
+    server_handle.join().unwrap();
+}
+
+#[tokio::test]
+async fn release_session_errors_without_token() {
+    let dir = tempdir().unwrap();
+    let client = BrokerClient::new("http://unused.test".to_string(), dir.path().to_path_buf());
+
+    let err = client.release_session("sess-abc123").await.unwrap_err();
+    assert!(matches!(err, BrokerError::AuthRequired));
+}

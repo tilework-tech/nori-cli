@@ -327,6 +327,8 @@ impl AcpBackend {
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            is_cloud: config.cloud_connection.is_some(),
+            is_shutting_down: Arc::new(AtomicBool::new(false)),
         };
 
         let runtime_backend = backend.clone();

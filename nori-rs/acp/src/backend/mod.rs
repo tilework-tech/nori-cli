@@ -9,6 +9,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use agent_client_protocol_schema as acp;
 use anyhow::Result;
@@ -332,6 +334,10 @@ pub struct AcpBackend {
     mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credential store mode used when forwarding MCP auth to ACP agents.
     mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+    /// Whether this backend is connected to a cloud session (affects disconnect behavior)
+    is_cloud: bool,
+    /// Set to true when Op::Shutdown is initiated, to avoid spurious disconnect errors
+    is_shutting_down: Arc<AtomicBool>,
 }
 
 mod helpers;

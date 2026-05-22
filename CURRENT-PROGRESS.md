@@ -34,9 +34,19 @@
 - 2 backend integration tests (successful cloud spawn via MockWsServer, failure with unreachable URL)
 - All tests pass across nori-acp, nori-cli, and nori-tui
 
+### Commit 4: Session release + disconnect handling
+- Added `release_session(session_id)` method to `BrokerClient` — POST /api/sessions/{id}/release with JWT Bearer auth
+- Added `ReleaseFailed { status, body }` variant to `BrokerError`
+- CLI calls `release_session()` with a 5-second timeout after TUI exits (best-effort cleanup; failures logged, not propagated)
+- Added `is_cloud: bool` field to `AcpBackend`, set from `cloud_connection.is_some()` during spawn
+- Modified `run_connection_event_relay()` to emit `EventMsg::Error("Cloud session disconnected...")` when WebSocket drops for cloud sessions (previously exited silently)
+- 4 unit tests for release_session (success with correct auth, 401 → TokenExpired, 404 → ReleaseFailed, no token → AuthRequired)
+- 1 integration test for cloud disconnect detection (mock WS server drops connection, verify error event emitted)
+- All 516+ nori-acp tests pass, all 27 nori-cli tests pass
+
 ## Next Steps (in spec order)
 
-### Commit 4: Session release + error handling
-- POST /api/sessions/{id}/release on explicit teardown
-- Reconnection UX (show clear message when WS drops)
-- Cloud-specific error messages
+Feature is functionally complete per APPLICATION_SPEC.md. Remaining potential work:
+- Session resume: `nori cloud --resume` (out of scope per spec)
+- Session listing: `nori cloud --list` (out of scope per spec)
+- Agent selection: `nori cloud --agent <slug>` (out of scope per spec)

@@ -186,6 +186,8 @@ impl AcpBackend {
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            is_cloud: config.cloud_connection.is_some(),
+            is_shutting_down: Arc::new(AtomicBool::new(false)),
         };
 
         let runtime_backend = backend.clone();
@@ -312,7 +314,23 @@ impl AcpBackend {
                                 )
                                 .await;
                         }
-                        None => break,
+                        None => {
+                            if backend.is_cloud
+                                && !backend.is_shutting_down.load(Ordering::Relaxed)
+                            {
+                                let _ = backend
+                                    .event_tx
+                                    .send(Event {
+                                        id: String::new(),
+                                        msg: EventMsg::Error(ErrorEvent {
+                                            message: "Cloud session disconnected. The remote session may still be active.".to_string(),
+                                            codex_error_info: None,
+                                        }),
+                                    })
+                                    .await;
+                            }
+                            break;
+                        }
                     }
                 }
                 maybe_result = prompt_result_rx.recv() => {

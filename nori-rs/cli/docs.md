@@ -51,6 +51,7 @@ match subcommand {
 - `nori cloud --broker-url https://broker.example.com` - Overrides the broker URL
 - TUI flags such as `--agent`, `--profile`, `--sandbox` can be passed after `cloud`
 - The dispatch flow: resolves broker URL (flag > config), creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, acquires a session, then sets `TuiCli.cloud_connection` and calls `nori_tui::run_main()`
+- After `run_main()` returns, the CLI calls `broker.release_session()` with a 5-second timeout as best-effort cleanup. Release failures or timeouts are logged but do not affect the exit code
 - The `CloudConnectionInfo` flows through the TUI unchanged until it reaches `AcpBackend::spawn()`, which uses `SacpConnection::connect_remote()` instead of spawning a local subprocess
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.

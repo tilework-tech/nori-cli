@@ -35,6 +35,9 @@ pub enum BrokerError {
     #[error("session acquisition failed: HTTP {status}: {body}")]
     AcquireFailed { status: u16, body: String },
 
+    #[error("session release failed: HTTP {status}: {body}")]
+    ReleaseFailed { status: u16, body: String },
+
     #[error("network error: {0}")]
     NetworkError(#[from] reqwest::Error),
 
@@ -106,6 +109,36 @@ impl BrokerClient {
             .await
             .map_err(|e| BrokerError::InvalidToken(format!("invalid response: {e}")))?;
         Ok(info)
+    }
+
+    pub async fn release_session(&self, session_id: &str) -> std::result::Result<(), BrokerError> {
+        let token = self
+            .auth_token
+            .as_deref()
+            .ok_or(BrokerError::AuthRequired)?;
+
+        if is_token_expired(token) {
+            return Err(BrokerError::TokenExpired);
+        }
+
+        let url = format!("{}/api/sessions/{session_id}/release", self.broker_url);
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await?;
+
+        let status = resp.status().as_u16();
+        if status == 401 {
+            return Err(BrokerError::TokenExpired);
+        }
+        if !resp.status().is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(BrokerError::ReleaseFailed { status, body });
+        }
+
+        Ok(())
     }
 
     pub async fn authenticate(&mut self) -> Result<()> {

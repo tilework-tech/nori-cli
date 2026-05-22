@@ -128,3 +128,68 @@ Cloud connection info needs to flow: CLI → TUI → ChatWidget → spawn_agent 
 - ChatWidgetInit test constructors must add `cloud_connection: None`
 - New unit test: `spawn_agent` with `cloud_connection: Some(...)` skips agent config check
 - Integration test: `AcpBackend::spawn()` with cloud_connection connects via mock WS server
+
+## Commit 4: Session Release + Disconnection Handling Research
+
+### Session Release Architecture
+
+#### Where broker session_id is available
+- `SessionInfo.session_id` returned by `broker.acquire_session()` at `cli/src/main.rs:543`
+- Currently DISCARDED — only `ws_url` is forwarded into `CloudConnectionInfo`
+- `BrokerClient` instance is local to the cloud dispatch handler in main.rs
+
+#### Simplest release approach: CLI layer
+- After `nori_tui::run_main()` returns (main.rs:562), `broker` and `session_info` are still in scope
+- Call `broker.release_session(&session_info.session_id)` with a 5s timeout
+- Log and move on if it fails (best-effort cleanup)
+- No need to thread broker_session_id through TUI layers
+
+#### Async shutdown patterns
+- No async Drop in Rust — `block_on` inside Drop panics inside tokio runtime
+- Use explicit `async fn release_session()` awaited with `tokio::time::timeout`
+- `tokio::spawn` fire-and-forget risks task cancellation on runtime drop
+- The runtime is still alive after `run_main()` returns, so plain await works
+
+### WebSocket Disconnection Handling
+
+#### Current behavior (gap)
+- WS close frame → `WsReadStream` returns `Poll::Ready(None)` → SACP task exits → `event_tx` dropped → relay loop breaks silently → TUI agent task exits silently → NO USER FEEDBACK
+- WS error → same path, also silent
+- Only during active prompts are errors surfaced via `Event::Error`
+
+#### `ConnectionEvent` enum (acp/src/connection/mod.rs)
+- Only two variants: `SessionUpdate`, `ApprovalRequest`
+- No `Disconnected` or `Error` variant
+
+#### Event relay loop (spawn_and_relay.rs:263-384)
+- `event_rx.recv()` returning `None` → loop breaks silently
+- This is where disconnect detection should go
+- Need to differentiate: user-initiated shutdown vs. unexpected connection loss
+- `is_shutting_down` flag already present on `AcpBackend` — can check this
+
+#### Proposed disconnect detection
+1. When `event_rx.recv()` returns `None` in the relay loop:
+   - Check if this was a user-initiated shutdown (check shutdown flag)
+   - If NOT: send an error event to TUI ("Cloud session disconnected")
+2. Use `BackendEvent::Control(Event::Error(...))` to surface the disconnect
+3. The TUI already handles `Event::Error` via `send_prompt_error` / error display
+
+### Cloud-Specific Error Messages
+
+#### Current error categories (session_runtime_driver.rs:568-610)
+- `AcpErrorCategory::Authentication`, `QuotaExceeded`, `ExecutableNotFound`, `Initialization`, `PromptTooLong`, `ApiServerError`, `Unknown`
+- These are for local agent errors — cloud errors need different messaging
+
+#### Cloud error scenarios
+1. **Broker unreachable** — handled at CLI layer before TUI starts (already has error messages)
+2. **Auth expired during session** — WS might get 401/close; surface as "Authentication expired"
+3. **WS connection dropped** — surface as "Cloud session disconnected. The remote session may still be active."
+4. **Prompt fails during cloud session** — existing `Event::Error` path works, but message should say "Cloud agent error" not "Agent process crashed"
+
+### Module Locations (key files to modify)
+- `acp/src/broker/mod.rs` — add `release_session()` and `ReleaseFailed` error variant
+- `acp/src/backend/spawn_and_relay.rs:263-384` — disconnect detection in relay loop
+- `acp/src/connection/mod.rs` — no changes needed (no new ConnectionEvent variant; detect at relay level)
+- `cli/src/main.rs:522-564` — call release after `run_main()` returns
+- `acp/src/broker/mod.rs:10-13` — CloudConnectionInfo may need `is_cloud` flag or similar for backend to know it's cloud mode
+- `acp/src/backend/mod.rs` — store `is_cloud` flag on AcpBackend for cloud-specific error messages

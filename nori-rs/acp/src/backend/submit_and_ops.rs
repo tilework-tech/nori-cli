@@ -41,8 +41,8 @@ impl AcpBackend {
                 self.handle_exec_approval(&call_id, decision).await;
             }
             Op::Shutdown => {
-                // Cancel any in-progress session and send ShutdownComplete
-                // to allow the TUI to exit properly
+                self.is_shutting_down
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 debug!("Processing Op::Shutdown in ACP mode");
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
 
