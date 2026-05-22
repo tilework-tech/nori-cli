@@ -40,7 +40,7 @@ BrokerClient ----HTTP POST /api/sessions/{id}/release---->|
 - `CloudConnectionInfo` is threaded through the TUI layer (`Cli` -> `App` -> `ChatWidgetInit` -> `spawn_agent()`) without modification; the TUI does not interact with the broker directly
 - The ACP backend (`@/nori-rs/acp/src/backend/spawn_and_relay.rs`) branches on `config.cloud_connection`: when present, it calls `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`
 - The WebSocket transport adapter (`@/nori-rs/acp/src/connection/ws_transport.rs`) is the component that actually opens the WebSocket connection using the `ws_url` and `auth_token` from `CloudConnectionInfo`
-- The broker URL can come from the `--broker-url` CLI flag or from `[cloud] broker_url` in `config.toml` (resolved in `@/nori-rs/acp/src/config/types/mod.rs` as `NoriConfig.cloud_broker_url`)
+- The broker URL is resolved by the CLI through a three-step priority chain: `--broker-url` flag > `[cloud] broker_url` in `config.toml` > interactive stdin prompt (terminal only). The interactive prompt validates the URL scheme (`http://` or `https://`) and persists the entered value via `save_cloud_broker_url()` in `@/nori-rs/acp/src/config/loader.rs`. Non-interactive (piped) invocations that lack a configured URL receive an error with setup instructions
 
 ### Core Implementation
 

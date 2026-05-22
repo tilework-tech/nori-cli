@@ -521,16 +521,35 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
         Some(Subcommand::Cloud(cloud_cmd)) => {
             let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
-            let broker_url = cloud_cmd
-                .broker_url
-                .or(nori_config.cloud_broker_url)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "No broker URL configured. Use --broker-url or set [cloud] broker_url in ~/.nori/cli/config.toml"
-                    )
-                })?;
-
             let nori_home = find_nori_home()?;
+            let broker_url = if let Some(url) =
+                cloud_cmd.broker_url.or(nori_config.cloud_broker_url)
+            {
+                url
+            } else if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                use std::io::BufRead;
+                use std::io::Write;
+
+                eprint!("Enter your org's broker URL: ");
+                std::io::stderr().flush()?;
+                let mut line = String::new();
+                std::io::stdin().lock().read_line(&mut line)?;
+                let url = line.trim().trim_end_matches('/').to_string();
+                if url.is_empty() {
+                    anyhow::bail!("No broker URL provided.");
+                }
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    anyhow::bail!("Broker URL must start with http:// or https://");
+                }
+                nori_acp::config::save_cloud_broker_url(&nori_home, &url)?;
+                eprintln!("Broker URL saved to config.");
+                url
+            } else {
+                anyhow::bail!(
+                    "No broker URL configured. Use --broker-url or set [cloud] broker_url in ~/.nori/cli/config.toml"
+                );
+            };
+
             let mut broker = nori_acp::broker::BrokerClient::new(broker_url, nori_home);
 
             if !broker.has_valid_token() {

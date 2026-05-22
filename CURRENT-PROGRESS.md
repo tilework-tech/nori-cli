@@ -50,6 +50,19 @@
 - Reviewed existing docs.md files (acp, broker, cli, tui) — all already accurate
 - Created `acp/src/connection/docs.md` documenting the dual transport architecture (local subprocess vs remote WebSocket)
 
+### Commit 6: Interactive broker URL prompt
+- Added `toml_edit` dependency to `nori-acp` for format-preserving TOML writes
+- Added `save_cloud_broker_url(nori_home, broker_url)` function in `acp/src/config/loader.rs`
+  - Reads/creates `config.toml`, sets `[cloud] broker_url` via `toml_edit::DocumentMut`, writes back
+  - Creates `nori_home` directory if it doesn't exist
+- Modified cloud handler in `cli/src/main.rs` to prompt for broker URL when missing
+  - Uses `eprint!` + `stdin().read_line()` for interactive prompt
+  - Validates URL starts with `http://` or `https://`
+  - Persists entered URL to config via `save_cloud_broker_url()`
+  - Falls back to error message when stdin is not a terminal (piped usage)
+- 4 unit tests for `save_cloud_broker_url` (empty config, preserving existing config, overwriting value, creating directory)
+- All nori-acp and nori-cli tests pass
+
 ## Status
 
 Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly, documentation is up to date.

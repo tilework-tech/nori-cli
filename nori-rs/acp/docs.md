@@ -139,7 +139,11 @@ The `[cloud]` TOML section stores the broker URL for cloud sessions:
 broker_url = "https://nori-broker.myorg.fly.dev"
 ```
 
-The value is resolved onto `NoriConfig.cloud_broker_url` during config loading. The CLI's `nori cloud` subcommand uses this as a fallback when `--broker-url` is not passed on the command line. See `@/nori-rs/acp/src/broker/docs.md` for the broker client and `@/nori-rs/cli/docs.md` for the CLI subcommand.
+The value is resolved onto `NoriConfig.cloud_broker_url` during config loading. The CLI's `nori cloud` subcommand uses this as a fallback when `--broker-url` is not passed on the command line. When neither the flag nor the config value is present and stdin is a terminal, the CLI prompts the user interactively and persists the entered URL via `save_cloud_broker_url()`. See `@/nori-rs/acp/src/broker/docs.md` for the broker client and `@/nori-rs/cli/docs.md` for the CLI subcommand.
+
+**Config Persistence** (`loader.rs`):
+
+`save_cloud_broker_url(nori_home, broker_url)` is a format-preserving write function that sets `[cloud] broker_url` in `config.toml` without clobbering other settings. It uses `toml_edit::DocumentMut` to parse the existing file (or start from an empty document), insert or update the value, and write back. It also creates the `nori_home` directory if it does not exist. This is called by the CLI's interactive broker URL prompt (see `@/nori-rs/cli/docs.md`).
 
 **ACP Wire Proxy Configuration** (`config/types/mod.rs`, `connection/`):
 

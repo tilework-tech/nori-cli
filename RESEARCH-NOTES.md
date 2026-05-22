@@ -193,3 +193,33 @@ Cloud connection info needs to flow: CLI → TUI → ChatWidget → spawn_agent 
 - `cli/src/main.rs:522-564` — call release after `run_main()` returns
 - `acp/src/broker/mod.rs:10-13` — CloudConnectionInfo may need `is_cloud` flag or similar for backend to know it's cloud mode
 - `acp/src/backend/mod.rs` — store `is_cloud` flag on AcpBackend for cloud-specific error messages
+
+## Commit 6: Interactive Broker URL Prompt Research
+
+### Spec Gap
+The APPLICATION_SPEC says: "CLI checks for `broker_url` in config. If missing, prompts: 'Enter your org's broker URL:'"
+Current implementation (main.rs:527-531) returns an error with instructions instead of prompting.
+
+### Interactive stdin Reading
+- No interactive prompt crate (`dialoguer`, `inquire`) in workspace deps
+- The `read_api_key_from_stdin()` in `cli/src/login.rs:94` is the closest analog but only handles piped input
+- The cloud handler runs BEFORE `nori_tui::run_main()`, so crossterm raw mode is NOT active — safe to use stdin
+- Pattern: `eprint!("prompt")` + `io::stderr().flush()` + `stdin().lock().read_line()`
+- Use `eprint!`/`eprintln!` for all output (existing convention in cloud handler)
+
+### Config Persistence
+- No existing `save_config()` or config write function in `acp/src/config/`
+- `toml_edit` is a workspace dep (v0.23.5, used by `codex-core`) but NOT a dep of the `acp` crate
+- Need to add `toml_edit` to `acp/Cargo.toml` to use format-preserving TOML edits
+- Config file path: `find_nori_home()?.join("config.toml")` → `~/.nori/cli/config.toml`
+- Write pattern: parse with `DocumentMut`, set `doc["cloud"]["broker_url"] = value(url)`, write back
+- Atomic write: use `tempfile::NamedTempFile` + `persist()` (tempfile already a dev-dep of acp)
+
+### Implementation Plan
+1. Add `toml_edit` dep to `acp/Cargo.toml`
+2. Add `save_cloud_broker_url(nori_home, url)` function in `acp/src/config/loader.rs`
+3. Modify cloud handler in `cli/src/main.rs:522-531`:
+   - When both CLI flag and config are None, prompt for broker URL
+   - After receiving URL, call `save_cloud_broker_url()` to persist
+   - Continue with the cloud flow using the provided URL
+4. Handle edge cases: empty input, non-terminal stdin (piped), Ctrl+C during prompt

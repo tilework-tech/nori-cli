@@ -47,10 +47,11 @@ match subcommand {
 ```
 
 **CloudCommand**: Runs a TUI session backed by a cloud VM via the nori-sessions broker:
-- `nori cloud` - Connects to a cloud session using the broker URL from `config.toml`
+- `nori cloud` - Connects to a cloud session using the broker URL from `config.toml`, or prompts interactively on first run
 - `nori cloud --broker-url https://broker.example.com` - Overrides the broker URL
 - TUI flags such as `--agent`, `--profile`, `--sandbox` can be passed after `cloud`
-- The dispatch flow: resolves broker URL (flag > config), creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, acquires a session, then sets `TuiCli.cloud_connection` and calls `nori_tui::run_main()`
+- Broker URL resolution follows a three-step priority chain: `--broker-url` flag > `[cloud] broker_url` in `config.toml` > interactive stdin prompt. The interactive prompt only activates when stdin is a terminal (`std::io::IsTerminal`); non-interactive invocations without a configured URL receive an error with setup instructions. The prompt validates that the URL starts with `http://` or `https://` and persists the value to `config.toml` via `save_cloud_broker_url()` from `@/nori-rs/acp/src/config/loader.rs`, so subsequent runs use the saved URL automatically
+- The dispatch flow: resolves broker URL (see above), creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, acquires a session, then sets `TuiCli.cloud_connection` and calls `nori_tui::run_main()`
 - After `run_main()` returns, the CLI calls `broker.release_session()` with a 5-second timeout as best-effort cleanup. Release failures or timeouts are logged but do not affect the exit code
 - The `CloudConnectionInfo` flows through the TUI unchanged until it reaches `AcpBackend::spawn()`, which uses `SacpConnection::connect_remote()` instead of spawning a local subprocess
 
