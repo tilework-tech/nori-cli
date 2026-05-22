@@ -262,7 +262,7 @@ impl TuiSession {
 
             // Write config.toml to CODEX_HOME (unless explicitly empty for first-launch testing)
             let config_path = codex_home.join("config.toml");
-            let config_content = config.config_toml.clone().unwrap_or_else(|| {
+            let mut config_content = config.config_toml.clone().unwrap_or_else(|| {
                 // Generate default config with model, trusted project path,
                 // and mock_provider that doesn't require OpenAI auth.
                 //
@@ -304,6 +304,16 @@ name = "Mock ACP provider for tests"
                     acp_section = acp_section
                 )
             });
+            // Append extra TOML only when the caller didn't fully override
+            // config_toml — extras compose on top of the auto-generated base.
+            if config.config_toml.is_none()
+                && let Some(extra) = config.extra_config_toml.as_ref()
+            {
+                if !config_content.ends_with('\n') {
+                    config_content.push('\n');
+                }
+                config_content.push_str(extra);
+            }
             // Only write config file if content is non-empty. Empty string means
             // "no config file" which is needed to test the first-launch welcome screen.
             if !config_content.is_empty() {
@@ -673,6 +683,11 @@ pub struct SessionConfig {
     /// Custom config.toml content. If None, a default config will be generated.
     /// Set to Some("") to write an empty config file.
     pub config_toml: Option<String>,
+    /// Extra TOML appended to the auto-generated default config. Ignored
+    /// when `config_toml` is set. Use this to add config sections (e.g.
+    /// `[tui.footer_segments]`) without losing the auto-generated trust
+    /// block that keeps approval mode at the trusted default.
+    pub extra_config_toml: Option<String>,
     /// Initialize the temp directory as a git repository.
     /// This prevents the "Snapshots disabled" BackgroundEvent from overwriting
     /// the "Working" status indicator during streaming tests.
@@ -702,6 +717,7 @@ impl SessionConfig {
             skip_trust_directory: true, // Skip trust prompt by default for E2E tests
             cwd: None,
             config_toml: None,
+            extra_config_toml: None,
             git_init: true,
             allow_http_fallback: false, // Default to ACP-only mode for tests
             extra_path: Vec::new(),
@@ -756,6 +772,14 @@ impl SessionConfig {
 
     pub fn with_config_toml(mut self, content: impl Into<String>) -> Self {
         self.config_toml = Some(content.into());
+        self
+    }
+
+    /// Append `content` to the auto-generated default config.toml. Use this
+    /// when you only need to add extra sections (e.g. `[tui.footer_segments]`)
+    /// and want to keep the auto-generated trust block.
+    pub fn with_extra_config_toml(mut self, content: impl Into<String>) -> Self {
+        self.extra_config_toml = Some(content.into());
         self
     }
 
@@ -948,6 +972,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
+            // Resume hint: "nori resume 019bb411-..." -> "nori resume [SESSION_ID]"
+            if let Some(result) = replace_after_marker(&line, "nori resume", "[SESSION_ID]") {
+                line = result;
+            }
+
             // Git diff stats in footer: strip "· +N -M " segment
             // The stats vary based on repo state and would cause flaky snapshots
             line = strip_git_stats_segment(&line);
@@ -995,12 +1024,11 @@ pub fn normalize_for_snapshot(contents: String) -> String {
         .lines()
         .map(|line| {
             if line.trim_start().starts_with("› ")
-                && (line.trim_start().starts_with("› Find and fix a bug")
-                    || line.trim_start().starts_with("› Explain this codebase")
-                    || line.trim_start().starts_with("› Write tests for")
-                    || line.trim_start().starts_with("› Improve documentation")
-                    || line.trim_start().starts_with("› Summarize recent commits")
-                    || line.trim_start().starts_with("› Implement {feature}")
+                && (line.trim_start().starts_with("› ? for shortcuts")
+                    || line.trim_start().starts_with("› / for slash command menu")
+                    || line.trim_start().starts_with("› $ for skill listing")
+                    || line.trim_start().starts_with("› ! for shell commands")
+                    || line.trim_start().starts_with("› @ for file mentions")
                     || line.contains("@filename"))
             {
                 "› [DEFAULT_PROMPT]".to_string()
@@ -1243,6 +1271,20 @@ mod tests {
             normalize_for_input_snapshot(input_similar.to_string()),
             input_similar
         );
+    }
+
+    #[test]
+    fn test_normalize_prompt_capability_placeholders() {
+        for placeholder in [
+            "? for shortcuts",
+            "/ for slash command menu",
+            "$ for skill listing",
+            "! for shell commands",
+            "@ for file mentions",
+        ] {
+            let input = format!("› {placeholder}\n");
+            assert_eq!(normalize_for_input_snapshot(input), "› [DEFAULT_PROMPT]\n");
+        }
     }
 
     #[test]

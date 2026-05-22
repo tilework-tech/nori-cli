@@ -39,6 +39,8 @@ impl Drop for CallbackServerGuard {
 /// and the `task` (to await completion). There is no Drop implementation;
 /// the caller is responsible for managing both halves.
 pub struct OAuthLoginHandle {
+    /// The URL the user can open manually to authorize this MCP server.
+    pub authorization_url: String,
     /// Send to cancel the OAuth flow.
     pub cancel_tx: Option<oneshot::Sender<()>>,
     /// The task running the flow.
@@ -151,6 +153,7 @@ pub async fn start_oauth_login(
         });
 
         Ok(OAuthLoginHandle {
+            authorization_url: auth_url,
             cancel_tx: Some(cancel_tx),
             task,
         })
@@ -255,6 +258,7 @@ async fn start_oauth_login_preconfigured(
     });
 
     Ok(OAuthLoginHandle {
+        authorization_url: auth_url_str,
         cancel_tx: Some(cancel_tx),
         task,
     })
@@ -528,5 +532,18 @@ mod tests {
                 .to_string()
                 .contains("timed out waiting for OAuth callback"),
         );
+    }
+
+    #[test]
+    fn parse_oauth_callback_decodes_linear_code_and_state() {
+        let callback = "/callback?code=6308519a-74c6-493a-84bc-0b62f65d6bd8%3AFye4xafYoqSz7AiE%3A9RbaPBdYF2ALzmJ8V1YezOvsKtQLpTtR&state=u9U31LFMBwdjKtt_zaq6qQ";
+
+        let parsed = parse_oauth_callback(callback).expect("callback should parse");
+
+        assert_eq!(
+            parsed.code,
+            "6308519a-74c6-493a-84bc-0b62f65d6bd8:Fye4xafYoqSz7AiE:9RbaPBdYF2ALzmJ8V1YezOvsKtQLpTtR"
+        );
+        assert_eq!(parsed.state, "u9U31LFMBwdjKtt_zaq6qQ");
     }
 }

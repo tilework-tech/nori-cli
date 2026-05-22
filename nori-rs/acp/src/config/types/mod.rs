@@ -199,6 +199,10 @@ pub struct NoriConfigToml {
     /// History persistence policy
     pub history_persistence: Option<HistoryPersistence>,
 
+    /// ACP wire proxy logging settings
+    #[serde(default)]
+    pub acp_proxy: AcpProxyConfigToml,
+
     /// TUI settings
     #[serde(default)]
     pub tui: TuiConfigToml,
@@ -218,6 +222,41 @@ pub struct NoriConfigToml {
     /// Custom agent definitions
     #[serde(default)]
     pub agents: Vec<AgentConfigToml>,
+}
+
+/// TOML settings for ACP wire proxy logging.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AcpProxyConfigToml {
+    /// Whether to record raw ACP JSON-RPC messages to disk.
+    pub enabled: Option<bool>,
+}
+
+/// Resolved ACP wire proxy logging settings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcpProxyConfig {
+    /// Whether wire logging is enabled.
+    pub enabled: bool,
+    /// Directory where per-child JSONL wire logs are written.
+    pub log_dir: PathBuf,
+}
+
+impl AcpProxyConfig {
+    /// Build resolved proxy settings from TOML and the Nori home directory.
+    pub fn from_toml(toml: AcpProxyConfigToml, nori_home: &std::path::Path) -> Self {
+        Self {
+            enabled: toml.enabled.unwrap_or(false),
+            log_dir: nori_home.join("acp-wire"),
+        }
+    }
+
+    /// Disabled proxy settings for tests and direct internal callers.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            log_dir: PathBuf::new(),
+        }
+    }
 }
 
 /// Whether terminal notifications (OSC 9) are enabled or disabled.
@@ -1107,6 +1146,8 @@ pub enum FooterSegment {
     NoriVersion,
     /// Token usage: "Tokens: 77K total (32K cached)"
     TokenUsage,
+    /// ACP mode indicator: "[ Plan ]"
+    ModeIndicator,
 }
 
 impl FooterSegment {
@@ -1123,6 +1164,7 @@ impl FooterSegment {
             Self::NoriProfile => "Skillset",
             Self::NoriVersion => "Skillset Version",
             Self::TokenUsage => "Token Usage",
+            Self::ModeIndicator => "Mode Indicator",
         }
     }
 
@@ -1139,6 +1181,7 @@ impl FooterSegment {
             Self::NoriProfile => "nori_profile",
             Self::NoriVersion => "nori_version",
             Self::TokenUsage => "token_usage",
+            Self::ModeIndicator => "mode_indicator",
         }
     }
 
@@ -1155,6 +1198,7 @@ impl FooterSegment {
             Self::NoriProfile,
             Self::NoriVersion,
             Self::TokenUsage,
+            Self::ModeIndicator,
         ]
     }
 
@@ -1195,6 +1239,8 @@ pub struct FooterSegmentConfigToml {
     pub nori_version: Option<bool>,
     /// Enable/disable token usage segment.
     pub token_usage: Option<bool>,
+    /// Enable/disable ACP mode indicator segment.
+    pub mode_indicator: Option<bool>,
 }
 
 /// Resolved footer segment configuration with defaults applied.
@@ -1220,21 +1266,29 @@ pub struct FooterSegmentConfig {
     pub nori_version: bool,
     /// Enable/disable token usage segment.
     pub token_usage: bool,
+    /// Enable/disable ACP mode indicator segment.
+    pub mode_indicator: bool,
 }
 
 impl Default for FooterSegmentConfig {
     fn default() -> Self {
+        // Lean defaults: only segments that are useful for everyone (or
+        // self-hiding when irrelevant) ship enabled. Niche segments such as
+        // vim mode, prompt summary, git stats, and skillset info are gated
+        // behind explicit opt-in so the footer stays readable on smaller
+        // terminals.
         Self {
-            prompt_summary: true,
-            vim_mode: true,
+            prompt_summary: false,
+            vim_mode: false,
             git_branch: true,
             worktree_name: true,
-            git_stats: true,
+            git_stats: false,
             context: true,
             approval_mode: true,
-            nori_profile: true,
-            nori_version: true,
+            nori_profile: false,
+            nori_version: false,
             token_usage: true,
+            mode_indicator: true,
         }
     }
 }
@@ -1242,17 +1296,19 @@ impl Default for FooterSegmentConfig {
 impl FooterSegmentConfig {
     /// Resolve from TOML config, applying defaults for missing values.
     pub fn from_toml(toml: &FooterSegmentConfigToml) -> Self {
+        let defaults = Self::default();
         Self {
-            prompt_summary: toml.prompt_summary.unwrap_or(true),
-            vim_mode: toml.vim_mode.unwrap_or(true),
-            git_branch: toml.git_branch.unwrap_or(true),
-            worktree_name: toml.worktree_name.unwrap_or(true),
-            git_stats: toml.git_stats.unwrap_or(true),
-            context: toml.context.unwrap_or(true),
-            approval_mode: toml.approval_mode.unwrap_or(true),
-            nori_profile: toml.nori_profile.unwrap_or(true),
-            nori_version: toml.nori_version.unwrap_or(true),
-            token_usage: toml.token_usage.unwrap_or(true),
+            prompt_summary: toml.prompt_summary.unwrap_or(defaults.prompt_summary),
+            vim_mode: toml.vim_mode.unwrap_or(defaults.vim_mode),
+            git_branch: toml.git_branch.unwrap_or(defaults.git_branch),
+            worktree_name: toml.worktree_name.unwrap_or(defaults.worktree_name),
+            git_stats: toml.git_stats.unwrap_or(defaults.git_stats),
+            context: toml.context.unwrap_or(defaults.context),
+            approval_mode: toml.approval_mode.unwrap_or(defaults.approval_mode),
+            nori_profile: toml.nori_profile.unwrap_or(defaults.nori_profile),
+            nori_version: toml.nori_version.unwrap_or(defaults.nori_version),
+            token_usage: toml.token_usage.unwrap_or(defaults.token_usage),
+            mode_indicator: toml.mode_indicator.unwrap_or(defaults.mode_indicator),
         }
     }
 
@@ -1269,6 +1325,7 @@ impl FooterSegmentConfig {
             FooterSegment::NoriProfile => self.nori_profile,
             FooterSegment::NoriVersion => self.nori_version,
             FooterSegment::TokenUsage => self.token_usage,
+            FooterSegment::ModeIndicator => self.mode_indicator,
         }
     }
 
@@ -1285,6 +1342,7 @@ impl FooterSegmentConfig {
             FooterSegment::NoriProfile => self.nori_profile = enabled,
             FooterSegment::NoriVersion => self.nori_version = enabled,
             FooterSegment::TokenUsage => self.token_usage = enabled,
+            FooterSegment::ModeIndicator => self.mode_indicator = enabled,
         }
     }
 
@@ -1294,6 +1352,106 @@ impl FooterSegmentConfig {
             .iter()
             .map(|s| (*s, self.is_enabled(*s)))
             .collect()
+    }
+}
+
+/// TOML-deserializable footer segment placement settings.
+///
+/// Each field replaces that placement when present. Listed segments are moved
+/// out of other default placements so a partial override like
+/// `textarea_top_right = ["mode_indicator"]` moves the mode indicator instead
+/// of duplicating it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FooterLayoutConfigToml {
+    pub footer_left: Option<Vec<FooterSegment>>,
+    pub footer_right: Option<Vec<FooterSegment>>,
+    pub textarea_top_left: Option<Vec<FooterSegment>>,
+    pub textarea_top_right: Option<Vec<FooterSegment>>,
+    pub textarea_bottom_left: Option<Vec<FooterSegment>>,
+    pub textarea_bottom_right: Option<Vec<FooterSegment>>,
+}
+
+/// Resolved footer segment placement configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FooterLayoutConfig {
+    pub footer_left: Vec<FooterSegment>,
+    pub footer_right: Vec<FooterSegment>,
+    pub textarea_top_left: Vec<FooterSegment>,
+    pub textarea_top_right: Vec<FooterSegment>,
+    pub textarea_bottom_left: Vec<FooterSegment>,
+    pub textarea_bottom_right: Vec<FooterSegment>,
+}
+
+impl Default for FooterLayoutConfig {
+    fn default() -> Self {
+        Self {
+            footer_left: vec![
+                FooterSegment::PromptSummary,
+                FooterSegment::VimMode,
+                FooterSegment::GitBranch,
+                FooterSegment::WorktreeName,
+                FooterSegment::GitStats,
+                FooterSegment::Context,
+                FooterSegment::ApprovalMode,
+                FooterSegment::NoriProfile,
+                FooterSegment::NoriVersion,
+                FooterSegment::TokenUsage,
+            ],
+            footer_right: vec![FooterSegment::ModeIndicator],
+            textarea_top_left: Vec::new(),
+            textarea_top_right: Vec::new(),
+            textarea_bottom_left: Vec::new(),
+            textarea_bottom_right: Vec::new(),
+        }
+    }
+}
+
+impl FooterLayoutConfig {
+    pub fn from_toml(toml: &FooterLayoutConfigToml) -> Self {
+        let mut config = Self::default();
+
+        if let Some(segments) = &toml.footer_left {
+            config.remove_segments(segments);
+            config.footer_left = segments.clone();
+        }
+        if let Some(segments) = &toml.footer_right {
+            config.remove_segments(segments);
+            config.footer_right = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_top_left {
+            config.remove_segments(segments);
+            config.textarea_top_left = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_top_right {
+            config.remove_segments(segments);
+            config.textarea_top_right = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_bottom_left {
+            config.remove_segments(segments);
+            config.textarea_bottom_left = segments.clone();
+        }
+        if let Some(segments) = &toml.textarea_bottom_right {
+            config.remove_segments(segments);
+            config.textarea_bottom_right = segments.clone();
+        }
+
+        config
+    }
+
+    fn remove_segments(&mut self, segments: &[FooterSegment]) {
+        self.footer_left
+            .retain(|segment| !segments.contains(segment));
+        self.footer_right
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_top_left
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_top_right
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_bottom_left
+            .retain(|segment| !segments.contains(segment));
+        self.textarea_bottom_right
+            .retain(|segment| !segments.contains(segment));
     }
 }
 
@@ -1328,6 +1486,10 @@ pub struct TuiConfigToml {
     #[serde(default)]
     pub footer_segments: FooterSegmentConfigToml,
 
+    /// Footer segment placement settings.
+    #[serde(default)]
+    pub footer_layout: FooterLayoutConfigToml,
+
     /// Timeout for custom prompt script execution.
     pub script_timeout: Option<ScriptTimeout>,
 
@@ -1346,6 +1508,14 @@ pub struct TuiConfigToml {
 
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: Option<bool>,
+
+    /// Show rotating custom messages while the agent is working.
+    pub custom_working_messages: Option<bool>,
+
+    /// User-supplied list of working messages. When non-empty and
+    /// `custom_working_messages` is enabled, the TUI samples from this list
+    /// instead of the builtin whimsical messages.
+    pub custom_working_message_list: Option<Vec<String>>,
 }
 
 /// Resolved TUI configuration
@@ -1478,6 +1648,9 @@ pub struct NoriConfig {
     /// History persistence policy
     pub history_persistence: HistoryPersistence,
 
+    /// ACP wire proxy logging settings.
+    pub acp_proxy: AcpProxyConfig,
+
     /// Enable TUI animations
     pub animations: bool,
 
@@ -1519,8 +1692,19 @@ pub struct NoriConfig {
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: bool,
 
+    /// Show rotating custom messages while the agent is working.
+    pub custom_working_messages: bool,
+
+    /// Optional user-supplied list of working messages. When non-empty and
+    /// `custom_working_messages` is `true`, the TUI samples from this list
+    /// instead of the builtin whimsical messages.
+    pub custom_working_message_list: Vec<String>,
+
     /// Footer segment visibility configuration.
     pub footer_segment_config: FooterSegmentConfig,
+
+    /// Footer segment placement configuration.
+    pub footer_layout_config: FooterLayoutConfig,
 
     /// Nori home directory (~/.nori/cli)
     pub nori_home: PathBuf,
@@ -1594,6 +1778,10 @@ impl Default for NoriConfig {
             sandbox_mode: SandboxMode::WorkspaceWrite,
             approval_policy: ApprovalPolicy::OnRequest,
             history_persistence: HistoryPersistence::default(),
+            acp_proxy: AcpProxyConfig {
+                enabled: false,
+                log_dir: PathBuf::from(".nori/cli/acp-wire"),
+            },
             animations: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
@@ -1607,7 +1795,10 @@ impl Default for NoriConfig {
             skillset_per_session: false,
             file_manager: None,
             pinned_plan_drawer: false,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: FooterLayoutConfig::default(),
             nori_home: PathBuf::from(".nori/cli"),
             cwd: std::env::current_dir().unwrap_or_default(),
             mcp_servers: HashMap::new(),

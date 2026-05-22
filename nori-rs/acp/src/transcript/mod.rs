@@ -30,6 +30,7 @@ pub(crate) const PROJECT_METADATA_FILE: &str = "project.json";
 
 pub use loader::ProjectInfo;
 pub use loader::SessionInfo;
+pub use loader::SessionMetadata;
 pub use loader::Transcript;
 pub use loader::TranscriptLoader;
 pub use project::ProjectId;

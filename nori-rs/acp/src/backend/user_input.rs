@@ -81,13 +81,17 @@ impl AcpBackend {
             if *is_first {
                 *is_first = false;
                 let skip_summary = cfg!(debug_assertions) && self.agent_name.starts_with("mock-");
-                if !skip_summary {
+                let prompt_summary_enabled = crate::config::NoriConfig::load()
+                    .map(|c| c.footer_segment_config.prompt_summary)
+                    .unwrap_or(false);
+                if !skip_summary && (prompt_summary_enabled || self.auto_worktree.is_enabled()) {
                     let event_tx = self.event_tx.clone();
                     let agent_name = self.agent_name.clone();
                     let cwd = self.cwd.clone();
                     let prompt_for_summary = display_text.clone();
                     let auto_worktree = self.auto_worktree;
                     let auto_worktree_repo_root = self.auto_worktree_repo_root.clone();
+                    let acp_proxy = self.acp_proxy.clone();
                     tokio::spawn(async move {
                         if let Err(e) = run_prompt_summary(
                             &event_tx,
@@ -96,6 +100,7 @@ impl AcpBackend {
                             &prompt_for_summary,
                             auto_worktree,
                             auto_worktree_repo_root.as_deref(),
+                            acp_proxy,
                         )
                         .await
                         {

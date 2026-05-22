@@ -185,6 +185,8 @@ pub struct AcpBackendConfig {
     pub nori_home: PathBuf,
     /// History persistence policy
     pub history_persistence: crate::config::HistoryPersistence,
+    /// ACP wire proxy logging settings
+    pub acp_proxy: crate::config::AcpProxyConfig,
     /// CLI version for transcript metadata
     pub cli_version: String,
     /// Auto-worktree mode (whether a worktree was created at startup)
@@ -276,6 +278,8 @@ pub struct AcpBackend {
     nori_home: PathBuf,
     /// History persistence policy
     history_persistence: crate::config::HistoryPersistence,
+    /// ACP wire proxy logging settings
+    acp_proxy: crate::config::AcpProxyConfig,
     /// Conversation ID for this session (used for history entries)
     conversation_id: ConversationId,
     /// Sender for broadcasting approval policy updates to the handler
@@ -324,6 +328,8 @@ pub struct AcpBackend {
     session_driver: Arc<Mutex<session_runtime_driver::SessionDriver>>,
     /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
+    /// OAuth credential store mode used when forwarding MCP auth to ACP agents.
+    mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
 mod helpers;
@@ -333,6 +339,7 @@ mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod user_input;
+mod user_shell;
 use helpers::get_op_name;
 mod tool_display;
 #[cfg(test)]

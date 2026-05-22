@@ -9,6 +9,7 @@ use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
 use ratatui::layout::Margin;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -27,10 +28,13 @@ use super::footer::esc_hint_mode;
 use super::footer::footer_height;
 use super::footer::render_footer;
 use super::footer::reset_mode_after_activity;
+use super::footer::textarea_corner_segments;
 use super::footer::toggle_shortcut_mode;
 use super::history_search_popup::HistorySearchPopup;
 use super::paste_burst::CharDecision;
 use super::paste_burst::PasteBurst;
+use super::skill_popup::SkillPickerItem;
+use super::skill_popup::SkillPopup;
 use crate::bottom_pane::paste_burst::FlushResult;
 use crate::bottom_pane::prompt_args::expand_custom_prompt;
 use crate::bottom_pane::prompt_args::expand_if_numeric_with_positional_args;
@@ -68,7 +72,6 @@ use std::time::Instant;
 /// If the pasted content exceeds this number of characters, replace it with a
 /// placeholder in the UI.
 const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
-
 /// Result returned when the user interacts with the text area.
 #[derive(Debug, PartialEq)]
 pub enum InputResult {
@@ -93,6 +96,20 @@ enum PromptSelectionAction {
     Submit { text: String },
 }
 
+#[derive(Clone, Copy)]
+enum PromptIndicator {
+    Normal,
+    Shortcut,
+    Slash,
+    Shell,
+}
+
+impl PromptIndicator {
+    fn hides_textarea_prefix(self) -> bool {
+        matches!(self, PromptIndicator::Slash)
+    }
+}
+
 pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
@@ -103,8 +120,10 @@ pub(crate) struct ChatComposer {
     esc_backtrack_hint: bool,
     use_shift_enter_hint: bool,
     dismissed_file_popup_token: Option<String>,
+    dismissed_skill_popup_token: Option<String>,
     current_file_query: Option<String>,
     pending_pastes: Vec<(String, String)>,
+    is_shell_mode: bool,
     has_focus: bool,
     attached_images: Vec<AttachedImage>,
     placeholder_text: String,
@@ -116,7 +135,7 @@ pub(crate) struct ChatComposer {
     custom_prompts: Vec<CustomPrompt>,
     agent_commands: Vec<nori_protocol::AgentCommandInfo>,
     agent_command_prefix: String,
-    command_description_overrides: HashMap<SlashCommand, String>,
+    command_description_overrides: HashMap<SlashCommand, Line<'static>>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
@@ -124,16 +143,19 @@ pub(crate) struct ChatComposer {
     system_info: Option<crate::system_info::SystemInfo>,
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
+    acp_mode_label: Option<String>,
     vim_enter_behavior: nori_acp::config::VimEnterBehavior,
     vertical_footer: bool,
     prompt_summary: Option<String>,
     footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    footer_layout_config: nori_acp::config::FooterLayoutConfig,
 }
 
 /// Popup state – at most one can be visible at any time.
 enum ActivePopup {
     None,
     Command(CommandPopup),
+    Skill(SkillPopup),
     File(FileSearchPopup),
     HistorySearch(HistorySearchPopup),
 }
@@ -165,8 +187,10 @@ impl ChatComposer {
             esc_backtrack_hint: false,
             use_shift_enter_hint,
             dismissed_file_popup_token: None,
+            dismissed_skill_popup_token: None,
             current_file_query: None,
             pending_pastes: Vec::new(),
+            is_shell_mode: false,
             has_focus: has_input_focus,
             attached_images: Vec::new(),
             placeholder_text,
@@ -183,10 +207,12 @@ impl ChatComposer {
             session_usage: None,
             system_info: None,
             approval_mode_label: None,
+            acp_mode_label: None,
             vim_enter_behavior: nori_acp::config::VimEnterBehavior::Off,
             vertical_footer: false,
             prompt_summary: None,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -195,7 +221,7 @@ impl ChatComposer {
 
     /// Returns true if the composer currently contains no user input.
     pub(crate) fn is_empty(&self) -> bool {
-        self.textarea.is_empty()
+        !self.is_shell_mode && self.textarea.is_empty()
     }
 
     /// Record the history metadata advertised by `SessionConfiguredEvent` so
@@ -213,6 +239,13 @@ impl ChatComposer {
         config: nori_acp::config::FooterSegmentConfig,
     ) {
         self.footer_segment_config = config;
+    }
+
+    pub(crate) fn set_footer_layout_config(
+        &mut self,
+        config: nori_acp::config::FooterLayoutConfig,
+    ) {
+        self.footer_layout_config = config;
     }
 
     #[cfg(test)]
@@ -283,10 +316,15 @@ impl ChatComposer {
         self.textarea.set_text("");
         self.pending_pastes.clear();
         self.attached_images.clear();
-        self.textarea.set_text(&text);
+        if let Some(shell_body) = text.strip_prefix('!') {
+            self.is_shell_mode = true;
+            self.textarea.set_text(shell_body);
+        } else {
+            self.is_shell_mode = false;
+            self.textarea.set_text(&text);
+        }
         self.textarea.set_cursor(0);
-        self.sync_command_popup();
-        self.sync_file_search_popup();
+        self.sync_selection_popups();
     }
 
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
@@ -302,7 +340,11 @@ impl ChatComposer {
 
     /// Get the current composer text.
     pub(crate) fn current_text(&self) -> String {
-        self.textarea.text().to_string()
+        if self.is_shell_mode {
+            format!("!{}", self.textarea.text())
+        } else {
+            self.textarea.text().to_string()
+        }
     }
 
     /// Attempt to start a burst by retro-capturing recent chars before the cursor.
@@ -353,8 +395,7 @@ impl ChatComposer {
 
     pub(crate) fn insert_str(&mut self, text: &str) {
         self.textarea.insert_str(text);
-        self.sync_command_popup();
-        self.sync_file_search_popup();
+        self.sync_selection_popups();
     }
 
     fn set_has_focus(&mut self, has_focus: bool) {
@@ -386,11 +427,24 @@ impl ChatComposer {
         self.approval_mode_label = label;
     }
 
+    pub(crate) fn set_acp_mode_label(&mut self, label: Option<String>) {
+        self.acp_mode_label = label;
+    }
+
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.prompt_summary = summary;
     }
 
     pub(crate) fn set_command_description_override(&mut self, cmd: SlashCommand, desc: String) {
+        self.command_description_overrides
+            .insert(cmd, Line::from(desc));
+    }
+
+    pub(crate) fn set_command_description_override_line(
+        &mut self,
+        cmd: SlashCommand,
+        desc: Line<'static>,
+    ) {
         self.command_description_overrides.insert(cmd, desc);
     }
 
@@ -420,6 +474,7 @@ impl ChatComposer {
 impl Renderable for ChatComposer {
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
         let [_, textarea_rect, _] = self.layout_areas(area);
+        let textarea_rect = Self::textarea_body_rect(textarea_rect, self.prompt_indicator());
         let state = *self.textarea_state.borrow();
         self.textarea.cursor_pos_with_state(textarea_rect, state)
     }
@@ -432,12 +487,20 @@ impl Renderable for ChatComposer {
         let footer_spacing = Self::footer_spacing(footer_hint_height);
         let footer_total_height = footer_hint_height + footer_spacing;
         const COLS_WITH_MARGIN: u16 = LIVE_PREFIX_COLS + 1;
-        self.textarea
-            .desired_height(width.saturating_sub(COLS_WITH_MARGIN))
-            + 2
+        let hidden_prefix_cols = if self.prompt_indicator().hides_textarea_prefix() {
+            1
+        } else {
+            0
+        };
+        self.textarea.desired_height(
+            width
+                .saturating_sub(COLS_WITH_MARGIN)
+                .saturating_add(hidden_prefix_cols),
+        ) + 2
             + match &self.active_popup {
                 ActivePopup::None => footer_total_height,
                 ActivePopup::Command(c) => c.calculate_required_height(width),
+                ActivePopup::Skill(c) => c.calculate_required_height(width),
                 ActivePopup::File(c) => c.calculate_required_height(),
                 ActivePopup::HistorySearch(c) => c.calculate_required_height(),
             }
@@ -447,6 +510,9 @@ impl Renderable for ChatComposer {
         let [composer_rect, textarea_rect, popup_rect] = self.layout_areas(area);
         match &self.active_popup {
             ActivePopup::Command(popup) => {
+                popup.render_ref(popup_rect, buf);
+            }
+            ActivePopup::Skill(popup) => {
                 popup.render_ref(popup_rect, buf);
             }
             ActivePopup::File(popup) => {
@@ -496,22 +562,140 @@ impl Renderable for ChatComposer {
         }
         let style = user_message_style();
         Block::default().style(style).render_ref(composer_rect, buf);
+        render_textarea_corner_segments(
+            composer_rect,
+            buf,
+            textarea_corner_segments(&self.footer_props()),
+        );
+        let prompt_indicator = self.prompt_indicator();
         if !textarea_rect.is_empty() {
+            let prompt = match prompt_indicator {
+                PromptIndicator::Normal => "›".bold(),
+                PromptIndicator::Shortcut => {
+                    Span::styled("?", Style::default().fg(Color::DarkGray))
+                }
+                PromptIndicator::Slash => "/".cyan(),
+                PromptIndicator::Shell => "!".red(),
+            };
             buf.set_span(
                 textarea_rect.x - LIVE_PREFIX_COLS,
                 textarea_rect.y,
-                &"›".bold(),
+                &prompt,
                 textarea_rect.width,
             );
         }
 
+        let body_rect = Self::textarea_body_rect(textarea_rect, prompt_indicator);
         let mut state = self.textarea_state.borrow_mut();
-        StatefulWidgetRef::render_ref(&(&self.textarea), textarea_rect, buf, &mut state);
-        if self.textarea.text().is_empty() {
-            let placeholder = Span::from(self.placeholder_text.as_str()).dim();
-            Line::from(vec![placeholder]).render_ref(textarea_rect.inner(Margin::new(0, 0)), buf);
+        StatefulWidgetRef::render_ref(&(&self.textarea), body_rect, buf, &mut state);
+        if prompt_indicator.hides_textarea_prefix() && !textarea_rect.is_empty() {
+            buf.set_string(
+                textarea_rect.x.saturating_sub(1),
+                textarea_rect.y,
+                " ",
+                user_message_style(),
+            );
+        }
+        if !self.is_shell_mode && self.textarea.text().is_empty() {
+            let placeholder_text = if matches!(prompt_indicator, PromptIndicator::Shortcut) {
+                self.placeholder_text
+                    .strip_prefix("? ")
+                    .unwrap_or(&self.placeholder_text)
+            } else {
+                &self.placeholder_text
+            };
+            let placeholder = Span::from(placeholder_text).dim();
+            Line::from(vec![placeholder]).render_ref(body_rect.inner(Margin::new(0, 0)), buf);
         }
     }
+}
+
+impl ChatComposer {
+    fn textarea_body_rect(textarea_rect: Rect, prompt_indicator: PromptIndicator) -> Rect {
+        if prompt_indicator.hides_textarea_prefix() {
+            Rect {
+                x: textarea_rect.x.saturating_sub(1),
+                width: textarea_rect.width.saturating_add(1),
+                ..textarea_rect
+            }
+        } else {
+            textarea_rect
+        }
+    }
+
+    fn prompt_indicator(&self) -> PromptIndicator {
+        if self.is_shell_mode {
+            PromptIndicator::Shell
+        } else if self.textarea.text().starts_with('/') {
+            PromptIndicator::Slash
+        } else if matches!(self.footer_mode(), FooterMode::ShortcutOverlay) {
+            PromptIndicator::Shortcut
+        } else {
+            PromptIndicator::Normal
+        }
+    }
+
+    pub(super) fn is_editing_slash_command_name(&self) -> bool {
+        let text = self.textarea.text();
+        let first_line_end = text.find('\n').unwrap_or(text.len());
+        let first_line = &text[..first_line_end];
+        let cursor = self.textarea.cursor();
+        let caret_on_first_line = cursor <= first_line_end;
+
+        if !first_line.starts_with('/') || !caret_on_first_line {
+            return false;
+        }
+
+        let token_end = first_line
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+            .map(|(i, _)| i)
+            .unwrap_or(first_line.len());
+        cursor <= token_end
+    }
+}
+
+fn render_textarea_corner_segments(
+    composer_rect: Rect,
+    buf: &mut Buffer,
+    segments: super::footer::TextareaCornerSegments,
+) {
+    if composer_rect.is_empty() {
+        return;
+    }
+
+    render_left_corner(composer_rect.x + 1, composer_rect.y, buf, segments.top_left);
+    render_right_corner(
+        composer_rect.right().saturating_sub(1),
+        composer_rect.y,
+        buf,
+        segments.top_right,
+    );
+
+    let bottom_y = composer_rect.bottom().saturating_sub(1);
+    render_left_corner(composer_rect.x + 1, bottom_y, buf, segments.bottom_left);
+    render_right_corner(
+        composer_rect.right().saturating_sub(1),
+        bottom_y,
+        buf,
+        segments.bottom_right,
+    );
+}
+
+fn render_left_corner(x: u16, y: u16, buf: &mut Buffer, line: Line<'static>) {
+    let width = line.width() as u16;
+    if width > 0 {
+        line.render(Rect::new(x, y, width, 1), buf);
+    }
+}
+
+fn render_right_corner(right_edge: u16, y: u16, buf: &mut Buffer, line: Line<'static>) {
+    let width = line.width() as u16;
+    if width == 0 {
+        return;
+    }
+    let x = right_edge.saturating_sub(width).saturating_add(1);
+    line.render(Rect::new(x, y, width, 1), buf);
 }
 
 fn prompt_selection_action(

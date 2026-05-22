@@ -2,16 +2,10 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn footer_hint_row_is_separated_from_composer() {
+fn shortcut_hint_is_placeholder_only_until_shortcut_overlay_opens() {
     let (tx, _rx) = unbounded_channel::<AppEvent>();
     let sender = AppEventSender::new(tx);
-    let composer = ChatComposer::new(
-        true,
-        sender,
-        false,
-        "Ask Nori to do anything".to_string(),
-        false,
-    );
+    let composer = ChatComposer::new(true, sender, false, "? for shortcuts".to_string(), false);
 
     let area = Rect::new(0, 0, 40, 6);
     let mut buf = Buffer::empty(area);
@@ -25,33 +19,49 @@ fn footer_hint_row_is_separated_from_composer() {
         row
     };
 
-    let mut hint_row: Option<(u16, String)> = None;
-    for y in 0..area.height {
-        let row = row_to_string(y);
-        if row.contains("? for shortcuts") {
-            hint_row = Some((y, row));
-            break;
-        }
-    }
-
-    let (hint_row_idx, hint_row_contents) =
-        hint_row.expect("expected footer hint row to be rendered");
-    assert_eq!(
-        hint_row_idx,
-        area.height - 1,
-        "hint row should occupy the bottom line: {hint_row_contents:?}",
+    let input_row = row_to_string(1);
+    assert!(
+        input_row.contains("? for shortcuts"),
+        "expected shortcut hint in the empty composer placeholder: {input_row:?}",
     );
+
+    let footer_rows = (3..area.height).map(row_to_string).collect::<Vec<_>>();
+    assert_eq!(
+        footer_rows
+            .iter()
+            .filter(|row| row.contains("? for shortcuts"))
+            .count(),
+        0,
+        "shortcut hint should not render below the textarea: {footer_rows:?}",
+    );
+}
+
+#[test]
+fn shortcut_overlay_still_renders_below_prompt_when_requested() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(true, sender, false, "? for shortcuts".to_string(), false);
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+    let area = Rect::new(0, 0, 80, 10);
+    let mut buf = Buffer::empty(area);
+    composer.render(area, &mut buf);
+
+    let rendered = (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buf[(x, y)].symbol().chars().next().unwrap_or(' '))
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
 
     assert!(
-        hint_row_idx > 0,
-        "expected a spacing row above the footer hints",
-    );
-
-    let spacing_row = row_to_string(hint_row_idx - 1);
-    assert_eq!(
-        spacing_row.trim(),
-        "",
-        "expected blank spacing row above hints but saw: {spacing_row:?}",
+        rendered.iter().any(|row| row.contains("newline")),
+        "shortcut overlay should still render below the prompt: {rendered:?}",
     );
 }
 

@@ -23,6 +23,8 @@ use nori_cli::login::run_logout;
 
 use nori_tui::AppExitInfo;
 use nori_tui::Cli as TuiCli;
+use nori_tui::RESUME_HINT_LEAD;
+use nori_tui::resume_command_for_conversation;
 use nori_tui::update_action::UpdateAction;
 use owo_colors::OwoColorize;
 use std::path::PathBuf;
@@ -85,12 +87,33 @@ enum Subcommand {
 
     /// Generate shell completion scripts.
     Completions(CompletionsCommand),
+
+    /// Resume a previous interactive session (picker by default; use --last to continue the most recent).
+    Resume(ResumeCommand),
 }
 
 #[derive(Debug, Parser)]
 struct CompletionsCommand {
     /// The shell to generate completions for.
     shell: clap_complete::Shell,
+}
+
+#[derive(Debug, Parser)]
+struct ResumeCommand {
+    /// Session id (UUID). If omitted, use --last or choose from the picker.
+    #[arg(value_name = "SESSION_ID")]
+    session_id: Option<String>,
+
+    /// Continue the most recent session without showing the picker.
+    #[arg(long = "last", default_value_t = false)]
+    last: bool,
+
+    /// Show all sessions instead of filtering to the current working directory.
+    #[arg(long = "all", default_value_t = false)]
+    all: bool,
+
+    #[clap(flatten)]
+    config_overrides: TuiCli,
 }
 
 #[derive(Debug, Parser)]
@@ -195,26 +218,27 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
     let AppExitInfo {
         token_usage,
         conversation_id,
+        conversation_has_activity,
         ..
     } = exit_info;
 
-    if token_usage.is_zero() {
-        return Vec::new();
+    let mut lines = Vec::new();
+    if !token_usage.is_zero() {
+        lines.push(format!(
+            "{}",
+            codex_core::protocol::FinalOutput::from(token_usage)
+        ));
     }
 
-    let mut lines = vec![format!(
-        "{}",
-        codex_core::protocol::FinalOutput::from(token_usage)
-    )];
-
-    if let Some(session_id) = conversation_id {
-        let resume_cmd = format!("nori resume {session_id}");
+    if conversation_has_activity && let Some(session_id) = conversation_id {
+        let resume_cmd = resume_command_for_conversation(&session_id);
         let command = if color_enabled {
             resume_cmd.cyan().to_string()
         } else {
             resume_cmd
         };
-        lines.push(format!("To continue this session, run {command}"));
+        lines.push(RESUME_HINT_LEAD.to_string());
+        lines.push(command);
     }
 
     lines
@@ -457,6 +481,23 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         Some(Subcommand::Skillsets(cmd)) => {
             run_skillsets_command(cmd)?;
         }
+        Some(Subcommand::Resume(ResumeCommand {
+            session_id,
+            last,
+            all,
+            config_overrides,
+        })) => {
+            interactive = finalize_resume_interactive(
+                interactive,
+                root_config_overrides.clone(),
+                session_id,
+                last,
+                all,
+                config_overrides,
+            );
+            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            handle_app_exit(exit_info)?;
+        }
         Some(Subcommand::Execpolicy(ExecpolicyCommand { sub })) => match sub {
             ExecpolicySubcommand::Check(cmd) => run_execpolicycheck(cmd)?,
         },
@@ -489,12 +530,91 @@ fn prepend_config_flags(
         .splice(0..0, cli_config_overrides.raw_overrides);
 }
 
+fn finalize_resume_interactive(
+    mut interactive: TuiCli,
+    root_config_overrides: CliConfigOverrides,
+    session_id: Option<String>,
+    last: bool,
+    show_all: bool,
+    resume_cli: TuiCli,
+) -> TuiCli {
+    interactive.resume_picker = session_id.is_none() && !last;
+    interactive.resume_last = last;
+    interactive.resume_session_id = session_id;
+    interactive.resume_show_all = show_all;
+    merge_interactive_cli_flags(&mut interactive, resume_cli);
+    prepend_config_flags(&mut interactive.config_overrides, root_config_overrides);
+    interactive
+}
+
+fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli) {
+    if let Some(prompt) = subcommand_cli.prompt {
+        interactive.prompt = Some(prompt.replace("\r\n", "\n").replace('\r', "\n"));
+    }
+    if !subcommand_cli.images.is_empty() {
+        interactive.images = subcommand_cli.images;
+    }
+    if let Some(agent) = subcommand_cli.agent {
+        interactive.agent = Some(agent);
+    }
+    if let Some(profile) = subcommand_cli.config_profile {
+        interactive.config_profile = Some(profile);
+    }
+    if subcommand_cli.dangerously_bypass_approvals_and_sandbox {
+        interactive.dangerously_bypass_approvals_and_sandbox = true;
+    }
+    if let Some(cwd) = subcommand_cli.cwd {
+        interactive.cwd = Some(cwd);
+    }
+    if !subcommand_cli.add_dir.is_empty() {
+        interactive.add_dir.extend(subcommand_cli.add_dir);
+    }
+    if subcommand_cli.skip_welcome {
+        interactive.skip_welcome = true;
+    }
+    if subcommand_cli.skip_trust_directory {
+        interactive.skip_trust_directory = true;
+    }
+    interactive
+        .config_overrides
+        .raw_overrides
+        .extend(subcommand_cli.config_overrides.raw_overrides);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
     use pretty_assertions::assert_eq;
+
+    fn finalize_resume_from_args(args: &[&str]) -> TuiCli {
+        let cli = MultitoolCli::try_parse_from(args).expect("parse");
+        let MultitoolCli {
+            interactive,
+            config_overrides: root_overrides,
+            subcommand,
+        } = cli;
+
+        let Subcommand::Resume(ResumeCommand {
+            session_id,
+            last,
+            all,
+            config_overrides: resume_cli,
+        }) = subcommand.expect("resume present")
+        else {
+            unreachable!()
+        };
+
+        finalize_resume_interactive(
+            interactive,
+            root_overrides,
+            session_id,
+            last,
+            all,
+            resume_cli,
+        )
+    }
 
     fn sample_exit_info(conversation: Option<&str>) -> AppExitInfo {
         let token_usage = TokenUsage {
@@ -507,6 +627,7 @@ mod tests {
             conversation_id: conversation
                 .map(ConversationId::from_string)
                 .map(Result::unwrap),
+            conversation_has_activity: conversation.is_some(),
             update_action: None,
         }
     }
@@ -516,6 +637,41 @@ mod tests {
         let exit_info = AppExitInfo {
             token_usage: TokenUsage::default(),
             conversation_id: None,
+            conversation_has_activity: false,
+            update_action: None,
+        };
+        let lines = format_exit_messages(exit_info, false);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn format_exit_messages_includes_resume_hint_without_token_usage() {
+        let exit_info = AppExitInfo {
+            token_usage: TokenUsage::default(),
+            conversation_id: Some(
+                ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            ),
+            conversation_has_activity: true,
+            update_action: None,
+        };
+        let lines = format_exit_messages(exit_info, false);
+        assert_eq!(
+            lines,
+            vec![
+                "To continue this session, run:".to_string(),
+                "nori resume 123e4567-e89b-12d3-a456-426614174000".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn format_exit_messages_skips_resume_hint_without_activity() {
+        let exit_info = AppExitInfo {
+            token_usage: TokenUsage::default(),
+            conversation_id: Some(
+                ConversationId::from_string("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            ),
+            conversation_has_activity: false,
             update_action: None,
         };
         let lines = format_exit_messages(exit_info, false);
@@ -530,8 +686,8 @@ mod tests {
             lines,
             vec![
                 "Token usage: total=2 input=0 output=2".to_string(),
-                "To continue this session, run nori resume 123e4567-e89b-12d3-a456-426614174000"
-                    .to_string(),
+                "To continue this session, run:".to_string(),
+                "nori resume 123e4567-e89b-12d3-a456-426614174000".to_string(),
             ]
         );
     }
@@ -540,8 +696,86 @@ mod tests {
     fn format_exit_messages_applies_color_when_enabled() {
         let exit_info = sample_exit_info(Some("123e4567-e89b-12d3-a456-426614174000"));
         let lines = format_exit_messages(exit_info, true);
-        assert_eq!(lines.len(), 2);
-        assert!(lines[1].contains("\u{1b}[36m"));
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[1], "To continue this session, run:");
+        assert!(lines[2].contains("\u{1b}[36m"));
+    }
+
+    #[test]
+    fn resume_picker_logic_none_and_not_last() {
+        let interactive = finalize_resume_from_args(["nori", "resume"].as_ref());
+        assert!(interactive.resume_picker);
+        assert!(!interactive.resume_last);
+        assert_eq!(interactive.resume_session_id, None);
+        assert!(!interactive.resume_show_all);
+    }
+
+    #[test]
+    fn resume_picker_logic_last() {
+        let interactive = finalize_resume_from_args(["nori", "resume", "--last"].as_ref());
+        assert!(!interactive.resume_picker);
+        assert!(interactive.resume_last);
+        assert_eq!(interactive.resume_session_id, None);
+    }
+
+    #[test]
+    fn resume_picker_logic_with_session_id() {
+        let interactive = finalize_resume_from_args(["nori", "resume", "session-123"].as_ref());
+        assert!(!interactive.resume_picker);
+        assert!(!interactive.resume_last);
+        assert_eq!(
+            interactive.resume_session_id.as_deref(),
+            Some("session-123")
+        );
+    }
+
+    #[test]
+    fn resume_all_flag_sets_show_all() {
+        let interactive = finalize_resume_from_args(["nori", "resume", "--all"].as_ref());
+        assert!(interactive.resume_picker);
+        assert!(interactive.resume_show_all);
+    }
+
+    #[test]
+    fn resume_merges_resume_scoped_interactive_flags() {
+        let interactive = finalize_resume_from_args(
+            [
+                "nori",
+                "resume",
+                "session-123",
+                "--agent",
+                "codex",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "-C",
+                "/tmp",
+                "-i",
+                "/tmp/a.png,/tmp/b.png",
+                "--skip-welcome",
+                "--skip-trust-directory",
+            ]
+            .as_ref(),
+        );
+
+        assert_eq!(interactive.agent.as_deref(), Some("codex"));
+        assert!(interactive.dangerously_bypass_approvals_and_sandbox);
+        assert_eq!(
+            interactive.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp"))
+        );
+        assert!(
+            interactive
+                .images
+                .iter()
+                .any(|path| path == std::path::Path::new("/tmp/a.png"))
+        );
+        assert!(
+            interactive
+                .images
+                .iter()
+                .any(|path| path == std::path::Path::new("/tmp/b.png"))
+        );
+        assert!(interactive.skip_welcome);
+        assert!(interactive.skip_trust_directory);
     }
 
     /// Binary name should be "nori" in help output
