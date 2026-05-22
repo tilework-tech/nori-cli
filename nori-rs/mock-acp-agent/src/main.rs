@@ -1261,7 +1261,11 @@ impl acp::Agent for MockAgent {
 
     async fn cancel(&self, _args: acp::CancelNotification) -> Result<(), acp::Error> {
         eprintln!("Mock agent: cancel");
-        self.cancel_requested.set(true);
+        if std::env::var("MOCK_AGENT_IGNORE_CANCEL").is_err() {
+            self.cancel_requested.set(true);
+        } else {
+            eprintln!("Mock agent: ignoring cancel (MOCK_AGENT_IGNORE_CANCEL is set)");
+        }
         Ok(())
     }
 

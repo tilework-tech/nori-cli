@@ -330,6 +330,10 @@ pub struct AcpBackend {
     mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credential store mode used when forwarding MCP auth to ACP agents.
     mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+    /// Abort handle for the in-flight prompt task (if any)
+    prompt_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the cancel timeout watchdog (if any)
+    cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
 mod helpers;

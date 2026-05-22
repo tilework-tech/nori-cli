@@ -886,6 +886,13 @@ When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::Canc
 - `SessionPhaseChanged(Idle)` and `PromptCompleted { stop_reason, last_agent_message }` are emitted only when that prompt response is reduced
 - queued follow-up prompts remain in the reducer-owned outbound queue until an eligible drain point (`stop_reason: end_turn`)
 
+**Cancel timeout watchdog:** The cancel path has a bounded timeout to prevent indefinite hangs when agents ignore `CancelNotification`. When the `SendCancel` side effect fires, it spawns a two-phase watchdog task alongside the cooperative `session/cancel` call:
+
+1. After `CANCEL_WARNING_SECS` (3s): emits a `WarningEvent` to the TUI ("Agent is slow to cancel. Will force-cancel in 7s...")
+2. After `CANCEL_FORCE_SECS` (10s): aborts the in-flight prompt task via its `AbortHandle` and sends `InboundEvent::PromptFailed` to the reducer, which transitions the session back to Idle with `stop_reason: Cancelled`
+
+The watchdog is tracked via `cancel_timeout_abort: Arc<Mutex<Option<AbortHandle>>>` on `AcpBackend`. If the agent responds cooperatively before the timeout fires, `apply_session_event()` aborts the watchdog and clears both the watchdog and prompt abort handles on any terminal prompt event (`PromptResponse` or `PromptFailed`). The prompt task itself is tracked via `prompt_task_abort: Arc<Mutex<Option<AbortHandle>>>`, which is stored when the `SendPrompt` side effect spawns the prompt task. Both handles are initialized to `None` in `spawn()` and `resume_session()`.
+
 `SacpConnection::prompt()` also carries a small amount of session-local transport state so cancellation tails can be absorbed without widening the public phase model. If the previous prompt ended with `Cancelled`, the next prompt request may receive one or more immediate empty `end_turn` responses before the agent starts working on the user's real follow-up prompt. The connection layer now treats those empty terminal responses as stale cancel-tail cleanup and retries the same ACP prompt request until either streamed updates arrive or a non-stale stop reason is observed. That keeps the reducer contract unchanged: it still only sees the final logical completion for the user-facing prompt turn.
 
 This removes the old synthetic interrupt-abort fast-path that treated cancel as immediate idle. The TUI now renders ACP interrupt state from reducer-owned phase/completion projections instead of inferring prompt ownership from interrupt timing.
