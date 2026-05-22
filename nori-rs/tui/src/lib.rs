@@ -226,40 +226,55 @@ pub async fn run_main(
     }
 
     #[cfg(feature = "nori-config")]
-    let pending_worktree_ask = {
+    let (pending_worktree_ask, worktree_blocked_reason) = {
         use nori_acp::config::AutoWorktree;
         let auto_worktree = nori_config
             .as_ref()
             .map(|c| c.auto_worktree)
             .unwrap_or_default();
-        match auto_worktree {
-            AutoWorktree::Automatic => {
-                if let Some(effective_cwd) = cwd.clone().or_else(|| std::env::current_dir().ok()) {
-                    match nori_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
-                        Ok(worktree_path) => {
-                            tracing::info!("Auto-worktree created at {}", worktree_path.display());
-                            cwd = Some(worktree_path);
+
+        if !auto_worktree.is_enabled() {
+            (false, None)
+        } else {
+            match cwd.clone().or_else(|| std::env::current_dir().ok()) {
+                Some(ref effective_cwd) => {
+                    match nori_acp::auto_worktree::can_create_worktree(effective_cwd) {
+                        Err(reason) => {
+                            tracing::debug!("Worktree creation blocked: {reason}");
+                            (false, Some(reason.to_string()))
                         }
-                        Err(e) => {
-                            tracing::warn!("Auto-worktree setup skipped: {e}");
-                        }
+                        Ok(()) => match auto_worktree {
+                            AutoWorktree::Automatic => {
+                                match nori_acp::auto_worktree::setup_auto_worktree(effective_cwd) {
+                                    Ok(worktree_path) => {
+                                        tracing::info!(
+                                            "Auto-worktree created at {}",
+                                            worktree_path.display()
+                                        );
+                                        cwd = Some(worktree_path);
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("Auto-worktree setup skipped: {e}");
+                                    }
+                                }
+                                (false, None)
+                            }
+                            AutoWorktree::Ask => (true, None),
+                            AutoWorktree::Off => (false, None),
+                        },
                     }
-                } else {
+                }
+                None => {
                     tracing::warn!(
                         "Auto-worktree setup skipped: could not determine working directory"
                     );
+                    (false, None)
                 }
-                false
             }
-            AutoWorktree::Ask => {
-                // Defer to TUI popup after terminal init
-                true
-            }
-            AutoWorktree::Off => false,
         }
     };
     #[cfg(not(feature = "nori-config"))]
-    let pending_worktree_ask = false;
+    let (pending_worktree_ask, worktree_blocked_reason): (bool, Option<String>) = (false, None);
 
     let overrides = ConfigOverrides {
         model: agent,
@@ -376,6 +391,7 @@ pub async fn run_main(
         active_profile,
         vertical_footer,
         pending_worktree_ask,
+        worktree_blocked_reason,
     )
     .await
     .map_err(|err| std::io::Error::other(err.to_string()))
@@ -390,6 +406,7 @@ async fn run_ratatui_app(
     active_profile: Option<String>,
     vertical_footer: bool,
     pending_worktree_ask: bool,
+    worktree_blocked_reason: Option<String>,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -475,9 +492,12 @@ async fn run_ratatui_app(
         (initial_config, overrides, cli_kv_overrides)
     };
 
-    // Auto-worktree "ask" mode: show a TUI popup asking the user.
-    // If they confirm, create the worktree and reload config with the new cwd.
-    let config = if pending_worktree_ask {
+    // Auto-worktree: show a popup if worktree creation is blocked, or ask the
+    // user whether to create one.
+    let config = if let Some(reason) = worktree_blocked_reason {
+        nori::worktree_ask::run_worktree_blocked_popup(&mut tui, &reason).await?;
+        config
+    } else if pending_worktree_ask {
         let effective_cwd = config.cwd.clone();
         let user_wants_worktree = nori::worktree_ask::run_worktree_ask_popup(&mut tui).await?;
         if user_wants_worktree {
