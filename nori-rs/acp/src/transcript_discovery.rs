@@ -61,6 +61,8 @@ pub struct TranscriptLocation {
     pub session_id: String,
     /// Detailed token usage breakdown, if available.
     pub token_breakdown: Option<TranscriptTokenUsage>,
+    /// Subagents found in the transcript when they are not emitted as ACP tool events.
+    pub subagents_used: Vec<String>,
 }
 
 /// Errors that can occur during transcript discovery.
@@ -159,12 +161,14 @@ pub fn discover_transcript_for_agent_with_message(
 
     // Parse token usage from the transcript
     let token_breakdown = parse_transcript_tokens(&transcript_path, agent);
+    let subagents_used = parse_transcript_subagents(&transcript_path);
 
     Ok(TranscriptLocation {
         agent_kind: agent,
         transcript_path,
         session_id,
         token_breakdown,
+        subagents_used,
     })
 }
 
@@ -343,6 +347,61 @@ pub fn parse_transcript_tokens(path: &Path, agent: AgentKind) -> Option<Transcri
 /// Returns `None` if the file cannot be read or contains no token data.
 pub fn parse_transcript_total_tokens(path: &Path, agent: AgentKind) -> Option<i64> {
     parse_transcript_tokens(path, agent).map(|t| t.total())
+}
+
+/// Parse subagent launches from a transcript JSONL file.
+///
+/// This intentionally looks for the common payload fields agents use for
+/// delegated work (`subagent_type` and `agent_type`) instead of coupling to one
+/// transcript schema. JSON-encoded argument strings are parsed when present.
+pub fn parse_transcript_subagents(path: &Path) -> Vec<String> {
+    let Ok(text) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+
+    let mut subagents = Vec::new();
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        collect_subagents_from_value(&value, &mut subagents);
+    }
+    subagents
+}
+
+fn collect_subagents_from_value(value: &serde_json::Value, subagents: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => {}
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_subagents_from_value(value, subagents);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for key in ["subagent_type", "agentType", "agent_type"] {
+                if let Some(subagent) = map.get(key).and_then(serde_json::Value::as_str) {
+                    let subagent = subagent.to_string();
+                    if !subagents.contains(&subagent) {
+                        subagents.push(subagent);
+                    }
+                }
+            }
+            for value in map.values() {
+                if let Some(text) = value.as_str()
+                    && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text)
+                {
+                    collect_subagents_from_value(&parsed, subagents);
+                }
+                collect_subagents_from_value(value, subagents);
+            }
+        }
+    }
 }
 
 /// Parse tokens from a Claude Code transcript file.
@@ -608,8 +667,104 @@ fn parse_gemini_tokens(path: &Path) -> Option<TranscriptTokenUsage> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::io::Write;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_parse_transcript_subagents_extracts_codex_spawn_agent_arguments() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"function_call","name":"spawn_agent","arguments":"{{\"agent_type\":\"nori-task-runner\",\"message\":\"check tests\"}}"}}}}"#
+            )
+            .unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"function_call","name":"spawn_agent","arguments":"{{\"agent_type\":\"nori-task-runner\"}}"}}}}"#
+            )
+            .unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"function_call","name":"shell","arguments":"{{\"cmd\":\"git status\"}}"}}}}"#
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            parse_transcript_subagents(&transcript_file),
+            vec!["nori-task-runner".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_parse_transcript_subagents_extracts_nested_agent_input() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"message":{{"content":[{{"type":"tool_use","name":"Agent","input":{{"subagent_type":"nori-code-reviewer","prompt":"review"}}}}]}}}}"#
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            parse_transcript_subagents(&transcript_file),
+            vec!["nori-code-reviewer".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_parse_transcript_subagents_ignores_internal_agent_ids() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"agent_spawned","agentId":"019e3cb4-f515-7d62-af6a-e0016ef364f3","agent_type":"nori-code-researcher"}}}}"#
+            )
+            .unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"agent_update","agent_id":"a74c49cc919c22c12","status":"completed"}}}}"#
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            parse_transcript_subagents(&transcript_file),
+            vec!["nori-code-researcher".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_parse_transcript_subagents_keeps_camel_case_agent_type() {
+        let temp_dir = TempDir::new().unwrap();
+        let transcript_file = temp_dir.path().join("session.jsonl");
+
+        {
+            let mut f = fs::File::create(&transcript_file).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"response_item","item":{{"type":"agent_spawned","agentId":"019e3cb4-f515-7d62-af6a-e0016ef364f3","agentType":"nori-code-researcher"}}}}"#
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            parse_transcript_subagents(&transcript_file),
+            vec!["nori-code-researcher".to_string()]
+        );
+    }
 
     #[test]
     fn test_parse_claude_total_tokens() {

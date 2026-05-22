@@ -2,6 +2,20 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn composer_placeholder_pool_advertises_prompt_capabilities() {
+    assert_eq!(
+        PROMPT_MODE_PLACEHOLDERS,
+        [
+            "? for shortcuts",
+            "/ for slash command menu",
+            "$ for skill listing",
+            "! for shell commands",
+            "@ for file mentions",
+        ],
+    );
+}
+
+#[test]
 fn resumed_initial_messages_render_history() {
     let (mut chat, mut rx, _ops) = make_chatwidget_manual();
 
@@ -99,6 +113,7 @@ async fn helpers_are_available_and_do_not_panic() {
         auth_manager,
         vertical_footer: false,
         footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
         expected_agent: None,
         deferred_spawn: false,
         fork_context: None,
@@ -472,4 +487,26 @@ fn slash_init_skips_when_project_doc_exists() {
         std::fs::read_to_string(existing_path).unwrap(),
         "existing instructions"
     );
+}
+
+#[test]
+fn on_task_started_respects_custom_working_messages_disabled() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.custom_working_messages = false;
+    chat.config.custom_working_message_list.clear();
+
+    chat.on_task_started();
+
+    assert_eq!(chat.current_status_header, "Working");
+}
+
+#[test]
+fn on_task_started_uses_user_list_when_provided() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.config.custom_working_messages = true;
+    chat.config.custom_working_message_list = vec!["only one".to_string()];
+
+    chat.on_task_started();
+
+    assert_eq!(chat.current_status_header, "only one");
 }

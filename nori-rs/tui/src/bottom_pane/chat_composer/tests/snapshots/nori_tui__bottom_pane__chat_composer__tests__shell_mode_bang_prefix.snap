@@ -1,0 +1,12 @@
+---
+source: tui/src/bottom_pane/chat_composer/tests/mod.rs
+expression: terminal.backend()
+---
+"                                                                                                    "
+"! pwd                                                                                               "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "

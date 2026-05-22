@@ -39,6 +39,8 @@ pub(crate) struct ReducerActions {
 fn client_event_kind(event: &ClientEvent) -> &'static str {
     match event {
         ClientEvent::SessionUpdateInfo(_) => "session_update_info",
+        ClientEvent::SessionConfigUpdate(_) => "session_config_update",
+        ClientEvent::SessionModeChanged(_) => "session_mode_changed",
         ClientEvent::SessionPhaseChanged(_) => "session_phase_changed",
         ClientEvent::QueueChanged(_) => "queue_changed",
         ClientEvent::MessageDelta(_) => "message_delta",
@@ -464,7 +466,10 @@ impl AcpBackend {
                 *self.pending_compact_summary.lock().await = Some(summary.clone());
 
                 let cwd = self.cwd.clone();
-                let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(&self.mcp_servers);
+                let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                    &self.mcp_servers,
+                    self.mcp_oauth_credentials_store_mode,
+                );
                 match self.connection.create_session(&cwd, mcp_servers).await {
                     Ok(new_session_id) => {
                         debug!("Created new session after compact: {:?}", new_session_id);

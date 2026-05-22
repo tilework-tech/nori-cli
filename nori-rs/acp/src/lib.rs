@@ -41,6 +41,7 @@ pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
 pub use backend::BackendEvent;
 pub use connection::AcpModelState;
+pub use connection::AcpSessionConfigState;
 pub use connection::ApprovalRequest;
 pub use connection::sacp_connection::SacpConnection;
 pub use registry::AcpAgentConfig;
@@ -74,6 +75,7 @@ pub use translator::translate_session_update;
 pub use transcript::ProjectId;
 pub use transcript::ProjectInfo;
 pub use transcript::SessionInfo;
+pub use transcript::SessionMetadata;
 pub use transcript::Transcript;
 pub use transcript::TranscriptLoader;
 pub use transcript::TranscriptRecorder;
@@ -85,8 +87,18 @@ pub use agent_client_protocol_schema::NewSessionRequest;
 pub use agent_client_protocol_schema::NewSessionResponse;
 pub use agent_client_protocol_schema::PromptRequest;
 pub use agent_client_protocol_schema::PromptResponse;
+pub use agent_client_protocol_schema::SessionConfigKind;
+pub use agent_client_protocol_schema::SessionConfigOption;
+pub use agent_client_protocol_schema::SessionConfigOptionCategory;
+pub use agent_client_protocol_schema::SessionConfigOptionValue;
+pub use agent_client_protocol_schema::SessionConfigSelectGroup;
+pub use agent_client_protocol_schema::SessionConfigSelectOption;
+pub use agent_client_protocol_schema::SessionConfigSelectOptions;
+pub use agent_client_protocol_schema::SessionConfigValueId;
 pub use agent_client_protocol_schema::SessionNotification;
 pub use agent_client_protocol_schema::SessionUpdate;
+pub use agent_client_protocol_schema::SetSessionConfigOptionRequest;
+pub use agent_client_protocol_schema::SetSessionConfigOptionResponse;
 
 // Re-export model-related types (unstable feature)
 #[cfg(feature = "unstable")]

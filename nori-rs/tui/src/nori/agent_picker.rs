@@ -6,7 +6,9 @@
 
 use nori_acp::AcpAgentInfo;
 use nori_acp::list_available_agents;
+use ratatui::style::Stylize;
 use ratatui::text::Line;
+use ratatui::text::Span;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -35,6 +37,7 @@ pub struct PendingAgentSelection {
 pub fn agent_picker_params(
     current_agent: &str,
     _app_event_tx: AppEventSender,
+    recording_enabled: bool,
 ) -> SelectionViewParams {
     let available_agents = list_available_agents();
     let current_normalized = current_agent.to_lowercase();
@@ -71,9 +74,28 @@ pub fn agent_picker_params(
             "Creates new conversation with selected agent (history not preserved)".to_string(),
         ),
         footer_hint: Some(standard_popup_hint_line()),
+        footer_hint_right: Some(recording_footer_hint(recording_enabled)),
+        on_shift_tab: Some(Box::new(move |tx| {
+            tx.send(AppEvent::SetConfigAcpWireRecording(!recording_enabled));
+        })),
         items,
         ..Default::default()
     }
+}
+
+fn recording_footer_hint(enabled: bool) -> Line<'static> {
+    let (symbol, status, action) = if enabled {
+        ("●", "on", "disable")
+    } else {
+        ("○", "off", "enable")
+    };
+    let symbol_span: Span<'static> = if enabled { symbol.red() } else { symbol.into() };
+
+    Line::from(vec![
+        "Recording: ".dim(),
+        symbol_span,
+        format!(" {status}  Shift-Tab to {action}").dim(),
+    ])
 }
 
 /// Create selection view parameters for the model picker in ACP mode.
@@ -189,6 +211,7 @@ pub fn get_agent_info(agent_name: &str) -> Option<AcpAgentInfo> {
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
+    use ratatui::style::Color;
     use tokio::sync::mpsc::unbounded_channel;
 
     #[test]
@@ -196,7 +219,7 @@ mod tests {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params = agent_picker_params("mock-model", tx);
+        let params = agent_picker_params("mock-model", tx, false);
 
         assert!(params.title.is_some());
         assert!(params.title.unwrap().contains("Select Agent"));
@@ -206,6 +229,37 @@ mod tests {
         let mock_agent = params.items.iter().find(|i| i.name == "Mock ACP");
         assert!(mock_agent.is_some());
         assert!(mock_agent.unwrap().is_current);
+    }
+
+    #[test]
+    fn agent_picker_footer_shows_recording_disabled_and_shift_tab_toggles_on() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = agent_picker_params("mock-model", tx.clone(), false);
+
+        let footer = params.footer_hint_right.as_ref().expect("recording footer");
+        assert_eq!(footer.to_string(), "Recording: ○ off  Shift-Tab to enable");
+
+        let action = params.on_shift_tab.as_ref().expect("shift-tab action");
+        action(&tx);
+        let event = rx.try_recv().expect("shift-tab event");
+        assert!(
+            matches!(event, AppEvent::SetConfigAcpWireRecording(true)),
+            "expected SetConfigAcpWireRecording(true), got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn recording_footer_uses_red_filled_dot_when_enabled() {
+        let footer = recording_footer_hint(true);
+        assert_eq!(footer.to_string(), "Recording: ● on  Shift-Tab to disable");
+        let dot = footer
+            .spans
+            .iter()
+            .find(|span| span.content == "●")
+            .expect("filled recording dot");
+        assert_eq!(dot.style.fg, Some(Color::Red));
     }
 
     #[test]

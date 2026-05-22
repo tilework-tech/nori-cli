@@ -1,4 +1,50 @@
 use super::*;
+use codex_core::config::types::McpServerConfig;
+use codex_core::config::types::McpServerTransportConfig;
+
+#[test]
+fn set_mcp_servers_updates_config_ref() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    // Initially empty
+    assert!(
+        chat.config_ref().mcp_servers.is_empty(),
+        "mcp_servers should start empty"
+    );
+
+    // Set servers
+    let mut servers = std::collections::HashMap::new();
+    servers.insert(
+        "test-server".to_string(),
+        McpServerConfig {
+            transport: McpServerTransportConfig::StreamableHttp {
+                url: "https://example.com/mcp".to_string(),
+                bearer_token_env_var: None,
+                http_headers: None,
+                env_http_headers: None,
+                client_id: None,
+                client_secret_env_var: None,
+            },
+            enabled: true,
+            startup_timeout_sec: None,
+            tool_timeout_sec: None,
+            enabled_tools: None,
+            disabled_tools: None,
+        },
+    );
+    chat.set_mcp_servers(servers.clone());
+
+    // config_ref should now reflect the updated servers
+    assert_eq!(
+        chat.config_ref().mcp_servers.len(),
+        1,
+        "config_ref should show 1 server after set_mcp_servers"
+    );
+    assert!(
+        chat.config_ref().mcp_servers.contains_key("test-server"),
+        "config_ref should contain 'test-server'"
+    );
+}
 
 #[test]
 fn cancelling_phase_keeps_task_running_until_prompt_completed() {

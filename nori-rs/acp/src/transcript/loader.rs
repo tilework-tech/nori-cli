@@ -3,6 +3,7 @@
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -51,6 +52,21 @@ pub struct SessionInfo {
     pub entry_count: usize,
 }
 
+/// Cheap session metadata loaded from the first transcript line only.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionMetadata {
+    /// Session identifier (UUID)
+    pub session_id: String,
+    /// Project identifier
+    pub project_id: String,
+    /// When the session started
+    pub started_at: String,
+    /// Working directory for the session
+    pub cwd: PathBuf,
+    /// ACP agent used for the session (e.g., "claude-code", "codex", "gemini")
+    pub agent: Option<String>,
+}
+
 /// A loaded transcript with all entries.
 #[derive(Debug, Clone)]
 pub struct Transcript {
@@ -64,6 +80,8 @@ pub struct Transcript {
 pub struct TranscriptLoader {
     nori_home: PathBuf,
 }
+
+const TRANSCRIPT_LOAD_PROGRESS_BYTES: usize = 100 * 1024 * 1024;
 
 impl TranscriptLoader {
     /// Create a new TranscriptLoader.
@@ -124,26 +142,123 @@ impl TranscriptLoader {
 
     /// List all sessions for a specific project.
     pub async fn list_sessions(&self, project_id: &str) -> io::Result<Vec<SessionInfo>> {
+        let started = Instant::now();
+        let sessions_path = self.transcripts_base().join(project_id).join(SESSIONS_DIR);
+
+        if !sessions_path.exists() {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "transcript_loader.list_sessions.missing_dir",
+                project_id,
+                sessions_path = %sessions_path.display(),
+                elapsed_ms = started.elapsed().as_millis(),
+                "no transcript sessions directory found",
+            );
+            return Ok(Vec::new());
+        }
+
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.list_sessions.start",
+            project_id,
+            sessions_path = %sessions_path.display(),
+            "listing transcript sessions",
+        );
+
+        let mut sessions = Vec::new();
+        let mut read_dir = tokio::fs::read_dir(&sessions_path).await?;
+        let mut file_count = 0usize;
+
+        while let Some(entry) = read_dir.next_entry().await? {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "jsonl") {
+                file_count += 1;
+                match load_session_info(&path, project_id).await {
+                    Ok(info) => sessions.push(info),
+                    Err(error) => tracing::warn!(
+                        target: "nori_resume",
+                        phase = "transcript_loader.list_sessions.session_info_error",
+                        project_id,
+                        path = %path.display(),
+                        error = %error,
+                        "failed to load transcript session info",
+                    ),
+                }
+            }
+        }
+
+        // Sort by started_at (most recent first)
+        sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.list_sessions.done",
+            project_id,
+            file_count,
+            loaded_session_count = sessions.len(),
+            elapsed_ms = started.elapsed().as_millis(),
+            "finished listing transcript sessions",
+        );
+
+        Ok(sessions)
+    }
+
+    /// List cheap session metadata for a specific project.
+    ///
+    /// This reads only the first line of each transcript, so it is suitable for
+    /// building picker rows without blocking on giant transcript bodies.
+    pub async fn list_session_metadata(
+        &self,
+        project_id: &str,
+    ) -> io::Result<Vec<SessionMetadata>> {
+        let started = Instant::now();
         let sessions_path = self.transcripts_base().join(project_id).join(SESSIONS_DIR);
 
         if !sessions_path.exists() {
             return Ok(Vec::new());
         }
 
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.list_session_metadata.start",
+            project_id,
+            sessions_path = %sessions_path.display(),
+            "listing transcript session metadata",
+        );
+
         let mut sessions = Vec::new();
         let mut read_dir = tokio::fs::read_dir(&sessions_path).await?;
+        let mut file_count = 0usize;
 
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "jsonl")
-                && let Ok(info) = load_session_info(&path, project_id).await
-            {
-                sessions.push(info);
+            if path.extension().is_some_and(|ext| ext == "jsonl") {
+                file_count += 1;
+                match load_session_metadata(&path, project_id).await {
+                    Ok(info) => sessions.push(info),
+                    Err(error) => tracing::warn!(
+                        target: "nori_resume",
+                        phase = "transcript_loader.list_session_metadata.error",
+                        project_id,
+                        path = %path.display(),
+                        error = %error,
+                        "failed to load transcript session metadata",
+                    ),
+                }
             }
         }
 
-        // Sort by started_at (most recent first)
         sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.list_session_metadata.done",
+            project_id,
+            file_count,
+            loaded_session_count = sessions.len(),
+            elapsed_ms = started.elapsed().as_millis(),
+            "finished listing transcript session metadata",
+        );
 
         Ok(sessions)
     }
@@ -151,9 +266,91 @@ impl TranscriptLoader {
     /// Find sessions for the current working directory.
     /// Useful for showing "recent sessions in this project".
     pub async fn find_sessions_for_cwd(&self, cwd: &Path) -> io::Result<Vec<SessionInfo>> {
+        let started = Instant::now();
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.find_sessions_for_cwd.start",
+            cwd = %cwd.display(),
+            "finding transcript sessions for cwd",
+        );
+
         // Compute project ID for the cwd
+        let project_started = Instant::now();
         let project_id = compute_project_id(cwd).await?;
-        self.list_sessions(&project_id.id).await
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.find_sessions_for_cwd.project_id",
+            cwd = %cwd.display(),
+            project_id = %project_id.id,
+            project_name = %project_id.name,
+            git_remote = project_id.git_remote.as_deref().unwrap_or("<none>"),
+            elapsed_ms = project_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "computed transcript project id",
+        );
+
+        let list_started = Instant::now();
+        let sessions = self.list_sessions(&project_id.id).await?;
+        tracing::info!(
+            target: "nori_resume",
+            phase = "transcript_loader.find_sessions_for_cwd.done",
+            cwd = %cwd.display(),
+            project_id = %project_id.id,
+            session_count = sessions.len(),
+            list_elapsed_ms = list_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "finished finding transcript sessions for cwd",
+        );
+        Ok(sessions)
+    }
+
+    /// Find cheap session metadata for the current working directory.
+    pub async fn find_session_metadata_for_cwd(
+        &self,
+        cwd: &Path,
+    ) -> io::Result<Vec<SessionMetadata>> {
+        let project_id = compute_project_id(cwd).await?;
+        self.list_session_metadata(&project_id.id).await
+    }
+
+    /// Find one session by its transcript session id across all known projects.
+    pub async fn find_session_metadata_by_id(
+        &self,
+        session_id: &str,
+    ) -> io::Result<Option<SessionMetadata>> {
+        for project in self.list_projects().await? {
+            let sessions = self.list_session_metadata(&project.id).await?;
+            if let Some(session) = sessions
+                .into_iter()
+                .find(|session| session.session_id == session_id)
+            {
+                return Ok(Some(session));
+            }
+        }
+        Ok(None)
+    }
+
+    /// List transcript session metadata for startup resume flows.
+    pub async fn list_resumable_session_metadata(
+        &self,
+        cwd: Option<&Path>,
+        agent_filter: Option<&str>,
+    ) -> io::Result<Vec<SessionMetadata>> {
+        let mut sessions = if let Some(cwd) = cwd {
+            self.find_session_metadata_for_cwd(cwd).await?
+        } else {
+            let mut sessions = Vec::new();
+            for project in self.list_projects().await? {
+                sessions.extend(self.list_session_metadata(&project.id).await?);
+            }
+            sessions
+        };
+
+        if let Some(agent_filter) = agent_filter {
+            sessions.retain(|session| session.agent.as_deref() == Some(agent_filter));
+        }
+        sessions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        Ok(sessions)
     }
 
     /// Load a complete transcript for display.
@@ -184,6 +381,22 @@ impl TranscriptLoader {
             .join(format!("{session_id}.jsonl"));
 
         load_session_meta_from_path(&path).await
+    }
+
+    /// Load the first user message preview without reading the whole transcript.
+    pub async fn load_first_user_preview(
+        &self,
+        project_id: &str,
+        session_id: &str,
+    ) -> io::Result<Option<String>> {
+        let path = self.session_path(project_id, session_id);
+        load_first_user_preview_from_path(&path).await
+    }
+
+    /// Count user turns by streaming transcript lines.
+    pub async fn count_user_turns(&self, project_id: &str, session_id: &str) -> io::Result<usize> {
+        let path = self.session_path(project_id, session_id);
+        count_user_turns_from_path(&path).await
     }
 
     /// Get the path to a session's transcript file.
@@ -237,11 +450,54 @@ async fn get_last_session_timestamp(sessions_path: &Path) -> Option<String> {
 
 /// Load session info from a transcript file.
 async fn load_session_info(path: &Path, project_id: &str) -> io::Result<SessionInfo> {
+    let started = Instant::now();
+    let transcript_bytes = tokio::fs::metadata(path)
+        .await
+        .map(|metadata| metadata.len())
+        .ok();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_session_info.start",
+        project_id,
+        path = %path.display(),
+        transcript_bytes,
+        "loading transcript session metadata and line count",
+    );
+
+    let meta_started = Instant::now();
     let meta = load_session_meta_from_path(path).await?;
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_session_info.meta_loaded",
+        project_id,
+        path = %path.display(),
+        session_id = %meta.session_id,
+        agent = meta.agent.as_deref().unwrap_or("<unknown>"),
+        elapsed_ms = meta_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        "loaded transcript session metadata",
+    );
 
     // Count entries (approximate - just count lines)
+    let read_started = Instant::now();
     let content = tokio::fs::read_to_string(path).await?;
+    let read_elapsed_ms = read_started.elapsed().as_millis();
+    let count_started = Instant::now();
     let entry_count = content.lines().count();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_session_info.done",
+        project_id,
+        path = %path.display(),
+        session_id = %meta.session_id,
+        agent = meta.agent.as_deref().unwrap_or("<unknown>"),
+        entry_count,
+        transcript_bytes,
+        read_elapsed_ms,
+        count_elapsed_ms = count_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        "loaded transcript session info",
+    );
 
     Ok(SessionInfo {
         session_id: meta.session_id,
@@ -250,6 +506,17 @@ async fn load_session_info(path: &Path, project_id: &str) -> io::Result<SessionI
         cwd: meta.cwd,
         agent: meta.agent,
         entry_count,
+    })
+}
+
+async fn load_session_metadata(path: &Path, project_id: &str) -> io::Result<SessionMetadata> {
+    let meta = load_session_meta_from_path(path).await?;
+    Ok(SessionMetadata {
+        session_id: meta.session_id,
+        project_id: project_id.to_string(),
+        started_at: meta.started_at,
+        cwd: meta.cwd,
+        agent: meta.agent,
     })
 }
 
@@ -274,20 +541,156 @@ async fn load_session_meta_from_path(path: &Path) -> io::Result<SessionMetaEntry
     }
 }
 
+#[derive(Deserialize)]
+struct TranscriptLineKind {
+    #[serde(rename = "type")]
+    kind: String,
+}
+
+const FIRST_USER_PREVIEW_MAX_BYTES: usize = 1024 * 1024;
+
+async fn load_first_user_preview_from_path(path: &Path) -> io::Result<Option<String>> {
+    let started = Instant::now();
+    let file = tokio::fs::File::open(path).await?;
+    let reader = tokio::io::BufReader::new(file);
+    let mut lines = reader.lines();
+    let mut bytes_seen = 0usize;
+    let mut line_count = 0usize;
+
+    while let Some(line) = lines.next_line().await? {
+        line_count += 1;
+        bytes_seen = bytes_seen.saturating_add(line.len() + 1);
+        if bytes_seen > FIRST_USER_PREVIEW_MAX_BYTES {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "transcript_loader.load_first_user_preview.capped",
+                path = %path.display(),
+                line_count,
+                bytes_seen,
+                elapsed_ms = started.elapsed().as_millis(),
+                "stopped first user preview scan at byte cap",
+            );
+            return Ok(None);
+        }
+
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let Ok(kind) = serde_json::from_str::<TranscriptLineKind>(&line) else {
+            continue;
+        };
+        if kind.kind != "user" {
+            continue;
+        }
+
+        let parsed: TranscriptLine = serde_json::from_str(&line)
+            .map_err(|e| io::Error::other(format!("failed to parse user line: {e}")))?;
+        if let TranscriptEntry::User(user) = parsed.entry {
+            return Ok(Some(truncate_preview(&user.content)));
+        }
+    }
+
+    Ok(None)
+}
+
+async fn count_user_turns_from_path(path: &Path) -> io::Result<usize> {
+    let started = Instant::now();
+    let file = tokio::fs::File::open(path).await?;
+    let reader = tokio::io::BufReader::new(file);
+    let mut lines = reader.lines();
+    let mut count = 0usize;
+    let mut line_count = 0usize;
+    let mut bytes_seen = 0usize;
+
+    while let Some(line) = lines.next_line().await? {
+        line_count += 1;
+        bytes_seen = bytes_seen.saturating_add(line.len() + 1);
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let Ok(kind) = serde_json::from_str::<TranscriptLineKind>(&line) else {
+            continue;
+        };
+        if kind.kind == "user" {
+            count += 1;
+        }
+    }
+
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.count_user_turns.done",
+        path = %path.display(),
+        user_turn_count = count,
+        line_count,
+        bytes_seen,
+        elapsed_ms = started.elapsed().as_millis(),
+        "counted user turns in transcript",
+    );
+
+    Ok(count)
+}
+
+fn truncate_preview(content: &str) -> String {
+    if content.chars().count() > 50 {
+        let truncated: String = content.chars().take(50).collect();
+        format!("{truncated}...")
+    } else {
+        content.to_string()
+    }
+}
+
 /// Load a complete transcript from a file.
 ///
 /// Lines that fail to deserialize (e.g. unknown entry types from older or newer
 /// versions) are silently skipped so that transcripts remain loadable across
 /// schema changes.
 async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
+    let started = Instant::now();
+    let transcript_bytes = tokio::fs::metadata(path)
+        .await
+        .map(|metadata| metadata.len())
+        .ok();
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_transcript.start",
+        path = %path.display(),
+        transcript_bytes,
+        "loading full transcript",
+    );
+
     let file = tokio::fs::File::open(path).await?;
     let reader = tokio::io::BufReader::new(file);
     let mut lines = reader.lines();
 
     let mut entries = Vec::new();
     let mut meta: Option<SessionMetaEntry> = None;
+    let mut line_count = 0usize;
+    let mut skipped_count = 0usize;
+    let mut bytes_seen = 0usize;
+    let mut next_progress_bytes = TRANSCRIPT_LOAD_PROGRESS_BYTES;
 
     while let Some(line) = lines.next_line().await? {
+        line_count += 1;
+        bytes_seen = bytes_seen.saturating_add(line.len() + 1);
+        if bytes_seen >= next_progress_bytes {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "transcript_loader.load_transcript.progress",
+                path = %path.display(),
+                line_count,
+                parsed_entry_count = entries.len(),
+                skipped_count,
+                bytes_seen,
+                transcript_bytes,
+                elapsed_ms = started.elapsed().as_millis(),
+                "still loading full transcript",
+            );
+            next_progress_bytes =
+                next_progress_bytes.saturating_add(TRANSCRIPT_LOAD_PROGRESS_BYTES);
+        }
+
         if line.trim().is_empty() {
             continue;
         }
@@ -297,11 +700,21 @@ async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
             Err(e) => {
                 // The first line must be valid session metadata; fail hard.
                 if meta.is_none() {
+                    tracing::warn!(
+                        target: "nori_resume",
+                        phase = "transcript_loader.load_transcript.first_line_error",
+                        path = %path.display(),
+                        line_count,
+                        elapsed_ms = started.elapsed().as_millis(),
+                        error = %e,
+                        "failed to parse first transcript line",
+                    );
                     return Err(io::Error::other(format!(
                         "failed to parse transcript line: {e}"
                     )));
                 }
                 // Skip unrecognized entries (e.g. removed or future event types).
+                skipped_count += 1;
                 tracing::debug!(
                     path = %path.display(),
                     error = %e,
@@ -323,6 +736,21 @@ async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
 
     let meta =
         meta.ok_or_else(|| io::Error::other("transcript does not contain session metadata"))?;
+
+    tracing::info!(
+        target: "nori_resume",
+        phase = "transcript_loader.load_transcript.done",
+        path = %path.display(),
+        session_id = %meta.session_id,
+        agent = meta.agent.as_deref().unwrap_or("<unknown>"),
+        line_count,
+        parsed_entry_count = entries.len(),
+        skipped_count,
+        bytes_seen,
+        transcript_bytes,
+        elapsed_ms = started.elapsed().as_millis(),
+        "loaded full transcript",
+    );
 
     Ok(Transcript { meta, entries })
 }
@@ -583,6 +1011,224 @@ mod tests {
         let path = sessions_dir.join(format!("{session_id}.jsonl"));
         let content = lines.join("\n") + "\n";
         tokio::fs::write(&path, content).await.unwrap();
+    }
+
+    async fn write_raw_transcript_bytes(
+        nori_home: &Path,
+        project_id: &str,
+        session_id: &str,
+        bytes: &[u8],
+    ) {
+        let sessions_dir = nori_home
+            .join(TRANSCRIPTS_DIR)
+            .join(BY_PROJECT_DIR)
+            .join(project_id)
+            .join(SESSIONS_DIR);
+        tokio::fs::create_dir_all(&sessions_dir).await.unwrap();
+
+        let path = sessions_dir.join(format!("{session_id}.jsonl"));
+        tokio::fs::write(&path, bytes).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn find_session_metadata_for_cwd_reads_only_session_meta() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let cwd = temp_dir.path().join("repo");
+        tokio::fs::create_dir_all(&cwd).await.unwrap();
+
+        let recorder =
+            TranscriptRecorder::new(nori_home, &cwd, Some("codex".to_string()), "0.1.0", None)
+                .await
+                .unwrap();
+        let project_id = recorder.project_id().to_string();
+        let session_id = recorder.session_id().to_string();
+        recorder.flush().await.unwrap();
+        recorder.shutdown().await.unwrap();
+
+        let transcript_path = recorder.transcript_path().to_path_buf();
+        let meta_line = tokio::fs::read_to_string(&transcript_path).await.unwrap();
+        let mut bytes = meta_line.into_bytes();
+        bytes.extend_from_slice(&[0xff, b'\n']);
+        tokio::fs::write(&transcript_path, bytes).await.unwrap();
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let sessions = loader.find_session_metadata_for_cwd(&cwd).await.unwrap();
+
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, session_id);
+        assert_eq!(sessions[0].project_id, project_id);
+        assert_eq!(sessions[0].agent.as_deref(), Some("codex"));
+    }
+
+    #[tokio::test]
+    async fn find_session_metadata_by_id_finds_sessions_across_projects() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let first_cwd = nori_home.join("first");
+        let second_cwd = nori_home.join("second");
+        tokio::fs::create_dir_all(&first_cwd).await.unwrap();
+        tokio::fs::create_dir_all(&second_cwd).await.unwrap();
+
+        let first_recorder = TranscriptRecorder::new(
+            nori_home,
+            &first_cwd,
+            Some("claude-code".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
+        first_recorder.shutdown().await.unwrap();
+
+        let second_recorder = TranscriptRecorder::new(
+            nori_home,
+            &second_cwd,
+            Some("codex".to_string()),
+            "0.1.0",
+            None,
+        )
+        .await
+        .unwrap();
+        let second_session_id = second_recorder.session_id().to_string();
+        let second_project_id = second_recorder.project_id().to_string();
+        second_recorder.shutdown().await.unwrap();
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let found = loader
+            .find_session_metadata_by_id(&second_session_id)
+            .await
+            .unwrap()
+            .expect("session should be found");
+
+        assert_eq!(found.session_id, second_session_id);
+        assert_eq!(found.project_id, second_project_id);
+        assert_eq!(found.agent.as_deref(), Some("codex"));
+    }
+
+    #[tokio::test]
+    async fn find_session_metadata_by_id_returns_none_for_missing_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let loader = TranscriptLoader::new(temp_dir.path().to_path_buf());
+
+        let found = loader
+            .find_session_metadata_by_id("missing-session")
+            .await
+            .unwrap();
+
+        assert!(found.is_none());
+    }
+
+    #[tokio::test]
+    async fn load_first_user_preview_stops_before_later_invalid_bytes() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let project_id = "test-project-preview";
+        let session_id = "test-session-preview";
+
+        let meta_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:00.000Z",
+            "v": 2,
+            "type": "session_meta",
+            "session_id": session_id,
+            "project_id": project_id,
+            "started_at": "2025-01-27T12:00:00.000Z",
+            "cwd": "/tmp/test",
+            "agent": "codex",
+            "cli_version": "0.1.0"
+        });
+        let user_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:01.000Z",
+            "v": 2,
+            "type": "user",
+            "id": "msg-001",
+            "content": "first prompt",
+            "attachments": []
+        });
+        let mut bytes = format!("{meta_line}\n{user_line}\n").into_bytes();
+        bytes.extend_from_slice(&[0xff, b'\n']);
+        write_raw_transcript_bytes(nori_home, project_id, session_id, &bytes).await;
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let preview = loader
+            .load_first_user_preview(project_id, session_id)
+            .await
+            .unwrap();
+
+        assert_eq!(preview.as_deref(), Some("first prompt"));
+    }
+
+    #[tokio::test]
+    async fn count_user_turns_counts_only_user_messages() {
+        let temp_dir = TempDir::new().unwrap();
+        let nori_home = temp_dir.path();
+        let project_id = "test-project-count";
+        let session_id = "test-session-count";
+
+        let meta_line = serde_json::json!({
+            "ts": "2025-01-27T12:00:00.000Z",
+            "v": 2,
+            "type": "session_meta",
+            "session_id": session_id,
+            "project_id": project_id,
+            "started_at": "2025-01-27T12:00:00.000Z",
+            "cwd": "/tmp/test",
+            "agent": "codex",
+            "cli_version": "0.1.0"
+        });
+        let user_one = serde_json::json!({
+            "ts": "2025-01-27T12:00:01.000Z",
+            "v": 2,
+            "type": "user",
+            "id": "msg-001",
+            "content": "first",
+            "attachments": []
+        });
+        let assistant = serde_json::json!({
+            "ts": "2025-01-27T12:00:02.000Z",
+            "v": 2,
+            "type": "assistant",
+            "id": "msg-002",
+            "content": [{"type": "text", "text": "reply"}]
+        });
+        let tool_call = serde_json::json!({
+            "ts": "2025-01-27T12:00:03.000Z",
+            "v": 2,
+            "type": "tool_call",
+            "call_id": "call-001",
+            "name": "shell",
+            "input": {"cmd": "ls"}
+        });
+        let user_two = serde_json::json!({
+            "ts": "2025-01-27T12:00:04.000Z",
+            "v": 2,
+            "type": "user",
+            "id": "msg-003",
+            "content": "second",
+            "attachments": []
+        });
+
+        write_raw_transcript(
+            nori_home,
+            project_id,
+            session_id,
+            &[
+                &meta_line.to_string(),
+                &user_one.to_string(),
+                &assistant.to_string(),
+                &tool_call.to_string(),
+                &user_two.to_string(),
+            ],
+        )
+        .await;
+
+        let loader = TranscriptLoader::new(nori_home.to_path_buf());
+        let turn_count = loader
+            .count_user_turns(project_id, session_id)
+            .await
+            .unwrap();
+
+        assert_eq!(turn_count, 2);
     }
 
     #[tokio::test]

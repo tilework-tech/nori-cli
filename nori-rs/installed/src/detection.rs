@@ -108,16 +108,21 @@ fn get_hostname_impl() -> Option<String> {
 mod tests {
     use super::*;
     use std::env;
+    use std::sync::Mutex;
+    use std::sync::MutexGuard;
     use uuid::Uuid;
+
+    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_detect_install_source_bun() {
+        let _guard = lock_env();
         // Save original values
         let orig_bun = env::var(NORI_MANAGED_BY_BUN).ok();
         let orig_npm = env::var(NORI_MANAGED_BY_NPM).ok();
 
         // Set Bun env var
-        // SAFETY: Tests run sequentially in the same process
+        // SAFETY: ENV_TEST_LOCK serializes environment mutations.
         unsafe {
             env::set_var(NORI_MANAGED_BY_BUN, "1");
             env::remove_var(NORI_MANAGED_BY_NPM);
@@ -133,10 +138,11 @@ mod tests {
 
     #[test]
     fn test_detect_install_source_npm() {
+        let _guard = lock_env();
         let orig_bun = env::var(NORI_MANAGED_BY_BUN).ok();
         let orig_npm = env::var(NORI_MANAGED_BY_NPM).ok();
 
-        // SAFETY: Tests run sequentially in the same process
+        // SAFETY: ENV_TEST_LOCK serializes environment mutations.
         unsafe {
             env::remove_var(NORI_MANAGED_BY_BUN);
             env::set_var(NORI_MANAGED_BY_NPM, "1");
@@ -151,10 +157,11 @@ mod tests {
 
     #[test]
     fn test_detect_install_source_unknown() {
+        let _guard = lock_env();
         let orig_bun = env::var(NORI_MANAGED_BY_BUN).ok();
         let orig_npm = env::var(NORI_MANAGED_BY_NPM).ok();
 
-        // SAFETY: Tests run sequentially in the same process
+        // SAFETY: ENV_TEST_LOCK serializes environment mutations.
         unsafe {
             env::remove_var(NORI_MANAGED_BY_BUN);
             env::remove_var(NORI_MANAGED_BY_NPM);
@@ -169,11 +176,12 @@ mod tests {
 
     #[test]
     fn test_detect_install_source_bun_takes_precedence() {
+        let _guard = lock_env();
         let orig_bun = env::var(NORI_MANAGED_BY_BUN).ok();
         let orig_npm = env::var(NORI_MANAGED_BY_NPM).ok();
 
         // Both set - Bun should take precedence
-        // SAFETY: Tests run sequentially in the same process
+        // SAFETY: ENV_TEST_LOCK serializes environment mutations.
         unsafe {
             env::set_var(NORI_MANAGED_BY_BUN, "1");
             env::set_var(NORI_MANAGED_BY_NPM, "1");
@@ -218,12 +226,16 @@ mod tests {
     }
 
     fn restore_env(key: &str, value: Option<String>) {
-        // SAFETY: Tests run sequentially in the same process
+        // SAFETY: Callers hold ENV_TEST_LOCK while restoring mutated env vars.
         unsafe {
             match value {
                 Some(v) => env::set_var(key, v),
                 None => env::remove_var(key),
             }
         }
+    }
+
+    fn lock_env() -> MutexGuard<'static, ()> {
+        ENV_TEST_LOCK.lock().expect("env test lock poisoned")
     }
 }

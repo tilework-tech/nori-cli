@@ -49,6 +49,7 @@ pub(crate) struct SelectionViewParams {
     pub title: Option<String>,
     pub subtitle: Option<String>,
     pub footer_hint: Option<Line<'static>>,
+    pub footer_hint_right: Option<Line<'static>>,
     pub items: Vec<SelectionItem>,
     pub is_searchable: bool,
     pub search_placeholder: Option<String>,
@@ -57,6 +58,8 @@ pub(crate) struct SelectionViewParams {
     /// Optional callback fired when the picker is dismissed without selection
     /// (e.g. via Escape or Ctrl-C).
     pub on_dismiss: Option<SelectionAction>,
+    /// Optional callback fired when Shift-Tab is pressed while the picker is open.
+    pub on_shift_tab: Option<SelectionAction>,
     /// When true, j/k navigate and `/` toggles search mode.
     /// When false (default), typing goes directly to search if `is_searchable`.
     pub vim_mode: bool,
@@ -68,12 +71,14 @@ impl Default for SelectionViewParams {
             title: None,
             subtitle: None,
             footer_hint: None,
+            footer_hint_right: None,
             items: Vec::new(),
             is_searchable: false,
             search_placeholder: None,
             header: Box::new(()),
             initial_selected_idx: None,
             on_dismiss: None,
+            on_shift_tab: None,
             vim_mode: false,
         }
     }
@@ -81,6 +86,7 @@ impl Default for SelectionViewParams {
 
 pub(crate) struct ListSelectionView {
     footer_hint: Option<Line<'static>>,
+    footer_hint_right: Option<Line<'static>>,
     items: Vec<SelectionItem>,
     state: ScrollState,
     complete: bool,
@@ -93,6 +99,7 @@ pub(crate) struct ListSelectionView {
     header: Box<dyn Renderable>,
     initial_selected_idx: Option<usize>,
     on_dismiss: Option<SelectionAction>,
+    on_shift_tab: Option<SelectionAction>,
     vim_mode: bool,
     search_active: bool,
 }
@@ -111,6 +118,7 @@ impl ListSelectionView {
         }
         let mut s = Self {
             footer_hint: params.footer_hint,
+            footer_hint_right: params.footer_hint_right,
             items: params.items,
             state: ScrollState::new(),
             complete: false,
@@ -131,11 +139,50 @@ impl ListSelectionView {
             header,
             initial_selected_idx: params.initial_selected_idx,
             on_dismiss: params.on_dismiss,
+            on_shift_tab: params.on_shift_tab,
             vim_mode: params.vim_mode,
             search_active: false,
         };
         s.apply_filter();
         s
+    }
+
+    pub(crate) fn update_item(
+        &mut self,
+        stable_id: &str,
+        name: String,
+        description: Option<String>,
+        search_value: String,
+    ) -> bool {
+        let Some(item) = self.items.iter_mut().find(|item| {
+            item.search_value
+                .as_deref()
+                .map(search_value_id)
+                .is_some_and(|id| id == stable_id)
+        }) else {
+            return false;
+        };
+
+        item.name = name;
+        item.description = description;
+        item.search_value = Some(search_value);
+        self.apply_filter();
+        true
+    }
+
+    pub(crate) fn remove_item(&mut self, stable_id: &str) -> bool {
+        let Some(index) = self.items.iter().position(|item| {
+            item.search_value
+                .as_deref()
+                .map(search_value_id)
+                .is_some_and(|id| id == stable_id)
+        }) else {
+            return false;
+        };
+
+        self.items.remove(index);
+        self.apply_filter();
+        true
     }
 
     fn visible_len(&self) -> usize {
@@ -227,6 +274,7 @@ impl ListSelectionView {
                         display_shortcut: item.display_shortcut,
                         match_indices: None,
                         description,
+                        styled_description: None,
                     }
                 })
             })
@@ -324,6 +372,12 @@ impl ListSelectionView {
     }
 }
 
+fn search_value_id(search_value: &str) -> &str {
+    search_value
+        .split_once(' ')
+        .map_or(search_value, |(id, _)| id)
+}
+
 impl BottomPaneView for ListSelectionView {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event {
@@ -353,6 +407,19 @@ impl BottomPaneView for ListSelectionView {
                 code: KeyCode::Esc, ..
             } => {
                 self.on_ctrl_c();
+            }
+            KeyEvent {
+                code: KeyCode::BackTab,
+                ..
+            }
+            | KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::SHIFT,
+                ..
+            } => {
+                if let Some(action) = &self.on_shift_tab {
+                    action(&self.app_event_tx);
+                }
             }
             // Vim mode + searchable + search active: chars go to search query.
             KeyEvent {
@@ -456,6 +523,20 @@ impl BottomPaneView for ListSelectionView {
         self.complete = true;
         CancellationEvent::Handled
     }
+
+    fn update_selection_item(
+        &mut self,
+        stable_id: &str,
+        name: String,
+        description: Option<String>,
+        search_value: String,
+    ) -> bool {
+        self.update_item(stable_id, name, description, search_value)
+    }
+
+    fn remove_selection_item(&mut self, stable_id: &str) -> bool {
+        self.remove_item(stable_id)
+    }
 }
 
 impl Renderable for ListSelectionView {
@@ -558,7 +639,26 @@ impl Renderable for ListSelectionView {
                 width: footer_area.width.saturating_sub(2),
                 height: footer_area.height,
             };
+            let left_width = hint.width() as u16;
+            let right_width = self
+                .footer_hint_right
+                .as_ref()
+                .map(|line| line.width() as u16)
+                .unwrap_or(0);
             hint.dim().render(hint_area, buf);
+            if let Some(right_hint) = self.footer_hint_right.clone()
+                && left_width.saturating_add(1).saturating_add(right_width) <= hint_area.width
+            {
+                let right_area = Rect {
+                    x: hint_area
+                        .x
+                        .saturating_add(hint_area.width.saturating_sub(right_width)),
+                    y: hint_area.y,
+                    width: right_width,
+                    height: hint_area.height,
+                };
+                right_hint.render(right_area, buf);
+            }
         }
     }
 }
@@ -646,6 +746,62 @@ mod tests {
     }
 
     #[test]
+    fn renders_right_aligned_footer_hint_without_extra_height() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Select Agent".to_string()),
+                footer_hint: Some(Line::from("Press esc to dismiss.")),
+                footer_hint_right: Some(Line::from("Recording: ○ off  Shift-Tab to enable")),
+                items: vec![SelectionItem {
+                    name: "ElizACP".to_string(),
+                    description: Some("Local test ACP agent".to_string()),
+                    is_current: true,
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            tx,
+        );
+
+        assert_snapshot!(
+            "list_selection_right_aligned_footer_hint",
+            render_lines_with_width(&view, 80)
+        );
+    }
+
+    #[test]
+    fn shift_tab_runs_action_without_dismissing_selection_view() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                items: vec![SelectionItem {
+                    name: "ElizACP".to_string(),
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }],
+                on_shift_tab: Some(Box::new(|tx| {
+                    tx.send(AppEvent::SetConfigAcpWireRecording(true));
+                })),
+                ..Default::default()
+            },
+            tx,
+        );
+
+        view.handle_key_event(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+
+        let event = rx.try_recv().expect("shift-tab event");
+        assert!(
+            matches!(event, AppEvent::SetConfigAcpWireRecording(true)),
+            "expected SetConfigAcpWireRecording(true), got: {event:?}"
+        );
+        assert!(!view.is_complete(), "shift-tab should keep picker open");
+    }
+
+    #[test]
     fn renders_search_query_line_when_enabled() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -674,6 +830,41 @@ mod tests {
             lines.contains("filters"),
             "expected search query line to include rendered query, got {lines:?}"
         );
+    }
+
+    #[test]
+    fn update_item_refreshes_row_and_search_index() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                items: vec![SelectionItem {
+                    name: "Apr 27, 2026 15:44".to_string(),
+                    search_value: Some("session-1".to_string()),
+                    ..Default::default()
+                }],
+                is_searchable: true,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        let updated = view.update_item(
+            "session-1",
+            "Apr 27, 2026 15:44 · 2 turns".to_string(),
+            Some("\"first prompt\"".to_string()),
+            "session-1 first prompt".to_string(),
+        );
+
+        assert!(updated);
+        assert_eq!(view.items[0].name, "Apr 27, 2026 15:44 · 2 turns");
+        assert_eq!(
+            view.items[0].description.as_deref(),
+            Some("\"first prompt\"")
+        );
+
+        view.set_search_query("first prompt".to_string());
+        assert_eq!(view.filtered_indices, vec![0]);
     }
 
     #[test]

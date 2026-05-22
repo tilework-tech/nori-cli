@@ -8,6 +8,7 @@ use nori_acp::AcpBackendConfig;
 #[cfg(feature = "unstable")]
 use nori_acp::AcpModelState;
 use nori_acp::HistoryPersistence;
+use nori_acp::SessionConfigOption;
 use nori_acp::find_nori_home;
 use nori_acp::get_agent_config;
 use nori_acp::get_agent_display_name;
@@ -52,38 +53,48 @@ async fn spawn_timeout_sequence(app_event_tx: &AppEventSender) {
     tokio::time::sleep(Duration::from_secs(CONNECT_ABORT_SECS)).await;
 }
 
-/// Command for controlling the ACP agent.
-#[cfg(feature = "unstable")]
-pub(crate) enum AcpModelCommand {
+/// Command for controlling ACP session state exposed by the agent.
+pub(crate) enum AcpAgentCommand {
     /// Get the current model state (available models and current selection)
+    #[cfg(feature = "unstable")]
     GetModelState {
         response_tx: oneshot::Sender<AcpModelState>,
     },
     /// Set the active model
+    #[cfg(feature = "unstable")]
     SetModel {
         model_id: String,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    /// Get the current ACP session config snapshot.
+    GetSessionConfig {
+        response_tx: oneshot::Sender<Vec<SessionConfigOption>>,
+    },
+    /// Set an ACP session config option.
+    SetSessionConfigOption {
+        config_id: String,
+        value: String,
+        response_tx: oneshot::Sender<anyhow::Result<Vec<SessionConfigOption>>>,
     },
 }
 
 /// Handle for communicating with an ACP agent.
 ///
-/// This handle provides access to model switching operations in addition
+/// This handle provides access to ACP session control operations in addition
 /// to the standard Op channel.
-#[cfg(feature = "unstable")]
 #[derive(Clone)]
 pub(crate) struct AcpAgentHandle {
-    model_cmd_tx: mpsc::UnboundedSender<AcpModelCommand>,
+    command_tx: mpsc::UnboundedSender<AcpAgentCommand>,
 }
 
-#[cfg(feature = "unstable")]
 impl AcpAgentHandle {
     /// Get the current model state from the ACP agent.
+    #[cfg(feature = "unstable")]
     pub async fn get_model_state(&self) -> Option<AcpModelState> {
         let (response_tx, response_rx) = oneshot::channel();
         if self
-            .model_cmd_tx
-            .send(AcpModelCommand::GetModelState { response_tx })
+            .command_tx
+            .send(AcpAgentCommand::GetModelState { response_tx })
             .is_err()
         {
             return None;
@@ -92,11 +103,44 @@ impl AcpAgentHandle {
     }
 
     /// Set the active model in the ACP agent.
+    #[cfg(feature = "unstable")]
     pub async fn set_model(&self, model_id: String) -> anyhow::Result<()> {
         let (response_tx, response_rx) = oneshot::channel();
-        self.model_cmd_tx
-            .send(AcpModelCommand::SetModel {
+        self.command_tx
+            .send(AcpAgentCommand::SetModel {
                 model_id,
+                response_tx,
+            })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+    }
+
+    /// Get the current ACP session config snapshot from the agent.
+    pub async fn get_session_config(&self) -> Option<Vec<SessionConfigOption>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        if self
+            .command_tx
+            .send(AcpAgentCommand::GetSessionConfig { response_tx })
+            .is_err()
+        {
+            return None;
+        }
+        response_rx.await.ok()
+    }
+
+    /// Set an ACP session config option value.
+    pub async fn set_session_config_option(
+        &self,
+        config_id: String,
+        value: String,
+    ) -> anyhow::Result<Vec<SessionConfigOption>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpAgentCommand::SetSessionConfigOption {
+                config_id,
+                value,
                 response_tx,
             })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
@@ -110,8 +154,7 @@ impl AcpAgentHandle {
 pub(crate) struct SpawnAgentResult {
     /// The Op sender for submitting operations to the agent.
     pub op_tx: UnboundedSender<Op>,
-    /// Optional ACP handle for model control (only present in ACP mode).
-    #[cfg(feature = "unstable")]
+    /// Optional ACP handle for session control (only present in ACP mode).
     pub acp_handle: Option<AcpAgentHandle>,
 }
 
@@ -141,7 +184,6 @@ pub(crate) fn spawn_agent(
             let op_tx = spawn_error_agent(agent_name, error_msg, app_event_tx);
             SpawnAgentResult {
                 op_tx,
-                #[cfg(feature = "unstable")]
                 acp_handle: None,
             }
         }
@@ -181,12 +223,12 @@ fn spawn_acp_agent(
 ) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
-    // Create the model command channel for model switching operations
-    #[cfg(feature = "unstable")]
-    let (model_cmd_tx, mut model_cmd_rx) = unbounded_channel::<AcpModelCommand>();
+    // Create the ACP command channel for model and session-config operations.
+    let (agent_cmd_tx, mut agent_cmd_rx) = unbounded_channel::<AcpAgentCommand>();
 
-    #[cfg(feature = "unstable")]
-    let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
+    let acp_handle = Some(AcpAgentHandle {
+        command_tx: agent_cmd_tx,
+    });
 
     // Emit "Connecting" status before spawning the backend
     let display_name = get_agent_display_name(&config.model);
@@ -232,6 +274,7 @@ fn spawn_acp_agent(
             notify_after_idle: nori_config.notify_after_idle,
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
+            acp_proxy: nori_config.acp_proxy.clone(),
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
             auto_worktree,
             auto_worktree_repo_root,
@@ -303,31 +346,44 @@ fn spawn_acp_agent(
             }
         });
 
-        // Handle model commands in a separate task
-        #[cfg(feature = "unstable")]
-        {
-            let backend_for_model = Arc::clone(&backend);
-            tokio::spawn(async move {
-                while let Some(cmd) = model_cmd_rx.recv().await {
-                    match cmd {
-                        AcpModelCommand::GetModelState { response_tx } => {
-                            let state = backend_for_model.model_state();
-                            let _ = response_tx.send(state);
-                        }
-                        AcpModelCommand::SetModel {
-                            model_id,
-                            response_tx,
-                        } => {
-                            let model_id = nori_acp::ModelId::from(model_id);
-                            let result = backend_for_model.set_model(&model_id).await;
-                            let _ = response_tx.send(result);
-                        }
+        let backend_for_agent = Arc::clone(&backend);
+        tokio::spawn(async move {
+            while let Some(cmd) = agent_cmd_rx.recv().await {
+                match cmd {
+                    #[cfg(feature = "unstable")]
+                    AcpAgentCommand::GetModelState { response_tx } => {
+                        let state = backend_for_agent.model_state();
+                        let _ = response_tx.send(state);
+                    }
+                    #[cfg(feature = "unstable")]
+                    AcpAgentCommand::SetModel {
+                        model_id,
+                        response_tx,
+                    } => {
+                        let model_id = nori_acp::ModelId::from(model_id);
+                        let result = backend_for_agent.set_model(&model_id).await;
+                        let _ = response_tx.send(result);
+                    }
+                    AcpAgentCommand::GetSessionConfig { response_tx } => {
+                        let state = backend_for_agent.config_options();
+                        let _ = response_tx.send(state);
+                    }
+                    AcpAgentCommand::SetSessionConfigOption {
+                        config_id,
+                        value,
+                        response_tx,
+                    } => {
+                        let result = backend_for_agent
+                            .set_config_option(config_id, value)
+                            .await
+                            .map(|()| backend_for_agent.config_options());
+                        let _ = response_tx.send(result);
                     }
                 }
-            });
-        }
+            }
+        });
 
-        // Drop our Arc reference - the op and model tasks have their own.
+        // Drop our Arc reference - the op and agent-control tasks have their own.
         // This is necessary so that when these tasks exit, the backend is fully dropped,
         // which drops event_tx, allowing event_rx to return None and this task to exit.
         drop(backend);
@@ -346,7 +402,6 @@ fn spawn_acp_agent(
 
     SpawnAgentResult {
         op_tx: codex_op_tx,
-        #[cfg(feature = "unstable")]
         acp_handle,
     }
 }
@@ -365,11 +420,11 @@ pub(crate) fn spawn_acp_agent_resume(
 ) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
-    #[cfg(feature = "unstable")]
-    let (model_cmd_tx, mut model_cmd_rx) = unbounded_channel::<AcpModelCommand>();
+    let (agent_cmd_tx, mut agent_cmd_rx) = unbounded_channel::<AcpAgentCommand>();
 
-    #[cfg(feature = "unstable")]
-    let acp_handle = Some(AcpAgentHandle { model_cmd_tx });
+    let acp_handle = Some(AcpAgentHandle {
+        command_tx: agent_cmd_tx,
+    });
 
     let display_name = get_agent_display_name(&config.model);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
@@ -407,6 +462,7 @@ pub(crate) fn spawn_acp_agent_resume(
             notify_after_idle: nori_config.notify_after_idle,
             nori_home,
             history_persistence: HistoryPersistence::SaveAll,
+            acp_proxy: nori_config.acp_proxy.clone(),
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
             auto_worktree,
             auto_worktree_repo_root,
@@ -481,28 +537,42 @@ pub(crate) fn spawn_acp_agent_resume(
             }
         });
 
-        #[cfg(feature = "unstable")]
-        {
-            let backend_for_model = Arc::clone(&backend);
-            tokio::spawn(async move {
-                while let Some(cmd) = model_cmd_rx.recv().await {
-                    match cmd {
-                        AcpModelCommand::GetModelState { response_tx } => {
-                            let state = backend_for_model.model_state();
-                            let _ = response_tx.send(state);
-                        }
-                        AcpModelCommand::SetModel {
-                            model_id,
-                            response_tx,
-                        } => {
-                            let model_id = nori_acp::ModelId::from(model_id);
-                            let result = backend_for_model.set_model(&model_id).await;
-                            let _ = response_tx.send(result);
-                        }
+        let backend_for_agent = Arc::clone(&backend);
+        tokio::spawn(async move {
+            while let Some(cmd) = agent_cmd_rx.recv().await {
+                match cmd {
+                    #[cfg(feature = "unstable")]
+                    AcpAgentCommand::GetModelState { response_tx } => {
+                        let state = backend_for_agent.model_state();
+                        let _ = response_tx.send(state);
+                    }
+                    #[cfg(feature = "unstable")]
+                    AcpAgentCommand::SetModel {
+                        model_id,
+                        response_tx,
+                    } => {
+                        let model_id = nori_acp::ModelId::from(model_id);
+                        let result = backend_for_agent.set_model(&model_id).await;
+                        let _ = response_tx.send(result);
+                    }
+                    AcpAgentCommand::GetSessionConfig { response_tx } => {
+                        let state = backend_for_agent.config_options();
+                        let _ = response_tx.send(state);
+                    }
+                    AcpAgentCommand::SetSessionConfigOption {
+                        config_id,
+                        value,
+                        response_tx,
+                    } => {
+                        let result = backend_for_agent
+                            .set_config_option(config_id, value)
+                            .await
+                            .map(|()| backend_for_agent.config_options());
+                        let _ = response_tx.send(result);
                     }
                 }
-            });
-        }
+            }
+        });
 
         drop(backend);
 
@@ -520,7 +590,50 @@ pub(crate) fn spawn_acp_agent_resume(
 
     SpawnAgentResult {
         op_tx: codex_op_tx,
-        #[cfg(feature = "unstable")]
         acp_handle,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn mode_option(current_value: &str) -> SessionConfigOption {
+        SessionConfigOption::select(
+            "mode",
+            "Mode",
+            current_value.to_string(),
+            vec![
+                nori_acp::SessionConfigSelectOption::new("plan", "Plan"),
+                nori_acp::SessionConfigSelectOption::new("build", "Build"),
+            ],
+        )
+        .category(nori_acp::SessionConfigOptionCategory::Mode)
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_returns_refreshed_config_snapshot() {
+        let (command_tx, mut command_rx) = unbounded_channel::<AcpAgentCommand>();
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if let AcpAgentCommand::SetSessionConfigOption {
+                    config_id: _,
+                    value,
+                    response_tx,
+                } = command
+                {
+                    let _ = response_tx.send(Ok(vec![mode_option(&value)]));
+                }
+            }
+        });
+        let handle = AcpAgentHandle { command_tx };
+
+        let config_options = handle
+            .set_session_config_option("mode".to_string(), "build".to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(config_options, vec![mode_option("build")]);
     }
 }

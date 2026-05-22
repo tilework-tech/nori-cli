@@ -2,4 +2,4 @@
 source: tui/src/chatwidget/tests/part3.rs
 expression: combined
 ---
-• ACP mode changed to review
+• gpt-5.1-codex mode changed: Review

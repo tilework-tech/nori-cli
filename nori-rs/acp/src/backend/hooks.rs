@@ -10,12 +10,13 @@ pub(super) async fn run_prompt_summary(
     user_prompt: &str,
     auto_worktree: crate::config::AutoWorktree,
     auto_worktree_repo_root: Option<&std::path::Path>,
+    acp_proxy: crate::config::AcpProxyConfig,
 ) -> Result<()> {
     use tokio::time::Duration;
     use tokio::time::timeout;
 
     let agent_config = get_agent_config(agent_name)?;
-    let mut connection = SacpConnection::spawn(&agent_config, cwd).await?;
+    let mut connection = SacpConnection::spawn(&agent_config, cwd, acp_proxy).await?;
     let session_id = connection.create_session(cwd, vec![]).await?;
 
     let summarization_prompt = format!(

@@ -1,14 +1,41 @@
 use super::*;
 
+static RESUME_PICKER_GENERATION: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(1);
+
 impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
+        let recording_enabled = nori_acp::config::NoriConfig::load()
+            .map(|config| config.acp_proxy.enabled)
+            .unwrap_or(false);
+        self.bottom_pane
+            .set_acp_wire_recording_enabled(recording_enabled);
         let params = crate::nori::agent_picker::agent_picker_params(
             &current_model,
             self.app_event_tx.clone(),
+            recording_enabled,
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
+        self.bottom_pane.set_acp_wire_recording_enabled(enabled);
+    }
+
+    #[cfg(feature = "nori-config")]
+    pub(crate) fn replace_agent_popup(&mut self, recording_enabled: bool) {
+        if !self.bottom_pane.has_active_view() {
+            return;
+        }
+        let params = crate::nori::agent_picker::agent_picker_params(
+            &self.config.model,
+            self.app_event_tx.clone(),
+            recording_enabled,
+        );
+        self.bottom_pane.replace_selection_view(params);
     }
 
     /// Show a selection view in the bottom pane.
@@ -61,26 +88,68 @@ impl ChatWidget {
     }
 
     pub(crate) fn open_resume_session_picker(&mut self) {
+        let started = std::time::Instant::now();
         let cwd = self.config.cwd.clone();
         let tx = self.app_event_tx.clone();
         let model = self.config.model.clone();
+        let generation =
+            RESUME_PICKER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        tracing::info!(
+            target: "nori_resume",
+            phase = "open_resume_session_picker.start",
+            cwd = %cwd.display(),
+            agent = %model,
+            "starting /resume pre-picker session load",
+        );
 
         let nori_home = match crate::nori::config_adapter::get_nori_home() {
             Ok(home) => home,
             Err(e) => {
+                tracing::warn!(
+                    target: "nori_resume",
+                    phase = "open_resume_session_picker.nori_home_error",
+                    elapsed_ms = started.elapsed().as_millis(),
+                    error = %e,
+                    "failed to resolve NORI_HOME before opening /resume picker",
+                );
                 self.add_error_message(format!("Failed to find NORI_HOME: {e}"));
                 return;
             }
         };
 
+        tracing::info!(
+            target: "nori_resume",
+            phase = "open_resume_session_picker.nori_home_resolved",
+            elapsed_ms = started.elapsed().as_millis(),
+            nori_home = %nori_home.display(),
+            "resolved NORI_HOME for /resume picker",
+        );
+
         let nori_home_for_event = nori_home.clone();
         tokio::spawn(async move {
+            let task_started = std::time::Instant::now();
+            tracing::info!(
+                target: "nori_resume",
+                phase = "open_resume_session_picker.load_task.start",
+                cwd = %cwd.display(),
+                agent = %model,
+                nori_home = %nori_home.display(),
+                "spawned /resume pre-picker load task",
+            );
             match crate::nori::resume_session_picker::load_resumable_sessions(
                 &nori_home, &cwd, &model,
             )
             .await
             {
                 Ok(sessions) => {
+                    tracing::info!(
+                        target: "nori_resume",
+                        phase = "open_resume_session_picker.load_task.loaded",
+                        elapsed_ms = task_started.elapsed().as_millis(),
+                        session_count = sessions.len(),
+                        "loaded resumable sessions for /resume picker",
+                    );
                     if sessions.is_empty() {
                         tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
                             crate::history_cell::new_error_event(
@@ -90,12 +159,27 @@ impl ChatWidget {
                         )));
                     } else {
                         tx.send(crate::app_event::AppEvent::ShowResumeSessionPicker {
-                            sessions,
+                            sessions: sessions.clone(),
                             nori_home: nori_home_for_event,
+                            generation,
                         });
+                        tracing::info!(
+                            target: "nori_resume",
+                            phase = "open_resume_session_picker.load_task.event_sent",
+                            elapsed_ms = task_started.elapsed().as_millis(),
+                            "sent ShowResumeSessionPicker event",
+                        );
+                        spawn_resume_summary_task(tx.clone(), nori_home, sessions, generation);
                     }
                 }
                 Err(e) => {
+                    tracing::warn!(
+                        target: "nori_resume",
+                        phase = "open_resume_session_picker.load_task.error",
+                        elapsed_ms = task_started.elapsed().as_millis(),
+                        error = %e,
+                        "failed to load resumable sessions for /resume picker",
+                    );
                     tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
                         crate::history_cell::new_error_event(format!(
                             "Failed to load sessions: {e}"
@@ -106,9 +190,53 @@ impl ChatWidget {
         });
     }
 
-    /// Open the config popup for TUI settings.
+    pub(crate) fn show_resume_session_picker(
+        &mut self,
+        params: SelectionViewParams,
+        generation: u64,
+    ) {
+        self.active_resume_picker_generation = Some(generation);
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    pub(crate) fn update_resume_session_picker_item(
+        &mut self,
+        generation: u64,
+        session_id: &str,
+        started_at: &str,
+        first_message_preview: Option<&str>,
+        user_turn_count: Option<usize>,
+    ) {
+        if self.active_resume_picker_generation != Some(generation) {
+            tracing::info!(
+                target: "nori_resume",
+                phase = "resume_session_summary.stale",
+                generation,
+                session_id,
+                "ignored stale resume session summary update",
+            );
+            return;
+        }
+
+        if user_turn_count == Some(0) {
+            self.bottom_pane.remove_selection_item(session_id);
+            return;
+        }
+
+        let (name, description, search_value) =
+            crate::nori::resume_session_picker::resume_session_item_update(
+                session_id,
+                started_at,
+                first_message_preview,
+                user_turn_count,
+            );
+        self.bottom_pane
+            .update_selection_item(session_id, name, description, search_value);
+    }
+
+    /// Open the Nori CLI settings popup.
     #[cfg(feature = "nori-config")]
-    pub(crate) fn open_config_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
+    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
         let params = crate::nori::config_picker::config_picker_params(
             nori_config,
             self.app_event_tx.clone(),
@@ -526,6 +654,21 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the generic ACP session-config picker.
+    pub(crate) fn open_session_config_popup(&mut self) {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            tokio::spawn(async move {
+                let config_options = handle.get_session_config().await.unwrap_or_default();
+                app_event_tx.send(AppEvent::OpenAcpSessionConfigPicker { config_options });
+            });
+            return;
+        }
+
+        let params = crate::nori::session_config_picker::acp_session_config_picker_params(&[]);
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the ACP model picker with fetched models.
     #[cfg(feature = "unstable")]
     pub(crate) fn open_acp_model_picker(
@@ -537,6 +680,26 @@ impl ChatWidget {
             &models,
             current_model_id.as_deref(),
         );
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the top-level ACP session-config picker with the current config snapshot.
+    pub(crate) fn open_acp_session_config_picker(
+        &mut self,
+        config_options: Vec<nori_acp::SessionConfigOption>,
+    ) {
+        let params =
+            crate::nori::session_config_picker::acp_session_config_picker_params(&config_options);
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Open the value picker for one ACP session config option.
+    pub(crate) fn open_acp_session_config_value_picker(
+        &mut self,
+        option: nori_acp::SessionConfigOption,
+    ) {
+        let params =
+            crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -575,4 +738,96 @@ impl ChatWidget {
             );
         }
     }
+
+    /// Set an ACP session config option via the agent handle.
+    pub(crate) fn set_acp_session_config_option(
+        &mut self,
+        config_id: String,
+        value: String,
+        option_name: String,
+        value_name: String,
+    ) {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            let generation = self.acp_mode_config_generation;
+            let option_name_for_result = option_name;
+            let value_name_for_result = value_name;
+            tokio::spawn(async move {
+                match handle.set_session_config_option(config_id, value).await {
+                    Ok(config_options) => {
+                        app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
+                            generation,
+                            mode: crate::nori::session_config_mode::acp_mode_config_from_options(
+                                &config_options,
+                            ),
+                        });
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: true,
+                            option_name: option_name_for_result,
+                            value_name: value_name_for_result,
+                            config_options: Some(config_options),
+                            error: None,
+                        });
+                    }
+                    Err(err) => {
+                        app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
+                            success: false,
+                            option_name: option_name_for_result,
+                            value_name: value_name_for_result,
+                            config_options: None,
+                            error: Some(err.to_string()),
+                        });
+                    }
+                }
+            });
+        } else {
+            self.add_info_message(
+                "No ACP agent handle available for session config".to_string(),
+                None,
+            );
+        }
+    }
+}
+
+fn spawn_resume_summary_task(
+    tx: AppEventSender,
+    nori_home: std::path::PathBuf,
+    sessions: Vec<crate::nori::viewonly_session_picker::SessionPickerInfo>,
+    generation: u64,
+) {
+    tokio::spawn(async move {
+        let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+        let mut previews = std::collections::HashMap::new();
+
+        for session in &sessions {
+            let preview = loader
+                .load_first_user_preview(&session.project_id, &session.session_id)
+                .await
+                .ok()
+                .flatten();
+            previews.insert(session.session_id.clone(), preview.clone());
+            tx.send(crate::app_event::AppEvent::ResumeSessionSummaryReady {
+                generation,
+                session_id: session.session_id.clone(),
+                started_at: session.started_at.clone(),
+                first_message_preview: preview,
+                user_turn_count: None,
+            });
+        }
+
+        for session in sessions {
+            let user_turn_count = loader
+                .count_user_turns(&session.project_id, &session.session_id)
+                .await
+                .ok();
+            let preview = previews.remove(&session.session_id).flatten();
+            tx.send(crate::app_event::AppEvent::ResumeSessionSummaryReady {
+                generation,
+                session_id: session.session_id,
+                started_at: session.started_at,
+                first_message_preview: preview,
+                user_turn_count,
+            });
+        }
+    });
 }

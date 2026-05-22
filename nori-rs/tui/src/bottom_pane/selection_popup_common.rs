@@ -31,6 +31,7 @@ pub(crate) struct GenericDisplayRow {
     pub display_shortcut: Option<KeyBinding>,
     pub match_indices: Option<Vec<usize>>, // indices to bold (char positions)
     pub description: Option<String>,       // optional grey text after the name
+    pub styled_description: Option<Line<'static>>,
 }
 
 /// Compute a shared description-column start based on the widest visible name
@@ -123,12 +124,12 @@ fn build_full_line(row: &GenericDisplayRow, desc_col: usize) -> Line<'static> {
         full_spans.push(display_shortcut.into());
         full_spans.push(")".into());
     }
-    if let Some(desc) = row.description.as_ref() {
+    if let Some(desc) = row_description_line(row) {
         let gap = desc_col.saturating_sub(this_name_width);
         if gap > 0 {
             full_spans.push(" ".repeat(gap).into());
         }
-        full_spans.push(desc.clone().dim());
+        full_spans.extend(desc.spans);
     }
     Line::from(full_spans)
 }
@@ -159,8 +160,7 @@ fn wrap_row(row: &GenericDisplayRow, desc_col: usize, width: usize) -> Vec<Line<
             .map(line_to_static)
             .collect();
 
-        if let Some(desc) = row.description.as_ref() {
-            let desc_line: Line<'static> = Line::from(desc.clone().dim());
+        if let Some(desc_line) = row_description_line(row) {
             let desc_opts = RtOptions::new(width)
                 .initial_indent(STACKED_DESC_INDENT.dim().into())
                 .subsequent_indent(STACKED_DESC_INDENT.dim().into());
@@ -181,6 +181,14 @@ fn wrap_row(row: &GenericDisplayRow, desc_col: usize, width: usize) -> Vec<Line<
             .map(line_to_static)
             .collect()
     }
+}
+
+fn row_description_line(row: &GenericDisplayRow) -> Option<Line<'static>> {
+    row.styled_description.clone().or_else(|| {
+        row.description
+            .clone()
+            .map(|description| Line::from(description.dim()))
+    })
 }
 
 /// Render a list of rows using the provided ScrollState, with shared styling
@@ -238,7 +246,12 @@ pub(crate) fn render_rows(
         if Some(i) == state.selected_idx {
             for line in &mut wrapped {
                 line.spans.iter_mut().for_each(|span| {
-                    span.style = Style::default().fg(Color::Cyan).bold();
+                    let selected_fg = if span.style.fg == Some(Color::Red) {
+                        Color::Red
+                    } else {
+                        Color::Cyan
+                    };
+                    span.style = Style::default().fg(selected_fg).bold();
                 });
             }
         }
@@ -301,4 +314,31 @@ pub(crate) fn measure_rows_height(
         total = total.saturating_add(wrap_row(row, desc_col, width as usize).len() as u16);
     }
     total.max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn selected_row_preserves_red_symbol_in_styled_description() {
+        let rows = vec![GenericDisplayRow {
+            name: "/agent".to_string(),
+            display_shortcut: None,
+            match_indices: None,
+            description: Some("recording ● on".to_string()),
+            styled_description: Some(Line::from(vec!["recording ".dim(), "●".red(), " on".dim()])),
+        }];
+        let mut state = ScrollState::new();
+        state.clamp_selection(rows.len());
+        let area = Rect::new(0, 0, 40, 1);
+        let mut buf = Buffer::empty(area);
+
+        render_rows(area, &mut buf, &rows, &state, 1, "no matches");
+
+        let dot_x = (0..area.width)
+            .find(|x| buf[(*x, 0)].symbol() == "●")
+            .expect("recording dot cell");
+        assert_eq!(buf[(dot_x, 0)].fg, Color::Red);
+    }
 }

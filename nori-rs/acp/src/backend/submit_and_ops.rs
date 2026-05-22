@@ -217,15 +217,14 @@ impl AcpBackend {
                 )
                 .await;
             }
-            // Unsupported operations - only show error in debug builds
-            Op::RunUserShellCommand { .. } => {
-                let op_name = get_op_name(&op);
-                warn!("Unsupported Op in ACP mode: {op_name}");
-                #[cfg(debug_assertions)]
-                self.send_error(&format!(
-                    "Operation '{op_name}' is not supported in ACP mode"
-                ))
-                .await;
+            Op::RunUserShellCommand { command } => {
+                let event_tx = self.event_tx.clone();
+                let cwd = self.cwd.clone();
+                let id = id.clone();
+                let shell_task = tokio::spawn(async move {
+                    user_shell::run_user_shell_command(&event_tx, &id, &cwd, command).await;
+                });
+                drop(shell_task);
             }
             Op::OverrideTurnContext {
                 approval_policy, ..
@@ -308,6 +307,11 @@ impl AcpBackend {
         self.connection.model_state()
     }
 
+    /// Get the current ACP session config snapshot from the connection.
+    pub fn config_options(&self) -> Vec<acp::SessionConfigOption> {
+        self.connection.config_options()
+    }
+
     /// Get the current session ID.
     ///
     /// Note: This clones the session ID since it may be replaced during /compact.
@@ -317,9 +321,21 @@ impl AcpBackend {
 
     /// Get a reference to the underlying ACP connection.
     ///
-    /// This provides access to low-level ACP operations like model switching.
+    /// This provides access to low-level ACP operations like session controls.
     pub fn connection(&self) -> &Arc<SacpConnection> {
         &self.connection
+    }
+
+    /// Set an ACP session config option for the current session.
+    pub async fn set_config_option(
+        &self,
+        config_id: impl Into<acp::SessionConfigId>,
+        value: impl Into<acp::SessionConfigValueId>,
+    ) -> Result<()> {
+        let session_id = self.session_id.read().await;
+        self.connection
+            .set_config_option(&session_id, config_id, value)
+            .await
     }
 
     /// Switch to a different model for the current session.

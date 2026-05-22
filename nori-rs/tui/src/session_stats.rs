@@ -8,6 +8,7 @@ use crate::history_cell::with_border;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Tracks statistics for a conversation session.
 #[derive(Debug, Default, Clone)]
@@ -22,6 +23,7 @@ pub struct SessionStats {
     pub skills_used: Vec<String>,
     /// Subagents that were invoked during the session
     pub subagents_used: Vec<String>,
+    recorded_client_tool_call_ids: HashSet<String>,
 }
 
 impl SessionStats {
@@ -59,6 +61,33 @@ impl SessionStats {
         }
     }
 
+    /// Record an ACP tool snapshot for goodbye-card statistics.
+    pub fn record_client_tool_snapshot(&mut self, snapshot: &nori_protocol::ToolSnapshot) {
+        let should_count_tool = matches!(
+            snapshot.phase,
+            nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+        ) && self
+            .recorded_client_tool_call_ids
+            .insert(snapshot.call_id.clone());
+
+        if should_count_tool {
+            self.record_tool_call(&client_tool_stats_name(snapshot));
+        }
+
+        if let Ok(snapshot_value) = serde_json::to_value(snapshot) {
+            self.record_skills_from_json(&snapshot_value);
+        }
+
+        if let Some(subagent_type) = extract_subagent_from_raw_input(snapshot.raw_input.as_ref()) {
+            self.record_subagent(&subagent_type);
+        }
+        if let Some(nori_protocol::Invocation::Tool { input, .. }) = &snapshot.invocation
+            && let Some(subagent_type) = extract_subagent_from_raw_input(input.as_ref())
+        {
+            self.record_subagent(&subagent_type);
+        }
+    }
+
     /// Check if any statistics have been recorded.
     pub fn has_activity(&self) -> bool {
         self.user_messages > 0
@@ -66,6 +95,33 @@ impl SessionStats {
             || !self.tool_calls.is_empty()
             || !self.skills_used.is_empty()
             || !self.subagents_used.is_empty()
+    }
+
+    fn record_skills_from_json(&mut self, value: &serde_json::Value) {
+        for skill_name in extract_skills_from_json(value) {
+            self.record_skill(&skill_name);
+        }
+    }
+}
+
+fn client_tool_stats_name(snapshot: &nori_protocol::ToolSnapshot) -> String {
+    let kind = crate::client_event_format::format_tool_kind(&snapshot.kind);
+    match &snapshot.kind {
+        nori_protocol::ToolKind::Other(other)
+            if other.eq_ignore_ascii_case("other") && !snapshot.title.trim().is_empty() =>
+        {
+            snapshot.title.trim().to_string()
+        }
+        nori_protocol::ToolKind::Read
+        | nori_protocol::ToolKind::Search
+        | nori_protocol::ToolKind::Execute
+        | nori_protocol::ToolKind::Create
+        | nori_protocol::ToolKind::Edit
+        | nori_protocol::ToolKind::Delete
+        | nori_protocol::ToolKind::Move
+        | nori_protocol::ToolKind::Fetch
+        | nori_protocol::ToolKind::Think
+        | nori_protocol::ToolKind::Other(_) => kind.to_string(),
     }
 }
 
@@ -161,10 +217,7 @@ pub fn extract_skill_from_raw_input(raw_input: Option<&serde_json::Value>) -> Op
 ///
 /// The Task tool is invoked with `{"subagent_type": "agent-type", ...}`.
 pub fn extract_subagent_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<String> {
-    raw_input
-        .and_then(|v| v.get("subagent_type"))
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
+    raw_input.and_then(extract_subagent_from_value)
 }
 
 /// Extract skill name from a Read tool call's file path.
@@ -207,6 +260,53 @@ pub fn extract_skills_from_text(text: &str) -> Vec<String> {
     }
 
     skills
+}
+
+fn extract_subagent_from_value(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => None,
+        serde_json::Value::Array(values) => values.iter().find_map(extract_subagent_from_value),
+        serde_json::Value::Object(map) => {
+            for key in ["subagent_type", "agentType", "agent_type"] {
+                if let Some(value) = map.get(key).and_then(serde_json::Value::as_str) {
+                    return Some(value.to_string());
+                }
+            }
+            map.values().find_map(extract_subagent_from_value)
+        }
+    }
+}
+
+fn extract_skills_from_json(value: &serde_json::Value) -> Vec<String> {
+    let mut skills = Vec::new();
+    collect_skills_from_json(value, &mut skills);
+    skills
+}
+
+fn collect_skills_from_json(value: &serde_json::Value, skills: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
+        serde_json::Value::String(text) => {
+            for skill_name in extract_skills_from_text(text) {
+                if !skills.contains(&skill_name) {
+                    skills.push(skill_name);
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_skills_from_json(value, skills);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for value in map.values() {
+                collect_skills_from_json(value, skills);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -371,6 +471,37 @@ mod tests {
         let raw_input = json!({"description": "test", "prompt": "test"});
         let result = extract_subagent_from_raw_input(Some(&raw_input));
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_subagent_ignores_internal_agent_id_fields() {
+        let raw_input = json!({
+            "agentId": "019e3cb4-f515-7d62-af6a-e0016ef364f3",
+            "agent_id": "a74c49cc919c22c12",
+            "message": "subagent lifecycle update"
+        });
+        let result = extract_subagent_from_raw_input(Some(&raw_input));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_subagent_prefers_type_over_internal_agent_id() {
+        let raw_input = json!({
+            "agent_type": "nori-code-researcher",
+            "agentId": "019e3cb4-f515-7d62-af6a-e0016ef364f3"
+        });
+        let result = extract_subagent_from_raw_input(Some(&raw_input));
+        assert_eq!(result, Some("nori-code-researcher".to_string()));
+    }
+
+    #[test]
+    fn extract_subagent_prefers_camel_case_type_over_internal_agent_id() {
+        let raw_input = json!({
+            "agentType": "nori-code-researcher",
+            "agentId": "019e3cb4-f515-7d62-af6a-e0016ef364f3"
+        });
+        let result = extract_subagent_from_raw_input(Some(&raw_input));
+        assert_eq!(result, Some("nori-code-researcher".to_string()));
     }
 
     // =========================================================================

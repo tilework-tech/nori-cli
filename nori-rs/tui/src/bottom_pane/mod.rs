@@ -13,6 +13,9 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::text::Span;
 use std::time::Duration;
 
 mod approval_overlay;
@@ -35,6 +38,7 @@ pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
 mod selection_popup_common;
+mod skill_popup;
 mod textarea;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +72,8 @@ pub(crate) struct BottomPane {
     ctrl_c_quit_hint: bool,
     esc_backtrack_hint: bool,
     animations_enabled: bool,
+    custom_working_messages: bool,
+    custom_working_message_list: Vec<String>,
 
     /// Inline status indicator shown above the composer while a task is running.
     status: Option<StatusIndicatorWidget>,
@@ -80,6 +86,8 @@ pub(crate) struct BottomPane {
     agent_slug: String,
     /// Whether vim mode is enabled, used to configure selection view behavior.
     vim_mode_enabled: bool,
+    /// Whether ACP wire JSONL recording is enabled for future child subprocesses.
+    acp_wire_recording_enabled: bool,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -90,8 +98,11 @@ pub(crate) struct BottomPaneParams {
     pub(crate) placeholder_text: String,
     pub(crate) disable_paste_burst: bool,
     pub(crate) animations_enabled: bool,
+    pub(crate) custom_working_messages: bool,
+    pub(crate) custom_working_message_list: Vec<String>,
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
     pub(crate) agent_display_name: String,
     pub(crate) agent_slug: String,
 }
@@ -106,8 +117,11 @@ impl BottomPane {
             placeholder_text,
             disable_paste_burst,
             animations_enabled,
+            custom_working_messages,
+            custom_working_message_list,
             vertical_footer,
             footer_segment_config,
+            footer_layout_config,
             agent_display_name,
             agent_slug,
         } = params;
@@ -120,6 +134,7 @@ impl BottomPane {
         );
         composer.set_vertical_footer(vertical_footer);
         composer.set_footer_segment_config(footer_segment_config);
+        composer.set_footer_layout_config(footer_layout_config);
 
         // In debug builds, allow synchronous system info collection for E2E tests
         // via NORI_SYNC_SYSTEM_INFO=1. In release builds, always use default to
@@ -134,6 +149,10 @@ impl BottomPane {
         let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 
+        let acp_wire_recording_enabled = nori_acp::config::NoriConfig::load()
+            .map(|config| config.acp_proxy.enabled)
+            .unwrap_or(false);
+
         let mut pane = Self {
             composer,
             view_stack: Vec::new(),
@@ -146,10 +165,13 @@ impl BottomPane {
             queued_user_messages: QueuedUserMessages::new(),
             esc_backtrack_hint: false,
             animations_enabled,
+            custom_working_messages,
+            custom_working_message_list,
             context_window_percent: None,
             agent_display_name,
             agent_slug,
             vim_mode_enabled: false,
+            acp_wire_recording_enabled,
         };
 
         // Set description overrides for the slash command popup so that
@@ -350,6 +372,8 @@ impl BottomPane {
                         self.app_event_tx.clone(),
                         self.frame_requester.clone(),
                         self.animations_enabled,
+                        self.custom_working_messages,
+                        self.custom_working_message_list.clone(),
                     ));
                 }
                 if let Some(status) = self.status.as_mut() {
@@ -376,6 +400,8 @@ impl BottomPane {
                 self.app_event_tx.clone(),
                 self.frame_requester.clone(),
                 self.animations_enabled,
+                self.custom_working_messages,
+                self.custom_working_message_list.clone(),
             ));
             self.request_redraw();
         }
@@ -400,13 +426,25 @@ impl BottomPane {
 
     /// Update the agent display name used in approval dialogs and slash command descriptions.
     pub(crate) fn set_agent_display_name(&mut self, name: String) {
-        self.agent_display_name = name.clone();
-        self.composer.set_command_description_override(
+        self.agent_display_name = name;
+        self.refresh_agent_command_descriptions();
+    }
+
+    pub(crate) fn agent_display_name(&self) -> &str {
+        &self.agent_display_name
+    }
+
+    pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
+        self.acp_wire_recording_enabled = enabled;
+        self.refresh_agent_command_descriptions();
+        self.request_redraw();
+    }
+
+    fn refresh_agent_command_descriptions(&mut self) {
+        let name = self.agent_display_name.clone();
+        self.composer.set_command_description_override_line(
             crate::slash_command::SlashCommand::Agent,
-            format!(
-                "{} (current: {name})",
-                crate::slash_command::SlashCommand::Agent.description()
-            ),
+            agent_command_description(&name, self.acp_wire_recording_enabled),
         );
         self.composer.set_command_description_override(
             crate::slash_command::SlashCommand::Model,
@@ -420,6 +458,17 @@ impl BottomPane {
     /// Set the vertical footer layout flag.
     pub(crate) fn set_vertical_footer(&mut self, vertical_footer: bool) {
         self.composer.set_vertical_footer(vertical_footer);
+    }
+
+    pub(crate) fn set_custom_working_messages(&mut self, enabled: bool) {
+        self.custom_working_messages = enabled;
+        if let Some(status) = self.status.as_mut() {
+            status.update_header(crate::status_indicator_widget::pick_status_message(
+                enabled,
+                &self.custom_working_message_list,
+            ));
+            self.request_redraw();
+        }
     }
 
     /// Update the hotkey configuration used by the textarea for editing bindings.
@@ -477,6 +526,28 @@ impl BottomPane {
         self.show_selection_view(params);
     }
 
+    pub(crate) fn update_selection_item(
+        &mut self,
+        stable_id: &str,
+        name: String,
+        description: Option<String>,
+        search_value: String,
+    ) {
+        if let Some(view) = self.view_stack.last_mut()
+            && view.update_selection_item(stable_id, name, description, search_value)
+        {
+            self.request_redraw();
+        }
+    }
+
+    pub(crate) fn remove_selection_item(&mut self, stable_id: &str) {
+        if let Some(view) = self.view_stack.last_mut()
+            && view.remove_selection_item(stable_id)
+        {
+            self.request_redraw();
+        }
+    }
+
     /// Update the queued messages preview shown above the composer.
     pub(crate) fn set_queued_user_messages(&mut self, queued: Vec<String>) {
         self.queued_user_messages.messages = queued;
@@ -525,6 +596,11 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn set_acp_mode_label(&mut self, label: Option<String>) {
+        self.composer.set_acp_mode_label(label);
+        self.request_redraw();
+    }
+
     /// Update the prompt summary displayed in the footer.
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.composer.set_prompt_summary(summary);
@@ -558,11 +634,15 @@ impl BottomPane {
         self.is_task_running
     }
 
+    pub(crate) fn has_active_overlay_or_popup(&self) -> bool {
+        !self.view_stack.is_empty() || self.composer.popup_active()
+    }
+
     /// Return true when the pane is in the regular composer state without any
     /// overlays or popups and not running a task. This is the safe context to
     /// use Esc-Esc for backtracking from the main view.
     pub(crate) fn is_normal_backtrack_mode(&self) -> bool {
-        !self.is_task_running && self.view_stack.is_empty() && !self.composer.popup_active()
+        !self.is_task_running && !self.has_active_overlay_or_popup()
     }
 
     pub(crate) fn show_view(&mut self, view: Box<dyn BottomPaneView>) {
@@ -717,6 +797,31 @@ impl BottomPane {
     }
 }
 
+fn agent_command_description(agent_name: &str, recording_enabled: bool) -> Line<'static> {
+    let command_description = crate::slash_command::SlashCommand::Agent.description();
+    let prefix = if agent_name.is_empty() {
+        command_description.to_string()
+    } else {
+        format!("{command_description} (current: {agent_name})")
+    };
+    let (symbol, status) = if recording_enabled {
+        ("●", "on")
+    } else {
+        ("○", "off")
+    };
+    let symbol_span: Span<'static> = if recording_enabled {
+        symbol.red()
+    } else {
+        symbol.into()
+    };
+
+    Line::from(vec![
+        format!("{prefix} (").dim(),
+        symbol_span,
+        format!(" rec {status})").dim(),
+    ])
+}
+
 impl Renderable for BottomPane {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         self.as_renderable().render(area, buf);
@@ -765,6 +870,38 @@ mod tests {
         }
     }
 
+    fn test_bottom_pane() -> BottomPane {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Nori to do anything".to_string(),
+            disable_paste_burst: true,
+            animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
+            vertical_footer: false,
+            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            agent_display_name: String::new(),
+            agent_slug: String::new(),
+        })
+    }
+
+    #[test]
+    fn active_overlay_or_popup_includes_active_views() {
+        let mut pane = test_bottom_pane();
+
+        assert!(!pane.has_active_overlay_or_popup());
+
+        pane.push_approval_request(exec_request());
+
+        assert!(pane.has_active_overlay_or_popup());
+    }
+
     #[test]
     fn ctrl_c_on_modal_consumes_and_shows_quit_hint() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
@@ -777,8 +914,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -802,8 +942,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -824,6 +967,50 @@ mod tests {
     }
 
     #[test]
+    fn slash_agent_description_appends_recording_status_after_current_agent() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut pane = BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Nori to do anything".to_string(),
+            disable_paste_burst: false,
+            animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
+            vertical_footer: false,
+            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            agent_display_name: "ElizACP".to_string(),
+            agent_slug: "elizacp".to_string(),
+        });
+
+        pane.set_acp_wire_recording_enabled(false);
+        for ch in ['/', 'a', 'g'] {
+            let _ = pane.composer.handle_key_event(KeyEvent::new(
+                KeyCode::Char(ch),
+                crossterm::event::KeyModifiers::NONE,
+            ));
+            std::thread::sleep(ChatComposer::recommended_paste_flush_delay());
+            let _ = pane.composer.flush_paste_burst_if_due();
+        }
+
+        let area = Rect::new(0, 0, 92, 6);
+        let mut buf = Buffer::empty(area);
+        pane.render(area, &mut buf);
+        let rendered = snapshot_buffer(&buf);
+
+        assert!(
+            rendered.contains(
+                "/agent  switch between available ACP agents (current: ElizACP) (○ rec off)"
+            ),
+            "expected /agent row to show current agent before recording status, got:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn composer_shown_after_denied_while_task_running() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -835,8 +1022,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -909,8 +1099,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -941,8 +1134,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -976,8 +1172,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1007,8 +1206,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1038,8 +1240,11 @@ mod tests {
             placeholder_text: "Ask Nori to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
+            custom_working_messages: true,
+            custom_working_message_list: Vec::new(),
             vertical_footer: false,
             footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });

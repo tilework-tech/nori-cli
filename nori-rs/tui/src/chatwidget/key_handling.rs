@@ -36,6 +36,15 @@ impl ChatWidget {
                 }
                 return;
             }
+            KeyEvent {
+                code: KeyCode::BackTab,
+                kind: KeyEventKind::Press,
+                ..
+            } if !self.bottom_pane.has_active_overlay_or_popup()
+                && self.cycle_acp_mode_config() =>
+            {
+                return;
+            }
             other if other.kind == KeyEventKind::Press => {
                 self.bottom_pane.clear_ctrl_c_quit_hint();
             }
@@ -114,12 +123,15 @@ impl ChatWidget {
             SlashCommand::Model => {
                 self.open_model_popup();
             }
+            SlashCommand::Config => {
+                self.open_session_config_popup();
+            }
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
             }
             #[cfg(feature = "nori-config")]
-            SlashCommand::Config => {
-                // Load NoriConfig from the default path and open the config popup.
+            SlashCommand::Settings => {
+                // Load NoriConfig from the default path and open the settings popup.
                 // Apply ephemeral session overrides so the picker shows the
                 // current in-session value rather than the persisted one.
                 match nori_acp::config::NoriConfig::load() {
@@ -127,17 +139,17 @@ impl ChatWidget {
                         if let Some(overridden) = self.loop_count_override {
                             nori_config.loop_count = overridden;
                         }
-                        self.open_config_popup(&nori_config);
+                        self.open_settings_popup(&nori_config);
                     }
                     Err(err) => {
-                        self.add_error_message(format!("Failed to load config: {err}"));
+                        self.add_error_message(format!("Failed to load settings: {err}"));
                     }
                 }
             }
             #[cfg(not(feature = "nori-config"))]
-            SlashCommand::Config => {
+            SlashCommand::Settings => {
                 self.add_info_message(
-                    "Config command requires the nori-config feature".to_string(),
+                    "Settings command requires the nori-config feature".to_string(),
                     None,
                 );
             }
@@ -165,7 +177,7 @@ impl ChatWidget {
                     }
                     None => {
                         self.add_error_message(
-                            "No file manager configured. Use /config to set one.".to_string(),
+                            "No file manager configured. Use /settings to set one.".to_string(),
                         );
                     }
                 },

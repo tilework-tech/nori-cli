@@ -6,7 +6,7 @@ Path: @/nori-rs/nori-protocol
 
 - Defines the normalized `ClientEvent` protocol that sits between raw ACP session updates (from `agent-client-protocol-schema`) and the TUI rendering layer. All ACP tool calls, messages, plans, approvals, and replay entries are transformed into this crate's types before reaching the TUI.
 - The `ClientEventNormalizer` is the stateful entry point: it accepts `acp::SessionUpdate` and `acp::RequestPermissionRequest` values and emits `Vec<ClientEvent>`.
-- Session-scoped ACP metadata is normalized into `ClientEvent::SessionUpdateInfo`, giving the rest of the stack one minimal rendering/replay path for mode, config, and session-info updates while still letting usage updates carry structured footer state.
+- Session-scoped ACP metadata is normalized into compact client events: simple mode/session/usage notes use `ClientEvent::SessionUpdateInfo`, while ACP session config snapshots use `ClientEvent::SessionConfigUpdate` so the TUI can diff option values without parsing display text.
 - Single-file crate (`lib.rs`) with no submodules.
 
 ### How it fits into the larger codebase
@@ -26,10 +26,12 @@ agent_client_protocol_schema::SessionUpdate
 ### Core Implementation
 
 - **`ClientEventNormalizer`** maintains a `HashMap<String, acp::ToolCall>` keyed by `call_id`. `ToolCallUpdate` messages always upsert into that map: if the ACP agent never sent an initial `ToolCall`, the normalizer synthesizes a placeholder `ToolCall`, applies the update fields, and still emits a visible `ToolSnapshot`.
-- **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `nori-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. These types let the backend treat prompt turns, `session/load`, queued prompts, and ownership of tool/approval updates as one ordered state machine instead of reconstructing turn state from racing tasks.
+- **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `nori-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. These types let the backend treat prompt turns, `session/load`, queued prompts, and ownership of tool/approval updates as one ordered state machine instead of reconstructing turn state from racing tasks. `ActiveRequestState` keeps the last flushed assistant text so `PromptCompleted { last_agent_message, .. }` remains correct even when a later reasoning chunk closes the assistant buffer before the turn ends.
 - **Session update normalization** keeps the first pass intentionally small:
   - `UserMessageChunk` becomes `MessageDelta { stream: User, .. }`, which lets replay paths reconstruct visible user history during `session/load`.
-  - `CurrentModeUpdate`, `ConfigOptionUpdate`, and `SessionInfoUpdate` become lightweight `SessionUpdateInfo` summaries.
+  - `CurrentModeUpdate` becomes `ClientEvent::SessionModeChanged { current_mode_id }`; the TUI resolves the id to a human label using its cached mode list.
+  - `ConfigOptionUpdate` becomes `SessionConfigUpdate`, preserving the full option snapshot so the TUI can show only changed user-facing option values.
+  - `SessionInfoUpdate` becomes a lightweight `SessionUpdateInfo` summary.
   - `UsageUpdate` also becomes `SessionUpdateInfo`, but the usage variant additionally carries `SessionUsageState` so the TUI can update footer context without reparsing the display string.
 - **Persisted session metadata** now includes `session_info` and `session_usage` alongside available commands, current mode, and config options. `nori-acp` owns persistence, but these structs live here so the reducer and replay pipeline share one runtime model.
 - **`is_generic_tool_call()`** gates initial `ToolCall` emission: tool calls with no `raw_input`, no `locations`, empty `content`, and no `/` in the title are suppressed (return empty `Vec`). The normalizer still records them internally so that later attributed `ToolCallUpdate` messages can refine the existing call without forcing the TUI to render a placeholder cell first.
