@@ -6,16 +6,34 @@ use std::path::PathBuf;
 
 const CLOUD_AUTH_FILE: &str = "cloud-auth.json";
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CloudConnectionInfo {
     pub ws_url: String,
     pub auth_token: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+impl std::fmt::Debug for CloudConnectionInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloudConnectionInfo")
+            .field("ws_url", &self.ws_url)
+            .field("auth_token", &"[redacted]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CloudCredentials {
     pub broker_url: String,
     pub auth_token: String,
+}
+
+impl std::fmt::Debug for CloudCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloudCredentials")
+            .field("broker_url", &self.broker_url)
+            .field("auth_token", &"[redacted]")
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -245,7 +263,25 @@ pub fn save_credentials(nori_home: &Path, creds: &CloudCredentials) -> Result<()
     std::fs::create_dir_all(nori_home)?;
     let path = nori_home.join(CLOUD_AUTH_FILE);
     let json = serde_json::to_string_pretty(creds)?;
-    std::fs::write(path, json)?;
+
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&path)?;
+        file.write_all(json.as_bytes())?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&path, json)?;
+    }
+
     Ok(())
 }
 

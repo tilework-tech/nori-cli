@@ -44,9 +44,17 @@
 - 1 integration test for cloud disconnect detection (mock WS server drops connection, verify error event emitted)
 - All 516+ nori-acp tests pass, all 27 nori-cli tests pass
 
-## Next Steps (in spec order)
+### Commit 5: Documentation + verification
+- Verified all tests pass: 546 nori-acp, 1309 nori-tui, 27 nori-cli, 94 E2E (zero failures)
+- Verified `cargo build --bin nori` succeeds with zero warnings
+- Reviewed existing docs.md files (acp, broker, cli, tui) — all already accurate
+- Created `acp/src/connection/docs.md` documenting the dual transport architecture (local subprocess vs remote WebSocket)
 
-Feature is functionally complete per APPLICATION_SPEC.md. Remaining potential work:
-- Session resume: `nori cloud --resume` (out of scope per spec)
-- Session listing: `nori cloud --list` (out of scope per spec)
-- Agent selection: `nori cloud --agent <slug>` (out of scope per spec)
+## Status
+
+Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly, documentation is up to date.
+
+### Out of scope per spec
+- Session resume: `nori cloud --resume`
+- Session listing: `nori cloud --list`
+- Agent selection: `nori cloud --agent <slug>`

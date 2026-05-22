@@ -233,6 +233,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_stream_yields_valid_utf8_binary_as_string() {
+        let messages = stream::iter(vec![Ok(Message::Binary(b"binary data".to_vec().into()))]);
+        let mut reader = WsReadStream::new(messages);
+
+        let result = reader.next().await.expect("should have item");
+        assert_eq!(result.expect("should be ok"), "binary data");
+    }
+
+    #[tokio::test]
+    async fn read_stream_returns_error_for_invalid_utf8_binary() {
+        let messages = stream::iter(vec![Ok(Message::Binary(vec![0xFF, 0xFE].into()))]);
+        let mut reader = WsReadStream::new(messages);
+
+        let result = reader.next().await.expect("should have item");
+        let err = result.expect_err("should be an error");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[tokio::test]
     async fn sink_sends_string_as_text_message() {
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<Message>();
         let sink = tx.sink_map_err(|e| WsError::Io(io::Error::other(e)));

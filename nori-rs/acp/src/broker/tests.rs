@@ -101,6 +101,22 @@ fn save_credentials_creates_directory_if_needed() {
     assert_eq!(loaded, Some(creds));
 }
 
+#[cfg(unix)]
+#[test]
+fn save_credentials_sets_restrictive_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempdir().unwrap();
+    let creds = CloudCredentials {
+        broker_url: "https://broker.example.com".to_string(),
+        auth_token: "secret-token".to_string(),
+    };
+
+    save_credentials(dir.path(), &creds).unwrap();
+    let path = dir.path().join("cloud-auth.json");
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+}
+
 // ── Callback URL token extraction ───────────────────────────────────
 
 #[test]
@@ -320,6 +336,63 @@ async fn release_session_sends_post_with_auth() {
     let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
 
     client.release_session("sess-abc123").await.unwrap();
+    server_handle.join().unwrap();
+}
+
+#[tokio::test]
+async fn acquire_session_returns_token_expired_for_locally_expired_jwt() {
+    let dir = tempdir().unwrap();
+    let broker_url = "http://unused.test".to_string();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: expired_jwt(),
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.acquire_session().await.unwrap_err();
+    assert!(matches!(err, BrokerError::TokenExpired));
+}
+
+#[tokio::test]
+async fn release_session_returns_token_expired_for_locally_expired_jwt() {
+    let dir = tempdir().unwrap();
+    let broker_url = "http://unused.test".to_string();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: expired_jwt(),
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.release_session("sess-abc123").await.unwrap_err();
+    assert!(matches!(err, BrokerError::TokenExpired));
+}
+
+#[tokio::test]
+async fn acquire_session_returns_error_for_malformed_response() {
+    let mock_server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = mock_server.server_addr().to_ip().unwrap().port();
+    let broker_url = format!("http://127.0.0.1:{port}");
+    let token = future_jwt();
+
+    let server_handle = std::thread::spawn(move || {
+        let request = mock_server.recv().unwrap();
+        let response = tiny_http::Response::from_string("not valid json").with_status_code(200);
+        request.respond(response).unwrap();
+    });
+
+    let dir = tempdir().unwrap();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: token,
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.acquire_session().await.unwrap_err();
+    assert!(matches!(err, BrokerError::InvalidToken(_)));
+
     server_handle.join().unwrap();
 }
 
