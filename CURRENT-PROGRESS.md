@@ -76,18 +76,23 @@
 - No new test added: the retry orchestration is in `main.rs` (not unit-testable without mocking browser auth), and the individual components (TokenExpired on 401, authenticate refreshing token, acquire succeeding) are already thoroughly tested
 - All tests pass (556 acp, 27 cli)
 
-### Broker-side: CLI cloud session endpoints (nori-sessions repo, branch cli-cloud-sessions)
+### Broker-side: CLI cloud session endpoints (nori-sessions repo, branch cli-cloud-sessions, PR #830)
 - Added `cliClaimedBy()` to `claimedBy.ts` — generates `cli:<email>/<iso-timestamp>` claim identifiers
 - Added `GET /auth/cli` unauthenticated endpoint serving Firebase JS SDK login page with localhost-only redirect_uri validation
 - Modified `POST /sessions/acquire` to accept `source: 'cli'` and return `ws_url` in response
+- Added `session_id` (snake_case) alongside `sessionId` (camelCase) in acquire response for Rust CLI compatibility
 - Added `POST /sessions/:id/release` path-based release endpoint
 - Created WebSocket tunnel at `/api/sessions/:id/ws` — bidirectional frame relay between CLI and sprite ACP, using `ws.Server` with `noServer: true`, Firebase token auth, and existing sprite connector infrastructure
-- 17 new tests across 4 test files, all passing
+- 18 tests across 4 test files, all passing
 - Updated noridocs across 5 docs.md files
+- PR #830 open with all CI checks green (Format, Clippy, Dependency audit, Broker TypeScript, Build Linux+macOS, Test, Docs, E2E Linux+macOS)
 
 ## Status
 
-Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly with zero clippy warnings, documentation is up to date.
+Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly with zero clippy warnings, documentation is up to date. Broker PR #830 is open with all CI green.
+
+### Remaining CLI-side follow-up
+- CLI sends no `source: 'cli'` in acquire request body — broker defaults to `webClaimedBy` instead of `cliClaimedBy` (functional, but claim identity is wrong)
 
 ### Out of scope per spec
 - Session resume: `nori cloud --resume`
