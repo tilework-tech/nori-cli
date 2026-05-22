@@ -33,15 +33,18 @@ Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_ma
 
 `NoriConfig` is also the source of truth for ACP backend diagnostics. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
 
-The auto-worktree startup flow branches on the `AutoWorktree` enum (see `@/nori-rs/acp/docs.md`):
+The auto-worktree startup flow first checks eligibility via `can_create_worktree()` (see `@/nori-rs/acp/docs.md`), then branches on the `AutoWorktree` enum:
 
-| Variant | Timing | Behavior |
-|---------|--------|----------|
-| `Automatic` | Before TUI init, in `run_main()` | Calls `setup_auto_worktree()` immediately and overrides cwd |
-| `Ask` | After TUI init, in `run_ratatui_app()` | Sets `pending_worktree_ask = true`, deferred to a TUI popup shown after onboarding but before `App::run()` |
+| State | Timing | Behavior |
+|-------|--------|----------|
+| Blocked (not a git repo, or already inside a worktree) | Before TUI init, in `run_main()` | Sets `worktree_blocked_reason`; a `WorktreeBlockedScreen` popup is shown after onboarding explaining why, then continues without a worktree |
+| `Automatic` (eligible) | Before TUI init, in `run_main()` | Calls `setup_auto_worktree()` immediately and overrides cwd |
+| `Ask` (eligible) | After TUI init, in `run_ratatui_app()` | Sets `pending_worktree_ask = true`, deferred to a TUI popup shown after onboarding but before `App::run()` |
 | `Off` | N/A | Skips worktree creation entirely |
 
 The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`, a standalone mini-app screen using the same pre-`App` event-loop pattern as `nori::update_prompt` in release builds. It presents two options ("Yes, create a worktree" / "No, continue without a worktree") and returns a boolean. If the user confirms, `setup_auto_worktree()` is called and config is reloaded with the new cwd via `load_config_or_exit()`. Ctrl-C, Escape, and the "No" option all skip worktree creation. On failure, the TUI continues with the original cwd.
+
+The `WorktreeBlockedScreen` popup (also in `nori::worktree_ask`) shows the blocked reason and a single "Continue without a worktree" option. It accepts Enter, Escape, or Ctrl-C/Ctrl-D to dismiss. The `worktree_blocked_reason` parameter is threaded from `run_main()` through to `run_ratatui_app()` as `Option<String>` and takes priority over `pending_worktree_ask` in the popup dispatch.
 
 The main event loop in `app/mod.rs` processes:
 

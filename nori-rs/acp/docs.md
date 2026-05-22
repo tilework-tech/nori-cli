@@ -31,7 +31,7 @@ Key files:
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `transcript_discovery.rs` - Discovers transcript files for external agents
-- `auto_worktree.rs` - Orchestrates automatic git worktree creation and summary-based renaming
+- `auto_worktree.rs` - Orchestrates automatic git worktree creation, eligibility checking, and summary-based renaming
 
 ### Core Implementation
 
@@ -249,7 +249,18 @@ The `FileManager` enum (`types/mod.rs`) represents supported terminal file manag
 
 The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
 
-Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
+Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) checks eligibility via `can_create_worktree()` before branching on the `AutoWorktree` variant in `lib.rs`: if eligible, `Automatic` calls `setup_auto_worktree()` immediately and `Ask` defers to a TUI popup (`worktree_ask.rs`); if ineligible, the TUI shows a `WorktreeBlockedScreen` popup explaining the reason before continuing without a worktree. `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
+
+**Worktree Eligibility Check** (`auto_worktree.rs`):
+
+Before attempting to create a worktree, `can_create_worktree(cwd)` validates that the directory is eligible. It returns `Ok(())` if eligible, or `Err(WorktreeBlockedReason)` if not:
+
+| `WorktreeBlockedReason` | Detection | User-Visible Message |
+|--------------------------|-----------|----------------------|
+| `NotGitRepo` | `git rev-parse --is-inside-work-tree` fails or returns non-`true` | "not in a git repository" |
+| `AlreadyInWorktree` | `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir` (linked worktree signature) | "already in a git worktree" |
+
+The check runs in `run_main()` before the TUI is initialized. When blocked, the reason string is threaded through to `run_ratatui_app()` and displayed via `run_worktree_blocked_popup()` in `@/nori-rs/tui/src/nori/worktree_ask.rs`.
 
 **Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend/mod.rs`):
 
