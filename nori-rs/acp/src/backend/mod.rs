@@ -324,6 +324,10 @@ pub struct AcpBackend {
     session_driver: Arc<Mutex<session_runtime_driver::SessionDriver>>,
     /// MCP server configuration forwarded to ACP agents at session creation.
     mcp_servers: HashMap<String, McpServerConfig>,
+    /// Abort handle for the in-flight prompt task (if any)
+    prompt_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the cancel timeout watchdog (if any)
+    cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
 mod helpers;

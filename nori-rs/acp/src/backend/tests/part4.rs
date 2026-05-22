@@ -96,6 +96,125 @@ async fn test_interrupt_emits_cancelling_phase_before_prompt_completion() {
 
 #[tokio::test]
 #[serial]
+async fn test_cancel_timeout_forces_idle_when_agent_ignores_cancel() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // Agent streams indefinitely and ignores cancel notifications.
+    // SAFETY: Test-scoped environment variables for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
+        std::env::set_var("MOCK_AGENT_IGNORE_CANCEL", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let config = build_test_config(temp_dir.path());
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(2))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "stream forever".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    // Wait for Prompt phase
+    let mut saw_prompt_phase = false;
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::SessionPhaseChanged(
+                nori_protocol::session_runtime::SessionPhaseView::Prompt,
+            )) => {
+                saw_prompt_phase = true;
+                break;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+    assert!(saw_prompt_phase, "expected prompt phase before interrupt");
+
+    backend
+        .submit(Op::Interrupt)
+        .await
+        .expect("Failed to interrupt prompt");
+
+    // The cancel timeout should force-complete within ~10 seconds even though
+    // the agent ignores the cancel notification.
+    let overall_timeout = Duration::from_secs(20);
+    let start = std::time::Instant::now();
+    let mut relevant_events = Vec::new();
+    let mut saw_warning = false;
+    while start.elapsed() < overall_timeout {
+        // Check both client events and control events
+        match tokio::time::timeout(Duration::from_millis(500), backend_event_rx.recv()).await {
+            Ok(Some(BackendEvent::Client(nori_protocol::ClientEvent::SessionPhaseChanged(
+                phase,
+            )))) => {
+                relevant_events.push(format!("phase:{phase:?}"));
+            }
+            Ok(Some(BackendEvent::Client(nori_protocol::ClientEvent::PromptCompleted(
+                completed,
+            )))) => {
+                relevant_events.push(format!("stop:{:?}", completed.stop_reason));
+                break;
+            }
+            Ok(Some(BackendEvent::Control(event))) => {
+                if matches!(event.msg, EventMsg::Warning(_)) {
+                    saw_warning = true;
+                }
+            }
+            Ok(Some(BackendEvent::Client(_))) => continue,
+            Ok(None) => break,
+            Err(_) => continue,
+        }
+    }
+
+    // SAFETY: Clean up the environment variables set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_STREAM_UNTIL_CANCEL");
+        std::env::remove_var("MOCK_AGENT_IGNORE_CANCEL");
+    }
+
+    assert_eq!(
+        relevant_events,
+        vec![
+            "phase:Cancelling".to_string(),
+            "phase:Idle".to_string(),
+            "stop:Cancelled".to_string(),
+        ],
+        "cancel timeout should force-complete the turn"
+    );
+
+    assert!(
+        saw_warning,
+        "expected a warning event about slow cancellation before force-cancel"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn test_user_input_emits_reducer_owned_phase_and_completion_events() {
     use std::time::Duration;
 

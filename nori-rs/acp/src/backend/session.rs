@@ -317,6 +317,8 @@ impl AcpBackend {
             script_timeout: config.script_timeout,
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
+            prompt_task_abort: Arc::new(Mutex::new(None)),
+            cancel_timeout_abort: Arc::new(Mutex::new(None)),
         };
 
         let runtime_backend = backend.clone();

@@ -142,12 +142,21 @@ pub(crate) fn patch_approval_request_owner(
         .collect()
 }
 
+const CANCEL_WARNING_SECS: u64 = 3;
+const CANCEL_FORCE_SECS: u64 = 10;
+
 impl AcpBackend {
     pub(super) async fn apply_session_event(&self, event: InboundEvent) {
-        let start_idle_timer = matches!(
+        let is_prompt_terminal = matches!(
             event,
             InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed
         );
+        if is_prompt_terminal {
+            if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
+                abort.abort();
+            }
+            *self.prompt_task_abort.lock().await = None;
+        }
         let event_kind = session_reducer::inbound_event_kind(&event);
         let actions = {
             let mut driver = self.session_driver.lock().await;
@@ -171,7 +180,7 @@ impl AcpBackend {
             actions
         };
         self.dispatch_reducer_actions(actions).await;
-        if start_idle_timer {
+        if is_prompt_terminal {
             self.maybe_start_idle_timer().await;
         }
     }
@@ -506,7 +515,7 @@ impl AcpBackend {
                 let backend = (*self).clone();
                 let prompt_result_tx = self.prompt_result_tx.clone();
                 let request_id_for_task = request_id.clone();
-                tokio::spawn(async move {
+                let prompt_task = tokio::spawn(async move {
                     let session_id = backend.session_id.read().await.clone();
                     let prompt_kind = prompt_kind.unwrap_or(QueuedPromptKind::User);
                     debug!(
@@ -542,6 +551,7 @@ impl AcpBackend {
                         }
                     }
                 });
+                *self.prompt_task_abort.lock().await = Some(prompt_task.abort_handle());
             }
             SideEffect::SendCancel => {
                 let session_id = self.session_id.read().await.clone();
@@ -553,6 +563,36 @@ impl AcpBackend {
                 if let Err(err) = self.connection.cancel(&session_id).await {
                     warn!("Failed to cancel ACP session: {err}");
                 }
+
+                let event_tx = self.event_tx.clone();
+                let prompt_task_abort = Arc::clone(&self.prompt_task_abort);
+                let prompt_result_tx = self.prompt_result_tx.clone();
+                let watchdog = tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(CANCEL_WARNING_SECS)).await;
+                    warn!("Agent has not responded to cancel after {CANCEL_WARNING_SECS}s");
+                    let _ = event_tx
+                        .send(Event {
+                            id: String::new(),
+                            msg: EventMsg::Warning(WarningEvent {
+                                message: format!(
+                                    "Agent is slow to cancel. Will force-cancel in {}s…",
+                                    CANCEL_FORCE_SECS - CANCEL_WARNING_SECS
+                                ),
+                            }),
+                        })
+                        .await;
+
+                    tokio::time::sleep(std::time::Duration::from_secs(
+                        CANCEL_FORCE_SECS - CANCEL_WARNING_SECS,
+                    ))
+                    .await;
+                    if let Some(abort) = prompt_task_abort.lock().await.take() {
+                        warn!("Force-cancelling prompt task after {CANCEL_FORCE_SECS}s timeout");
+                        abort.abort();
+                        let _ = prompt_result_tx.send(InboundEvent::PromptFailed).await;
+                    }
+                });
+                *self.cancel_timeout_abort.lock().await = Some(watchdog.abort_handle());
             }
             SideEffect::ResolvePermissionCancelled { request_id } => {
                 self.resolve_cancelled_permission(&request_id).await;
