@@ -3,6 +3,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 const CLOUD_AUTH_FILE: &str = "cloud-auth.json";
 
@@ -160,8 +162,10 @@ impl BrokerClient {
     }
 
     pub async fn authenticate(&mut self) -> Result<()> {
-        let server = tiny_http::Server::http("127.0.0.1:0")
-            .map_err(|e| anyhow::anyhow!("failed to bind local server: {e}"))?;
+        let server = Arc::new(
+            tiny_http::Server::http("127.0.0.1:0")
+                .map_err(|e| anyhow::anyhow!("failed to bind local server: {e}"))?,
+        );
         let port = server
             .server_addr()
             .to_ip()
@@ -178,8 +182,9 @@ impl BrokerClient {
         }
 
         let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+        let server_handle = Arc::clone(&server);
         std::thread::spawn(move || {
-            while let Ok(request) = server.recv() {
+            while let Ok(request) = server_handle.recv() {
                 let url = request.url().to_string();
                 if url.starts_with("/callback") {
                     let token = extract_token_from_callback(&url);
@@ -196,7 +201,7 @@ impl BrokerClient {
                     if let Some(t) = token {
                         let _ = tx.send(t);
                     }
-                    server.unblock();
+                    server_handle.unblock();
                     break;
                 } else {
                     let _ = request.respond(
@@ -206,9 +211,17 @@ impl BrokerClient {
             }
         });
 
-        let token = rx
-            .await
-            .map_err(|_| anyhow::anyhow!("authentication callback was not received"))?;
+        let token = match tokio::time::timeout(Duration::from_secs(120), rx).await {
+            Ok(Ok(token)) => token,
+            Ok(Err(_)) => {
+                server.unblock();
+                anyhow::bail!("authentication callback was not received");
+            }
+            Err(_) => {
+                server.unblock();
+                anyhow::bail!("authentication timed out after 2 minutes — please try again");
+            }
+        };
 
         self.auth_token = Some(token.clone());
         save_credentials(

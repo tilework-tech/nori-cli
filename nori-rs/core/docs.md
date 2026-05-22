@@ -87,7 +87,7 @@ The builder is used by the TUI layer (`@/nori-rs/tui/`) to persist user preferen
 **Data Flow (ACP path):**
 
 ```
-User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/acp) -> Agent subprocess (JSON-RPC)
+User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/acp) -> Agent (JSON-RPC via subprocess or WebSocket)
     |
     v
 Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution

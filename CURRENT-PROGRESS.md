@@ -63,9 +63,13 @@
 - 4 unit tests for `save_cloud_broker_url` (empty config, preserving existing config, overwriting value, creating directory)
 - All nori-acp and nori-cli tests pass
 
+### Commit 7: Documentation accuracy fix
+- Updated `core/docs.md` data flow diagram to reflect dual transport: "Agent (JSON-RPC via subprocess or WebSocket)" instead of "Agent subprocess (JSON-RPC)"
+- Verified all other docs.md files (acp, broker, connection, cli, tui, nori-protocol) were already accurate
+
 ## Status
 
-Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly, documentation is up to date.
+Feature is functionally complete per APPLICATION_SPEC.md. All tests pass (556 acp, 27 cli, 1309 tui, 97 e2e), code compiles cleanly with zero clippy warnings, documentation is up to date.
 
 ### Out of scope per spec
 - Session resume: `nori cloud --resume`
