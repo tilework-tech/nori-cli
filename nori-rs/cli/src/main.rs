@@ -555,7 +555,9 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 ws_url: session_info.ws_url,
                 auth_token: broker
                     .auth_token()
-                    .expect("token must be present after authenticate + acquire_session")
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("auth token missing after authenticate + acquire_session")
+                    })?
                     .to_string(),
             });
 
