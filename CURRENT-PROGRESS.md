@@ -67,9 +67,18 @@
 - Updated `core/docs.md` data flow diagram to reflect dual transport: "Agent (JSON-RPC via subprocess or WebSocket)" instead of "Agent subprocess (JSON-RPC)"
 - Verified all other docs.md files (acp, broker, connection, cli, tui, nori-protocol) were already accurate
 
+### Commit 8: Auto re-authentication retry on token expiry
+- Modified cloud handler in `cli/src/main.rs` to catch `BrokerError::TokenExpired` from `acquire_session()`
+- On `TokenExpired`, CLI prints "Token expired, re-authenticating...", calls `broker.authenticate()`, and retries `acquire_session()` once
+- Handles edge cases: token passes local `has_valid_token()` but broker returns HTTP 401, or token expires between check and acquire (race condition)
+- Single retry only — if the fresh token also fails, the error propagates (prevents infinite loops)
+- Updated broker/docs.md and cli/docs.md to document the retry behavior
+- No new test added: the retry orchestration is in `main.rs` (not unit-testable without mocking browser auth), and the individual components (TokenExpired on 401, authenticate refreshing token, acquire succeeding) are already thoroughly tested
+- All tests pass (556 acp, 27 cli)
+
 ## Status
 
-Feature is functionally complete per APPLICATION_SPEC.md. All tests pass (556 acp, 27 cli, 1309 tui, 97 e2e), code compiles cleanly with zero clippy warnings, documentation is up to date.
+Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly with zero clippy warnings, documentation is up to date.
 
 ### Out of scope per spec
 - Session resume: `nori cloud --resume`

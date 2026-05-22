@@ -559,10 +559,21 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             }
 
             eprintln!("Acquiring cloud session...");
-            let session_info = broker
-                .acquire_session()
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to acquire cloud session: {e}"))?;
+            let session_info = match broker.acquire_session().await {
+                Ok(info) => info,
+                Err(nori_acp::broker::BrokerError::TokenExpired) => {
+                    eprintln!("Token expired, re-authenticating...");
+                    broker.authenticate().await?;
+                    broker.acquire_session().await.map_err(|e| {
+                        anyhow::anyhow!(
+                            "Failed to acquire cloud session after re-authentication: {e}"
+                        )
+                    })?
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to acquire cloud session: {e}");
+                }
+            };
             eprintln!("Connected to session {}", session_info.session_id);
 
             interactive = cloud_cmd.config_overrides;

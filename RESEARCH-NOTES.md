@@ -223,3 +223,37 @@ Current implementation (main.rs:527-531) returns an error with instructions inst
    - After receiving URL, call `save_cloud_broker_url()` to persist
    - Continue with the cloud flow using the provided URL
 4. Handle edge cases: empty input, non-terminal stdin (piped), Ctrl+C during prompt
+
+## Commit 8: Auto Re-authentication Retry Research
+
+### Spec Gap
+APPLICATION_SPEC.md line 73: "If the token is expired, the browser auth flow is re-triggered automatically."
+Current code (main.rs:555-565) only checks `has_valid_token()` at startup. If `acquire_session()` returns `BrokerError::TokenExpired`, the error propagates and the process exits.
+
+### Current Code Flow (main.rs:555-565)
+1. `broker.has_valid_token()` — checks token presence + local JWT expiry
+2. If invalid: `broker.authenticate()` — browser OAuth, mutates `self.auth_token`
+3. `broker.acquire_session()` — returns `Result<SessionInfo, BrokerError>`
+4. Error mapped to generic `anyhow::anyhow!` — `BrokerError` type info erased
+
+### TokenExpired Sources
+- Local JWT expiry check in `acquire_session()` (line 106-108)
+- Server HTTP 401 response (line 119-121)
+- Both produce `BrokerError::TokenExpired` (unit variant, no payload)
+
+### Borrow Compatibility
+- `authenticate()` takes `&mut self`, `acquire_session()` takes `&self`
+- `broker` is already `let mut` in cloud handler (line 553)
+- No borrow conflict: can call `authenticate()` between two `acquire_session()` calls
+
+### Design Decision: Single Retry
+- Industry standard for 401 retry: exactly one retry after re-auth
+- If fresh token also gets 401, the problem is not token expiry (revocation, server error)
+- Retrying more than once risks infinite loops or poor UX (repeated browser opens)
+- Guard: only retry on `TokenExpired`, not on `AuthRequired` or other errors
+
+### Implementation
+Replace `.map_err()` chain at lines 561-565 with `match` on `BrokerError`:
+- `Ok(info)` → proceed normally
+- `Err(TokenExpired)` → `eprintln!` status, call `authenticate()`, retry `acquire_session()` once
+- `Err(other)` → propagate as before
