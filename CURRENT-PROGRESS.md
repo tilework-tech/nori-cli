@@ -89,8 +89,7 @@
 
 ### Broker-side: End-to-end fixes (nori-sessions repo, branch cli-cloud-sessions)
 - Fixed WebSocket tunnel to call `lifecycle.markActive()` at relay start and on each client→sprite message — prevents GC from reclaiming active CLI sessions after 15-minute inactivity timeout
-- Fixed acquire endpoint to default to `cliClaimedBy` when request body is empty/absent — CLI sends bare POST with no JSON body, which was incorrectly falling through to `webClaimedBy`
-- 2 new tests (markActive on message relay, empty body → CLI claim identity), total 20 tests across 4 files
+- 1 new test (markActive on message relay), total 19 tests across 4 files
 - Updated 4 docs.md files (ws/docs.md, lifecycle/docs.md, endpoints/docs.md, broker/docs.md)
 
 ## Status
@@ -98,7 +97,7 @@
 Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly with zero clippy warnings, documentation is up to date. Broker PR #830 is open with all CI green.
 
 ### Remaining CLI-side follow-up
-- None — broker now correctly handles CLI's empty-body acquire requests
+- CLI sends no `source: 'cli'` in acquire request body — broker defaults to `webClaimedBy` instead of `cliClaimedBy` (functional, but claim identity is wrong). Cannot fix broker-side because web UI and broker CLI also send empty POST bodies, making body-presence an unreliable heuristic. Fix requires adding `.json(&json!({"source": "cli"}))` to the CLI's `acquire_session()` in `acp/src/broker/mod.rs`.
 
 ### Out of scope per spec
 - Session resume: `nori cloud --resume`
