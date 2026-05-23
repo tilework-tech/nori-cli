@@ -31,7 +31,7 @@ Key files:
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `transcript_discovery.rs` - Discovers transcript files for external agents
-- `auto_worktree.rs` - Orchestrates automatic git worktree creation and summary-based renaming
+- `auto_worktree.rs` - Orchestrates automatic git worktree creation, eligibility checking, and summary-based renaming
 
 ### Core Implementation
 
@@ -249,7 +249,18 @@ The `FileManager` enum (`types/mod.rs`) represents supported terminal file manag
 
 The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
 
-Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) matches on the `AutoWorktree` variant in `lib.rs`: `Automatic` calls `setup_auto_worktree()` immediately, `Ask` defers to a TUI popup (`worktree_ask.rs`), and `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
+Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) checks eligibility via `can_create_worktree()` before branching on the `AutoWorktree` variant in `lib.rs`: if eligible, `Automatic` calls `setup_auto_worktree()` immediately and `Ask` defers to a TUI popup (`worktree_ask.rs`); if ineligible, the TUI shows a `WorktreeBlockedScreen` popup explaining the reason before continuing without a worktree. `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
+
+**Worktree Eligibility Check** (`auto_worktree.rs`):
+
+Before attempting to create a worktree, `can_create_worktree(cwd)` validates that the directory is eligible. It returns `Ok(())` if eligible, or `Err(WorktreeBlockedReason)` if not:
+
+| `WorktreeBlockedReason` | Detection | User-Visible Message |
+|--------------------------|-----------|----------------------|
+| `NotGitRepo` | `git rev-parse --is-inside-work-tree` fails or returns non-`true` | "not in a git repository" |
+| `AlreadyInWorktree` | `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir` (linked worktree signature) | "already in a git worktree" |
+
+The check runs in `run_main()` before the TUI is initialized. When blocked, the reason string is threaded through to `run_ratatui_app()` and displayed via `run_worktree_blocked_popup()` in `@/nori-rs/tui/src/nori/worktree_ask.rs`.
 
 **Auto-Worktree Branch Renaming** (`auto_worktree.rs`, `backend/mod.rs`):
 
@@ -874,6 +885,13 @@ When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::Canc
 - the prompt stays active until the real ACP prompt response arrives
 - `SessionPhaseChanged(Idle)` and `PromptCompleted { stop_reason, last_agent_message }` are emitted only when that prompt response is reduced
 - queued follow-up prompts remain in the reducer-owned outbound queue until an eligible drain point (`stop_reason: end_turn`)
+
+**Cancel timeout watchdog:** The cancel path has a bounded timeout to prevent indefinite hangs when agents ignore `CancelNotification`. When the `SendCancel` side effect fires, it spawns a two-phase watchdog task alongside the cooperative `session/cancel` call:
+
+1. After `CANCEL_WARNING_SECS` (3s): emits a `WarningEvent` to the TUI ("Agent is slow to cancel. Will force-cancel in 7s...")
+2. After `CANCEL_FORCE_SECS` (10s): aborts the in-flight prompt task via its `AbortHandle` and sends `InboundEvent::PromptFailed` to the reducer, which transitions the session back to Idle with `stop_reason: Cancelled`
+
+The watchdog is tracked via `cancel_timeout_abort: Arc<Mutex<Option<AbortHandle>>>` on `AcpBackend`. If the agent responds cooperatively before the timeout fires, `apply_session_event()` aborts the watchdog and clears both the watchdog and prompt abort handles on any terminal prompt event (`PromptResponse` or `PromptFailed`). The prompt task itself is tracked via `prompt_task_abort: Arc<Mutex<Option<AbortHandle>>>`, which is stored when the `SendPrompt` side effect spawns the prompt task. Both handles are initialized to `None` in `spawn()` and `resume_session()`.
 
 `SacpConnection::prompt()` also carries a small amount of session-local transport state so cancellation tails can be absorbed without widening the public phase model. If the previous prompt ended with `Cancelled`, the next prompt request may receive one or more immediate empty `end_turn` responses before the agent starts working on the user's real follow-up prompt. The connection layer now treats those empty terminal responses as stale cancel-tail cleanup and retries the same ACP prompt request until either streamed updates arrive or a non-stale stop reason is observed. That keeps the reducer contract unchanged: it still only sees the final logical completion for the user-facing prompt turn.
 

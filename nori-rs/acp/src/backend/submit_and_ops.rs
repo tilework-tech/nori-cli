@@ -41,9 +41,13 @@ impl AcpBackend {
                 self.handle_exec_approval(&call_id, decision).await;
             }
             Op::Shutdown => {
-                // Cancel any in-progress session and send ShutdownComplete
-                // to allow the TUI to exit properly
                 debug!("Processing Op::Shutdown in ACP mode");
+                if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
+                    abort.abort();
+                }
+                if let Some(abort) = self.prompt_task_abort.lock().await.take() {
+                    abort.abort();
+                }
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
 
                 // Execute session_end hooks and route output before teardown
