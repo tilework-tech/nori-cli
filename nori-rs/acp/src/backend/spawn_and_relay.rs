@@ -188,6 +188,8 @@ impl AcpBackend {
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
             is_cloud: config.cloud_connection.is_some(),
             is_shutting_down: Arc::new(AtomicBool::new(false)),
+            prompt_task_abort: Arc::new(Mutex::new(None)),
+            cancel_timeout_abort: Arc::new(Mutex::new(None)),
         };
 
         let runtime_backend = backend.clone();

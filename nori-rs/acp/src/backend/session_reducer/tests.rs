@@ -869,6 +869,34 @@ fn usage_update_is_accepted_while_idle_and_emits_info_event() {
 }
 
 // =========================================================================
+// 11. PromptFailed while cancelling
+// =========================================================================
+
+#[test]
+fn prompt_failed_while_cancelling_transitions_to_idle_with_cancelled_stop_reason() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+    reduce(&mut rt, InboundEvent::CancelSubmit, &mut norm);
+    assert_eq!(rt.phase_view(), SessionPhaseView::Cancelling);
+
+    let out = reduce(&mut rt, InboundEvent::PromptFailed, &mut norm);
+
+    assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
+    assert!(rt.active.is_none());
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::PromptCompleted(completed)
+            if completed.stop_reason == acp::StopReason::Cancelled
+    )));
+}
+
+// =========================================================================
 // Orphan-update warning de-duplication
 // =========================================================================
 

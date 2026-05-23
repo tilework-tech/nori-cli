@@ -338,6 +338,10 @@ pub struct AcpBackend {
     is_cloud: bool,
     /// Set to true when Op::Shutdown is initiated, to avoid spurious disconnect errors
     is_shutting_down: Arc<AtomicBool>,
+    /// Abort handle for the in-flight prompt task (if any)
+    prompt_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the cancel timeout watchdog (if any)
+    cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
 mod helpers;

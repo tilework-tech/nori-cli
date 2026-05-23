@@ -25,6 +25,36 @@ use ratatui::widgets::Clear;
 use ratatui::widgets::WidgetRef;
 use tokio_stream::StreamExt;
 
+/// Run the worktree blocked popup. Shows why worktree creation was skipped and
+/// waits for the user to acknowledge.
+pub(crate) async fn run_worktree_blocked_popup(tui: &mut Tui, reason: &str) -> Result<()> {
+    let mut screen = WorktreeBlockedScreen::new(tui.frame_requester(), reason.to_string());
+    tui.draw(u16::MAX, |frame| {
+        frame.render_widget_ref(&screen, frame.area());
+    })?;
+
+    let events = tui.event_stream();
+    tokio::pin!(events);
+
+    while !screen.is_done() {
+        if let Some(event) = events.next().await {
+            match event {
+                TuiEvent::Key(key_event) => screen.handle_key(key_event),
+                TuiEvent::Paste(_) => {}
+                TuiEvent::Draw => {
+                    tui.draw(u16::MAX, |frame| {
+                        frame.render_widget_ref(&screen, frame.area());
+                    })?;
+                }
+            }
+        } else {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
 /// Run the worktree ask popup. Returns `true` if the user chose to create a worktree.
 pub(crate) async fn run_worktree_ask_popup(tui: &mut Tui) -> Result<bool> {
     let mut screen = WorktreeAskScreen::new(tui.frame_requester());
@@ -120,6 +150,73 @@ impl WorktreeSelection {
             Self::Yes => Self::No,
             Self::No => Self::Yes,
         }
+    }
+}
+
+struct WorktreeBlockedScreen {
+    request_frame: FrameRequester,
+    reason: String,
+    done: bool,
+}
+
+impl WorktreeBlockedScreen {
+    fn new(request_frame: FrameRequester, reason: String) -> Self {
+        Self {
+            request_frame,
+            reason,
+            done: false,
+        }
+    }
+
+    fn handle_key(&mut self, key_event: KeyEvent) {
+        if key_event.kind == KeyEventKind::Release {
+            return;
+        }
+        if key_event.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key_event.code, KeyCode::Char('c') | KeyCode::Char('d'))
+        {
+            self.done = true;
+            self.request_frame.schedule_frame();
+            return;
+        }
+        match key_event.code {
+            KeyCode::Enter | KeyCode::Esc => {
+                self.done = true;
+                self.request_frame.schedule_frame();
+            }
+            _ => {}
+        }
+    }
+
+    fn is_done(&self) -> bool {
+        self.done
+    }
+}
+
+impl WidgetRef for &WorktreeBlockedScreen {
+    fn render_ref(&self, area: Rect, buf: &mut Buffer) {
+        Clear.render(area, buf);
+        let mut column = ColumnRenderable::new();
+
+        column.push("");
+        column.push(Line::from("  Worktree cannot be created".bold()));
+        column.push(Line::from(format!("  Reason: {}", self.reason)));
+        column.push("");
+        column.push(selection_option_row(
+            0,
+            "Continue without a worktree".to_string(),
+            true,
+        ));
+        column.push("");
+        column.push(
+            Line::from(vec![
+                "Press ".dim(),
+                "enter".dim().bold(),
+                " to continue".dim(),
+            ])
+            .inset(Insets::tlbr(0, 2, 0, 0)),
+        );
+        column.render(area, buf);
     }
 }
 

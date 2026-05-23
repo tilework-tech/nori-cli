@@ -1,9 +1,64 @@
+use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::Context;
 use anyhow::Result;
+
+/// Reason why a worktree cannot be created in the current directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorktreeBlockedReason {
+    NotGitRepo,
+    AlreadyInWorktree,
+}
+
+impl fmt::Display for WorktreeBlockedReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotGitRepo => write!(f, "not in a git repository"),
+            Self::AlreadyInWorktree => write!(f, "already in a git worktree"),
+        }
+    }
+}
+
+/// Check whether a worktree can be created from the given directory.
+///
+/// Returns `Ok(())` if eligible, or `Err(reason)` if not.
+pub fn can_create_worktree(cwd: &Path) -> Result<(), WorktreeBlockedReason> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(cwd)
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "true" => {}
+        _ => return Err(WorktreeBlockedReason::NotGitRepo),
+    }
+
+    let git_dir = Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", "--git-dir"])
+        .current_dir(cwd)
+        .output();
+
+    let common_dir = Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .current_dir(cwd)
+        .output();
+
+    match (git_dir, common_dir) {
+        (Ok(gd), Ok(cd)) if gd.status.success() && cd.status.success() => {
+            let gd_str = String::from_utf8_lossy(&gd.stdout).trim().to_string();
+            let cd_str = String::from_utf8_lossy(&cd.stdout).trim().to_string();
+            if gd_str != cd_str {
+                return Err(WorktreeBlockedReason::AlreadyInWorktree);
+            }
+        }
+        _ => return Err(WorktreeBlockedReason::NotGitRepo),
+    }
+
+    Ok(())
+}
 
 /// Rename an existing auto-worktree's branch using a prompt summary.
 ///
@@ -137,6 +192,37 @@ mod tests {
 
         let result = setup_auto_worktree(temp.path());
         assert!(result.is_err(), "should fail outside a git repo");
+    }
+
+    #[test]
+    fn test_can_create_worktree_in_normal_repo() {
+        let temp = init_temp_repo();
+        let result = can_create_worktree(temp.path());
+        assert!(result.is_ok(), "should be eligible in a normal git repo");
+    }
+
+    #[test]
+    fn test_can_create_worktree_outside_git_repo() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let result = can_create_worktree(temp.path());
+        assert_eq!(
+            result,
+            Err(WorktreeBlockedReason::NotGitRepo),
+            "should return NotGitRepo outside a git repo"
+        );
+    }
+
+    #[test]
+    fn test_can_create_worktree_inside_linked_worktree() {
+        let temp = init_temp_repo();
+        let worktree_path = setup_auto_worktree(temp.path()).unwrap();
+
+        let result = can_create_worktree(&worktree_path);
+        assert_eq!(
+            result,
+            Err(WorktreeBlockedReason::AlreadyInWorktree),
+            "should return AlreadyInWorktree when inside a linked worktree"
+        );
     }
 
     #[test]

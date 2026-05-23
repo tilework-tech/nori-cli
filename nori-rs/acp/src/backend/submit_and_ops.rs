@@ -44,6 +44,12 @@ impl AcpBackend {
                 self.is_shutting_down
                     .store(true, std::sync::atomic::Ordering::Relaxed);
                 debug!("Processing Op::Shutdown in ACP mode");
+                if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
+                    abort.abort();
+                }
+                if let Some(abort) = self.prompt_task_abort.lock().await.take() {
+                    abort.abort();
+                }
                 let _ = self.connection.cancel(&*self.session_id.read().await).await;
 
                 // Execute session_end hooks and route output before teardown
