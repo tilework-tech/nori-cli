@@ -196,7 +196,7 @@ async fn acquire_session_sends_auth_and_parses_response() {
 
     let expected_token = token.clone();
     let server_handle = std::thread::spawn(move || {
-        let request = mock_server.recv().unwrap();
+        let mut request = mock_server.recv().unwrap();
         assert_eq!(request.method(), &tiny_http::Method::Post);
         assert!(request.url().contains("/api/sessions/acquire"));
 
@@ -206,6 +206,11 @@ async fn acquire_session_sends_auth_and_parses_response() {
             .find(|h| h.field.equiv("Authorization"))
             .map(|h| h.value.to_string());
         assert_eq!(auth_header, Some(format!("Bearer {expected_token}")));
+
+        let mut body = String::new();
+        request.as_reader().read_to_string(&mut body).unwrap();
+        let body_json: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(body_json, serde_json::json!({"source": "cli"}));
 
         let response_body = serde_json::json!({
             "session_id": "sess-abc123",

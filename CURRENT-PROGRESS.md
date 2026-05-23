@@ -96,8 +96,11 @@
 
 Feature is functionally complete per APPLICATION_SPEC.md. All tests pass, code compiles cleanly with zero clippy warnings, documentation is up to date. Broker PR #830 is open with all CI green.
 
-### Remaining CLI-side follow-up
-- CLI sends no `source: 'cli'` in acquire request body — broker defaults to `webClaimedBy` instead of `cliClaimedBy` (functional, but claim identity is wrong). Cannot fix broker-side because web UI and broker CLI also send empty POST bodies, making body-presence an unreliable heuristic. Fix requires adding `.json(&json!({"source": "cli"}))` to the CLI's `acquire_session()` in `acp/src/broker/mod.rs`.
+### Commit 9: Send source:'cli' in acquire request body
+- Added `.json(&serde_json::json!({"source": "cli"}))` to `acquire_session()` POST request in `acp/src/broker/mod.rs`
+- Broker now receives `source: "cli"` and uses `cliClaimedBy()` for correct claim identity
+- Updated test `acquire_session_sends_auth_and_parses_response` to verify request body contains `{"source": "cli"}`
+- All 526 nori-acp tests pass, 25 nori-cli tests pass, zero clippy warnings
 
 ### Out of scope per spec
 - Session resume: `nori cloud --resume`

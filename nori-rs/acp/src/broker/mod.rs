@@ -112,6 +112,7 @@ impl BrokerClient {
             .http
             .post(&url)
             .header("Authorization", format!("Bearer {token}"))
+            .json(&serde_json::json!({"source": "cli"}))
             .send()
             .await?;
 
