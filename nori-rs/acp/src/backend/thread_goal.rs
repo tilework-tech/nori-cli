@@ -153,10 +153,13 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
                 hint: Some("Resolve the blocker, then use /goal resume to continue; /goal edit and /goal clear are also available.".to_string()),
                 usage: None,
             }),
-            ThreadGoalStatus::Active
-            | ThreadGoalStatus::UsageLimited
-            | ThreadGoalStatus::BudgetLimited
-            | ThreadGoalStatus::Complete => None,
+            ThreadGoalStatus::UsageLimited => Some(SessionUpdateInfo {
+                kind: SessionUpdateKind::SessionInfo,
+                message: format!("Goal is usage limited: {}", goal.objective),
+                hint: Some("Use /goal resume after usage is available again, /goal edit to change it, or /goal clear to remove it.".to_string()),
+                usage: None,
+            }),
+            ThreadGoalStatus::Active | ThreadGoalStatus::BudgetLimited | ThreadGoalStatus::Complete => None,
         }
     }
 
@@ -582,7 +585,7 @@ mod tests {
     }
 
     #[test]
-    fn resume_notice_only_exists_for_paused_and_blocked_goals() {
+    fn resume_notice_exists_for_resumable_stopped_goals() {
         let mut goals = ThreadGoalState::default();
         assert_eq!(goals.resume_notice(10), None);
 
@@ -617,9 +620,21 @@ mod tests {
         );
 
         goals
-            .set_status(ThreadGoalStatus::Complete, 40)
+            .set_status(ThreadGoalStatus::UsageLimited, 40)
             .expect("existing goal");
-        assert_eq!(goals.resume_notice(45), None);
+        let usage_notice = goals.resume_notice(45).expect("usage-limited goal notice");
+        assert_eq!(usage_notice.message, "Goal is usage limited: Keep going");
+        assert!(
+            usage_notice
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("/goal resume"))
+        );
+
+        goals
+            .set_status(ThreadGoalStatus::Complete, 50)
+            .expect("existing goal");
+        assert_eq!(goals.resume_notice(55), None);
     }
 
     #[test]

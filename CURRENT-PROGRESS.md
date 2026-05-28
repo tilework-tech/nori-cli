@@ -95,7 +95,7 @@ Goal command progress:
     snapshot for editing and the backend replies that no goal exists, the pending edit request
     is now cleared, so a later unrelated `ThreadGoalUpdated` event does not unexpectedly
     replace the user's composer contents with `/goal <later objective>`.
-23. Added resume notices for replayed paused and blocked goals. After ACP resume sends deferred
+23. Added resume notices for replayed paused, blocked, and usage-limited goals. After ACP resume sends deferred
     replay events, the backend now appends a non-persisted session info notice when the restored
-    goal is paused or blocked, pointing the user at `/goal resume`, `/goal edit`, and `/goal
+    goal is stopped but resumable, pointing the user at `/goal resume`, `/goal edit`, and `/goal
     clear` without recording duplicate resume-only messages into future transcripts.
