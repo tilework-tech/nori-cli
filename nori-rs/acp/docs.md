@@ -4,7 +4,9 @@ Path: @/nori-rs/acp
 
 ### Overview
 
-The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers. `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
+- The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses, communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers.
+- It owns ACP backend session state that is not provided by agents, including per-session thread goals used by the `/goal` TUI command and prompt-context injection.
+- `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 
 ### How it fits into the larger codebase
 
@@ -24,12 +26,14 @@ The ACP crate serves as a bridge between:
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
 - `SessionRuntime` in `@/nori-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
+- Thread-goal operations from `@/nori-rs/protocol` and normalized goal events from `@/nori-rs/nori-protocol`, with backend storage and prompt transformation in `@/nori-rs/acp/src/backend/thread_goal.rs`
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
 - `connection/` - SACP v11-based subprocess spawning and JSON-RPC communication
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
+- `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage-baseline updates
 - `transcript_discovery.rs` - Discovers transcript files for external agents
 - `auto_worktree.rs` - Orchestrates automatic git worktree creation, eligibility checking, and summary-based renaming
 
@@ -90,6 +94,24 @@ The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.
 Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
 
 `session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. Message replay preserves chronological stream-kind boundaries: an answer -> reasoning -> answer sequence becomes three replay entries, while adjacent deltas of the same stream are still coalesced. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
+
+**Thread Goal State** (`backend/thread_goal.rs`, `backend/submit_and_ops.rs`, `backend/user_input.rs`, `backend/transcript.rs`):
+
+The ACP backend owns the `/goal` feature as per-session state instead of delegating it to the ACP agent. The TUI sends typed `codex_protocol::protocol::Op::ThreadGoalGet`, `ThreadGoalSet`, and `ThreadGoalClear` operations; `submit_and_ops.rs` routes those operations directly to the backend goal handler; and successful mutations are emitted as `nori_protocol::ClientEvent::ThreadGoalUpdated` or `ThreadGoalCleared`.
+
+```
+@/nori-rs/tui/src/chatwidget/goal.rs
+    -> @/nori-rs/protocol/src/protocol/mod.rs (typed Op)
+    -> @/nori-rs/acp/src/backend/thread_goal.rs
+    -> @/nori-rs/nori-protocol/src/lib.rs (ClientEvent)
+    -> @/nori-rs/tui/src/chatwidget/event_handlers.rs
+```
+
+`ThreadGoalState` tracks the current objective, lifecycle status, active elapsed time, token usage, and the session-token baseline used to compute goal-local `tokens_used`. Only the `Active` status accrues active time; paused, blocked, usage-limited, budget-limited, and complete goals keep their accumulated time until they become active again. Objective validation is shared with `@/nori-rs/protocol/src/protocol/mod.rs` so the TUI and backend enforce the same acceptance rules.
+
+Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends the current goal as a structured `<goal_context>` block when a goal exists. Hook context is still applied before goal context, and compact summaries remain the outermost framing instruction, so resumed/compacted turns retain their existing prompt-ordering invariant while still carrying goal state to the agent.
+
+Goal state is also part of the replay contract. `transcript.rs` passes goal update and clear events through replay, and `session.rs` rehydrates `ThreadGoalState` from those replay events before the live backend starts. ACP usage updates still normalize to `SessionUpdateInfo`, but `session_runtime_driver.rs` observes those events and asks the goal state to refresh `tokens_used`; when a goal exists, the backend emits a follow-up `ThreadGoalUpdated` snapshot so the TUI and transcript stay synchronized with usage accounting.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 

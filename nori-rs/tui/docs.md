@@ -20,6 +20,7 @@ The TUI acts as the frontend layer. It:
 - Uses `nori-acp` for ACP agent communication (see `@/nori-rs/acp/`)
 - Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
 - Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)
+- Maps user-facing session controls such as `/goal` into typed `codex-protocol` operations, leaving ACP backend state ownership in `@/nori-rs/acp`
 - Displays approval requests from the ACP layer and forwards user decisions back
 - Renders streaming AI responses with markdown and syntax highlighting
 
@@ -61,6 +62,14 @@ The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` +
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
 
 For replayed ACP conversations, user-authored message chunks are reconstructed upstream into `ReplayEntry::UserMessage` before they reach the widget. Live `MessageStream::User` deltas are therefore ignored by `ChatWidget` itself; the widget only needs to render the replay entry path, not duplicate the local composer state.
+
+**Thread Goal UI** (`chatwidget/goal.rs`, `chatwidget/event_handlers.rs`, `slash_command.rs`):
+
+The `/goal` command is a TUI command surface for ACP backend-owned goal state. `@/nori-rs/tui/src/slash_command.rs` advertises the command, while `@/nori-rs/tui/src/chatwidget/goal.rs` maps the command family (viewing, setting, status changes, clearing, and editing) into typed `codex_protocol::protocol::Op::ThreadGoal*` operations. Those operations are handled by `@/nori-rs/acp/src/backend/thread_goal.rs`; the TUI does not persist or derive goal state from prompt text.
+
+`ClientEvent::ThreadGoalUpdated` is treated as the source of truth for the visible current goal. `ChatWidget` stores that snapshot in `current_goal`, renders a compact history summary, and uses it to seed `/goal edit` back into the composer. `ClientEvent::ThreadGoalCleared` clears the cached snapshot and writes a short info message. Goal updates are omitted from view-only transcript rendering in `@/nori-rs/tui/src/viewonly_transcript.rs` because they are state synchronization events rather than conversation messages.
+
+The TUI validates goal objective text through `@/nori-rs/protocol/src/protocol/mod.rs` before submitting a set operation, matching the backend's validation path. This keeps the UI responsive while preserving the backend as the authority for state transitions, resume rehydration, token accounting, and prompt `<goal_context>` injection.
 
 The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. In ACP sessions, `ClientToolCell` provides differentiated `transcript_lines()` for Execute tools (shell-style `$ command` format via `render_execute_transcript_lines()`) while exploring and edit cells reuse their `display_lines()` rendering for transcripts.
 

@@ -4,75 +4,24 @@ Path: @/nori-rs/protocol
 
 ### Overview
 
-The protocol crate defines the internal message types used between Nori components. It specifies operations (`Op`), events (`EventMsg`), and approval-related types that flow between the TUI, core, and backend layers.
+- Defines the internal message types used between Nori components. It specifies operations (`Op`), events (`EventMsg`), and approval-related types that flow between the TUI, core, and backend layers.
+- Owns shared command contracts that must stay backend-agnostic, such as typed thread-goal operations and validation helpers used by both `@/nori-rs/tui` and `@/nori-rs/acp`.
 
 ### How it fits into the larger codebase
 
-This crate provides the contract between:
-- `@/nori-rs/tui/` - consumes events, sends operations
-- `@/nori-rs/core/` - processes operations, emits events
-- `@/nori-rs/acp/` - translates ACP protocol to/from these types
-
-The crate is a pure type definition library with serde serialization support.
+- `@/nori-rs/tui` consumes shared protocol types when turning user actions into backend operations.
+- `@/nori-rs/acp` implements ACP-specific behavior behind the same `Op` surface, including thread-goal handling in `@/nori-rs/acp/src/backend/thread_goal.rs`.
+- `@/nori-rs/core` still provides the legacy Codex backend path and shared app/control-plane types.
+- `@/nori-rs/nori-protocol` carries normalized ACP client events back toward the TUI; thread-goal commands start here as `Op` values and return there as normalized goal events.
+- The crate is a pure type definition library with serde and schema support; ownership of runtime state belongs to backend crates, not this crate.
 
 ### Core Implementation
 
-**Core Types:**
+**Core Types:** `@/nori-rs/protocol/src/protocol/mod.rs` defines `Submission`, `Op`, `Event`, and `EventMsg`, which form the shared SQ/EQ contract between the UI and whichever backend owns the active session.
 
-```rust
-// Operation sent to conversation
-pub enum Op {
-    UserTurn { items, cwd, approval_policy, ... },
-    Interrupt,
-    Shutdown,
-    // ...
-}
+**Operations** (`@/nori-rs/protocol/src/protocol/mod.rs`) group backend commands into user-input, lifecycle, approval, history, undo, custom-prompt, and session-control surfaces. The `/goal` feature belongs to that typed command surface through `ThreadGoalGet`, `ThreadGoalSet`, and `ThreadGoalClear`, rather than being smuggled through a normal user prompt.
 
-// Event received from conversation
-pub struct Event {
-    pub id: String,
-    pub msg: EventMsg,
-}
-
-pub enum EventMsg {
-    SessionConfigured { ... },
-    TurnStart { ... },
-    Delta { ... },
-    TurnComplete { ... },
-    Error { ... },
-    ShutdownComplete,
-    // ...
-}
-```
-
-**Operations** (`protocol/mod.rs`): Commands sent from TUI to core:
-
-| Op | Purpose |
-|----|---------|
-| `Configure` | Set session configuration |
-| `UserTurn` | Send user message |
-| `ApproveTool` / `RejectTool` | Handle approval requests |
-| `CancelTurn` | Cancel current generation |
-| `Undo` | Undo the most recent turn (sequential pop from snapshot stack) |
-| `UndoList` | Request the list of available undo snapshots |
-| `UndoTo { index }` | Restore to a specific snapshot by display index (0 = most recent) |
-| `SearchHistoryRequest { max_results }` | Request all history entries for client-side search; response via `SearchHistoryResponse` |
-
-**Events** (`events.rs`): Messages from core to TUI:
-
-| Event | Purpose |
-|-------|---------|
-| `TaskStarted` | Turn began processing |
-| `AgentMessage` | Streaming AI response content |
-| `ToolCall` / `ToolResult` | Tool invocation lifecycle |
-| `ApprovalRequired` | User approval needed |
-| `TaskComplete` | Turn finished |
-| `ContextCompacted` | Conversation history was compacted; carries optional summary text for TUI session boundary rendering |
-| `UndoCompleted` | Result of an undo operation (success/failure with message) |
-| `UndoListResult` | Response to `UndoList` containing available `SnapshotInfo` entries |
-| `PromptSummary` | Short summary of the first user prompt for display in the footer |
-| `HookOutput` | Output from a hook script, routed by level (Info/Warn/Error) for TUI display |
-| `SearchHistoryResponse` | Response to `SearchHistoryRequest` with deduplicated history entries (newest first). Not persisted to rollout files. |
+**Events** (`@/nori-rs/protocol/src/protocol/mod.rs`) carry shared control-plane updates back to TUI-facing code. Examples include turn lifecycle events, approval prompts, compact-summary notifications, undo results, prompt summaries, hook output, and history lookup results. ACP session-domain rendering uses `@/nori-rs/nori-protocol` instead.
 
 **Approval Types** (`approvals.rs`): Defines `ExecApprovalRequestEvent` for shell commands and `ApplyPatchApprovalRequestEvent` for file edits. The `ReviewDecision` enum captures user responses.
 
@@ -87,6 +36,8 @@ pub enum EventMsg {
 | `PROMPTS_CMD_PREFIX` | The slash command prefix constant (`"prompts"`) |
 
 `CustomPromptKind::Script` carries an `interpreter` string (e.g. `"bash"`, `"python3"`, `"node"`) that determines how the script file is executed. `CustomPromptKind` defaults to `Markdown` and is serde-tagged as `"type"` for JSON serialization.
+
+**Thread Goal Types** (`protocol/mod.rs`): The `/goal` feature uses typed operations rather than encoding commands as regular prompt text. `Op::ThreadGoalGet`, `Op::ThreadGoalSet`, and `Op::ThreadGoalClear` define the backend-facing command surface; `ThreadGoalStatus` defines the shared lifecycle labels; `validate_thread_goal_objective()` defines the cross-crate validation invariant for objective text before the TUI or backend accepts it.
 
 ### Things to Know
 
@@ -128,6 +79,12 @@ pub enum EventMsg {
 | Type | Purpose |
 |------|---------|
 | `ContextCompactedEvent` | Carries an optional `summary: Option<String>` field. When emitted by the ACP backend (`@/nori-rs/acp/`), the summary contains the compact summary text so the TUI can render a session boundary and reprint it. When emitted by the core backend (`@/nori-rs/core/`), the summary is `None` and the TUI shows only an info message. |
+
+**Thread Goal Invariants:**
+
+- Goal objectives are validated in `@/nori-rs/protocol/src/protocol/mod.rs` so the same empty and maximum-length rules apply before `@/nori-rs/tui/src/chatwidget/goal.rs` submits a goal and before `@/nori-rs/acp/src/backend/thread_goal.rs` persists one.
+- `ThreadGoalSet` accepts either a new objective, a status update for an existing goal, or both. The backend owns how that becomes session state and emits normalized `ThreadGoalUpdated` / `ThreadGoalCleared` events through `@/nori-rs/nori-protocol`.
+- These operations are ACP-backend commands, not agent prompt text. The ACP backend may use the stored goal to transform later prompts, but the protocol operation itself never goes to the agent subprocess.
 
 **Approval Policy:**
 
