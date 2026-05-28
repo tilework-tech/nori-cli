@@ -35,8 +35,6 @@ use super::AcpSessionConfigState;
 use super::ApprovalEventType;
 use super::ApprovalRequest;
 use super::ConnectionEvent;
-use super::local_mcp::LocalMcpServer;
-use super::local_mcp::LocalMcpSession;
 use super::wire_log::WireDirection;
 use super::wire_log::WireLogger;
 use crate::config::AcpProxyConfig;
@@ -85,10 +83,6 @@ pub struct SacpConnection {
 
     /// Thread-safe session config state, updated from complete ACP snapshots.
     session_config_state: std::sync::Arc<std::sync::RwLock<AcpSessionConfigState>>,
-
-    /// Dynamic handler registrations for backend-owned MCP servers advertised
-    /// to the current ACP session.
-    local_mcp_registrations: std::sync::Arc<std::sync::Mutex<Vec<Box<dyn Send>>>>,
 
     /// Handle to the background task driving the SACP connection.
     connection_task: tokio::task::JoinHandle<()>,
@@ -549,7 +543,6 @@ impl SacpConnection {
             prompt_state,
             model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
             session_config_state,
-            local_mcp_registrations: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             connection_task,
             child,
             stderr_task,
@@ -591,30 +584,6 @@ impl SacpConnection {
         }
 
         Ok(response.session_id)
-    }
-
-    /// Register an in-process MCP server for a single ACP connection and append
-    /// its `acp:` endpoint to the session MCP server list.
-    pub(crate) fn register_local_mcp_server(
-        &self,
-        mcp_servers: &mut Vec<acp::McpServer>,
-        mcp_connect: impl LocalMcpServer<Agent> + 'static,
-    ) -> Result<()> {
-        let acp_url = format!("acp:{}", uuid::Uuid::new_v4());
-        let name = mcp_connect.name();
-        let handler = LocalMcpSession::new(acp_url.clone(), std::sync::Arc::new(mcp_connect));
-        let registration = self
-            .cx
-            .add_dynamic_handler(handler)
-            .context("Failed to register local MCP-over-ACP server")?;
-        let mut registrations = self
-            .local_mcp_registrations
-            .lock()
-            .map_err(|_| anyhow::anyhow!("local MCP registration lock poisoned"))?;
-        registrations.clear();
-        registrations.push(Box::new(registration));
-        mcp_servers.push(acp::McpServer::Http(acp::McpServerHttp::new(name, acp_url)));
-        Ok(())
     }
 
     /// Load (resume) an existing session.

@@ -496,7 +496,11 @@ impl AcpBackend {
                     Arc::clone(&self.thread_goal_state),
                     self.backend_event_tx.clone(),
                     Arc::clone(&self.transcript_recorder_cell),
-                ) {
+                    Arc::clone(&self.goal_mcp_connected),
+                    Arc::clone(&self.goal_mcp_http_server),
+                )
+                .await
+                {
                     warn!("Failed to register goal MCP server after compact: {err}");
                 }
                 match self.connection.create_session(&cwd, mcp_servers).await {
@@ -534,7 +538,9 @@ impl AcpBackend {
             return;
         }
 
-        let can_chain_continuation = self.connection.capabilities().mcp_capabilities.http;
+        let can_chain_continuation = self
+            .goal_mcp_connected
+            .load(std::sync::atomic::Ordering::Relaxed);
         match completed_turn.prompt.kind {
             QueuedPromptKind::User => {}
             QueuedPromptKind::GoalContinuation if can_chain_continuation => {}

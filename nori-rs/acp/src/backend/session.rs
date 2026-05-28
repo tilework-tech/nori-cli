@@ -49,6 +49,8 @@ impl AcpBackend {
             thread_goal::ThreadGoalState::from_replay_events(&initial_goal_replay_events),
         ));
         let transcript_recorder_cell = Arc::new(Mutex::new(None));
+        let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let goal_mcp_http_server = Arc::new(Mutex::new(None));
 
         // Either load the session server-side or create a fresh session for
         // client-side replay.
@@ -142,7 +144,10 @@ impl AcpBackend {
                 Arc::clone(&thread_goal_state),
                 backend_event_tx.clone(),
                 Arc::clone(&transcript_recorder_cell),
-            )?;
+                Arc::clone(&goal_mcp_connected),
+                Arc::clone(&goal_mcp_http_server),
+            )
+            .await?;
 
             match connection.load_session(sid, &cwd, mcp_servers).await {
                 Ok(session_id) => {
@@ -188,7 +193,10 @@ impl AcpBackend {
                         Arc::clone(&thread_goal_state),
                         backend_event_tx.clone(),
                         Arc::clone(&transcript_recorder_cell),
-                    )?;
+                        Arc::clone(&goal_mcp_connected),
+                        Arc::clone(&goal_mcp_http_server),
+                    )
+                    .await?;
                     let session_id =
                         connection
                             .create_session(&cwd, mcp_servers)
@@ -244,7 +252,10 @@ impl AcpBackend {
                 Arc::clone(&thread_goal_state),
                 backend_event_tx.clone(),
                 Arc::clone(&transcript_recorder_cell),
-            )?;
+                Arc::clone(&goal_mcp_connected),
+                Arc::clone(&goal_mcp_http_server),
+            )
+            .await?;
             let session_id = connection
                 .create_session(&cwd, mcp_servers)
                 .await
@@ -346,6 +357,8 @@ impl AcpBackend {
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
             thread_goal_state,
+            goal_mcp_connected,
+            goal_mcp_http_server,
             transcript_recorder_cell,
             pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
             transcript_recorder,

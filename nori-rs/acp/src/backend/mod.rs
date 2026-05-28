@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use agent_client_protocol_schema as acp;
 use anyhow::Result;
@@ -288,6 +289,11 @@ pub struct AcpBackend {
     pending_compact_summary: Arc<Mutex<Option<String>>>,
     /// Persistent goal for this ACP session.
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
+    /// True after the active ACP agent has successfully opened the backend-owned
+    /// `nori-goal` MCP endpoint.
+    goal_mcp_connected: Arc<AtomicBool>,
+    /// Loopback HTTP server exposing the backend-owned `nori-goal` MCP tools.
+    goal_mcp_http_server: Arc<Mutex<Option<thread_goal_http_mcp::GoalMcpHttpServer>>>,
     /// Transcript recorder cell used by local MCP tools created before the
     /// recorder's session ID is known.
     transcript_recorder_cell: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
@@ -348,6 +354,7 @@ mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod thread_goal;
+mod thread_goal_http_mcp;
 mod thread_goal_mcp;
 mod user_input;
 mod user_shell;

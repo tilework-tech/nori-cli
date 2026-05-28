@@ -56,6 +56,8 @@ impl AcpBackend {
 
         let thread_goal_state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
         let transcript_recorder_cell = Arc::new(Mutex::new(None));
+        let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let goal_mcp_http_server = Arc::new(Mutex::new(None));
 
         // Create a session with enhanced error handling, forwarding CLI MCP servers.
         let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
@@ -68,7 +70,10 @@ impl AcpBackend {
             Arc::clone(&thread_goal_state),
             backend_event_tx.clone(),
             Arc::clone(&transcript_recorder_cell),
-        )?;
+            Arc::clone(&goal_mcp_connected),
+            Arc::clone(&goal_mcp_http_server),
+        )
+        .await?;
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
             Ok(id) => id,
@@ -178,6 +183,8 @@ impl AcpBackend {
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(config.initial_context.clone())),
             thread_goal_state,
+            goal_mcp_connected,
+            goal_mcp_http_server,
             transcript_recorder_cell,
             pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
             transcript_recorder,

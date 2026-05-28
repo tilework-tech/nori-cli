@@ -5,6 +5,21 @@ struct EnvGuard {
     previous: Option<String>,
 }
 
+struct RegistryGuard;
+
+impl RegistryGuard {
+    fn with_agents(agents: Vec<crate::config::AgentConfigToml>) -> Self {
+        crate::registry::initialize_registry(agents).expect("registry override should be valid");
+        Self
+    }
+}
+
+impl Drop for RegistryGuard {
+    fn drop(&mut self) {
+        crate::registry::initialize_registry(Vec::new()).expect("registry reset should be valid");
+    }
+}
+
 impl EnvGuard {
     fn set(name: &'static str, value: &str) -> Self {
         let previous = std::env::var(name).ok();
@@ -418,12 +433,12 @@ async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
         completed_prompts[1]
     );
 
-    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(500)).await;
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_secs(2)).await;
 }
 
 #[tokio::test]
 #[serial]
-async fn http_mcp_agent_chains_hidden_goal_continuations() {
+async fn http_mcp_agent_without_goal_mcp_connection_does_not_chain_hidden_continuations() {
     use std::time::Duration;
 
     let mock_config =
@@ -440,8 +455,13 @@ async fn http_mcp_agent_chains_hidden_goal_continuations() {
     let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
-    let config = build_test_config(temp_dir.path());
+    let mut config = build_test_config(temp_dir.path());
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
 
     let backend = AcpBackend::spawn(&config, backend_event_tx)
         .await
@@ -472,9 +492,9 @@ async fn http_mcp_agent_chains_hidden_goal_continuations() {
     let mut current_agent_text = String::new();
     let timeout = Duration::from_secs(10);
     let start = std::time::Instant::now();
-    while completed_prompts.len() < 3 {
+    while completed_prompts.len() < 2 {
         if start.elapsed() > timeout {
-            panic!("Timed out waiting for chained goal continuations");
+            panic!("Timed out waiting for goal continuation");
         }
         match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
             Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
@@ -488,21 +508,99 @@ async fn http_mcp_agent_chains_hidden_goal_continuations() {
         }
     }
 
-    backend
-        .submit(Op::Shutdown)
-        .await
-        .expect("Failed to shut down backend");
-
     assert!(
         completed_prompts[0].contains("start the chain"),
         "expected first prompt to be the visible user turn, got: {}",
         completed_prompts[0]
     );
     assert!(
-        completed_prompts[1].contains("Continue working toward the active thread goal")
-            && completed_prompts[2].contains("Continue working toward the active thread goal"),
-        "expected chained hidden continuations, got: {completed_prompts:?}"
+        completed_prompts[1].contains("Continue working toward the active thread goal"),
+        "expected second prompt to be the one hidden goal continuation, got: {}",
+        completed_prompts[1]
     );
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(
+        count_logged_requests(&wire_log_dir, "session/prompt"),
+        2,
+        "expected no chained goal continuation before the goal MCP server is connected"
+    );
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down backend");
+}
+
+#[tokio::test]
+#[serial]
+async fn goal_mcp_initialize_allows_chained_hidden_continuations() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let new_session = latest_logged_new_session(&wire_log_dir);
+    let goal_mcp_url = nori_goal_http_url(&new_session);
+    initialize_goal_mcp(&goal_mcp_url).await;
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("Keep going until a later tool call stops it".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to set goal");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "start the initialized chain".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let start = std::time::Instant::now();
+    while count_logged_requests(&wire_log_dir, "session/prompt") < 3 {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "expected initialized goal MCP server to allow chaining beyond the first hidden continuation"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down backend");
 }
 
 #[tokio::test]
@@ -669,10 +767,10 @@ async fn goal_mcp_server_is_advertised_to_http_mcp_agents() {
             matches!(
                 server,
                 acp::McpServer::Http(http)
-                    if http.name == "nori-goal" && http.url.starts_with("acp:")
+                    if http.name == "nori-goal" && http.url.starts_with("http://127.0.0.1:")
             )
         }),
-        "expected session/new to advertise the local nori-goal MCP server, got: {:?}",
+        "expected session/new to advertise the local loopback nori-goal MCP server, got: {:?}",
         new_session.mcp_servers
     );
 }
@@ -696,13 +794,64 @@ async fn goal_mcp_server_is_not_advertised_without_http_mcp_capability() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn codex_agent_receives_loopback_http_goal_mcp_server() {
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _registry_guard = RegistryGuard::with_agents(vec![crate::config::AgentConfigToml {
+        name: "Codex".to_string(),
+        slug: "codex".to_string(),
+        distribution: crate::config::AgentDistributionToml {
+            local: Some(crate::config::LocalDistribution {
+                command: mock_config.command.clone(),
+                args: mock_config.args.clone(),
+                env: mock_config.env.clone(),
+            }),
+            ..Default::default()
+        },
+        context_window_size: None,
+        auth_hint: None,
+        transcript_base_dir: None,
+    }]);
+    let Some(new_session) = logged_new_session_for_agent("codex", true).await else {
+        return;
+    };
+
+    assert!(
+        new_session.mcp_servers.iter().any(|server| {
+            matches!(
+                server,
+                acp::McpServer::Http(http)
+                    if http.name == "nori-goal" && http.url.starts_with("http://127.0.0.1:")
+            )
+        }),
+        "expected session/new to advertise a real loopback HTTP nori-goal server for Codex ACP, got: {:?}",
+        new_session.mcp_servers
+    );
+}
+
 async fn logged_new_session_for_mock_agent(
+    advertise_http_mcp: bool,
+) -> Option<acp::NewSessionRequest> {
+    logged_new_session_for_agent("mock-model", advertise_http_mcp).await
+}
+
+async fn logged_new_session_for_agent(
+    agent: &str,
     advertise_http_mcp: bool,
 ) -> Option<acp::NewSessionRequest> {
     use std::time::Duration;
 
-    let mock_config =
-        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    let mock_config = crate::registry::get_agent_config(agent).expect("agent should be registered");
     if !std::path::Path::new(&mock_config.command).exists() {
         eprintln!(
             "Skipping test: mock_acp_agent not found at {}",
@@ -721,6 +870,7 @@ async fn logged_new_session_for_mock_agent(
     let wire_log_dir = temp_dir.path().join("acp-wire");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
     let mut config = build_test_config(temp_dir.path());
+    config.agent = agent.to_string();
     config.acp_proxy = crate::config::AcpProxyConfig {
         enabled: true,
         log_dir: wire_log_dir.clone(),
@@ -743,12 +893,11 @@ async fn logged_new_session_for_mock_agent(
         .await
         .expect("Failed to shut down ACP backend");
 
-    let log_path = std::fs::read_dir(&wire_log_dir)
-        .expect("wire log dir exists")
-        .map(|entry| entry.expect("wire log entry").path())
-        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
-        .expect("wire log should be written");
-    let log_content = std::fs::read_to_string(log_path).expect("wire log should be readable");
+    Some(latest_logged_new_session(&wire_log_dir))
+}
+
+fn latest_logged_new_session(log_dir: &std::path::Path) -> acp::NewSessionRequest {
+    let log_content = read_wire_log(log_dir);
     let new_session = log_content
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json wire log line"))
@@ -757,10 +906,87 @@ async fn logged_new_session_for_mock_agent(
         })
         .next_back()
         .expect("session/new should be logged");
-    Some(
-        serde_json::from_value(new_session["message"]["params"].clone())
-            .expect("session/new params should match ACP schema"),
-    )
+    serde_json::from_value(new_session["message"]["params"].clone())
+        .expect("session/new params should match ACP schema")
+}
+
+fn read_wire_log(log_dir: &std::path::Path) -> String {
+    let log_path = std::fs::read_dir(log_dir)
+        .expect("wire log dir exists")
+        .map(|entry| entry.expect("wire log entry").path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .expect("wire log should be written");
+    std::fs::read_to_string(log_path).expect("wire log should be readable")
+}
+
+fn count_logged_requests(log_dir: &std::path::Path, method: &str) -> usize {
+    let log_content = read_wire_log(log_dir);
+    log_content
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json wire log line"))
+        .filter(|record| {
+            record["direction"] == "client_to_agent" && record["message"]["method"] == method
+        })
+        .count()
+}
+
+fn nori_goal_http_url(new_session: &acp::NewSessionRequest) -> String {
+    new_session
+        .mcp_servers
+        .iter()
+        .find_map(|server| match server {
+            acp::McpServer::Http(http) if http.name == "nori-goal" => Some(http.url.clone()),
+            _ => None,
+        })
+        .expect("session/new should advertise nori-goal HTTP MCP server")
+}
+
+async fn initialize_goal_mcp(url: &str) {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    let without_scheme = url
+        .strip_prefix("http://")
+        .expect("test URL should be plain HTTP");
+    let (host_port, path) = without_scheme
+        .split_once('/')
+        .expect("test URL should include a path");
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "nori-test", "version": "0" }
+        }
+    })
+    .to_string();
+    let request = format!(
+        "POST /{path} HTTP/1.1\r\n\
+Host: {host_port}\r\n\
+Content-Type: application/json\r\n\
+Content-Length: {}\r\n\
+Connection: close\r\n\r\n\
+{body}",
+        body.len()
+    );
+    let mut stream = tokio::net::TcpStream::connect(host_port)
+        .await
+        .expect("goal MCP HTTP server should accept initialize");
+    stream
+        .write_all(request.as_bytes())
+        .await
+        .expect("initialize request should write");
+    let mut response = String::new();
+    stream
+        .read_to_string(&mut response)
+        .await
+        .expect("initialize response should read");
+    assert!(
+        response.contains("200 OK") && response.contains("\"serverInfo\""),
+        "expected successful goal MCP initialize response, got: {response}"
+    );
 }
 
 /// Test that session_context is consumed after the first prompt (not repeated).

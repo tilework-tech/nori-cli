@@ -1,17 +1,12 @@
 use serde_json::Value;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
 
 use super::*;
-use crate::connection::local_mcp::LocalMcpServer;
+use crate::backend::thread_goal_http_mcp::GoalMcpHttpServer;
 use codex_protocol::protocol::ThreadGoalStatus;
 use nori_protocol::ThreadGoalUpdated;
-use sacp::Agent;
-use sacp::ConnectTo;
-use sacp::ConnectionTo;
-use sacp::Dispatch;
-use sacp::DynConnectTo;
-use sacp::UntypedMessage;
-use sacp::role;
 
 const GET_GOAL_TOOL_NAME: &str = "get_goal";
 const CREATE_GOAL_TOOL_NAME: &str = "create_goal";
@@ -25,6 +20,7 @@ pub(crate) struct ThreadGoalMcpBridge {
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     backend_event_tx: mpsc::Sender<BackendEvent>,
     transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
+    connected: Arc<AtomicBool>,
 }
 
 impl ThreadGoalMcpBridge {
@@ -32,21 +28,26 @@ impl ThreadGoalMcpBridge {
         thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
         backend_event_tx: mpsc::Sender<BackendEvent>,
         transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
+        connected: Arc<AtomicBool>,
     ) -> Self {
         Self {
             thread_goal_state,
             backend_event_tx,
             transcript_recorder,
+            connected,
         }
     }
 
     pub(crate) async fn handle_mcp_request(&self, method: &str, params: Value) -> Value {
         match method {
-            "initialize" => serde_json::json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": { "tools": {} },
-                "serverInfo": { "name": "nori-goal", "version": env!("CARGO_PKG_VERSION") }
-            }),
+            "initialize" => {
+                self.connected.store(true, Ordering::Relaxed);
+                serde_json::json!({
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": { "tools": {} },
+                    "serverInfo": { "name": "nori-goal", "version": env!("CARGO_PKG_VERSION") }
+                })
+            }
             "tools/list" => serde_json::json!({ "tools": tools() }),
             "tools/call" => self.handle_tool_call(params).await,
             _ => tool_error(format!("unsupported goal MCP request: {method}")),
@@ -146,67 +147,46 @@ impl ThreadGoalMcpBridge {
     }
 }
 
-impl LocalMcpServer<Agent> for ThreadGoalMcpBridge {
-    fn name(&self) -> String {
-        "nori-goal".to_string()
-    }
-
-    fn connect(
-        &self,
-        _acp_url: String,
-        _connection: ConnectionTo<Agent>,
-    ) -> DynConnectTo<role::mcp::Client> {
-        DynConnectTo::new(ThreadGoalMcpComponent {
-            bridge: self.clone(),
-        })
-    }
-}
-
-struct ThreadGoalMcpComponent {
-    bridge: ThreadGoalMcpBridge,
-}
-
-impl ConnectTo<role::mcp::Client> for ThreadGoalMcpComponent {
-    async fn connect_to(
-        self,
-        client: impl ConnectTo<role::mcp::Server>,
-    ) -> Result<(), sacp::Error> {
-        let bridge = self.bridge;
-        role::mcp::Server
-            .builder()
-            .on_receive_dispatch(
-                async move |message: Dispatch, _connection| {
-                    match message {
-                        Dispatch::Request(request, responder) => {
-                            let UntypedMessage { method, params } = request;
-                            responder.respond(bridge.handle_mcp_request(&method, params).await)?;
-                        }
-                        Dispatch::Notification(_) | Dispatch::Response(_, _) => {}
-                    }
-                    Ok(())
-                },
-                sacp::on_receive_dispatch!(),
-            )
-            .connect_to(client)
-            .await
-    }
-}
-
-pub(super) fn register_for_session(
+pub(super) async fn register_for_session(
     connection: &SacpConnection,
     mcp_servers: &mut Vec<acp::McpServer>,
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     backend_event_tx: mpsc::Sender<BackendEvent>,
     transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
+    connected: Arc<AtomicBool>,
+    http_server: Arc<Mutex<Option<GoalMcpHttpServer>>>,
 ) -> Result<()> {
-    if !connection.capabilities().mcp_capabilities.http {
+    connected.store(false, Ordering::Relaxed);
+
+    if !supports_local_goal_mcp(connection) {
         return Ok(());
     }
 
-    connection.register_local_mcp_server(
-        mcp_servers,
-        ThreadGoalMcpBridge::new(thread_goal_state, backend_event_tx, transcript_recorder),
-    )
+    let mut server = http_server.lock().await;
+    if server.is_none() {
+        *server = Some(
+            GoalMcpHttpServer::spawn(ThreadGoalMcpBridge::new(
+                thread_goal_state,
+                backend_event_tx,
+                transcript_recorder,
+                Arc::clone(&connected),
+            ))
+            .await?,
+        );
+    }
+    let Some(server) = server.as_ref() else {
+        return Ok(());
+    };
+    mcp_servers.push(acp::McpServer::Http(acp::McpServerHttp::new(
+        "nori-goal",
+        server.url().to_string(),
+    )));
+
+    Ok(())
+}
+
+fn supports_local_goal_mcp(connection: &SacpConnection) -> bool {
+    connection.capabilities().mcp_capabilities.http
 }
 
 fn tools() -> Vec<Value> {
@@ -314,6 +294,7 @@ mod tests {
             Arc::new(Mutex::new(thread_goal::ThreadGoalState::default())),
             backend_event_tx,
             Arc::new(Mutex::new(None)),
+            Arc::new(AtomicBool::new(false)),
         )
     }
 
@@ -376,6 +357,7 @@ mod tests {
             Arc::new(Mutex::new(thread_goal::ThreadGoalState::default())),
             backend_event_tx,
             Arc::new(Mutex::new(None)),
+            Arc::new(AtomicBool::new(false)),
         );
 
         let create_response = bridge
