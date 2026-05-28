@@ -1,0 +1,125 @@
+use super::*;
+
+impl ChatWidget {
+    pub(super) fn handle_goal_user_message(&mut self, text: &str) -> bool {
+        let Some(rest) = text.strip_prefix("/goal") else {
+            return false;
+        };
+        if !rest.is_empty() && !rest.starts_with(' ') {
+            return false;
+        }
+
+        let rest = rest.trim();
+        if rest.is_empty() {
+            self.submit_op(Op::ThreadGoalGet);
+            return true;
+        }
+
+        let lower = rest.to_ascii_lowercase();
+        match lower.as_str() {
+            "pause" => {
+                self.submit_op(Op::ThreadGoalSet {
+                    objective: None,
+                    status: Some(codex_core::protocol::ThreadGoalStatus::Paused),
+                });
+            }
+            "resume" => {
+                self.submit_op(Op::ThreadGoalSet {
+                    objective: None,
+                    status: Some(codex_core::protocol::ThreadGoalStatus::Active),
+                });
+            }
+            "clear" => {
+                self.submit_op(Op::ThreadGoalClear);
+            }
+            "edit" => {
+                self.open_goal_editor_or_request_snapshot();
+            }
+            _ => {
+                if let Err(message) = codex_core::protocol::validate_thread_goal_objective(rest) {
+                    self.add_error_message(message);
+                    return true;
+                }
+                self.submit_op(Op::ThreadGoalSet {
+                    objective: Some(rest.to_string()),
+                    status: Some(codex_core::protocol::ThreadGoalStatus::Active),
+                });
+            }
+        }
+        true
+    }
+
+    pub(super) fn handle_thread_goal_updated(&mut self, goal: nori_protocol::ThreadGoal) {
+        self.current_goal = Some(goal.clone());
+        if self.pending_goal_edit {
+            self.pending_goal_edit = false;
+            self.open_goal_editor(goal);
+        } else {
+            self.show_goal_summary(&goal);
+        }
+        self.request_redraw();
+    }
+
+    pub(super) fn handle_thread_goal_cleared(&mut self) {
+        self.current_goal = None;
+        self.pending_goal_edit = false;
+        self.add_info_message("Goal cleared".to_string(), None);
+        self.request_redraw();
+    }
+
+    fn open_goal_editor_or_request_snapshot(&mut self) {
+        if let Some(goal) = self.current_goal.clone() {
+            self.open_goal_editor(goal);
+        } else {
+            self.pending_goal_edit = true;
+            self.submit_op(Op::ThreadGoalGet);
+        }
+    }
+
+    fn open_goal_editor(&mut self, goal: nori_protocol::ThreadGoal) {
+        self.bottom_pane
+            .set_composer_text(format!("/goal {}", goal.objective));
+    }
+
+    fn show_goal_summary(&mut self, goal: &nori_protocol::ThreadGoal) {
+        self.add_plain_history_lines(vec![
+            Line::from("Goal".bold()),
+            Line::from(vec!["Status: ".dim(), goal_status_label(goal.status).into()]),
+            Line::from(vec!["Objective: ".dim(), goal.objective.clone().into()]),
+            Line::from(vec![
+                "Time used: ".dim(),
+                format!("{}s", goal.time_used_seconds).into(),
+            ]),
+            Line::from(vec![
+                "Tokens used: ".dim(),
+                goal.tokens_used.to_string().into(),
+            ]),
+            Line::default(),
+            Line::from(goal_command_hint(goal.status).dim()),
+        ]);
+    }
+}
+
+fn goal_status_label(status: nori_protocol::ThreadGoalStatus) -> &'static str {
+    match status {
+        nori_protocol::ThreadGoalStatus::Active => "active",
+        nori_protocol::ThreadGoalStatus::Paused => "paused",
+        nori_protocol::ThreadGoalStatus::Blocked => "blocked",
+        nori_protocol::ThreadGoalStatus::UsageLimited => "usage limited",
+        nori_protocol::ThreadGoalStatus::BudgetLimited => "limited by budget",
+        nori_protocol::ThreadGoalStatus::Complete => "complete",
+    }
+}
+
+fn goal_command_hint(status: nori_protocol::ThreadGoalStatus) -> &'static str {
+    match status {
+        nori_protocol::ThreadGoalStatus::Active => "Commands: /goal edit, /goal pause, /goal clear",
+        nori_protocol::ThreadGoalStatus::Paused
+        | nori_protocol::ThreadGoalStatus::Blocked
+        | nori_protocol::ThreadGoalStatus::UsageLimited => {
+            "Commands: /goal edit, /goal resume, /goal clear"
+        }
+        nori_protocol::ThreadGoalStatus::BudgetLimited
+        | nori_protocol::ThreadGoalStatus::Complete => "Commands: /goal edit, /goal clear",
+    }
+}

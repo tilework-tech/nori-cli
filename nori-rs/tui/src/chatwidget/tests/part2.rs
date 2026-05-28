@@ -1,6 +1,8 @@
 use super::*;
 use pretty_assertions::assert_eq;
 
+use codex_core::protocol::ThreadGoalStatus;
+
 #[test]
 fn slash_quit_sends_shutdown() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
@@ -28,6 +30,112 @@ fn slash_undo_sends_op() {
     match rx.try_recv() {
         Ok(AppEvent::CodexOp(Op::UndoList)) => {}
         other => panic!("expected AppEvent::CodexOp(Op::UndoList), got {other:?}"),
+    }
+}
+
+#[test]
+fn slash_goal_requests_current_goal() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+
+    chat.dispatch_command(SlashCommand::Goal);
+
+    assert_matches!(op_rx.try_recv(), Ok(Op::ThreadGoalGet));
+}
+
+#[test]
+fn goal_objective_submits_thread_goal_set() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+
+    chat.submit_user_message("/goal Ship the ACP goal command".to_string().into());
+
+    assert_eq!(
+        op_rx.try_recv(),
+        Ok(Op::ThreadGoalSet {
+            objective: Some("Ship the ACP goal command".to_string()),
+            status: Some(ThreadGoalStatus::Active),
+        })
+    );
+}
+
+#[test]
+fn goal_status_commands_submit_goal_mutations() {
+    let cases = [
+        (
+            "/goal pause",
+            Op::ThreadGoalSet {
+                objective: None,
+                status: Some(ThreadGoalStatus::Paused),
+            },
+        ),
+        (
+            "/goal resume",
+            Op::ThreadGoalSet {
+                objective: None,
+                status: Some(ThreadGoalStatus::Active),
+            },
+        ),
+        ("/goal clear", Op::ThreadGoalClear),
+    ];
+
+    for (input, expected) in cases {
+        let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+
+        chat.submit_user_message(input.to_string().into());
+
+        assert_eq!(op_rx.try_recv(), Ok(expected));
+    }
+}
+
+#[test]
+fn goal_update_event_renders_summary() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let rendered = lines_to_single_string(&cells[0]);
+    assert!(
+        rendered.contains("Goal")
+            && rendered.contains("Status: active")
+            && rendered.contains("Objective: Keep going")
+            && rendered.contains("Commands: /goal edit, /goal pause, /goal clear"),
+        "expected goal summary, got: {rendered}"
+    );
+}
+
+#[test]
+fn goal_edit_prefills_current_goal_objective() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+    chat.current_goal = Some(test_thread_goal(
+        "Keep improving the ACP goal command",
+        nori_protocol::ThreadGoalStatus::Paused,
+    ));
+
+    chat.submit_user_message("/goal edit".to_string().into());
+
+    assert_eq!(
+        chat.bottom_pane.composer_text(),
+        "/goal Keep improving the ACP goal command"
+    );
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+fn test_thread_goal(
+    objective: &str,
+    status: nori_protocol::ThreadGoalStatus,
+) -> nori_protocol::ThreadGoal {
+    nori_protocol::ThreadGoal {
+        objective: objective.to_string(),
+        status,
+        tokens_used: 0,
+        time_used_seconds: 0,
+        created_at: 10,
+        updated_at: 10,
     }
 }
 

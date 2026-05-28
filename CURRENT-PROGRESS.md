@@ -54,3 +54,7 @@ Goal command progress:
     `ThreadGoalSet`, and `ThreadGoalClear` through `AcpBackend::submit`. Goal time is
     accumulated only while the status is active; paused/blocked/limited/complete states do
     not accrue elapsed time until resumed.
+14. Wired the TUI `/goal` command to typed ACP goal ops. Bare `/goal` requests the current
+    goal, `/goal <objective>` creates/replaces the objective as active, `/goal pause`,
+    `/goal resume`, and `/goal clear` map to direct mutations, and `/goal edit` preloads
+    the current objective into the composer when the TUI has a goal snapshot.

@@ -316,6 +316,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         login_handler: None,
         active_resume_picker_generation: None,
         first_prompt_text: None,
+        current_goal: None,
+        pending_goal_edit: false,
         loop_remaining: None,
         loop_total: None,
         #[cfg(feature = "nori-config")]

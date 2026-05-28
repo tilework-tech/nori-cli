@@ -108,6 +108,8 @@ impl ChatWidget {
             login_handler: None,
             active_resume_picker_generation: None,
             first_prompt_text,
+            current_goal: None,
+            pending_goal_edit: false,
             loop_remaining: None,
             loop_total: None,
             #[cfg(feature = "nori-config")]
@@ -231,6 +233,8 @@ impl ChatWidget {
             login_handler: None,
             active_resume_picker_generation: None,
             first_prompt_text,
+            current_goal: None,
+            pending_goal_edit: false,
             loop_remaining: None,
             loop_total: None,
             #[cfg(feature = "nori-config")]

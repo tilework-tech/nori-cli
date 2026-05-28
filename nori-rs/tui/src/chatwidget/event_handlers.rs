@@ -1174,6 +1174,12 @@ impl ChatWidget {
             nori_protocol::ClientEvent::SessionModeChanged(update) => {
                 self.handle_acp_session_mode_changed(&update.current_mode_id);
             }
+            nori_protocol::ClientEvent::ThreadGoalUpdated(update) => {
+                self.handle_thread_goal_updated(update.goal);
+            }
+            nori_protocol::ClientEvent::ThreadGoalCleared => {
+                self.handle_thread_goal_cleared();
+            }
             nori_protocol::ClientEvent::Warning(warning) => {
                 self.on_warning(warning.message);
             }
