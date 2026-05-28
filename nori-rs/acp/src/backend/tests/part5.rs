@@ -1,5 +1,59 @@
 use super::*;
 
+struct EnvGuard {
+    name: &'static str,
+    previous: Option<String>,
+}
+
+impl EnvGuard {
+    fn set(name: &'static str, value: &str) -> Self {
+        let previous = std::env::var(name).ok();
+        unsafe {
+            std::env::set_var(name, value);
+        }
+        Self { name, previous }
+    }
+
+    fn remove(name: &'static str) -> Self {
+        let previous = std::env::var(name).ok();
+        unsafe {
+            std::env::remove_var(name);
+        }
+        Self { name, previous }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => unsafe {
+                std::env::set_var(self.name, value);
+            },
+            None => unsafe {
+                std::env::remove_var(self.name);
+            },
+        }
+    }
+}
+
+async fn assert_no_prompt_completed(
+    backend_event_rx: &mut mpsc::Receiver<BackendEvent>,
+    window: std::time::Duration,
+) {
+    let start = std::time::Instant::now();
+    while start.elapsed() < window {
+        let remaining = window
+            .saturating_sub(start.elapsed())
+            .min(std::time::Duration::from_millis(100));
+        if let Some(event) = recv_backend_client(backend_event_rx, remaining).await {
+            assert!(
+                !matches!(event, nori_protocol::ClientEvent::PromptCompleted(_)),
+                "unexpected extra PromptCompleted event: {event:?}"
+            );
+        }
+    }
+}
+
 #[tokio::test]
 #[serial]
 async fn user_shell_command_executes_locally_and_emits_exec_lifecycle() {
@@ -154,11 +208,7 @@ async fn test_session_context_prepended_to_first_prompt() {
         return;
     }
 
-    // Configure mock agent to echo back the full prompt text.
-    // SAFETY: Test-scoped environment variable for mock agent behavior.
-    unsafe {
-        std::env::set_var("MOCK_AGENT_ECHO_PROMPT", "1");
-    }
+    let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -213,11 +263,6 @@ async fn test_session_context_prepended_to_first_prompt() {
         agent_text.contains("hello agent"),
         "Expected user prompt in agent's echoed prompt, got: {agent_text}"
     );
-
-    // Clean up env var
-    unsafe {
-        std::env::remove_var("MOCK_AGENT_ECHO_PROMPT");
-    }
 }
 
 /// When a session goal is active, the next user prompt sent to the ACP agent
@@ -237,11 +282,8 @@ async fn test_goal_context_prepended_to_user_prompt() {
         return;
     }
 
-    // Configure mock agent to echo back the full prompt text.
-    // SAFETY: Test-scoped environment variable for mock agent behavior.
-    unsafe {
-        std::env::set_var("MOCK_AGENT_ECHO_PROMPT", "1");
-    }
+    let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -295,26 +337,12 @@ async fn test_goal_context_prepended_to_user_prompt() {
             && agent_text.contains("hello agent"),
         "Expected goal context and user prompt in agent echo, got: {agent_text}"
     );
-
-    unsafe {
-        std::env::remove_var("MOCK_AGENT_ECHO_PROMPT");
-    }
 }
 
 #[tokio::test]
 #[serial]
 async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
     use std::time::Duration;
-
-    struct EnvGuard(&'static str);
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            unsafe {
-                std::env::remove_var(self.0);
-            }
-        }
-    }
 
     let mock_config =
         crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
@@ -326,10 +354,8 @@ async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
         return;
     }
 
-    unsafe {
-        std::env::set_var("MOCK_AGENT_ECHO_PROMPT", "1");
-    }
-    let _env_guard = EnvGuard("MOCK_AGENT_ECHO_PROMPT");
+    let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -391,6 +417,180 @@ async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
         "expected second prompt to be a hidden goal continuation, got: {}",
         completed_prompts[1]
     );
+
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(500)).await;
+}
+
+#[tokio::test]
+#[serial]
+async fn http_mcp_agent_chains_hidden_goal_continuations() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("Keep going until the goal tool stops the loop".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to set goal");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "start the chain".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let mut completed_prompts = Vec::new();
+    let mut current_agent_text = String::new();
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while completed_prompts.len() < 3 {
+        if start.elapsed() > timeout {
+            panic!("Timed out waiting for chained goal continuations");
+        }
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
+                current_agent_text.push_str(&delta.delta);
+            }
+            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => {
+                completed_prompts.push(std::mem::take(&mut current_agent_text));
+            }
+            Some(_) => {}
+            None => {}
+        }
+    }
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down backend");
+
+    assert!(
+        completed_prompts[0].contains("start the chain"),
+        "expected first prompt to be the visible user turn, got: {}",
+        completed_prompts[0]
+    );
+    assert!(
+        completed_prompts[1].contains("Continue working toward the active thread goal")
+            && completed_prompts[2].contains("Continue working toward the active thread goal"),
+        "expected chained hidden continuations, got: {completed_prompts:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn completed_goal_stops_chained_hidden_continuations() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _delay_guard = EnvGuard::set("MOCK_AGENT_DELAY_MS", "200");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("Stop after the goal is complete".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to set goal");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "start then finish".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    loop {
+        if start.elapsed() > timeout {
+            panic!("Timed out waiting for first PromptCompleted");
+        }
+        if let Some(nori_protocol::ClientEvent::PromptCompleted(_)) =
+            recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await
+        {
+            break;
+        }
+    }
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: None,
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Complete),
+        })
+        .await
+        .expect("Failed to complete goal");
+
+    let start = std::time::Instant::now();
+    loop {
+        if start.elapsed() > timeout {
+            panic!("Timed out waiting for already queued hidden goal continuation");
+        }
+        if let Some(nori_protocol::ClientEvent::PromptCompleted(_)) =
+            recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await
+        {
+            break;
+        }
+    }
+
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(500)).await;
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down backend");
 }
 
 #[tokio::test]
@@ -500,42 +700,6 @@ async fn logged_new_session_for_mock_agent(
     advertise_http_mcp: bool,
 ) -> Option<acp::NewSessionRequest> {
     use std::time::Duration;
-
-    struct EnvGuard {
-        name: &'static str,
-        previous: Option<String>,
-    }
-
-    impl EnvGuard {
-        fn set(name: &'static str, value: &str) -> Self {
-            let previous = std::env::var(name).ok();
-            unsafe {
-                std::env::set_var(name, value);
-            }
-            Self { name, previous }
-        }
-
-        fn remove(name: &'static str) -> Self {
-            let previous = std::env::var(name).ok();
-            unsafe {
-                std::env::remove_var(name);
-            }
-            Self { name, previous }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match &self.previous {
-                Some(value) => unsafe {
-                    std::env::set_var(self.name, value);
-                },
-                None => unsafe {
-                    std::env::remove_var(self.name);
-                },
-            }
-        }
-    }
 
     let mock_config =
         crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");

@@ -475,9 +475,9 @@ impl AcpBackend {
                             env_vars,
                         );
                     }
-
-                    self.maybe_submit_goal_continuation(completed_turn).await;
                 }
+
+                self.maybe_submit_goal_continuation(completed_turn).await;
             }
             QueuedPromptKind::Compact => {
                 let Some(summary) = completed_turn.last_agent_message.clone() else {
@@ -532,6 +532,13 @@ impl AcpBackend {
     async fn maybe_submit_goal_continuation(&self, completed_turn: &CompletedTurn) {
         if completed_turn.stop_reason != agent_client_protocol_schema::StopReason::EndTurn {
             return;
+        }
+
+        let can_chain_continuation = self.connection.capabilities().mcp_capabilities.http;
+        match completed_turn.prompt.kind {
+            QueuedPromptKind::User => {}
+            QueuedPromptKind::GoalContinuation if can_chain_continuation => {}
+            QueuedPromptKind::GoalContinuation | QueuedPromptKind::Compact => return,
         }
 
         let prompt_text = {

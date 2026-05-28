@@ -110,3 +110,8 @@ Goal command progress:
     notifications cannot erase a restored goal. The local MCP bridge now has direct
     `_mcp/connect`/`_mcp/message` routing coverage and retains dynamic handler registrations only
     for the current advertised local MCP endpoint instead of leaking stale endpoints indefinitely.
+26. Added the deeper autonomous continuation slice for ACP agents that can use goal tools. When
+    an agent advertises HTTP MCP support, hidden `GoalContinuation` turns can now chain after
+    prior continuation turns while the active goal remains open and the runtime is idle; agents
+    without HTTP MCP support keep the previous single hidden continuation after a visible user
+    turn so unsupported agents are not put into an unbounded loop they cannot stop.
