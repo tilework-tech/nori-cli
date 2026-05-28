@@ -84,7 +84,10 @@ impl ChatWidget {
     fn show_goal_summary(&mut self, goal: &nori_protocol::ThreadGoal) {
         self.add_plain_history_lines(vec![
             Line::from("Goal".bold()),
-            Line::from(vec!["Status: ".dim(), goal_status_label(goal.status).into()]),
+            Line::from(vec![
+                "Status: ".dim(),
+                goal_status_label(goal.status).into(),
+            ]),
             Line::from(vec!["Objective: ".dim(), goal.objective.clone().into()]),
             Line::from(vec![
                 "Time used: ".dim(),

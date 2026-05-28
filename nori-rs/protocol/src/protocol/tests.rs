@@ -121,7 +121,10 @@ fn serialize_mcp_startup_update_event() -> Result<()> {
 
 #[test]
 fn thread_goal_objective_validation_accepts_non_empty_objective() {
-    assert_eq!(Ok(()), validate_thread_goal_objective("ship the goal command"));
+    assert_eq!(
+        Ok(()),
+        validate_thread_goal_objective("ship the goal command")
+    );
 }
 
 #[test]
