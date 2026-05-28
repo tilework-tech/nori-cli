@@ -120,6 +120,38 @@ fn serialize_mcp_startup_update_event() -> Result<()> {
 }
 
 #[test]
+fn thread_goal_objective_validation_accepts_non_empty_objective() {
+    assert_eq!(Ok(()), validate_thread_goal_objective("ship the goal command"));
+}
+
+#[test]
+fn thread_goal_objective_validation_accepts_max_length_objective() {
+    let objective: String = (0..MAX_THREAD_GOAL_OBJECTIVE_CHARS).map(|_| 'x').collect();
+
+    assert_eq!(Ok(()), validate_thread_goal_objective(&objective));
+}
+
+#[test]
+fn thread_goal_objective_validation_rejects_empty_objective() {
+    assert_eq!(
+        Err("goal objective must not be empty".to_string()),
+        validate_thread_goal_objective("")
+    );
+}
+
+#[test]
+fn thread_goal_objective_validation_rejects_overlong_objective() {
+    let objective: String = (0..=MAX_THREAD_GOAL_OBJECTIVE_CHARS).map(|_| 'x').collect();
+
+    assert_eq!(
+        Err(format!(
+            "goal objective must be at most {MAX_THREAD_GOAL_OBJECTIVE_CHARS} characters"
+        )),
+        validate_thread_goal_objective(&objective)
+    );
+}
+
+#[test]
 fn serialize_mcp_startup_complete_event() -> Result<()> {
     let event = Event {
         id: "init".to_string(),
