@@ -115,3 +115,146 @@ Goal command progress:
     prior continuation turns while the active goal remains open and the runtime is idle; agents
     without HTTP MCP support keep the previous single hidden continuation after a visible user
     turn so unsupported agents are not put into an unbounded loop they cannot stop.
+
+Follow-up bug investigations - 2026-05-28:
+
+### Bug 1: `nori-goal` MCP startup failure
+
+- Finding: The existing `nori-rs/closing-loop/nori-goal-mcp-over-acp-bug-report.md`
+  report is substantially correct. Nori advertises backend-owned goal tools as an
+  ACP local MCP server by sending an HTTP MCP server entry whose URL is `acp:<uuid>`.
+  Codex ACP treats that entry as a normal streamable HTTP MCP server and Codex's
+  HTTP client rejects the `acp:` scheme before Nori's `_mcp/connect` bridge can run.
+- Evidence: Goal MCP registration is guarded only by `mcp_capabilities.http` in
+  `nori-rs/acp/src/backend/thread_goal_mcp.rs`; registration appends
+  `McpServer::Http { url: "acp:<uuid>" }` in
+  `nori-rs/acp/src/connection/sacp_connection.rs`; the intended local receiver is
+  `_mcp/connect` in `nori-rs/acp/src/connection/local_mcp.rs`.
+- Correction to the prior report: the built-in Nori Codex agent still launches
+  `@zed-industries/codex-acp`, not `@agentclientprotocol/codex-acp`. Both appear to
+  have the same shape mismatch: they advertise HTTP MCP but forward/load the
+  `acp:` URL as a normal HTTP MCP config instead of using ACP `_mcp/connect`.
+- Quickest estimate: 2-4 hours for a focused mitigation that disables local goal
+  MCP advertisement for Codex ACP and gates continuation chaining on goal MCP
+  being actually supported/registered, not raw HTTP MCP capability. A real
+  loopback HTTP MCP server is a more complete but larger 1-2 day fix. Upstream
+  Codex ACP support for ACP-local MCP is the cleanest architecture, but timing is
+  outside this repo.
+- Risks/unknowns: Need confirm which non-Codex ACP agents actually support `acp:`
+  local MCP before changing behavior broadly. A Codex-specific deny path is safer
+  than treating all HTTP MCP agents as broken.
+
+### Bug 2: New `/goal <objective>` does not begin work immediately
+
+- Finding: Confirmed. `/goal <objective>` is a state mutation only. The TUI
+  intercepts the slash command, sends `Op::ThreadGoalSet`, and returns before any
+  normal ACP `session/prompt` is submitted.
+- Root cause: Automatic hidden goal continuation is currently triggered only after
+  a completed visible user turn or prior continuation turn. Setting the goal does
+  not enqueue a hidden `GoalContinuation` prompt, so work starts only after the
+  user submits a second prompt.
+- Evidence: `/goal` sends only `ThreadGoalSet` from
+  `nori-rs/tui/src/chatwidget/goal.rs`; `handle_thread_goal_set` stores state and
+  emits `ThreadGoalUpdated`; `maybe_submit_goal_continuation` is called from
+  completed-turn handling in `nori-rs/acp/src/backend/session_runtime_driver.rs`.
+- Quickest estimate: small, 1-2 hours with tests. More like 2-3 hours if the same
+  change covers `/goal resume`, active-goal replacement while a request is in
+  flight, and HTTP-MCP chain semantics.
+- Likely fix: after a successful active `ThreadGoalSet`, enqueue the existing
+  hidden `GoalContinuation` prompt when the runtime is idle and there is no queued
+  user work. Extract the enqueue portion of `maybe_submit_goal_continuation` so it
+  can be reused without requiring a `CompletedTurn`.
+
+### Bug 3: Goal status prints constantly into history
+
+- Finding: Confirmed. Nori emits a `ThreadGoalUpdated` event for every ACP usage
+  update, and the TUI renders every `ThreadGoalUpdated` as a full history summary.
+  That makes token/time refreshes look like repeated goal status messages.
+- What Codex does: upstream Codex stores goal state and updates a compact footer
+  status indicator such as `Pursuing goal (...)`. It does not append every backend
+  goal update into chat history. History/info messages are mostly tied to explicit
+  `/goal` actions such as set, status, pause, resume, or clear.
+- Evidence: ACP usage updates are converted into `ThreadGoalUpdated` in
+  `nori-rs/acp/src/backend/thread_goal.rs`; the TUI always calls
+  `show_goal_summary` from `handle_thread_goal_updated` in
+  `nori-rs/tui/src/chatwidget/goal.rs`. Codex's footer/status indicator path is in
+  `other-repos/codex/codex-rs/tui/src/chatwidget/goal_status.rs` and
+  `other-repos/codex/codex-rs/tui/src/bottom_pane/footer.rs`.
+- Quickest estimate: small, 1-2 hours with focused TUI tests/snapshot updates.
+  Matching the upstream footer/status model more fully is closer to 0.5-1 day.
+- Likely fix: keep updating cached `current_goal` on every event, but only append
+  a history summary when user-visible goal meaning changes or when the user
+  explicitly asks for `/goal` status. Minimal safe heuristic: suppress summaries
+  when previous and new goal have the same objective/status/created timestamp and
+  only accounting fields changed.
+- Risks/unknowns: The protocol currently does not carry provenance that says
+  "this update is an explicit user-requested status response" versus "this update
+  is backend sync." Without adding provenance, the first fix will be heuristic.
+
+### Bug 4: `Tokens used` should pretty print
+
+- Finding: Display-only bug. `nori-rs/tui/src/chatwidget/goal.rs` renders
+  `Tokens used` with `goal.tokens_used.to_string()`.
+- Existing helper: `codex_protocol::num_format::format_si_suffix` already exists
+  and is used elsewhere for compact token counts, so the cheapest fix does not
+  need a new formatter or dependency.
+- Format ambiguity: `195043 -> 195K` matches the existing Nori helper and upstream
+  Codex compact formatting. The example `32492004 -> 32,492M` is ambiguous because
+  it reads as 32,492 million, while existing Nori/upstream compact formatting
+  would be around `32.5M`.
+- Quickest estimate: tiny, 15-30 minutes including one TUI snapshot update.
+- Likely fix: replace raw `to_string()` with `format_si_suffix(goal.tokens_used)`,
+  update the existing goal summary snapshot to cover a nonzero count, and decide
+  whether `32.5M` is acceptable or whether this needs a new project-specific
+  convention.
+
+### Bug 5: Goal token count mirrors latest usage instead of cumulative capacity
+
+- Finding: Confirmed. Goal token accounting treats ACP `UsageUpdate.used` as if it
+  were cumulative goal spend, but ACP usage is "tokens currently in context". Nori
+  subtracts a single baseline from a point-in-time context-window measurement.
+- Evidence: `StoredThreadGoal` stores `tokens_used`, `token_usage_baseline`, and
+  `last_session_used_tokens`. On each usage update,
+  `nori-rs/acp/src/backend/thread_goal.rs` sets `goal.tokens_used =
+  used_tokens.saturating_sub(baseline)`. That exactly explains why the goal count
+  mirrors usage updates and can reset or drift across compaction, resume, subagent
+  sidechains, and new ACP session IDs.
+- Likely correct model: keep goal-owned cumulative usage and per-source/segment
+  last-seen context values. For a same segment, add only positive deltas; when
+  context usage drops because of compaction/resume/session changes, start a new
+  segment instead of subtracting from an old baseline. Provider transcript totals
+  may be needed to include subagent usage accurately, with deduping by transcript
+  message/session identity.
+- Quickest estimate: medium, 1-2 days for a focused segment-based approximation
+  with tests. More if robust provider transcript aggregation across Claude, Codex,
+  Gemini, and sidechain/subagent messages is required.
+- Risks/unknowns: ACP does not appear to expose cumulative token spend directly.
+  Provider transcript schemas differ and may be stale during live sessions. Replay
+  and live `session/load` usage must be deduped to avoid double-counting.
+
+### Bug 6: Agent repeats "Verified again..." and cannot stop the goal loop
+
+- Finding: High-confidence root cause is continuation chaining based on advertised
+  HTTP MCP capability rather than observed working `nori-goal` MCP tools. For
+  Codex ACP, the tools fail to start because of Bug 1, but Nori still believes the
+  agent can stop itself via goal MCP and therefore keeps chaining hidden
+  continuations while the backend goal remains active.
+- Evidence: `maybe_submit_goal_continuation` chains after a `GoalContinuation`
+  when `connection.capabilities().mcp_capabilities.http` is true. The actual stop
+  path requires the agent to call MCP `update_goal({"status":"complete"})` in
+  `nori-rs/acp/src/backend/thread_goal_mcp.rs`. Since Codex never successfully
+  initializes the `acp:` goal MCP server, the active goal never transitions to
+  complete through that path.
+- Why those history cells appear: hidden `GoalContinuation` prompts are not shown
+  as user prompts, but assistant output is still recorded and finalized like normal
+  assistant history. The repeated "Verified again..." messages are normal
+  assistant completions from each chained hidden continuation, not duplicate TUI
+  rendering of the same cell.
+- Quickest estimate: small for mitigation, roughly 1-2 hours to disable chained
+  continuation unless goal MCP is known usable. Medium, 0.5-1 day, to track an
+  observed `_mcp/connect` success from the local MCP bridge and gate chaining on
+  that runtime state.
+- Likely fix: allow one post-user hidden continuation as the unsupported-agent
+  fallback, but do not allow `GoalContinuation -> GoalContinuation` chaining until
+  Nori has observed a working `nori-goal` MCP connection. A faster temporary
+  mitigation is to disable chained continuations entirely.
