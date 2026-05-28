@@ -166,6 +166,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(config.initial_context.clone())),
+            thread_goal_state: Arc::new(Mutex::new(thread_goal::ThreadGoalState::default())),
             pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),

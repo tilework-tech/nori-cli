@@ -50,3 +50,7 @@ Goal command progress:
 12. Added normalized ACP-client events for goal updated/cleared notifications in
     `nori-protocol`. This keeps the ACP backend as the goal-state owner while giving the
     TUI an agent-independent event shape to render.
+13. Added an in-memory ACP-session goal state machine and wired `ThreadGoalGet`,
+    `ThreadGoalSet`, and `ThreadGoalClear` through `AcpBackend::submit`. Goal time is
+    accumulated only while the status is active; paused/blocked/limited/complete states do
+    not accrue elapsed time until resumed.

@@ -286,6 +286,8 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// Persistent goal for this ACP session.
+    thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
     pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence
@@ -342,6 +344,7 @@ pub(crate) mod session_reducer;
 mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
+mod thread_goal;
 mod user_input;
 mod user_shell;
 use helpers::get_op_name;

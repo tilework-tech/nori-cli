@@ -53,6 +53,8 @@ fn client_event_kind(event: &ClientEvent) -> &'static str {
         ClientEvent::ContextCompacted(_) => "context_compacted",
         ClientEvent::Warning(_) => "warning",
         ClientEvent::ReplayEntry(_) => "replay_entry",
+        ClientEvent::ThreadGoalUpdated(_) => "thread_goal_updated",
+        ClientEvent::ThreadGoalCleared => "thread_goal_cleared",
     }
 }
 
