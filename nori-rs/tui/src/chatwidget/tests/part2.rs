@@ -99,21 +99,19 @@ fn goal_update_event_renders_summary() {
     let cells = drain_insert_history(&mut rx);
     assert_eq!(cells.len(), 1);
     let rendered = lines_to_single_string(&cells[0]);
-    assert!(
-        rendered.contains("Goal")
-            && rendered.contains("Status: active")
-            && rendered.contains("Objective: Keep going")
-            && rendered.contains("Commands: /goal edit, /goal pause, /goal clear"),
-        "expected goal summary, got: {rendered}"
-    );
+    assert_snapshot!("goal_update_event_summary", rendered);
 }
 
 #[test]
 fn goal_edit_prefills_current_goal_objective() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
-    chat.current_goal = Some(test_thread_goal(
-        "Keep improving the ACP goal command",
-        nori_protocol::ThreadGoalStatus::Paused,
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal(
+                "Keep improving the ACP goal command",
+                nori_protocol::ThreadGoalStatus::Paused,
+            ),
+        },
     ));
 
     chat.submit_user_message("/goal edit".to_string().into());

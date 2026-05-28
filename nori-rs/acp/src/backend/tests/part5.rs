@@ -301,6 +301,70 @@ async fn test_goal_context_prepended_to_user_prompt() {
     }
 }
 
+#[tokio::test]
+#[serial]
+async fn usage_updates_refresh_goal_token_count() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .apply_session_event(session_reducer::InboundEvent::Notification(Box::new(
+            acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(100, 4096)),
+        )))
+        .await;
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("Track token budget".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to set goal");
+
+    backend
+        .apply_session_event(session_reducer::InboundEvent::Notification(Box::new(
+            acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(175, 4096)),
+        )))
+        .await;
+
+    let mut saw_goal_update_with_tokens = false;
+    for _ in 0..4 {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::ThreadGoalUpdated(update))
+                if update.goal.tokens_used == 75 =>
+            {
+                saw_goal_update_with_tokens = true;
+                break;
+            }
+            Some(_) => {}
+            None => panic!("Backend event channel closed unexpectedly"),
+        }
+    }
+
+    assert!(saw_goal_update_with_tokens);
+}
+
 /// Test that session_context is consumed after the first prompt (not repeated).
 #[tokio::test]
 #[serial]

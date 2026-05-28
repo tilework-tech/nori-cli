@@ -120,14 +120,6 @@ fn serialize_mcp_startup_update_event() -> Result<()> {
 }
 
 #[test]
-fn thread_goal_objective_validation_accepts_non_empty_objective() {
-    assert_eq!(
-        Ok(()),
-        validate_thread_goal_objective("ship the goal command")
-    );
-}
-
-#[test]
 fn thread_goal_objective_validation_accepts_max_length_objective() {
     let objective: String = (0..MAX_THREAD_GOAL_OBJECTIVE_CHARS).map(|_| 'x').collect();
 

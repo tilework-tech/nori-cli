@@ -35,6 +35,7 @@ struct StoredThreadGoal {
     objective: String,
     status: ThreadGoalStatus,
     tokens_used: i64,
+    token_usage_baseline: Option<i64>,
     accumulated_active_seconds: i64,
     active_started_at: Option<i64>,
     created_at: i64,
@@ -44,6 +45,7 @@ struct StoredThreadGoal {
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ThreadGoalState {
     goal: Option<StoredThreadGoal>,
+    last_session_used_tokens: Option<i64>,
 }
 
 impl ThreadGoalState {
@@ -52,10 +54,20 @@ impl ThreadGoalState {
         for event in events {
             match event {
                 ClientEvent::ThreadGoalUpdated(update) => {
-                    state.goal = Some(StoredThreadGoal::from_client_goal(&update.goal));
+                    state.goal = Some(StoredThreadGoal::from_client_goal(
+                        &update.goal,
+                        state.last_session_used_tokens,
+                    ));
                 }
                 ClientEvent::ThreadGoalCleared => {
                     state.goal = None;
+                }
+                ClientEvent::SessionUpdateInfo(update) => {
+                    if let Some(usage) = &update.usage {
+                        let updated_at =
+                            state.goal.as_ref().map(|goal| goal.updated_at).unwrap_or(0);
+                        state.update_session_tokens(usage.used_tokens, updated_at);
+                    }
                 }
                 ClientEvent::ToolSnapshot(_)
                 | ClientEvent::ApprovalRequest(_)
@@ -68,7 +80,6 @@ impl ThreadGoalState {
                 | ClientEvent::ContextCompacted(_)
                 | ClientEvent::ReplayEntry(_)
                 | ClientEvent::AgentCommandsUpdate(_)
-                | ClientEvent::SessionUpdateInfo(_)
                 | ClientEvent::SessionConfigUpdate(_)
                 | ClientEvent::SessionModeChanged(_)
                 | ClientEvent::Warning(_) => {}
@@ -113,6 +124,7 @@ impl ThreadGoalState {
             objective,
             status,
             tokens_used: 0,
+            token_usage_baseline: Some(self.last_session_used_tokens.unwrap_or(0)),
             accumulated_active_seconds: 0,
             active_started_at: active_started_at(status, now),
             created_at: now,
@@ -136,15 +148,37 @@ impl ThreadGoalState {
     pub(crate) fn clear(&mut self) -> bool {
         self.goal.take().is_some()
     }
+
+    pub(crate) fn update_session_tokens(
+        &mut self,
+        used_tokens: i64,
+        now: i64,
+    ) -> Option<ThreadGoalSnapshot> {
+        self.last_session_used_tokens = Some(used_tokens);
+        let goal = self.goal.as_mut()?;
+        let baseline = goal.token_usage_baseline.unwrap_or_else(|| {
+            let baseline = used_tokens.saturating_sub(goal.tokens_used);
+            goal.token_usage_baseline = Some(baseline);
+            baseline
+        });
+        goal.tokens_used = used_tokens.saturating_sub(baseline);
+        goal.updated_at = now;
+        Some(goal.snapshot(now))
+    }
 }
 
 impl StoredThreadGoal {
-    fn from_client_goal(goal: &nori_protocol::ThreadGoal) -> Self {
+    fn from_client_goal(
+        goal: &nori_protocol::ThreadGoal,
+        session_used_tokens: Option<i64>,
+    ) -> Self {
         let status = status_from_client(goal.status);
         Self {
             objective: goal.objective.clone(),
             status,
             tokens_used: goal.tokens_used,
+            token_usage_baseline: session_used_tokens
+                .map(|used_tokens| used_tokens.saturating_sub(goal.tokens_used)),
             accumulated_active_seconds: goal.time_used_seconds,
             active_started_at: active_started_at(status, goal.updated_at),
             created_at: goal.created_at,
@@ -220,6 +254,24 @@ pub(super) fn now_seconds() -> i64 {
 }
 
 impl AcpBackend {
+    pub(super) async fn thread_goal_update_from_client_event(
+        &self,
+        client_event: &ClientEvent,
+    ) -> Option<ClientEvent> {
+        let ClientEvent::SessionUpdateInfo(update) = client_event else {
+            return None;
+        };
+        let usage = update.usage.as_ref()?;
+        let goal = self
+            .thread_goal_state
+            .lock()
+            .await
+            .update_session_tokens(usage.used_tokens, now_seconds())?;
+        Some(ClientEvent::ThreadGoalUpdated(ThreadGoalUpdated {
+            goal: goal.into_client_goal(),
+        }))
+    }
+
     pub(super) async fn prepend_goal_context_to_prompt(&self, prompt: String) -> String {
         let goal_context = self
             .thread_goal_state
@@ -392,19 +444,28 @@ mod tests {
 
     #[test]
     fn rehydrates_latest_goal_from_replay_events() {
-        let goals =
-            ThreadGoalState::from_replay_events(&[nori_protocol::ClientEvent::ThreadGoalUpdated(
-                nori_protocol::ThreadGoalUpdated {
-                    goal: nori_protocol::ThreadGoal {
-                        objective: "Keep going".to_string(),
-                        status: nori_protocol::ThreadGoalStatus::Active,
-                        tokens_used: 42,
-                        time_used_seconds: 15,
-                        created_at: 10,
-                        updated_at: 25,
-                    },
+        let goals = ThreadGoalState::from_replay_events(&[
+            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
+                goal: nori_protocol::ThreadGoal {
+                    objective: "Earlier goal".to_string(),
+                    status: nori_protocol::ThreadGoalStatus::Paused,
+                    tokens_used: 12,
+                    time_used_seconds: 5,
+                    created_at: 1,
+                    updated_at: 8,
                 },
-            )]);
+            }),
+            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
+                goal: nori_protocol::ThreadGoal {
+                    objective: "Keep going".to_string(),
+                    status: nori_protocol::ThreadGoalStatus::Active,
+                    tokens_used: 42,
+                    time_used_seconds: 15,
+                    created_at: 10,
+                    updated_at: 25,
+                },
+            }),
+        ]);
 
         let goal = goals.snapshot(30).expect("goal should be rehydrated");
         assert_eq!(goal.objective, "Keep going");
@@ -448,5 +509,54 @@ mod tests {
                     .to_string()
             )
         );
+    }
+
+    #[test]
+    fn usage_updates_count_tokens_since_goal_started() {
+        let mut goals = ThreadGoalState::default();
+        assert_eq!(goals.update_session_tokens(100, 5), None);
+        goals
+            .set_objective("Keep going".to_string(), None, 10)
+            .expect("valid objective");
+
+        let goal = goals
+            .update_session_tokens(175, 15)
+            .expect("goal should be updated");
+
+        assert_eq!(goal.tokens_used, 75);
+        assert_eq!(goal.updated_at, 15);
+    }
+
+    #[test]
+    fn rehydrated_goal_usage_baseline_survives_future_usage_updates() {
+        let goals = ThreadGoalState::from_replay_events(&[
+            nori_protocol::ClientEvent::SessionUpdateInfo(nori_protocol::SessionUpdateInfo {
+                kind: nori_protocol::SessionUpdateKind::Usage,
+                message: "Session usage: 200 / 4096 tokens".to_string(),
+                hint: None,
+                usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                    used_tokens: 200,
+                    total_tokens: 4096,
+                    cost_display: None,
+                }),
+            }),
+            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
+                goal: nori_protocol::ThreadGoal {
+                    objective: "Keep going".to_string(),
+                    status: nori_protocol::ThreadGoalStatus::Active,
+                    tokens_used: 42,
+                    time_used_seconds: 15,
+                    created_at: 10,
+                    updated_at: 25,
+                },
+            }),
+        ]);
+        let mut goals = goals;
+
+        let goal = goals
+            .update_session_tokens(220, 30)
+            .expect("goal should be updated");
+
+        assert_eq!(goal.tokens_used, 62);
     }
 }

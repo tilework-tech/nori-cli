@@ -69,3 +69,7 @@ Goal command progress:
     the ACP agent, the backend now prepends a structured `<goal_context>` block with the goal
     status, objective, elapsed active time, and token count, while preserving compact-summary
     ordering when a summary is pending.
+18. Added goal token accounting from ACP usage updates. The backend keeps a usage baseline
+    when a goal is created, updates goal token totals as `UsageUpdate` client events arrive,
+    emits refreshed goal snapshots, and rebuilds the baseline from replayed usage/goal events
+    when resuming a session.

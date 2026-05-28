@@ -344,12 +344,23 @@ impl AcpBackend {
                 );
             }
         }
+        let goal_event = self
+            .thread_goal_update_from_client_event(&client_event)
+            .await;
         emit_client_event(
             &self.backend_event_tx,
             self.transcript_recorder.as_ref(),
             client_event,
         )
         .await;
+        if let Some(goal_event) = goal_event {
+            emit_client_event(
+                &self.backend_event_tx,
+                self.transcript_recorder.as_ref(),
+                goal_event,
+            )
+            .await;
+        }
     }
 
     async fn handle_completed_turn(&self, completed_turn: &CompletedTurn) {
