@@ -58,3 +58,7 @@ Goal command progress:
     goal, `/goal <objective>` creates/replaces the objective as active, `/goal pause`,
     `/goal resume`, and `/goal clear` map to direct mutations, and `/goal edit` preloads
     the current objective into the composer when the TUI has a goal snapshot.
+15. Preserved goal update/clear client events through transcript replay conversion. This
+    restores the latest TUI-visible goal snapshot on resumed sessions, but the ACP backend
+    still needs a stronger state rehydration path before automatic continuation can rely on
+    a replayed goal without a fresh mutation.
