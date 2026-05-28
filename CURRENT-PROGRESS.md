@@ -73,3 +73,10 @@ Goal command progress:
     when a goal is created, updates goal token totals as `UsageUpdate` client events arrive,
     emits refreshed goal snapshots, and rebuilds the baseline from replayed usage/goal events
     when resuming a session.
+19. Compared the current ACP goal implementation against upstream Codex goal behavior after
+    verification. Remaining parity gaps are intentional blockers for the next design slice:
+    Codex confirms before replacing an unfinished goal, prompts on resume for paused/blocked
+    goals, exposes model-facing `create_goal`/`update_goal` tools, and can automatically
+    continue active goals when the runtime goes idle. The current Nori slice stores,
+    rehydrates, renders, and injects goal context, but does not yet auto-submit continuation
+    turns or expose structured goal tools to ACP agents.
