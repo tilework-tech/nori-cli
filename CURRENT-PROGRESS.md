@@ -65,3 +65,7 @@ Goal command progress:
 16. Rehydrated ACP backend goal state from replayed goal events during resume setup. Active
     goals resume elapsed-time accounting from their last `updated_at` timestamp; a later
     replayed clear removes the backend goal state.
+17. Added ACP prompt-context injection for active session goals. Before user input is sent to
+    the ACP agent, the backend now prepends a structured `<goal_context>` block with the goal
+    status, objective, elapsed active time, and token count, while preserving compact-summary
+    ordering when a summary is pending.

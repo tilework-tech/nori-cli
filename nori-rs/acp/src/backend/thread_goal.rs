@@ -81,6 +81,26 @@ impl ThreadGoalState {
         self.goal.as_ref().map(|goal| goal.snapshot(now))
     }
 
+    pub(crate) fn prompt_context(&self, now: i64) -> Option<String> {
+        self.snapshot(now).map(|goal| {
+            let status = match goal.status {
+                ThreadGoalStatus::Active => "active",
+                ThreadGoalStatus::Paused => "paused",
+                ThreadGoalStatus::Blocked => "blocked",
+                ThreadGoalStatus::UsageLimited => "usage limited",
+                ThreadGoalStatus::BudgetLimited => "limited by budget",
+                ThreadGoalStatus::Complete => "complete",
+            };
+            format!(
+                "<goal_context>\nStatus: {}\nObjective: {}\nTime used: {}s\nTokens used: {}\n</goal_context>",
+                status,
+                goal.objective,
+                goal.time_used_seconds,
+                goal.tokens_used
+            )
+        })
+    }
+
     pub(crate) fn set_objective(
         &mut self,
         objective: String,
@@ -200,6 +220,18 @@ pub(super) fn now_seconds() -> i64 {
 }
 
 impl AcpBackend {
+    pub(super) async fn prepend_goal_context_to_prompt(&self, prompt: String) -> String {
+        let goal_context = self
+            .thread_goal_state
+            .lock()
+            .await
+            .prompt_context(now_seconds());
+        match goal_context {
+            Some(goal_context) => format!("{goal_context}\n\n{prompt}"),
+            None => prompt,
+        }
+    }
+
     pub(super) async fn handle_thread_goal_get(&self) {
         let now = now_seconds();
         let goal = self.thread_goal_state.lock().await.snapshot(now);
@@ -360,18 +392,19 @@ mod tests {
 
     #[test]
     fn rehydrates_latest_goal_from_replay_events() {
-        let goals = ThreadGoalState::from_replay_events(&[nori_protocol::ClientEvent::ThreadGoalUpdated(
-            nori_protocol::ThreadGoalUpdated {
-                goal: nori_protocol::ThreadGoal {
-                    objective: "Keep going".to_string(),
-                    status: nori_protocol::ThreadGoalStatus::Active,
-                    tokens_used: 42,
-                    time_used_seconds: 15,
-                    created_at: 10,
-                    updated_at: 25,
+        let goals =
+            ThreadGoalState::from_replay_events(&[nori_protocol::ClientEvent::ThreadGoalUpdated(
+                nori_protocol::ThreadGoalUpdated {
+                    goal: nori_protocol::ThreadGoal {
+                        objective: "Keep going".to_string(),
+                        status: nori_protocol::ThreadGoalStatus::Active,
+                        tokens_used: 42,
+                        time_used_seconds: 15,
+                        created_at: 10,
+                        updated_at: 25,
+                    },
                 },
-            },
-        )]);
+            )]);
 
         let goal = goals.snapshot(30).expect("goal should be rehydrated");
         assert_eq!(goal.objective, "Keep going");
@@ -399,5 +432,21 @@ mod tests {
         ]);
 
         assert_eq!(goals.snapshot(30), None);
+    }
+
+    #[test]
+    fn prompt_context_includes_current_goal_snapshot() {
+        let mut goals = ThreadGoalState::default();
+        goals
+            .set_objective("Keep going".to_string(), None, 10)
+            .expect("valid objective");
+
+        assert_eq!(
+            goals.prompt_context(25),
+            Some(
+                "<goal_context>\nStatus: active\nObjective: Keep going\nTime used: 15s\nTokens used: 0\n</goal_context>"
+                    .to_string()
+            )
+        );
     }
 }

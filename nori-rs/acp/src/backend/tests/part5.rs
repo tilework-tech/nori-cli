@@ -220,6 +220,87 @@ async fn test_session_context_prepended_to_first_prompt() {
     }
 }
 
+/// When a session goal is active, the next user prompt sent to the ACP agent
+/// includes a structured goal context block.
+#[tokio::test]
+#[serial]
+async fn test_goal_context_prepended_to_user_prompt() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    // Configure mock agent to echo back the full prompt text.
+    // SAFETY: Test-scoped environment variable for mock agent behavior.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_ECHO_PROMPT", "1");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("Keep the north star visible".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to set goal");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "hello agent".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let mut agent_text = String::new();
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    loop {
+        if start.elapsed() > timeout {
+            panic!("Timed out waiting for PromptCompleted");
+        }
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
+                agent_text.push_str(&delta.delta);
+            }
+            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => break,
+            Some(_) => continue,
+            None => panic!("Backend event channel closed unexpectedly"),
+        }
+    }
+
+    assert!(
+        agent_text.contains("<goal_context>")
+            && agent_text.contains("Objective: Keep the north star visible")
+            && agent_text.contains("hello agent"),
+        "Expected goal context and user prompt in agent echo, got: {agent_text}"
+    );
+
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_ECHO_PROMPT");
+    }
+}
+
 /// Test that session_context is consumed after the first prompt (not repeated).
 #[tokio::test]
 #[serial]

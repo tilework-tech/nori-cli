@@ -394,8 +394,8 @@ mod tests {
 
     #[test]
     fn client_events_to_replay_client_events_preserves_goal_updates() {
-        let goal_event = nori_protocol::ClientEvent::ThreadGoalUpdated(
-            nori_protocol::ThreadGoalUpdated {
+        let goal_event =
+            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
                 goal: nori_protocol::ThreadGoal {
                     objective: "Keep the north star".to_string(),
                     status: nori_protocol::ThreadGoalStatus::Active,
@@ -404,8 +404,7 @@ mod tests {
                     created_at: 100,
                     updated_at: 107,
                 },
-            },
-        );
+            });
         let replay = client_events_to_replay_client_events(vec![goal_event.clone()]);
 
         assert_eq!(replay, vec![goal_event]);
@@ -413,8 +412,9 @@ mod tests {
 
     #[test]
     fn client_events_to_replay_client_events_preserves_goal_clears() {
-        let replay =
-            client_events_to_replay_client_events(vec![nori_protocol::ClientEvent::ThreadGoalCleared]);
+        let replay = client_events_to_replay_client_events(vec![
+            nori_protocol::ClientEvent::ThreadGoalCleared,
+        ]);
 
         assert_eq!(replay, vec![nori_protocol::ClientEvent::ThreadGoalCleared]);
     }
