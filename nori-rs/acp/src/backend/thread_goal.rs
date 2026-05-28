@@ -47,6 +47,36 @@ pub(crate) struct ThreadGoalState {
 }
 
 impl ThreadGoalState {
+    pub(crate) fn from_replay_events(events: &[ClientEvent]) -> Self {
+        let mut state = Self::default();
+        for event in events {
+            match event {
+                ClientEvent::ThreadGoalUpdated(update) => {
+                    state.goal = Some(StoredThreadGoal::from_client_goal(&update.goal));
+                }
+                ClientEvent::ThreadGoalCleared => {
+                    state.goal = None;
+                }
+                ClientEvent::ToolSnapshot(_)
+                | ClientEvent::ApprovalRequest(_)
+                | ClientEvent::MessageDelta(_)
+                | ClientEvent::PlanSnapshot(_)
+                | ClientEvent::SessionPhaseChanged(_)
+                | ClientEvent::PromptCompleted(_)
+                | ClientEvent::LoadCompleted
+                | ClientEvent::QueueChanged(_)
+                | ClientEvent::ContextCompacted(_)
+                | ClientEvent::ReplayEntry(_)
+                | ClientEvent::AgentCommandsUpdate(_)
+                | ClientEvent::SessionUpdateInfo(_)
+                | ClientEvent::SessionConfigUpdate(_)
+                | ClientEvent::SessionModeChanged(_)
+                | ClientEvent::Warning(_) => {}
+            }
+        }
+        state
+    }
+
     pub(crate) fn snapshot(&self, now: i64) -> Option<ThreadGoalSnapshot> {
         self.goal.as_ref().map(|goal| goal.snapshot(now))
     }
@@ -89,6 +119,19 @@ impl ThreadGoalState {
 }
 
 impl StoredThreadGoal {
+    fn from_client_goal(goal: &nori_protocol::ThreadGoal) -> Self {
+        let status = status_from_client(goal.status);
+        Self {
+            objective: goal.objective.clone(),
+            status,
+            tokens_used: goal.tokens_used,
+            accumulated_active_seconds: goal.time_used_seconds,
+            active_started_at: active_started_at(status, goal.updated_at),
+            created_at: goal.created_at,
+            updated_at: goal.updated_at,
+        }
+    }
+
     fn snapshot(&self, now: i64) -> ThreadGoalSnapshot {
         ThreadGoalSnapshot {
             objective: self.objective.clone(),
@@ -135,6 +178,17 @@ fn client_status(status: ThreadGoalStatus) -> nori_protocol::ThreadGoalStatus {
         ThreadGoalStatus::UsageLimited => nori_protocol::ThreadGoalStatus::UsageLimited,
         ThreadGoalStatus::BudgetLimited => nori_protocol::ThreadGoalStatus::BudgetLimited,
         ThreadGoalStatus::Complete => nori_protocol::ThreadGoalStatus::Complete,
+    }
+}
+
+fn status_from_client(status: nori_protocol::ThreadGoalStatus) -> ThreadGoalStatus {
+    match status {
+        nori_protocol::ThreadGoalStatus::Active => ThreadGoalStatus::Active,
+        nori_protocol::ThreadGoalStatus::Paused => ThreadGoalStatus::Paused,
+        nori_protocol::ThreadGoalStatus::Blocked => ThreadGoalStatus::Blocked,
+        nori_protocol::ThreadGoalStatus::UsageLimited => ThreadGoalStatus::UsageLimited,
+        nori_protocol::ThreadGoalStatus::BudgetLimited => ThreadGoalStatus::BudgetLimited,
+        nori_protocol::ThreadGoalStatus::Complete => ThreadGoalStatus::Complete,
     }
 }
 
@@ -302,5 +356,48 @@ mod tests {
 
         assert_eq!(goals.clear(), true);
         assert_eq!(goals.snapshot(20), None);
+    }
+
+    #[test]
+    fn rehydrates_latest_goal_from_replay_events() {
+        let goals = ThreadGoalState::from_replay_events(&[nori_protocol::ClientEvent::ThreadGoalUpdated(
+            nori_protocol::ThreadGoalUpdated {
+                goal: nori_protocol::ThreadGoal {
+                    objective: "Keep going".to_string(),
+                    status: nori_protocol::ThreadGoalStatus::Active,
+                    tokens_used: 42,
+                    time_used_seconds: 15,
+                    created_at: 10,
+                    updated_at: 25,
+                },
+            },
+        )]);
+
+        let goal = goals.snapshot(30).expect("goal should be rehydrated");
+        assert_eq!(goal.objective, "Keep going");
+        assert_eq!(goal.status, ThreadGoalStatus::Active);
+        assert_eq!(goal.tokens_used, 42);
+        assert_eq!(goal.time_used_seconds, 20);
+        assert_eq!(goal.created_at, 10);
+        assert_eq!(goal.updated_at, 25);
+    }
+
+    #[test]
+    fn rehydration_respects_latest_clear_event() {
+        let goals = ThreadGoalState::from_replay_events(&[
+            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
+                goal: nori_protocol::ThreadGoal {
+                    objective: "Keep going".to_string(),
+                    status: nori_protocol::ThreadGoalStatus::Paused,
+                    tokens_used: 42,
+                    time_used_seconds: 15,
+                    created_at: 10,
+                    updated_at: 25,
+                },
+            }),
+            nori_protocol::ClientEvent::ThreadGoalCleared,
+        ]);
+
+        assert_eq!(goals.snapshot(30), None);
     }
 }

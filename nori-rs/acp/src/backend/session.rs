@@ -289,6 +289,8 @@ impl AcpBackend {
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
+        let thread_goal_state =
+            thread_goal::ThreadGoalState::from_replay_events(&deferred_replay_client_events);
 
         let backend = Self {
             connection,
@@ -305,7 +307,7 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
-            thread_goal_state: Arc::new(Mutex::new(thread_goal::ThreadGoalState::default())),
+            thread_goal_state: Arc::new(Mutex::new(thread_goal_state)),
             pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),

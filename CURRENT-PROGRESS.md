@@ -62,3 +62,6 @@ Goal command progress:
     restores the latest TUI-visible goal snapshot on resumed sessions, but the ACP backend
     still needs a stronger state rehydration path before automatic continuation can rely on
     a replayed goal without a fresh mutation.
+16. Rehydrated ACP backend goal state from replayed goal events during resume setup. Active
+    goals resume elapsed-time accounting from their last `updated_at` timestamp; a later
+    replayed clear removes the backend goal state.
