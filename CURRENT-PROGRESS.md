@@ -87,3 +87,7 @@ Goal command progress:
     agent response still renders and records like normal assistant work. This intentionally
     does not recurse after continuation turns; deeper Codex-style autonomous loops and
     structured agent goal tools remain follow-on parity work from note 19.
+21. Matched another Codex `/goal` UX affordance in the Nori TUI: submitting a new objective
+    while an unfinished goal is cached now opens a replacement confirmation picker instead
+    of immediately overwriting the active thread goal. Completed goals remain terminal and
+    can be replaced directly without confirmation.

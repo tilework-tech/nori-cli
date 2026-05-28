@@ -58,6 +58,74 @@ fn goal_objective_submits_thread_goal_set() {
 }
 
 #[test]
+fn goal_objective_confirms_before_replacing_unfinished_goal() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Existing goal", nori_protocol::ThreadGoalStatus::Active),
+        },
+    ));
+
+    chat.submit_user_message("/goal Replacement goal".to_string().into());
+
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+    let popup = render_bottom_popup(&chat, 80);
+    assert_snapshot!("goal_replace_confirmation_popup", popup);
+}
+
+#[test]
+fn goal_replace_confirmation_submits_new_objective() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Existing goal", nori_protocol::ThreadGoalStatus::Paused),
+        },
+    ));
+    let _ = drain_insert_history(&mut rx);
+
+    chat.submit_user_message("/goal Replacement goal".to_string().into());
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    loop {
+        match rx.try_recv() {
+            Ok(AppEvent::CodexOp(Op::ThreadGoalSet {
+                objective: Some(objective),
+                status: Some(ThreadGoalStatus::Active),
+            })) => {
+                assert_eq!(objective, "Replacement goal");
+                break;
+            }
+            Ok(_) => {}
+            other => panic!("expected replacement ThreadGoalSet event, got {other:?}"),
+        }
+    }
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[test]
+fn goal_objective_replaces_completed_goal_without_confirmation() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Finished goal", nori_protocol::ThreadGoalStatus::Complete),
+        },
+    ));
+
+    chat.submit_user_message("/goal Next goal".to_string().into());
+
+    assert_eq!(
+        op_rx.try_recv(),
+        Ok(Op::ThreadGoalSet {
+            objective: Some("Next goal".to_string()),
+            status: Some(ThreadGoalStatus::Active),
+        })
+    );
+}
+
+#[test]
 fn goal_status_commands_submit_goal_mutations() {
     let cases = [
         (

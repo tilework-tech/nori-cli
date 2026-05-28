@@ -40,6 +40,10 @@ impl ChatWidget {
                     self.add_error_message(message);
                     return true;
                 }
+                if self.should_confirm_before_replacing_goal() {
+                    self.show_replace_goal_confirmation(rest.to_string());
+                    return true;
+                }
                 self.submit_op(Op::ThreadGoalSet {
                     objective: Some(rest.to_string()),
                     status: Some(codex_core::protocol::ThreadGoalStatus::Active),
@@ -79,6 +83,53 @@ impl ChatWidget {
     fn open_goal_editor(&mut self, goal: nori_protocol::ThreadGoal) {
         self.bottom_pane
             .set_composer_text(format!("/goal {}", goal.objective));
+    }
+
+    fn should_confirm_before_replacing_goal(&self) -> bool {
+        let Some(goal) = &self.current_goal else {
+            return false;
+        };
+
+        match goal.status {
+            nori_protocol::ThreadGoalStatus::Complete => false,
+            nori_protocol::ThreadGoalStatus::Active
+            | nori_protocol::ThreadGoalStatus::Paused
+            | nori_protocol::ThreadGoalStatus::Blocked
+            | nori_protocol::ThreadGoalStatus::UsageLimited
+            | nori_protocol::ThreadGoalStatus::BudgetLimited => true,
+        }
+    }
+
+    fn show_replace_goal_confirmation(&mut self, objective: String) {
+        let replacement = objective.clone();
+        let items = vec![
+            SelectionItem {
+                name: "Replace current goal".to_string(),
+                description: Some("Set the new objective and start it now".to_string()),
+                actions: vec![Box::new(move |tx| {
+                    tx.send(AppEvent::CodexOp(Op::ThreadGoalSet {
+                        objective: Some(replacement.clone()),
+                        status: Some(codex_core::protocol::ThreadGoalStatus::Active),
+                    }));
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Keep current goal".to_string(),
+                description: Some("Leave the current objective unchanged".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+
+        self.show_selection_view(SelectionViewParams {
+            title: Some("Replace goal?".to_string()),
+            subtitle: Some(format!("New objective: {objective}")),
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            ..Default::default()
+        });
     }
 
     fn show_goal_summary(&mut self, goal: &nori_protocol::ThreadGoal) {
