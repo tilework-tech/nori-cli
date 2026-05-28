@@ -47,3 +47,6 @@ Goal command progress:
 11. Added the first shared protocol contract for thread goals: statuses, typed get/set/clear
     ops, and objective validation. Token budgets remain intentionally out of scope for the
     first Nori implementation, matching the goal-context instruction.
+12. Added normalized ACP-client events for goal updated/cleared notifications in
+    `nori-protocol`. This keeps the ACP backend as the goal-state owner while giving the
+    TUI an agent-independent event shape to render.

@@ -26,6 +26,8 @@ pub enum ClientEvent {
     SessionUpdateInfo(SessionUpdateInfo),
     SessionConfigUpdate(SessionConfigUpdate),
     SessionModeChanged(SessionModeChanged),
+    ThreadGoalUpdated(ThreadGoalUpdated),
+    ThreadGoalCleared,
     Warning(WarningInfo),
 }
 
@@ -96,6 +98,34 @@ pub struct SessionUpdateInfo {
 #[serde(rename_all = "snake_case")]
 pub struct SessionModeChanged {
     pub current_mode_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ThreadGoalStatus {
+    Active,
+    Paused,
+    Blocked,
+    UsageLimited,
+    BudgetLimited,
+    Complete,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ThreadGoal {
+    pub objective: String,
+    pub status: ThreadGoalStatus,
+    pub tokens_used: i64,
+    pub time_used_seconds: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ThreadGoalUpdated {
+    pub goal: ThreadGoal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1734,6 +1764,40 @@ mod tests {
         });
 
         let json = serde_json::to_string(&event).unwrap();
+        let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn thread_goal_update_event_round_trips_through_serde() {
+        let event = ClientEvent::ThreadGoalUpdated(ThreadGoalUpdated {
+            goal: ThreadGoal {
+                objective: "Keep implementing /goal".to_string(),
+                status: ThreadGoalStatus::Active,
+                tokens_used: 123,
+                time_used_seconds: 45,
+                created_at: 1000,
+                updated_at: 1045,
+            },
+        });
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(
+            json,
+            r#"{"event_type":"thread_goal_updated","goal":{"objective":"Keep implementing /goal","status":"active","tokens_used":123,"time_used_seconds":45,"created_at":1000,"updated_at":1045}}"#
+        );
+        let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn thread_goal_cleared_event_round_trips_through_serde() {
+        let event = ClientEvent::ThreadGoalCleared;
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(json, r#"{"event_type":"thread_goal_cleared"}"#);
         let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed, event);
