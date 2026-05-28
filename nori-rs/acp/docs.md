@@ -82,7 +82,7 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 
 `SessionRuntime` is the authoritative model for:
 - whether the ACP session is idle, loading, or in a prompt turn
-- queued user prompts and compact prompts waiting behind an active request
+- queued user, compact, and hidden goal-continuation prompts waiting behind an active request
 - request-local message assembly for user/assistant/reasoning streams, including flushing the prior open text buffer when the ACP session update type changes
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
@@ -94,6 +94,8 @@ The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.
 Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
 
 `session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. Message replay preserves chronological stream-kind boundaries: an answer -> reasoning -> answer sequence becomes three replay entries, while adjacent deltas of the same stream are still coalesced. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
+
+The runtime differentiates visible user work from backend-internal continuation work through `QueuedPromptKind` in `@/nori-rs/nori-protocol/src/session_runtime.rs`. Goal continuations are sent through the same reducer and ACP side-effect path as user prompts, so assistant deltas, tool activity, hooks, transcript assistant messages, usage updates, and completion events remain normal. Their prompt text is hidden from visible queue updates and from persisted user transcript entries, which keeps the user's transcript anchored to explicit user input while still letting the ACP session continue the active goal.
 
 **Thread Goal State** (`backend/thread_goal.rs`, `backend/submit_and_ops.rs`, `backend/user_input.rs`, `backend/transcript.rs`):
 
@@ -110,6 +112,8 @@ The ACP backend owns the `/goal` feature as per-session state instead of delegat
 `ThreadGoalState` tracks the current objective, lifecycle status, active elapsed time, token usage, and the session-token baseline used to compute goal-local `tokens_used`. Only the `Active` status accrues active time; paused, blocked, usage-limited, budget-limited, and complete goals keep their accumulated time until they become active again. Objective validation is shared with `@/nori-rs/protocol/src/protocol/mod.rs` so the TUI and backend enforce the same acceptance rules.
 
 Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends the current goal as a structured `<goal_context>` block when a goal exists. Hook context is still applied before goal context, and compact summaries remain the outermost framing instruction, so resumed/compacted turns retain their existing prompt-ordering invariant while still carrying goal state to the agent.
+
+After a visible user prompt completes with `StopReason::EndTurn`, `session_runtime_driver.rs` may submit one hidden goal-continuation prompt to the same ACP session. `thread_goal.rs` owns the continuation prompt text so it is derived from the current backend goal snapshot, not from TUI state or transcript text. The driver only starts this continuation when the goal is active, the reducer has returned to idle, and no queued user work remains; it does not chain continuations after a `GoalContinuation` turn. This gives long-lived goals forward progress across user turns without recursively taking over the session or obscuring pending user input.
 
 Goal state is also part of the replay contract. `transcript.rs` passes goal update and clear events through replay, and `session.rs` rehydrates `ThreadGoalState` from those replay events before the live backend starts. ACP usage updates still normalize to `SessionUpdateInfo`, but `session_runtime_driver.rs` observes those events and asks the goal state to refresh `tokens_used`; when a goal exists, the backend emits a follow-up `ThreadGoalUpdated` snapshot so the TUI and transcript stay synchronized with usage accounting.
 
