@@ -120,7 +120,7 @@ impl ThreadGoalState {
     ) -> Result<ThreadGoalSnapshot, String> {
         validate_thread_goal_objective(&objective)?;
         let status = status.unwrap_or(ThreadGoalStatus::Active);
-        self.goal = Some(StoredThreadGoal {
+        let goal = StoredThreadGoal {
             objective,
             status,
             tokens_used: 0,
@@ -129,8 +129,10 @@ impl ThreadGoalState {
             active_started_at: active_started_at(status, now),
             created_at: now,
             updated_at: now,
-        });
-        Ok(self.snapshot(now).expect("goal was just set"))
+        };
+        let snapshot = goal.snapshot(now);
+        self.goal = Some(goal);
+        Ok(snapshot)
     }
 
     pub(crate) fn set_status(
