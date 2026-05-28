@@ -486,10 +486,19 @@ impl AcpBackend {
                 *self.pending_compact_summary.lock().await = Some(summary.clone());
 
                 let cwd = self.cwd.clone();
-                let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
                     &self.mcp_servers,
                     self.mcp_oauth_credentials_store_mode,
                 );
+                if let Err(err) = thread_goal_mcp::register_for_session(
+                    &self.connection,
+                    &mut mcp_servers,
+                    Arc::clone(&self.thread_goal_state),
+                    self.backend_event_tx.clone(),
+                    Arc::clone(&self.transcript_recorder_cell),
+                ) {
+                    warn!("Failed to register goal MCP server after compact: {err}");
+                }
                 match self.connection.create_session(&cwd, mcp_servers).await {
                     Ok(new_session_id) => {
                         debug!("Created new session after compact: {:?}", new_session_id);

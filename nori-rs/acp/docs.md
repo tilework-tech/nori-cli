@@ -27,6 +27,7 @@ The ACP crate serves as a bridge between:
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
 - `SessionRuntime` in `@/nori-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
 - Thread-goal operations from `@/nori-rs/protocol` and normalized goal events from `@/nori-rs/nori-protocol`, with backend storage and prompt transformation in `@/nori-rs/acp/src/backend/thread_goal.rs`
+- Backend-owned local MCP tools that expose the same goal state to ACP agents through `@/nori-rs/acp/src/backend/thread_goal_mcp.rs` and the connection bridge in `@/nori-rs/acp/src/connection/local_mcp.rs`
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
@@ -34,6 +35,8 @@ Key files:
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage-baseline updates
+- `backend/thread_goal_mcp.rs` - Adapts backend-owned goal state into MCP tools for agents that support HTTP MCP
+- `connection/local_mcp.rs` - Bridges in-process MCP servers into ACP's MCP-over-ACP dynamic handler flow
 - `transcript_discovery.rs` - Discovers transcript files for external agents
 - `auto_worktree.rs` - Orchestrates automatic git worktree creation, eligibility checking, and summary-based renaming
 
@@ -97,25 +100,34 @@ Metadata notifications that ACP permits while idle are treated as session-owned 
 
 The runtime differentiates visible user work from backend-internal continuation work through `QueuedPromptKind` in `@/nori-rs/nori-protocol/src/session_runtime.rs`. Goal continuations are sent through the same reducer and ACP side-effect path as user prompts, so assistant deltas, tool activity, hooks, transcript assistant messages, usage updates, and completion events remain normal. Their prompt text is hidden from visible queue updates and from persisted user transcript entries, which keeps the user's transcript anchored to explicit user input while still letting the ACP session continue the active goal.
 
-**Thread Goal State** (`backend/thread_goal.rs`, `backend/submit_and_ops.rs`, `backend/user_input.rs`, `backend/transcript.rs`):
+**Thread Goal State** (`backend/thread_goal.rs`, `backend/thread_goal_mcp.rs`, `backend/submit_and_ops.rs`, `backend/user_input.rs`, `backend/transcript.rs`):
 
-The ACP backend owns the `/goal` feature as per-session state instead of delegating it to the ACP agent. The TUI sends typed `codex_protocol::protocol::Op::ThreadGoalGet`, `ThreadGoalSet`, and `ThreadGoalClear` operations; `submit_and_ops.rs` routes those operations directly to the backend goal handler; and successful mutations are emitted as `nori_protocol::ClientEvent::ThreadGoalUpdated` or `ThreadGoalCleared`.
+The ACP backend owns the `/goal` feature as per-session state instead of delegating it to the ACP agent. The TUI sends typed `codex_protocol::protocol::Op::ThreadGoalGet`, `ThreadGoalSet`, and `ThreadGoalClear` operations; `submit_and_ops.rs` routes those operations directly to the backend goal handler; and successful mutations are emitted as `nori_protocol::ClientEvent::ThreadGoalUpdated` or `ThreadGoalCleared`. ACP agents that advertise HTTP MCP can also interact with the same state through the backend-owned `nori-goal` local MCP server, which exposes `get_goal`, `create_goal`, and `update_goal`.
 
 ```
 @/nori-rs/tui/src/chatwidget/goal.rs
     -> @/nori-rs/protocol/src/protocol/mod.rs (typed Op)
     -> @/nori-rs/acp/src/backend/thread_goal.rs
+    -> @/nori-rs/acp/src/backend/thread_goal_mcp.rs (optional model-facing MCP)
     -> @/nori-rs/nori-protocol/src/lib.rs (ClientEvent)
     -> @/nori-rs/tui/src/chatwidget/event_handlers.rs
 ```
 
 `ThreadGoalState` tracks the current objective, lifecycle status, active elapsed time, token usage, and the session-token baseline used to compute goal-local `tokens_used`. Only the `Active` status accrues active time; paused, blocked, usage-limited, budget-limited, and complete goals keep their accumulated time until they become active again. Objective validation is shared with `@/nori-rs/protocol/src/protocol/mod.rs` so the TUI and backend enforce the same acceptance rules.
 
+`thread_goal_mcp.rs` is a bridge, not a second store. Its tools lock the same `ThreadGoalState` used by TUI `/goal` operations, return JSON snapshots shaped for model consumption, and emit the same `ThreadGoalUpdated` client event after mutations. The bridge records those emitted events through `@/nori-rs/acp/src/backend/transcript.rs` when a transcript recorder is available; session setup stores the recorder behind a shared cell because local MCP handlers are registered before all resume/create paths know the final transcript session id.
+
+The model-facing MCP contract is intentionally narrower than the user-facing `/goal` command surface. `create_goal` creates a new active goal only when no goal exists, rejects token budgets for now, and delegates objective validation to `ThreadGoalState`. `update_goal` only lets an agent mark the existing goal `complete` or `blocked`; pause, resume, usage-limited, and budget-limited transitions remain controlled by the user or the backend system path. Errors are returned as MCP tool errors instead of changing state.
+
 Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends the current goal as a structured `<goal_context>` block when a goal exists. Hook context is still applied before goal context, and compact summaries remain the outermost framing instruction, so resumed/compacted turns retain their existing prompt-ordering invariant while still carrying goal state to the agent.
+
+Agents without `mcp_capabilities.http` still receive goal context through prompt transformation and hidden goal-continuation prompts. The local MCP server is additive for capable agents so they can use structured goal tools; it is never required for goal context, transcript replay, usage accounting, or continuation behavior.
 
 After a visible user prompt completes with `StopReason::EndTurn`, `session_runtime_driver.rs` may submit one hidden goal-continuation prompt to the same ACP session. `thread_goal.rs` owns the continuation prompt text so it is derived from the current backend goal snapshot, not from TUI state or transcript text. The driver only starts this continuation when the goal is active, the reducer has returned to idle, and no queued user work remains; it does not chain continuations after a `GoalContinuation` turn. This gives long-lived goals forward progress across user turns without recursively taking over the session or obscuring pending user input.
 
-Goal state is also part of the replay contract. `transcript.rs` passes goal update and clear events through replay, and `session.rs` rehydrates `ThreadGoalState` from those replay events before the live backend starts. When a resumed goal is paused, blocked, or usage-limited, `thread_goal.rs` derives a one-time `SessionUpdateInfo` notice from the rehydrated snapshot so the TUI can show why goal automation will not continue until the user resumes, edits, clears, or resolves the blocker. That notice is emitted directly by `session.rs` after deferred replay events and is not written back into the transcript, so each future resume still derives its notice from goal state instead of accumulating duplicate history entries. ACP usage updates still normalize to `SessionUpdateInfo`, but `session_runtime_driver.rs` observes those events and asks the goal state to refresh `tokens_used`; when a goal exists, the backend emits a follow-up `ThreadGoalUpdated` snapshot so the TUI and transcript stay synchronized with usage accounting.
+Goal state is also part of the replay contract. `transcript.rs` passes Nori-owned goal update and clear events through replay, and `session.rs` seeds `ThreadGoalState` from those transcript-derived events before ACP session setup advertises local MCP tools. Server-side `session/load` can also emit ACP replay notifications while loading; those normalized client events are deferred until backend setup completes, then combined with the transcript replay events before rebuilding `ThreadGoalState`. This ordering matters because ACP agents replay their own session history, but they do not replay Nori-owned `ThreadGoalUpdated` events, so the transcript remains authoritative for goal state even when the agent emits load replay notifications.
+
+When a resumed goal is paused, blocked, or usage-limited, `thread_goal.rs` derives a one-time `SessionUpdateInfo` notice from the rehydrated snapshot so the TUI can show why goal automation will not continue until the user resumes, edits, clears, or resolves the blocker. That notice is emitted directly by `session.rs` after deferred replay events and is not written back into the transcript, so each future resume still derives its notice from goal state instead of accumulating duplicate history entries. ACP usage updates still normalize to `SessionUpdateInfo`, but `session_runtime_driver.rs` observes those events and asks the goal state to refresh `tokens_used`; when a goal exists, the backend emits a follow-up `ThreadGoalUpdated` snapshot so the TUI and transcript stay synchronized with usage accounting.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
@@ -638,7 +650,7 @@ The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent 
 
 **Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the ordered inbox, and uses the SACP responder plus `ConnectionTo<Agent>` to send the eventual review decision back without blocking the dispatch loop while the UI collects user input.
 
-**MCP Server Forwarding** (`connection/mcp.rs`):
+**MCP Server Forwarding and Local MCP Bridges** (`connection/mcp.rs`, `connection/local_mcp.rs`):
 
 CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_sacp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to ACP `McpServer` values inside the transport adapter:
 
@@ -656,11 +668,13 @@ Disabled servers (`enabled == false`) are filtered out before conversion. Enviro
 
 This means `to_sacp_mcp_servers()` has side effects (reads from keyring/file system) rather than being a pure config transformation. The `acp` crate depends on `codex-rmcp-client`'s `load_oauth_tokens` for this purpose.
 
-`create_session()` accepts a `mcp_servers: Vec<McpServer>` parameter that is populated by calling `to_sacp_mcp_servers()` at each session creation site:
-- `spawn_and_relay.rs` -- initial session creation during backend spawn
-- `session.rs` -- both the server-side `load_session` fallback and client-side replay paths during session resume
-- `submit_and_ops.rs` -- fresh session creation after context compaction
-- `hooks.rs` -- passes an empty vec (hook sessions do not need MCP servers)
+`SacpConnection::register_local_mcp_server()` is the connection-layer escape hatch for backend-owned MCP servers that are not user config. It creates an `acp:` URL, registers a dynamic `LocalMcpSession` handler on the live SACP connection, and appends an HTTP-shaped ACP MCP server entry to the same `mcp_servers` list used for configured servers. The connection retains the dynamic registration guard for the currently advertised backend-owned endpoint and drops the prior guard when a new local MCP server is registered, so load-session fallback and compaction-created sessions cannot leave stale `acp:` endpoints attached to the connection.
+
+`connection/local_mcp.rs` handles the MCP-over-ACP lifecycle for each advertised local endpoint: ACP `_mcp/connect` opens a per-connection channel, `_mcp/message` requests and notifications are routed to the in-process server for that connection id, and disconnect notifications remove the route. The local server itself runs in process and speaks normal MCP roles through SACP channels, while the ACP agent only sees an HTTP-shaped MCP server whose URL uses the `acp:` scheme.
+
+ACP session setup paths build the MCP server list in two phases: first convert configured MCP servers with `to_sacp_mcp_servers()`, then let backend-owned features append local MCP servers when the agent's initialize response advertises `mcp_capabilities.http`. This applies to resumed, fresh, fallback, and compaction-created sessions. Hook-only ACP sessions pass an empty list because hooks do not need user-configured or backend-owned MCP servers.
+
+The local goal MCP server is intentionally additive. User-configured MCP servers are still forwarded normally, and unsupported agents simply do not receive the `nori-goal` `acp:` endpoint.
 
 ### Transcript Persistence
 

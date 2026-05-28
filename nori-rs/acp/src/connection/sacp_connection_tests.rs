@@ -5,6 +5,10 @@ use super::ConnectionEvent;
 use super::sacp_connection::SacpConnection;
 use agent_client_protocol_schema as acp;
 use pretty_assertions::assert_eq;
+use sacp::ConnectTo;
+use sacp::ConnectionTo;
+use sacp::DynConnectTo;
+use sacp::role;
 use serde_json::Value;
 use serial_test::serial;
 use tempfile::tempdir;
@@ -58,12 +62,87 @@ async fn drive_logged_prompt(
     conn.shutdown().await;
 }
 
+struct NoopMcpServer;
+
+impl super::local_mcp::LocalMcpServer<sacp::Agent> for NoopMcpServer {
+    fn name(&self) -> String {
+        "nori-goal".to_string()
+    }
+
+    fn connect(
+        &self,
+        _acp_url: String,
+        _connection: ConnectionTo<sacp::Agent>,
+    ) -> DynConnectTo<role::mcp::Client> {
+        DynConnectTo::new(NoopMcpComponent)
+    }
+}
+
+struct NoopMcpComponent;
+
+impl ConnectTo<role::mcp::Client> for NoopMcpComponent {
+    async fn connect_to(
+        self,
+        _client: impl ConnectTo<role::mcp::Server>,
+    ) -> Result<(), sacp::Error> {
+        futures::future::pending().await
+    }
+}
+
 fn read_wire_log(path: &std::path::Path) -> Vec<Value> {
     let content = std::fs::read_to_string(path).expect("read wire log");
     content
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).expect("wire log line is json"))
         .collect()
+}
+
+#[tokio::test]
+#[serial]
+async fn test_register_local_mcp_server_advertises_acp_url_in_new_session() {
+    let Some(config) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+    let proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: temp_dir.path().join("acp-wire"),
+    };
+
+    let conn = SacpConnection::spawn(&config, temp_dir.path(), proxy.clone())
+        .await
+        .expect("spawn connection");
+    let mut mcp_servers = Vec::new();
+    conn.register_local_mcp_server(&mut mcp_servers, NoopMcpServer)
+        .expect("register local mcp server");
+
+    conn.create_session(temp_dir.path(), mcp_servers)
+        .await
+        .expect("create session");
+    conn.shutdown().await;
+
+    let log_path = std::fs::read_dir(&proxy.log_dir)
+        .expect("wire log dir exists")
+        .map(|entry| entry.expect("wire log entry").path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .expect("wire log should be written");
+    let records = read_wire_log(&log_path);
+    let new_session = records
+        .iter()
+        .find(|record| {
+            record["direction"] == "client_to_agent" && record["message"]["method"] == "session/new"
+        })
+        .expect("session/new should be logged");
+    let advertised_server = &new_session["message"]["params"]["mcpServers"][0];
+
+    assert_eq!(advertised_server["name"], "nori-goal");
+    assert_eq!(advertised_server["type"], "http");
+    assert!(
+        advertised_server["url"]
+            .as_str()
+            .expect("url should be string")
+            .starts_with("acp:")
+    );
 }
 
 /// Test that SacpConnection can spawn a mock agent, perform the initialization

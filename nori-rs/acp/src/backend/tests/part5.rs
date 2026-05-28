@@ -457,6 +457,148 @@ async fn usage_updates_refresh_goal_token_count() {
     assert!(saw_goal_update_with_tokens);
 }
 
+#[tokio::test]
+#[serial]
+async fn goal_mcp_server_is_advertised_to_http_mcp_agents() {
+    let Some(new_session) = logged_new_session_for_mock_agent(true).await else {
+        return;
+    };
+
+    assert!(
+        new_session.mcp_servers.iter().any(|server| {
+            matches!(
+                server,
+                acp::McpServer::Http(http)
+                    if http.name == "nori-goal" && http.url.starts_with("acp:")
+            )
+        }),
+        "expected session/new to advertise the local nori-goal MCP server, got: {:?}",
+        new_session.mcp_servers
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn goal_mcp_server_is_not_advertised_without_http_mcp_capability() {
+    let Some(new_session) = logged_new_session_for_mock_agent(false).await else {
+        return;
+    };
+
+    assert!(
+        new_session.mcp_servers.iter().all(|server| {
+            !matches!(
+                server,
+                acp::McpServer::Http(http) if http.name == "nori-goal"
+            )
+        }),
+        "expected session/new to omit nori-goal without HTTP MCP capability, got: {:?}",
+        new_session.mcp_servers
+    );
+}
+
+async fn logged_new_session_for_mock_agent(
+    advertise_http_mcp: bool,
+) -> Option<acp::NewSessionRequest> {
+    use std::time::Duration;
+
+    struct EnvGuard {
+        name: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(name: &'static str, value: &str) -> Self {
+            let previous = std::env::var(name).ok();
+            unsafe {
+                std::env::set_var(name, value);
+            }
+            Self { name, previous }
+        }
+
+        fn remove(name: &'static str) -> Self {
+            let previous = std::env::var(name).ok();
+            unsafe {
+                std::env::remove_var(name);
+            }
+            Self { name, previous }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => unsafe {
+                    std::env::set_var(self.name, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(self.name);
+                },
+            }
+        }
+    }
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return None;
+    }
+
+    let _env_guard = if advertise_http_mcp {
+        EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1")
+    } else {
+        EnvGuard::remove("MOCK_AGENT_MCP_HTTP")
+    };
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let configured = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+    assert!(
+        matches!(configured.msg, EventMsg::SessionConfigured(_)),
+        "expected SessionConfigured event, got: {configured:?}"
+    );
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+
+    let log_path = std::fs::read_dir(&wire_log_dir)
+        .expect("wire log dir exists")
+        .map(|entry| entry.expect("wire log entry").path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .expect("wire log should be written");
+    let log_content = std::fs::read_to_string(log_path).expect("wire log should be readable");
+    let new_session = log_content
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json wire log line"))
+        .filter(|record| {
+            record["direction"] == "client_to_agent" && record["message"]["method"] == "session/new"
+        })
+        .next_back()
+        .expect("session/new should be logged");
+    Some(
+        serde_json::from_value(new_session["message"]["params"].clone())
+            .expect("session/new params should match ACP schema"),
+    )
+}
+
 /// Test that session_context is consumed after the first prompt (not repeated).
 #[tokio::test]
 #[serial]

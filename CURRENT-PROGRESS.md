@@ -99,3 +99,14 @@ Goal command progress:
     replay events, the backend now appends a non-persisted session info notice when the restored
     goal is stopped but resumable, pointing the user at `/goal resume`, `/goal edit`, and `/goal
     clear` without recording duplicate resume-only messages into future transcripts.
+24. Added backend-owned goal MCP tools for ACP agents that advertise HTTP MCP support. Nori now
+    registers an in-process `nori-goal` MCP server over ACP MCP-over-ACP during new, resumed, and
+    compaction-created sessions; agents can call `get_goal`, `create_goal`, and `update_goal`
+    while the backend remains the goal-state authority and continues emitting transcript-backed
+    `ThreadGoalUpdated` snapshots. Agents without HTTP MCP support still receive the existing
+    prompt goal context and hidden continuation behavior without the structured tools.
+25. Addressed review feedback on the goal MCP slice. Server-side ACP resume now rebuilds goal
+    state from transcript-owned goal replay plus any agent load replay so non-goal ACP
+    notifications cannot erase a restored goal. The local MCP bridge now has direct
+    `_mcp/connect`/`_mcp/message` routing coverage and retains dynamic handler registrations only
+    for the current advertised local MCP endpoint instead of leaking stale endpoints indefinitely.

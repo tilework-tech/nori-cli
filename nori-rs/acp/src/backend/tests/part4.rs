@@ -1463,6 +1463,91 @@ async fn test_resume_session_does_not_deadlock_with_many_notifications() {
     );
 }
 
+/// When server-side load_session sends replay notifications, transcript-owned
+/// backend goal state must survive because ACP agents do not replay Nori's
+/// ThreadGoalUpdated events.
+#[tokio::test]
+#[serial]
+async fn test_resume_session_preserves_transcript_goal_after_server_side_replay() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        std::env::set_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT", "2");
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+    let mut transcript = build_test_transcript();
+    transcript
+        .entries
+        .push(crate::transcript::TranscriptLine::new(
+            crate::transcript::TranscriptEntry::ClientEvent(crate::transcript::ClientEventEntry {
+                event: nori_protocol::ClientEvent::ThreadGoalUpdated(
+                    nori_protocol::ThreadGoalUpdated {
+                        goal: nori_protocol::ThreadGoal {
+                            objective: "Keep the resumed goal".to_string(),
+                            status: nori_protocol::ThreadGoalStatus::Active,
+                            tokens_used: 7,
+                            time_used_seconds: 11,
+                            created_at: 100,
+                            updated_at: 200,
+                        },
+                    },
+                ),
+            }),
+        ));
+
+    let backend = AcpBackend::resume_session(
+        &config,
+        Some("acp-session-42"),
+        Some(&transcript),
+        backend_event_tx,
+    )
+    .await
+    .expect("resume_session should succeed");
+
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+        std::env::remove_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT");
+    }
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalGet)
+        .await
+        .expect("ThreadGoalGet should submit");
+
+    let start = std::time::Instant::now();
+    while start.elapsed() < Duration::from_secs(5) {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::ThreadGoalUpdated(update))
+                if update.goal.objective == "Keep the resumed goal" =>
+            {
+                return;
+            }
+            Some(_) => {}
+            None => {}
+        }
+    }
+
+    panic!("Timed out waiting for resumed thread goal snapshot");
+}
+
 /// When load_session succeeds, resume_session should use the server-side
 /// path and NOT produce initial_messages.
 #[tokio::test]

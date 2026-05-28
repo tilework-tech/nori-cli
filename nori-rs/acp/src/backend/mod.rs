@@ -288,6 +288,9 @@ pub struct AcpBackend {
     pending_compact_summary: Arc<Mutex<Option<String>>>,
     /// Persistent goal for this ACP session.
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
+    /// Transcript recorder cell used by local MCP tools created before the
+    /// recorder's session ID is known.
+    transcript_recorder_cell: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
     pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence
@@ -345,6 +348,7 @@ mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod thread_goal;
+mod thread_goal_mcp;
 mod user_input;
 mod user_shell;
 use helpers::get_op_name;

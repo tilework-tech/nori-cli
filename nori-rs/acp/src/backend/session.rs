@@ -42,6 +42,13 @@ impl AcpBackend {
             })?;
 
         let supports_load_session = connection.capabilities().load_session;
+        let initial_goal_replay_events = transcript
+            .map(transcript_to_replay_client_events)
+            .unwrap_or_default();
+        let thread_goal_state = Arc::new(Mutex::new(
+            thread_goal::ThreadGoalState::from_replay_events(&initial_goal_replay_events),
+        ));
+        let transcript_recorder_cell = Arc::new(Mutex::new(None));
 
         // Either load the session server-side or create a fresh session for
         // client-side replay.
@@ -125,7 +132,19 @@ impl AcpBackend {
                 (session_driver, event_rx, buffered_events)
             });
 
-            match connection.load_session(sid, &cwd).await {
+            let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                &config.mcp_servers,
+                config.mcp_oauth_credentials_store_mode,
+            );
+            thread_goal_mcp::register_for_session(
+                &connection,
+                &mut mcp_servers,
+                Arc::clone(&thread_goal_state),
+                backend_event_tx.clone(),
+                Arc::clone(&transcript_recorder_cell),
+            )?;
+
+            match connection.load_session(sid, &cwd, mcp_servers).await {
                 Ok(session_id) => {
                     // Signal the collector that load is done, then collect results.
                     let _ = load_done_tx.send(());
@@ -159,10 +178,17 @@ impl AcpBackend {
                         anyhow::anyhow!("load session collector task panicked: {err}")
                     })?;
 
-                    let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                    let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
                         &config.mcp_servers,
                         config.mcp_oauth_credentials_store_mode,
                     );
+                    thread_goal_mcp::register_for_session(
+                        &connection,
+                        &mut mcp_servers,
+                        Arc::clone(&thread_goal_state),
+                        backend_event_tx.clone(),
+                        Arc::clone(&transcript_recorder_cell),
+                    )?;
                     let session_id =
                         connection
                             .create_session(&cwd, mcp_servers)
@@ -208,10 +234,17 @@ impl AcpBackend {
         } else {
             debug!("Agent does not support session/load — using client-side replay");
 
-            let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+            let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
+            thread_goal_mcp::register_for_session(
+                &connection,
+                &mut mcp_servers,
+                Arc::clone(&thread_goal_state),
+                backend_event_tx.clone(),
+                Arc::clone(&transcript_recorder_cell),
+            )?;
             let session_id = connection
                 .create_session(&cwd, mcp_servers)
                 .await
@@ -254,6 +287,13 @@ impl AcpBackend {
             )
         };
 
+        if !deferred_replay_client_events.is_empty() {
+            let mut replay_events_for_goal_state = initial_goal_replay_events;
+            replay_events_for_goal_state.extend(deferred_replay_client_events.iter().cloned());
+            *thread_goal_state.lock().await =
+                thread_goal::ThreadGoalState::from_replay_events(&replay_events_for_goal_state);
+        }
+
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let session_driver = Arc::new(Mutex::new(session_driver_state));
@@ -285,13 +325,11 @@ impl AcpBackend {
                 None
             }
         };
+        *transcript_recorder_cell.lock().await = transcript_recorder.clone();
         let conversation_id = transcript_recorder
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
-        let thread_goal_state =
-            thread_goal::ThreadGoalState::from_replay_events(&deferred_replay_client_events);
-
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -307,7 +345,8 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(pending_summary)),
-            thread_goal_state: Arc::new(Mutex::new(thread_goal_state)),
+            thread_goal_state,
+            transcript_recorder_cell,
             pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),
