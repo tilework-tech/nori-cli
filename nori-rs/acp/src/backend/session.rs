@@ -414,12 +414,23 @@ impl AcpBackend {
             approval_policy_rx,
         ));
 
-        if !deferred_replay_client_events.is_empty() {
+        let resume_goal_notice = backend
+            .thread_goal_state
+            .lock()
+            .await
+            .resume_notice(thread_goal::now_seconds());
+
+        if !deferred_replay_client_events.is_empty() || resume_goal_notice.is_some() {
             let backend_event_tx = backend.backend_event_tx.clone();
             tokio::spawn(async move {
                 for client_event in deferred_replay_client_events {
                     let _ = backend_event_tx
                         .send(BackendEvent::Client(client_event))
+                        .await;
+                }
+                if let Some(update) = resume_goal_notice {
+                    let _ = backend_event_tx
+                        .send(BackendEvent::Client(ClientEvent::SessionUpdateInfo(update)))
                         .await;
                 }
             });

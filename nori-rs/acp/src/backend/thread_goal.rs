@@ -138,6 +138,28 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
         ))
     }
 
+    pub(crate) fn resume_notice(&self, now: i64) -> Option<SessionUpdateInfo> {
+        let goal = self.snapshot(now)?;
+        match goal.status {
+            ThreadGoalStatus::Paused => Some(SessionUpdateInfo {
+                kind: SessionUpdateKind::SessionInfo,
+                message: format!("Goal is paused: {}", goal.objective),
+                hint: Some("Use /goal resume to continue, /goal edit to change it, or /goal clear to remove it.".to_string()),
+                usage: None,
+            }),
+            ThreadGoalStatus::Blocked => Some(SessionUpdateInfo {
+                kind: SessionUpdateKind::SessionInfo,
+                message: format!("Goal is blocked: {}", goal.objective),
+                hint: Some("Resolve the blocker, then use /goal resume to continue; /goal edit and /goal clear are also available.".to_string()),
+                usage: None,
+            }),
+            ThreadGoalStatus::Active
+            | ThreadGoalStatus::UsageLimited
+            | ThreadGoalStatus::BudgetLimited
+            | ThreadGoalStatus::Complete => None,
+        }
+    }
+
     pub(crate) fn set_objective(
         &mut self,
         objective: String,
@@ -557,6 +579,47 @@ mod tests {
             .expect("existing goal");
 
         assert_eq!(goals.continuation_prompt(35), None);
+    }
+
+    #[test]
+    fn resume_notice_only_exists_for_paused_and_blocked_goals() {
+        let mut goals = ThreadGoalState::default();
+        assert_eq!(goals.resume_notice(10), None);
+
+        goals
+            .set_objective("Keep going".to_string(), Some(ThreadGoalStatus::Active), 10)
+            .expect("valid objective");
+        assert_eq!(goals.resume_notice(15), None);
+
+        goals
+            .set_status(ThreadGoalStatus::Paused, 20)
+            .expect("existing goal");
+        let paused_notice = goals.resume_notice(25).expect("paused goal notice");
+        assert_eq!(paused_notice.kind, SessionUpdateKind::SessionInfo);
+        assert_eq!(paused_notice.message, "Goal is paused: Keep going");
+        assert_eq!(
+            paused_notice.hint.as_deref(),
+            Some(
+                "Use /goal resume to continue, /goal edit to change it, or /goal clear to remove it."
+            )
+        );
+
+        goals
+            .set_status(ThreadGoalStatus::Blocked, 30)
+            .expect("existing goal");
+        let blocked_notice = goals.resume_notice(35).expect("blocked goal notice");
+        assert_eq!(blocked_notice.message, "Goal is blocked: Keep going");
+        assert!(
+            blocked_notice
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("/goal resume"))
+        );
+
+        goals
+            .set_status(ThreadGoalStatus::Complete, 40)
+            .expect("existing goal");
+        assert_eq!(goals.resume_notice(45), None);
     }
 
     #[test]

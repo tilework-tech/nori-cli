@@ -1530,3 +1530,81 @@ async fn test_resume_session_uses_server_side_when_load_session_succeeds() {
         ),
     }
 }
+
+/// When transcript replay restores a paused goal, the resumed session should
+/// surface a direct notice with the next available goal commands.
+#[tokio::test]
+#[serial]
+async fn test_resume_session_notifies_about_paused_goal() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+    let mut transcript = build_test_transcript();
+    transcript
+        .entries
+        .push(crate::transcript::TranscriptLine::new(
+            crate::transcript::TranscriptEntry::ClientEvent(crate::transcript::ClientEventEntry {
+                event: nori_protocol::ClientEvent::ThreadGoalUpdated(
+                    nori_protocol::ThreadGoalUpdated {
+                        goal: nori_protocol::ThreadGoal {
+                            objective: "Finish the resume notice".to_string(),
+                            status: nori_protocol::ThreadGoalStatus::Paused,
+                            tokens_used: 12,
+                            time_used_seconds: 34,
+                            created_at: 100,
+                            updated_at: 200,
+                        },
+                    },
+                ),
+            }),
+        ));
+
+    let _backend = AcpBackend::resume_session(&config, None, Some(&transcript), backend_event_tx)
+        .await
+        .expect("resume_session should succeed");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let start = std::time::Instant::now();
+    let mut saw_replayed_goal = false;
+    while start.elapsed() < Duration::from_secs(5) {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::ThreadGoalUpdated(update)) => {
+                if update.goal.objective == "Finish the resume notice" {
+                    saw_replayed_goal = true;
+                }
+            }
+            Some(nori_protocol::ClientEvent::SessionUpdateInfo(update))
+                if update.message.contains("Goal is paused")
+                    && update
+                        .hint
+                        .as_deref()
+                        .is_some_and(|hint| hint.contains("/goal resume")) =>
+            {
+                assert!(
+                    saw_replayed_goal,
+                    "resume notice should follow the replayed goal snapshot"
+                );
+                return;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    panic!("Timed out waiting for paused goal resume notice");
+}
