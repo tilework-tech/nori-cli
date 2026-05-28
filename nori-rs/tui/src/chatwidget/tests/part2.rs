@@ -191,6 +191,42 @@ fn goal_edit_prefills_current_goal_objective() {
     assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
 }
 
+#[test]
+fn goal_edit_without_goal_does_not_open_editor_on_later_goal_update() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+
+    chat.submit_user_message("/goal edit".to_string().into());
+    assert_matches!(op_rx.try_recv(), Ok(Op::ThreadGoalGet));
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
+        nori_protocol::SessionUpdateInfo {
+            kind: nori_protocol::SessionUpdateKind::SessionInfo,
+            message: "Usage: /goal <objective>".to_string(),
+            hint: Some("No goal is currently set.".to_string()),
+            usage: None,
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|cell| lines_to_single_string(cell))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        rendered.contains("No goal is currently set."),
+        "expected no-goal hint, got: {rendered}"
+    );
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Later goal", nori_protocol::ThreadGoalStatus::Active),
+        },
+    ));
+
+    assert_ne!(chat.bottom_pane.composer_text(), "/goal Later goal");
+}
+
 fn test_thread_goal(
     objective: &str,
     status: nori_protocol::ThreadGoalStatus,

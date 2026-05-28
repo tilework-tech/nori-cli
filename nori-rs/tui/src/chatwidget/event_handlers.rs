@@ -1162,6 +1162,7 @@ impl ChatWidget {
                     self.request_redraw();
                     return;
                 }
+                self.clear_pending_goal_edit_if_no_goal(&update);
                 if update.kind == nori_protocol::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
                 {

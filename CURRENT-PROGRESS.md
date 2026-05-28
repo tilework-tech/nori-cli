@@ -91,3 +91,7 @@ Goal command progress:
     while an unfinished goal is cached now opens a replacement confirmation picker instead
     of immediately overwriting the active thread goal. Completed goals remain terminal and
     can be replaced directly without confirmation.
+22. Fixed a stale pending-edit edge case in `/goal edit`. When the TUI requests a backend goal
+    snapshot for editing and the backend replies that no goal exists, the pending edit request
+    is now cleared, so a later unrelated `ThreadGoalUpdated` event does not unexpectedly
+    replace the user's composer contents with `/goal <later objective>`.

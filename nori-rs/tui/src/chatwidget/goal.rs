@@ -71,6 +71,18 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(super) fn clear_pending_goal_edit_if_no_goal(
+        &mut self,
+        update: &nori_protocol::SessionUpdateInfo,
+    ) {
+        if self.pending_goal_edit
+            && update.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            && update.hint.as_deref() == Some("No goal is currently set.")
+        {
+            self.pending_goal_edit = false;
+        }
+    }
+
     fn open_goal_editor_or_request_snapshot(&mut self) {
         if let Some(goal) = self.current_goal.clone() {
             self.open_goal_editor(goal);
