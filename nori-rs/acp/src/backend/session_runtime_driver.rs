@@ -5,6 +5,7 @@ use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use nori_protocol::session_runtime::QueuedPrompt;
 use nori_protocol::session_runtime::QueuedPromptKind;
+use nori_protocol::session_runtime::SessionPhase;
 use nori_protocol::session_runtime::SessionRuntime;
 
 use super::session_reducer::InboundEvent;
@@ -19,6 +20,7 @@ pub(crate) struct SessionDriver {
 
 pub(crate) struct CompletedTurn {
     pub prompt: QueuedPrompt,
+    pub stop_reason: agent_client_protocol_schema::StopReason,
     pub last_agent_message: Option<String>,
 }
 
@@ -84,6 +86,7 @@ impl SessionDriver {
             out.events.iter().find_map(|event| match event {
                 ClientEvent::PromptCompleted(completed) => Some(CompletedTurn {
                     prompt: prompt.clone(),
+                    stop_reason: completed.stop_reason,
                     last_agent_message: completed.last_agent_message.clone(),
                 }),
                 _ => None,
@@ -365,7 +368,7 @@ impl AcpBackend {
 
     async fn handle_completed_turn(&self, completed_turn: &CompletedTurn) {
         match completed_turn.prompt.kind {
-            QueuedPromptKind::User => {
+            QueuedPromptKind::User | QueuedPromptKind::GoalContinuation => {
                 if let Some(last_agent_message) = &completed_turn.last_agent_message
                     && let Some(ref recorder) = self.transcript_recorder
                 {
@@ -430,46 +433,50 @@ impl AcpBackend {
                     );
                 }
 
-                if let Some(display_text) = &completed_turn.prompt.display_text
-                    && !self.post_user_prompt_hooks.is_empty()
-                {
-                    let env_vars = HashMap::from([
-                        (
-                            "NORI_HOOK_EVENT".to_string(),
-                            "post_user_prompt".to_string(),
-                        ),
-                        ("NORI_HOOK_PROMPT_TEXT".to_string(), display_text.clone()),
-                    ]);
-                    let results = crate::hooks::execute_hooks_with_env(
-                        &self.post_user_prompt_hooks,
-                        self.script_timeout,
-                        &env_vars,
-                    )
-                    .await;
-                    route_hook_results(
-                        &results,
-                        &self.event_tx,
-                        &completed_turn.prompt.event_id,
-                        Some(&self.pending_hook_context),
-                    )
-                    .await;
-                }
+                if completed_turn.prompt.kind == QueuedPromptKind::User {
+                    if let Some(display_text) = &completed_turn.prompt.display_text
+                        && !self.post_user_prompt_hooks.is_empty()
+                    {
+                        let env_vars = HashMap::from([
+                            (
+                                "NORI_HOOK_EVENT".to_string(),
+                                "post_user_prompt".to_string(),
+                            ),
+                            ("NORI_HOOK_PROMPT_TEXT".to_string(), display_text.clone()),
+                        ]);
+                        let results = crate::hooks::execute_hooks_with_env(
+                            &self.post_user_prompt_hooks,
+                            self.script_timeout,
+                            &env_vars,
+                        )
+                        .await;
+                        route_hook_results(
+                            &results,
+                            &self.event_tx,
+                            &completed_turn.prompt.event_id,
+                            Some(&self.pending_hook_context),
+                        )
+                        .await;
+                    }
 
-                if let Some(display_text) = &completed_turn.prompt.display_text
-                    && !self.async_post_user_prompt_hooks.is_empty()
-                {
-                    let env_vars = HashMap::from([
-                        (
-                            "NORI_HOOK_EVENT".to_string(),
-                            "post_user_prompt".to_string(),
-                        ),
-                        ("NORI_HOOK_PROMPT_TEXT".to_string(), display_text.clone()),
-                    ]);
-                    let _ = crate::hooks::execute_hooks_fire_and_forget(
-                        self.async_post_user_prompt_hooks.clone(),
-                        self.script_timeout,
-                        env_vars,
-                    );
+                    if let Some(display_text) = &completed_turn.prompt.display_text
+                        && !self.async_post_user_prompt_hooks.is_empty()
+                    {
+                        let env_vars = HashMap::from([
+                            (
+                                "NORI_HOOK_EVENT".to_string(),
+                                "post_user_prompt".to_string(),
+                            ),
+                            ("NORI_HOOK_PROMPT_TEXT".to_string(), display_text.clone()),
+                        ]);
+                        let _ = crate::hooks::execute_hooks_fire_and_forget(
+                            self.async_post_user_prompt_hooks.clone(),
+                            self.script_timeout,
+                            env_vars,
+                        );
+                    }
+
+                    self.maybe_submit_goal_continuation(completed_turn).await;
                 }
             }
             QueuedPromptKind::Compact => {
@@ -511,6 +518,49 @@ impl AcpBackend {
                     .await;
             }
         }
+    }
+
+    async fn maybe_submit_goal_continuation(&self, completed_turn: &CompletedTurn) {
+        if completed_turn.stop_reason != agent_client_protocol_schema::StopReason::EndTurn {
+            return;
+        }
+
+        let prompt_text = {
+            self.thread_goal_state
+                .lock()
+                .await
+                .continuation_prompt(thread_goal::now_seconds())
+        };
+        let Some(prompt_text) = prompt_text else {
+            return;
+        };
+
+        let can_start_continuation = {
+            let driver = self.session_driver.lock().await;
+            matches!(driver.runtime.phase, SessionPhase::Idle) && driver.runtime.queue.is_empty()
+        };
+        if !can_start_continuation {
+            debug!(
+                target: "acp_event_flow",
+                "Skipping goal continuation because the ACP runtime is not idle"
+            );
+            return;
+        }
+
+        let _ = self
+            .session_event_tx
+            .send(SessionRuntimeInput::Reducer(
+                session_reducer::InboundEvent::PromptSubmit(
+                    nori_protocol::session_runtime::QueuedPrompt {
+                        event_id: format!("goal-continuation-{}", uuid::Uuid::new_v4()),
+                        kind: nori_protocol::session_runtime::QueuedPromptKind::GoalContinuation,
+                        text: prompt_text,
+                        display_text: None,
+                        images: Vec::new(),
+                    },
+                ),
+            ))
+            .await;
     }
 
     async fn execute_side_effect(&self, side_effect: SideEffect) {
@@ -621,6 +671,7 @@ impl AcpBackend {
     async fn send_prompt_error(&self, prompt_kind: QueuedPromptKind, err: &anyhow::Error) {
         let message = match prompt_kind {
             QueuedPromptKind::Compact => format!("Compact failed: {err}"),
+            QueuedPromptKind::GoalContinuation => format!("Goal continuation failed: {err}"),
             QueuedPromptKind::User => {
                 let error_string = format!("{err:?}");
                 let category = categorize_acp_error(&error_string);

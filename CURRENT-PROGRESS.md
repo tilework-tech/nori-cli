@@ -80,3 +80,10 @@ Goal command progress:
     continue active goals when the runtime goes idle. The current Nori slice stores,
     rehydrates, renders, and injects goal context, but does not yet auto-submit continuation
     turns or expose structured goal tools to ACP agents.
+20. Added the first ACP-native automatic continuation slice. After a visible user prompt
+    completes with an active goal and the ACP runtime is idle with no queued user work, the
+    backend now submits one hidden `GoalContinuation` prompt to the same ACP session. The
+    hidden prompt is omitted from visible queue text and user transcript entries, while the
+    agent response still renders and records like normal assistant work. This intentionally
+    does not recurse after continuation turns; deeper Codex-style autonomous loops and
+    structured agent goal tools remain follow-on parity work from note 19.

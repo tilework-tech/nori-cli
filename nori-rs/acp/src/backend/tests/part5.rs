@@ -303,6 +303,98 @@ async fn test_goal_context_prepended_to_user_prompt() {
 
 #[tokio::test]
 #[serial]
+async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
+    use std::time::Duration;
+
+    struct EnvGuard(&'static str);
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                std::env::remove_var(self.0);
+            }
+        }
+    }
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    unsafe {
+        std::env::set_var("MOCK_AGENT_ECHO_PROMPT", "1");
+    }
+    let _env_guard = EnvGuard("MOCK_AGENT_ECHO_PROMPT");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("Ship the ACP goal command".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to set goal");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "start the work".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let mut completed_prompts = Vec::new();
+    let mut current_agent_text = String::new();
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while completed_prompts.len() < 2 {
+        if start.elapsed() > timeout {
+            panic!("Timed out waiting for hidden goal continuation");
+        }
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
+                current_agent_text.push_str(&delta.delta);
+            }
+            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => {
+                completed_prompts.push(std::mem::take(&mut current_agent_text));
+            }
+            Some(_) => {}
+            None => panic!("Backend event channel closed unexpectedly"),
+        }
+    }
+
+    assert!(
+        completed_prompts[0].contains("start the work"),
+        "expected first prompt to be the visible user turn, got: {}",
+        completed_prompts[0]
+    );
+    assert!(
+        completed_prompts[1].contains("Continue working toward the active thread goal")
+            && completed_prompts[1].contains("Ship the ACP goal command"),
+        "expected second prompt to be a hidden goal continuation, got: {}",
+        completed_prompts[1]
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn usage_updates_refresh_goal_token_count() {
     use std::time::Duration;
 
