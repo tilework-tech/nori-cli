@@ -5,7 +5,7 @@ expression: rendered
 Goal
 Status: active
 Objective: Keep going
-Time used: 0s
-Tokens used: 195K (subagents not counted)
+Time used: 1m 3s
+Tokens used: 1.06K
 
 Commands: /goal edit, /goal pause, /goal clear

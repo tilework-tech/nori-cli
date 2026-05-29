@@ -547,6 +547,10 @@ impl AcpBackend {
             QueuedPromptKind::GoalContinuation | QueuedPromptKind::Compact => return,
         }
 
+        self.submit_goal_continuation_if_idle().await;
+    }
+
+    pub(super) async fn submit_goal_continuation_if_idle(&self) {
         let prompt_text = {
             self.thread_goal_state
                 .lock()

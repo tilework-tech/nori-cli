@@ -69,6 +69,28 @@ async fn assert_no_prompt_completed(
     }
 }
 
+async fn collect_completed_prompt_text(
+    backend_event_rx: &mut mpsc::Receiver<BackendEvent>,
+    timeout: std::time::Duration,
+    timeout_message: &str,
+) -> String {
+    let mut agent_text = String::new();
+    let start = std::time::Instant::now();
+    loop {
+        if start.elapsed() > timeout {
+            panic!("{timeout_message}");
+        }
+        match recv_backend_client(backend_event_rx, std::time::Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
+                agent_text.push_str(&delta.delta);
+            }
+            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => return agent_text,
+            Some(_) => {}
+            None => {}
+        }
+    }
+}
+
 #[tokio::test]
 #[serial]
 async fn user_shell_command_executes_locally_and_emits_exec_lifecycle() {
@@ -320,6 +342,18 @@ async fn test_goal_context_prepended_to_user_prompt() {
         .await
         .expect("Failed to set goal");
 
+    let initial_goal_work = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for initial goal continuation",
+    )
+    .await;
+    assert!(
+        initial_goal_work.contains("Continue working toward the active thread goal")
+            && initial_goal_work.contains("Keep the north star visible"),
+        "expected /goal to start immediate goal work, got: {initial_goal_work}"
+    );
+
     backend
         .submit(Op::UserInput {
             items: vec![codex_protocol::user_input::UserInput::Text {
@@ -329,22 +363,12 @@ async fn test_goal_context_prepended_to_user_prompt() {
         .await
         .expect("Failed to submit user input");
 
-    let mut agent_text = String::new();
-    let timeout = Duration::from_secs(10);
-    let start = std::time::Instant::now();
-    loop {
-        if start.elapsed() > timeout {
-            panic!("Timed out waiting for PromptCompleted");
-        }
-        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
-            Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
-                agent_text.push_str(&delta.delta);
-            }
-            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => break,
-            Some(_) => continue,
-            None => panic!("Backend event channel closed unexpectedly"),
-        }
-    }
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for PromptCompleted",
+    )
+    .await;
 
     assert!(
         agent_text.contains("<goal_context>")
@@ -352,6 +376,60 @@ async fn test_goal_context_prepended_to_user_prompt() {
             && agent_text.contains("hello agent"),
         "Expected goal context and user prompt in agent echo, got: {agent_text}"
     );
+}
+
+#[tokio::test]
+#[serial]
+async fn setting_active_goal_starts_hidden_continuation_without_extra_prompt() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("Begin immediately from the goal command".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to set goal");
+
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for hidden goal continuation",
+    )
+    .await;
+
+    assert!(
+        agent_text.contains("Continue working toward the active thread goal")
+            && agent_text.contains("Begin immediately from the goal command"),
+        "expected goal command to start a hidden continuation, got: {agent_text}"
+    );
+
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_secs(2)).await;
 }
 
 #[tokio::test]
@@ -392,6 +470,18 @@ async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
         .await
         .expect("Failed to set goal");
 
+    let initial_goal_work = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for initial goal continuation",
+    )
+    .await;
+    assert!(
+        initial_goal_work.contains("Continue working toward the active thread goal")
+            && initial_goal_work.contains("Ship the ACP goal command"),
+        "expected /goal to start immediate goal work, got: {initial_goal_work}"
+    );
+
     backend
         .submit(Op::UserInput {
             items: vec![codex_protocol::user_input::UserInput::Text {
@@ -401,36 +491,27 @@ async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
         .await
         .expect("Failed to submit user input");
 
-    let mut completed_prompts = Vec::new();
-    let mut current_agent_text = String::new();
-    let timeout = Duration::from_secs(10);
-    let start = std::time::Instant::now();
-    while completed_prompts.len() < 2 {
-        if start.elapsed() > timeout {
-            panic!("Timed out waiting for hidden goal continuation");
-        }
-        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
-            Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
-                current_agent_text.push_str(&delta.delta);
-            }
-            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => {
-                completed_prompts.push(std::mem::take(&mut current_agent_text));
-            }
-            Some(_) => {}
-            None => panic!("Backend event channel closed unexpectedly"),
-        }
-    }
+    let user_turn = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for visible user turn",
+    )
+    .await;
+    let post_user_goal_work = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for hidden goal continuation",
+    )
+    .await;
 
     assert!(
-        completed_prompts[0].contains("start the work"),
-        "expected first prompt to be the visible user turn, got: {}",
-        completed_prompts[0]
+        user_turn.contains("start the work"),
+        "expected visible user turn after initial goal work, got: {user_turn}"
     );
     assert!(
-        completed_prompts[1].contains("Continue working toward the active thread goal")
-            && completed_prompts[1].contains("Ship the ACP goal command"),
-        "expected second prompt to be a hidden goal continuation, got: {}",
-        completed_prompts[1]
+        post_user_goal_work.contains("Continue working toward the active thread goal")
+            && post_user_goal_work.contains("Ship the ACP goal command"),
+        "expected hidden goal continuation after user turn, got: {post_user_goal_work}"
     );
 
     assert_no_prompt_completed(&mut backend_event_rx, Duration::from_secs(2)).await;
@@ -479,6 +560,17 @@ async fn http_mcp_agent_without_goal_mcp_connection_does_not_chain_hidden_contin
         .await
         .expect("Failed to set goal");
 
+    let initial_goal_work = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for initial goal continuation",
+    )
+    .await;
+    assert!(
+        initial_goal_work.contains("Continue working toward the active thread goal"),
+        "expected /goal to start immediate goal work, got: {initial_goal_work}"
+    );
+
     backend
         .submit(Op::UserInput {
             items: vec![codex_protocol::user_input::UserInput::Text {
@@ -488,41 +580,32 @@ async fn http_mcp_agent_without_goal_mcp_connection_does_not_chain_hidden_contin
         .await
         .expect("Failed to submit user input");
 
-    let mut completed_prompts = Vec::new();
-    let mut current_agent_text = String::new();
-    let timeout = Duration::from_secs(10);
-    let start = std::time::Instant::now();
-    while completed_prompts.len() < 2 {
-        if start.elapsed() > timeout {
-            panic!("Timed out waiting for goal continuation");
-        }
-        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
-            Some(nori_protocol::ClientEvent::MessageDelta(delta)) => {
-                current_agent_text.push_str(&delta.delta);
-            }
-            Some(nori_protocol::ClientEvent::PromptCompleted(_)) => {
-                completed_prompts.push(std::mem::take(&mut current_agent_text));
-            }
-            Some(_) => {}
-            None => {}
-        }
-    }
+    let user_turn = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for visible user turn",
+    )
+    .await;
+    let post_user_goal_work = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for goal continuation",
+    )
+    .await;
 
     assert!(
-        completed_prompts[0].contains("start the chain"),
-        "expected first prompt to be the visible user turn, got: {}",
-        completed_prompts[0]
+        user_turn.contains("start the chain"),
+        "expected visible user turn after initial goal work, got: {user_turn}"
     );
     assert!(
-        completed_prompts[1].contains("Continue working toward the active thread goal"),
-        "expected second prompt to be the one hidden goal continuation, got: {}",
-        completed_prompts[1]
+        post_user_goal_work.contains("Continue working toward the active thread goal"),
+        "expected post-user hidden goal continuation, got: {post_user_goal_work}"
     );
 
     tokio::time::sleep(Duration::from_secs(2)).await;
     assert_eq!(
         count_logged_requests(&wire_log_dir, "session/prompt"),
-        2,
+        3,
         "expected no chained goal continuation before the goal MCP server is connected"
     );
 
@@ -579,20 +662,11 @@ async fn goal_mcp_initialize_allows_chained_hidden_continuations() {
         .await
         .expect("Failed to set goal");
 
-    backend
-        .submit(Op::UserInput {
-            items: vec![codex_protocol::user_input::UserInput::Text {
-                text: "start the initialized chain".to_string(),
-            }],
-        })
-        .await
-        .expect("Failed to submit user input");
-
     let start = std::time::Instant::now();
     while count_logged_requests(&wire_log_dir, "session/prompt") < 3 {
         assert!(
             start.elapsed() < Duration::from_secs(10),
-            "expected initialized goal MCP server to allow chaining beyond the first hidden continuation"
+            "expected initialized goal MCP server to allow chaining beyond the initial goal continuation"
         );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
@@ -619,6 +693,7 @@ async fn completed_goal_stops_chained_hidden_continuations() {
     }
 
     let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
     let _delay_guard = EnvGuard::set("MOCK_AGENT_DELAY_MS", "200");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
@@ -641,6 +716,17 @@ async fn completed_goal_stops_chained_hidden_continuations() {
         .await
         .expect("Failed to set goal");
 
+    let initial_goal_work = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for initial goal continuation",
+    )
+    .await;
+    assert!(
+        initial_goal_work.contains("Continue working toward the active thread goal"),
+        "expected /goal to start immediate goal work, got: {initial_goal_work}"
+    );
+
     backend
         .submit(Op::UserInput {
             items: vec![codex_protocol::user_input::UserInput::Text {
@@ -650,18 +736,16 @@ async fn completed_goal_stops_chained_hidden_continuations() {
         .await
         .expect("Failed to submit user input");
 
-    let timeout = Duration::from_secs(10);
-    let start = std::time::Instant::now();
-    loop {
-        if start.elapsed() > timeout {
-            panic!("Timed out waiting for first PromptCompleted");
-        }
-        if let Some(nori_protocol::ClientEvent::PromptCompleted(_)) =
-            recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await
-        {
-            break;
-        }
-    }
+    let user_turn = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for visible user turn",
+    )
+    .await;
+    assert!(
+        user_turn.contains("start then finish"),
+        "expected visible user turn after initial goal work, got: {user_turn}"
+    );
 
     backend
         .submit(Op::ThreadGoalSet {
@@ -671,17 +755,16 @@ async fn completed_goal_stops_chained_hidden_continuations() {
         .await
         .expect("Failed to complete goal");
 
-    let start = std::time::Instant::now();
-    loop {
-        if start.elapsed() > timeout {
-            panic!("Timed out waiting for already queued hidden goal continuation");
-        }
-        if let Some(nori_protocol::ClientEvent::PromptCompleted(_)) =
-            recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await
-        {
-            break;
-        }
-    }
+    let already_queued_goal_work = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for already queued hidden goal continuation",
+    )
+    .await;
+    assert!(
+        already_queued_goal_work.contains("Continue working toward the active thread goal"),
+        "expected already queued goal continuation, got: {already_queued_goal_work}"
+    );
 
     assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(500)).await;
 

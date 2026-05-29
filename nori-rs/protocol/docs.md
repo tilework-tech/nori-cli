@@ -39,6 +39,8 @@ Path: @/nori-rs/protocol
 
 **Thread Goal Types** (`protocol/mod.rs`): The `/goal` feature uses typed operations rather than encoding commands as regular prompt text. `Op::ThreadGoalGet`, `Op::ThreadGoalSet`, and `Op::ThreadGoalClear` define the backend-facing command surface; `ThreadGoalStatus` defines the shared lifecycle labels; `validate_thread_goal_objective()` defines the cross-crate validation invariant for objective text before the TUI or backend accepts it.
 
+**Compact Number Formatting** (`num_format.rs`): Shared user-facing formatters keep ACP backend prompt context and TUI summaries consistent. Token counts use SI suffixes, and whole-second goal elapsed time is rendered compactly as seconds or minute/second text.
+
 ### Things to Know
 
 **Module Structure:** The `protocol` module uses a directory layout (`protocol/mod.rs` + submodules) instead of a single `protocol.rs` file. Submodules include `display.rs` (Display impls), `history.rs` (conversation history types), `legacy_events.rs` (legacy event types), `sandbox.rs` (sandbox config types), `token_usage.rs` (token tracking types), and `tests.rs`.

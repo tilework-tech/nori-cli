@@ -184,11 +184,14 @@ fn goal_update_event_renders_summary() {
 
     chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
         nori_protocol::ThreadGoalUpdated {
-            goal: test_thread_goal_with_tokens(
-                "Keep going",
-                nori_protocol::ThreadGoalStatus::Active,
-                195_043,
-            ),
+            goal: nori_protocol::ThreadGoal {
+                time_used_seconds: 63,
+                ..test_thread_goal_with_tokens(
+                    "Keep going",
+                    nori_protocol::ThreadGoalStatus::Active,
+                    1_060,
+                )
+            },
         },
     ));
 

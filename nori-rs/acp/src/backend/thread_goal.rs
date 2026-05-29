@@ -1,3 +1,5 @@
+use codex_protocol::num_format::format_elapsed_seconds;
+use codex_protocol::num_format::format_si_suffix;
 use codex_protocol::protocol::ThreadGoalStatus;
 use codex_protocol::protocol::validate_thread_goal_objective;
 use nori_protocol::ClientEvent;
@@ -103,11 +105,11 @@ impl ThreadGoalState {
                 ThreadGoalStatus::Complete => "complete",
             };
             format!(
-                "<goal_context>\nStatus: {}\nObjective: {}\nTime used: {}s\nTokens used (subagents not counted): {}\n</goal_context>",
+                "<goal_context>\nStatus: {}\nObjective: {}\nTime used: {}\nTokens used: {}\n</goal_context>",
                 status,
                 goal.objective,
-                goal.time_used_seconds,
-                goal.tokens_used
+                format_elapsed_seconds(goal.time_used_seconds),
+                format_si_suffix(goal.tokens_used)
             )
         })
     }
@@ -127,14 +129,15 @@ Continuation behavior:\n\
 - Keep the full objective intact. If it cannot be finished now, make concrete progress toward the real requested end state, leave the goal active, and do not redefine success around a smaller or easier task.\n\
 - Temporary rough edges are acceptable while the work is moving in the right direction. Completion still requires the requested end state to be true and verified.\n\n\
 Budget:\n\
-- Tokens used (subagents not counted): {}\n\
+- Tokens used: {}\n\
 - Token budget: none\n\
 - Tokens remaining: unbounded\n\n\
 Work from evidence:\n\
 Use the current worktree and external state as authoritative. Previous conversation context can help locate relevant work, but inspect the current state before relying on it. Improve, replace, or remove existing work as needed to satisfy the actual objective.\n\n\
 Completion audit:\n\
 Before deciding that the goal is achieved, treat completion as unproven and verify it against the actual current state. If completion is not proven, keep working toward the objective.",
-            goal.objective, goal.tokens_used
+            goal.objective,
+            format_si_suffix(goal.tokens_used)
         ))
     }
 
@@ -379,7 +382,13 @@ impl AcpBackend {
         };
 
         match result {
-            Ok(goal) => self.emit_thread_goal_updated(goal).await,
+            Ok(goal) => {
+                let should_start = goal.status == ThreadGoalStatus::Active;
+                self.emit_thread_goal_updated(goal).await;
+                if should_start {
+                    self.submit_goal_continuation_if_idle().await;
+                }
+            }
             Err(message) => self.send_error(&message).await,
         }
     }
@@ -555,11 +564,14 @@ mod tests {
         goals
             .set_objective("Keep going".to_string(), None, 10)
             .expect("valid objective");
+        goals
+            .update_session_tokens(1_060, 73)
+            .expect("goal should exist");
 
         assert_eq!(
-            goals.prompt_context(25),
+            goals.prompt_context(73),
             Some(
-                "<goal_context>\nStatus: active\nObjective: Keep going\nTime used: 15s\nTokens used (subagents not counted): 0\n</goal_context>"
+                "<goal_context>\nStatus: active\nObjective: Keep going\nTime used: 1m 3s\nTokens used: 1.06K\n</goal_context>"
                     .to_string()
             )
         );

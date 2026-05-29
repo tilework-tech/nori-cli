@@ -1,4 +1,5 @@
 use super::*;
+use codex_protocol::num_format::format_elapsed_seconds;
 use codex_protocol::num_format::format_si_suffix;
 
 impl ChatWidget {
@@ -174,15 +175,11 @@ impl ChatWidget {
             Line::from(vec!["Objective: ".dim(), goal.objective.clone().into()]),
             Line::from(vec![
                 "Time used: ".dim(),
-                format!("{}s", goal.time_used_seconds).into(),
+                format_elapsed_seconds(goal.time_used_seconds).into(),
             ]),
             Line::from(vec![
                 "Tokens used: ".dim(),
-                format!(
-                    "{} (subagents not counted)",
-                    format_si_suffix(goal.tokens_used)
-                )
-                .into(),
+                format_si_suffix(goal.tokens_used).into(),
             ]),
             Line::default(),
             Line::from(goal_command_hint(goal.status).dim()),
