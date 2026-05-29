@@ -34,7 +34,7 @@ Key files:
 - `connection/` - SACP v11-based subprocess spawning and JSON-RPC communication
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
-- `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage-baseline updates
+- `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage checkpoint updates
 - `backend/thread_goal_mcp.rs` - Adapts backend-owned goal state into MCP tools for agents that advertise HTTP MCP support
 - `backend/thread_goal_http_mcp.rs` - Exposes those backend-owned tools over a loopback HTTP endpoint for ACP adapters
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -113,7 +113,7 @@ The ACP backend owns the `/goal` feature as per-session state instead of delegat
     -> @/nori-rs/tui/src/chatwidget/event_handlers.rs
 ```
 
-`ThreadGoalState` tracks the current objective, lifecycle status, active elapsed time, token usage, and the session-token baseline used to compute goal-local `tokens_used`. Only the `Active` status accrues active time; paused, blocked, usage-limited, budget-limited, and complete goals keep their accumulated time until they become active again. Objective validation is shared with `@/nori-rs/protocol/src/protocol/mod.rs` so the TUI and backend enforce the same acceptance rules.
+`ThreadGoalState` tracks the current objective, lifecycle status, active elapsed time, accumulated goal token usage, and the latest ACP session-usage checkpoint. ACP usage updates add only positive deltas since the last checkpoint to goal-local `tokens_used`; if context-window usage drops after compaction or session reset, the already accumulated goal usage is preserved and the lower value becomes the next checkpoint. Only the `Active` status accrues active time; paused, blocked, usage-limited, budget-limited, and complete goals keep their accumulated time until they become active again. Objective validation is shared with `@/nori-rs/protocol/src/protocol/mod.rs` so the TUI and backend enforce the same acceptance rules.
 
 `thread_goal_mcp.rs` is a bridge, not a second store. Its tools lock the same `ThreadGoalState` used by TUI `/goal` operations, return JSON snapshots shaped for model consumption, and emit the same `ThreadGoalUpdated` client event after mutations. The bridge records those emitted events through `@/nori-rs/acp/src/backend/transcript.rs` when a transcript recorder is available; session setup stores the recorder behind a shared cell because the goal MCP bridge can be created before all resume/create paths know the final transcript session id.
 
@@ -121,7 +121,7 @@ The local `nori-goal` server is only advertised when `@/nori-rs/acp/src/backend/
 
 The model-facing MCP contract is intentionally narrower than the user-facing `/goal` command surface. `create_goal` creates a new active goal only when no goal exists, rejects token budgets for now, and delegates objective validation to `ThreadGoalState`. `update_goal` only lets an agent mark the existing goal `complete` or `blocked`; pause, resume, usage-limited, and budget-limited transitions remain controlled by the user or the backend system path. Errors are returned as MCP tool errors instead of changing state.
 
-Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends the current goal as a structured `<goal_context>` block when a goal exists. Hook context is still applied before goal context, and compact summaries remain the outermost framing instruction, so resumed/compacted turns retain their existing prompt-ordering invariant while still carrying goal state to the agent.
+Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends the current goal as a structured `<goal_context>` block when a goal exists. Hook context is still applied before goal context, and compact summaries remain the outermost framing instruction, so resumed/compacted turns retain their existing prompt-ordering invariant while still carrying goal state to the agent. The prompt goal context and hidden continuation prompt both label goal token usage as excluding subagent usage, matching the backend accounting source.
 
 Agents that are not advertised the local `nori-goal` server still receive goal context through prompt transformation and a single hidden goal-continuation prompt after visible user turns. The local MCP server is additive for capable agents so they can use structured goal tools; it is never required for goal context, transcript replay, usage accounting, or one-shot continuation behavior.
 

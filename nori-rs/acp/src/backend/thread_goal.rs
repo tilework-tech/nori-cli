@@ -35,7 +35,7 @@ struct StoredThreadGoal {
     objective: String,
     status: ThreadGoalStatus,
     tokens_used: i64,
-    token_usage_baseline: Option<i64>,
+    token_usage_checkpoint: Option<i64>,
     accumulated_active_seconds: i64,
     active_started_at: Option<i64>,
     created_at: i64,
@@ -103,7 +103,7 @@ impl ThreadGoalState {
                 ThreadGoalStatus::Complete => "complete",
             };
             format!(
-                "<goal_context>\nStatus: {}\nObjective: {}\nTime used: {}s\nTokens used: {}\n</goal_context>",
+                "<goal_context>\nStatus: {}\nObjective: {}\nTime used: {}s\nTokens used (subagents not counted): {}\n</goal_context>",
                 status,
                 goal.objective,
                 goal.time_used_seconds,
@@ -127,7 +127,7 @@ Continuation behavior:\n\
 - Keep the full objective intact. If it cannot be finished now, make concrete progress toward the real requested end state, leave the goal active, and do not redefine success around a smaller or easier task.\n\
 - Temporary rough edges are acceptable while the work is moving in the right direction. Completion still requires the requested end state to be true and verified.\n\n\
 Budget:\n\
-- Tokens used: {}\n\
+- Tokens used (subagents not counted): {}\n\
 - Token budget: none\n\
 - Tokens remaining: unbounded\n\n\
 Work from evidence:\n\
@@ -175,7 +175,7 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
             objective,
             status,
             tokens_used: 0,
-            token_usage_baseline: Some(self.last_session_used_tokens.unwrap_or(0)),
+            token_usage_checkpoint: Some(self.last_session_used_tokens.unwrap_or(0)),
             accumulated_active_seconds: 0,
             active_started_at: active_started_at(status, now),
             created_at: now,
@@ -209,12 +209,14 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
     ) -> Option<ThreadGoalSnapshot> {
         self.last_session_used_tokens = Some(used_tokens);
         let goal = self.goal.as_mut()?;
-        let baseline = goal.token_usage_baseline.unwrap_or_else(|| {
-            let baseline = used_tokens.saturating_sub(goal.tokens_used);
-            goal.token_usage_baseline = Some(baseline);
-            baseline
-        });
-        goal.tokens_used = used_tokens.saturating_sub(baseline);
+        if let Some(checkpoint) = goal.token_usage_checkpoint
+            && used_tokens >= checkpoint
+        {
+            goal.tokens_used = goal
+                .tokens_used
+                .saturating_add(used_tokens.saturating_sub(checkpoint));
+        }
+        goal.token_usage_checkpoint = Some(used_tokens);
         goal.updated_at = now;
         Some(goal.snapshot(now))
     }
@@ -230,8 +232,7 @@ impl StoredThreadGoal {
             objective: goal.objective.clone(),
             status,
             tokens_used: goal.tokens_used,
-            token_usage_baseline: session_used_tokens
-                .map(|used_tokens| used_tokens.saturating_sub(goal.tokens_used)),
+            token_usage_checkpoint: session_used_tokens,
             accumulated_active_seconds: goal.time_used_seconds,
             active_started_at: active_started_at(status, goal.updated_at),
             created_at: goal.created_at,
@@ -558,7 +559,7 @@ mod tests {
         assert_eq!(
             goals.prompt_context(25),
             Some(
-                "<goal_context>\nStatus: active\nObjective: Keep going\nTime used: 15s\nTokens used: 0\n</goal_context>"
+                "<goal_context>\nStatus: active\nObjective: Keep going\nTime used: 15s\nTokens used (subagents not counted): 0\n</goal_context>"
                     .to_string()
             )
         );
@@ -654,7 +655,38 @@ mod tests {
     }
 
     #[test]
-    fn rehydrated_goal_usage_baseline_survives_future_usage_updates() {
+    fn usage_updates_accumulate_across_context_window_resets() {
+        let mut goals = ThreadGoalState::default();
+        assert_eq!(goals.update_session_tokens(100, 5), None);
+        goals
+            .set_objective("Keep going".to_string(), None, 10)
+            .expect("valid objective");
+
+        assert_eq!(
+            goals
+                .update_session_tokens(175, 15)
+                .expect("goal should be updated")
+                .tokens_used,
+            75
+        );
+        assert_eq!(
+            goals
+                .update_session_tokens(80, 20)
+                .expect("goal should be updated")
+                .tokens_used,
+            75
+        );
+        assert_eq!(
+            goals
+                .update_session_tokens(130, 25)
+                .expect("goal should be updated")
+                .tokens_used,
+            125
+        );
+    }
+
+    #[test]
+    fn rehydrated_goal_usage_checkpoint_survives_future_usage_updates() {
         let goals = ThreadGoalState::from_replay_events(&[
             nori_protocol::ClientEvent::SessionUpdateInfo(nori_protocol::SessionUpdateInfo {
                 kind: nori_protocol::SessionUpdateKind::Usage,

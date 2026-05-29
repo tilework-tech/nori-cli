@@ -1,4 +1,5 @@
 use super::*;
+use codex_protocol::num_format::format_si_suffix;
 
 impl ChatWidget {
     pub(super) fn handle_goal_user_message(&mut self, text: &str) -> bool {
@@ -11,7 +12,7 @@ impl ChatWidget {
 
         let rest = rest.trim();
         if rest.is_empty() {
-            self.submit_op(Op::ThreadGoalGet);
+            self.request_thread_goal_status();
             return true;
         }
 
@@ -53,12 +54,24 @@ impl ChatWidget {
         true
     }
 
+    pub(super) fn request_thread_goal_status(&mut self) {
+        self.pending_goal_status = true;
+        self.submit_op(Op::ThreadGoalGet);
+    }
+
     pub(super) fn handle_thread_goal_updated(&mut self, goal: nori_protocol::ThreadGoal) {
+        let should_show_summary = self.current_goal.as_ref().is_none_or(|previous| {
+            previous.objective != goal.objective
+                || previous.status != goal.status
+                || previous.created_at != goal.created_at
+        });
         self.current_goal = Some(goal.clone());
         if self.pending_goal_edit {
             self.pending_goal_edit = false;
+            self.pending_goal_status = false;
             self.open_goal_editor(goal);
-        } else {
+        } else if self.pending_goal_status || should_show_summary {
+            self.pending_goal_status = false;
             self.show_goal_summary(&goal);
         }
         self.request_redraw();
@@ -66,6 +79,7 @@ impl ChatWidget {
 
     pub(super) fn handle_thread_goal_cleared(&mut self) {
         self.current_goal = None;
+        self.pending_goal_status = false;
         self.pending_goal_edit = false;
         self.add_info_message("Goal cleared".to_string(), None);
         self.request_redraw();
@@ -80,6 +94,12 @@ impl ChatWidget {
             && update.hint.as_deref() == Some("No goal is currently set.")
         {
             self.pending_goal_edit = false;
+        }
+        if self.pending_goal_status
+            && update.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            && update.hint.as_deref() == Some("No goal is currently set.")
+        {
+            self.pending_goal_status = false;
         }
     }
 
@@ -158,7 +178,11 @@ impl ChatWidget {
             ]),
             Line::from(vec![
                 "Tokens used: ".dim(),
-                goal.tokens_used.to_string().into(),
+                format!(
+                    "{} (subagents not counted)",
+                    format_si_suffix(goal.tokens_used)
+                )
+                .into(),
             ]),
             Line::default(),
             Line::from(goal_command_hint(goal.status).dim()),

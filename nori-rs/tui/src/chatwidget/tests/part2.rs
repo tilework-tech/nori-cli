@@ -43,6 +43,30 @@ fn slash_goal_requests_current_goal() {
 }
 
 #[test]
+fn slash_picker_goal_renders_current_goal_summary() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+    let goal = test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active);
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated { goal: goal.clone() },
+    ));
+    let _ = drain_insert_history(&mut rx);
+
+    chat.dispatch_command(SlashCommand::Goal);
+    assert_eq!(op_rx.try_recv(), Ok(Op::ThreadGoalGet));
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated { goal },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let rendered = lines_to_single_string(&cells[0]);
+    assert!(
+        rendered.contains("Objective: Keep going"),
+        "expected slash picker goal summary, got: {rendered}"
+    );
+}
+
+#[test]
 fn goal_objective_submits_thread_goal_set() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
 
@@ -160,7 +184,11 @@ fn goal_update_event_renders_summary() {
 
     chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
         nori_protocol::ThreadGoalUpdated {
-            goal: test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active),
+            goal: test_thread_goal_with_tokens(
+                "Keep going",
+                nori_protocol::ThreadGoalStatus::Active,
+                195_043,
+            ),
         },
     ));
 
@@ -168,6 +196,79 @@ fn goal_update_event_renders_summary() {
     assert_eq!(cells.len(), 1);
     let rendered = lines_to_single_string(&cells[0]);
     assert_snapshot!("goal_update_event_summary", rendered);
+}
+
+#[test]
+fn accounting_only_goal_update_does_not_render_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active),
+        },
+    ));
+    let _ = drain_insert_history(&mut rx);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: nori_protocol::ThreadGoal {
+                tokens_used: 195_043,
+                time_used_seconds: 15,
+                updated_at: 25,
+                ..test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active)
+            },
+        },
+    ));
+
+    assert_eq!(drain_insert_history(&mut rx).len(), 0);
+}
+
+#[test]
+fn explicit_goal_status_request_renders_current_goal_summary() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+    let goal = test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active);
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated { goal: goal.clone() },
+    ));
+    let _ = drain_insert_history(&mut rx);
+
+    chat.submit_user_message("/goal".to_string().into());
+    assert_eq!(op_rx.try_recv(), Ok(Op::ThreadGoalGet));
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated { goal },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let rendered = lines_to_single_string(&cells[0]);
+    assert!(
+        rendered.contains("Objective: Keep going"),
+        "expected explicit goal status summary, got: {rendered}"
+    );
+}
+
+#[test]
+fn status_goal_update_still_renders_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active),
+        },
+    ));
+    let _ = drain_insert_history(&mut rx);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
+        nori_protocol::ThreadGoalUpdated {
+            goal: test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Paused),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1);
+    let rendered = lines_to_single_string(&cells[0]);
+    assert!(
+        rendered.contains("Status: paused"),
+        "expected paused status summary, got: {rendered}"
+    );
 }
 
 #[test]
@@ -231,10 +332,18 @@ fn test_thread_goal(
     objective: &str,
     status: nori_protocol::ThreadGoalStatus,
 ) -> nori_protocol::ThreadGoal {
+    test_thread_goal_with_tokens(objective, status, 0)
+}
+
+fn test_thread_goal_with_tokens(
+    objective: &str,
+    status: nori_protocol::ThreadGoalStatus,
+    tokens_used: i64,
+) -> nori_protocol::ThreadGoal {
     nori_protocol::ThreadGoal {
         objective: objective.to_string(),
         status,
-        tokens_used: 0,
+        tokens_used,
         time_used_seconds: 0,
         created_at: 10,
         updated_at: 10,

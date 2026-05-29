@@ -419,6 +419,8 @@ pub(crate) struct ChatWidget {
     first_prompt_text: Option<String>,
     // Latest ACP-owned goal snapshot for this session.
     current_goal: Option<nori_protocol::ThreadGoal>,
+    // Whether `/goal` is waiting for the backend to return a goal snapshot.
+    pending_goal_status: bool,
     // Whether `/goal edit` is waiting for the backend to return a goal snapshot.
     pending_goal_edit: bool,
     // Loop mode state: remaining iterations (None = not looping)

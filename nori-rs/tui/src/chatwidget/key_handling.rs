@@ -154,7 +154,7 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Goal => {
-                self.submit_op(Op::ThreadGoalGet);
+                self.request_thread_goal_status();
             }
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.submit_op(Op::Shutdown);
