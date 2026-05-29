@@ -115,6 +115,24 @@ Goal command progress:
     prior continuation turns while the active goal remains open and the runtime is idle; agents
     without HTTP MCP support keep the previous single hidden continuation after a visible user
     turn so unsupported agents are not put into an unbounded loop they cannot stop.
+27. Follow-up: disable or clearly mark `/goal` unavailable when the active ACP agent does not
+    support HTTP MCP servers. The current slash popup has description overrides but no disabled
+    row state, and pasted `/goal ...` is handled separately in `chatwidget/goal.rs`, so the
+    correct small fix is probably both UI affordance and a backend/TUI command guard. This
+    matters because prompt goal context can still work without MCP, but the main close-the-loop
+    path depends on the agent having the `nori-goal` MCP tools so it can mark goals complete or
+    blocked.
+28. Fixed the quick goal visual/accounting issues from bugs 3, 4, and the scoped version of 5.
+    The TUI now suppresses history cells for accounting-only `ThreadGoalUpdated` refreshes while
+    still rendering explicit `/goal` status requests and objective/status changes. Goal summaries
+    use compact SI token formatting and label the count as excluding subagents. Backend goal token
+    usage now accumulates positive ACP usage deltas across context-window drops instead of
+    mirroring the latest session usage value.
+29. Verified the bug 3/4/5 slice end-to-end and pushed it to PR #491 as commit `846c27c1`.
+    Local verification covered `cargo test -p nori-acp`, `cargo test -p nori-tui`,
+    `cargo build --bin nori && cargo test -p tui-pty-e2e`, `just fmt`, scoped `just fix`,
+    snapshot acceptance, and an isolated ElizACP TUI smoke test. GitHub checks for the PR passed
+    afterward: `Linux checks` and `cargo-deny`.
 
 Follow-up bug investigations - 2026-05-28:
 
