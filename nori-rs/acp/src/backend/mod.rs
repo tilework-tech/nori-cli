@@ -290,10 +290,10 @@ pub struct AcpBackend {
     /// Persistent goal for this ACP session.
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     /// True after the active ACP agent has successfully opened the backend-owned
-    /// `nori-goal` MCP endpoint.
+    /// `nori-client` MCP endpoint.
     goal_mcp_connected: Arc<AtomicBool>,
-    /// Loopback HTTP server exposing the backend-owned `nori-goal` MCP tools.
-    goal_mcp_http_server: Arc<Mutex<Option<thread_goal_http_mcp::GoalMcpHttpServer>>>,
+    /// Loopback HTTP server exposing the backend-owned `nori-client` MCP tools.
+    goal_mcp_http_server: Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
     /// Transcript recorder cell used by local MCP tools created before the
     /// recorder's session ID is known.
     transcript_recorder_cell: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
@@ -348,14 +348,13 @@ pub struct AcpBackend {
 }
 
 mod helpers;
+mod nori_client_mcp;
 mod session;
 pub(crate) mod session_reducer;
 mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod thread_goal;
-mod thread_goal_http_mcp;
-mod thread_goal_mcp;
 mod user_input;
 mod user_shell;
 use helpers::get_op_name;

@@ -138,7 +138,7 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            thread_goal_mcp::register_for_session(
+            nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
@@ -187,7 +187,7 @@ impl AcpBackend {
                         &config.mcp_servers,
                         config.mcp_oauth_credentials_store_mode,
                     );
-                    thread_goal_mcp::register_for_session(
+                    nori_client_mcp::register_for_session(
                         &connection,
                         &mut mcp_servers,
                         Arc::clone(&thread_goal_state),
@@ -246,7 +246,7 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            thread_goal_mcp::register_for_session(
+            nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
