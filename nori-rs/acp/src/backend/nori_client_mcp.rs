@@ -491,4 +491,76 @@ mod tests {
         assert!(is_error(&result));
         assert!(tool_text(&result).contains("no goal exists"));
     }
+
+    /// End-to-end: a real spec-compliant rmcp client connects to the loopback
+    /// server over HTTP, exercising the streamable-HTTP transport, the
+    /// `initialize` handshake (which must flip `connected`), tool discovery, and
+    /// a `create_goal` round-trip — i.e. the path a real ACP agent takes.
+    #[tokio::test]
+    async fn real_mcp_client_round_trips_over_http() {
+        use rmcp::ServiceExt;
+        use rmcp::model::CallToolRequestParam;
+        use rmcp::transport::StreamableHttpClientTransport;
+
+        let connected = Arc::new(AtomicBool::new(false));
+        let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
+        let (backend_event_tx, _backend_event_rx) = mpsc::channel(8);
+        let server = NoriClientServer::spawn(NoriClientShared::new(
+            Arc::clone(&state),
+            backend_event_tx,
+            Arc::new(Mutex::new(None)),
+            Arc::clone(&connected),
+        ))
+        .await
+        .expect("nori-client server should spawn");
+
+        let transport = StreamableHttpClientTransport::from_uri(server.url().to_string());
+        let client = ()
+            .serve(transport)
+            .await
+            .expect("rmcp client should complete the initialize handshake");
+
+        assert!(
+            connected.load(Ordering::Relaxed),
+            "initialize handshake must flip the connected gate"
+        );
+
+        let tools = client
+            .list_all_tools()
+            .await
+            .expect("client should list tools");
+        let tool_names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
+        assert!(tool_names.contains(&"get_goal"));
+        assert!(tool_names.contains(&"create_goal"));
+        assert!(tool_names.contains(&"update_goal"));
+
+        let create = client
+            .call_tool(CallToolRequestParam {
+                name: "create_goal".into(),
+                arguments: serde_json::json!({ "objective": "Round-trip over real MCP" })
+                    .as_object()
+                    .cloned(),
+            })
+            .await
+            .expect("create_goal call should succeed");
+        assert_eq!(create.is_error, Some(false));
+
+        let get = client
+            .call_tool(CallToolRequestParam {
+                name: "get_goal".into(),
+                arguments: None,
+            })
+            .await
+            .expect("get_goal call should succeed");
+        let goal_text = get.content[0]
+            .as_text()
+            .expect("get_goal returns text")
+            .text
+            .as_str();
+        let goal: serde_json::Value = serde_json::from_str(goal_text).expect("goal json");
+        assert_eq!(goal["goal"]["objective"], "Round-trip over real MCP");
+        assert_eq!(goal["goal"]["status"], "active");
+
+        client.cancel().await.expect("client should shut down");
+    }
 }

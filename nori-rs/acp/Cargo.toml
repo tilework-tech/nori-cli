@@ -56,7 +56,10 @@ libc = { workspace = true }
 [dev-dependencies]
 filetime = "0.2"
 pretty_assertions = { workspace = true }
-rmcp = { workspace = true }
+rmcp = { workspace = true, features = [
+    "client",
+    "transport-streamable-http-client-reqwest",
+] }
 serial_test = { workspace = true }
 tempfile = { workspace = true }
 tokio-test = { workspace = true }
