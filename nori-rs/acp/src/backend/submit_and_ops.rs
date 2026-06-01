@@ -293,8 +293,7 @@ impl AcpBackend {
         Ok(())
     }
 
-    /// Send an error event to the TUI (only used in debug builds).
-    #[cfg(debug_assertions)]
+    /// Send an error event to the TUI.
     pub(super) async fn send_error(&self, message: &str) {
         let _ = self
             .event_tx
