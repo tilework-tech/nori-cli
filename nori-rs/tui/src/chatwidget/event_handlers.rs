@@ -1162,6 +1162,7 @@ impl ChatWidget {
                     self.request_redraw();
                     return;
                 }
+                self.clear_pending_goal_edit_if_no_goal(&update);
                 if update.kind == nori_protocol::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
                 {
@@ -1173,6 +1174,12 @@ impl ChatWidget {
             }
             nori_protocol::ClientEvent::SessionModeChanged(update) => {
                 self.handle_acp_session_mode_changed(&update.current_mode_id);
+            }
+            nori_protocol::ClientEvent::ThreadGoalUpdated(update) => {
+                self.handle_thread_goal_updated(update.goal);
+            }
+            nori_protocol::ClientEvent::ThreadGoalCleared => {
+                self.handle_thread_goal_cleared();
             }
             nori_protocol::ClientEvent::Warning(warning) => {
                 self.on_warning(warning.message);

@@ -20,6 +20,7 @@ The TUI acts as the frontend layer. It:
 - Uses `nori-acp` for ACP agent communication (see `@/nori-rs/acp/`)
 - Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
 - Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)
+- Maps user-facing session controls such as `/goal` into typed `codex-protocol` operations, leaving ACP backend state ownership in `@/nori-rs/acp`
 - Displays approval requests from the ACP layer and forwards user decisions back
 - Renders streaming AI responses with markdown and syntax highlighting
 
@@ -61,6 +62,18 @@ The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` +
 - Pager overlay for reviewing long content (`pager_overlay.rs`)
 
 For replayed ACP conversations, user-authored message chunks are reconstructed upstream into `ReplayEntry::UserMessage` before they reach the widget. Live `MessageStream::User` deltas are therefore ignored by `ChatWidget` itself; the widget only needs to render the replay entry path, not duplicate the local composer state.
+
+**Thread Goal UI** (`chatwidget/goal.rs`, `chatwidget/event_handlers.rs`, `slash_command.rs`):
+
+The `/goal` command is a TUI command surface for ACP backend-owned goal state. `@/nori-rs/tui/src/slash_command.rs` advertises the command, while `@/nori-rs/tui/src/chatwidget/goal.rs` maps the command family (viewing, setting, status changes, clearing, and editing) into typed `codex_protocol::protocol::Op::ThreadGoal*` operations. Those operations are handled by `@/nori-rs/acp/src/backend/thread_goal.rs`; the TUI does not persist or derive goal state from prompt text.
+
+`ClientEvent::ThreadGoalUpdated` is treated as the source of truth for the visible current goal. `ChatWidget` stores that snapshot in `current_goal`, renders a compact history summary for new goals and objective/status changes, and uses it to seed `/goal edit` back into the composer. Accounting-only updates from backend usage refresh the cached snapshot without adding history cells. The summary formats elapsed time and token counts with the shared compact formatters from `@/nori-rs/protocol/src/num_format.rs`. `ClientEvent::ThreadGoalCleared` clears the cached snapshot and writes a short info message. Goal updates are omitted from view-only transcript rendering in `@/nori-rs/tui/src/viewonly_transcript.rs` because they are state synchronization events rather than conversation messages.
+
+The TUI validates goal objective text through `@/nori-rs/protocol/src/protocol/mod.rs` before submitting a set operation, matching the backend's validation path. This keeps the UI responsive while preserving the backend as the authority for state transitions, resume rehydration, token accounting, and prompt `<goal_context>` injection.
+
+`/goal edit` uses the cached goal immediately when available. If no snapshot is cached, it requests one from the ACP backend and marks the edit as pending until the backend replies. A no-goal response clears that pending flag before rendering the usage hint, preventing a later unrelated goal update from unexpectedly replacing the user's composer contents.
+
+When `/goal <objective>` is used while `current_goal` contains an unfinished ACP goal, the TUI opens a `SelectionView` confirmation instead of immediately sending the mutation. Choosing "Replace current goal" forwards `AppEvent::CodexOp(Op::ThreadGoalSet)` with the replacement objective and `Active` status; choosing "Keep current goal" dismisses the popup without changing backend state. Completed goals are replaced directly because they no longer protect an in-progress objective. This mirrors the Codex goal replacement flow while preserving the invariant that only explicit user confirmation can overwrite an unfinished goal snapshot cached from `ClientEvent::ThreadGoalUpdated`; the ACP backend owns the follow-up behavior that starts active goal work immediately when it can.
 
 The transcript pager overlay uses each history cell's transcript view rather than the live summary view. To keep reopened transcripts readable, the overlay caps non-patch cells at 20 lines and appends an omission marker, while patch cells keep their full diff output for review. In ACP sessions, `ClientToolCell` provides differentiated `transcript_lines()` for Execute tools (shell-style `$ command` format via `render_execute_transcript_lines()`) while exploring and edit cells reuse their `display_lines()` rendering for transcripts.
 

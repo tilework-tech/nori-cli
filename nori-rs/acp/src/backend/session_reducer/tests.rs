@@ -128,6 +128,64 @@ fn prompt_response_transitions_to_idle() {
 }
 
 #[test]
+fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+
+    let hidden_prompt = QueuedPrompt {
+        event_id: "goal-continuation-1".to_string(),
+        kind: QueuedPromptKind::GoalContinuation,
+        text: "Continue working toward the active thread goal.".to_string(),
+        display_text: None,
+        images: Vec::new(),
+    };
+    let out = reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(hidden_prompt),
+        &mut norm,
+    );
+
+    let queue_texts = out.events.iter().find_map(|event| match event {
+        ClientEvent::QueueChanged(update) => Some(update.prompts.clone()),
+        _ => None,
+    });
+    assert_eq!(queue_texts, Some(Vec::new()));
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptResponse {
+            stop_reason: acp::StopReason::EndTurn,
+        },
+        &mut norm,
+    );
+
+    assert_eq!(
+        rt.persisted
+            .transcript
+            .iter()
+            .map(|message| (message.role, message.content.as_str()))
+            .collect::<Vec<_>>(),
+        vec![(
+            nori_protocol::session_runtime::TranscriptRole::User,
+            "hello"
+        )]
+    );
+    assert!(matches!(
+        rt.active.as_ref().and_then(|active| active.prompt.as_ref()),
+        Some(QueuedPrompt {
+            kind: QueuedPromptKind::GoalContinuation,
+            ..
+        })
+    ));
+}
+
+#[test]
 fn inbound_event_kind_labels_prompt_response() {
     assert_eq!(
         inbound_event_kind(&InboundEvent::PromptResponse {

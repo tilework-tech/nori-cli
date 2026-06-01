@@ -5,6 +5,9 @@ pub(crate) fn get_op_name(op: &Op) -> &'static str {
     match op {
         Op::Interrupt => "Interrupt",
         Op::UserInput { .. } => "UserInput",
+        Op::ThreadGoalGet => "ThreadGoalGet",
+        Op::ThreadGoalSet { .. } => "ThreadGoalSet",
+        Op::ThreadGoalClear => "ThreadGoalClear",
         Op::UserTurn { .. } => "UserTurn",
         Op::OverrideTurnContext { .. } => "OverrideTurnContext",
         Op::ExecApproval { .. } => "ExecApproval",

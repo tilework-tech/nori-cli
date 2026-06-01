@@ -54,11 +54,26 @@ impl AcpBackend {
             }
         };
 
+        let thread_goal_state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
+        let transcript_recorder_cell = Arc::new(Mutex::new(None));
+        let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let goal_mcp_http_server = Arc::new(Mutex::new(None));
+
         // Create a session with enhanced error handling, forwarding CLI MCP servers.
-        let mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+        let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
             &config.mcp_servers,
             config.mcp_oauth_credentials_store_mode,
         );
+        thread_goal_mcp::register_for_session(
+            &connection,
+            &mut mcp_servers,
+            Arc::clone(&thread_goal_state),
+            backend_event_tx.clone(),
+            Arc::clone(&transcript_recorder_cell),
+            Arc::clone(&goal_mcp_connected),
+            Arc::clone(&goal_mcp_http_server),
+        )
+        .await?;
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
             Ok(id) => id,
@@ -146,6 +161,7 @@ impl AcpBackend {
                 None
             }
         };
+        *transcript_recorder_cell.lock().await = transcript_recorder.clone();
         let conversation_id = transcript_recorder
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
@@ -166,6 +182,10 @@ impl AcpBackend {
             conversation_id,
             approval_policy_tx,
             pending_compact_summary: Arc::new(Mutex::new(config.initial_context.clone())),
+            thread_goal_state,
+            goal_mcp_connected,
+            goal_mcp_http_server,
+            transcript_recorder_cell,
             pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),

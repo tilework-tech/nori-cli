@@ -72,6 +72,18 @@ pub fn format_si_suffix(n: i64) -> String {
     format_si_suffix_with_formatter(n, formatter())
 }
 
+/// Format elapsed whole seconds for compact user-facing status text.
+pub fn format_elapsed_seconds(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    if seconds < 60 {
+        return format!("{seconds}s");
+    }
+
+    let minutes = seconds / 60;
+    let seconds = seconds % 60;
+    format!("{minutes}m {seconds}s")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +107,14 @@ mod tests {
         assert_eq!(fmt(1_234_000_000), "1.23G");
         // Above 1000G we keep whole‑G precision (no higher unit supported here).
         assert_eq!(fmt(1_234_000_000_000), "1,234G");
+    }
+
+    #[test]
+    fn elapsed_seconds() {
+        assert_eq!(format_elapsed_seconds(0), "0s");
+        assert_eq!(format_elapsed_seconds(59), "59s");
+        assert_eq!(format_elapsed_seconds(63), "1m 3s");
+        assert_eq!(format_elapsed_seconds(73), "1m 13s");
+        assert_eq!(format_elapsed_seconds(-1), "0s");
     }
 }

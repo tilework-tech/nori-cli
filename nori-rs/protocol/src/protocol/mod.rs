@@ -64,6 +64,34 @@ pub struct Submission {
     pub op: Op,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ThreadGoalStatus {
+    Active,
+    Paused,
+    Blocked,
+    UsageLimited,
+    BudgetLimited,
+    Complete,
+}
+
+pub const MAX_THREAD_GOAL_OBJECTIVE_CHARS: i64 = 4_000;
+
+pub fn validate_thread_goal_objective(value: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err("goal objective must not be empty".to_string());
+    }
+
+    let char_count = value.chars().fold(0_i64, |count, _| count + 1);
+    if char_count > MAX_THREAD_GOAL_OBJECTIVE_CHARS {
+        return Err(format!(
+            "goal objective must be at most {MAX_THREAD_GOAL_OBJECTIVE_CHARS} characters"
+        ));
+    }
+
+    Ok(())
+}
+
 /// Submission operation
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -79,6 +107,22 @@ pub enum Op {
         /// User input items, see `InputItem`
         items: Vec<UserInput>,
     },
+
+    /// Get the persistent goal for the current thread, if any.
+    ThreadGoalGet,
+
+    /// Create or update the persistent goal for the current thread.
+    ThreadGoalSet {
+        /// New objective. When omitted, only the status is updated.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        objective: Option<String>,
+        /// New status. When omitted with an objective, defaults to active.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<ThreadGoalStatus>,
+    },
+
+    /// Clear the persistent goal for the current thread.
+    ThreadGoalClear,
 
     /// Similar to [`Op::UserInput`], but contains additional context required
     /// for a model turn.
