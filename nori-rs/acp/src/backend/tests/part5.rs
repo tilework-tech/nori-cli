@@ -651,8 +651,8 @@ async fn goal_mcp_initialize_allows_chained_hidden_continuations() {
         .expect("Should receive SessionConfigured event");
 
     let new_session = latest_logged_new_session(&wire_log_dir);
-    let goal_mcp_url = nori_goal_http_url(&new_session);
-    initialize_goal_mcp(&goal_mcp_url).await;
+    let goal_mcp_url = nori_client_http_url(&new_session);
+    initialize_nori_client_mcp(&goal_mcp_url).await;
 
     backend
         .submit(Op::ThreadGoalSet {
@@ -850,10 +850,10 @@ async fn goal_mcp_server_is_advertised_to_http_mcp_agents() {
             matches!(
                 server,
                 acp::McpServer::Http(http)
-                    if http.name == "nori-goal" && http.url.starts_with("http://127.0.0.1:")
+                    if http.name == "nori-client" && http.url.starts_with("http://127.0.0.1:")
             )
         }),
-        "expected session/new to advertise the local loopback nori-goal MCP server, got: {:?}",
+        "expected session/new to advertise the local loopback nori-client MCP server, got: {:?}",
         new_session.mcp_servers
     );
 }
@@ -869,10 +869,10 @@ async fn goal_mcp_server_is_not_advertised_without_http_mcp_capability() {
         new_session.mcp_servers.iter().all(|server| {
             !matches!(
                 server,
-                acp::McpServer::Http(http) if http.name == "nori-goal"
+                acp::McpServer::Http(http) if http.name == "nori-client"
             )
         }),
-        "expected session/new to omit nori-goal without HTTP MCP capability, got: {:?}",
+        "expected session/new to omit nori-client without HTTP MCP capability, got: {:?}",
         new_session.mcp_servers
     );
 }
@@ -914,10 +914,10 @@ async fn codex_agent_receives_loopback_http_goal_mcp_server() {
             matches!(
                 server,
                 acp::McpServer::Http(http)
-                    if http.name == "nori-goal" && http.url.starts_with("http://127.0.0.1:")
+                    if http.name == "nori-client" && http.url.starts_with("http://127.0.0.1:")
             )
         }),
-        "expected session/new to advertise a real loopback HTTP nori-goal server for Codex ACP, got: {:?}",
+        "expected session/new to advertise a real loopback HTTP nori-client server for Codex ACP, got: {:?}",
         new_session.mcp_servers
     );
 }
@@ -1013,18 +1013,22 @@ fn count_logged_requests(log_dir: &std::path::Path, method: &str) -> usize {
         .count()
 }
 
-fn nori_goal_http_url(new_session: &acp::NewSessionRequest) -> String {
+fn nori_client_http_url(new_session: &acp::NewSessionRequest) -> String {
     new_session
         .mcp_servers
         .iter()
         .find_map(|server| match server {
-            acp::McpServer::Http(http) if http.name == "nori-goal" => Some(http.url.clone()),
+            acp::McpServer::Http(http) if http.name == "nori-client" => Some(http.url.clone()),
             _ => None,
         })
-        .expect("session/new should advertise nori-goal HTTP MCP server")
+        .expect("session/new should advertise nori-client HTTP MCP server")
 }
 
-async fn initialize_goal_mcp(url: &str) {
+/// Drive a real MCP `initialize` against the loopback `nori-client` server,
+/// mirroring how an external agent connects. The rmcp streamable-HTTP server is
+/// spec-compliant, so the POST must send `Accept: application/json,
+/// text/event-stream` and the result arrives as an SSE `data:` line.
+async fn initialize_nori_client_mcp(url: &str) {
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
 
@@ -1048,6 +1052,7 @@ async fn initialize_goal_mcp(url: &str) {
     let request = format!(
         "POST /{path} HTTP/1.1\r\n\
 Host: {host_port}\r\n\
+Accept: application/json, text/event-stream\r\n\
 Content-Type: application/json\r\n\
 Content-Length: {}\r\n\
 Connection: close\r\n\r\n\
@@ -1056,7 +1061,7 @@ Connection: close\r\n\r\n\
     );
     let mut stream = tokio::net::TcpStream::connect(host_port)
         .await
-        .expect("goal MCP HTTP server should accept initialize");
+        .expect("nori-client MCP server should accept initialize");
     stream
         .write_all(request.as_bytes())
         .await
@@ -1068,7 +1073,7 @@ Connection: close\r\n\r\n\
         .expect("initialize response should read");
     assert!(
         response.contains("200 OK") && response.contains("\"serverInfo\""),
-        "expected successful goal MCP initialize response, got: {response}"
+        "expected successful nori-client MCP initialize response, got: {response}"
     );
 }
 

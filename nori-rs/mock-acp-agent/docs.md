@@ -23,7 +23,7 @@ Used by `@/nori-rs/tui-pty-e2e/` for end-to-end integration testing. The mock ag
 
 **Session Lifecycle Testing**: Several env vars control `session/load` behavior for testing the resume path in `@/nori-rs/acp/src/backend/session.rs`:
 - `MOCK_AGENT_SUPPORT_LOAD_SESSION` -- when set, the agent advertises `load_session: true` in its capabilities during `initialize()`
-- `MOCK_AGENT_MCP_HTTP` -- when set, the agent advertises HTTP MCP capability so `@/nori-rs/acp/src/backend/thread_goal_mcp.rs` and `@/nori-rs/acp/src/backend/thread_goal_http_mcp.rs` can be tested through the normal `session/new` MCP server advertisement path
+- `MOCK_AGENT_MCP_HTTP` -- when set, the agent advertises HTTP MCP capability so the backend-owned `nori-client` MCP server in `@/nori-rs/acp/src/backend/nori_client_mcp.rs` can be tested through the normal `session/new` MCP server advertisement path
 - `MOCK_AGENT_LOAD_SESSION_FAIL` -- when set, the `load_session()` handler returns an error instead of succeeding, allowing tests to exercise the runtime-failure fallback path
 - `MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT` -- when set to an integer N, the `load_session()` handler sends N text-chunk notifications (via `send_text_chunk()`) before returning, simulating history replay with a configurable volume of events. Used to test the deferred-relay pattern in `resume_session()` that prevents deadlocks when the notification count exceeds the bounded `event_tx` channel capacity.
 

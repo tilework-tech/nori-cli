@@ -6,7 +6,7 @@ goal complete or blocked.
 
 - In the raw Codex harness, goals are native session/runtime state.
 - In Nori CLI over ACP, goals are owned by the Nori ACP backend and projected
-  into an external ACP agent through prompt context plus a local `nori-goal`
+  into an external ACP agent through prompt context plus a local `nori-client`
   MCP server.
 
 ## Raw Codex Harness
@@ -120,7 +120,7 @@ ThreadGoal.status changes; continuation loop stops
 ## Nori CLI Over ACP
 
 Nori keeps the user-facing goal state in the ACP backend. During ACP session
-setup, it advertises a local `nori-goal` MCP server when the agent connection
+setup, it advertises a local `nori-client` MCP server when the agent connection
 reports HTTP MCP support. Per turn, it sends goal context to the external ACP
 agent as prompt text, and the external agent marks completion/blocking through
 that local MCP server.
@@ -137,11 +137,11 @@ sequenceDiagram
     participant Runtime as SessionRuntimeDriver
     participant ACP as ACP connection
     participant Agent as External ACP agent
-    participant MCP as local nori-goal MCP server
+    participant MCP as local nori-client MCP server
 
-    Backend->>MCP: ensure local nori-goal server exists
-    Backend->>ACP: session/new or session/load with mcpServers[nori-goal]
-    ACP-->>Agent: advertise nori-goal HTTP MCP server
+    Backend->>MCP: ensure local nori-client server exists
+    Backend->>ACP: session/new or session/load with mcpServers[nori-client]
+    ACP-->>Agent: advertise nori-client HTTP MCP server
     Agent->>MCP: connect and initialize goal tools
 
     User->>TUI: /goal <objective> or /goal resume
@@ -191,7 +191,7 @@ ACP session setup
   |
   | if connection supports HTTP MCP
   v
-Advertise local nori-goal HTTP MCP server
+Advertise local nori-client HTTP MCP server
   |
   | external agent connects and initializes tools
   v
@@ -232,7 +232,7 @@ External ACP agent keeps working
   |
   | when evidence proves done or blocked
   v
-nori-goal.update_goal(status="complete" | "blocked")
+nori-client.update_goal(status="complete" | "blocked")
   |
   v
 ThreadGoalState status changes; continuation loop stops
@@ -249,11 +249,14 @@ ThreadGoalState status changes; continuation loop stops
 - Nori registers the local goal MCP server during ACP session setup/load and
   advertises it only when the connection reports HTTP MCP support:
   `acp/src/backend/spawn_and_relay.rs`, `acp/src/backend/session.rs`, and
-  `acp/src/backend/thread_goal_mcp.rs`.
+  `acp/src/backend/nori_client_mcp.rs`.
 - The ACP connection forwards `mcpServers` to the external agent when creating a
   session in `acp/src/connection/sacp_connection.rs`.
-- The local `nori-goal` MCP server exposes `get_goal`, `create_goal`, and
-  `update_goal` in `acp/src/backend/thread_goal_mcp.rs`.
+- The local `nori-client` MCP server exposes `get_goal`, `create_goal`, and
+  `update_goal` as typed rmcp `#[tool]` handlers on an rmcp `StreamableHttpService`
+  (served over a loopback `axum` listener) in `acp/src/backend/nori_client_mcp.rs`.
+  `nori-client` is Nori's general harness-side channel to the agent; the goal
+  tools are its first tenants, not the whole of it.
 
 ## Comparison
 
@@ -263,7 +266,7 @@ ThreadGoalState status changes; continuation loop stops
 | Model-facing goal context | Hidden `GoalContext` response item | Prepended prompt text and hidden continuation prompt |
 | Continuation scheduler | `GoalRuntimeState::MaybeContinueIfIdle` | `SessionRuntimeDriver::maybe_submit_goal_continuation` |
 | Completion evaluator | The model self-audits against current evidence | The external ACP agent self-audits against current evidence |
-| Completion actuator | Built-in Codex `update_goal` tool | Local `nori-goal` MCP `update_goal` tool |
+| Completion actuator | Built-in Codex `update_goal` tool | Local `nori-client` MCP `update_goal` tool |
 | Context window | Same Codex thread/session history, compacted as needed | External ACP agent's session context, steered by Nori prompts |
 | Subagents | Separate Codex threads only when explicitly spawned | Determined by the external ACP agent, not by Nori goal state |
 

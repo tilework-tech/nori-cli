@@ -490,7 +490,7 @@ impl AcpBackend {
                     &self.mcp_servers,
                     self.mcp_oauth_credentials_store_mode,
                 );
-                if let Err(err) = thread_goal_mcp::register_for_session(
+                if let Err(err) = nori_client_mcp::register_for_session(
                     &self.connection,
                     &mut mcp_servers,
                     Arc::clone(&self.thread_goal_state),
@@ -538,6 +538,13 @@ impl AcpBackend {
             return;
         }
 
+        // Safety invariant: a hidden continuation may only chain after another
+        // hidden continuation once we have observed the agent actually connect to
+        // the `nori-client` MCP endpoint (`goal.connected`). Until then the agent
+        // has no way to mark the goal complete/blocked, so unbounded
+        // continuation-to-continuation chaining would loop forever. A user turn may
+        // always start one continuation; only continuation-to-continuation chaining
+        // requires the completion tool to be reachable.
         let can_chain_continuation = self
             .goal_mcp_connected
             .load(std::sync::atomic::Ordering::Relaxed);
