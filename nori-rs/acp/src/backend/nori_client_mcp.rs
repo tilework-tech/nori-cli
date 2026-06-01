@@ -8,7 +8,7 @@
 //! goal-only surface.
 //!
 //! The transport is rmcp's spec-compliant streamable-HTTP server, served on a
-//! loopback port. The tools are typed `#[tool]` handlers — there is no
+//! loopback port. The tools are typed `#[tool]` handlers; there is no
 //! hand-rolled HTTP or JSON-RPC framing here.
 
 use std::sync::Arc;
@@ -495,7 +495,7 @@ mod tests {
     /// End-to-end: a real spec-compliant rmcp client connects to the loopback
     /// server over HTTP, exercising the streamable-HTTP transport, the
     /// `initialize` handshake (which must flip `connected`), tool discovery, and
-    /// a `create_goal` round-trip — i.e. the path a real ACP agent takes.
+    /// a `create_goal` round-trip, i.e. the path a real ACP agent takes.
     #[tokio::test]
     async fn real_mcp_client_round_trips_over_http() {
         use rmcp::ServiceExt;

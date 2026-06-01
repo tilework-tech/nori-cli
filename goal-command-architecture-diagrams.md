@@ -255,7 +255,7 @@ ThreadGoalState status changes; continuation loop stops
 - The local `nori-client` MCP server exposes `get_goal`, `create_goal`, and
   `update_goal` as typed rmcp `#[tool]` handlers on an rmcp `StreamableHttpService`
   (served over a loopback `axum` listener) in `acp/src/backend/nori_client_mcp.rs`.
-  `nori-client` is Nori's general harness-side channel to the agent — the goal
+  `nori-client` is Nori's general harness-side channel to the agent; the goal
   tools are its first tenants, not the whole of it.
 
 ## Comparison

@@ -542,8 +542,8 @@ impl AcpBackend {
         // hidden continuation once we have observed the agent actually connect to
         // the `nori-client` MCP endpoint (`goal.connected`). Until then the agent
         // has no way to mark the goal complete/blocked, so unbounded
-        // continuation→continuation chaining would loop forever. A user turn may
-        // always start one continuation; only continuation→continuation chaining
+        // continuation-to-continuation chaining would loop forever. A user turn may
+        // always start one continuation; only continuation-to-continuation chaining
         // requires the completion tool to be reachable.
         let can_chain_continuation = self
             .goal_mcp_connected
