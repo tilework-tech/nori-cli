@@ -602,7 +602,7 @@ jobs:
     # Publish for tag pushes OR when publish_next=true and not a dry run
     # Note: create-next-tag is skipped for tag pushes but we still need the dependency for ordering
     if: ${{ !failure() && !cancelled() && (needs.validate.outputs.is_tag_push == 'true' || (needs.validate.outputs.publish_next == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false))) }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     environment: npm-publish
     permissions:
       contents: read # Required to checkout code
@@ -662,7 +662,9 @@ jobs:
             NPM_TAG="next"
           fi
 
-          # Publish with OIDC Trusted Publishing (no --provenance for private repos)
+          # Publish via OIDC Trusted Publishing. npm auto-generates a sigstore
+          # provenance attestation, which requires a GitHub-hosted runner --
+          # self-hosted/Blacksmith runners are rejected by the npm registry.
           npm publish "$TARBALL" --tag "$NPM_TAG" --access public
 
           echo "## npm Publish Complete" >> "$GITHUB_STEP_SUMMARY"
