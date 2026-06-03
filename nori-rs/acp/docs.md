@@ -340,7 +340,7 @@ ACP agents can expose runtime session configuration through `NewSessionResponse.
 This first implementation is deliberately live-session only:
 - `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
 - `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
-- If the snapshot includes a select option categorized as `Mode` (or with id `mode`), the TUI derives the current mode label from the same live options, displays it through the normal `mode_indicator` footer segment, and uses `Shift-Tab` to cycle to the next value via `session/set_config_option`.
+- Config options use `SessionConfigOptionCategory` to tag their purpose. The `Mode` category drives the footer mode indicator and `Shift-Tab` cycling. The `Model` category is the stable mechanism for model selection -- the TUI's `/model` command checks for a Model-category config option first (see `@/nori-rs/tui/docs.md`) before falling back to the unstable `SessionModelState`. Real ACP agents like Claude Code provide model selection through this stable config_options path.
 - No config form is shown during `/agent` switching yet.
 - No ACP session config selections are persisted to `config.toml` yet.
 
