@@ -6,7 +6,7 @@ expression: normalize_for_input_snapshot(session.screen_contents())
 
 • Sure, I'll help you with that!
 
-╭───────────────────────────────────────────────╮
+╭───────────────────────────────────────╮
 │  Goodbye! Thanks for using Nori.      │
 │                                       │
 │  Session: [SESSION_ID]                │

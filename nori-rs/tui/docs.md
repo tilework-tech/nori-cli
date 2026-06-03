@@ -282,7 +282,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | Command | Description |
 |---------|-------------|
 | `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
-| `/model` | Choose model (dynamically shows current agent/model name) |
+| `/model` | Choose model -- convenience shortcut that opens the Model-category config option value picker when available, falling back to the unstable model state (dynamically shows current agent/model name) |
 | `/config` | Configure live ACP session settings exposed by the current agent |
 | `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
 | `/settings` | Configure Nori CLI settings (pinned plan drawer, custom working messages, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
@@ -379,6 +379,8 @@ Claude-backed agents have an additional compatibility path in `skill_picker_item
 `/config` opens a two-step picker for the current ACP session. `ChatWidget::open_session_config_popup()` asks the `AcpAgentHandle` for the live `AcpBackend::config_options()` snapshot, renders supported `select` options, then opens a value picker for the selected option. Selecting a value sends `session/set_config_option` through `AcpBackend::set_config_option()` and shows a single final info or error message when the RPC finishes.
 
 The picker intentionally only edits the active session. It does not run during `/agent` switching and it does not persist selected values. Unsupported ACP config kinds and future non-exhaustive select layouts are treated as unavailable rather than guessed.
+
+`/model` acts as a convenience shortcut into the same config_options mechanism. `ChatWidget::open_model_popup()` in `chatwidget/pickers.rs` first fetches config_options via `AcpAgentHandle::get_session_config()`, finds a config option with `SessionConfigOptionCategory::Model`, and if present sends `AppEvent::OpenAcpSessionConfigValuePicker` to open the value picker directly (bypassing the top-level config picker). When no Model-category config option exists, it falls back to the unstable `SessionModelState` (behind `#[cfg(feature = "unstable")]`), and finally to a "not supported" empty model picker. This means real ACP agents that provide model selection through config_options (the stable mechanism) work correctly with `/model`, while agents that only provide the unstable `session/set_model` path still function via the fallback.
 
 **Selection Popup Row Layout (`bottom_pane/selection_popup_common.rs`):**
 

@@ -607,13 +607,29 @@ impl ChatWidget {
     }
 
     /// Open the ACP model picker popup.
+    ///
+    /// Prefers the stable `config_options` mechanism (Model-category config
+    /// option) over the unstable `SessionModelState`.  Falls back to the
+    /// unstable model state when no Model-category config option exists,
+    /// and to a static "not supported" message when neither is available.
     pub(crate) fn open_model_popup(&mut self) {
-        #[cfg(feature = "unstable")]
-        {
-            // ACP mode with unstable features - try to get model state from the agent
-            if let Some(handle) = self.acp_handle.clone() {
-                let app_event_tx = self.app_event_tx.clone();
-                tokio::spawn(async move {
+        if let Some(handle) = self.acp_handle.clone() {
+            let app_event_tx = self.app_event_tx.clone();
+            tokio::spawn(async move {
+                // First try the stable config_options path.
+                if let Some(config_options) = handle.get_session_config().await {
+                    let model_option = config_options.into_iter().find(|opt| {
+                        opt.category == Some(nori_acp::SessionConfigOptionCategory::Model)
+                    });
+                    if let Some(option) = model_option {
+                        app_event_tx.send(AppEvent::OpenAcpSessionConfigValuePicker { option });
+                        return;
+                    }
+                }
+
+                // Fall back to the unstable SessionModelState.
+                #[cfg(feature = "unstable")]
+                {
                     if let Some(model_state) = handle.get_model_state().await {
                         let models: Vec<crate::app_event::AcpModelInfo> = model_state
                             .available_models
@@ -637,19 +653,19 @@ impl ChatWidget {
                             models,
                             current_model_id,
                         });
-                    } else {
-                        // Failed to get model state - show empty picker with explanation
-                        tracing::warn!("Failed to get ACP model state");
-                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                            models: vec![],
-                            current_model_id: None,
-                        });
+                        return;
                     }
+                }
+
+                // Neither mechanism provided models.
+                app_event_tx.send(AppEvent::OpenAcpModelPicker {
+                    models: vec![],
+                    current_model_id: None,
                 });
-                return;
-            }
+            });
+            return;
         }
-        // No ACP handle or unstable not enabled - show disabled model picker
+        // No ACP handle - show disabled model picker
         let params = crate::nori::agent_picker::acp_model_picker_params();
         self.bottom_pane.show_selection_view(params);
     }
