@@ -212,12 +212,19 @@ fn replay_entry_from_client_event(
         | nori_protocol::ClientEvent::SessionUpdateInfo(_)
         | nori_protocol::ClientEvent::SessionConfigUpdate(_)
         | nori_protocol::ClientEvent::SessionModeChanged(_)
+        | nori_protocol::ClientEvent::ThreadGoalUpdated(_)
+        | nori_protocol::ClientEvent::ThreadGoalCleared
         | nori_protocol::ClientEvent::Warning(_) => None,
     }
 }
 
 fn should_pass_through_replay_client_event(event: &nori_protocol::ClientEvent) -> bool {
-    matches!(event, nori_protocol::ClientEvent::SessionUpdateInfo(_))
+    matches!(
+        event,
+        nori_protocol::ClientEvent::SessionUpdateInfo(_)
+            | nori_protocol::ClientEvent::ThreadGoalUpdated(_)
+            | nori_protocol::ClientEvent::ThreadGoalCleared
+    )
 }
 
 #[cfg(test)]
@@ -383,6 +390,33 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn client_events_to_replay_client_events_preserves_goal_updates() {
+        let goal_event =
+            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
+                goal: nori_protocol::ThreadGoal {
+                    objective: "Keep the north star".to_string(),
+                    status: nori_protocol::ThreadGoalStatus::Active,
+                    tokens_used: 42,
+                    time_used_seconds: 7,
+                    created_at: 100,
+                    updated_at: 107,
+                },
+            });
+        let replay = client_events_to_replay_client_events(vec![goal_event.clone()]);
+
+        assert_eq!(replay, vec![goal_event]);
+    }
+
+    #[test]
+    fn client_events_to_replay_client_events_preserves_goal_clears() {
+        let replay = client_events_to_replay_client_events(vec![
+            nori_protocol::ClientEvent::ThreadGoalCleared,
+        ]);
+
+        assert_eq!(replay, vec![nori_protocol::ClientEvent::ThreadGoalCleared]);
     }
 
     #[test]

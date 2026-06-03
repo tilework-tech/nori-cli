@@ -295,10 +295,23 @@ impl acp::Agent for MockAgent {
         let mut response = acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
             .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent"));
 
+        let mut capabilities = acp::AgentCapabilities::new();
+        let mut has_capabilities = false;
+
         if std::env::var("MOCK_AGENT_SUPPORT_LOAD_SESSION").is_ok() {
             eprintln!("Mock agent: advertising load_session capability");
-            response =
-                response.agent_capabilities(acp::AgentCapabilities::new().load_session(true));
+            capabilities = capabilities.load_session(true);
+            has_capabilities = true;
+        }
+
+        if std::env::var("MOCK_AGENT_MCP_HTTP").is_ok() {
+            eprintln!("Mock agent: advertising HTTP MCP capability");
+            capabilities = capabilities.mcp_capabilities(acp::McpCapabilities::new().http(true));
+            has_capabilities = true;
+        }
+
+        if has_capabilities {
+            response = response.agent_capabilities(capabilities);
         }
 
         Ok(response)

@@ -126,6 +126,7 @@ mod session_header;
 mod approvals;
 mod constructors;
 mod event_handlers;
+mod goal;
 mod helpers;
 mod key_handling;
 mod login;
@@ -416,6 +417,12 @@ pub(crate) struct ChatWidget {
     active_resume_picker_generation: Option<u64>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
+    // Latest ACP-owned goal snapshot for this session.
+    current_goal: Option<nori_protocol::ThreadGoal>,
+    // Whether `/goal` is waiting for the backend to return a goal snapshot.
+    pending_goal_status: bool,
+    // Whether `/goal edit` is waiting for the backend to return a goal snapshot.
+    pending_goal_edit: bool,
     // Loop mode state: remaining iterations (None = not looping)
     loop_remaining: Option<i32>,
     // Loop mode state: total iterations configured

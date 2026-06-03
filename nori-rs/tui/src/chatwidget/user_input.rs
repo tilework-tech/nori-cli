@@ -50,6 +50,10 @@ impl ChatWidget {
             return;
         }
 
+        if image_paths.is_empty() && self.handle_goal_user_message(&text) {
+            return;
+        }
+
         // Special-case: "/login <agent>" triggers login for a specific agent
         // This intercepts before the message is sent to the agent
         if let Some(agent_name) = text.strip_prefix("/login ").map(str::trim)

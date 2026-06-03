@@ -156,14 +156,17 @@ impl AcpBackend {
         } else {
             prompt_text
         };
+        let prompt_with_goal_context = self
+            .prepend_goal_context_to_prompt(prompt_with_context)
+            .await;
 
         // Check if we have a pending compact summary to prepend
         let pending_summary = self.pending_compact_summary.lock().await.take();
         let final_prompt_text = if let Some(summary) = pending_summary {
             use codex_core::compact::SUMMARY_PREFIX;
-            format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_with_context}")
+            format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_with_goal_context}")
         } else {
-            prompt_with_context
+            prompt_with_goal_context
         };
 
         let (phase_before_submit, active_request_id_before_submit, queue_len_before_submit) = {

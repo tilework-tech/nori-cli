@@ -20,6 +20,15 @@ impl AcpBackend {
             Op::UserInput { items } => {
                 self.handle_user_input(items, &id).await?;
             }
+            Op::ThreadGoalGet => {
+                self.handle_thread_goal_get().await;
+            }
+            Op::ThreadGoalSet { objective, status } => {
+                self.handle_thread_goal_set(objective, status).await;
+            }
+            Op::ThreadGoalClear => {
+                self.handle_thread_goal_clear().await;
+            }
             Op::Interrupt => {
                 let _ = self
                     .session_event_tx
@@ -284,8 +293,7 @@ impl AcpBackend {
         Ok(())
     }
 
-    /// Send an error event to the TUI (only used in debug builds).
-    #[cfg(debug_assertions)]
+    /// Send an error event to the TUI.
     pub(super) async fn send_error(&self, message: &str) {
         let _ = self
             .event_tx

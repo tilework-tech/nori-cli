@@ -4,10 +4,9 @@ Path: @/nori-rs/nori-protocol
 
 ### Overview
 
-- Defines the normalized `ClientEvent` protocol that sits between raw ACP session updates (from `agent-client-protocol-schema`) and the TUI rendering layer. All ACP tool calls, messages, plans, approvals, and replay entries are transformed into this crate's types before reaching the TUI.
-- The `ClientEventNormalizer` is the stateful entry point: it accepts `acp::SessionUpdate` and `acp::RequestPermissionRequest` values and emits `Vec<ClientEvent>`.
-- Session-scoped ACP metadata is normalized into compact client events: simple mode/session/usage notes use `ClientEvent::SessionUpdateInfo`, while ACP session config snapshots use `ClientEvent::SessionConfigUpdate` so the TUI can diff option values without parsing display text.
-- Single-file crate (`lib.rs`) with no submodules.
+- Defines the normalized `ClientEvent` protocol between raw ACP session updates and the TUI rendering layer. `ClientEventNormalizer` converts provider messages, plans, tools, approvals, and session metadata into stable client events.
+- Exposes backend-owned session state, including thread goals, through normalized client events so `@/nori-rs/tui` does not know ACP backend storage details.
+- `@/nori-rs/nori-protocol/src/lib.rs` defines the client event vocabulary and normalization path, while `@/nori-rs/nori-protocol/src/session_runtime.rs` defines reducer-owned ACP runtime state shared with `@/nori-rs/acp`.
 
 ### How it fits into the larger codebase
 
@@ -21,12 +20,13 @@ agent_client_protocol_schema::SessionUpdate
 - **Downstream consumer:** `nori-tui` (`@/nori-rs/tui/`) is the primary consumer. The TUI renders `ToolSnapshot`, `MessageDelta`, `PlanSnapshot`, `ApprovalRequest`, reducer-owned `SessionPhaseChanged` / `PromptCompleted` / `QueueChanged` events, `ReplayEntry`, and `AgentCommandsUpdate` from this crate.
 - `nori-acp` uses the same normalized events for both live updates and `session/load` replay, so this crate now has to preserve enough structure for replayable user-message chunks and pass-through session metadata notes.
 - The `nori-acp` backend (`@/nori-rs/acp/`) now wraps the normalizer inside a serialized `SessionRuntime` driver. ACP prompt responses, `session/load`, `session/update`, cancellations, and permission requests are reduced in order before the backend forwards the resulting `ClientEvent` items to the TUI via `BackendEvent::Client`.
+- Thread-goal events are produced by `@/nori-rs/acp/src/backend/thread_goal.rs`, recorded by `@/nori-rs/acp/src/backend/transcript.rs`, and consumed by `@/nori-rs/tui/src/chatwidget/goal.rs`. This crate defines the shared client-facing shape so live sessions, replay, and resume all speak the same event vocabulary.
 - This crate intentionally has no TUI, rendering, or terminal dependencies. It is a pure data transformation layer.
 
 ### Core Implementation
 
 - **`ClientEventNormalizer`** maintains a `HashMap<String, acp::ToolCall>` keyed by `call_id`. `ToolCallUpdate` messages always upsert into that map: if the ACP agent never sent an initial `ToolCall`, the normalizer synthesizes a placeholder `ToolCall`, applies the update fields, and still emits a visible `ToolSnapshot`.
-- **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `nori-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. These types let the backend treat prompt turns, `session/load`, queued prompts, and ownership of tool/approval updates as one ordered state machine instead of reconstructing turn state from racing tasks. `ActiveRequestState` keeps the last flushed assistant text so `PromptCompleted { last_agent_message, .. }` remains correct even when a later reasoning chunk closes the assistant buffer before the turn ends.
+- **`SessionRuntime` support types** in `session_runtime.rs` define the reducer-owned ACP runtime model used by `nori-acp`: `SessionPhase`, `PersistedSessionState`, `ActiveRequestState`, `OpenMessage`, and `QueuedPrompt`. These types let the backend treat prompt turns, `session/load`, queued prompts, and ownership of tool/approval updates as one ordered state machine instead of reconstructing turn state from racing tasks. `QueuedPromptKind` distinguishes visible user prompts, compaction prompts, and hidden goal continuations so `@/nori-rs/acp/src/backend/session_reducer.rs` can preserve the right queue, transcript, and completion behavior for each path. `ActiveRequestState` keeps the last flushed assistant text so `PromptCompleted { last_agent_message, .. }` remains correct even when a later reasoning chunk closes the assistant buffer before the turn ends.
 - **Session update normalization** keeps the first pass intentionally small:
   - `UserMessageChunk` becomes `MessageDelta { stream: User, .. }`, which lets replay paths reconstruct visible user history during `session/load`.
   - `CurrentModeUpdate` becomes `ClientEvent::SessionModeChanged { current_mode_id }`; the TUI resolves the id to a human label using its cached mode list.
@@ -34,6 +34,7 @@ agent_client_protocol_schema::SessionUpdate
   - `SessionInfoUpdate` becomes a lightweight `SessionUpdateInfo` summary.
   - `UsageUpdate` also becomes `SessionUpdateInfo`, but the usage variant additionally carries `SessionUsageState` so the TUI can update footer context without reparsing the display string.
 - **Persisted session metadata** now includes `session_info` and `session_usage` alongside available commands, current mode, and config options. `nori-acp` owns persistence, but these structs live here so the reducer and replay pipeline share one runtime model.
+- **Thread-goal client events** carry the current goal snapshot (`objective`, lifecycle status, token usage, active time, and timestamps) or a clear notification. They are not derived from ACP provider messages; they are backend session-state projections emitted through the same `ClientEvent` stream as normalized ACP data.
 - **`is_generic_tool_call()`** gates initial `ToolCall` emission: tool calls with no `raw_input`, no `locations`, empty `content`, and no `/` in the title are suppressed (return empty `Vec`). The normalizer still records them internally so that later attributed `ToolCallUpdate` messages can refine the existing call without forcing the TUI to render a placeholder cell first.
 - **Invocation priority cascade** in `invocation_from_tool_call()` resolves what the tool is doing, in priority order:
 
@@ -52,6 +53,9 @@ agent_client_protocol_schema::SessionUpdate
 
 - The `is_generic_tool_call()` filter means the normalizer is not 1:1 with incoming events. Initial `ToolCall` messages that are sufficiently sparse are silently dropped, but later `ToolCallUpdate` messages still become visible `ToolSnapshot`s even if no initial `ToolCall` ever arrived.
 - `SessionUpdateInfo` stays intentionally lightweight, but it is no longer fully lossy: the `Usage` variant also carries structured `SessionUsageState` so replay and live footer updates can share the same path.
+- `ThreadGoalUpdated` is a full replacement snapshot for the client's current goal, while `ThreadGoalCleared` removes that state. The TUI should not infer a goal lifecycle by replaying command text; it should consume these events directly.
+- Usage events and goal events intentionally remain separate: ACP `UsageUpdate` normalizes to `SessionUpdateInfo`, and the backend may follow it with a refreshed `ThreadGoalUpdated` when a goal exists. Goal `tokens_used` is accumulated by `@/nori-rs/acp/src/backend/thread_goal.rs` from positive ACP session-usage deltas, with context-window drops treated as new checkpoints rather than subtracting previously counted work.
+- Hidden goal continuations are protocol-visible as `QueuedPromptKind::GoalContinuation`, but they are not user-visible prompt text. Reducer consumers should treat their assistant output like any other assistant turn while excluding their prompt text from visible `QueueChanged` entries and user transcript messages.
 - The location fallback (tier 4) only handles `Read` and `Search` kinds. Edit/Delete/Move with locations but no `raw_input` return `None` from the normalizer and fall through to the TUI's location-path display fallback, avoiding creation of empty-diff `FileOperations` that would route to `PatchHistoryCell`.
 - `sanitize_title()` is a two-pass operation: first strips the `[current working directory ...]` bracket, then strips trailing `(description)` parenthetical. The parenthetical strip only fires after a cwd bracket was found, because Gemini appends descriptions after the cwd metadata.
 - Shell wrapper detection (`is_shell_wrapper()`) recognizes `bash`, `sh`, `zsh`, `fish`, `pwsh`, and `powershell` with `-c` or `-lc` flags. When a 3-element command array matches this pattern, only the script portion is extracted as the command string.

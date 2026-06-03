@@ -1106,8 +1106,12 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
                 // Don't break yet - install line may follow
             }
         }
-        // Skip empty lines after the header block
-        while skip_until < lines.len() && lines[skip_until].trim().is_empty() {
+        // Skip empty lines and wrapped tail text after the header block. In
+        // narrow PTYs the install hint can wrap after "Nori AI", leaving a
+        // standalone "enhancements" line after the init command line.
+        while skip_until < lines.len()
+            && (lines[skip_until].trim().is_empty() || lines[skip_until].trim() == "enhancements")
+        {
             skip_until += 1;
         }
         if skip_until > 0 {
@@ -1293,6 +1297,30 @@ mod tests {
             let input = format!("› {placeholder}\n");
             assert_eq!(normalize_for_input_snapshot(input), "› [DEFAULT_PROMPT]\n");
         }
+    }
+
+    #[test]
+    fn test_normalize_wrapped_skillset_init_header() {
+        let input = "\
+╭────────────────────────────╮
+│ Nori CLI v0.0.0            │
+╰────────────────────────────╯
+
+  Run 'npx nori-skillsets init' to set up Nori AI
+enhancements
+
+› @ for file mentions
+
+  ⎇ master
+  Approvals: Read Only
+";
+        let expected = "\
+› [DEFAULT_PROMPT]
+
+  ⎇ master
+  Approvals: Read Only
+";
+        assert_eq!(normalize_for_input_snapshot(input.to_string()), expected);
     }
 
     #[test]

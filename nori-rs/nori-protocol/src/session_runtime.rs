@@ -198,6 +198,7 @@ pub enum TranscriptRole {
 pub enum QueuedPromptKind {
     User,
     Compact,
+    GoalContinuation,
 }
 
 /// A user prompt waiting to be sent to ACP.

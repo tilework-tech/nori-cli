@@ -17,6 +17,7 @@ pub enum SlashCommand {
     Config,
     Approvals,
     Settings,
+    Goal,
     New,
     Resume,
     ResumeViewonly,
@@ -60,6 +61,7 @@ impl SlashCommand {
             SlashCommand::Config => "configure ACP agent settings (if exposed by the agent)",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Settings => "configure Nori CLI settings (theme, hotkeys, layout, …)",
+            SlashCommand::Goal => "set or view the goal for a long-running task",
             SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
@@ -99,6 +101,7 @@ impl SlashCommand {
             | SlashCommand::Status
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
+            | SlashCommand::Goal
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
         }

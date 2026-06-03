@@ -176,9 +176,14 @@ name = "Mock ACP provider for tests"
 vertical_footer = true
 "#;
 
-    let mut session =
-        TuiSession::spawn_with_config(24, 60, SessionConfig::new().with_config_toml(config_toml))
-            .expect("Failed to spawn");
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        60,
+        SessionConfig::new()
+            .with_config_toml(config_toml)
+            .with_excluded_binary("nori-skillsets"),
+    )
+    .expect("Failed to spawn");
 
     session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();

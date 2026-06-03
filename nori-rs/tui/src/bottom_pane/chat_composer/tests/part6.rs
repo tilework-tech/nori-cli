@@ -545,6 +545,32 @@ fn slash_mode_prompt_stays_active_after_command_arguments() {
 }
 
 #[test]
+fn builtin_goal_command_with_arguments_submits_literal_text() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    type_chars_humanlike(
+        &mut composer,
+        &[
+            '/', 'g', 'o', 'a', 'l', ' ', 'S', 'h', 'i', 'p', ' ', 'i', 't',
+        ],
+    );
+
+    let (result, _needs_redraw) =
+        composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(InputResult::Submitted("/goal Ship it".to_string()), result);
+    assert!(composer.textarea.is_empty(), "composer should be cleared");
+}
+
+#[test]
 fn shell_mode_prompt_uses_red_bang_without_duplicate_prefix() {
     let (tx, _rx) = unbounded_channel::<AppEvent>();
     let sender = AppEventSender::new(tx);

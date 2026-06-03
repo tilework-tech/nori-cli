@@ -1,0 +1,40 @@
+│ Nori CLI v0.0.0                                │
+│                                                │
+│ directory: ~/Documents/source/nori/cli/nori-rs │
+│ agent:     elizacp                             │
+│ skillset:  clifford                            │
+│                                                │
+│ Instruction Files                              │
+╰────────────────────────────────────────────────╯
+
+Goal
+Status: active
+Objective: Verify immediate goal continuation from slash command
+Time used: 0s
+Tokens used: 0
+
+Commands: /goal edit, /goal pause, /goal clear
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• What do you think about it cannot be finished now make concrete progress toward the real requested end state leave the
+  goal active and do not redefine success around a smaller or easier task - temporary rough edges are acceptable while
+  the work is moving in the right direction completion still requires the requested end state to be true and verified
+  budget - tokens used 0 - token budget none - tokens remaining unbounded work from evidence use the current worktree
+  and external state as authoritative previous conversation context can help locate relevant work but inspect the
+  current state before relying on it improve replace or remove existing work as needed to satisfy the actual objective
+  completion audit before deciding that the goal is achieved treat completion as unproven and verify it against the
+  actual current state if completion is not proven keep working toward the objective?
+
+Goal
+Status: active
+Objective: Verify immediate goal continuation from slash command
+Time used: 1m 58s
+Tokens used: 0
+
+Commands: /goal edit, /goal pause, /goal clear
+
+
+› @ for file mentions
+
+  ⎇ feat/goal · Approvals: Read Only
