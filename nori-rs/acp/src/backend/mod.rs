@@ -290,6 +290,16 @@ pub struct AcpBackend {
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
     pending_compact_summary: Arc<Mutex<Option<String>>>,
+    /// Persistent goal for this ACP session.
+    thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
+    /// True after the active ACP agent has successfully opened the backend-owned
+    /// `nori-client` MCP endpoint.
+    goal_mcp_connected: Arc<AtomicBool>,
+    /// Loopback HTTP server exposing the backend-owned `nori-client` MCP tools.
+    goal_mcp_http_server: Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
+    /// Transcript recorder cell used by local MCP tools created before the
+    /// recorder's session ID is known.
+    transcript_recorder_cell: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
     pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence
@@ -345,11 +355,13 @@ pub struct AcpBackend {
 }
 
 mod helpers;
+mod nori_client_mcp;
 mod session;
 pub(crate) mod session_reducer;
 mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
+mod thread_goal;
 mod user_input;
 mod user_shell;
 use helpers::get_op_name;

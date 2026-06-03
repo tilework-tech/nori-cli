@@ -4,7 +4,9 @@ Path: @/nori-rs/acp
 
 ### Overview
 
-The ACP crate implements the Agent Client Protocol integration for Nori. It manages connecting to ACP-compliant agents -- either by spawning local subprocesses (like Claude Code, Codex, or Gemini) or by connecting to remote agents over WebSocket -- communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers. `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
+- The ACP crate implements the Agent Client Protocol integration for Nori. It manages connecting to ACP-compliant agents -- either by spawning local subprocesses (like Claude Code, Codex, or Gemini) or by connecting to remote agents over WebSocket -- communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers.
+- It owns ACP backend session state that is not provided by agents, including per-session thread goals used by the `/goal` TUI command and prompt-context injection.
+- `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 
 ### How it fits into the larger codebase
 
@@ -24,6 +26,8 @@ The ACP crate serves as a bridge between:
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
 - `SessionRuntime` in `@/nori-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
+- Thread-goal operations from `@/nori-rs/protocol` and normalized goal events from `@/nori-rs/nori-protocol`, with backend storage and prompt transformation in `@/nori-rs/acp/src/backend/thread_goal.rs`
+- The backend-owned `nori-client` MCP server in `@/nori-rs/acp/src/backend/nori_client_mcp.rs`, Nori's harness-side channel to the external ACP agent, which today exposes the same goal state to ACP agents as typed tools
 
 Key files:
 - `registry.rs` - Agent configuration and npm package detection
@@ -31,6 +35,8 @@ Key files:
 - `broker/` - Cloud session broker client: OAuth auth, JWT management, session acquisition/release, and `CloudConnectionInfo` (see `@/nori-rs/acp/src/broker/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
+- `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage checkpoint updates
+- `backend/nori_client_mcp.rs` - Hosts the `nori-client` MCP server: typed `#[tool]` goal handlers on `NoriClientService` (an rmcp `ServerHandler`), served via rmcp's `StreamableHttpService` over a loopback `axum` listener (`NoriClientServer`)
 - `transcript_discovery.rs` - Discovers transcript files for external agents
 - `auto_worktree.rs` - Orchestrates automatic git worktree creation, eligibility checking, and summary-based renaming
 
@@ -79,7 +85,7 @@ ACP session-domain state now flows through a single serialized reducer. `Session
 
 `SessionRuntime` is the authoritative model for:
 - whether the ACP session is idle, loading, or in a prompt turn
-- queued user prompts and compact prompts waiting behind an active request
+- queued user, compact, and hidden goal-continuation prompts waiting behind an active request
 - request-local message assembly for user/assistant/reasoning streams, including flushing the prior open text buffer when the ACP session update type changes
 - tool snapshot ownership via `owner_request_id`
 - pending permission request ownership and cancellation cleanup
@@ -91,6 +97,39 @@ The live backend path in `user_input.rs`, `submit_and_ops.rs`, `spawn_and_relay.
 Metadata notifications that ACP permits while idle are treated as session-owned rather than request-owned. `AvailableCommandsUpdate`, `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`, and `UsageUpdate` no longer produce "no request is active" warnings; instead the reducer persists the latest values and forwards normalized `ClientEvent`s downstream.
 
 `session/load` replay also preserves more session context than before. User-side `MessageDelta { stream: User, .. }` values are reassembled into `ReplayEntry::UserMessage`, while `SessionUpdateInfo` notes pass through unchanged. Message replay preserves chronological stream-kind boundaries: an answer -> reasoning -> answer sequence becomes three replay entries, while adjacent deltas of the same stream are still coalesced. For usage updates, that replay path now restores the structured footer context state without needing to re-render the verbose message in history.
+
+The runtime differentiates visible user work from backend-internal continuation work through `QueuedPromptKind` in `@/nori-rs/nori-protocol/src/session_runtime.rs`. Goal continuations are sent through the same reducer and ACP side-effect path as user prompts, so assistant deltas, tool activity, hooks, transcript assistant messages, usage updates, and completion events remain normal. Their prompt text is hidden from visible queue updates and from persisted user transcript entries, which keeps the user's transcript anchored to explicit user input while still letting the ACP session continue the active goal.
+
+**Thread Goal State** (`backend/thread_goal.rs`, `backend/nori_client_mcp.rs`, `backend/submit_and_ops.rs`, `backend/user_input.rs`, `backend/transcript.rs`):
+
+The ACP backend owns the `/goal` feature as per-session state instead of delegating it to the ACP agent. The TUI sends typed `codex_protocol::protocol::Op::ThreadGoalGet`, `ThreadGoalSet`, and `ThreadGoalClear` operations; `submit_and_ops.rs` routes those operations directly to the backend goal handler; and successful mutations are emitted as `nori_protocol::ClientEvent::ThreadGoalUpdated` or `ThreadGoalCleared`. Eligible ACP agents can also interact with the same state through the backend-owned `nori-client` local MCP server, which exposes the goal tools `get_goal`, `create_goal`, and `update_goal`.
+
+```
+@/nori-rs/tui/src/chatwidget/goal.rs
+    -> @/nori-rs/protocol/src/protocol/mod.rs (typed Op)
+    -> @/nori-rs/acp/src/backend/thread_goal.rs
+    -> @/nori-rs/acp/src/backend/nori_client_mcp.rs (optional model-facing MCP)
+    -> @/nori-rs/nori-protocol/src/lib.rs (ClientEvent)
+    -> @/nori-rs/tui/src/chatwidget/event_handlers.rs
+```
+
+`ThreadGoalState` tracks the current objective, lifecycle status, active elapsed time, accumulated goal token usage, and the latest ACP session-usage checkpoint. ACP usage updates add only positive deltas since the last checkpoint to goal-local `tokens_used`; if context-window usage drops after compaction or session reset, the already accumulated goal usage is preserved and the lower value becomes the next checkpoint. Only the `Active` status accrues active time; paused, blocked, usage-limited, budget-limited, and complete goals keep their accumulated time until they become active again. Objective validation is shared with `@/nori-rs/protocol/src/protocol/mod.rs` so the TUI and backend enforce the same acceptance rules, and goal status text uses the shared compact elapsed-time and SI-token formatters from `@/nori-rs/protocol/src/num_format.rs`.
+
+`nori_client_mcp.rs` is a bridge, not a second store. The goal tools are typed rmcp `#[tool]` handlers on `NoriClientService`; they lock the same `ThreadGoalState` used by TUI `/goal` operations, return JSON snapshots shaped for model consumption, and emit the same `ThreadGoalUpdated` client event after mutations. The bridge records those emitted events through `@/nori-rs/acp/src/backend/transcript.rs` when a transcript recorder is available; `NoriClientShared` stores the recorder behind a shared cell because the service is built before the session id is known.
+
+The local `nori-client` server is only advertised when `register_for_session` in `@/nori-rs/acp/src/backend/nori_client_mcp.rs` sees HTTP MCP support from `@/nori-rs/acp/src/connection/mod.rs`. Nori advertises a real `http://127.0.0.1:<port>/mcp` endpoint rather than an ACP pseudo-URL, because Codex ACP and Claude ACP both forward ACP `mcpServers` to their underlying clients as ordinary HTTP MCP server config. The loopback server (`NoriClientServer`) is served by rmcp's spec-compliant `StreamableHttpService` (stateless mode) behind an `axum` listener; it is owned by the ACP backend (abort-on-drop) and talks directly to the same in-memory goal state as `/goal`. The server is named `nori-client` rather than `nori-goal` because it is Nori's general harness-side channel to the external ACP agent -- the single point of contact for harness-specific tooling the ACP protocol does not yet provide -- and the goal tools are simply its first tenants.
+
+The model-facing tool contract is intentionally narrower than the user-facing `/goal` command surface. `create_goal` creates a new active goal only when no goal exists, rejects token budgets for now, and delegates objective validation to `ThreadGoalState`. `update_goal` takes a typed `complete`/`blocked` enum, so the advertised tool schema exposes only those two Codex-compatible statuses and any other value is rejected at deserialization; pause, resume, usage-limited, and budget-limited transitions remain controlled by the user or the backend system path. Errors are returned as MCP tool errors instead of changing state.
+
+Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends the current goal as a structured `<goal_context>` block when a goal exists. Hook context is still applied before goal context, and compact summaries remain the outermost framing instruction, so resumed/compacted turns retain their existing prompt-ordering invariant while still carrying goal state to the agent. The prompt goal context and hidden continuation prompt use the same compact elapsed-time and token-count formatting as the visible TUI goal summary.
+
+Agents that are not advertised the local `nori-client` server still receive goal context through prompt transformation, an immediate hidden goal-continuation prompt when an active goal is set while the runtime is idle, and a single hidden goal-continuation prompt after visible user turns. The local MCP server is additive for capable agents so they can use structured goal tools; it is never required for goal context, transcript replay, usage accounting, or one-shot continuation behavior.
+
+After an active goal mutation or a visible user prompt completes with `StopReason::EndTurn`, `session_runtime_driver.rs` may submit a hidden goal-continuation prompt to the same ACP session. `thread_goal.rs` owns the continuation prompt text so it is derived from the current backend goal snapshot, not from TUI state or transcript text. The driver only starts a continuation when the goal is active, the reducer has returned to idle, and no queued user work remains. Chaining from one hidden `GoalContinuation` into another is gated on `goal_mcp_connected`, an `@/nori-rs/acp/src/backend/mod.rs` session flag that `NoriClientService::initialize` (the rmcp `ServerHandler::initialize` hook) flips only after the local MCP server receives an `initialize` request. This is a safety invariant: until the agent has actually connected to the `nori-client` endpoint it has no way to mark the goal complete, so unbounded continuation-to-continuation chaining is not allowed. Agents without a connected goal MCP endpoint receive at most one hidden continuation per active goal mutation or visible user turn.
+
+Goal state is also part of the replay contract. `transcript.rs` passes Nori-owned goal update and clear events through replay, and `session.rs` seeds `ThreadGoalState` from those transcript-derived events before ACP session setup advertises local MCP tools. Server-side `session/load` can also emit ACP replay notifications while loading; those normalized client events are deferred until backend setup completes, then combined with the transcript replay events before rebuilding `ThreadGoalState`. This ordering matters because ACP agents replay their own session history, but they do not replay Nori-owned `ThreadGoalUpdated` events, so the transcript remains authoritative for goal state even when the agent emits load replay notifications.
+
+When a resumed goal is paused, blocked, or usage-limited, `thread_goal.rs` derives a one-time `SessionUpdateInfo` notice from the rehydrated snapshot so the TUI can show why goal automation will not continue until the user resumes, edits, clears, or resolves the blocker. That notice is emitted directly by `session.rs` after deferred replay events and is not written back into the transcript, so each future resume still derives its notice from goal state instead of accumulating duplicate history entries. ACP usage updates still normalize to `SessionUpdateInfo`, but `session_runtime_driver.rs` observes those events and asks the goal state to refresh `tokens_used`; when a goal exists, the backend emits a follow-up `ThreadGoalUpdated` snapshot so the TUI and transcript stay synchronized with usage accounting.
 
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
@@ -643,7 +682,7 @@ The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with ACP ag
 
 **Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the ordered inbox, and uses the SACP responder plus `ConnectionTo<Agent>` to send the eventual review decision back without blocking the dispatch loop while the UI collects user input.
 
-**MCP Server Forwarding** (`connection/mcp.rs`):
+**MCP Server Forwarding and the Backend-Owned `nori-client` MCP Server** (`connection/mcp.rs`, `backend/nori_client_mcp.rs`):
 
 CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_sacp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to ACP `McpServer` values inside the transport adapter:
 
@@ -661,11 +700,13 @@ Disabled servers (`enabled == false`) are filtered out before conversion. Enviro
 
 This means `to_sacp_mcp_servers()` has side effects (reads from keyring/file system) rather than being a pure config transformation. The `acp` crate depends on `codex-rmcp-client`'s `load_oauth_tokens` for this purpose.
 
-`create_session()` accepts a `mcp_servers: Vec<McpServer>` parameter that is populated by calling `to_sacp_mcp_servers()` at each session creation site:
-- `spawn_and_relay.rs` -- initial session creation during backend spawn
-- `session.rs` -- both the server-side `load_session` fallback and client-side replay paths during session resume
-- `submit_and_ops.rs` -- fresh session creation after context compaction
-- `hooks.rs` -- passes an empty vec (hook sessions do not need MCP servers)
+`nori_client_mcp.rs` is the backend-owned MCP channel for harness-side tooling (currently the goal tools). It serves rmcp's spec-compliant `StreamableHttpService` (streamable-HTTP, stateless mode) over a loopback `axum` listener bound on `127.0.0.1`, and `register_for_session` appends an HTTP ACP MCP server entry named `nori-client` to the same `mcp_servers` list used for configured servers. The transport handles all MCP framing (initialize, tool listing, tool calls); there is no hand-rolled HTTP or JSON-RPC parsing in process. The `NoriClientServer` handle lives on `AcpBackend`, aborts its serving task on drop, and is dropped with the backend.
+
+The server uses a normal `http://127.0.0.1:<port>/mcp` URL because current Codex and Claude ACP adapters forward ACP MCP server entries into their underlying clients as ordinary HTTP MCP config. Avoiding `acp:` keeps startup compatible with those adapters while still keeping the tool implementation in process.
+
+ACP session setup paths build the MCP server list in two phases: first convert configured MCP servers with `to_sacp_mcp_servers()`, then let backend-owned features append local MCP servers when their own eligibility checks pass. The `nori-client` server requires HTTP MCP support. This setup applies to resumed, fresh, fallback, and compaction-created sessions. Hook-only ACP sessions pass an empty list because hooks do not need user-configured or backend-owned MCP servers.
+
+The local `nori-client` MCP server is intentionally additive. User-configured MCP servers are still forwarded normally, and ineligible agents simply do not receive the loopback endpoint. Continuation chaining depends on the local MCP server actually being initialized for the current advertised endpoint, not just on HTTP MCP support or endpoint advertisement.
 
 ### Transcript Persistence
 
@@ -1004,7 +1045,7 @@ SacpConnection::spawn() -> check capabilities().load_session
 SessionConfigured event sent to TUI
     |
     v
-Deferred replay relay spawned (sends buffered events to backend_event_tx)
+Deferred replay relay spawned (sends buffered events, then optional goal resume notice)
 ```
 
 **Server-side path:** A collect task runs concurrently during `load_session()`, taking ownership of the ordered `ConnectionEvent` receiver and buffering the normalized `ClientEvent` stream into a `Vec`. `SacpConnection::load_session()` reuses that same ordered inbox for the agent's replay notifications, so the collector can observe session updates in source order without a special side channel. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.

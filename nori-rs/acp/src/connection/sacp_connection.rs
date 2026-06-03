@@ -624,10 +624,17 @@ impl SacpConnection {
     /// The agent replays previous session history. Updates flow through the
     /// ordered event inbox. The returned `SessionId` is the same as
     /// the input `session_id` (the LoadSessionResponse doesn't contain one).
-    pub async fn load_session(&self, session_id: &str, cwd: &Path) -> Result<acp::SessionId> {
+    pub async fn load_session(
+        &self,
+        session_id: &str,
+        cwd: &Path,
+        mcp_servers: Vec<acp::McpServer>,
+    ) -> Result<acp::SessionId> {
         let response = self
             .cx
-            .send_request(acp::LoadSessionRequest::new(session_id.to_string(), cwd))
+            .send_request(
+                acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
+            )
             .block_task()
             .await
             .context("Failed to load ACP session")?;
