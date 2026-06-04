@@ -37,6 +37,7 @@ pub(crate) struct CommandPopup {
     agent_command_prefix: String,
     state: ScrollState,
     description_overrides: HashMap<SlashCommand, Line<'static>>,
+    disabled_builtins: HashMap<SlashCommand, Line<'static>>,
 }
 
 impl CommandPopup {
@@ -50,7 +51,13 @@ impl CommandPopup {
         prompts: Vec<CustomPrompt>,
         description_overrides: HashMap<SlashCommand, Line<'static>>,
     ) -> Self {
-        Self::new_full(prompts, Vec::new(), String::new(), description_overrides)
+        Self::new_full(
+            prompts,
+            Vec::new(),
+            String::new(),
+            description_overrides,
+            HashMap::new(),
+        )
     }
 
     pub(crate) fn new_full(
@@ -58,6 +65,7 @@ impl CommandPopup {
         agent_commands: Vec<AgentCommandInfo>,
         agent_command_prefix: String,
         description_overrides: HashMap<SlashCommand, Line<'static>>,
+        disabled_builtins: HashMap<SlashCommand, Line<'static>>,
     ) -> Self {
         let builtins = built_in_slash_commands();
         // Exclude prompts that collide with builtin command names and sort by name.
@@ -72,6 +80,7 @@ impl CommandPopup {
             agent_command_prefix,
             state: ScrollState::new(),
             description_overrides,
+            disabled_builtins,
         }
     }
 
@@ -97,6 +106,13 @@ impl CommandPopup {
     pub(crate) fn set_agent_commands(&mut self, commands: Vec<AgentCommandInfo>, prefix: String) {
         self.agent_commands = commands;
         self.agent_command_prefix = prefix;
+    }
+
+    pub(crate) fn set_disabled_builtins(
+        &mut self,
+        disabled_builtins: HashMap<SlashCommand, Line<'static>>,
+    ) {
+        self.disabled_builtins = disabled_builtins;
     }
 
     fn is_slash_agent_command(cmd: &AgentCommandInfo, builtin_names: &HashSet<&str>) -> bool {
@@ -236,13 +252,16 @@ impl CommandPopup {
             .map(|(item, indices, _)| {
                 let (name, description, styled_description) = match item {
                     CommandItem::Builtin(cmd) => {
-                        let (description, styled_description) = if let Some(desc_line) =
-                            self.description_overrides.get(&cmd).cloned()
-                        {
-                            (desc_line.to_string(), Some(desc_line))
-                        } else {
-                            (cmd.description().to_string(), None)
-                        };
+                        let (description, styled_description) =
+                            if let Some(desc_line) = self.disabled_builtins.get(&cmd).cloned() {
+                                (desc_line.to_string(), Some(desc_line))
+                            } else if let Some(desc_line) =
+                                self.description_overrides.get(&cmd).cloned()
+                            {
+                                (desc_line.to_string(), Some(desc_line))
+                            } else {
+                                (cmd.description().to_string(), None)
+                            };
                         (
                             format!("/{}", cmd.command()),
                             description,
@@ -273,6 +292,10 @@ impl CommandPopup {
                     display_shortcut: None,
                     description: Some(description),
                     styled_description,
+                    disabled: matches!(
+                        item,
+                        CommandItem::Builtin(cmd) if self.disabled_builtins.contains_key(&cmd)
+                    ),
                 }
             })
             .collect()
@@ -299,6 +322,10 @@ impl CommandPopup {
         self.state
             .selected_idx
             .and_then(|idx| matches.get(idx).copied())
+            .filter(|item| match item {
+                CommandItem::Builtin(cmd) => !self.disabled_builtins.contains_key(cmd),
+                CommandItem::UserPrompt(_) | CommandItem::AgentCommand(_) => true,
+            })
     }
 }
 
@@ -492,6 +519,40 @@ mod tests {
     }
 
     #[test]
+    fn disabled_builtin_command_is_dimmed_and_not_selectable() {
+        let mut disabled = HashMap::new();
+        disabled.insert(
+            SlashCommand::Goal,
+            Line::from("disabled because the active agent cannot complete goals"),
+        );
+        let mut popup = CommandPopup::new_full(
+            Vec::new(),
+            Vec::new(),
+            String::new(),
+            HashMap::new(),
+            disabled,
+        );
+        popup.on_composer_text_change("/goal".to_string());
+
+        let rows =
+            popup.rows_from_matches(vec![(CommandItem::Builtin(SlashCommand::Goal), None, 0)]);
+        let row = rows.first().expect("goal row should render");
+        assert!(
+            row.disabled,
+            "disabled commands should be marked for dim rendering"
+        );
+        assert_eq!(
+            row.description.as_deref(),
+            Some("disabled because the active agent cannot complete goals")
+        );
+        assert_eq!(
+            popup.selected_item(),
+            None,
+            "disabled command rows should not activate"
+        );
+    }
+
+    #[test]
     fn agent_commands_appear_in_unfiltered_list() {
         let agent_commands = vec![
             AgentCommandInfo {
@@ -509,6 +570,7 @@ mod tests {
             Vec::new(),
             agent_commands,
             "claude-code".to_string(),
+            HashMap::new(),
             HashMap::new(),
         );
         let items = popup.filtered_items();
@@ -537,6 +599,7 @@ mod tests {
             Vec::new(),
             agent_commands,
             "codex".to_string(),
+            HashMap::new(),
             HashMap::new(),
         );
         popup.on_composer_text_change("/".to_string());
@@ -574,6 +637,7 @@ mod tests {
             Vec::new(),
             agent_commands,
             "claude-code".to_string(),
+            HashMap::new(),
             HashMap::new(),
         );
         popup.on_composer_text_change("/claude-code:lo".to_string());
@@ -613,6 +677,7 @@ mod tests {
             agent_commands,
             "claude-code".to_string(),
             HashMap::new(),
+            HashMap::new(),
         );
         let items = popup.filtered_items();
         // "compact" collides with builtin, should only appear as Builtin
@@ -645,6 +710,7 @@ mod tests {
             agent_commands,
             "claude-code".to_string(),
             HashMap::new(),
+            HashMap::new(),
         );
         let rows = popup.rows_from_matches(vec![(CommandItem::AgentCommand(0), None, 0)]);
         let name = rows.first().map(|r| r.name.as_str());
@@ -660,8 +726,13 @@ mod tests {
             description: "loop desc".to_string(),
             input_hint: None,
         }];
-        let popup =
-            CommandPopup::new_full(Vec::new(), agent_commands, String::new(), HashMap::new());
+        let popup = CommandPopup::new_full(
+            Vec::new(),
+            agent_commands,
+            String::new(),
+            HashMap::new(),
+            HashMap::new(),
+        );
         let rows = popup.rows_from_matches(vec![(CommandItem::AgentCommand(0), None, 0)]);
         let name = rows.first().map(|r| r.name.as_str());
         assert_eq!(name, Some("/loop"));
@@ -678,6 +749,7 @@ mod tests {
             Vec::new(),
             agent_commands.clone(),
             String::new(),
+            HashMap::new(),
             HashMap::new(),
         );
         // Initially no prefix

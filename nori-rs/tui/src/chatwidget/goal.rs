@@ -10,6 +10,9 @@ impl ChatWidget {
         if !rest.is_empty() && !rest.starts_with(' ') {
             return false;
         }
+        if !self.ensure_builtin_command_enabled(SlashCommand::Goal) {
+            return true;
+        }
 
         let rest = rest.trim();
         if rest.is_empty() {
@@ -53,6 +56,69 @@ impl ChatWidget {
             }
         }
         true
+    }
+
+    pub(super) fn handle_session_capabilities_changed(
+        &mut self,
+        update: nori_protocol::SessionCapabilitiesView,
+    ) {
+        let previous = std::mem::replace(
+            &mut self.builtin_command_availability,
+            update.builtin_commands,
+        );
+        self.session_agent_capabilities = update.agent;
+
+        let command_names: HashSet<String> = previous
+            .keys()
+            .chain(self.builtin_command_availability.keys())
+            .cloned()
+            .collect();
+        for command_name in command_names {
+            let Ok(command) = command_name.parse::<SlashCommand>() else {
+                continue;
+            };
+            let availability = self.builtin_command_availability(command);
+            let disabled_reason = (!availability.enabled).then(|| {
+                Line::from(
+                    availability
+                        .reason
+                        .unwrap_or_else(|| default_command_unavailable_reason(command)),
+                )
+            });
+            self.bottom_pane
+                .set_builtin_command_disabled(command, disabled_reason);
+        }
+        self.request_redraw();
+    }
+
+    pub(super) fn ensure_builtin_command_enabled(&mut self, command: SlashCommand) -> bool {
+        let availability = self.builtin_command_availability(command);
+        if availability.enabled {
+            return true;
+        }
+
+        self.add_error_message(format!(
+            "/{} is unavailable. {}",
+            command.command(),
+            availability
+                .reason
+                .unwrap_or_else(|| default_command_unavailable_reason(command))
+        ));
+        self.request_redraw();
+        false
+    }
+
+    fn builtin_command_availability(
+        &self,
+        command: SlashCommand,
+    ) -> nori_protocol::CommandAvailability {
+        self.builtin_command_availability
+            .get(command.command())
+            .cloned()
+            .unwrap_or(nori_protocol::CommandAvailability {
+                enabled: true,
+                reason: None,
+            })
     }
 
     pub(super) fn request_thread_goal_status(&mut self) {
@@ -185,6 +251,10 @@ impl ChatWidget {
             Line::from(goal_command_hint(goal.status).dim()),
         ]);
     }
+}
+
+fn default_command_unavailable_reason(command: SlashCommand) -> String {
+    format!("/{} is disabled for the active session.", command.command())
 }
 
 fn goal_status_label(status: nori_protocol::ThreadGoalStatus) -> &'static str {

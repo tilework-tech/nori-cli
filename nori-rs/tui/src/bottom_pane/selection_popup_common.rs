@@ -32,6 +32,7 @@ pub(crate) struct GenericDisplayRow {
     pub match_indices: Option<Vec<usize>>, // indices to bold (char positions)
     pub description: Option<String>,       // optional grey text after the name
     pub styled_description: Option<Line<'static>>,
+    pub disabled: bool,
 }
 
 /// Compute a shared description-column start based on the widest visible name
@@ -243,7 +244,13 @@ pub(crate) fn render_rows(
 
         let mut wrapped = wrap_row(row, desc_col, area.width as usize);
 
-        if Some(i) == state.selected_idx {
+        if row.disabled {
+            for line in &mut wrapped {
+                line.spans.iter_mut().for_each(|span| {
+                    span.style = span.style.dim();
+                });
+            }
+        } else if Some(i) == state.selected_idx {
             for line in &mut wrapped {
                 line.spans.iter_mut().for_each(|span| {
                     let selected_fg = if span.style.fg == Some(Color::Red) {
@@ -328,6 +335,7 @@ mod tests {
             match_indices: None,
             description: Some("recording ● on".to_string()),
             styled_description: Some(Line::from(vec!["recording ".dim(), "●".red(), " on".dim()])),
+            disabled: false,
         }];
         let mut state = ScrollState::new();
         state.clamp_selection(rows.len());

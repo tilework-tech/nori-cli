@@ -136,6 +136,7 @@ pub(crate) struct ChatComposer {
     agent_commands: Vec<nori_protocol::AgentCommandInfo>,
     agent_command_prefix: String,
     command_description_overrides: HashMap<SlashCommand, Line<'static>>,
+    disabled_builtin_commands: HashMap<SlashCommand, Line<'static>>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
@@ -201,6 +202,7 @@ impl ChatComposer {
             agent_commands: Vec::new(),
             agent_command_prefix: String::new(),
             command_description_overrides: HashMap::new(),
+            disabled_builtin_commands: HashMap::new(),
             footer_mode: FooterMode::ShortcutSummary,
             footer_hint_override: None,
             context_window_percent: None,
@@ -446,6 +448,21 @@ impl ChatComposer {
         desc: Line<'static>,
     ) {
         self.command_description_overrides.insert(cmd, desc);
+    }
+
+    pub(crate) fn set_builtin_command_disabled(
+        &mut self,
+        cmd: SlashCommand,
+        reason: Option<Line<'static>>,
+    ) {
+        if let Some(reason) = reason {
+            self.disabled_builtin_commands.insert(cmd, reason);
+        } else {
+            self.disabled_builtin_commands.remove(&cmd);
+        }
+        if let ActivePopup::Command(popup) = &mut self.active_popup {
+            popup.set_disabled_builtins(self.disabled_builtin_commands.clone());
+        }
     }
 
     pub(crate) fn set_esc_backtrack_hint(&mut self, show: bool) {

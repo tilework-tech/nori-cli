@@ -154,7 +154,9 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Goal => {
-                self.request_thread_goal_status();
+                if self.ensure_builtin_command_enabled(SlashCommand::Goal) {
+                    self.request_thread_goal_status();
+                }
             }
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.submit_op(Op::Shutdown);

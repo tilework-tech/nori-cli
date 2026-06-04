@@ -115,7 +115,7 @@ Goal command progress:
     prior continuation turns while the active goal remains open and the runtime is idle; agents
     without HTTP MCP support keep the previous single hidden continuation after a visible user
     turn so unsupported agents are not put into an unbounded loop they cannot stop.
-27. Follow-up: disable or clearly mark `/goal` unavailable when the active ACP agent does not
+27. Identified the need to disable or clearly mark `/goal` unavailable when the active ACP agent does not
     support HTTP MCP servers. The current slash popup has description overrides but no disabled
     row state, and pasted `/goal ...` is handled separately in `chatwidget/goal.rs`, so the
     correct small fix is probably both UI affordance and a backend/TUI command guard. This
@@ -133,6 +133,12 @@ Goal command progress:
     `cargo build --bin nori && cargo test -p tui-pty-e2e`, `just fmt`, scoped `just fix`,
     snapshot acceptance, and an isolated ElizACP TUI smoke test. GitHub checks for the PR passed
     afterward: `Linux checks` and `cargo-deny`.
+30. Completed the `/goal` availability follow-up from item 27. New and resumed ACP sessions now
+    emit a generic `SessionCapabilitiesChanged` client-state projection with raw agent capabilities
+    and derived built-in command availability. ACP maps missing HTTP MCP support to `/goal`
+    disabled, and the TUI consumes that command availability snapshot to dim the `/goal`
+    slash-palette row with an explanatory reason and block both picker activation and typed
+    `/goal ...` submissions.
 
 Follow-up bug investigations - 2026-05-28:
 

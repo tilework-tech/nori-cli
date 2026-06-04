@@ -355,6 +355,7 @@ impl ChatComposer {
                         self.agent_commands.clone(),
                         self.agent_command_prefix.clone(),
                         self.command_description_overrides.clone(),
+                        self.disabled_builtin_commands.clone(),
                     );
                     command_popup.on_composer_text_change(first_line.to_string());
                     self.active_popup = ActivePopup::Command(command_popup);

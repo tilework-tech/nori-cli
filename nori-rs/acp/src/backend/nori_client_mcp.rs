@@ -11,6 +11,7 @@
 //! loopback port. The tools are typed `#[tool]` handlers; there is no
 //! hand-rolled HTTP or JSON-RPC framing here.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -307,6 +308,28 @@ impl NoriClientServer {
 impl Drop for NoriClientServer {
     fn drop(&mut self) {
         self.abort_handle.abort();
+    }
+}
+
+pub(super) fn capabilities_update_for_session(
+    connection: &SacpConnection,
+) -> nori_protocol::SessionCapabilitiesView {
+    let http_mcp = connection.capabilities().mcp_capabilities.http;
+    nori_protocol::SessionCapabilitiesView {
+        agent: nori_protocol::AgentCapabilitiesView {
+            http_mcp,
+            load_session: connection.capabilities().load_session,
+        },
+        builtin_commands: HashMap::from([(
+            "goal".to_string(),
+            nori_protocol::CommandAvailability {
+                enabled: http_mcp,
+                reason: (!http_mcp).then(|| {
+                    "The active agent does not advertise HTTP MCP support, so /goal is unavailable."
+                        .to_string()
+                }),
+            },
+        )]),
     }
 }
 

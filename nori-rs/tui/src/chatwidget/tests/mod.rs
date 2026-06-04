@@ -317,6 +317,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         active_resume_picker_generation: None,
         first_prompt_text: None,
         current_goal: None,
+        session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+        builtin_command_availability: HashMap::new(),
         pending_goal_status: false,
         pending_goal_edit: false,
         loop_remaining: None,

@@ -275,6 +275,7 @@ impl ListSelectionView {
                         match_indices: None,
                         description,
                         styled_description: None,
+                        disabled: false,
                     }
                 })
             })
