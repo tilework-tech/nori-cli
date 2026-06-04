@@ -88,6 +88,11 @@ pub(crate) struct AcpAgentHandle {
 }
 
 impl AcpAgentHandle {
+    #[cfg(test)]
+    pub(crate) fn from_command_tx(command_tx: mpsc::UnboundedSender<AcpAgentCommand>) -> Self {
+        Self { command_tx }
+    }
+
     /// Get the current model state from the ACP agent.
     #[cfg(feature = "unstable")]
     pub async fn get_model_state(&self) -> Option<AcpModelState> {

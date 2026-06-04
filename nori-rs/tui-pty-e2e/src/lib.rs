@@ -921,8 +921,9 @@ fn strip_git_stats_segment(line: &str) -> String {
 pub fn normalize_for_snapshot(contents: String) -> String {
     let mut normalized = contents;
 
-    // Replace temp directories: /tmp/claude/.tmpXXXXXX or /tmp/.tmpXXXXXX -> [TMP_DIR]
-    for pattern in &["/tmp/claude/.tmp", "/tmp/.tmp"] {
+    // Replace temp directories: /tmp/claude-*/.tmpXXXXXX, /tmp/claude/.tmpXXXXXX,
+    // or /tmp/.tmpXXXXXX -> [TMP_DIR]
+    for pattern in &["/tmp/claude-", "/tmp/claude/.tmp", "/tmp/.tmp"] {
         while let Some(start) = normalized.find(pattern) {
             let end = normalized[start..]
                 .find(|c: char| c.is_whitespace() || c == '│')
@@ -1006,6 +1007,13 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 if trimmed.len() < FIXED_BOX_WIDTH {
                     return format!("│ {:<width$} │", trimmed, width = FIXED_BOX_WIDTH);
                 }
+            }
+            // Normalize top border: "╭───────╮" -> fixed width
+            if line.starts_with('╭')
+                && line.ends_with('╮')
+                && line.chars().all(|c| c == '╭' || c == '─' || c == '╮')
+            {
+                return format!("╭{}╮", "─".repeat(FIXED_BOX_WIDTH + 2));
             }
             // Normalize bottom border: "╰───────╯" -> fixed width
             if line.starts_with('╰')
