@@ -455,6 +455,15 @@ impl BottomPane {
         );
     }
 
+    pub(crate) fn set_builtin_command_disabled(
+        &mut self,
+        cmd: crate::slash_command::SlashCommand,
+        reason: Option<Line<'static>>,
+    ) {
+        self.composer.set_builtin_command_disabled(cmd, reason);
+        self.request_redraw();
+    }
+
     /// Set the vertical footer layout flag.
     pub(crate) fn set_vertical_footer(&mut self, vertical_footer: bool) {
         self.composer.set_vertical_footer(vertical_footer);

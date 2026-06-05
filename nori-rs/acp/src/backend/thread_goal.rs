@@ -82,6 +82,7 @@ impl ThreadGoalState {
                 | ClientEvent::ContextCompacted(_)
                 | ClientEvent::ReplayEntry(_)
                 | ClientEvent::AgentCommandsUpdate(_)
+                | ClientEvent::SessionCapabilitiesChanged(_)
                 | ClientEvent::SessionConfigUpdate(_)
                 | ClientEvent::SessionModeChanged(_)
                 | ClientEvent::Warning(_) => {}

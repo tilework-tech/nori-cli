@@ -421,6 +421,9 @@ pub(crate) struct ChatWidget {
     first_prompt_text: Option<String>,
     // Latest ACP-owned goal snapshot for this session.
     current_goal: Option<nori_protocol::ThreadGoal>,
+    // Latest ACP capability snapshot projected into Nori client concepts.
+    session_agent_capabilities: nori_protocol::AgentCapabilitiesView,
+    builtin_command_availability: HashMap<String, nori_protocol::CommandAvailability>,
     // Whether `/goal` is waiting for the backend to return a goal snapshot.
     pending_goal_status: bool,
     // Whether `/goal edit` is waiting for the backend to return a goal snapshot.

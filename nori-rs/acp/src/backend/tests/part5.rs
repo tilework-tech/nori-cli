@@ -891,6 +891,50 @@ async fn goal_mcp_server_is_not_advertised_without_http_mcp_capability() {
 
 #[tokio::test]
 #[serial]
+async fn session_capabilities_enable_goal_for_http_mcp_agents() {
+    let Some(update) = session_capabilities_for_mock_agent(true).await else {
+        return;
+    };
+
+    assert!(update.agent.http_mcp, "expected raw HTTP MCP capability");
+    let goal = update
+        .builtin_commands
+        .get("goal")
+        .expect("expected /goal availability");
+    assert!(
+        goal.enabled,
+        "expected /goal to be supported for HTTP MCP agents"
+    );
+    assert_eq!(goal.reason, None);
+}
+
+#[tokio::test]
+#[serial]
+async fn session_capabilities_disable_goal_without_http_mcp_capability() {
+    let Some(update) = session_capabilities_for_mock_agent(false).await else {
+        return;
+    };
+
+    assert!(!update.agent.http_mcp, "expected raw HTTP MCP capability");
+    let goal = update
+        .builtin_commands
+        .get("goal")
+        .expect("expected /goal availability");
+    assert!(
+        !goal.enabled,
+        "expected /goal to be unsupported without HTTP MCP capability"
+    );
+    assert!(
+        goal.reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("HTTP MCP")),
+        "expected unsupported reason to mention HTTP MCP, got {:?}",
+        goal.reason
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn codex_agent_receives_loopback_http_goal_mcp_server() {
     let mock_config =
         crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
@@ -938,6 +982,52 @@ async fn logged_new_session_for_mock_agent(
     advertise_http_mcp: bool,
 ) -> Option<acp::NewSessionRequest> {
     logged_new_session_for_agent("mock-model", advertise_http_mcp).await
+}
+
+async fn session_capabilities_for_mock_agent(
+    advertise_http_mcp: bool,
+) -> Option<nori_protocol::SessionCapabilitiesView> {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return None;
+    }
+
+    let _env_guard = if advertise_http_mcp {
+        EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1")
+    } else {
+        EnvGuard::remove("MOCK_AGENT_MCP_HTTP")
+    };
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let update = loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
+            Some(_) => {}
+            None => panic!("Timed out waiting for SessionCapabilitiesChanged"),
+        }
+    };
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+
+    Some(update)
 }
 
 async fn logged_new_session_for_agent(

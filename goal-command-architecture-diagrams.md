@@ -123,7 +123,9 @@ Nori keeps the user-facing goal state in the ACP backend. During ACP session
 setup, it advertises a local `nori-client` MCP server when the agent connection
 reports HTTP MCP support. Per turn, it sends goal context to the external ACP
 agent as prompt text, and the external agent marks completion/blocking through
-that local MCP server.
+that local MCP server. Agents without the MCP capability do not get the `/goal`
+command surface, because they cannot close the loop by calling the backend-owned
+goal tools.
 
 ### Mermaid Sequence Diagram
 
@@ -250,25 +252,33 @@ ThreadGoalState status changes; continuation loop stops
   advertises it only when the connection reports HTTP MCP support:
   `acp/src/backend/spawn_and_relay.rs`, `acp/src/backend/session.rs`, and
   `acp/src/backend/nori_client_mcp.rs`.
+- The backend also projects session capabilities to the TUI. `/goal` is disabled
+  when the active agent cannot receive the `nori-client` MCP server, keeping the
+  user-facing command surface aligned with the agent's ability to complete or
+  block goals.
 - The ACP connection forwards `mcpServers` to the external agent when creating a
   session in `acp/src/connection/sacp_connection.rs`.
 - The local `nori-client` MCP server exposes `get_goal`, `create_goal`, and
   `update_goal` as typed rmcp `#[tool]` handlers on an rmcp `StreamableHttpService`
   (served over a loopback `axum` listener) in `acp/src/backend/nori_client_mcp.rs`.
   `nori-client` is Nori's general harness-side channel to the agent; the goal
-  tools are its first tenants, not the whole of it.
+  tools are its first tenants, not the whole of it. Future tenants should move
+  Nori-specific prompt workarounds into MCP prompts/resources, including Nori
+  CLI operating context, skill/subagent guidance, local ACP-agent setup help,
+  ACP wire-debugging help, and source-code Q&A against the open source Nori CLI
+  repo.
 
 ## Comparison
 
-| Concern | Raw Codex harness | Nori CLI over ACP |
-| --- | --- | --- |
-| Goal state owner | Codex state DB plus core `Session` runtime | Nori ACP backend `ThreadGoalState` |
-| Model-facing goal context | Hidden `GoalContext` response item | Prepended prompt text and hidden continuation prompt |
-| Continuation scheduler | `GoalRuntimeState::MaybeContinueIfIdle` | `SessionRuntimeDriver::maybe_submit_goal_continuation` |
-| Completion evaluator | The model self-audits against current evidence | The external ACP agent self-audits against current evidence |
-| Completion actuator | Built-in Codex `update_goal` tool | Local `nori-client` MCP `update_goal` tool |
-| Context window | Same Codex thread/session history, compacted as needed | External ACP agent's session context, steered by Nori prompts |
-| Subagents | Separate Codex threads only when explicitly spawned | Determined by the external ACP agent, not by Nori goal state |
+| Concern                   | Raw Codex harness                                      | Nori CLI over ACP                                             |
+| ------------------------- | ------------------------------------------------------ | ------------------------------------------------------------- |
+| Goal state owner          | Codex state DB plus core `Session` runtime             | Nori ACP backend `ThreadGoalState`                            |
+| Model-facing goal context | Hidden `GoalContext` response item                     | Prepended prompt text and hidden continuation prompt          |
+| Continuation scheduler    | `GoalRuntimeState::MaybeContinueIfIdle`                | `SessionRuntimeDriver::maybe_submit_goal_continuation`        |
+| Completion evaluator      | The model self-audits against current evidence         | The external ACP agent self-audits against current evidence   |
+| Completion actuator       | Built-in Codex `update_goal` tool                      | Local `nori-client` MCP `update_goal` tool                    |
+| Context window            | Same Codex thread/session history, compacted as needed | External ACP agent's session context, steered by Nori prompts |
+| Subagents                 | Separate Codex threads only when explicitly spawned    | Determined by the external ACP agent, not by Nori goal state  |
 
 ## Mental Model
 
