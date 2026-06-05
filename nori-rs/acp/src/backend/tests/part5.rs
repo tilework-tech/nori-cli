@@ -1115,6 +1115,81 @@ async fn session_capabilities_refresh_when_nori_client_initializes() {
 
 #[tokio::test]
 #[serial]
+async fn resume_session_advertises_nori_client_and_refreshes_capabilities() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _load_guard = EnvGuard::set("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+    let transcript = build_test_transcript();
+
+    let backend = AcpBackend::resume_session(
+        &config,
+        Some("acp-session-with-mcp"),
+        Some(&transcript),
+        backend_event_tx,
+    )
+    .await
+    .expect("resume_session should succeed");
+
+    let update = loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
+            Some(_) => {}
+            None => panic!("Timed out waiting for SessionCapabilitiesChanged"),
+        }
+    };
+    assert!(update.agent.http_mcp);
+    assert!(update.agent.load_session);
+    assert!(update.nori_client.advertised);
+    assert!(!update.nori_client.initialized);
+    let goal = update
+        .builtin_commands
+        .get("goal")
+        .expect("expected /goal availability");
+    assert!(goal.enabled);
+    assert_eq!(goal.reason, None);
+
+    let load_session = latest_logged_load_session(&wire_log_dir);
+    let nori_client = nori_client_http_server_from_servers(&load_session.mcp_servers)
+        .expect("session/load should advertise nori-client HTTP MCP server");
+    assert!(
+        nori_client.url.starts_with("http://127.0.0.1:"),
+        "expected loopback nori-client URL, got {}",
+        nori_client.url
+    );
+    let authorization = nori_client_authorization_header(nori_client);
+    assert!(
+        authorization.starts_with("Bearer ") && authorization.len() > "Bearer ".len(),
+        "expected nori-client to advertise a bearer Authorization header, got {authorization:?}"
+    );
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+}
+
+#[tokio::test]
+#[serial]
 async fn session_capabilities_disable_goal_without_http_mcp_capability() {
     let Some(update) = session_capabilities_for_mock_agent(false).await else {
         return;
@@ -1300,6 +1375,21 @@ fn latest_logged_new_session(log_dir: &std::path::Path) -> acp::NewSessionReques
         .expect("session/new params should match ACP schema")
 }
 
+fn latest_logged_load_session(log_dir: &std::path::Path) -> acp::LoadSessionRequest {
+    let log_content = read_wire_log(log_dir);
+    let load_session = log_content
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json wire log line"))
+        .filter(|record| {
+            record["direction"] == "client_to_agent"
+                && record["message"]["method"] == "session/load"
+        })
+        .next_back()
+        .expect("session/load should be logged");
+    serde_json::from_value(load_session["message"]["params"].clone())
+        .expect("session/load params should match ACP schema")
+}
+
 fn read_wire_log(log_dir: &std::path::Path) -> String {
     let log_path = std::fs::read_dir(log_dir)
         .expect("wire log dir exists")
@@ -1321,13 +1411,16 @@ fn count_logged_requests(log_dir: &std::path::Path, method: &str) -> usize {
 }
 
 fn nori_client_http_server(new_session: &acp::NewSessionRequest) -> Option<&acp::McpServerHttp> {
-    new_session
-        .mcp_servers
-        .iter()
-        .find_map(|server| match server {
-            acp::McpServer::Http(http) if http.name == "nori-client" => Some(http),
-            _ => None,
-        })
+    nori_client_http_server_from_servers(&new_session.mcp_servers)
+}
+
+fn nori_client_http_server_from_servers(
+    mcp_servers: &[acp::McpServer],
+) -> Option<&acp::McpServerHttp> {
+    mcp_servers.iter().find_map(|server| match server {
+        acp::McpServer::Http(http) if http.name == "nori-client" => Some(http),
+        _ => None,
+    })
 }
 
 fn nori_client_authorization_header(http: &acp::McpServerHttp) -> String {
