@@ -791,8 +791,10 @@ async fn goal_mcp_initialize_allows_chained_hidden_continuations() {
         .expect("Should receive SessionConfigured event");
 
     let new_session = latest_logged_new_session(&wire_log_dir);
-    let goal_mcp_url = nori_client_http_url(&new_session);
-    initialize_nori_client_mcp(&goal_mcp_url).await;
+    let nori_client = nori_client_http_server(&new_session)
+        .expect("session/new should advertise nori-client HTTP MCP server");
+    let authorization = nori_client_authorization_header(nori_client);
+    initialize_nori_client_mcp(&nori_client.url, Some(&authorization)).await;
 
     backend
         .submit(Op::ThreadGoalSet {
@@ -987,16 +989,22 @@ async fn goal_mcp_server_is_advertised_to_http_mcp_agents() {
         return;
     };
 
+    let Some(nori_client) = nori_client_http_server(&new_session) else {
+        panic!(
+            "expected session/new to advertise the local loopback nori-client MCP server, got: {:?}",
+            new_session.mcp_servers
+        );
+    };
+
     assert!(
-        new_session.mcp_servers.iter().any(|server| {
-            matches!(
-                server,
-                acp::McpServer::Http(http)
-                    if http.name == "nori-client" && http.url.starts_with("http://127.0.0.1:")
-            )
-        }),
-        "expected session/new to advertise the local loopback nori-client MCP server, got: {:?}",
-        new_session.mcp_servers
+        nori_client.url.starts_with("http://127.0.0.1:"),
+        "expected loopback nori-client URL, got {}",
+        nori_client.url
+    );
+    let authorization = nori_client_authorization_header(nori_client);
+    assert!(
+        authorization.starts_with("Bearer ") && authorization.len() > "Bearer ".len(),
+        "expected nori-client to advertise a bearer Authorization header, got {authorization:?}"
     );
 }
 
@@ -1079,8 +1087,15 @@ async fn session_capabilities_refresh_when_nori_client_initializes() {
     assert!(!initial.nori_client.initialized);
 
     let new_session = latest_logged_new_session(&wire_log_dir);
-    let nori_client_url = nori_client_http_url(&new_session);
-    initialize_nori_client_mcp(&nori_client_url).await;
+    let nori_client = nori_client_http_server(&new_session)
+        .expect("session/new should advertise nori-client HTTP MCP server");
+    let unauthorized = send_nori_client_mcp_initialize(&nori_client.url, None).await;
+    assert!(
+        unauthorized.contains("401 Unauthorized"),
+        "expected unauthenticated nori-client MCP initialize to be rejected, got: {unauthorized}"
+    );
+    let authorization = nori_client_authorization_header(nori_client);
+    initialize_nori_client_mcp(&nori_client.url, Some(&authorization)).await;
 
     let refreshed = loop {
         match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
@@ -1305,22 +1320,37 @@ fn count_logged_requests(log_dir: &std::path::Path, method: &str) -> usize {
         .count()
 }
 
-fn nori_client_http_url(new_session: &acp::NewSessionRequest) -> String {
+fn nori_client_http_server(new_session: &acp::NewSessionRequest) -> Option<&acp::McpServerHttp> {
     new_session
         .mcp_servers
         .iter()
         .find_map(|server| match server {
-            acp::McpServer::Http(http) if http.name == "nori-client" => Some(http.url.clone()),
+            acp::McpServer::Http(http) if http.name == "nori-client" => Some(http),
             _ => None,
         })
-        .expect("session/new should advertise nori-client HTTP MCP server")
+}
+
+fn nori_client_authorization_header(http: &acp::McpServerHttp) -> String {
+    http.headers
+        .iter()
+        .find(|header| header.name == "Authorization")
+        .map(|header| header.value.clone())
+        .expect("nori-client should advertise an Authorization header")
 }
 
 /// Drive a real MCP `initialize` against the loopback `nori-client` server,
 /// mirroring how an external agent connects. The rmcp streamable-HTTP server is
 /// spec-compliant, so the POST must send `Accept: application/json,
 /// text/event-stream` and the result arrives as an SSE `data:` line.
-async fn initialize_nori_client_mcp(url: &str) {
+async fn initialize_nori_client_mcp(url: &str, authorization: Option<&str>) {
+    let response = send_nori_client_mcp_initialize(url, authorization).await;
+    assert!(
+        response.contains("200 OK") && response.contains("\"serverInfo\""),
+        "expected successful nori-client MCP initialize response, got: {response}"
+    );
+}
+
+async fn send_nori_client_mcp_initialize(url: &str, authorization: Option<&str>) -> String {
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
 
@@ -1341,11 +1371,15 @@ async fn initialize_nori_client_mcp(url: &str) {
         }
     })
     .to_string();
+    let authorization_header = authorization
+        .map(|value| format!("Authorization: {value}\r\n"))
+        .unwrap_or_default();
     let request = format!(
         "POST /{path} HTTP/1.1\r\n\
 Host: {host_port}\r\n\
 Accept: application/json, text/event-stream\r\n\
 Content-Type: application/json\r\n\
+{authorization_header}\
 Content-Length: {}\r\n\
 Connection: close\r\n\r\n\
 {body}",
@@ -1363,10 +1397,7 @@ Connection: close\r\n\r\n\
         .read_to_string(&mut response)
         .await
         .expect("initialize response should read");
-    assert!(
-        response.contains("200 OK") && response.contains("\"serverInfo\""),
-        "expected successful nori-client MCP initialize response, got: {response}"
-    );
+    response
 }
 
 /// Test that session_context is consumed after the first prompt (not repeated).

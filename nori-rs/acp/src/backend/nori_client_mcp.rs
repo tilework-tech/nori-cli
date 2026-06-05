@@ -8,8 +8,9 @@
 //! goal-only surface.
 //!
 //! The transport is rmcp's spec-compliant streamable-HTTP server, served on a
-//! loopback port. The tools are typed `#[tool]` handlers; there is no
-//! hand-rolled HTTP or JSON-RPC framing here.
+//! loopback port and protected by a per-session bearer token before requests
+//! reach rmcp. The tools are typed `#[tool]` handlers; there is no hand-rolled
+//! HTTP or JSON-RPC framing here.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,6 +19,14 @@ use std::sync::atomic::Ordering;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use axum::body::Body;
+use axum::extract::State;
+use axum::http::Request;
+use axum::http::StatusCode;
+use axum::http::header::AUTHORIZATION;
+use axum::middleware;
+use axum::middleware::Next;
+use axum::response::Response;
 use rmcp::ErrorData as McpError;
 use rmcp::RoleServer;
 use rmcp::ServerHandler;
@@ -333,6 +342,7 @@ fn status_label(status: ThreadGoalStatus) -> &'static str {
 /// Loopback `nori-client` MCP server. Bound on first use and torn down on drop.
 pub(crate) struct NoriClientServer {
     url: String,
+    authorization_header_value: String,
     abort_handle: tokio::task::AbortHandle,
 }
 
@@ -342,6 +352,8 @@ impl NoriClientServer {
             .await
             .context("failed to bind local nori-client MCP server")?;
         let url = format!("http://{}/mcp", listener.local_addr()?);
+        let authorization_header_value = format!("Bearer {}", uuid::Uuid::new_v4());
+        let expected_authorization = Arc::new(authorization_header_value.clone());
 
         let service = StreamableHttpService::new(
             move || Ok(NoriClientService::new(shared.clone())),
@@ -352,7 +364,9 @@ impl NoriClientServer {
                 ..Default::default()
             },
         );
-        let router = axum::Router::new().nest_service("/mcp", service);
+        let router = axum::Router::new().nest_service("/mcp", service).layer(
+            middleware::from_fn_with_state(expected_authorization, require_bearer_token),
+        );
         let task = tokio::spawn(async move {
             if let Err(err) = axum::serve(listener, router).await {
                 tracing::debug!("nori-client MCP server stopped: {err}");
@@ -361,6 +375,7 @@ impl NoriClientServer {
 
         Ok(Self {
             url,
+            authorization_header_value,
             abort_handle: task.abort_handle(),
         })
     }
@@ -368,11 +383,31 @@ impl NoriClientServer {
     pub(crate) fn url(&self) -> &str {
         &self.url
     }
+
+    fn authorization_header(&self) -> acp::HttpHeader {
+        acp::HttpHeader::new("Authorization", self.authorization_header_value.clone())
+    }
 }
 
 impl Drop for NoriClientServer {
     fn drop(&mut self) {
         self.abort_handle.abort();
+    }
+}
+
+async fn require_bearer_token(
+    State(expected): State<Arc<String>>,
+    request: Request<Body>,
+    next: Next,
+) -> std::result::Result<Response, StatusCode> {
+    if request
+        .headers()
+        .get(AUTHORIZATION)
+        .is_some_and(|value| value.as_bytes() == expected.as_bytes())
+    {
+        Ok(next.run(request).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
     }
 }
 
@@ -438,29 +473,24 @@ pub(super) async fn register_for_session(
     }
 
     let mut server = http_server.lock().await;
-    if server.is_none() {
-        *server = Some(
-            NoriClientServer::spawn(NoriClientShared::new(
-                thread_goal_state,
-                backend_event_tx,
-                transcript_recorder,
-                Arc::clone(&connected),
-                nori_protocol::AgentCapabilitiesView {
-                    http_mcp: connection.capabilities().mcp_capabilities.http,
-                    load_session: connection.capabilities().load_session,
-                },
-                true,
-            ))
-            .await?,
-        );
-    }
-    let Some(server) = server.as_ref() else {
-        return Ok(());
-    };
-    mcp_servers.push(acp::McpServer::Http(acp::McpServerHttp::new(
-        "nori-client",
-        server.url().to_string(),
-    )));
+    let next_server = NoriClientServer::spawn(NoriClientShared::new(
+        thread_goal_state,
+        backend_event_tx,
+        transcript_recorder,
+        Arc::clone(&connected),
+        nori_protocol::AgentCapabilitiesView {
+            http_mcp: connection.capabilities().mcp_capabilities.http,
+            load_session: connection.capabilities().load_session,
+        },
+        true,
+    ))
+    .await?;
+    let advertised_server = acp::McpServer::Http(
+        acp::McpServerHttp::new("nori-client", next_server.url().to_string())
+            .headers(vec![next_server.authorization_header()]),
+    );
+    *server = Some(next_server);
+    mcp_servers.push(advertised_server);
 
     Ok(())
 }
@@ -528,6 +558,20 @@ mod tests {
             .update_goal(Parameters(UpdateGoalRequest { status }))
             .await
             .expect("update_goal should not fail at the protocol level")
+    }
+
+    fn authenticated_transport(
+        url: String,
+        authorization_header_value: String,
+    ) -> impl rmcp::transport::Transport<rmcp::RoleClient> {
+        use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+
+        let bearer_token = authorization_header_value
+            .strip_prefix("Bearer ")
+            .expect("generated Authorization header should be a bearer token")
+            .to_string();
+        let config = StreamableHttpClientTransportConfig::with_uri(url).auth_header(bearer_token);
+        rmcp::transport::StreamableHttpClientTransport::from_config(config)
     }
 
     #[test]
@@ -630,7 +674,6 @@ mod tests {
     async fn real_mcp_client_round_trips_over_http() {
         use rmcp::ServiceExt;
         use rmcp::model::CallToolRequestParam;
-        use rmcp::transport::StreamableHttpClientTransport;
 
         let connected = Arc::new(AtomicBool::new(false));
         let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
@@ -646,7 +689,10 @@ mod tests {
         .await
         .expect("nori-client server should spawn");
 
-        let transport = StreamableHttpClientTransport::from_uri(server.url().to_string());
+        let transport = authenticated_transport(
+            server.url().to_string(),
+            server.authorization_header_value.clone(),
+        );
         let client = ()
             .serve(transport)
             .await
@@ -703,7 +749,6 @@ mod tests {
         use rmcp::ServiceExt;
         use rmcp::model::ReadResourceRequestParam;
         use rmcp::model::ResourceContents;
-        use rmcp::transport::StreamableHttpClientTransport;
 
         let connected = Arc::new(AtomicBool::new(false));
         let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
@@ -719,7 +764,10 @@ mod tests {
         .await
         .expect("nori-client server should spawn");
 
-        let transport = StreamableHttpClientTransport::from_uri(server.url().to_string());
+        let transport = authenticated_transport(
+            server.url().to_string(),
+            server.authorization_header_value.clone(),
+        );
         let client = ()
             .serve(transport)
             .await
@@ -768,7 +816,6 @@ mod tests {
         use rmcp::ServiceExt;
         use rmcp::model::GetPromptRequestParam;
         use rmcp::model::PromptMessageContent;
-        use rmcp::transport::StreamableHttpClientTransport;
 
         let connected = Arc::new(AtomicBool::new(false));
         let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
@@ -784,7 +831,10 @@ mod tests {
         .await
         .expect("nori-client server should spawn");
 
-        let transport = StreamableHttpClientTransport::from_uri(server.url().to_string());
+        let transport = authenticated_transport(
+            server.url().to_string(),
+            server.authorization_header_value.clone(),
+        );
         let client = ()
             .serve(transport)
             .await
