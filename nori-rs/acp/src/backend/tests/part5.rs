@@ -520,6 +520,109 @@ async fn non_mcp_thread_goal_set_is_inert() {
 
 #[tokio::test]
 #[serial]
+async fn non_mcp_replayed_active_goal_does_not_drive_prompt_context_or_continuation() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+    let mut transcript = build_test_transcript();
+    transcript
+        .entries
+        .push(crate::transcript::TranscriptLine::new(
+            crate::transcript::TranscriptEntry::ClientEvent(crate::transcript::ClientEventEntry {
+                event: nori_protocol::ClientEvent::ThreadGoalUpdated(
+                    nori_protocol::ThreadGoalUpdated {
+                        goal: nori_protocol::ThreadGoal {
+                            objective: "Replayed goal cannot close itself".to_string(),
+                            status: nori_protocol::ThreadGoalStatus::Active,
+                            tokens_used: 12,
+                            time_used_seconds: 34,
+                            created_at: 100,
+                            updated_at: 200,
+                        },
+                    },
+                ),
+            }),
+        ));
+
+    let backend = AcpBackend::resume_session(&config, None, Some(&transcript), backend_event_tx)
+        .await
+        .expect("resume_session should succeed");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let start = std::time::Instant::now();
+    let mut saw_replayed_goal = false;
+    let mut saw_unavailable_notice = false;
+    while start.elapsed() < Duration::from_secs(5) {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::ThreadGoalUpdated(update)) => {
+                if update.goal.objective == "Replayed goal cannot close itself" {
+                    saw_replayed_goal = true;
+                }
+            }
+            Some(nori_protocol::ClientEvent::SessionUpdateInfo(update))
+                if update.message.contains("/goal is unavailable") =>
+            {
+                saw_unavailable_notice = true;
+                break;
+            }
+            Some(_) => {}
+            None => {}
+        }
+    }
+
+    assert!(saw_replayed_goal, "expected replayed active goal snapshot");
+    assert!(
+        saw_unavailable_notice,
+        "expected unavailable notice for replayed non-MCP goal"
+    );
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(300)).await;
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "ordinary resumed prompt".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for user prompt after replayed non-MCP goal",
+    )
+    .await;
+
+    assert!(
+        !agent_text.contains("<goal_context>"),
+        "replayed non-MCP goal should not inject goal context, got: {agent_text}"
+    );
+    assert!(
+        agent_text.contains("ordinary resumed prompt"),
+        "expected ordinary user prompt after replayed goal, got: {agent_text}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn setting_active_goal_starts_hidden_continuation_without_extra_prompt() {
     use std::time::Duration;
 

@@ -24,3 +24,4 @@
 - Decision: advertise the generated loopback credential as the normal ACP HTTP `Authorization: Bearer ...` header and reject missing/wrong headers in `axum` middleware before rmcp handles MCP framing.
 - Decision: when resume replays an active goal into a non-MCP session, emit the existing `/goal is unavailable` notice instead of inventing a separate resume-only warning, so all unavailable goal paths share wording.
 - Decision: treat server-side `session/load` as the resume capability-refresh proof case, because it is the resume path that forwards MCP servers to an existing ACP session.
+- Decision: verify replayed non-MCP active goals through the first post-resume user prompt, because the observable contract is no hidden completion before input and no `<goal_context>` on that prompt.
