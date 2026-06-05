@@ -379,15 +379,23 @@ impl Drop for NoriClientServer {
 pub(super) fn capabilities_update_for_session(
     connection: &SacpConnection,
 ) -> nori_protocol::SessionCapabilitiesView {
+    capabilities_update_for_nori_client(
+        connection,
+        connection.capabilities().mcp_capabilities.http,
+        false,
+    )
+}
+
+pub(super) fn capabilities_update_for_nori_client(
+    connection: &SacpConnection,
+    nori_client_advertised: bool,
+    nori_client_initialized: bool,
+) -> nori_protocol::SessionCapabilitiesView {
     let agent = nori_protocol::AgentCapabilitiesView {
         http_mcp: connection.capabilities().mcp_capabilities.http,
         load_session: connection.capabilities().load_session,
     };
-    capabilities_update(
-        agent,
-        connection.capabilities().mcp_capabilities.http,
-        false,
-    )
+    capabilities_update(agent, nori_client_advertised, nori_client_initialized)
 }
 
 fn capabilities_update(

@@ -504,10 +504,26 @@ impl AcpBackend {
                 {
                     warn!("Failed to register goal MCP server after compact: {err}");
                 }
+                let nori_client_advertised = mcp_servers.iter().any(|server| {
+                    matches!(
+                        server,
+                        acp::McpServer::Http(http) if http.name == "nori-client"
+                    )
+                });
                 match self.connection.create_session(&cwd, mcp_servers).await {
                     Ok(new_session_id) => {
                         debug!("Created new session after compact: {:?}", new_session_id);
                         *self.session_id.write().await = new_session_id;
+                        self.forward_and_record_client_event(
+                            ClientEvent::SessionCapabilitiesChanged(
+                                nori_client_mcp::capabilities_update_for_nori_client(
+                                    &self.connection,
+                                    nori_client_advertised,
+                                    false,
+                                ),
+                            ),
+                        )
+                        .await;
                     }
                     Err(err) => {
                         warn!("Failed to create new session after compact: {err}");
