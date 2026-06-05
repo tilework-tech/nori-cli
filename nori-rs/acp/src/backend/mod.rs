@@ -348,6 +348,7 @@ pub struct AcpBackend {
 }
 
 mod helpers;
+mod nori_client_context;
 mod nori_client_mcp;
 mod session;
 pub(crate) mod session_reducer;

@@ -79,8 +79,9 @@ For agents without MCP, the desired fallback is backend-owned context rather tha
 UI-specific hacks: the first prompt should carry a concise `<context>` block
 explaining that the session is running in Nori CLI, linking to
 `https://github.com/tilework-tech/nori-cli`, and noting which MCP-backed Nori
-affordances are unavailable. MCP-capable agents should receive that kind of Nori
-operating context through `nori-client` prompts/resources instead.
+affordances are unavailable. MCP-capable agents receive Nori operating context
+through the backend-owned `nori-client` resources/prompts described in
+`@/nori-rs/acp/docs.md`.
 
 `/goal edit` uses the cached goal immediately when available. If no snapshot is cached, it requests one from the ACP backend and marks the edit as pending until the backend replies. A no-goal response clears that pending flag before rendering the usage hint, preventing a later unrelated goal update from unexpectedly replacing the user's composer contents.
 
