@@ -89,6 +89,8 @@ async fn start_mock_acp_ws_server() -> MockWsServer {
 
 #[tokio::test]
 async fn cloud_spawn_connects_and_produces_session_configured() {
+    use pretty_assertions::assert_eq;
+
     let server = start_mock_acp_ws_server().await;
     let temp_dir = tempfile::tempdir().unwrap();
 
@@ -100,29 +102,28 @@ async fn cloud_spawn_connects_and_produces_session_configured() {
     });
 
     let (backend_event_tx, mut backend_event_rx) = tokio::sync::mpsc::channel(32);
-    let backend = AcpBackend::spawn(&config, backend_event_tx).await;
-
-    assert!(backend.is_ok(), "cloud spawn should succeed");
-    let _backend = backend.unwrap();
-
-    let event = tokio::time::timeout(std::time::Duration::from_secs(5), backend_event_rx.recv())
+    let _backend = AcpBackend::spawn(&config, backend_event_tx)
         .await
-        .expect("should receive event within 5s")
-        .expect("event channel should not be closed");
+        .expect("cloud spawn should succeed");
 
-    match event {
-        BackendEvent::Control(event) => {
-            assert!(
-                matches!(
-                    event.msg,
-                    codex_core::protocol::EventMsg::SessionConfigured(_)
-                ),
-                "expected SessionConfigured event, got: {:?}",
-                event.msg
-            );
+    let timeout = std::time::Duration::from_secs(5);
+    let mut found_configured = None;
+
+    while let Ok(Some(event)) = tokio::time::timeout(timeout, backend_event_rx.recv()).await {
+        if let BackendEvent::Control(event) = &event
+            && let codex_core::protocol::EventMsg::SessionConfigured(configured) = &event.msg
+        {
+            found_configured = Some(configured.clone());
+            break;
         }
-        other => panic!("expected Control(SessionConfigured), got: {other:?}"),
     }
+
+    let configured = found_configured.expect("expected SessionConfigured event");
+    assert_eq!(
+        configured.cwd,
+        temp_dir.path().to_path_buf(),
+        "cloud session should use config cwd"
+    );
 }
 
 #[tokio::test]

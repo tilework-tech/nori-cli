@@ -84,11 +84,8 @@ These are NOT bugs in the feature code — they're consequences of the DEV testi
 ### 1. Remove temporary debug logging from `cli-tunnel.ts`
 The relay handler in `cli-tunnel.ts` has `[RELAY]` log lines added for debugging. These should be removed before the broker PR is finalized. Keep only the `isNoriControlFrame()` filtering fix.
 
-### 2. Fix the `cwd` design issue in the CLI cloud path
-The CLI sends its local cwd in `session/new`, which breaks on the sprite. Needs a proper fix — NOT the current hack of creating the directory on the sprite. The fix should be in the CLI code where `create_session(cwd, mcp_servers)` is called for cloud mode. Key files:
-- `nori-rs/cli/src/main.rs` (lines ~552-608) — cloud command handler, where the TUI is launched
-- `nori-rs/acp/src/connection/sacp_connection.rs` (line 596) — `create_session` sends `NewSessionRequest::new(cwd)`
-- The cwd needs to be overridden to a sprite-appropriate path (e.g., `/home/sprite/org/workspace`) when in cloud mode
+### 2. ~~Fix the `cwd` design issue in the CLI cloud path~~ — DONE
+The hardcoded `/home/sprite/org/workspace` cwd override in `spawn_and_relay.rs` has been removed. The CLI now sends its local cwd in `session/new`, which the broker's SACP proxy discards — the broker manages the sprite-side cwd via AcpTunnelManager. The local cwd is correct for all client-side operations (TUI display, transcript recording, SessionConfigured metadata).
 
 ### 3. Commit the E2E test script
 `scripts/cloud-e2e-test.sh` needs to be committed. Consider whether it should be in `scripts/` or somewhere else.

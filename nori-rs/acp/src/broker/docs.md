@@ -59,5 +59,6 @@ BrokerClient ----HTTP POST /api/sessions/{id}/release---->|
 - The `auth_token()` accessor on `BrokerClient` is used by the CLI to extract the token for constructing `CloudConnectionInfo` after session acquisition -- the token flows to the WebSocket connection as a Bearer auth header
 - `BrokerClient` now covers the full session lifecycle: authenticate -> acquire -> release. Release is the terminal step, called from the CLI layer (not the backend) since the broker client and session ID are scoped there
 - Cloud mode in `AcpBackend::spawn()` skips agent config lookup (`get_agent_config`) since the remote agent is already running on the cloud VM. Error messages for cloud connection failures use simple messages instead of the enhanced error categorization used for local subprocess failures
+- The CLI uses its local cwd for cloud sessions -- the broker's SACP proxy (in the nori-sessions repo) manages the sprite-side working directory independently via `AcpTunnelManager`. The `cwd` sent in the `session/new` RPC is discarded by the broker. This means client-side file handlers, transcript recording, and TUI display all reflect the user's local directory, not the sprite's workspace path
 
 Created and maintained by Nori.
