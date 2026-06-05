@@ -12,6 +12,7 @@ This is the root repository containing the Nori CLI project:
 
 - **`nori-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
 - **`nori-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
+- **`docs/`**: Durable specs, implementation plans, and follow-up backlogs
 - **`.github/`**: Build and CI configuration
 - **`.claude/`**: Skills and configuration for Claude-based development
 - **`scripts/`**: Development scripts
@@ -47,13 +48,13 @@ The project was originally forked from OpenAI Codex CLI and has been adapted to 
 
 **Entry Points:**
 
-| Command           | Description        | Implementation        |
-| ----------------- | ------------------ | --------------------- |
-| `nori`              | Interactive TUI          | `nori-rs/tui`                     |
-| `nori login`        | Authentication           | `nori-rs/cli` + `nori-rs/login`   |
-| `nori logout`       | Clear saved credentials  | `nori-rs/cli` + `nori-rs/login`   |
-| `nori sandbox ...`  | Sandbox command runner   | `nori-rs/cli` + platform sandbox crates |
-| `nori skillsets`    | Skillset management shim | `nori-rs/cli`                     |
+| Command            | Description              | Implementation                          |
+| ------------------ | ------------------------ | --------------------------------------- |
+| `nori`             | Interactive TUI          | `nori-rs/tui`                           |
+| `nori login`       | Authentication           | `nori-rs/cli` + `nori-rs/login`         |
+| `nori logout`      | Clear saved credentials  | `nori-rs/cli` + `nori-rs/login`         |
+| `nori sandbox ...` | Sandbox command runner   | `nori-rs/cli` + platform sandbox crates |
+| `nori skillsets`   | Skillset management shim | `nori-rs/cli`                           |
 
 **Model Providers (via ACP):**
 
