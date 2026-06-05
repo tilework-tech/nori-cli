@@ -20,10 +20,14 @@ impl AcpBackend {
         config: &AcpBackendConfig,
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
-        let cwd = config.cwd.clone();
-
         let (event_tx, event_rx) = mpsc::channel(32);
         tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
+
+        let cwd = if config.cloud_connection.is_some() {
+            PathBuf::from("/home/sprite/org/workspace")
+        } else {
+            config.cwd.clone()
+        };
 
         let (mut connection, agent_config) = if let Some(ref cloud) = config.cloud_connection {
             debug!("Connecting to cloud session: {}", cloud.ws_url);
