@@ -22,3 +22,4 @@
 - Decision: for compact-created replacement sessions, emit the refreshed capability snapshot only after `create_session` succeeds, and derive `nori_client.advertised` from the actual MCP server list rather than raw HTTP MCP support.
 - Decision: interpret "per-session" loopback auth as a fresh `nori-client` server/port/token for every eligible session registration, including compact replacements, instead of keeping one server alive and rotating shared token state.
 - Decision: advertise the generated loopback credential as the normal ACP HTTP `Authorization: Bearer ...` header and reject missing/wrong headers in `axum` middleware before rmcp handles MCP framing.
+- Decision: when resume replays an active goal into a non-MCP session, emit the existing `/goal is unavailable` notice instead of inventing a separate resume-only warning, so all unavailable goal paths share wording.

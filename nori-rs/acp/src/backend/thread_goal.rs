@@ -50,6 +50,18 @@ pub(crate) struct ThreadGoalState {
     last_session_used_tokens: Option<i64>,
 }
 
+pub(crate) fn unavailable_notice() -> SessionUpdateInfo {
+    SessionUpdateInfo {
+        kind: SessionUpdateKind::SessionInfo,
+        message: "/goal is unavailable for this session.".to_string(),
+        hint: Some(
+            "The active agent does not advertise HTTP MCP support, so it cannot use the nori-client goal tools to close the loop."
+                .to_string(),
+        ),
+        usage: None,
+    }
+}
+
 impl ThreadGoalState {
     pub(crate) fn from_replay_events(events: &[ClientEvent]) -> Self {
         let mut state = Self::default();
@@ -445,15 +457,7 @@ impl AcpBackend {
         emit_client_event(
             &self.backend_event_tx,
             self.transcript_recorder.as_ref(),
-            ClientEvent::SessionUpdateInfo(SessionUpdateInfo {
-                kind: SessionUpdateKind::SessionInfo,
-                message: "/goal is unavailable for this session.".to_string(),
-                hint: Some(
-                    "The active agent does not advertise HTTP MCP support, so it cannot use the nori-client goal tools to close the loop."
-                        .to_string(),
-                ),
-                usage: None,
-            }),
+            ClientEvent::SessionUpdateInfo(unavailable_notice()),
         )
         .await;
     }

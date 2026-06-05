@@ -1695,3 +1695,94 @@ async fn test_resume_session_notifies_about_paused_goal() {
 
     panic!("Timed out waiting for paused goal resume notice");
 }
+
+/// When transcript replay restores an active goal into a non-MCP session, the
+/// user should see that goal automation is unavailable for the active agent.
+#[tokio::test]
+#[serial]
+async fn test_resume_session_non_mcp_active_goal_reports_unavailable() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let previous_mcp_http = std::env::var("MOCK_AGENT_MCP_HTTP").ok();
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_MCP_HTTP");
+    }
+    let restore_mcp_http = || unsafe {
+        match &previous_mcp_http {
+            Some(value) => std::env::set_var("MOCK_AGENT_MCP_HTTP", value),
+            None => std::env::remove_var("MOCK_AGENT_MCP_HTTP"),
+        }
+    };
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+    let mut transcript = build_test_transcript();
+    transcript
+        .entries
+        .push(crate::transcript::TranscriptLine::new(
+            crate::transcript::TranscriptEntry::ClientEvent(crate::transcript::ClientEventEntry {
+                event: nori_protocol::ClientEvent::ThreadGoalUpdated(
+                    nori_protocol::ThreadGoalUpdated {
+                        goal: nori_protocol::ThreadGoal {
+                            objective: "Resume an active goal without MCP".to_string(),
+                            status: nori_protocol::ThreadGoalStatus::Active,
+                            tokens_used: 12,
+                            time_used_seconds: 34,
+                            created_at: 100,
+                            updated_at: 200,
+                        },
+                    },
+                ),
+            }),
+        ));
+
+    let _backend = AcpBackend::resume_session(&config, None, Some(&transcript), backend_event_tx)
+        .await
+        .expect("resume_session should succeed");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let start = std::time::Instant::now();
+    let mut saw_replayed_goal = false;
+    while start.elapsed() < Duration::from_secs(5) {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::ThreadGoalUpdated(update)) => {
+                if update.goal.objective == "Resume an active goal without MCP" {
+                    saw_replayed_goal = true;
+                }
+            }
+            Some(nori_protocol::ClientEvent::SessionUpdateInfo(update))
+                if update.message.contains("/goal is unavailable")
+                    && update
+                        .hint
+                        .as_deref()
+                        .is_some_and(|hint| hint.contains("HTTP MCP")) =>
+            {
+                assert!(
+                    saw_replayed_goal,
+                    "unavailable notice should follow the replayed goal snapshot"
+                );
+                restore_mcp_http();
+                return;
+            }
+            Some(_) => continue,
+            None => continue,
+        }
+    }
+
+    restore_mcp_http();
+    panic!("Timed out waiting for active-goal unavailable notice");
+}
