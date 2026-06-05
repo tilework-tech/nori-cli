@@ -559,6 +559,10 @@ impl AcpBackend {
     }
 
     pub(super) async fn submit_goal_continuation_if_idle(&self) {
+        if self.goal_mcp_http_server.lock().await.is_none() {
+            return;
+        }
+
         let prompt_text = {
             self.thread_goal_state
                 .lock()

@@ -1482,6 +1482,7 @@ async fn test_resume_session_preserves_transcript_goal_after_server_side_replay(
     }
 
     unsafe {
+        std::env::set_var("MOCK_AGENT_MCP_HTTP", "1");
         std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
         std::env::set_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT", "2");
     }
@@ -1519,6 +1520,7 @@ async fn test_resume_session_preserves_transcript_goal_after_server_side_replay(
     .expect("resume_session should succeed");
 
     unsafe {
+        std::env::remove_var("MOCK_AGENT_MCP_HTTP");
         std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
         std::env::remove_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT");
     }

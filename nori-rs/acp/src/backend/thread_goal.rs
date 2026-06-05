@@ -331,6 +331,10 @@ impl AcpBackend {
     }
 
     pub(super) async fn prepend_goal_context_to_prompt(&self, prompt: String) -> String {
+        if !self.goal_automation_available().await {
+            return prompt;
+        }
+
         let goal_context = self
             .thread_goal_state
             .lock()
@@ -343,6 +347,11 @@ impl AcpBackend {
     }
 
     pub(super) async fn handle_thread_goal_get(&self) {
+        if !self.goal_automation_available().await {
+            self.emit_goal_unavailable().await;
+            return;
+        }
+
         let now = now_seconds();
         let goal = self.thread_goal_state.lock().await.snapshot(now);
         match goal {
@@ -370,6 +379,11 @@ impl AcpBackend {
         objective: Option<String>,
         status: Option<ThreadGoalStatus>,
     ) {
+        if !self.goal_automation_available().await {
+            self.emit_goal_unavailable().await;
+            return;
+        }
+
         let now = now_seconds();
         let result = {
             let mut state = self.thread_goal_state.lock().await;
@@ -395,6 +409,11 @@ impl AcpBackend {
     }
 
     pub(super) async fn handle_thread_goal_clear(&self) {
+        if !self.goal_automation_available().await {
+            self.emit_goal_unavailable().await;
+            return;
+        }
+
         let cleared = self.thread_goal_state.lock().await.clear();
         if cleared {
             emit_client_event(
@@ -416,6 +435,27 @@ impl AcpBackend {
             )
             .await;
         }
+    }
+
+    async fn goal_automation_available(&self) -> bool {
+        self.goal_mcp_http_server.lock().await.is_some()
+    }
+
+    async fn emit_goal_unavailable(&self) {
+        emit_client_event(
+            &self.backend_event_tx,
+            self.transcript_recorder.as_ref(),
+            ClientEvent::SessionUpdateInfo(SessionUpdateInfo {
+                kind: SessionUpdateKind::SessionInfo,
+                message: "/goal is unavailable for this session.".to_string(),
+                hint: Some(
+                    "The active agent does not advertise HTTP MCP support, so it cannot use the nori-client goal tools to close the loop."
+                        .to_string(),
+                ),
+                usage: None,
+            }),
+        )
+        .await;
     }
 
     async fn emit_thread_goal_updated(&self, goal: ThreadGoalSnapshot) {

@@ -381,7 +381,7 @@ async fn test_goal_context_prepended_to_user_prompt() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
-    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -441,6 +441,85 @@ async fn test_goal_context_prepended_to_user_prompt() {
 
 #[tokio::test]
 #[serial]
+async fn non_mcp_thread_goal_set_is_inert() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("This should not start autonomous work".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to submit inert goal operation");
+
+    let notice = recv_backend_client(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("expected unavailable goal notice");
+    match notice {
+        nori_protocol::ClientEvent::SessionUpdateInfo(update) => {
+            assert!(
+                update.message.contains("/goal is unavailable"),
+                "expected unavailable /goal notice, got: {update:?}"
+            );
+        }
+        other => panic!("expected unavailable /goal notice, got {other:?}"),
+    }
+
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(300)).await;
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "ordinary prompt after inert goal".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for user prompt after inert goal",
+    )
+    .await;
+
+    assert!(
+        !agent_text.contains("<goal_context>"),
+        "non-MCP inert goal should not inject goal context, got: {agent_text}"
+    );
+    assert!(
+        agent_text.contains("ordinary prompt after inert goal"),
+        "expected user prompt after inert goal, got: {agent_text}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn setting_active_goal_starts_hidden_continuation_without_extra_prompt() {
     use std::time::Duration;
 
@@ -455,7 +534,7 @@ async fn setting_active_goal_starts_hidden_continuation_without_extra_prompt() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
-    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -509,7 +588,7 @@ async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
-    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -849,6 +928,8 @@ async fn usage_updates_refresh_goal_token_count() {
         );
         return;
     }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
