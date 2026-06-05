@@ -342,6 +342,7 @@ impl AcpBackend {
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
+        let pending_hook_context = fallback_session_context_for_connection(config, &connection);
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -361,7 +362,7 @@ impl AcpBackend {
             goal_mcp_connected,
             goal_mcp_http_server,
             transcript_recorder_cell,
-            pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
+            pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),
             prompt_result_tx: prompt_result_tx.clone(),

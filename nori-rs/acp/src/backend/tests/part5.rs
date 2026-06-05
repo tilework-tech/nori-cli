@@ -226,13 +226,13 @@ async fn user_shell_command_submit_returns_while_command_is_running() {
     );
 }
 
-/// Test that session_context is prepended to the first user prompt.
+/// Non-MCP agents receive session_context on the first user prompt.
 ///
-/// When `session_context` is set on `AcpBackendConfig`, its value should appear
-/// in the prompt text sent to the ACP agent on the first user turn.
+/// This is the fallback path for agents that cannot discover Nori operating
+/// context through the backend-owned `nori-client` MCP server.
 #[tokio::test]
 #[serial]
-async fn test_session_context_prepended_to_first_prompt() {
+async fn non_mcp_agent_receives_session_context_on_first_prompt() {
     use std::time::Duration;
 
     let mock_config =
@@ -246,6 +246,7 @@ async fn test_session_context_prepended_to_first_prompt() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -298,6 +299,66 @@ async fn test_session_context_prepended_to_first_prompt() {
     );
     assert!(
         agent_text.contains("hello agent"),
+        "Expected user prompt in agent's echoed prompt, got: {agent_text}"
+    );
+}
+
+/// MCP-capable agents should discover Nori operating context through
+/// `nori-client` resources/prompts, not through the first user prompt.
+#[tokio::test]
+#[serial]
+async fn mcp_capable_agent_does_not_receive_session_context_fallback() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let mut config = build_test_config(temp_dir.path());
+    config.session_context = Some("NORI_MCP_SHOULD_NOT_GET_FALLBACK".to_string());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "hello mcp agent".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for PromptCompleted",
+    )
+    .await;
+
+    assert!(
+        !agent_text.contains("NORI_MCP_SHOULD_NOT_GET_FALLBACK"),
+        "MCP-capable agent should not receive fallback session context, got: {agent_text}"
+    );
+    assert!(
+        agent_text.contains("hello mcp agent"),
         "Expected user prompt in agent's echoed prompt, got: {agent_text}"
     );
 }
@@ -1183,9 +1244,8 @@ async fn test_session_context_consumed_after_first_prompt() {
         return;
     }
 
-    unsafe {
-        std::env::set_var("MOCK_AGENT_ECHO_PROMPT", "1");
-    }
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
