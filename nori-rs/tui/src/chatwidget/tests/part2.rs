@@ -43,6 +43,67 @@ fn slash_goal_requests_current_goal() {
 }
 
 #[test]
+fn slash_goal_is_disabled_when_goal_tools_are_unsupported() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionCapabilitiesChanged(
+        goal_capabilities(false),
+    ));
+
+    chat.dispatch_command(SlashCommand::Goal);
+
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        !cells.is_empty(),
+        "expected disabled goal command to emit a user-visible message"
+    );
+    let rendered = lines_to_single_string(cells.last().unwrap());
+    assert!(
+        rendered.contains("/goal is unavailable"),
+        "expected disabled goal explanation, got: {rendered}"
+    );
+}
+
+#[test]
+fn typed_goal_command_is_disabled_when_goal_tools_are_unsupported() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionCapabilitiesChanged(
+        goal_capabilities(false),
+    ));
+
+    chat.submit_user_message("/goal Ship this".to_string().into());
+
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+    let cells = drain_insert_history(&mut rx);
+    assert!(
+        !cells.is_empty(),
+        "expected typed disabled goal command to emit a user-visible message"
+    );
+    let rendered = lines_to_single_string(cells.last().unwrap());
+    assert!(
+        rendered.contains("/goal is unavailable"),
+        "expected disabled goal explanation, got: {rendered}"
+    );
+}
+
+fn goal_capabilities(goal_enabled: bool) -> nori_protocol::SessionCapabilitiesView {
+    nori_protocol::SessionCapabilitiesView {
+        agent: nori_protocol::AgentCapabilitiesView {
+            http_mcp: goal_enabled,
+            load_session: true,
+        },
+        builtin_commands: std::collections::HashMap::from([(
+            "goal".to_string(),
+            nori_protocol::CommandAvailability {
+                enabled: goal_enabled,
+                reason: (!goal_enabled)
+                    .then(|| "The active agent does not support HTTP MCP.".to_string()),
+            },
+        )]),
+    }
+}
+
+#[test]
 fn slash_picker_goal_renders_current_goal_summary() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
     let goal = test_thread_goal("Keep going", nori_protocol::ThreadGoalStatus::Active);

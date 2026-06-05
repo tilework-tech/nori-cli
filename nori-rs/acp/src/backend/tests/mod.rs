@@ -79,6 +79,8 @@ fn spawn_test_approval_handler(
                 BackendEvent::Control(event) => {
                     let _ = event_tx.send(event).await;
                 }
+                BackendEvent::Client(nori_protocol::ClientEvent::SessionCapabilitiesChanged(_)) => {
+                }
                 BackendEvent::Client(client_event) => {
                     if let Some(client_event_tx) = &client_event_tx {
                         let _ = client_event_tx.send(client_event).await;
@@ -130,6 +132,8 @@ fn spawn_test_persistent_relay(
                 BackendEvent::Control(event) => {
                     let _ = event_tx.send(event).await;
                 }
+                BackendEvent::Client(nori_protocol::ClientEvent::SessionCapabilitiesChanged(_)) => {
+                }
                 BackendEvent::Client(client_event) => {
                     if let Some(client_event_tx) = &client_event_tx {
                         let _ = client_event_tx.send(client_event).await;
@@ -174,6 +178,8 @@ fn spawn_test_idle_persistent_relay(
                     if matches!(event.msg, EventMsg::SessionConfigured(_)) => {}
                 BackendEvent::Control(event) => {
                     let _ = event_tx.send(event).await;
+                }
+                BackendEvent::Client(nori_protocol::ClientEvent::SessionCapabilitiesChanged(_)) => {
                 }
                 BackendEvent::Client(client_event) => {
                     if let Some(client_event_tx) = &client_event_tx {

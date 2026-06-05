@@ -43,6 +43,7 @@ fn client_event_kind(event: &ClientEvent) -> &'static str {
         ClientEvent::SessionUpdateInfo(_) => "session_update_info",
         ClientEvent::SessionConfigUpdate(_) => "session_config_update",
         ClientEvent::SessionModeChanged(_) => "session_mode_changed",
+        ClientEvent::SessionCapabilitiesChanged(_) => "session_capabilities_changed",
         ClientEvent::SessionPhaseChanged(_) => "session_phase_changed",
         ClientEvent::QueueChanged(_) => "queue_changed",
         ClientEvent::MessageDelta(_) => "message_delta",

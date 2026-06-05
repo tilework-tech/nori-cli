@@ -122,6 +122,7 @@ impl AcpBackend {
             }
         }
 
+        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
         let event_rx = connection.take_event_receiver();
 
         let connection = Arc::new(connection);
@@ -267,6 +268,12 @@ impl AcpBackend {
                 id: String::new(),
                 msg: EventMsg::SessionConfigured(session_configured),
             })
+            .await
+            .ok();
+        backend_event_tx
+            .send(BackendEvent::Client(
+                ClientEvent::SessionCapabilitiesChanged(capabilities_update),
+            ))
             .await
             .ok();
 

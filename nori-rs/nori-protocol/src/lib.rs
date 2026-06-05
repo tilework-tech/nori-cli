@@ -23,6 +23,7 @@ pub enum ClientEvent {
     ContextCompacted(ContextCompacted),
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
+    SessionCapabilitiesChanged(SessionCapabilitiesView),
     SessionUpdateInfo(SessionUpdateInfo),
     SessionConfigUpdate(SessionConfigUpdate),
     SessionModeChanged(SessionModeChanged),
@@ -72,6 +73,28 @@ pub struct AgentCommandInfo {
     pub name: String,
     pub description: String,
     pub input_hint: Option<String>,
+}
+
+/// Snapshot of the active session capabilities as projected for Nori clients.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SessionCapabilitiesView {
+    pub agent: AgentCapabilitiesView,
+    pub builtin_commands: HashMap<String, CommandAvailability>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AgentCapabilitiesView {
+    pub http_mcp: bool,
+    pub load_session: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CommandAvailability {
+    pub enabled: bool,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1798,6 +1821,28 @@ mod tests {
 
         let json = serde_json::to_string(&event).unwrap();
         assert_eq!(json, r#"{"event_type":"thread_goal_cleared"}"#);
+        let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed, event);
+    }
+
+    #[test]
+    fn session_capabilities_event_round_trips_through_serde() {
+        let event = ClientEvent::SessionCapabilitiesChanged(SessionCapabilitiesView {
+            agent: AgentCapabilitiesView {
+                http_mcp: false,
+                load_session: true,
+            },
+            builtin_commands: HashMap::from([(
+                "goal".to_string(),
+                CommandAvailability {
+                    enabled: false,
+                    reason: Some("Goal tools require HTTP MCP support.".to_string()),
+                },
+            )]),
+        });
+
+        let json = serde_json::to_string(&event).unwrap();
         let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed, event);

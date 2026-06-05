@@ -110,6 +110,7 @@ impl SkillPopup {
                 display_shortcut: None,
                 description: Some(item.description),
                 styled_description: None,
+                disabled: false,
             })
             .collect()
     }
