@@ -21,6 +21,7 @@ nori-protocol (normalized ACP session events)
 ```
 
 The ACP crate serves as a bridge between:
+
 - The TUI layer (`@/nori-rs/tui/`) which displays UI and collects user input
 - External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex, @google/gemini-cli)
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
@@ -30,6 +31,7 @@ The ACP crate serves as a bridge between:
 - The backend-owned `nori-client` MCP server in `@/nori-rs/acp/src/backend/nori_client_mcp.rs`, Nori's harness-side channel to the external ACP agent, which today exposes the same goal state to ACP agents as typed tools
 
 Key files:
+
 - `registry.rs` - Agent configuration and npm package detection
 - `connection/` - SACP v11-based subprocess spawning and JSON-RPC communication
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
@@ -47,13 +49,13 @@ The registry is **data-driven** and **agent-centric**: it combines built-in agen
 
 `RegisteredAgent` is the unified representation for both built-in and custom agents:
 
-| Field | Built-in Agent | Custom Agent |
-|-------|---------------|--------------|
-| `kind` | `Some(AgentKind)` | `None` |
-| `distribution` | `None` (uses auto-detection) | `Some(ResolvedDistribution)` |
-| `context_window_size` | From `AgentKind::context_window_size()` | From TOML config (optional) |
-| `auth_hint` | From `AgentKind::auth_hint()` | From TOML config (optional) |
-| `transcript_base_dir` | From `AgentKind::transcript_base_dir()` | From TOML config (optional) |
+| Field                 | Built-in Agent                          | Custom Agent                 |
+| --------------------- | --------------------------------------- | ---------------------------- |
+| `kind`                | `Some(AgentKind)`                       | `None`                       |
+| `distribution`        | `None` (uses auto-detection)            | `Some(ResolvedDistribution)` |
+| `context_window_size` | From `AgentKind::context_window_size()` | From TOML config (optional)  |
+| `auth_hint`           | From `AgentKind::auth_hint()`           | From TOML config (optional)  |
+| `transcript_base_dir` | From `AgentKind::transcript_base_dir()` | From TOML config (optional)  |
 
 **Registry construction** (`build_registry()`): starts with `build_default_agents()` (the three built-ins), then iterates custom agents. If a custom agent's slug matches a built-in slug, it **overrides** the built-in entry in-place. Otherwise it is appended. Duplicate slugs among custom agents are rejected with an error.
 
@@ -83,6 +85,7 @@ Built-in agents use `detect_preferred_package_manager()` which checks `NORI_MANA
 ACP session-domain state now flows through a single serialized reducer. `SessionDriver` owns a `SessionRuntime` plus `ClientEventNormalizer`, accepts ordered `InboundEvent` values (`PromptSubmit`, `CancelSubmit`, `LoadSubmit`, `Notification`, `PromptResponse`, `PermissionRequest`, etc.), and returns normalized `ClientEvent` projections plus ACP side effects. This removed the old split where prompt tasks emitted lifecycle events directly while a separate notification relay normalized deltas.
 
 `SessionRuntime` is the authoritative model for:
+
 - whether the ACP session is idle, loading, or in a prompt turn
 - queued user, compact, and hidden goal-continuation prompts waiting behind an active request
 - request-local message assembly for user/assistant/reasoning streams, including flushing the prior open text buffer when the ACP session update type changes
@@ -116,13 +119,13 @@ The ACP backend owns the `/goal` feature as per-session state instead of delegat
 
 `nori_client_mcp.rs` is a bridge, not a second store. The goal tools are typed rmcp `#[tool]` handlers on `NoriClientService`; they lock the same `ThreadGoalState` used by TUI `/goal` operations, return JSON snapshots shaped for model consumption, and emit the same `ThreadGoalUpdated` client event after mutations. The bridge records those emitted events through `@/nori-rs/acp/src/backend/transcript.rs` when a transcript recorder is available; `NoriClientShared` stores the recorder behind a shared cell because the service is built before the session id is known.
 
-The local `nori-client` server is only advertised when `register_for_session` in `@/nori-rs/acp/src/backend/nori_client_mcp.rs` sees HTTP MCP support from `@/nori-rs/acp/src/connection/mod.rs`. Nori advertises a real `http://127.0.0.1:<port>/mcp` endpoint rather than an ACP pseudo-URL, because Codex ACP and Claude ACP both forward ACP `mcpServers` to their underlying clients as ordinary HTTP MCP server config. The loopback server (`NoriClientServer`) is served by rmcp's spec-compliant `StreamableHttpService` (stateless mode) behind an `axum` listener; it is owned by the ACP backend (abort-on-drop) and talks directly to the same in-memory goal state as `/goal`. The server is named `nori-client` rather than `nori-goal` because it is Nori's general harness-side channel to the external ACP agent -- the single point of contact for harness-specific tooling the ACP protocol does not yet provide -- and the goal tools are simply its first tenants.
+The local `nori-client` server is only advertised when `register_for_session` in `@/nori-rs/acp/src/backend/nori_client_mcp.rs` sees HTTP MCP support from `@/nori-rs/acp/src/connection/mod.rs`. Nori advertises a real `http://127.0.0.1:<port>/mcp` endpoint rather than an ACP pseudo-URL, because Codex ACP and Claude ACP both forward ACP `mcpServers` to their underlying clients as ordinary HTTP MCP server config. The loopback server (`NoriClientServer`) is served by rmcp's spec-compliant `StreamableHttpService` (stateless mode) behind an `axum` listener; it is owned by the ACP backend (abort-on-drop) and talks directly to the same in-memory goal state as `/goal`. The server is named `nori-client` rather than `nori-goal` because it is Nori's general harness-side channel to the external ACP agent -- the single point of contact for harness-specific tooling the ACP protocol does not yet provide -- and the goal tools are simply its first tenants. Future follow-up work should also move Nori-specific operating context, skill/subagent guidance, local ACP-agent registration help, ACP wire-debugging help, and Nori CLI source-code Q&A into `nori-client` prompts or resources. The backend emits a `SessionCapabilitiesChanged` projection after session setup so clients can derive built-in command availability from the same capability state.
 
 The model-facing tool contract is intentionally narrower than the user-facing `/goal` command surface. `create_goal` creates a new active goal only when no goal exists, rejects token budgets for now, and delegates objective validation to `ThreadGoalState`. `update_goal` takes a typed `complete`/`blocked` enum, so the advertised tool schema exposes only those two Codex-compatible statuses and any other value is rejected at deserialization; pause, resume, usage-limited, and budget-limited transitions remain controlled by the user or the backend system path. Errors are returned as MCP tool errors instead of changing state.
 
 Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends the current goal as a structured `<goal_context>` block when a goal exists. Hook context is still applied before goal context, and compact summaries remain the outermost framing instruction, so resumed/compacted turns retain their existing prompt-ordering invariant while still carrying goal state to the agent. The prompt goal context and hidden continuation prompt use the same compact elapsed-time and token-count formatting as the visible TUI goal summary.
 
-Agents that are not advertised the local `nori-client` server still receive goal context through prompt transformation, an immediate hidden goal-continuation prompt when an active goal is set while the runtime is idle, and a single hidden goal-continuation prompt after visible user turns. The local MCP server is additive for capable agents so they can use structured goal tools; it is never required for goal context, transcript replay, usage accounting, or one-shot continuation behavior.
+Agents that are not advertised the local `nori-client` server still receive goal context through prompt transformation, an immediate hidden goal-continuation prompt when an active goal is set while the runtime is idle, and a single hidden goal-continuation prompt after visible user turns. The local MCP server is additive for capable agents so they can use structured goal tools and future Nori context prompts/resources; it is never required for transcript replay, usage accounting, or one-shot continuation behavior. The interactive `/goal` command is disabled for agents that cannot receive the local server, because those agents cannot call `update_goal` to close the loop. The intended degradation path is a concise first-prompt `<context>` block with Nori CLI context and the open source repo URL, not repeated prompt-prefix workarounds on every turn.
 
 After an active goal mutation or a visible user prompt completes with `StopReason::EndTurn`, `session_runtime_driver.rs` may submit a hidden goal-continuation prompt to the same ACP session. `thread_goal.rs` owns the continuation prompt text so it is derived from the current backend goal snapshot, not from TUI state or transcript text. The driver only starts a continuation when the goal is active, the reducer has returned to idle, and no queued user work remains. Chaining from one hidden `GoalContinuation` into another is gated on `goal_mcp_connected`, an `@/nori-rs/acp/src/backend/mod.rs` session flag that `NoriClientService::initialize` (the rmcp `ServerHandler::initialize` hook) flips only after the local MCP server receives an `initialize` request. This is a safety invariant: until the agent has actually connected to the `nori-client` endpoint it has no way to mark the goal complete, so unbounded continuation-to-continuation chaining is not allowed. Agents without a connected goal MCP endpoint receive at most one hidden continuation per active goal mutation or visible user turn.
 
@@ -149,19 +152,20 @@ args = ["acp"]
 
 `AgentDistributionToml` requires exactly one of these distribution variants to be set (validated by `resolve()`):
 
-| Variant | TOML Key | Command Generated | Use Case |
-|---------|----------|-------------------|----------|
-| `LocalDistribution` | `local` | `{command} {args...}` with env vars | Local binary |
-| `PackageDistribution` (npx) | `npx` | `npx {package} {args...}` | Node.js via npm |
-| `PackageDistribution` (bunx) | `bunx` | `bunx {package} {args...}` | Node.js via bun |
-| `PackageDistribution` (pipx) | `pipx` | `pipx run {package} {args...}` | Python via pipx |
-| `PackageDistribution` (uvx) | `uvx` | `uvx {package} {args...}` | Python via uv |
+| Variant                      | TOML Key | Command Generated                   | Use Case        |
+| ---------------------------- | -------- | ----------------------------------- | --------------- |
+| `LocalDistribution`          | `local`  | `{command} {args...}` with env vars | Local binary    |
+| `PackageDistribution` (npx)  | `npx`    | `npx {package} {args...}`           | Node.js via npm |
+| `PackageDistribution` (bunx) | `bunx`   | `bunx {package} {args...}`          | Node.js via bun |
+| `PackageDistribution` (pipx) | `pipx`   | `pipx run {package} {args...}`      | Python via pipx |
+| `PackageDistribution` (uvx)  | `uvx`    | `uvx {package} {args...}`           | Python via uv   |
 
 `resolve()` returns `ResolvedDistribution` enum or errors if zero or multiple variants are set.
 
 **Nori Config Path Resolution** (`config/`):
 
 The config module provides the **canonical source of truth** for Nori home path resolution:
+
 - `find_nori_home()`: Returns `~/.nori/cli` or `$NORI_HOME` if set
 - `NORI_HOME_ENV`: Environment variable name (`"NORI_HOME"`)
 - `NORI_HOME_DIR`: Default relative path (`".nori/cli"`)
@@ -185,20 +189,20 @@ The TUI's `/agent` picker can persistently toggle this setting with `Shift-Tab`.
 
 **Agent Config Field Resolution:**
 
-| Field | Purpose | Persistence |
-|-------|---------|-------------|
-| `agent` | User's persistent agent preference | Saved to config.toml |
-| `active_agent` | Active agent for current session (CLI override > config agent > persisted agent) | Not persisted |
+| Field          | Purpose                                                                          | Persistence          |
+| -------------- | -------------------------------------------------------------------------------- | -------------------- |
+| `agent`        | User's persistent agent preference                                               | Saved to config.toml |
+| `active_agent` | Active agent for current session (CLI override > config agent > persisted agent) | Not persisted        |
 
 **Notification Configuration** (`config/types/mod.rs`):
 
 Three config enums control notification behavior, all stored in the `[tui]` section of `config.toml`:
 
-| Enum | TOML Key | Default | Controls |
-|------|----------|---------|----------|
-| `TerminalNotifications` | `terminal_notifications` | `Enabled` | OSC 9 escape sequences sent by the TUI (`chatwidget.rs`) |
-| `OsNotifications` | `os_notifications` | `Enabled` | Native desktop notifications via `notify-rust` (wired in `backend/mod.rs` to `UserNotifier::new()`) |
-| `NotifyAfterIdle` | `notify_after_idle` | `FiveSeconds` (`"5s"`) | Duration to wait before firing an idle notification; `Disabled` suppresses the timer entirely |
+| Enum                    | TOML Key                 | Default                | Controls                                                                                            |
+| ----------------------- | ------------------------ | ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `TerminalNotifications` | `terminal_notifications` | `Enabled`              | OSC 9 escape sequences sent by the TUI (`chatwidget.rs`)                                            |
+| `OsNotifications`       | `os_notifications`       | `Enabled`              | Native desktop notifications via `notify-rust` (wired in `backend/mod.rs` to `UserNotifier::new()`) |
+| `NotifyAfterIdle`       | `notify_after_idle`      | `FiveSeconds` (`"5s"`) | Duration to wait before firing an idle notification; `Disabled` suppresses the timer entirely       |
 
 `NotifyAfterIdle` accepts serde-renamed string values: `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"`. Its `as_duration()` method returns `Option<Duration>` (`None` when `Disabled`). The idle timer in `backend/mod.rs` is conditionally spawned only when `as_duration()` returns `Some` -- when `Disabled`, no timer task or abort handle is created.
 
@@ -210,17 +214,16 @@ The `[tui]` section also owns display-only preferences consumed by `@/nori-rs/tu
 
 Footer visibility and placement are also config-owned. `[tui.footer_segments]` enables or disables named segments, including the ACP-only `mode_indicator` segment. `FooterSegmentConfig::default()` ships a lean subset enabled by default -- `context`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, and `mode_indicator` -- while `prompt_summary`, `vim_mode`, `git_stats`, `nori_profile`, and `nori_version` are off by default and require an explicit opt-in. `FooterSegmentConfig::from_toml` resolves unspecified fields by delegating to `Self::default()`, so the in-code default and the TOML-derived default stay in lockstep. `[tui.footer_layout]` controls where enabled segments render: `footer_left`, `footer_right`, and the four textarea corners. The default layout keeps legacy status segments on the footer's left side and puts `mode_indicator` on the footer's right side; partial layout overrides move listed segments out of their default placement to avoid duplicates.
 
-
 **Hotkey Configuration** (`config/types/mod.rs`):
 
 Hotkeys are user-configurable keyboard shortcuts stored under `[tui.hotkeys]` in `config.toml`. The config layer defines four types:
 
-| Type | Purpose |
-|------|---------|
-| `HotkeyAction` | Enum of bindable actions with display names, descriptions, TOML keys, and default bindings. Covers app-level actions (OpenTranscript, OpenEditor), emacs-style editing actions (cursor movement, deletion, kill/yank) used by the textarea, and UI trigger actions (HistorySearch) |
-| `HotkeyBinding` | String-based key representation (e.g. `"ctrl+t"`, `"alt+g"`, `"none"` for unbound). Serializes/deserializes via serde for TOML roundtripping |
-| `HotkeyConfigToml` | TOML deserialization struct with `Option<HotkeyBinding>` fields for each action |
-| `HotkeyConfig` | Resolved config with defaults applied via `from_toml()`. Provides `binding_for()`, `set_binding()`, and `all_bindings()` accessors |
+| Type               | Purpose                                                                                                                                                                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HotkeyAction`     | Enum of bindable actions with display names, descriptions, TOML keys, and default bindings. Covers app-level actions (OpenTranscript, OpenEditor), emacs-style editing actions (cursor movement, deletion, kill/yank) used by the textarea, and UI trigger actions (HistorySearch) |
+| `HotkeyBinding`    | String-based key representation (e.g. `"ctrl+t"`, `"alt+g"`, `"none"` for unbound). Serializes/deserializes via serde for TOML roundtripping                                                                                                                                       |
+| `HotkeyConfigToml` | TOML deserialization struct with `Option<HotkeyBinding>` fields for each action                                                                                                                                                                                                    |
+| `HotkeyConfig`     | Resolved config with defaults applied via `from_toml()`. Provides `binding_for()`, `set_binding()`, and `all_bindings()` accessors                                                                                                                                                 |
 
 The binding string format is kept terminal-agnostic (no crossterm dependency in the config crate). The TUI layer in `@/nori-rs/tui/src/nori/hotkey_match.rs` handles conversion between binding strings and crossterm `KeyEvent` types. `HotkeyConfig` is carried on `NoriConfig` and resolved during config loading in `loader.rs`.
 
@@ -228,8 +231,8 @@ The binding string format is kept terminal-agnostic (no crossterm dependency in 
 
 The `vim_mode` field in `TuiConfigToml` and `NoriConfig` uses the `VimEnterBehavior` enum, which doubles as both the vim mode on/off switch and the Enter key behavior selector. Stored under `[tui]` in `config.toml`:
 
-| Field | TOML Key | Default | Controls |
-|-------|----------|---------|----------|
+| Field      | TOML Key   | Default | Controls                                                                                                                                                                                      |
+| ---------- | ---------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vim_mode` | `vim_mode` | `"off"` | Vim mode and Enter key behavior: `"newline"` (Enter inserts newline in INSERT, submits in NORMAL), `"submit"` (Enter submits in INSERT, inserts newline in NORMAL), or `"off"` (vim disabled) |
 
 `VimEnterBehavior` has a custom `Deserialize` implementation that accepts both booleans and strings for backwards compatibility: `true` maps to `Submit`, `false` maps to `Off`. New string values are `"newline"`, `"submit"`, `"off"`. Serialization always writes the string form. The enum provides `is_enabled()` (returns `true` for any variant except `Off`), `display_name()` for TUI display, `toml_value()` for persistence, and `all_variants()` for building picker UIs.
@@ -240,8 +243,8 @@ The TUI layer (`@/nori-rs/tui/`) handles the vim mode state machine and propagat
 
 The `ScriptTimeout` type represents a configurable duration for custom prompt script execution. It stores both the raw string (for TOML round-tripping and display) and the parsed `Duration`. Stored under `[tui]` in `config.toml`:
 
-| Field | TOML Key | Default | Controls |
-|-------|----------|---------|----------|
+| Field            | TOML Key         | Default | Controls                                                                |
+| ---------------- | ---------------- | ------- | ----------------------------------------------------------------------- |
 | `script_timeout` | `script_timeout` | `"30s"` | Maximum execution time for custom prompt scripts before they are killed |
 
 Supported suffixes: `s` (seconds), `m` (minutes). Bare numbers are treated as seconds. `all_common_values()` provides picker options: 10s, 30s, 1m, 2m, 5m. The setting is resolved in `loader.rs` with `unwrap_or_default()` (30 seconds).
@@ -250,8 +253,8 @@ Supported suffixes: `s` (seconds), `m` (minutes). Bare numbers are treated as se
 
 The `loop_count` field on `NoriConfigToml` and `NoriConfig` controls how many times the TUI re-runs the first user prompt in fresh conversation sessions. Stored as a top-level key in `config.toml`:
 
-| Field | TOML Key | Default | Controls |
-|-------|----------|---------|----------|
+| Field        | TOML Key     | Default           | Controls                                                                                                     |
+| ------------ | ------------ | ----------------- | ------------------------------------------------------------------------------------------------------------ |
 | `loop_count` | `loop_count` | `None` (disabled) | Number of fresh-session iterations of the first prompt. Values > 1 enable looping; `None` or `0` disables it |
 
 The setting is resolved in `loader.rs` by passing `toml.loop_count` directly. The TUI layer (`@/nori-rs/tui/`) orchestrates the loop lifecycle -- the config layer only stores the value.
@@ -260,28 +263,30 @@ The setting is resolved in `loader.rs` by passing `toml.loop_count` directly. Th
 
 The `auto_worktree` field controls whether and how the TUI creates a git worktree at session start for process isolation. It is an `AutoWorktree` enum stored under `[tui]` in `config.toml`:
 
-| Variant | TOML Value | Behavior |
-|---------|------------|----------|
-| `Automatic` | `"automatic"` (or legacy `true`) | Always create a worktree at session start |
-| `Ask` | `"ask"` | Show a TUI popup at session start asking the user whether to create a worktree |
-| `Off` | `"off"` (or legacy `false`) | Never create a worktree automatically |
+| Variant     | TOML Value                       | Behavior                                                                       |
+| ----------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| `Automatic` | `"automatic"` (or legacy `true`) | Always create a worktree at session start                                      |
+| `Ask`       | `"ask"`                          | Show a TUI popup at session start asking the user whether to create a worktree |
+| `Off`       | `"off"` (or legacy `false`)      | Never create a worktree automatically                                          |
 
 The default is `Off`. The enum has a custom serde `Deserialize` implementation that accepts both string values (`"automatic"`, `"ask"`, `"off"`) and boolean values (`true` maps to `Automatic`, `false` maps to `Off`) for backwards compatibility with config files written before the enum existed. `Serialize` always writes the string form via `toml_value()`.
 
 Helper methods on `AutoWorktree`:
+
 - `display_name()` -- human-readable label for the TUI config picker (e.g. `"Automatic"`, `"Ask"`, `"Off"`)
 - `toml_value()` -- string written to config.toml (e.g. `"automatic"`, `"ask"`, `"off"`)
 - `all_variants()` -- returns all three variants in order, used to build the picker UI
 - `is_enabled()` -- returns `true` for `Automatic` and `Ask`, `false` for `Off`; used by the backend to gate worktree branch renaming
 
-| Field | TOML Key | Default | Controls |
-|-------|----------|---------|----------|
-| `auto_worktree` | `auto_worktree` | `Off` | Worktree creation behavior at session start |
+| Field                  | TOML Key               | Default | Controls                                                                                                 |
+| ---------------------- | ---------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `auto_worktree`        | `auto_worktree`        | `Off`   | Worktree creation behavior at session start                                                              |
 | `skillset_per_session` | `skillset_per_session` | `false` | When enabled, each session gets its own skillset. Independent of `auto_worktree` -- does not force it on |
-| `file_manager` | `file_manager` | `None` | Terminal file manager for the `/browse` command |
-| `pinned_plan_drawer` | `pinned_plan_drawer` | `false` | When enabled, plan updates render in a pinned viewport drawer instead of scrollable history cells |
+| `file_manager`         | `file_manager`         | `None`  | Terminal file manager for the `/browse` command                                                          |
+| `pinned_plan_drawer`   | `pinned_plan_drawer`   | `false` | When enabled, plan updates render in a pinned viewport drawer instead of scrollable history cells        |
 
 The `FileManager` enum (`types/mod.rs`) represents supported terminal file managers for the `/browse` slash command. Stored under `[tui]` in `config.toml` as a kebab-case string. Variants: `Vifm`, `Ranger`, `Lf`, `Nnn`. Each variant provides:
+
 - `command_name()` -- binary name to invoke (e.g. `"vifm"`, `"ranger"`)
 - `chooser_args(output_path)` -- CLI arguments that put the file manager into chooser mode, writing the selected file path to a temp file. Each file manager uses a different flag convention (e.g. vifm uses `--choose-files`, ranger uses `--choosefile=`, lf uses `-selection-path`, nnn uses `-p`)
 - `display_name()` -- human-friendly label for the config picker
@@ -294,10 +299,10 @@ Both `auto_worktree` and `skillset_per_session` are resolved independently in `l
 
 Before attempting to create a worktree, `can_create_worktree(cwd)` validates that the directory is eligible. It returns `Ok(())` if eligible, or `Err(WorktreeBlockedReason)` if not:
 
-| `WorktreeBlockedReason` | Detection | User-Visible Message |
-|--------------------------|-----------|----------------------|
-| `NotGitRepo` | `git rev-parse --is-inside-work-tree` fails or returns non-`true` | "not in a git repository" |
-| `AlreadyInWorktree` | `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir` (linked worktree signature) | "already in a git worktree" |
+| `WorktreeBlockedReason` | Detection                                                                                           | User-Visible Message        |
+| ----------------------- | --------------------------------------------------------------------------------------------------- | --------------------------- |
+| `NotGitRepo`            | `git rev-parse --is-inside-work-tree` fails or returns non-`true`                                   | "not in a git repository"   |
+| `AlreadyInWorktree`     | `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir` (linked worktree signature) | "already in a git worktree" |
 
 The check runs in `run_main()` before the TUI is initialized. When blocked, the reason string is threaded through to `run_ratatui_app()` and displayed via `run_worktree_blocked_popup()` in `@/nori-rs/tui/src/nori/worktree_ask.rs`.
 
@@ -311,22 +316,23 @@ When auto-worktree is active (either via `Automatic` or the user confirming in `
 
 The `AcpBackend` stores `auto_worktree: AutoWorktree` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The `is_enabled()` method returns `true` for both `Automatic` and `Ask` variants, since in both cases a worktree was actually created. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
-
 **Default Models Configuration** (`config/types/mod.rs`, `backend/mod.rs`):
 
 Model preferences can be persisted per agent in the `[default_models]` table of `config.toml`. When a session starts, the configured default model is automatically applied if available:
 
-| Field | TOML Section | Purpose |
-|-------|--------------|---------|
+| Field            | TOML Section       | Purpose                                                       |
+| ---------------- | ------------------ | ------------------------------------------------------------- |
 | `default_models` | `[default_models]` | Maps agent slugs to model IDs (e.g., `claude-code = "haiku"`) |
 
 The config flow is:
+
 1. `NoriConfigToml.default_models` deserializes the `[default_models]` table from TOML (empty HashMap by default via `#[serde(default)]`)
 2. `NoriConfig.default_models` stores the resolved map after config loading
 3. `AcpBackendConfig.default_model` receives `Option<String>` via lookup by agent slug in `chatwidget/agent.rs`
 4. `AcpBackend::spawn()` applies the model via `connection.set_model()` after session creation (behind `#[cfg(feature = "unstable")]`)
 
 The model is only applied if:
+
 - The feature `unstable` is enabled (model switching requires this feature)
 - The default model is listed in the agent's `available_models` (checked against `model_state`)
 - The session was successfully created
@@ -338,6 +344,7 @@ Failures to apply the default model (e.g., model unavailable, API error) produce
 ACP agents can expose runtime session configuration through `NewSessionResponse.config_options`, `LoadSessionResponse.config_options`, idle `SessionUpdate::ConfigOptionUpdate` notifications, and the `session/set_config_option` RPC. `SacpConnection` owns the latest live config snapshot in `AcpSessionConfigState`, updates it when a session is created/loaded or when config-option notifications arrive, and replaces it with the full response snapshot after `set_config_option()`.
 
 This first implementation is deliberately live-session only:
+
 - `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
 - `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
 - Config options use `SessionConfigOptionCategory` to tag their purpose. The `Mode` category drives the footer mode indicator and `Shift-Tab` cycling. The `Model` category is the stable mechanism for model selection -- the TUI's `/model` command checks for a Model-category config option first (see `@/nori-rs/tui/docs.md`) before falling back to the unstable `SessionModelState`. Real ACP agents like Claude Code provide model selection through this stable config_options path.
@@ -374,16 +381,16 @@ async_pre_agent_response = ["~/.nori/cli/hooks/async-pre-response.sh"]
 async_post_agent_response = ["~/.nori/cli/hooks/async-post-response.sh"]
 ```
 
-| Field | TOML Key | Default | Execution Point |
-|-------|----------|---------|-----------------|
-| `session_start_hooks` | `session_start` | `[]` | After backend construction, before `SessionConfigured` event |
-| `session_end_hooks` | `session_end` | `[]` | On `Op::Shutdown`, before transcript recorder shutdown |
-| `pre_user_prompt_hooks` | `pre_user_prompt` | `[]` | In `handle_user_input()`, before the prompt is sent to the agent |
-| `post_user_prompt_hooks` | `post_user_prompt` | `[]` | After the entire turn completes (agent response + all tool calls finished) |
-| `pre_tool_call_hooks` | `pre_tool_call` | `[]` | Inside the update handler task, when a `ToolCall` update arrives |
-| `post_tool_call_hooks` | `post_tool_call` | `[]` | Inside the update handler task, when a `ToolCallUpdate` has `Completed` status |
-| `pre_agent_response_hooks` | `pre_agent_response` | `[]` | Inside the update handler task, on the first non-empty `AgentMessageChunk` |
-| `post_agent_response_hooks` | `post_agent_response` | `[]` | After the update handler completes, with the full accumulated response text |
+| Field                       | TOML Key              | Default | Execution Point                                                                |
+| --------------------------- | --------------------- | ------- | ------------------------------------------------------------------------------ |
+| `session_start_hooks`       | `session_start`       | `[]`    | After backend construction, before `SessionConfigured` event                   |
+| `session_end_hooks`         | `session_end`         | `[]`    | On `Op::Shutdown`, before transcript recorder shutdown                         |
+| `pre_user_prompt_hooks`     | `pre_user_prompt`     | `[]`    | In `handle_user_input()`, before the prompt is sent to the agent               |
+| `post_user_prompt_hooks`    | `post_user_prompt`    | `[]`    | After the entire turn completes (agent response + all tool calls finished)     |
+| `pre_tool_call_hooks`       | `pre_tool_call`       | `[]`    | Inside the update handler task, when a `ToolCall` update arrives               |
+| `post_tool_call_hooks`      | `post_tool_call`      | `[]`    | Inside the update handler task, when a `ToolCallUpdate` has `Completed` status |
+| `pre_agent_response_hooks`  | `pre_agent_response`  | `[]`    | Inside the update handler task, on the first non-empty `AgentMessageChunk`     |
+| `post_agent_response_hooks` | `post_agent_response` | `[]`    | After the update handler completes, with the full accumulated response text    |
 
 **Hook execution timing within a turn:**
 
@@ -412,26 +419,26 @@ handle_user_input()
 
 Each lifecycle hook receives `NORI_HOOK_EVENT` set to its hook name. Additional variables depend on the hook type:
 
-| Hook | `NORI_HOOK_EVENT` | Additional Environment Variables |
-|------|-------------------|----------------------------------|
-| `pre_user_prompt` | `"pre_user_prompt"` | `NORI_HOOK_PROMPT_TEXT` |
-| `post_user_prompt` | `"post_user_prompt"` | `NORI_HOOK_PROMPT_TEXT` |
-| `pre_tool_call` | `"pre_tool_call"` | `NORI_HOOK_TOOL_NAME`, `NORI_HOOK_TOOL_ARGS` |
-| `post_tool_call` | `"post_tool_call"` | `NORI_HOOK_TOOL_NAME`, `NORI_HOOK_TOOL_OUTPUT` |
-| `pre_agent_response` | `"pre_agent_response"` | (none) |
-| `post_agent_response` | `"post_agent_response"` | `NORI_HOOK_RESPONSE_TEXT` |
-| `session_start` | (none) | (none) |
-| `session_end` | (none) | (none) |
+| Hook                  | `NORI_HOOK_EVENT`       | Additional Environment Variables               |
+| --------------------- | ----------------------- | ---------------------------------------------- |
+| `pre_user_prompt`     | `"pre_user_prompt"`     | `NORI_HOOK_PROMPT_TEXT`                        |
+| `post_user_prompt`    | `"post_user_prompt"`    | `NORI_HOOK_PROMPT_TEXT`                        |
+| `pre_tool_call`       | `"pre_tool_call"`       | `NORI_HOOK_TOOL_NAME`, `NORI_HOOK_TOOL_ARGS`   |
+| `post_tool_call`      | `"post_tool_call"`      | `NORI_HOOK_TOOL_NAME`, `NORI_HOOK_TOOL_OUTPUT` |
+| `pre_agent_response`  | `"pre_agent_response"`  | (none)                                         |
+| `post_agent_response` | `"post_agent_response"` | `NORI_HOOK_RESPONSE_TEXT`                      |
+| `session_start`       | (none)                  | (none)                                         |
+| `session_end`         | (none)                  | (none)                                         |
 
 **Hook resolution:** `HooksConfigToml` deserializes the TOML `[hooks]` section. `resolve_hook_paths()` applies tilde expansion via `expand_tilde()` (using `dirs::home_dir()`) and converts strings to `PathBuf`s. The resolved paths are stored on `NoriConfig` and passed through `AcpBackendConfig` to the backend.
 
 **Hook execution** (`hooks.rs`): `execute_hooks_with_env()` is the core execution function -- it runs scripts sequentially with a configurable timeout and injects environment variables into each child process. `execute_hooks()` is a thin wrapper that calls it with an empty env map. Interpreter is auto-detected by file extension:
 
-| Extension | Interpreter |
-|-----------|-------------|
-| `.sh` | `bash` |
-| `.py` | `python3` |
-| `.js` | `node` |
+| Extension  | Interpreter       |
+| ---------- | ----------------- |
+| `.sh`      | `bash`            |
+| `.py`      | `python3`         |
+| `.js`      | `node`            |
 | other/none | executed directly |
 
 Hook failures are non-fatal. Failed hooks emit warning events to the TUI via the event channel. A failed hook does not prevent subsequent hooks from executing.
@@ -449,13 +456,13 @@ The resulting image blocks are appended after any text block in the prompt vecto
 
 Hook scripts can route their stdout lines to different destinations by using line prefixes. `parse_hook_output()` parses each non-empty line of stdout:
 
-| Prefix | Destination | `HookOutputLine` variant |
-|--------|-------------|--------------------------|
-| (none) | `tracing::info!` | `Log` |
-| `::output::` | Plain white text in TUI (`PlainHistoryCell`) | `Output` |
-| `::output-warn::` | Yellow warning text in TUI | `OutputWarn` |
-| `::output-error::` | Red error text in TUI | `OutputError` |
-| `::context::` | Accumulated and prepended to next user prompt | `Context` |
+| Prefix             | Destination                                   | `HookOutputLine` variant |
+| ------------------ | --------------------------------------------- | ------------------------ |
+| (none)             | `tracing::info!`                              | `Log`                    |
+| `::output::`       | Plain white text in TUI (`PlainHistoryCell`)  | `Output`                 |
+| `::output-warn::`  | Yellow warning text in TUI                    | `OutputWarn`             |
+| `::output-error::` | Red error text in TUI                         | `OutputError`            |
+| `::context::`      | Accumulated and prepended to next user prompt | `Context`                |
 
 The routing is handled by `route_hook_results()` in `backend/mod.rs`, which is shared across all hook types. It sends `EventMsg::HookOutput` events (from `@/nori-rs/protocol/`) for output/warn/error lines, and accumulates context lines into `pending_hook_context` on the `AcpBackend`.
 
@@ -516,6 +523,7 @@ Pick most recently modified file within 2 days
 ```
 
 Entry points:
+
 - `discover_transcript_for_agent_with_message()` - Required entry point using first-message matching
 - `discover_transcript_for_agent()` - Deprecated, always returns `NoSessionsFound` error
 
@@ -523,11 +531,11 @@ Entry points:
 
 Each agent's base directory is provided by `AgentKind::transcript_base_dir()` in `registry.rs`:
 
-| Agent | Base Directory | File Types |
-|-------|----------------|------------|
-| Claude Code | `~/.claude/projects/` | `.jsonl` |
-| Codex | `~/.codex/sessions/` | `.jsonl` |
-| Gemini | `~/.gemini/tmp/` | `.json` |
+| Agent       | Base Directory        | File Types |
+| ----------- | --------------------- | ---------- |
+| Claude Code | `~/.claude/projects/` | `.jsonl`   |
+| Codex       | `~/.codex/sessions/`  | `.jsonl`   |
+| Gemini      | `~/.gemini/tmp/`      | `.json`    |
 
 **Shell Search Implementation:**
 
@@ -541,6 +549,7 @@ The `find_transcript_by_shell_search()` function uses shell tools to search recu
 **Message Normalization:**
 
 Messages are normalized before searching via `normalize_message_for_matching()` to create a consistent fingerprint:
+
 - Trim leading/trailing whitespace
 - Truncate to first 120 characters (`NORMALIZED_MESSAGE_LENGTH`)
 
@@ -565,20 +574,20 @@ pub struct TranscriptTokenUsage {
 
 Each agent format requires different parsing:
 
-| Agent | Format | Token Fields |
-|-------|--------|--------------|
-| Claude Code | JSONL | `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens` in `message.usage` |
-| Codex | JSONL | `total_token_usage.input_tokens`, `total_token_usage.output_tokens`, `total_token_usage.cached_input_tokens` from last `token_count` event; `last_token_usage.input_tokens` as `last_context_tokens` for context window fill |
-| Gemini | JSON | `input`, `output`, `thoughts`, `cached` from each message's `tokens` object |
+| Agent       | Format | Token Fields                                                                                                                                                                                                                 |
+| ----------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code | JSONL  | `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens` in `message.usage`                                                                                                                 |
+| Codex       | JSONL  | `total_token_usage.input_tokens`, `total_token_usage.output_tokens`, `total_token_usage.cached_input_tokens` from last `token_count` event; `last_token_usage.input_tokens` as `last_context_tokens` for context window fill |
+| Gemini      | JSON   | `input`, `output`, `thoughts`, `cached` from each message's `tokens` object                                                                                                                                                  |
 
 **Codex Token Semantics:**
 
 Codex `token_count` events contain two token usage objects with different semantics:
 
-| Object | Meaning | Used For |
-|--------|---------|----------|
-| `total_token_usage` | Cumulative billing counter across ALL API calls in the session; grows unboundedly | `input_tokens`, `output_tokens`, `cached_tokens` fields (the "Tokens" footer segment) |
-| `last_token_usage` | Tokens from the most recent API call only; represents actual context window fill | `last_context_tokens` field used by transcript-discovery fallback for the "Context Y% (XK)" footer segment |
+| Object              | Meaning                                                                           | Used For                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `total_token_usage` | Cumulative billing counter across ALL API calls in the session; grows unboundedly | `input_tokens`, `output_tokens`, `cached_tokens` fields (the "Tokens" footer segment)                      |
+| `last_token_usage`  | Tokens from the most recent API call only; represents actual context window fill  | `last_context_tokens` field used by transcript-discovery fallback for the "Context Y% (XK)" footer segment |
 
 Using `total_token_usage.input_tokens` for context window percentage would produce nonsensical results (e.g., 995K tokens for a 258K context window) because the cumulative counter sums across all turns. The `last_token_usage.input_tokens` correctly reflects how full the context window is for the current turn. When ACP `UsageUpdate` events are present, the TUI prefers those live session values for the footer; transcript parsing remains a fallback for older agents/sessions where `UsageUpdate` is absent. When `last_token_usage` is absent (older transcript formats), `last_context_tokens` is `None` and the transcript fallback does not display a context percentage.
 
@@ -588,20 +597,22 @@ Claude Code logs multiple JSONL entries per API request due to streaming (each s
 
 **Claude Token Field Semantics:**
 
-| Field | Meaning | Counted As |
-|-------|---------|------------|
-| `input_tokens` | Non-cached input tokens sent | Added to `input_tokens` |
-| `cache_creation_input_tokens` | Tokens sent and cached for future use | Added to `input_tokens` |
-| `cache_read_input_tokens` | Tokens read from cache (discounted) | Reported as `cached_tokens` |
-| `output_tokens` | Output tokens generated | Added to `output_tokens` |
+| Field                         | Meaning                               | Counted As                  |
+| ----------------------------- | ------------------------------------- | --------------------------- |
+| `input_tokens`                | Non-cached input tokens sent          | Added to `input_tokens`     |
+| `cache_creation_input_tokens` | Tokens sent and cached for future use | Added to `input_tokens`     |
+| `cache_read_input_tokens`     | Tokens read from cache (discounted)   | Reported as `cached_tokens` |
+| `output_tokens`               | Output tokens generated               | Added to `output_tokens`    |
 
 The `TranscriptLocation` struct returned by discovery functions includes:
+
 - `token_breakdown: Option<TranscriptTokenUsage>` - Detailed breakdown for input, output, and cached tokens
 - `subagents_used: Vec<String>` - Unique subagent names found in the discovered transcript for agents that do not emit every delegated subagent launch as visible ACP tool events
 
 Token parsing is synchronous because `SystemInfo::collect_fresh` runs in a background thread.
 
 The data flow is:
+
 ```
 SystemInfo::collect_for_directory_with_message() (background thread)
     |
@@ -655,14 +666,15 @@ The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent 
 
 CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_sacp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to ACP `McpServer` values inside the transport adapter:
 
-| Transport | SACP Type | Key Fields |
-|-----------|-----------|------------|
-| `Stdio` | `McpServer::Stdio` | command, args, env (explicit key-value pairs + env vars resolved from process environment) |
-| `StreamableHttp` | `McpServer::Http` | url, headers (static headers + env-resolved headers + bearer token + OAuth token as `Authorization: Bearer` header) |
+| Transport        | SACP Type          | Key Fields                                                                                                          |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `Stdio`          | `McpServer::Stdio` | command, args, env (explicit key-value pairs + env vars resolved from process environment)                          |
+| `StreamableHttp` | `McpServer::Http`  | url, headers (static headers + env-resolved headers + bearer token + OAuth token as `Authorization: Bearer` header) |
 
 Disabled servers (`enabled == false`) are filtered out before conversion. Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. The `client_id` and `client_secret_env_var` fields on `StreamableHttp` are not forwarded to the agent -- they are only used by the TUI/rmcp-client layer for OAuth login flows (see `@/nori-rs/rmcp-client/docs.md`). Results are sorted by server name for deterministic ordering.
 
 **OAuth token injection for HTTP servers:** For `StreamableHttp` servers, `to_sacp_mcp_servers()` resolves authentication headers using a priority chain:
+
 1. `bearer_token_env_var` -- if present and the env var resolves, used as `Authorization: Bearer` header
 2. Stored OAuth tokens -- if no bearer token env var was resolved, `load_oauth_tokens()` from `@/nori-rs/rmcp-client/src/oauth.rs` is called to load credentials from the system keyring or `CODEX_HOME/.credentials.json` fallback file
 3. No auth -- if neither source produces a token, the server is forwarded without an `Authorization` header
@@ -675,7 +687,7 @@ The server uses a normal `http://127.0.0.1:<port>/mcp` URL because current Codex
 
 ACP session setup paths build the MCP server list in two phases: first convert configured MCP servers with `to_sacp_mcp_servers()`, then let backend-owned features append local MCP servers when their own eligibility checks pass. The `nori-client` server requires HTTP MCP support. This setup applies to resumed, fresh, fallback, and compaction-created sessions. Hook-only ACP sessions pass an empty list because hooks do not need user-configured or backend-owned MCP servers.
 
-The local `nori-client` MCP server is intentionally additive. User-configured MCP servers are still forwarded normally, and ineligible agents simply do not receive the loopback endpoint. Continuation chaining depends on the local MCP server actually being initialized for the current advertised endpoint, not just on HTTP MCP support or endpoint advertisement.
+The local `nori-client` MCP server is intentionally additive. User-configured MCP servers are still forwarded normally, and ineligible agents simply do not receive the loopback endpoint. Continuation chaining depends on the local MCP server actually being initialized for the current advertised endpoint, not just on HTTP MCP support or endpoint advertisement. Durable follow-up work for this surface lives in `@/docs/followups/nori-client-mcp.md`.
 
 ### Transcript Persistence
 
@@ -700,31 +712,34 @@ Transcripts are stored at `{nori_home}/transcripts/by-project/{project-id}/sessi
 **Project Identification:**
 
 Project IDs are derived from the workspace to group sessions by project:
+
 - Git repositories: SHA-256 hash of normalized git remote URL (SSH and HTTPS normalize to same hash)
 - Non-git directories: SHA-256 hash of canonicalized path
 - Hash is truncated to 16 hex characters for compact directory names
 
 Key exports from `@/nori-rs/acp/src/transcript/project.rs`:
+
 - `compute_project_id()`: Computes project ID for a working directory
 - `ProjectId`: Contains id, name, git_remote, git_root, and cwd
 
 **Transcript Schema (JSONL):**
 
 Each line in the transcript file is a JSON object with:
+
 - `ts`: ISO 8601 timestamp
 - `v`: Schema version (currently 1)
 - `type`: Entry type discriminator
 
 Entry types (from `@/nori-rs/acp/src/transcript/types.rs`):
 
-| Type | Description | Key Fields (JSON) |
-|------|-------------|-------------------|
+| Type           | Description                  | Key Fields (JSON)                                                                |
+| -------------- | ---------------------------- | -------------------------------------------------------------------------------- |
 | `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git, acp_session_id |
-| `user` | User message | id, content, attachments |
-| `assistant` | Complete assistant turn | id, content (blocks), agent |
-| `tool_call` | Tool execution start | call_id, name, input |
-| `tool_result` | Tool execution result | call_id, output, truncated, exit_code |
-| `patch_apply` | File modification result | call_id, operation (edit/write/delete), path, success, error |
+| `user`         | User message                 | id, content, attachments                                                         |
+| `assistant`    | Complete assistant turn      | id, content (blocks), agent                                                      |
+| `tool_call`    | Tool execution start         | call_id, name, input                                                             |
+| `tool_result`  | Tool execution result        | call_id, output, truncated, exit_code                                            |
+| `patch_apply`  | File modification result     | call_id, operation (edit/write/delete), path, success, error                     |
 
 **Schema Field Naming:**
 
@@ -747,6 +762,7 @@ The `TranscriptRecorder` (in `@/nori-rs/acp/src/transcript/recorder.rs`) handles
 ```
 
 Key methods:
+
 - `new()`: Creates recorder, writes session_meta (including optional `acp_session_id`) and project.json
 - `record_user_message()`: Records user input with optional attachments
 - `record_assistant_message()`: Records complete assistant turn with content blocks
@@ -760,6 +776,7 @@ Key methods:
 The `TranscriptLoader` (in `@/nori-rs/acp/src/transcript/loader.rs`) reads transcripts for viewing:
 
 Key methods:
+
 - `list_projects()`: List all projects with transcripts
 - `list_sessions()`: List sessions for a specific project
 - `list_session_metadata()`: List first-line-only session metadata for a specific project
@@ -779,6 +796,7 @@ Large transcript paths avoid full-file reads when building `/resume` and startup
 **ACP Integration:**
 
 The `AcpBackend` automatically:
+
 1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
@@ -805,6 +823,7 @@ Reducer-owned transcript assembly preserves ACP session update type boundaries. 
 Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers in the crate -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 
 Configuration:
+
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 - `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
@@ -813,6 +832,7 @@ Configuration:
 **Re-exported Types:**
 
 Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
+
 - `TranscriptRecorder`, `TranscriptLoader`
 - `ProjectId`, `ProjectInfo`, `SessionInfo`, `SessionMetadata`, `Transcript`
 - Entry types: `SessionMetaEntry`, `UserEntry`, `AssistantEntry`, `ToolCallEntry`, `ToolResultEntry`, `PatchApplyEntry`
@@ -830,6 +850,7 @@ Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
 ### File-Based Tracing
 
 The `init_rolling_file_tracing()` function in `@/nori-rs/acp/src/tracing_setup.rs` provides structured file logging:
+
 - Sets global tracing subscriber that writes to rolling daily log files
 - Log files are named `nori-acp.YYYY-MM-DD` in the configured log directory
 - Filters at DEBUG level (debug builds) or WARN with INFO for nori_tui/acp (release builds)
@@ -867,20 +888,20 @@ File operation handlers are registered as `.on_receive_request()` handlers durin
 
 Parses token usage from agent session files:
 
-| Agent | Path Format |
-|-------|-------------|
-| Codex | `~/.codex/sessions/<YEAR>/<MM>/<DD>/rollout-<ISODATE>T<HH-MM-SS>-<SESSION_GUID>.jsonl` |
-| Gemini | `~/.gemini/tmp/<HASHED_PATHS>/chats/session-<ISODATE>T<HH-MM>-<SESSIONID>.json` |
-| Claude | `~/.claude/projects/<PROJECT_PATH>/<SESSIONID>.jsonl` |
+| Agent  | Path Format                                                                            |
+| ------ | -------------------------------------------------------------------------------------- |
+| Codex  | `~/.codex/sessions/<YEAR>/<MM>/<DD>/rollout-<ISODATE>T<HH-MM-SS>-<SESSION_GUID>.jsonl` |
+| Gemini | `~/.gemini/tmp/<HASHED_PATHS>/chats/session-<ISODATE>T<HH-MM>-<SESSIONID>.json`        |
+| Claude | `~/.claude/projects/<PROJECT_PATH>/<SESSIONID>.jsonl`                                  |
 
 **Approval Bridging:**
 
-| Policy | Behavior |
-|--------|----------|
+| Policy                          | Behavior                                                        |
+| ------------------------------- | --------------------------------------------------------------- |
 | `AskForApproval::UnlessTrusted` | Auto-approve known-safe read-only commands, prompt for all else |
-| `AskForApproval::OnFailure` | Auto-approve in sandbox, prompt on failure to escalate |
-| `AskForApproval::OnRequest` | (Default) Agent decides when to request approval |
-| `AskForApproval::Never` | Auto-approve all requests (yolo mode) |
+| `AskForApproval::OnFailure`     | Auto-approve in sandbox, prompt on failure to escalate          |
+| `AskForApproval::OnRequest`     | (Default) Agent decides when to request approval                |
+| `AskForApproval::Never`         | Auto-approve all requests (yolo mode)                           |
 
 Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` command to take effect immediately.
 
@@ -890,12 +911,12 @@ Dynamic policy updates via `tokio::sync::watch` channel enable `/approvals` comm
 
 For Edit/Write/Delete operations, the ACP backend normalizes file mutations into `nori_protocol::ClientEvent` snapshots that carry file-operation details for the TUI and transcript recorder. The same normalized snapshot drives approval prompts, live rendering, and persistence so the UI does not need to infer edits from Codex-shaped tool events.
 
-| Operation | Approval Event | Result Event |
-|-----------|----------------|--------------|
-| Edit (old_string + new_string) | `ApprovalRequest` with file-operation details | Normalized file-operation snapshot |
-| Write (content only) | `ApprovalRequest` with file-operation details | Normalized file-operation snapshot |
-| Delete | `ApprovalRequest` with file-operation details | Normalized file-operation snapshot |
-| Execute, Read, etc. | `ApprovalRequest` or auto-approval depending on policy | Normalized tool snapshot |
+| Operation                      | Approval Event                                         | Result Event                       |
+| ------------------------------ | ------------------------------------------------------ | ---------------------------------- |
+| Edit (old_string + new_string) | `ApprovalRequest` with file-operation details          | Normalized file-operation snapshot |
+| Write (content only)           | `ApprovalRequest` with file-operation details          | Normalized file-operation snapshot |
+| Delete                         | `ApprovalRequest` with file-operation details          | Normalized file-operation snapshot |
+| Execute, Read, etc.            | `ApprovalRequest` or auto-approval depending on policy | Normalized tool snapshot           |
 
 The transcript recorder uses the same normalized snapshot data when deciding how to persist tool activity, so the recorded transcript and live TUI stay aligned without requiring a separate patch translation path.
 
@@ -940,11 +961,11 @@ This removes the old synthetic interrupt-abort fast-path that treated cancel as 
 
 **Tool Classification System:**
 
-| ACP ToolKind | ParsedCommand | TUI Rendering |
-|--------------|---------------|---------------|
-| `Read` | `ParsedCommand::Read` | Exploring (compact, grouped) |
-| `Search` | `ParsedCommand::Search` | Exploring (compact, grouped) |
-| `Execute`, `Edit`, `Delete`, etc. | `ParsedCommand::Unknown` | Command (full display) |
+| ACP ToolKind                      | ParsedCommand            | TUI Rendering                |
+| --------------------------------- | ------------------------ | ---------------------------- |
+| `Read`                            | `ParsedCommand::Read`    | Exploring (compact, grouped) |
+| `Search`                          | `ParsedCommand::Search`  | Exploring (compact, grouped) |
+| `Execute`, `Edit`, `Delete`, etc. | `ParsedCommand::Unknown` | Command (full display)       |
 
 **Plan Event Translation:**
 
@@ -952,17 +973,18 @@ ACP agents emit `SessionUpdate::Plan` events containing checklist/task entries. 
 
 Each `acp::PlanEntry` is mapped to a `codex_protocol::plan_tool::PlanItemArg`:
 
-| ACP Field | Internal Field | Notes |
-|-----------|---------------|-------|
-| `PlanEntry.content` | `PlanItemArg.step` | Step description text |
-| `PlanEntry.status` | `PlanItemArg.status` | `Pending`/`InProgress`/`Completed` mapped 1:1; unknown variants default to `Pending` |
-| `PlanEntry.priority` | (dropped) | Not present in the internal `PlanItemArg` type |
+| ACP Field            | Internal Field       | Notes                                                                                |
+| -------------------- | -------------------- | ------------------------------------------------------------------------------------ |
+| `PlanEntry.content`  | `PlanItemArg.step`   | Step description text                                                                |
+| `PlanEntry.status`   | `PlanItemArg.status` | `Pending`/`InProgress`/`Completed` mapped 1:1; unknown variants default to `Pending` |
+| `PlanEntry.priority` | (dropped)            | Not present in the internal `PlanItemArg` type                                       |
 
 The simpler `translator.rs` helper functions are unrelated to ACP session translation; they remain focused on user input conversion and other local parsing helpers.
 
 **Conversation Compaction:**
 
 Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
+
 1. `/compact` sends summarization prompt to agent
 2. Agent's summary response is streamed to the TUI as deltas and captured in `pending_compact_summary`
 3. A new ACP session is created (the old session's context is discarded)
@@ -1014,7 +1036,7 @@ SessionConfigured event sent to TUI
 Deferred replay relay spawned (sends buffered events, then optional goal resume notice)
 ```
 
-**Server-side path:** A collect task runs concurrently during `load_session()`, taking ownership of the ordered `ConnectionEvent` receiver and buffering the normalized `ClientEvent` stream into a `Vec`. `SacpConnection::load_session()` reuses that same ordered inbox for the agent's replay notifications, so the collector can observe session updates in source order without a special side channel. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only *after* all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.
+**Server-side path:** A collect task runs concurrently during `load_session()`, taking ownership of the ordered `ConnectionEvent` receiver and buffering the normalized `ClientEvent` stream into a `Vec`. `SacpConnection::load_session()` reuses that same ordered inbox for the agent's replay notifications, so the collector can observe session updates in source order without a special side channel. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only _after_ all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.
 
 **Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is replayed through normalized `ClientEvent::ReplayEntry` items derived from the transcript rather than through `SessionConfigured.initial_messages`. The transcript summary path remains available for context management and `/compact`-style behavior. A `TRANSCRIPT_SUMMARY_WARN_CHARS` threshold (200K chars) logs a warning when summaries are very large; the actual safety net is the agent-side "prompt too long" rejection, which the caller handles gracefully.
 
@@ -1027,6 +1049,7 @@ On the first user prompt of a session, the ACP backend conditionally spawns a fi
 The background session is gated on configuration: it only spawns when the `prompt_summary` footer segment is enabled (via `NoriConfig::load()`) or `auto_worktree.is_enabled()`. Since `prompt_summary` defaults to `false` in the lean footer defaults and `auto_worktree` defaults to `Off`, the background ACP session does not spawn by default, keeping the wire protocol clean for debugging.
 
 The summarization uses a completely separate ACP connection (`SacpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/hooks.rs` handles this:
+
 1. Spawns a new agent subprocess via `get_agent_config()` with the same agent name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
 3. Collects the streamed text response via an `mpsc` channel and a collector task
@@ -1048,22 +1071,24 @@ The ACP backend supports undo via git ghost snapshots, using the `codex-git` cra
 `GhostSnapshotStack` is a thread-safe stack (`Mutex<Vec<SnapshotEntry>>`) stored as `Arc<GhostSnapshotStack>` on `AcpBackend`. Each `SnapshotEntry` pairs a `GhostCommit` with a `label` string (the user's prompt text at that turn). The label is captured in `handle_user_input()` when the snapshot is created.
 
 **Snapshot lifecycle:**
+
 1. At the **start** of each user turn (in `handle_user_input()`), before sending the prompt to the agent, a ghost commit captures the current working tree state via `codex_git::create_ghost_commit()`
 2. The snapshot is pushed onto `GhostSnapshotStack` along with the user's prompt text as a label
 
 **Undo operations:**
 
-| Protocol Op | Handler | Behavior |
-|-------------|---------|----------|
-| `Op::Undo` | `handle_undo()` | Pops and restores the most recent snapshot (sequential undo) |
-| `Op::UndoList` | `handle_list_snapshots()` | Returns `UndoListResult` event with all snapshots in reverse chronological order |
-| `Op::UndoTo { index }` | `handle_undo_to()` | Cancels any in-progress agent turn, then restores the snapshot at the given display index and truncates all newer entries |
+| Protocol Op            | Handler                   | Behavior                                                                                                                  |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `Op::Undo`             | `handle_undo()`           | Pops and restores the most recent snapshot (sequential undo)                                                              |
+| `Op::UndoList`         | `handle_list_snapshots()` | Returns `UndoListResult` event with all snapshots in reverse chronological order                                          |
+| `Op::UndoTo { index }` | `handle_undo_to()`        | Cancels any in-progress agent turn, then restores the snapshot at the given display index and truncates all newer entries |
 
 The display index scheme: index 0 = most recent snapshot (last element in the internal vec), index 1 = second most recent, etc. `restore_to_index()` removes the selected entry and all entries newer than it from the stack. The `list()` method returns `Vec<SnapshotInfo>` with `index`, `short_id` (first 7 chars of commit hash), and `label` fields.
 
 The `handle_undo_to()` completion message includes a warning: "the agent is not aware that files have changed", because undo is purely a filesystem restoration that is not communicated to the ACP agent.
 
 **Key behaviors:**
+
 - If the cwd is not a git repository, snapshot creation is silently skipped (logged at debug level)
 - If no snapshots exist when undo is requested, `UndoCompleted` reports `success: false`
 - Ghost commits are unreferenced git objects (not on any branch) created by the `codex-git` crate
@@ -1071,14 +1096,14 @@ The `handle_undo_to()` completion message includes a warning: "the agent is not 
 
 **ACP Error Categorization:**
 
-| Category | Detection Patterns | User Message |
-|----------|-------------------|--------------|
-| `Authentication` | "auth", "-32000", "api key", "unauthorized" | "Authentication required for {provider}. {auth_hint}" |
-| `QuotaExceeded` | "quota", "rate limit", "429", "usage limit" | "Rate limit or quota exceeded for {provider}" |
-| `ExecutableNotFound` | "not found", "command not found" | "Could not find the {agent} CLI. Install with: npm install -g {package}" |
-| `Initialization` | "initialization", "handshake", "protocol" | "Failed to initialize {provider}" |
-| `PromptTooLong` | "prompt is too long" | "Prompt is too long. Try using /compact to reduce context size, or start a new session." |
-| `ApiServerError` | "500", "502", "503", "504", "server error", "api_error", "overloaded" | "The API returned a server error. This is usually temporary -- please try again." |
+| Category             | Detection Patterns                                                    | User Message                                                                             |
+| -------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `Authentication`     | "auth", "-32000", "api key", "unauthorized"                           | "Authentication required for {provider}. {auth_hint}"                                    |
+| `QuotaExceeded`      | "quota", "rate limit", "429", "usage limit"                           | "Rate limit or quota exceeded for {provider}"                                            |
+| `ExecutableNotFound` | "not found", "command not found"                                      | "Could not find the {agent} CLI. Install with: npm install -g {package}"                 |
+| `Initialization`     | "initialization", "handshake", "protocol"                             | "Failed to initialize {provider}"                                                        |
+| `PromptTooLong`      | "prompt is too long"                                                  | "Prompt is too long. Try using /compact to reduce context size, or start a new session." |
+| `ApiServerError`     | "500", "502", "503", "504", "server error", "api_error", "overloaded" | "The API returned a server error. This is usually temporary -- please try again."        |
 
 The priority chain is: Auth > Quota > ExecutableNotFound > Initialization > PromptTooLong > ApiServerError > Unknown. Earlier categories take precedence when an error message matches multiple patterns (e.g., "500 authentication service unavailable" categorizes as `Authentication`, not `ApiServerError`).
 

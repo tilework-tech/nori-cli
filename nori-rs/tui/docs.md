@@ -17,6 +17,7 @@ User Input --> nori-tui --> nori-acp (ACP backend)
 ```
 
 The TUI acts as the frontend layer. It:
+
 - Uses `nori-acp` for ACP agent communication (see `@/nori-rs/acp/`)
 - Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
 - Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)
@@ -36,12 +37,12 @@ Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_ma
 
 The auto-worktree startup flow first checks eligibility via `can_create_worktree()` (see `@/nori-rs/acp/docs.md`), then branches on the `AutoWorktree` enum:
 
-| State | Timing | Behavior |
-|-------|--------|----------|
-| Blocked (not a git repo, or already inside a worktree) | Before TUI init, in `run_main()` | Sets `worktree_blocked_reason`; a `WorktreeBlockedScreen` popup is shown after onboarding explaining why, then continues without a worktree |
-| `Automatic` (eligible) | Before TUI init, in `run_main()` | Calls `setup_auto_worktree()` immediately and overrides cwd |
-| `Ask` (eligible) | After TUI init, in `run_ratatui_app()` | Sets `pending_worktree_ask = true`, deferred to a TUI popup shown after onboarding but before `App::run()` |
-| `Off` | N/A | Skips worktree creation entirely |
+| State                                                  | Timing                                 | Behavior                                                                                                                                    |
+| ------------------------------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Blocked (not a git repo, or already inside a worktree) | Before TUI init, in `run_main()`       | Sets `worktree_blocked_reason`; a `WorktreeBlockedScreen` popup is shown after onboarding explaining why, then continues without a worktree |
+| `Automatic` (eligible)                                 | Before TUI init, in `run_main()`       | Calls `setup_auto_worktree()` immediately and overrides cwd                                                                                 |
+| `Ask` (eligible)                                       | After TUI init, in `run_ratatui_app()` | Sets `pending_worktree_ask = true`, deferred to a TUI popup shown after onboarding but before `App::run()`                                  |
+| `Off`                                                  | N/A                                    | Skips worktree creation entirely                                                                                                            |
 
 The `Ask` popup is implemented by `nori::worktree_ask::run_worktree_ask_popup()`, a standalone mini-app screen using the same pre-`App` event-loop pattern as `nori::update_prompt` in release builds. It presents two options ("Yes, create a worktree" / "No, continue without a worktree") and returns a boolean. If the user confirms, `setup_auto_worktree()` is called and config is reloaded with the new cwd via `load_config_or_exit()`. Ctrl-C, Escape, and the "No" option all skip worktree creation. On failure, the TUI continues with the original cwd.
 
@@ -56,6 +57,7 @@ The main event loop in `app/mod.rs` processes:
 The client-event stream now also includes lightweight ACP session metadata summaries. Most `ClientEvent::SessionUpdateInfo` values still render as ordinary info/history cells, but usage updates are handled specially: they update the footer context segment and are omitted from both live history cells and the view-only transcript.
 
 The chat interface is managed by the `chatwidget/` module (`chatwidget/mod.rs` + submodules), which handles:
+
 - User input composition with multi-line editing
 - Message history display with markdown rendering
 - File search integration (`file_search.rs`)
@@ -70,6 +72,15 @@ The `/goal` command is a TUI command surface for ACP backend-owned goal state. `
 `ClientEvent::ThreadGoalUpdated` is treated as the source of truth for the visible current goal. `ChatWidget` stores that snapshot in `current_goal`, renders a compact history summary for new goals and objective/status changes, and uses it to seed `/goal edit` back into the composer. Accounting-only updates from backend usage refresh the cached snapshot without adding history cells. The summary formats elapsed time and token counts with the shared compact formatters from `@/nori-rs/protocol/src/num_format.rs`. `ClientEvent::ThreadGoalCleared` clears the cached snapshot and writes a short info message. Goal updates are omitted from view-only transcript rendering in `@/nori-rs/tui/src/viewonly_transcript.rs` because they are state synchronization events rather than conversation messages.
 
 The TUI validates goal objective text through `@/nori-rs/protocol/src/protocol/mod.rs` before submitting a set operation, matching the backend's validation path. This keeps the UI responsive while preserving the backend as the authority for state transitions, resume rehydration, token accounting, and prompt `<goal_context>` injection.
+
+`ClientEvent::SessionCapabilitiesChanged` carries the backend's current session capability projection, including derived availability for built-in commands. When the active ACP agent cannot receive the backend-owned `nori-client` MCP server, the TUI keeps `/goal` visible but disabled in the slash popup and blocks typed `/goal ...` submissions with the backend-provided reason.
+
+For agents without MCP, the desired fallback is backend-owned context rather than
+UI-specific hacks: the first prompt should carry a concise `<context>` block
+explaining that the session is running in Nori CLI, linking to
+`https://github.com/tilework-tech/nori-cli`, and noting which MCP-backed Nori
+affordances are unavailable. MCP-capable agents should receive that kind of Nori
+operating context through `nori-client` prompts/resources instead.
 
 `/goal edit` uses the cached goal immediately when available. If no snapshot is cached, it requests one from the ACP backend and marks the edit as pending until the backend replies. A no-goal response clears that pending flag before rendering the usage hint, preventing a later unrelated goal update from unexpectedly replacing the user's composer contents.
 
@@ -95,11 +106,11 @@ For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` no
 
 **Edit/Delete/Move rendering** (`render_edit_lines()`): Edit, Delete, and Move tool kinds use a dedicated rendering path with semantic verb-based headers from `format_edit_tool_header()` (in `client_event_format.rs`):
 
-| Kind | In-Progress | Completed | Failed |
-|------|-------------|-----------|--------|
-| Edit | `Editing {path}` | `Edited {path}` | `Edit failed: {path}` |
+| Kind   | In-Progress       | Completed        | Failed                  |
+| ------ | ----------------- | ---------------- | ----------------------- |
+| Edit   | `Editing {path}`  | `Edited {path}`  | `Edit failed: {path}`   |
 | Delete | `Deleting {path}` | `Deleted {path}` | `Delete failed: {path}` |
-| Move | `Moving {path}` | `Moved {path}` | `Move failed: {path}` |
+| Move   | `Moving {path}`   | `Moved {path}`   | `Move failed: {path}`   |
 
 The path is extracted from `locations[0].path` when available, falling back to parsing the title (stripping the kind prefix, e.g., `"Edit README.md"` -> `"README.md"`). Bullet styling: green bold for completed, red bold for failed, spinner for active. For failed edits, error text is extracted via `extract_error_text()` (checks `raw_output` for `"error"`, `"stderr"`, `"output"`, or bare string), with a `"(failed)"` fallback.
 
@@ -147,8 +158,8 @@ When the agent streams text, ACP `ClientEvent::ToolSnapshot` updates can arrive 
 
 One operation consumes the queue:
 
-| Method | Called From | Behavior |
-|--------|------------|----------|
+| Method                          | Called From                                | Behavior                                                                                                                                    |
+| ------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `flush_completions_and_clear()` | `on_agent_message()`, `on_task_complete()` | Processes completion events whose Begin was already handled, discards Begin events and any End events whose Begin was discarded. See below. |
 
 The selective flush ensures tool cells that are already visible transition from "Running" to "Ran", while preventing new "Explored" / "Ran" cells from appearing below the agent's final message.
@@ -196,17 +207,18 @@ on_task_complete():
 
 Plan updates from the ACP agent (`ClientEvent::PlanSnapshot`) can be rendered in one of two ways, controlled by the `PlanDrawerMode` enum on `ChatWidget`:
 
-| Mode | `PlanDrawerMode` | Behavior |
-|------|-------------------|----------|
-| History cells | `Off` (default) | Each plan update creates a `PlanUpdateCell` in scrollback history |
-| Collapsed drawer | `Collapsed` | One-line progress summary: `Plan: X/Y completed  *  > Current: step_name` |
-| Expanded drawer | `Expanded` | Full plan checklist (same as the previous boolean `true` behavior) |
+| Mode             | `PlanDrawerMode` | Behavior                                                                  |
+| ---------------- | ---------------- | ------------------------------------------------------------------------- |
+| History cells    | `Off` (default)  | Each plan update creates a `PlanUpdateCell` in scrollback history         |
+| Collapsed drawer | `Collapsed`      | One-line progress summary: `Plan: X/Y completed  *  > Current: step_name` |
+| Expanded drawer  | `Expanded`       | Full plan checklist (same as the previous boolean `true` behavior)        |
 
 The toggle cycle (bound to `Ctrl+O` via `HotkeyAction::TogglePlanDrawer`) is: `Off -> Collapsed -> Expanded -> Collapsed -> ...`. Once the drawer enters a visible mode, it cycles between Collapsed and Expanded without returning to Off. The `toggle_plan_drawer()` method on `ChatWidget` implements this state machine. The `App` layer intercepts the hotkey binding in `handle_key_event()` and updates both the widget and its own `plan_drawer_mode` field.
 
 The `pinned_plan` field on `ChatWidget` always tracks the latest plan update, regardless of the current mode. In the ACP path, `handle_client_plan_snapshot()` converts the normalized snapshot into `UpdatePlanArgs`, stores it in `pinned_plan`, and when the mode is `Off`, clones it into scrollback as a `PlanUpdateCell`. This "always-store" invariant means toggling the drawer on mid-conversation immediately shows the most recent plan without waiting for the next update.
 
 The drawer is inserted into the `FlexRenderable` layout in `ChatWidget::as_renderable()` as a flex=0 child between the active cell (flex=1) and the bottom pane (flex=0):
+
 - `Collapsed` renders `PinnedPlanDrawerCollapsed` (1 line, shows progress count and current/next step with truncation)
 - `Expanded` renders `PinnedPlanDrawer` (full checklist via `render_plan_lines()`)
 - `Off` contributes zero height
@@ -227,16 +239,16 @@ Live `ClientEvent::SessionConfigUpdate` events carry the full ACP session config
 
 The `SystemInfo` struct collects environment data in a background thread to avoid blocking TUI startup:
 
-| Field | Source |
-|-------|--------|
-| `git_branch` | Git repository branch name |
-| `active_skillsets` | Active skillsets from `nori-skillsets list-active` (one name per line; returns all skillsets active for the current directory). Empty vec if the command is unavailable or fails. |
-| `git_lines_added` / `git_lines_removed` | Git working tree statistics relative to `HEAD` for tracked files |
-| `git_has_untracked` | Whether untracked, non-ignored files are present |
-| `is_worktree` | Whether CWD is a git worktree |
-| `worktree_name` | Last path component of CWD when parent directory is `.worktrees`; used to display the immutable worktree directory identifier in the footer |
-| `transcript_location` | Discovered transcript path and token usage when running within an agent environment |
-| `worktree_cleanup_warning` | Warning when git worktrees exist and disk space is below 10% free (unix only) |
+| Field                                   | Source                                                                                                                                                                            |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `git_branch`                            | Git repository branch name                                                                                                                                                        |
+| `active_skillsets`                      | Active skillsets from `nori-skillsets list-active` (one name per line; returns all skillsets active for the current directory). Empty vec if the command is unavailable or fails. |
+| `git_lines_added` / `git_lines_removed` | Git working tree statistics relative to `HEAD` for tracked files                                                                                                                  |
+| `git_has_untracked`                     | Whether untracked, non-ignored files are present                                                                                                                                  |
+| `is_worktree`                           | Whether CWD is a git worktree                                                                                                                                                     |
+| `worktree_name`                         | Last path component of CWD when parent directory is `.worktrees`; used to display the immutable worktree directory identifier in the footer                                       |
+| `transcript_location`                   | Discovered transcript path and token usage when running within an agent environment                                                                                               |
+| `worktree_cleanup_warning`              | Warning when git worktrees exist and disk space is below 10% free (unix only)                                                                                                     |
 
 The `transcript_location` field includes `token_breakdown` (detailed input/output/cached breakdown), which is displayed in the TUI footer when Nori runs as a nested agent inside Claude Code, Codex, or Gemini. It can also include `subagents_used`, which is merged into goodbye-card session stats when visible ACP events do not expose delegated subagent launches.
 
@@ -257,6 +269,7 @@ alert instead of contributing line counts. The `/diff` command still produces a
 PR-like diff when users ask for the full change context.
 
 Two collection methods are provided:
+
 - `collect_for_directory()` - Basic collection without first-message matching (test-only)
 - `collect_for_directory_with_message()` - Preferred method that passes the first user message to the transcript discovery layer for accurate transcript identification across all agents
 
@@ -292,52 +305,52 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 
 **Slash Commands:**
 
-| Command | Description |
-|---------|-------------|
-| `/agent` | Switch between available ACP agents (dynamically shows current agent name) |
-| `/model` | Choose model -- convenience shortcut that opens the Model-category config option value picker when available, falling back to the unstable model state (dynamically shows current agent/model name) |
-| `/config` | Configure live ACP session settings exposed by the current agent |
-| `/approvals` | Choose what Nori can do without approval (dynamically shows current approval mode) |
-| `/settings` | Configure Nori CLI settings (pinned plan drawer, custom working messages, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
-| `/browse` | Open a terminal file manager to browse and edit files |
-| `/new` | Start a new chat during a conversation |
-| `/resume` | Resume a previous ACP session |
-| `/init` | Create an AGENTS.md file with instructions |
-| `/resume-viewonly` | View a previous session transcript (read-only) |
-| `/compact` | Summarize conversation to prevent context limit |
-| `/undo` | Open undo snapshot picker to select a restore point |
-| `/diff` | Show PR-like git diff (changes since merge-base with default branch, plus untracked files) |
-| `/mention` | Mention a file |
-| `/status` | Show session configuration and context window usage |
-| `/memory` | Show the contents of all active instruction files (CLAUDE.md / AGENTS.md / GEMINI.md) |
-| `/first-prompt` | Show the first prompt from this session |
-| `/mcp` | Manage MCP server connections (add, toggle, delete) via interactive wizard |
-| `/login` | Log in to the current agent |
-| `/logout` | Show logout instructions |
-| `/switch-skillset [name]` | Switch between available skillsets (with optional direct name) |
-| `/fork` | Rewind conversation to a previous message |
-| `/quit` | Exit Nori |
-| `/exit` | Exit Nori (alias for /quit) |
+| Command                   | Description                                                                                                                                                                                                                                                                                                |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/agent`                  | Switch between available ACP agents (dynamically shows current agent name)                                                                                                                                                                                                                                 |
+| `/model`                  | Choose model -- convenience shortcut that opens the Model-category config option value picker when available, falling back to the unstable model state (dynamically shows current agent/model name)                                                                                                        |
+| `/config`                 | Configure live ACP session settings exposed by the current agent                                                                                                                                                                                                                                           |
+| `/approvals`              | Choose what Nori can do without approval (dynamically shows current approval mode)                                                                                                                                                                                                                         |
+| `/settings`               | Configure Nori CLI settings (pinned plan drawer, custom working messages, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
+| `/browse`                 | Open a terminal file manager to browse and edit files                                                                                                                                                                                                                                                      |
+| `/new`                    | Start a new chat during a conversation                                                                                                                                                                                                                                                                     |
+| `/resume`                 | Resume a previous ACP session                                                                                                                                                                                                                                                                              |
+| `/init`                   | Create an AGENTS.md file with instructions                                                                                                                                                                                                                                                                 |
+| `/resume-viewonly`        | View a previous session transcript (read-only)                                                                                                                                                                                                                                                             |
+| `/compact`                | Summarize conversation to prevent context limit                                                                                                                                                                                                                                                            |
+| `/undo`                   | Open undo snapshot picker to select a restore point                                                                                                                                                                                                                                                        |
+| `/diff`                   | Show PR-like git diff (changes since merge-base with default branch, plus untracked files)                                                                                                                                                                                                                 |
+| `/mention`                | Mention a file                                                                                                                                                                                                                                                                                             |
+| `/status`                 | Show session configuration and context window usage                                                                                                                                                                                                                                                        |
+| `/memory`                 | Show the contents of all active instruction files (CLAUDE.md / AGENTS.md / GEMINI.md)                                                                                                                                                                                                                      |
+| `/first-prompt`           | Show the first prompt from this session                                                                                                                                                                                                                                                                    |
+| `/mcp`                    | Manage MCP server connections (add, toggle, delete) via interactive wizard                                                                                                                                                                                                                                 |
+| `/login`                  | Log in to the current agent                                                                                                                                                                                                                                                                                |
+| `/logout`                 | Show logout instructions                                                                                                                                                                                                                                                                                   |
+| `/switch-skillset [name]` | Switch between available skillsets (with optional direct name)                                                                                                                                                                                                                                             |
+| `/fork`                   | Rewind conversation to a previous message                                                                                                                                                                                                                                                                  |
+| `/quit`                   | Exit Nori                                                                                                                                                                                                                                                                                                  |
+| `/exit`                   | Exit Nori (alias for /quit)                                                                                                                                                                                                                                                                                |
 
 **`/mcp` Picker** (`nori/mcp_server_picker.rs`):
 
 The `/mcp` command opens an interactive `BottomPaneView` for managing MCP server connections (same pattern as `HotkeyPickerView`). It is not available during a task. The picker operates as a state machine with these modes:
 
-| Mode | Purpose | Transitions |
-|------|---------|-------------|
-| `List` | Browse servers; "Add new..." row at index 0, servers below | Enter on "Add new..." -> `TransportSelect`; Enter on server -> toggle enabled; `d` on server -> `ConfirmDelete`; `l` on server -> OAuth login |
-| `ConfirmDelete` | Confirm server deletion | `d` -> delete + save + `List`; Esc -> `List` |
-| `TransportSelect` | Choose Stdio or HTTP transport | Enter -> `NameInput` |
-| `NameInput` | Type server name | Enter -> `CommandInput` (stdio) or `UrlInput` (http) |
-| `CommandInput` | Type command for stdio transport | Enter -> `ArgsInput` |
-| `ArgsInput` | Type space-separated args | Enter -> `EnvInput` |
-| `UrlInput` | Type URL for HTTP transport | Enter -> `HeaderInput` |
-| `EnvInput` | Type env vars as `KEY=VAL` | Enter with empty -> finalize (stdio only); Enter with value -> adds to list, stays in `EnvInput` |
-| `HeaderInput` | Type headers as `Key: Value` (HTTP only) | Enter with empty -> `SecretInput`; Enter with value -> adds to list, stays in `HeaderInput` |
-| `SecretInput` | Type bearer token env var name (HTTP only) | Enter with value -> finalize (bearer token and client credentials are mutually exclusive); Enter with empty -> `ClientIdInput` |
-| `ClientIdInput` | Type pre-registered OAuth client ID (HTTP only, for servers without dynamic registration) | Enter with value -> `ClientSecretEnvVarInput`; Enter with empty -> finalize (skip client credentials); Esc -> `SecretInput` |
-| `ClientSecretEnvVarInput` | Type env var name for OAuth client secret (HTTP only) | Enter -> finalize; Esc -> `ClientIdInput` (restores typed client ID) |
-| `OAuthInProgress` | Inline OAuth status display | Esc -> emits `McpOAuthLoginCancel`, returns to `List` |
+| Mode                      | Purpose                                                                                   | Transitions                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `List`                    | Browse servers; "Add new..." row at index 0, servers below                                | Enter on "Add new..." -> `TransportSelect`; Enter on server -> toggle enabled; `d` on server -> `ConfirmDelete`; `l` on server -> OAuth login |
+| `ConfirmDelete`           | Confirm server deletion                                                                   | `d` -> delete + save + `List`; Esc -> `List`                                                                                                  |
+| `TransportSelect`         | Choose Stdio or HTTP transport                                                            | Enter -> `NameInput`                                                                                                                          |
+| `NameInput`               | Type server name                                                                          | Enter -> `CommandInput` (stdio) or `UrlInput` (http)                                                                                          |
+| `CommandInput`            | Type command for stdio transport                                                          | Enter -> `ArgsInput`                                                                                                                          |
+| `ArgsInput`               | Type space-separated args                                                                 | Enter -> `EnvInput`                                                                                                                           |
+| `UrlInput`                | Type URL for HTTP transport                                                               | Enter -> `HeaderInput`                                                                                                                        |
+| `EnvInput`                | Type env vars as `KEY=VAL`                                                                | Enter with empty -> finalize (stdio only); Enter with value -> adds to list, stays in `EnvInput`                                              |
+| `HeaderInput`             | Type headers as `Key: Value` (HTTP only)                                                  | Enter with empty -> `SecretInput`; Enter with value -> adds to list, stays in `HeaderInput`                                                   |
+| `SecretInput`             | Type bearer token env var name (HTTP only)                                                | Enter with value -> finalize (bearer token and client credentials are mutually exclusive); Enter with empty -> `ClientIdInput`                |
+| `ClientIdInput`           | Type pre-registered OAuth client ID (HTTP only, for servers without dynamic registration) | Enter with value -> `ClientSecretEnvVarInput`; Enter with empty -> finalize (skip client credentials); Esc -> `SecretInput`                   |
+| `ClientSecretEnvVarInput` | Type env var name for OAuth client secret (HTTP only)                                     | Enter -> finalize; Esc -> `ClientIdInput` (restores typed client ID)                                                                          |
+| `OAuthInProgress`         | Inline OAuth status display                                                               | Esc -> emits `McpOAuthLoginCancel`, returns to `List`                                                                                         |
 
 The wizard field set matches Claude Code's `claude mcp add` command: transport type, name, command/url, args, env vars, headers, bearer token env var, plus optional OAuth client credentials for servers that do not support dynamic client registration.
 
@@ -352,6 +365,7 @@ The picker is opened by `ChatWidget::open_mcp_servers_popup()` in `chatwidget/pi
 OAuth login can be triggered two ways: (1) pressing `l` in the `/mcp` list on a server with `NotLoggedIn` status, or (2) automatically via the auto-probe mechanism after adding an HTTP server without a bearer token. Both paths emit `AppEvent::McpOAuthLogin`.
 
 Auth statuses are computed asynchronously when the picker opens:
+
 ```
 open_mcp_servers_popup()
     -> sends AppEvent::ComputeMcpAuthStatuses
@@ -399,10 +413,10 @@ The picker intentionally only edits the active session. It does not run during `
 
 `render_rows()` and `measure_rows_height()` are the shared rendering functions used by selection popups that render command-like rows (`ListSelectionView`, `CommandPopup`, `SkillPopup`, `FileSearchPopup`). Each popup item has an optional description that appears alongside the item name. The layout engine chooses between two modes per-row via `wrap_row()`:
 
-| Mode | Condition | Layout |
-|------|-----------|--------|
+| Mode         | Condition                                         | Layout                                                                                              |
+| ------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Side-by-side | `total_width - desc_col >= MIN_DESC_COLUMNS` (12) | Description starts at `desc_col` on the same line as the name, wrapped lines indented to `desc_col` |
-| Stacked | `total_width - desc_col < MIN_DESC_COLUMNS` | Name on its own line(s), description on separate line(s) below with 4-space indent |
+| Stacked      | `total_width - desc_col < MIN_DESC_COLUMNS`       | Name on its own line(s), description on separate line(s) below with 4-space indent                  |
 
 The `desc_col` is computed once per render pass from the widest visible name plus 2 columns of padding. The stacked fallback prevents descriptions from being squeezed into 1-2 characters of horizontal space on narrow terminals. Because both `render_rows()` and `measure_rows_height()` call the same `wrap_row()` function, layout and height calculation are always consistent.
 
@@ -416,12 +430,12 @@ The `desc_col` is computed once per render pass from the widest visible name plu
 
 The view operates as a state machine with three key-handling branches:
 
-| Config | Sub-state | Key behavior |
-|--------|-----------|-------------|
-| `vim_mode=true`, `is_searchable=true` | `search_active=false` | `j`/`k` navigate, `/` activates search, digits 1-9 select directly, Esc dismisses |
-| `vim_mode=true`, `is_searchable=true` | `search_active=true` | Characters filter the list, Backspace edits query, Esc exits search (clears query, returns to nav mode) without dismissing the popup |
-| `vim_mode=false`, `is_searchable=true` | N/A | All characters immediately filter the list (no explicit search activation needed) |
-| `is_searchable=false` | N/A | `j`/`k` navigate, digits 1-9 select directly (unchanged legacy behavior) |
+| Config                                 | Sub-state             | Key behavior                                                                                                                         |
+| -------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `vim_mode=true`, `is_searchable=true`  | `search_active=false` | `j`/`k` navigate, `/` activates search, digits 1-9 select directly, Esc dismisses                                                    |
+| `vim_mode=true`, `is_searchable=true`  | `search_active=true`  | Characters filter the list, Backspace edits query, Esc exits search (clears query, returns to nav mode) without dismissing the popup |
+| `vim_mode=false`, `is_searchable=true` | N/A                   | All characters immediately filter the list (no explicit search activation needed)                                                    |
+| `is_searchable=false`                  | N/A                   | `j`/`k` navigate, digits 1-9 select directly (unchanged legacy behavior)                                                             |
 
 The `show_search_row()` method controls whether the search input row renders: in vim mode, it only appears when `search_active=true`. In non-vim mode, it always appears for searchable views.
 
@@ -465,7 +479,6 @@ The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` 
 
 The `/logout` command is only available when the `login` feature is enabled. The `/settings` command requires the `nori-config` feature.
 
-
 **Status Card (`/status`) (`nori/session_header/mod.rs`):**
 
 The `/status` command renders a bordered card in the chat history showing session state. The card is built by `new_nori_status_output()` which creates a `CompositeHistoryCell` containing the `/status` echo and a `NoriSessionHeaderCell`.
@@ -484,12 +497,12 @@ new_nori_status_output() --> NoriSessionHeaderCell::new_with_status_info()
 
 The card always shows: version, directory, agent, skillset (Nori profile). Optionally it shows:
 
-| Section | Condition | Example |
-|---------|-----------|---------|
-| Task summary | `prompt_summary` present | "Task: Fix auth bug" |
-| Approval mode | `approval_mode_label` present | "approvals: Agent" |
-| Context line | `context_window_percent` present, with or without token data | "Context 27% (77.0K)" or just "Context 42%" |
-| Token totals | `token_breakdown` has non-zero total | "Tokens: 123K total (32.0K cached)" |
+| Section       | Condition                                                    | Example                                     |
+| ------------- | ------------------------------------------------------------ | ------------------------------------------- |
+| Task summary  | `prompt_summary` present                                     | "Task: Fix auth bug"                        |
+| Approval mode | `approval_mode_label` present                                | "approvals: Agent"                          |
+| Context line  | `context_window_percent` present, with or without token data | "Context 27% (77.0K)" or just "Context 42%" |
+| Token totals  | `token_breakdown` has non-zero total                         | "Tokens: 123K total (32.0K cached)"         |
 
 The Tokens section renders if either `token_breakdown` has a non-zero total OR `context_window_percent` is present. This means context window percentage from the live API (`TokenUsageInfo`) can appear even before transcript token data is available.
 
@@ -499,14 +512,14 @@ Task summaries are truncated to 50 characters via `truncate_summary()`, which us
 
 The "Instruction Files" block in the startup welcome banner, the `/status` card, and the `/memory` output (`chatwidget/helpers.rs::add_memory_output()` -> `active_instruction_file_contents()`) all funnel through the same discovery pathway: `discover_all_instruction_files()` -> `discover_all_instruction_files_with_paths(cwd, agent_kind, home_dir, managed_policy_dir)`. The active subset of those files is what the agent will actually load, so the displayed list must mirror each agent's documented inheritance rules instead of using a single shared rule.
 
-The agent kind is inferred by `detect_agent_kind()` from the configured agent/model string ("claude*", "codex*", "gemini*"). The set of directories searched for instruction files is then chosen per agent:
+The agent kind is inferred by `detect_agent_kind()` from the configured agent/model string ("claude*", "codex*", "gemini\*"). The set of directories searched for instruction files is then chosen per agent:
 
-| Agent | Search range | Fallback when no `.git` is found |
-|-------|--------------|----------------------------------|
-| Claude | Full ancestor chain from cwd up to filesystem root (no git-root cutoff) | n/a -- always walks to root |
-| Codex | cwd up to the nearest `.git` ancestor | cwd only |
-| Gemini | cwd up to the nearest `.git` ancestor | cwd only |
-| Unknown | cwd up to the nearest `.git` ancestor | cwd only |
+| Agent   | Search range                                                            | Fallback when no `.git` is found |
+| ------- | ----------------------------------------------------------------------- | -------------------------------- |
+| Claude  | Full ancestor chain from cwd up to filesystem root (no git-root cutoff) | n/a -- always walks to root      |
+| Codex   | cwd up to the nearest `.git` ancestor                                   | cwd only                         |
+| Gemini  | cwd up to the nearest `.git` ancestor                                   | cwd only                         |
+| Unknown | cwd up to the nearest `.git` ancestor                                   | cwd only                         |
 
 The `.git` ancestor check uses the same `@/nori-rs/tui/src/git_marker.rs::is_git_marker()` helper as effective CWD refreshes: a worktree `.git` file or a repository `.git` directory with `HEAD` marks a real root, while an empty `.git` directory does not change the search range.
 
@@ -521,12 +534,12 @@ The final list is concatenated lowest-precedence first (managed-policy, then hom
 
 After discovery, an activation pass marks each file `active` for the current agent:
 
-| Agent | Files marked active |
-|-------|---------------------|
-| Claude | `.claude/CLAUDE.md`, `CLAUDE.md`, `CLAUDE.local.md` (all of them, anywhere they appear) |
-| Codex | Per directory: `AGENTS.override.md` if present, else `AGENTS.md`. `dirs_with_override` tracks which directories had an override so the sibling `AGENTS.md` in the same directory is suppressed. |
-| Gemini | `GEMINI.md` only (no hidden variants, no overrides) |
-| Unknown | nothing is active |
+| Agent   | Files marked active                                                                                                                                                                             |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude  | `.claude/CLAUDE.md`, `CLAUDE.md`, `CLAUDE.local.md` (all of them, anywhere they appear)                                                                                                         |
+| Codex   | Per directory: `AGENTS.override.md` if present, else `AGENTS.md`. `dirs_with_override` tracks which directories had an override so the sibling `AGENTS.md` in the same directory is suppressed. |
+| Gemini  | `GEMINI.md` only (no hidden variants, no overrides)                                                                                                                                             |
+| Unknown | nothing is active                                                                                                                                                                               |
 
 Token counts are computed only for active files (via `count_tokens()` from `nori/token_count.rs`), so inactive files render dim and contribute nothing to the per-section total in the status card.
 
@@ -559,7 +572,6 @@ The "Per Session Skillsets" toggle in `/settings` is built in `nori/config_picke
 The "Auto Worktree" item in `/settings` uses a sub-picker pattern (matching Notify After Idle / Script Timeout): selecting the config item emits `AppEvent::OpenAutoWorktreePicker`, which opens a second selection view listing all `AutoWorktree` variants (`Automatic`, `Ask`, `Off`) with radio-select style (current variant marked). The config item's display name shows the current mode in parentheses (e.g. "Auto Worktree (automatic)"). Selecting a variant emits `AppEvent::SetConfigAutoWorktree(variant)`, persisted via `persist_auto_worktree_setting()` which writes the string value (e.g. `"automatic"`, `"ask"`, `"off"`) to `[tui]` in `config.toml`.
 
 Active skillset display in the footer is driven entirely by `SystemInfo.active_skillsets`, which is populated by shelling out to `nori-skillsets list-active`. After a successful skillset switch or install, `request_system_info_refresh()` triggers a background re-collection so the footer reflects the updated state. There is no in-memory override -- `nori-skillsets list-active` is the single source of truth.
-
 
 **Notification Configuration:**
 
@@ -604,11 +616,11 @@ The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. 
 
 Hotkey actions fall into two categories that are consumed at different layers:
 
-| Category | Actions | Consumed By |
-|----------|---------|-------------|
-| App-level | OpenTranscript, OpenEditor, TogglePlanDrawer | `app/event_handling.rs::handle_key_event()` |
-| Editing | MoveBackwardChar, MoveForwardChar, MoveBeginningOfLine, MoveEndOfLine, MoveBackwardWord, MoveForwardWord, DeleteBackwardChar, DeleteForwardChar, DeleteBackwardWord, KillToEndOfLine, KillToBeginningOfLine, Yank | `textarea/mod.rs::input()` |
-| UI triggers | HistorySearch | `chat_composer/key_handling.rs` |
+| Category    | Actions                                                                                                                                                                                                           | Consumed By                                 |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| App-level   | OpenTranscript, OpenEditor, TogglePlanDrawer                                                                                                                                                                      | `app/event_handling.rs::handle_key_event()` |
+| Editing     | MoveBackwardChar, MoveForwardChar, MoveBeginningOfLine, MoveEndOfLine, MoveBackwardWord, MoveForwardWord, DeleteBackwardChar, DeleteForwardChar, DeleteBackwardWord, KillToEndOfLine, KillToBeginningOfLine, Yank | `textarea/mod.rs::input()`                  |
+| UI triggers | HistorySearch                                                                                                                                                                                                     | `chat_composer/key_handling.rs`             |
 
 Editing hotkeys are propagated from `App` down to the textarea via a `set_hotkey_config()` chain: App -> ChatWidget -> BottomPane -> ChatComposer -> TextArea. This propagation occurs at startup, after config changes via `persist_hotkey_setting()`, and when new sessions or agent switches create fresh ChatWidgets.
 
@@ -627,38 +639,38 @@ vim_mode = "newline"  # or "submit" or "off"
 
 The `VimEnterBehavior` enum (from `@/nori-rs/acp/src/config/types/mod.rs`) controls both whether vim mode is enabled and how the Enter key behaves:
 
-| Variant | Enter in INSERT | Enter in NORMAL | Vim Enabled |
-|---------|----------------|-----------------|-------------|
-| `Newline` | Inserts newline | Submits prompt | Yes |
-| `Submit` | Submits prompt | Inserts newline | Yes |
-| `Off` | N/A (vim disabled) | N/A | No |
+| Variant   | Enter in INSERT    | Enter in NORMAL | Vim Enabled |
+| --------- | ------------------ | --------------- | ----------- |
+| `Newline` | Inserts newline    | Submits prompt  | Yes         |
+| `Submit`  | Submits prompt     | Inserts newline | Yes         |
+| `Off`     | N/A (vim disabled) | N/A             | No          |
 
 The `ChatComposer` stores a `vim_enter_behavior: VimEnterBehavior` field alongside the textarea's own `vim_mode_enabled: bool`. The textarea only cares about on/off (for the vim state machine), while the composer uses the full enum to route Enter key presses at the top of its Enter handler in `key_handling.rs`.
 
 When enabled, the textarea operates in two modes:
 
-| Mode | Behavior |
-|------|----------|
+| Mode   | Behavior                                                                                                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode; the cursor moves back one position (standard vim behavior), but never past the beginning of the current line. |
-| Normal | Navigation and editing mode. Keys are interpreted as commands rather than character input. |
+| Normal | Navigation and editing mode. Keys are interpreted as commands rather than character input.                                                                                                         |
 
 Normal mode supports standard vim keybindings:
 
-| Category | Keys | Behavior |
-|----------|------|----------|
-| Navigation | `h`/`j`/`k`/`l` (or arrow keys) | Move cursor left/down/up/right |
-| Navigation | `w`/`b`/`e` | Forward/backward/end-of-word navigation (`w` moves to start of next word, `b` to start of previous word, `e` to end of current/next word) |
-| Navigation | `0`/`$`/`^` | Beginning of line / end of line / first non-whitespace on line |
-| Navigation | `G`/`gg` | End of text / beginning of text |
-| Insert entry | `i`/`a` | Enter Insert at cursor / after cursor |
-| Insert entry | `I`/`A` | Enter Insert at beginning of line / end of line |
-| Insert entry | `o`/`O` | Open new line below/above and enter Insert |
-| Editing | `x` | Delete character under cursor |
-| Editing | `D`/`C` | Delete to end of line (`C` also enters Insert mode) |
-| Editing | `dd` | Delete current line |
-| Editing | `p` | Paste from kill buffer |
-| Undo/Redo | `u` | Undo last edit or insert session |
-| Undo/Redo | `Ctrl-R` | Redo last undone edit or insert session |
+| Category     | Keys                            | Behavior                                                                                                                                  |
+| ------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation   | `h`/`j`/`k`/`l` (or arrow keys) | Move cursor left/down/up/right                                                                                                            |
+| Navigation   | `w`/`b`/`e`                     | Forward/backward/end-of-word navigation (`w` moves to start of next word, `b` to start of previous word, `e` to end of current/next word) |
+| Navigation   | `0`/`$`/`^`                     | Beginning of line / end of line / first non-whitespace on line                                                                            |
+| Navigation   | `G`/`gg`                        | End of text / beginning of text                                                                                                           |
+| Insert entry | `i`/`a`                         | Enter Insert at cursor / after cursor                                                                                                     |
+| Insert entry | `I`/`A`                         | Enter Insert at beginning of line / end of line                                                                                           |
+| Insert entry | `o`/`O`                         | Open new line below/above and enter Insert                                                                                                |
+| Editing      | `x`                             | Delete character under cursor                                                                                                             |
+| Editing      | `D`/`C`                         | Delete to end of line (`C` also enters Insert mode)                                                                                       |
+| Editing      | `dd`                            | Delete current line                                                                                                                       |
+| Editing      | `p`                             | Paste from kill buffer                                                                                                                    |
+| Undo/Redo    | `u`                             | Undo last edit or insert session                                                                                                          |
+| Undo/Redo    | `Ctrl-R`                        | Redo last undone edit or insert session                                                                                                   |
 
 Two-key sequences (`gg`, `dd`) use a `vim_pending_key: Option<char>` field on TextArea. Pressing `g` or `d` sets the pending key; the second keypress either completes the sequence or cancels it (non-matching keys are discarded).
 
@@ -674,7 +686,6 @@ Config changes use two app events: `AppEvent::OpenVimModePicker` opens the sub-p
 
 `BottomPane` also stores `vim_mode_enabled: bool` (set by `set_vim_mode()`), which it injects into `SelectionViewParams` whenever `show_selection_view()` is called for a searchable view. This means vim mode affects both the textarea input and the selection popup key handling (see "ListSelectionView Vim-Mode-Aware Search" above).
 
-
 **History Search (Configurable Hotkey):**
 
 The history search hotkey is configurable via the `HotkeyAction::HistorySearch` binding (default: `Ctrl+R`). The `ChatComposer` key handler uses `matches_binding()` against the configured binding rather than a hardcoded key pattern. This allows users to remap history search when `Ctrl+R` conflicts with other bindings (e.g., vim redo).
@@ -684,6 +695,7 @@ In vim Normal mode, `Ctrl+R` is handled by the textarea as redo before the compo
 The history search popup follows the same `ActivePopup` pattern as the slash command popup (`Command`) and file mention popup (`File`). The popup is implemented in `history_search_popup.rs` using the shared `ScrollState` and `MAX_POPUP_ROWS` infrastructure from `popup_consts.rs`.
 
 Data flow:
+
 ```
 History search hotkey pressed in ChatComposer
   -> Op::SearchHistoryRequest { max_results: 500 }
@@ -707,21 +719,22 @@ The `!` shell command affordance is a prompt-initial composer mode, not a slash 
 
 The footer displays configurable segments, each of which can be enabled/disabled via `/settings` -> "Footer Segments" or via `[tui.footer_segments]` in config.toml:
 
-| Segment | TOML Key | Description |
-|---------|----------|-------------|
-| Task Summary | `prompt_summary` | "Task: <summary>" (dim) - generated by ACP backend on first user prompt |
-| Vim Mode | `vim_mode` | "NORMAL" (blue/bold) or "INSERT" (green) when vim mode is enabled |
-| Git Branch | `git_branch` | Current branch name with ⎇ symbol (yellow for main repo, orange for worktree) |
-| Worktree Name | `worktree_name` | "Worktree: {name}" (light red) when running in an auto-worktree session -- the immutable directory name, distinct from the git branch which gets renamed after the first prompt |
-| Git Stats | `git_stats` | Lines added/removed in current session |
-| Context Window | `context` | "Context 27% (34K)" when running within an agent environment |
-| Approval Mode | `approval_mode` | "Approvals: Agent/Full Access/Read Only" |
-| Nori Profile | `nori_profile` | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
-| Nori Version | `nori_version` | "Skillsets v<version>" |
-| Token Usage | `token_usage` | "Tokens: 123K total (32K cached)" when running within an agent environment |
-| Mode Indicator | `mode_indicator` | "[ Plan ]" style ACP mode label, shown only when the active ACP agent exposes a mode config option |
+| Segment        | TOML Key         | Description                                                                                                                                                                                   |
+| -------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task Summary   | `prompt_summary` | "Task: <summary>" (dim) - generated by ACP backend on first user prompt                                                                                                                       |
+| Vim Mode       | `vim_mode`       | "NORMAL" (blue/bold) or "INSERT" (green) when vim mode is enabled                                                                                                                             |
+| Git Branch     | `git_branch`     | Current branch name with ⎇ symbol (yellow for main repo, orange for worktree)                                                                                                                 |
+| Worktree Name  | `worktree_name`  | "Worktree: {name}" (light red) when running in an auto-worktree session -- the immutable directory name, distinct from the git branch which gets renamed after the first prompt               |
+| Git Stats      | `git_stats`      | Lines added/removed in current session                                                                                                                                                        |
+| Context Window | `context`        | "Context 27% (34K)" when running within an agent environment                                                                                                                                  |
+| Approval Mode  | `approval_mode`  | "Approvals: Agent/Full Access/Read Only"                                                                                                                                                      |
+| Nori Profile   | `nori_profile`   | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
+| Nori Version   | `nori_version`   | "Skillsets v<version>"                                                                                                                                                                        |
+| Token Usage    | `token_usage`    | "Tokens: 123K total (32K cached)" when running within an agent environment                                                                                                                    |
+| Mode Indicator | `mode_indicator` | "[ Plan ]" style ACP mode label, shown only when the active ACP agent exposes a mode config option                                                                                            |
 
 Example config.toml to disable specific segments and opt in to ones that are off by default:
+
 ```toml
 [tui.footer_segments]
 token_usage = false
@@ -734,6 +747,7 @@ vim_mode = true
 Segment placement is configurable through `[tui.footer_layout]`. Missing layout fields use defaults: legacy status segments render on `footer_left`, and `mode_indicator` renders on `footer_right`. A field that is present replaces that placement; listed segments are moved out of other default placements so a partial override can move one segment without duplicating it. The layout supports `footer_left`, `footer_right`, `textarea_top_left`, `textarea_top_right`, `textarea_bottom_left`, and `textarea_bottom_right`.
 
 Example config.toml to move the mode indicator into the textarea's top-right corner:
+
 ```toml
 [tui.footer_layout]
 textarea_top_right = ["mode_indicator"]
@@ -782,6 +796,7 @@ The `/resume-viewonly` command allows viewing previous session transcripts witho
 - `app/session_setup.rs::display_viewonly_transcript()`: Renders entries in the chat history
 
 Rendering behavior:
+
 - User messages display via `UserHistoryCell` with standard user styling
 - Assistant messages render via `AgentMessageCell` with `append_markdown()` for syntax highlighting
 - Thinking blocks display with dimmed styling (matching live reasoning display)
@@ -811,6 +826,7 @@ spawn_acp_agent_resume() -> AcpBackend::resume_session()
 ```
 
 Selection behavior:
+
 - `nori resume <session-id>` searches all transcript projects for that exact session ID.
 - `nori resume --last` chooses the newest transcript for the current working directory; `--all` removes the cwd filter.
 - `nori resume` opens `resume_picker/`, which lists metadata-only transcript rows and returns a `ResumeTarget`.
@@ -867,16 +883,17 @@ Agent registration validation is performed exclusively in `spawn_agent()` (`chat
 
 When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. Each spawn function (`spawn_acp_agent`, `spawn_acp_agent_resume`) uses a `tokio::select!` to race three concurrent futures during backend initialization:
 
-| Arm | Trigger | Action |
-|-----|---------|--------|
-| Backend init completes (success) | `AcpBackend::spawn()` / `resume_session()` returns `Ok` | Proceeds to op forwarding and event forwarding |
-| Backend init completes (failure) | Returns `Err` | Sends `AppEvent::AgentSpawnFailed`, drops `codex_op_rx` |
-| `drain_until_shutdown()` | User sends `Op::Shutdown` during connection | Sends `AppEvent::ExitRequest`, drops `codex_op_rx` |
-| `spawn_timeout_sequence()` | 8s warning + 30s abort elapse | Sends warning at 8s, then `AgentSpawnFailed` at 38s, drops `codex_op_rx` |
+| Arm                              | Trigger                                                 | Action                                                                   |
+| -------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Backend init completes (success) | `AcpBackend::spawn()` / `resume_session()` returns `Ok` | Proceeds to op forwarding and event forwarding                           |
+| Backend init completes (failure) | Returns `Err`                                           | Sends `AppEvent::AgentSpawnFailed`, drops `codex_op_rx`                  |
+| `drain_until_shutdown()`         | User sends `Op::Shutdown` during connection             | Sends `AppEvent::ExitRequest`, drops `codex_op_rx`                       |
+| `spawn_timeout_sequence()`       | 8s warning + 30s abort elapse                           | Sends warning at 8s, then `AgentSpawnFailed` at 38s, drops `codex_op_rx` |
 
 `drain_until_shutdown()` reads ops from the channel, discarding everything until it sees `Op::Shutdown`. This allows the user to exit (via `/exit`, Ctrl-C) even while the backend is still attempting to connect. `spawn_timeout_sequence()` provides user feedback: at 8 seconds it sends a `WarningEvent` visible in the chat, and after 30 more seconds it aborts the connection attempt entirely.
 
 `on_agent_spawn_failed()` in `chatwidget/helpers.rs` performs three recovery steps in order:
+
 1. Clears the "Connecting" status indicator via `bottom_pane.hide_status_indicator()`
 2. Displays an error message in chat history: "Failed to start agent '{name}': {error}"
 3. Reopens the agent picker so the user can select a different agent
@@ -960,6 +977,7 @@ The insertion algorithm:
 The critical invariant: **DECSTBM `Pb=0` means "bottom of screen"**, not row 0. Calling `SetScrollRegion(1..0)` when `area.top() == 0` produces `\x1b[1;0r`, which sets the scroll region to the entire terminal rather than an empty region. Any subsequent writes then scroll through the viewport, corrupting ratatui's content in ways the diff-based renderer cannot detect. The `area.top() == 0` early return guards against this.
 
 Two crossterm `Command` implementations support the function:
+
 - `SetScrollRegion(Range<u16>)` — emits `\x1b[{start};{end}r`
 - `ResetScrollRegion` — emits `\x1b[r` (restores full-screen scrolling)
 
@@ -998,14 +1016,14 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 
 **Cargo Feature Flags:**
 
-| Feature | Dependencies | Default | Purpose |
-|---------|--------------|---------|---------|
-| `unstable` | `nori-acp/unstable` | Yes | Unstable ACP features like agent switching |
-| `nori-config` | - | Yes | Use Nori's simplified ACP-only config |
-| `login` | `codex-login`, `codex-utils-pty` | Yes | ChatGPT/API login functionality |
-| `otel` | `opentelemetry-appender-tracing` | No | OpenTelemetry tracing export |
-| `vt100-tests` | - | No | vt100-based emulator tests |
-| `debug-logs` | - | No | Verbose debug logging |
+| Feature       | Dependencies                     | Default | Purpose                                    |
+| ------------- | -------------------------------- | ------- | ------------------------------------------ |
+| `unstable`    | `nori-acp/unstable`              | Yes     | Unstable ACP features like agent switching |
+| `nori-config` | -                                | Yes     | Use Nori's simplified ACP-only config      |
+| `login`       | `codex-login`, `codex-utils-pty` | Yes     | ChatGPT/API login functionality            |
+| `otel`        | `opentelemetry-appender-tracing` | No      | OpenTelemetry tracing export               |
+| `vt100-tests` | -                                | No      | vt100-based emulator tests                 |
+| `debug-logs`  | -                                | No      | Verbose debug logging                      |
 
 **--yolo Flag:**
 
@@ -1014,6 +1032,7 @@ The `--dangerously-bypass-approvals-and-sandbox` flag (alias: `--yolo`) works in
 **Update Checking:**
 
 The TUI uses Nori-specific update checking via the modules in `@/nori-rs/tui/src/nori/`:
+
 - `nori/update_action.rs`: Update action handling
 - `nori/updates.rs`: Version checking against GitHub releases
 - `nori/update_prompt.rs`: User prompting for updates
