@@ -1040,6 +1040,66 @@ async fn session_capabilities_enable_goal_for_http_mcp_agents() {
 
 #[tokio::test]
 #[serial]
+async fn session_capabilities_refresh_when_nori_client_initializes() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _env_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let initial = loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
+            Some(_) => {}
+            None => panic!("Timed out waiting for initial SessionCapabilitiesChanged"),
+        }
+    };
+    assert!(initial.nori_client.advertised);
+    assert!(!initial.nori_client.initialized);
+
+    let new_session = latest_logged_new_session(&wire_log_dir);
+    let nori_client_url = nori_client_http_url(&new_session);
+    initialize_nori_client_mcp(&nori_client_url).await;
+
+    let refreshed = loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
+            Some(_) => {}
+            None => panic!("Timed out waiting for refreshed SessionCapabilitiesChanged"),
+        }
+    };
+    assert!(refreshed.nori_client.advertised);
+    assert!(refreshed.nori_client.initialized);
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+}
+
+#[tokio::test]
+#[serial]
 async fn session_capabilities_disable_goal_without_http_mcp_capability() {
     let Some(update) = session_capabilities_for_mock_agent(false).await else {
         return;

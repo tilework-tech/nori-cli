@@ -92,6 +92,10 @@ fn goal_capabilities(goal_enabled: bool) -> nori_protocol::SessionCapabilitiesVi
             http_mcp: goal_enabled,
             load_session: true,
         },
+        nori_client: nori_protocol::NoriClientCapabilitiesView {
+            advertised: goal_enabled,
+            initialized: false,
+        },
         builtin_commands: std::collections::HashMap::from([(
             "goal".to_string(),
             nori_protocol::CommandAvailability {

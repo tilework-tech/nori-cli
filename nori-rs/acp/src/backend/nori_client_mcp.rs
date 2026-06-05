@@ -105,6 +105,8 @@ pub(crate) struct NoriClientShared {
     backend_event_tx: mpsc::Sender<BackendEvent>,
     transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     connected: Arc<AtomicBool>,
+    agent_capabilities: nori_protocol::AgentCapabilitiesView,
+    nori_client_advertised: bool,
 }
 
 impl NoriClientShared {
@@ -113,12 +115,16 @@ impl NoriClientShared {
         backend_event_tx: mpsc::Sender<BackendEvent>,
         transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
         connected: Arc<AtomicBool>,
+        agent_capabilities: nori_protocol::AgentCapabilitiesView,
+        nori_client_advertised: bool,
     ) -> Self {
         Self {
             thread_goal_state,
             backend_event_tx,
             transcript_recorder,
             connected,
+            agent_capabilities,
+            nori_client_advertised,
         }
     }
 }
@@ -271,7 +277,20 @@ impl ServerHandler for NoriClientService {
         request: InitializeRequestParam,
         context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
-        self.shared.connected.store(true, Ordering::Relaxed);
+        let already_connected = self.shared.connected.swap(true, Ordering::Relaxed);
+        if !already_connected {
+            let recorder = self.shared.transcript_recorder.lock().await.clone();
+            emit_client_event(
+                &self.shared.backend_event_tx,
+                recorder.as_ref(),
+                ClientEvent::SessionCapabilitiesChanged(capabilities_update(
+                    self.shared.agent_capabilities.clone(),
+                    self.shared.nori_client_advertised,
+                    true,
+                )),
+            )
+            .await;
+        }
         if context.peer.peer_info().is_none() {
             context.peer.set_peer_info(request);
         }
@@ -360,17 +379,33 @@ impl Drop for NoriClientServer {
 pub(super) fn capabilities_update_for_session(
     connection: &SacpConnection,
 ) -> nori_protocol::SessionCapabilitiesView {
-    let http_mcp = connection.capabilities().mcp_capabilities.http;
+    let agent = nori_protocol::AgentCapabilitiesView {
+        http_mcp: connection.capabilities().mcp_capabilities.http,
+        load_session: connection.capabilities().load_session,
+    };
+    capabilities_update(
+        agent,
+        connection.capabilities().mcp_capabilities.http,
+        false,
+    )
+}
+
+fn capabilities_update(
+    agent: nori_protocol::AgentCapabilitiesView,
+    nori_client_advertised: bool,
+    nori_client_initialized: bool,
+) -> nori_protocol::SessionCapabilitiesView {
     nori_protocol::SessionCapabilitiesView {
-        agent: nori_protocol::AgentCapabilitiesView {
-            http_mcp,
-            load_session: connection.capabilities().load_session,
+        agent,
+        nori_client: nori_protocol::NoriClientCapabilitiesView {
+            advertised: nori_client_advertised,
+            initialized: nori_client_initialized,
         },
         builtin_commands: HashMap::from([(
             "goal".to_string(),
             nori_protocol::CommandAvailability {
-                enabled: http_mcp,
-                reason: (!http_mcp).then(|| {
+                enabled: nori_client_advertised,
+                reason: (!nori_client_advertised).then(|| {
                     "The active agent does not advertise HTTP MCP support, so /goal is unavailable."
                         .to_string()
                 }),
@@ -402,6 +437,11 @@ pub(super) async fn register_for_session(
                 backend_event_tx,
                 transcript_recorder,
                 Arc::clone(&connected),
+                nori_protocol::AgentCapabilitiesView {
+                    http_mcp: connection.capabilities().mcp_capabilities.http,
+                    load_session: connection.capabilities().load_session,
+                },
+                true,
             ))
             .await?,
         );
@@ -424,6 +464,13 @@ mod tests {
 
     use super::*;
 
+    fn test_agent_capabilities() -> nori_protocol::AgentCapabilitiesView {
+        nori_protocol::AgentCapabilitiesView {
+            http_mcp: true,
+            load_session: false,
+        }
+    }
+
     fn service() -> NoriClientService {
         let (backend_event_tx, _backend_event_rx) = mpsc::channel(8);
         NoriClientService::new(NoriClientShared::new(
@@ -431,6 +478,8 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::new(AtomicBool::new(false)),
+            test_agent_capabilities(),
+            true,
         ))
     }
 
@@ -497,6 +546,8 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::new(AtomicBool::new(false)),
+            test_agent_capabilities(),
+            true,
         ));
 
         let create_result = create(&service, "Ship the ACP goal bridge").await;
@@ -581,6 +632,8 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::clone(&connected),
+            test_agent_capabilities(),
+            true,
         ))
         .await
         .expect("nori-client server should spawn");
@@ -652,6 +705,8 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::clone(&connected),
+            test_agent_capabilities(),
+            true,
         ))
         .await
         .expect("nori-client server should spawn");
@@ -715,6 +770,8 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::clone(&connected),
+            test_agent_capabilities(),
+            true,
         ))
         .await
         .expect("nori-client server should spawn");
