@@ -84,13 +84,8 @@ model_verbosity = "high"
 
     let openai_chat_completions_provider = ModelProviderInfo {
         name: "OpenAI using Chat Completions".to_string(),
-        base_url: Some("https://api.openai.com/v1".to_string()),
         env_key: Some("OPENAI_API_KEY".to_string()),
         env_key_instructions: None,
-        experimental_bearer_token: None,
-        query_params: None,
-        http_headers: None,
-        env_http_headers: None,
         request_max_retries: Some(4),
         stream_max_retries: Some(10),
         stream_idle_timeout_ms: Some(300_000),
