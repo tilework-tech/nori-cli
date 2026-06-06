@@ -511,19 +511,7 @@ pub enum EventMsg {
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
 pub enum CodexErrorInfo {
-    ContextWindowExceeded,
-    UsageLimitExceeded,
-    HttpConnectionFailed {
-        http_status_code: Option<u16>,
-    },
-    InternalServerError,
-    Unauthorized,
-    BadRequest,
-    SandboxError,
-    /// Reached the retry limit for responses.
-    ResponseTooManyFailedAttempts {
-        http_status_code: Option<u16>,
-    },
+    #[serde(other)]
     Other,
 }
 

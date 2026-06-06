@@ -54,49 +54,18 @@ macro_rules! v2_enum_from_core {
     };
 }
 
-/// This translation layer make sure that we expose codex error code in camel case.
-///
-/// When an upstream HTTP status is available (for example, from the Responses API or a provider),
-/// it is forwarded in `httpStatusCode` on the relevant `codexErrorInfo` variant.
+/// Codex errors that we expose to clients.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub enum CodexErrorInfo {
-    ContextWindowExceeded,
-    UsageLimitExceeded,
-    HttpConnectionFailed {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
-    InternalServerError,
-    Unauthorized,
-    BadRequest,
-    SandboxError,
-    /// Reached the retry limit for responses.
-    ResponseTooManyFailedAttempts {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
+    #[serde(other)]
     Other,
 }
 
 impl From<CoreCodexErrorInfo> for CodexErrorInfo {
     fn from(value: CoreCodexErrorInfo) -> Self {
         match value {
-            CoreCodexErrorInfo::ContextWindowExceeded => CodexErrorInfo::ContextWindowExceeded,
-            CoreCodexErrorInfo::UsageLimitExceeded => CodexErrorInfo::UsageLimitExceeded,
-            CoreCodexErrorInfo::HttpConnectionFailed { http_status_code } => {
-                CodexErrorInfo::HttpConnectionFailed { http_status_code }
-            }
-            CoreCodexErrorInfo::InternalServerError => CodexErrorInfo::InternalServerError,
-            CoreCodexErrorInfo::Unauthorized => CodexErrorInfo::Unauthorized,
-            CoreCodexErrorInfo::BadRequest => CodexErrorInfo::BadRequest,
-            CoreCodexErrorInfo::SandboxError => CodexErrorInfo::SandboxError,
-            CoreCodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code } => {
-                CodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code }
-            }
             CoreCodexErrorInfo::Other => CodexErrorInfo::Other,
         }
     }
@@ -1447,7 +1416,7 @@ mod tests {
     use codex_protocol::items::WebSearchItem;
     use codex_protocol::user_input::UserInput as CoreUserInput;
     use pretty_assertions::assert_eq;
-    use serde_json::json;
+    
     use std::path::PathBuf;
 
     #[test]
@@ -1531,22 +1500,6 @@ mod tests {
                 id: "search-1".to_string(),
                 query: "docs".to_string(),
             }
-        );
-    }
-
-    #[test]
-    fn codex_error_info_serializes_http_status_code_in_camel_case() {
-        let value = CodexErrorInfo::ResponseTooManyFailedAttempts {
-            http_status_code: Some(401),
-        };
-
-        assert_eq!(
-            serde_json::to_value(value).unwrap(),
-            json!({
-                "responseTooManyFailedAttempts": {
-                    "httpStatusCode": 401
-                }
-            })
         );
     }
 }
