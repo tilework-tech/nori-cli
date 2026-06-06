@@ -329,6 +329,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | `/logout`                 | Show logout instructions                                                                                                                                                                                                                                                                                   |
 | `/switch-skillset [name]` | Switch between available skillsets (with optional direct name)                                                                                                                                                                                                                                             |
 | `/fork`                   | Rewind conversation to a previous message                                                                                                                                                                                                                                                                  |
+| `/browser`                | Launch a headed Chrome browser the agent can control via CDP (Chrome DevTools Protocol)                                                                                                                                                                                                                    |
 | `/quit`                   | Exit Nori                                                                                                                                                                                                                                                                                                  |
 | `/exit`                   | Exit Nori (alias for /quit)                                                                                                                                                                                                                                                                                |
 
@@ -478,6 +479,17 @@ The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` 
 **Cloud connection threading:** `ChatWidgetInit.cloud_connection` carries an optional `CloudConnectionInfo` from the CLI's `nori cloud` subcommand. The value flows through `Cli` -> `App::run()` -> `ChatWidgetInit` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.cloud_connection`. When present, `spawn_agent()` bypasses the `get_agent_config()` check (the remote agent is already running) and routes directly to `spawn_acp_agent()`. The resume path (`new_resumed_acp()`, `spawn_deferred_agent()`) always passes `None` for cloud_connection since cloud sessions do not support resume. See `@/nori-rs/acp/src/broker/docs.md` for the broker client and `@/nori-rs/acp/docs.md` for the backend spawn branch.
 
 **Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). This tells the ACP agent that it is running inside the nori CLI and provides a source-code URL for self-referential questions. The context is prepended (without `SUMMARY_PREFIX` framing) to the first user prompt only and then consumed (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
+
+**Browser Session (`/browser`) (`chatwidget/key_handling.rs`, `app/event_handling.rs`, `app_event.rs`):**
+
+The `/browser` slash command launches a headed Chrome browser with CDP (Chrome DevTools Protocol) remote debugging enabled, then injects the connection details into the conversation so the agent can script the browser via its existing shell tool. It is not available during a task (`available_during_task = false`). The flow:
+
+1. `SlashCommand::Browser` in `key_handling.rs` shows an info message ("Launching browser...") and spawns a `tokio` task calling `nori_acp::backend::browser_session::BrowserSession::launch()` (see `@/nori-rs/acp/docs.md`)
+2. On success, the task posts `AppEvent::BrowserLaunched { ws_url, cdp_port }`. On failure, it posts `AppEvent::BrowserLaunchFailed(error_string)`
+3. The `BrowserLaunched` handler in `app/event_handling.rs` calls `browser_session::compose_agent_prompt()` to build a structured message containing the CDP HTTP endpoint and WebSocket URL, then submits it as a user message via `submit_user_message_text()`
+4. The agent receives the CDP connection details and can use Playwright, Puppeteer, or raw CDP commands via its shell tool to control the browser
+
+The `BrowserSession` is intentionally `std::mem::forget`'d after launch so Chrome stays alive for the duration of the nori session. The `BrowserSession::Drop` impl sends SIGTERM to the Chrome process, which fires when the nori process exits. This is distinct from `/browse` which opens a terminal file manager.
 
 The `/logout` command is only available when the `login` feature is enabled. The `/settings` command requires the `nori-config` feature.
 

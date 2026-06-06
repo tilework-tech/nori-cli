@@ -44,6 +44,13 @@ impl ChatWidget {
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
     }
 
+    pub(crate) fn submit_user_message_text(&mut self, text: String) {
+        self.submit_user_message(UserMessage {
+            text,
+            image_paths: Vec::new(),
+        });
+    }
+
     pub(super) fn submit_user_message(&mut self, user_message: UserMessage) {
         let UserMessage { text, image_paths } = user_message;
         if text.is_empty() && image_paths.is_empty() {
