@@ -516,18 +516,10 @@ pub enum CodexErrorInfo {
     HttpConnectionFailed {
         http_status_code: Option<u16>,
     },
-    /// Failed to connect to the response SSE stream.
-    ResponseStreamConnectionFailed {
-        http_status_code: Option<u16>,
-    },
     InternalServerError,
     Unauthorized,
     BadRequest,
     SandboxError,
-    /// The response SSE stream disconnected in the middle of a turnbefore completion.
-    ResponseStreamDisconnected {
-        http_status_code: Option<u16>,
-    },
     /// Reached the retry limit for responses.
     ResponseTooManyFailedAttempts {
         http_status_code: Option<u16>,

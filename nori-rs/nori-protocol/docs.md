@@ -46,7 +46,7 @@ agent_client_protocol_schema::SessionUpdate
   | 4 | No `raw_input`, but `locations` non-empty | Location fallback: synthesizes `Read` or `Search` from the first location path. Edit/Delete/Move are excluded (they need more context than a bare path) and fall through to the TUI's location-path display fallback. |
 
 - **`sanitize_title()`** strips Gemini-specific metadata from tool call titles before they reach the TUI. It removes `[current working directory /path]` suffixes and any trailing `(description text)` that Gemini appends after the cwd bracket. Applied in `tool_snapshot_from_tool_call()` so all downstream consumers (TUI rendering, transcript, approvals) receive cleaned titles.
-- **`structured_invocation_from_tool_call()`** performs kind-specific parsing of `raw_input` JSON. For `Execute` kind, it unwraps shell-wrapper command arrays (`["/usr/bin/zsh", "-lc", "actual command"]`). For `Read` and `Search` kinds, it also checks `parsed_cmd` metadata (used by the Codex backend) to extract structured paths, queries, and listing classifications.
+- **`structured_invocation_from_tool_call()`** performs kind-specific parsing of `raw_input` JSON. For `Execute` kind, it unwraps shell-wrapper command arrays (`["/usr/bin/zsh", "-lc", "actual command"]`). For `Read` and `Search` kinds, it also checks `parsed_cmd` metadata in `raw_input` to extract structured paths, queries, and listing classifications.
 - **Artifact extraction** (`artifacts_from_tool_call()`) collects `Diff` and `Text` artifacts from `content`, then falls back to `raw_output` fields (`stdout`, `formatted_output`, `aggregated_output`, `lines`, `count`) when no text artifact was found.
 
 ### Things to Know

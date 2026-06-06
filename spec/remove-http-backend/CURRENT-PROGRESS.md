@@ -1,25 +1,49 @@
 # Current Progress
 
-## Status: Twenty-first component removed
+## Status: Twenty-fourth component removed
 
-### Completed: Delete orphaned test files from core_test_support
+### Completed: Remove `chatgpt_base_url`, dead error variants, and stale `wire_api` references
 
-Deleted two orphaned files from `core/tests/common/` that were left behind when the HTTP backend was removed. These files were never compiled (not declared as modules in `lib.rs`) and referenced removed types (`CodexConversation`, `ConversationManager`).
+Three surgical removals of HTTP backend remnants:
 
-**What was removed:**
-- `core/tests/common/test_codex.rs` (~360 lines) — HTTP backend test harness (`TestCodex`, `TestCodexBuilder`, `ApplyPatchModelOutput`) that created `ConversationManager` instances backed by wiremock HTTP servers
-- `core/tests/common/responses.rs` (~715 lines) — HTTP Responses API mock infrastructure (`ResponseMock`, `ResponsesRequest`, SSE event builders, request capture helpers)
+**1. Removed `chatgpt_base_url` field**
 
-**What was preserved:**
-- `core/tests/common/lib.rs` — shared test utilities (`load_default_config_for_test`, `fs_wait`, `skip_if_sandbox`, `skip_if_no_network` macros)
-- `core/tests/common/Cargo.toml` — crate definition
+This config field was set during config loading but never read at runtime — it was part of the HTTP backend's ChatGPT API URL configuration.
 
-**Impact:** ~1,075 lines of dead files removed. codex-core unit tests: 360 pass. Integration tests: 14 pass. nori binary builds successfully.
+- `core/src/config/mod.rs` — Removed from `Config` struct (field), `ConfigToml` struct (field), and resolution logic (3 lines)
+- `core/src/config/profile.rs` — Removed from `ConfigProfile` struct (field) and `From<ConfigProfile> for Profile` impl (1 line)
+- `app-server-protocol/src/protocol/v1.rs` — Removed from ASP `Profile` struct (field)
+- `core/src/config/tests/part3.rs`, `part4.rs` — Removed from expected `Config` struct literals (4 sites)
+
+Backwards compat: existing config.toml files with `chatgpt_base_url` are silently ignored by serde (no `deny_unknown_fields`).
+
+**2. Removed dead error variants `ResponseStreamConnectionFailed` and `ResponseStreamDisconnected`**
+
+These `CodexErrorInfo` variants were never constructed or matched — HTTP streaming error types with zero consumers.
+
+- `protocol/src/protocol/mod.rs` — Removed both variants (8 lines)
+- `app-server-protocol/src/protocol/v2.rs` — Removed both ASP variants and two `From` conversion arms (18 lines)
+
+**3. Cleaned up stale `wire_api` references**
+
+Three leftover references after the `WireApi` enum was removed in a prior commit.
+
+- `core/src/config/tests/mod.rs` — Removed `wire_api = "chat"` from test TOML fixture (silently ignored)
+- `tui-pty-e2e/tests/live_acp.rs` — Removed `wire_api = "acp"` from config generator (silently ignored)
+- `tui-pty-e2e/tests/acp_mode.rs` — Updated doc comment: `wire_api = "acp"` → `with a mock agent`
+
+**Documentation updated:**
+- `protocol/docs.md` — Removed stale reference to "legacy Codex backend path"
+- `nori-protocol/docs.md` — Updated `parsed_cmd` description to remove Codex backend reference
+
+**Impact:** ~50 lines of dead config/error/reference code removed. codex-core unit tests: 371 pass. Integration tests: 14 pass. codex-protocol: 20 pass. ASP: 18 pass. nori binary builds successfully.
 
 ### Suggested next steps for future commits
-1. Remove `chatgpt_base_url` field from `Config`, `ConfigToml`, `ConfigProfile`, and ASP `Profile` — set but never read at runtime
-2. Remove dead error variants `ResponseStreamConnectionFailed` and `ResponseStreamDisconnected` from `CodexErrorInfo` in codex-protocol and app-server-protocol
-3. Clean up stale `wire_api` references in test TOML fixtures and comments
+1. Investigate whether `ModelProviderInfo` fields `base_url`, `experimental_bearer_token`, `query_params`, `http_headers`, `env_http_headers` are functionally dead — they were consumed by the HTTP client but may still be read by auth or config validation
+2. Remove `forced_chatgpt_workspace_id` and `forced_login_method` if dead — investigate whether these are still consumed by auth flow
+3. Remove remaining HTTP-specific `CodexErrorInfo` variants (`ContextWindowExceeded`, `UsageLimitExceeded`, `HttpConnectionFailed`, `ResponseTooManyFailedAttempts`) if confirmed dead
+
+### Completed: Delete orphaned test files from core_test_support
 
 ### Completed: Remove dead HTTP retry/timeout methods from ModelProviderInfo
 

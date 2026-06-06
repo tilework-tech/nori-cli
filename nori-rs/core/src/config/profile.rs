@@ -20,7 +20,6 @@ pub struct ConfigProfile {
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub model_reasoning_summary: Option<ReasoningSummary>,
     pub model_verbosity: Option<Verbosity>,
-    pub chatgpt_base_url: Option<String>,
     pub experimental_instructions_file: Option<PathBuf>,
     pub experimental_compact_prompt_file: Option<PathBuf>,
     pub include_apply_patch_tool: Option<bool>,
@@ -45,7 +44,6 @@ impl From<ConfigProfile> for codex_app_server_protocol::Profile {
             model_reasoning_effort: config_profile.model_reasoning_effort,
             model_reasoning_summary: config_profile.model_reasoning_summary,
             model_verbosity: config_profile.model_verbosity,
-            chatgpt_base_url: config_profile.chatgpt_base_url,
         }
     }
 }

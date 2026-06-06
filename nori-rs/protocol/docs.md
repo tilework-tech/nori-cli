@@ -11,7 +11,7 @@ Path: @/nori-rs/protocol
 
 - `@/nori-rs/tui` consumes shared protocol types when turning user actions into backend operations.
 - `@/nori-rs/acp` implements ACP-specific behavior behind the same `Op` surface, including thread-goal handling in `@/nori-rs/acp/src/backend/thread_goal.rs`.
-- `@/nori-rs/core` still provides the legacy Codex backend path and shared app/control-plane types.
+- `@/nori-rs/core` provides shared infrastructure (config, auth, sandboxing) and app/control-plane types consumed by the ACP backend.
 - `@/nori-rs/nori-protocol` carries normalized ACP client events back toward the TUI; thread-goal commands start here as `Op` values and return there as normalized goal events.
 - The crate is a pure type definition library with serde and schema support; ownership of runtime state belongs to backend crates, not this crate.
 

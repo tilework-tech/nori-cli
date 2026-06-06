@@ -69,22 +69,10 @@ pub enum CodexErrorInfo {
         #[ts(rename = "httpStatusCode")]
         http_status_code: Option<u16>,
     },
-    /// Failed to connect to the response SSE stream.
-    ResponseStreamConnectionFailed {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
     InternalServerError,
     Unauthorized,
     BadRequest,
     SandboxError,
-    /// The response SSE stream disconnected in the middle of a turn before completion.
-    ResponseStreamDisconnected {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
     /// Reached the retry limit for responses.
     ResponseTooManyFailedAttempts {
         #[serde(rename = "httpStatusCode")]
@@ -102,16 +90,10 @@ impl From<CoreCodexErrorInfo> for CodexErrorInfo {
             CoreCodexErrorInfo::HttpConnectionFailed { http_status_code } => {
                 CodexErrorInfo::HttpConnectionFailed { http_status_code }
             }
-            CoreCodexErrorInfo::ResponseStreamConnectionFailed { http_status_code } => {
-                CodexErrorInfo::ResponseStreamConnectionFailed { http_status_code }
-            }
             CoreCodexErrorInfo::InternalServerError => CodexErrorInfo::InternalServerError,
             CoreCodexErrorInfo::Unauthorized => CodexErrorInfo::Unauthorized,
             CoreCodexErrorInfo::BadRequest => CodexErrorInfo::BadRequest,
             CoreCodexErrorInfo::SandboxError => CodexErrorInfo::SandboxError,
-            CoreCodexErrorInfo::ResponseStreamDisconnected { http_status_code } => {
-                CodexErrorInfo::ResponseStreamDisconnected { http_status_code }
-            }
             CoreCodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code } => {
                 CodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code }
             }

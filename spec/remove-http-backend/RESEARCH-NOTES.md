@@ -940,3 +940,64 @@ These files reference each other (`crate::test_codex`, `crate::responses`) but s
 - No external crate imports `core_test_support::test_codex` or `core_test_support::responses`
 - The files reference removed types (`CodexConversation`, `ConversationManager`) and would not compile if re-included
 - Deleting them has zero effect on compilation or tests
+
+## Remove `chatgpt_base_url` field (twenty-second removal)
+
+### Why this component
+
+`chatgpt_base_url` is a config field set during config construction but never read at runtime. It was used by the HTTP backend to configure the ChatGPT API base URL. With the HTTP backend removed, the field is dead — populated and immediately forgotten.
+
+### Where it exists
+
+| File | Lines | Role |
+|---|---|---|
+| `core/src/config/mod.rs` | 230 | `Config` struct: `pub chatgpt_base_url: String` |
+| `core/src/config/mod.rs` | 686 | `ConfigToml` struct: `pub chatgpt_base_url: Option<String>` |
+| `core/src/config/mod.rs` | 1247-1250 | Resolution logic: profile > top-level > hardcoded default |
+| `core/src/config/profile.rs` | 23 | `ConfigProfile`: `pub chatgpt_base_url: Option<String>` |
+| `core/src/config/profile.rs` | 48 | `From<ConfigProfile> for Profile` conversion |
+| `app-server-protocol/src/protocol/v1.rs` | 350 | ASP `Profile`: `pub chatgpt_base_url: Option<String>` |
+| `core/src/config/tests/part3.rs` | 530, 605 | Test expected values |
+| `core/src/config/tests/part4.rs` | 49, 125 | Test expected values |
+
+### Consumption analysis
+
+Zero consumers. A grep for `.chatgpt_base_url` excluding struct definitions, config construction, and the `From` impl returns no results. No code in `acp/`, `tui/`, `cli/`, or `core/src/` (outside `config/`) ever reads this value.
+
+### Backwards compatibility
+
+`ConfigToml` and `ConfigProfile` use `#[derive(Deserialize)]` without `#[serde(deny_unknown_fields)]`. Existing config files with `chatgpt_base_url = "..."` will be silently ignored by serde — no runtime error, no behavioral change.
+
+The ASP `Profile` struct derives `Serialize`, `JsonSchema`, and `TS` (TypeScript bindings). Removing the field changes the wire protocol shape, but no TypeScript consumer references `chatgptBaseUrl`.
+
+## Remove dead error variants (twenty-third removal)
+
+### Why this component
+
+`ResponseStreamConnectionFailed` and `ResponseStreamDisconnected` are `CodexErrorInfo` enum variants that exist in both `codex-protocol` and `app-server-protocol`. They were part of the HTTP streaming backend's error taxonomy. Neither is ever constructed or meaningfully matched anywhere — confirmed by full-workspace grep.
+
+### Where they exist
+
+| File | Lines | Role |
+|---|---|---|
+| `protocol/src/protocol/mod.rs` | 519-530 | Core protocol enum definition |
+| `app-server-protocol/src/protocol/v2.rs` | 72-87 | ASP enum definition |
+| `app-server-protocol/src/protocol/v2.rs` | 105-113 | `From` conversion match arms |
+
+### Backwards compatibility
+
+An external ACP agent could theoretically send JSON with these variant names, which would then fail deserialization. Since the ACP protocol is internal and no agent constructs these errors, this is not a practical concern.
+
+## Clean up stale `wire_api` references (twenty-fourth removal)
+
+### Why this component
+
+Three remaining `wire_api` references in production/test code, despite the `WireApi` enum being fully removed. Two are in TOML fixture strings (silently ignored by serde) and one is in a Rust doc comment.
+
+### Where they exist
+
+| File | Line | Type | Context |
+|---|---|---|---|
+| `core/src/config/tests/mod.rs` | 44 | Functional TOML fixture | `wire_api = "chat"` in test config string — silently ignored |
+| `tui-pty-e2e/tests/live_acp.rs` | 119 | Functional TOML fixture | `wire_api = "acp"` in config generator — silently ignored |
+| `tui-pty-e2e/tests/acp_mode.rs` | 4 | Doc comment | Claims ACP mode is "configured via wire_api" — incorrect |
