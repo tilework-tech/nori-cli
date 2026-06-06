@@ -2,11 +2,16 @@
 
 ## Completed
 
-### CLI Side (nori-cli repo)
-1. **cwd fix** — `spawn_and_relay.rs:26-30` hardcodes `/home/sprite/org/workspace` for cloud mode (commit `aaeb6990`)
-2. **`source: "cli"` in acquire request** — `broker/mod.rs:115` sends `{"source": "cli"}` (pre-existing)
-3. **E2E test script** — `scripts/cloud-e2e-test.sh` validates full flow through local broker to remote sprite
-4. **No other CLI changes needed** — the SACP protocol is unchanged; the broker refactoring is invisible to the CLI
+### CLI Side (nori-cli repo) — All V1 work complete
+
+1. **Cloud subcommand** — `nori cloud` connects the TUI to a remote sprite VM via broker WebSocket tunnel
+2. **Broker client** — `broker/mod.rs` implements `BrokerClient` with acquire/release/auth (30 tests passing)
+3. **Cloud connection** — `sacp_connection.rs` supports `connect_remote()` for cloud WebSocket connections
+4. **cwd fix** — Removed hardcoded `/home/sprite/org/workspace` from `spawn_and_relay.rs` (commit `e5827749`). The CLI now uses its local cwd (`config.cwd`) for cloud sessions. The broker's SACP proxy handles sprite-side cwd via AcpTunnelManager.
+5. **`source: "cli"` in acquire request** — `broker/mod.rs:115` sends `{"source": "cli"}` (pre-existing)
+6. **Cloud disconnect handling** — `run_connection_event_relay` emits "Cloud session disconnected" error event when the transport closes unexpectedly (3 tests in `part6.rs`)
+7. **E2E test script** — `scripts/cloud-e2e-test.sh` validates full flow through local broker to remote sprite (2 messages sent and received)
+8. **No further CLI changes needed for V1** — The SACP protocol is unchanged; the broker's refactoring from dumb relay to SACP proxy via AcpTunnelManager is invisible to the CLI
 
 ### Broker Side (nori-sessions repo, branch `cli-cloud-sessions`)
 
@@ -17,7 +22,7 @@
    - Tests: 3 new tests in `manager.test.ts` for optional hooks
 
 2. **SACP proxy replaces dumb relay** (commit `2cf075a1`)
-   - Created `cli-session.ts` — SACP proxy with state machine (awaiting_initialize → awaiting_session_new → ready → prompting → errored)
+   - Created `cli-session.ts` — SACP proxy with state machine (awaiting_initialize -> awaiting_session_new -> ready -> prompting -> errored)
    - Created `cliLifecycle/index.ts` — CLI lifecycle module following Discord's pattern
    - Wired into `server.ts` and `main.ts`
    - Deleted `cli-tunnel.ts` and its tests
@@ -27,13 +32,19 @@
    - Updated all relevant noridocs files
    - Created new `cliLifecycle/docs.md`
 
-## Not Yet Done
+## Not Yet Done (broker-side only)
 
-1. ~~**CLI-side cwd cleanup**~~ — **DONE.** Removed the hardcoded `/home/sprite/org/workspace` override from `spawn_and_relay.rs`. The CLI now uses its local cwd (`config.cwd`) for cloud sessions. The broker's SACP proxy handles sprite-side cwd via AcpTunnelManager. Updated the cloud test to assert cwd correctness.
-2. **Broker PR** — The broker changes on `cli-cloud-sessions` branch need to be pushed and reviewed.
-3. **E2E test script updates** — `scripts/cloud-e2e-test.sh` may need patch updates since the session creation flow changed (AcpTunnelManager creates the session instead of the CLI). However, the test patches only affect lifecycle management files (`base-version.ts`, `manager.ts`), not the tunnel/session code, so they should still work.
-4. **`session/set_config_option` and `session/set_model` forwarding** — Currently stubbed with empty responses in the broker. Need pass-through methods on AcpTunnelManager to forward to underlying AcpClient. No CLI changes needed.
-5. **Reconnection (V2)** — The broker-side plumbing enables reconnection (AcpTunnelManager holds session across CLI disconnects), but the CLI session picker UI is deferred.
+1. **Broker PR** — The broker changes on `cli-cloud-sessions` branch (PR #830) need to be pushed and reviewed.
+2. **`session/set_config_option` and `session/set_model` forwarding** — Currently stubbed with empty responses in the broker. Need pass-through methods on AcpTunnelManager to forward to underlying AcpClient. No CLI changes needed.
+3. **Reconnection (V2)** — The broker-side plumbing enables reconnection (AcpTunnelManager holds session across CLI disconnects), but the CLI session picker UI is deferred.
+
+## Verification (2026-06-05)
+
+- All 598 ACP tests pass (including 3 cloud tests in `part6.rs` and 30 broker client tests)
+- All 1329 TUI tests pass
+- All 27 CLI tests pass
+- `just fmt` and `just fix` clean — no warnings or errors
+- E2E test script (`scripts/cloud-e2e-test.sh`) does not need updates — the patches target broker startup behavior, not session routing
 
 ## Pre-existing Issues (not caused by this work)
-- 6 failures in `sessions-routes.test.ts` on the `cli-cloud-sessions` branch (onboarding session tests)
+- 6 failures in `sessions-routes.test.ts` on the `cli-cloud-sessions` branch (onboarding session tests) — broker-side only

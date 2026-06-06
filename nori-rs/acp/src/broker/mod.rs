@@ -187,7 +187,7 @@ impl BrokerClient {
         std::thread::spawn(move || {
             while let Ok(request) = server_handle.recv() {
                 let url = request.url().to_string();
-                if url.starts_with("/callback") {
+                if url == "/callback" || url.starts_with("/callback?") {
                     let token = extract_token_from_callback(&url);
                     let html = if token.is_some() {
                         "<html><body><h1>Authentication successful!</h1><p>You can close this tab.</p></body></html>"
