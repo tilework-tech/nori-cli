@@ -320,9 +320,7 @@ impl ChatWidget {
             EventMsg::UndoStarted(ev) => self.on_undo_started(ev),
             EventMsg::UndoCompleted(ev) => self.on_undo_completed(ev),
             EventMsg::UndoListResult(ev) => self.on_undo_list_result(ev),
-            EventMsg::StreamError(StreamErrorEvent { message }) => {
-                self.on_stream_error(message)
-            }
+            EventMsg::StreamError(StreamErrorEvent { message }) => self.on_stream_error(message),
             EventMsg::UserMessage(ev) => {
                 if from_replay {
                     self.on_user_message_event(ev);
