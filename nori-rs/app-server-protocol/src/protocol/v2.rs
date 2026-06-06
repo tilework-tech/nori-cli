@@ -1416,7 +1416,7 @@ mod tests {
     use codex_protocol::items::WebSearchItem;
     use codex_protocol::user_input::UserInput as CoreUserInput;
     use pretty_assertions::assert_eq;
-    
+
     use std::path::PathBuf;
 
     #[test]
