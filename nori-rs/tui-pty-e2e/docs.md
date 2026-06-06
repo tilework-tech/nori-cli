@@ -44,6 +44,10 @@ Tests verify the `/mcp` slash command in ACP mode:
 - With configured MCP servers: verifies that server details (name, transport) are displayed even though individual tool names are unavailable in ACP mode
 - Without configured MCP servers: verifies the "No MCP servers configured" fallback message appears
 
+**Browser Command Tests** (`browser_command.rs`):
+
+Tests verify the full `/browser` integration flow: start app, launch Chrome, agent modifies page via CDP, verify browser state independently. The test spawns the nori binary with `MOCK_AGENT_BROWSER_MODIFY=1`, sends `/browser`, waits for the CDP endpoint to appear on screen, then waits for the mock agent's `BROWSER_MODIFIED:title=NORI_BROWSER_TEST` confirmation. The test independently verifies the browser title via a direct CDP WebSocket connection using `tungstenite` and `ureq`. This test is `#[ignore]` and `#[cfg(target_os = "linux")]` because it requires Chrome/Chromium installed and a display server (X11/Wayland). Run with `cargo test -p tui-pty-e2e -- --ignored browser`.
+
 **Debug Output**: Colorized output (via `owo-colors`) for test debugging:
 - Sent input highlighted
 - Expected vs actual screen content

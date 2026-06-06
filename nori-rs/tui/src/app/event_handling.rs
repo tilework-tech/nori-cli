@@ -1128,6 +1128,20 @@ impl App {
                     }
                 }
             }
+            #[cfg(unix)]
+            AppEvent::BrowserLaunched { ws_url, cdp_port } => {
+                let prompt =
+                    nori_acp::backend::browser_session::compose_agent_prompt(&ws_url, cdp_port);
+                self.chat_widget.add_info_message(
+                    format!("Browser launched (CDP port {cdp_port}). Notifying agent..."),
+                    None,
+                );
+                self.chat_widget.submit_user_message_text(prompt);
+            }
+            AppEvent::BrowserLaunchFailed(err) => {
+                self.chat_widget
+                    .add_error_message(format!("Failed to launch browser: {err}"));
+            }
             AppEvent::OpenForkPicker => {
                 let messages =
                     crate::app_backtrack::collect_all_user_messages(&self.transcript_cells);
