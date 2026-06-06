@@ -491,7 +491,7 @@ impl AcpBackend {
                     &self.mcp_servers,
                     self.mcp_oauth_credentials_store_mode,
                 );
-                if let Err(err) = nori_client_mcp::register_for_session(
+                let nori_client_context_window = match nori_client_mcp::register_for_session(
                     &self.connection,
                     &mut mcp_servers,
                     Arc::clone(&self.thread_goal_state),
@@ -502,8 +502,12 @@ impl AcpBackend {
                 )
                 .await
                 {
-                    warn!("Failed to register goal MCP server after compact: {err}");
-                }
+                    Ok(context_window) => context_window,
+                    Err(err) => {
+                        warn!("Failed to register goal MCP server after compact: {err}");
+                        nori_protocol::NoriClientContextWindowView::default()
+                    }
+                };
                 let nori_client_advertised = mcp_servers.iter().any(|server| {
                     matches!(
                         server,
@@ -520,6 +524,7 @@ impl AcpBackend {
                                     &self.connection,
                                     nori_client_advertised,
                                     false,
+                                    nori_client_context_window,
                                 ),
                             ),
                         )

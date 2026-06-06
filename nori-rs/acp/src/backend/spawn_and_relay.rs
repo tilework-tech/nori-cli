@@ -64,7 +64,7 @@ impl AcpBackend {
             &config.mcp_servers,
             config.mcp_oauth_credentials_store_mode,
         );
-        nori_client_mcp::register_for_session(
+        let nori_client_context_window = nori_client_mcp::register_for_session(
             &connection,
             &mut mcp_servers,
             Arc::clone(&thread_goal_state),
@@ -122,7 +122,12 @@ impl AcpBackend {
             }
         }
 
-        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
+        let capabilities_update = nori_client_mcp::capabilities_update_for_nori_client(
+            &connection,
+            connection.capabilities().mcp_capabilities.http,
+            false,
+            nori_client_context_window,
+        );
         let event_rx = connection.take_event_receiver();
 
         let connection = Arc::new(connection);

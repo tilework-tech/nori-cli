@@ -116,6 +116,7 @@ pub(crate) struct NoriClientShared {
     connected: Arc<AtomicBool>,
     agent_capabilities: nori_protocol::AgentCapabilitiesView,
     nori_client_advertised: bool,
+    context_window: Arc<Mutex<nori_protocol::NoriClientContextWindowView>>,
 }
 
 impl NoriClientShared {
@@ -134,7 +135,18 @@ impl NoriClientShared {
             connected,
             agent_capabilities,
             nori_client_advertised,
+            context_window: Arc::new(Mutex::new(
+                nori_protocol::NoriClientContextWindowView::default(),
+            )),
         }
+    }
+
+    async fn set_context_window(&self, context_window: nori_protocol::NoriClientContextWindowView) {
+        *self.context_window.lock().await = context_window;
+    }
+
+    async fn context_window(&self) -> nori_protocol::NoriClientContextWindowView {
+        self.context_window.lock().await.clone()
     }
 }
 
@@ -296,6 +308,7 @@ impl ServerHandler for NoriClientService {
                     self.shared.agent_capabilities.clone(),
                     self.shared.nori_client_advertised,
                     true,
+                    self.shared.context_window().await,
                 )),
             )
             .await;
@@ -411,38 +424,36 @@ async fn require_bearer_token(
     }
 }
 
-pub(super) fn capabilities_update_for_session(
-    connection: &SacpConnection,
-) -> nori_protocol::SessionCapabilitiesView {
-    capabilities_update_for_nori_client(
-        connection,
-        connection.capabilities().mcp_capabilities.http,
-        false,
-    )
-}
-
 pub(super) fn capabilities_update_for_nori_client(
     connection: &SacpConnection,
     nori_client_advertised: bool,
     nori_client_initialized: bool,
+    context_window: nori_protocol::NoriClientContextWindowView,
 ) -> nori_protocol::SessionCapabilitiesView {
     let agent = nori_protocol::AgentCapabilitiesView {
         http_mcp: connection.capabilities().mcp_capabilities.http,
         load_session: connection.capabilities().load_session,
     };
-    capabilities_update(agent, nori_client_advertised, nori_client_initialized)
+    capabilities_update(
+        agent,
+        nori_client_advertised,
+        nori_client_initialized,
+        context_window,
+    )
 }
 
 fn capabilities_update(
     agent: nori_protocol::AgentCapabilitiesView,
     nori_client_advertised: bool,
     nori_client_initialized: bool,
+    context_window: nori_protocol::NoriClientContextWindowView,
 ) -> nori_protocol::SessionCapabilitiesView {
     nori_protocol::SessionCapabilitiesView {
         agent,
         nori_client: nori_protocol::NoriClientCapabilitiesView {
             advertised: nori_client_advertised,
             initialized: nori_client_initialized,
+            context_window,
         },
         builtin_commands: HashMap::from([(
             "goal".to_string(),
@@ -465,15 +476,15 @@ pub(super) async fn register_for_session(
     transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     connected: Arc<AtomicBool>,
     http_server: Arc<Mutex<Option<NoriClientServer>>>,
-) -> Result<()> {
+) -> Result<nori_protocol::NoriClientContextWindowView> {
     connected.store(false, Ordering::Relaxed);
 
     if !connection.capabilities().mcp_capabilities.http {
-        return Ok(());
+        return Ok(nori_protocol::NoriClientContextWindowView::default());
     }
 
     let mut server = http_server.lock().await;
-    let next_server = NoriClientServer::spawn(NoriClientShared::new(
+    let shared = NoriClientShared::new(
         thread_goal_state,
         backend_event_tx,
         transcript_recorder,
@@ -483,16 +494,34 @@ pub(super) async fn register_for_session(
             load_session: connection.capabilities().load_session,
         },
         true,
-    ))
-    .await?;
+    );
+    let next_server = NoriClientServer::spawn(shared.clone()).await?;
     let advertised_server = acp::McpServer::Http(
         acp::McpServerHttp::new("nori-client", next_server.url().to_string())
             .headers(vec![next_server.authorization_header()]),
     );
+    let context_window = context_window_for_server(&advertised_server);
+    shared.set_context_window(context_window.clone()).await;
     *server = Some(next_server);
     mcp_servers.push(advertised_server);
 
-    Ok(())
+    Ok(context_window)
+}
+
+fn context_window_for_server(
+    server: &acp::McpServer,
+) -> nori_protocol::NoriClientContextWindowView {
+    let bytes = serde_json::to_string(server)
+        .map(|payload| payload.len() as i64)
+        .unwrap_or_default();
+    nori_protocol::NoriClientContextWindowView {
+        advertised_server_bytes: bytes,
+        advertised_server_estimated_tokens: estimated_tokens_from_bytes(bytes),
+    }
+}
+
+fn estimated_tokens_from_bytes(bytes: i64) -> i64 {
+    bytes.saturating_add(3) / 4
 }
 
 #[cfg(test)]
