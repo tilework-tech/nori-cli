@@ -1,6 +1,34 @@
 # Current Progress
 
-## Status: Twenty-fourth component removed
+## Status: Twenty-sixth component removed
+
+### Completed: Remove dead `ModelProviderInfo` fields and `api_key()` method
+
+Removed 5 HTTP-backend-only fields from `ModelProviderInfo` that were deserialized but never read at runtime: `base_url`, `experimental_bearer_token`, `query_params`, `http_headers`, `env_http_headers`. Also removed the dead `api_key()` method (zero callers), the dead `create_oss_provider_with_base_url()` function, and the dead `DEFAULT_LMSTUDIO_PORT`/`DEFAULT_OLLAMA_PORT` constants.
+
+- `core/src/model_provider_info.rs` — Removed 5 fields, `api_key()` method, `create_oss_provider_with_base_url()`, port constants. Simplified `create_oss_provider()` to not take a port parameter.
+- `core/src/lib.rs` — Removed re-exports: `DEFAULT_LMSTUDIO_PORT`, `DEFAULT_OLLAMA_PORT`, `create_oss_provider_with_base_url`
+- `core/src/config/tests/mod.rs` — Removed dead fields from test expected struct
+
+Backwards compat: `ModelProviderInfo` has no `deny_unknown_fields`, so existing config files with removed fields are silently ignored by serde.
+
+**Impact:** ~140 lines of dead HTTP config code removed. codex-core unit tests: 371 pass. Integration tests: 14 pass. E2E: 12 pass. nori binary builds successfully.
+
+### Suggested next steps for future commits
+1. Investigate whether `env_key` and `env_key_instructions` fields on `ModelProviderInfo` are still needed — they have zero runtime readers, but may be conceptually relevant for future ACP provider auth
+2. Remove `ErrorEvent` type if `codex_error_info` is always `None` in ACP — the field exists but is never set to a meaningful value
+3. Continue removing HTTP-backend remnants from codex-core
+
+### Completed: Remove all dead `CodexErrorInfo` variants
+
+Removed 7 dead `CodexErrorInfo` enum variants from both `codex-protocol` and `app-server-protocol`. Only `Other` remains. Added `#[serde(other)]` to `Other` for backwards compatibility with any previously-serialized variant names.
+
+**Variants removed:** `ContextWindowExceeded`, `UsageLimitExceeded`, `HttpConnectionFailed`, `InternalServerError`, `Unauthorized`, `BadRequest`, `SandboxError`, `ResponseTooManyFailedAttempts`
+
+- `protocol/src/protocol/mod.rs` — Removed 7 variants (~15 lines), added `#[serde(other)]` to `Other`
+- `app-server-protocol/src/protocol/v2.rs` — Removed 7 variants (~20 lines), removed `From` conversion arms (~10 lines), removed `codex_error_info_serializes_http_status_code_in_camel_case` test
+
+**Impact:** ~60 lines removed. codex-protocol: 20 tests pass. ASP: 17 tests pass.
 
 ### Completed: Remove `chatgpt_base_url`, dead error variants, and stale `wire_api` references
 

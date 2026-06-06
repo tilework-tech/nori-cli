@@ -1001,3 +1001,53 @@ Three remaining `wire_api` references in production/test code, despite the `Wire
 | `core/src/config/tests/mod.rs` | 44 | Functional TOML fixture | `wire_api = "chat"` in test config string — silently ignored |
 | `tui-pty-e2e/tests/live_acp.rs` | 119 | Functional TOML fixture | `wire_api = "acp"` in config generator — silently ignored |
 | `tui-pty-e2e/tests/acp_mode.rs` | 4 | Doc comment | Claims ACP mode is "configured via wire_api" — incorrect |
+
+## Dead `CodexErrorInfo` variants (twenty-fifth removal)
+
+### Why this component
+
+All 7 non-`Other` variants of `CodexErrorInfo` in `codex-protocol` and `app-server-protocol` were dead code — zero constructors anywhere in the codebase. The ACP backend always sets `codex_error_info: None`. These HTTP-error-taxonomy variants confused readers by implying specific error categorization that never occurs.
+
+### Verification
+
+- Searched for `CodexErrorInfo::VariantName` for every variant — zero construction sites
+- The only production uses of `codex_error_info` set it to `None` (ACP backend) or `Some(Other)` (one TUI test)
+- Added `#[serde(other)]` to `Other` so any old serialized variant names map to `Other`
+
+## Dead `ModelProviderInfo` fields (twenty-sixth removal)
+
+### Why this component
+
+`ModelProviderInfo` had 5 fields consumed only by the removed HTTP backend. The ACP backend's `AcpProviderInfo` struct deliberately omits them because ACP communicates over subprocess stdio, not HTTP.
+
+### Fields confirmed dead
+
+| Field | Always set to | Runtime readers |
+|---|---|---|
+| `base_url` | From env or config | Zero |
+| `experimental_bearer_token` | `None` | Zero |
+| `query_params` | `None` (except test) | Zero |
+| `http_headers` | OpenAI version header | Zero |
+| `env_http_headers` | OpenAI org/project | Zero |
+
+### Also dead
+
+- `api_key()` method — zero callers
+- `create_oss_provider_with_base_url()` — only called by `create_oss_provider()`, which was simplified
+- `DEFAULT_LMSTUDIO_PORT`, `DEFAULT_OLLAMA_PORT` — only used by `create_oss_provider()` for base_url construction
+
+### Fields kept alive
+
+| Field | Runtime readers | Why keep |
+|---|---|---|
+| `name` | TUI, config display | Active |
+| `env_key` | Only in dead `api_key()` | Config concept, may be useful for future ACP provider auth |
+| `env_key_instructions` | Only in dead `api_key()` | Config concept |
+| `request_max_retries` | AcpProviderInfo mirrors it | Active via ACP |
+| `stream_max_retries` | AcpProviderInfo mirrors it | Active via ACP |
+| `stream_idle_timeout_ms` | AcpProviderInfo mirrors it | Active via ACP |
+| `requires_openai_auth` | TUI onboarding | Active |
+
+### `forced_chatgpt_workspace_id` and `forced_login_method` — NOT candidates
+
+Both fields are actively used at runtime in auth, login, and TUI onboarding flows. Despite the "chatgpt" name, `forced_chatgpt_workspace_id` enforces workspace identity during login and is not HTTP-backend-specific.
