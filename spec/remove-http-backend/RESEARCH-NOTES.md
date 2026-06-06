@@ -1051,3 +1051,75 @@ All 7 non-`Other` variants of `CodexErrorInfo` in `codex-protocol` and `app-serv
 ### `forced_chatgpt_workspace_id` and `forced_login_method` — NOT candidates
 
 Both fields are actively used at runtime in auth, login, and TUI onboarding flows. Despite the "chatgpt" name, `forced_chatgpt_workspace_id` enforces workspace identity during login and is not HTTP-backend-specific.
+
+## Remove `CodexErrorInfo` enum and `codex_error_info` field (twenty-seventh removal)
+
+### Why this component
+
+The `CodexErrorInfo` enum was once a rich error taxonomy for HTTP backend errors (ContextWindowExceeded, UsageLimitExceeded, etc.). All meaningful variants were removed in commit ecaf7b78, leaving only a single `Other` variant. The `codex_error_info: Option<CodexErrorInfo>` field on `ErrorEvent`, `StreamErrorEvent`, and `TurnError` is always set to `None` in production code and never read by any consumer. It carries zero information.
+
+### Current state
+
+**`CodexErrorInfo` enum (codex-protocol):**
+```rust
+pub enum CodexErrorInfo {
+    #[serde(other)]
+    Other,
+}
+```
+Single variant. The `#[serde(other)]` means it deserializes any string to `Other`.
+
+**`CodexErrorInfo` enum (app-server-protocol):**
+```rust
+pub enum CodexErrorInfo {
+    #[serde(other)]
+    Other,
+}
+impl From<CoreCodexErrorInfo> for CodexErrorInfo { ... }
+```
+Mirror of core enum with trivial `From` conversion.
+
+### Production write sites (ALL set None)
+
+| File | Line | Struct |
+|---|---|---|
+| `acp/src/backend/session_runtime_driver.rs` | 747 | `ErrorEvent { message, codex_error_info: None }` |
+| `acp/src/backend/submit_and_ops.rs` | 306 | `ErrorEvent { message, codex_error_info: None }` |
+| `acp/src/backend/spawn_and_relay.rs` | 357 | `ErrorEvent { message, codex_error_info: None }` |
+
+### Production read sites
+
+**Zero.** The TUI destructures `ErrorEvent` with `..`:
+```rust
+EventMsg::Error(ErrorEvent { message, .. }) => self.on_error(message),
+```
+
+No code anywhere reads or branches on `codex_error_info`.
+
+### Test-only references
+
+| File | Line | Usage |
+|---|---|---|
+| `tui/src/chatwidget/tests/mod.rs` | 46 | import |
+| `tui/src/chatwidget/tests/part4.rs` | 742 | `codex_error_info: Some(CodexErrorInfo::Other)` |
+| `tui/src/chatwidget/tests/part5.rs` | 121 | `codex_error_info: None` |
+
+### Backwards compatibility
+
+- Neither `ErrorEvent` nor `StreamErrorEvent` uses `#[serde(deny_unknown_fields)]`
+- Both have `#[serde(default)]` on the `codex_error_info` field
+- JSON deserialization silently ignores unknown fields
+- Old serialized data with `"codex_error_info": null` or `"codex_error_info": "other"` will be silently ignored
+- TypeScript type generation (`#[ts(...)]`) will drop the field — no TS consumer references it
+
+### Scope
+
+1. Remove `CodexErrorInfo` enum from `protocol/src/protocol/mod.rs`
+2. Remove `codex_error_info` field from `ErrorEvent` in `protocol/src/protocol/mod.rs`
+3. Remove `codex_error_info` field from `StreamErrorEvent` in `protocol/src/protocol/mod.rs`
+4. Remove `CodexErrorInfo` enum and `From` impl from `app-server-protocol/src/protocol/v2.rs`
+5. Remove `codex_error_info` field from `TurnError` in `app-server-protocol/src/protocol/v2.rs`
+6. Remove `codex_error_info: None` from all 3 ACP construction sites
+7. Update test code that references `codex_error_info` or `CodexErrorInfo`
+8. Remove re-exports of `CodexErrorInfo` from `protocol/src/lib.rs` and `app-server-protocol/src/lib.rs` if any
+9. Update docs

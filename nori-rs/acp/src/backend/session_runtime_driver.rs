@@ -742,10 +742,7 @@ impl AcpBackend {
             .event_tx
             .send(Event {
                 id: String::new(),
-                msg: EventMsg::Error(ErrorEvent {
-                    message,
-                    codex_error_info: None,
-                }),
+                msg: EventMsg::Error(ErrorEvent { message }),
             })
             .await;
     }

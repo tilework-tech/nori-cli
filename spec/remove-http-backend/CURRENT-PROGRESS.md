@@ -1,6 +1,28 @@
 # Current Progress
 
-## Status: Twenty-sixth component removed
+## Status: Twenty-seventh component removed
+
+### Completed: Remove `CodexErrorInfo` enum and `codex_error_info` field entirely
+
+Removed the now-meaningless `CodexErrorInfo` enum (single `Other` variant) and the dead `codex_error_info: Option<CodexErrorInfo>` field from `ErrorEvent`, `StreamErrorEvent`, and `TurnError`. The field was always set to `None` in production and never read by any consumer.
+
+- `protocol/src/protocol/mod.rs` — Removed `CodexErrorInfo` enum (~8 lines), removed `codex_error_info` field from `ErrorEvent` and `StreamErrorEvent`
+- `app-server-protocol/src/protocol/v2.rs` — Removed `CodexErrorInfo` enum, `From` impl, import, and `codex_error_info` field from `TurnError`
+- `acp/src/backend/session_runtime_driver.rs` — Removed `codex_error_info: None` from ErrorEvent construction
+- `acp/src/backend/submit_and_ops.rs` — Removed `codex_error_info: None` from ErrorEvent construction
+- `acp/src/backend/spawn_and_relay.rs` — Removed `codex_error_info: None` from ErrorEvent construction
+- `tui/src/chatwidget/tests/mod.rs` — Removed unused `CodexErrorInfo` import
+- `tui/src/chatwidget/tests/part4.rs` — Removed `codex_error_info` from test construction
+- `tui/src/chatwidget/tests/part5.rs` — Removed `codex_error_info` from test construction
+
+Backwards compat: Neither `ErrorEvent` nor `StreamErrorEvent` uses `deny_unknown_fields`. Old serialized data with `"codex_error_info": null` or `"codex_error_info": "other"` is silently ignored by serde during deserialization.
+
+**Impact:** ~30 lines of dead protocol scaffolding removed. `ErrorEvent` and `StreamErrorEvent` are now single-field structs (`message: String`). codex-protocol: 20 tests pass. ASP: 17 tests pass. ACP: 16 pass. TUI: 1328 pass. codex-core: 371 unit + 14 integration pass.
+
+### Suggested next steps for future commits
+1. Investigate whether `env_key` and `env_key_instructions` fields on `ModelProviderInfo` are still needed — they have zero runtime readers, but may be conceptually relevant for future ACP provider auth
+2. Investigate whether `ErrorEvent` and `StreamErrorEvent` should be simplified to just `String` (they're now single-field wrapper structs)
+3. Continue removing HTTP-backend remnants from codex-core
 
 ### Completed: Remove dead `ModelProviderInfo` fields and `api_key()` method
 

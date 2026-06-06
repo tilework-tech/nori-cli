@@ -354,7 +354,6 @@ impl AcpBackend {
                                         id: String::new(),
                                         msg: EventMsg::Error(ErrorEvent {
                                             message: "Cloud session disconnected. The remote session may still be active.".to_string(),
-                                            codex_error_info: None,
                                         }),
                                     })
                                     .await;

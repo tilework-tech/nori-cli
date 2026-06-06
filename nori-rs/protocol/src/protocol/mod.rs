@@ -506,15 +506,6 @@ pub enum EventMsg {
     HookOutput(HookOutputEvent),
 }
 
-/// Codex errors that we expose to clients.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(rename_all = "snake_case")]
-pub enum CodexErrorInfo {
-    #[serde(other)]
-    Other,
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema)]
 pub struct RawResponseItemEvent {
     pub item: ResponseItem,
@@ -573,8 +564,6 @@ pub struct ReasoningRawContentDeltaEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ErrorEvent {
     pub message: String,
-    #[serde(default)]
-    pub codex_error_info: Option<CodexErrorInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
@@ -1010,8 +999,6 @@ pub struct UndoListResultEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct StreamErrorEvent {
     pub message: String,
-    #[serde(default)]
-    pub codex_error_info: Option<CodexErrorInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]

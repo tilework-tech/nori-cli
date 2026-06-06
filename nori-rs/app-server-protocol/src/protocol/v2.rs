@@ -13,7 +13,6 @@ use codex_protocol::models::ResponseItem;
 use codex_protocol::parse_command::ParsedCommand as CoreParsedCommand;
 use codex_protocol::plan_tool::PlanItemArg as CorePlanItemArg;
 use codex_protocol::plan_tool::StepStatus as CorePlanStepStatus;
-use codex_protocol::protocol::CodexErrorInfo as CoreCodexErrorInfo;
 use codex_protocol::protocol::CreditsSnapshot as CoreCreditsSnapshot;
 use codex_protocol::protocol::RateLimitSnapshot as CoreRateLimitSnapshot;
 use codex_protocol::protocol::RateLimitWindow as CoreRateLimitWindow;
@@ -52,23 +51,6 @@ macro_rules! v2_enum_from_core {
             }
         }
     };
-}
-
-/// Codex errors that we expose to clients.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub enum CodexErrorInfo {
-    #[serde(other)]
-    Other,
-}
-
-impl From<CoreCodexErrorInfo> for CodexErrorInfo {
-    fn from(value: CoreCodexErrorInfo) -> Self {
-        match value {
-            CoreCodexErrorInfo::Other => CodexErrorInfo::Other,
-        }
-    }
 }
 
 v2_enum_from_core!(
@@ -811,7 +793,6 @@ pub struct Turn {
 #[error("{message}")]
 pub struct TurnError {
     pub message: String,
-    pub codex_error_info: Option<CodexErrorInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
