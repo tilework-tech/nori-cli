@@ -149,6 +149,7 @@ Tool cells always appear in scrollback history before the agent text that follow
 - `handle_streaming_delta()` always calls `flush_active_cell()` before streaming text, even when the active cell contains an incomplete (still-running) ExecCell. The incomplete cell is sent to history immediately rather than held in `active_cell` until completion.
 - `flush_active_cell()` marks pending call_ids of incomplete ExecCells as completed (via `completed_client_tool_calls`) so that later completion events for the same call_ids do not create duplicate cells. The `pending_exec_cells` tracker is bypassed for this path -- cells go directly to history.
 - `add_boxed_history()` also always flushes the active cell first, applying the same ordering guarantee when non-streaming history cells are inserted.
+- Assistant message cells do not re-arm the final-message separator; a single tool-to-answer boundary should not become repeated dividers when one assistant turn arrives as multiple message cells.
 
 The trade-off: incomplete cells may appear in scrollback showing "Running"/"Exploring" status rather than their final "Ran"/"Explored" state, because they are flushed before completion events arrive.
 
