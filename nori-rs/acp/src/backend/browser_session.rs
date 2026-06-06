@@ -89,9 +89,10 @@ impl BrowserSession {
     /// it as the active session. Closes any previous session.
     pub async fn launch_and_store() -> Result<(String, i32)> {
         if is_browser_active()
-            && let Some((ws_url, cdp_port)) = active_session_info() {
-                return Ok((ws_url, cdp_port));
-            }
+            && let Some((ws_url, cdp_port)) = active_session_info()
+        {
+            return Ok((ws_url, cdp_port));
+        }
 
         let chrome = find_chrome_binary()?;
         let user_data_dir =
