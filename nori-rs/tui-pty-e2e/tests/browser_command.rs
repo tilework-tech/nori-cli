@@ -88,9 +88,10 @@ fn extract_cdp_port_from_screen(screen: &str) -> Option<u16> {
     for line in screen.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("CDP endpoint: http://127.0.0.1:")
-            && let Ok(port) = rest.trim().parse::<u16>() {
-                return Some(port);
-            }
+            && let Ok(port) = rest.trim().parse::<u16>()
+        {
+            return Some(port);
+        }
     }
     None
 }
