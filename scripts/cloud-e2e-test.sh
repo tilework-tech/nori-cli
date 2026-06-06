@@ -15,7 +15,7 @@
 #
 # Prerequisites:
 #   - nori binary built (cargo build --bin nori in nori-rs/)
-#   - nori-sessions repo with cli-cloud-sessions worktree
+#   - nori-sessions repo with cli-cloud-session-refactor worktree
 #   - Sprites credentials (NORI_SPRITE_ORG + NORI_SPRITE_TOKEN)
 #   - Valid cloud-auth.json (browser auth will be triggered if missing/expired)
 #   - bun, tmux, curl, jq, python3 installed
@@ -38,7 +38,7 @@ set -euo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 
-NORI_SESSIONS_WORKTREE="${NORI_SESSIONS_WORKTREE:-$HOME/code/nori/nori-sessions/.worktrees/cli-cloud-sessions}"
+NORI_SESSIONS_WORKTREE="${NORI_SESSIONS_WORKTREE:-$HOME/code/nori/nori-sessions/.worktrees/cli-cloud-session-refactor}"
 NORI_SPRITE_ORG="${NORI_SPRITE_ORG:-amol-kapoor}"
 NORI_SPRITE_TOKEN="${NORI_SPRITE_TOKEN:?NORI_SPRITE_TOKEN must be set}"
 BROKER_PORT="${BROKER_PORT:-19400}"
@@ -487,7 +487,7 @@ run_e2e() {
   fi
   pass "Message 1: got response"
 
-  pass "E2E test complete — 2 messages sent and received"
+  pass "E2E test complete — message sent and received"
 }
 
 # ---------------------------------------------------------------------------
