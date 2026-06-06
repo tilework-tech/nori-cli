@@ -37,6 +37,7 @@ pub enum SlashCommand {
     Exit,
     SwitchSkillset,
     Fork,
+    Browser,
 }
 
 impl SlashCommand {
@@ -67,6 +68,7 @@ impl SlashCommand {
             SlashCommand::Logout => "show logout instructions",
             SlashCommand::SwitchSkillset => "switch between available skillsets",
             SlashCommand::Fork => "rewind conversation to a previous message",
+            SlashCommand::Browser => "open a Chrome browser the agent can control via CDP",
         }
     }
 
@@ -94,7 +96,8 @@ impl SlashCommand {
             | SlashCommand::Login
             | SlashCommand::Logout
             | SlashCommand::SwitchSkillset
-            | SlashCommand::Fork => false,
+            | SlashCommand::Fork
+            | SlashCommand::Browser => false,
             SlashCommand::Browse
             | SlashCommand::Diff
             | SlashCommand::Mention
@@ -367,6 +370,46 @@ mod tests {
         assert!(
             !SlashCommand::Mcp.available_during_task(),
             "/mcp should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn browser_parses_from_string() {
+        let cmd: SlashCommand = "browser"
+            .parse()
+            .expect("/browser should parse from string");
+        assert_eq!(cmd, SlashCommand::Browser);
+    }
+
+    #[test]
+    fn browser_visible_in_commands() {
+        let commands = built_in_slash_commands();
+        let has_browser = commands
+            .iter()
+            .any(|(_, cmd)| *cmd == SlashCommand::Browser);
+        assert!(has_browser, "/browser should be visible in commands list");
+    }
+
+    #[test]
+    fn browser_has_description() {
+        let desc = SlashCommand::Browser.description();
+        assert!(!desc.is_empty(), "/browser should have a description");
+    }
+
+    #[test]
+    fn browser_not_available_during_task() {
+        assert!(
+            !SlashCommand::Browser.available_during_task(),
+            "/browser should not be available while task is running"
+        );
+    }
+
+    #[test]
+    fn browser_is_distinct_from_browse() {
+        assert_ne!(
+            SlashCommand::Browser.command(),
+            SlashCommand::Browse.command(),
+            "/browser and /browse should be different commands"
         );
     }
 }

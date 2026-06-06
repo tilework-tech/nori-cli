@@ -563,6 +563,15 @@ pub(crate) enum AppEvent {
         std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
     ),
 
+    /// Browser launched successfully with CDP details.
+    BrowserLaunched {
+        ws_url: String,
+        cdp_port: i32,
+    },
+
+    /// Browser launch failed with an error message.
+    BrowserLaunchFailed(String),
+
     /// Open the fork picker modal showing previous user messages.
     OpenForkPicker,
 
