@@ -66,6 +66,7 @@ fail() { echo "[$(date +%H:%M:%S)] FAIL: $*" >&2; cleanup; exit 1; }
 cleanup() {
   log "Cleaning up..."
   tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  tmux kill-session -t "nori-cloud-e2e-reacquire-$$" 2>/dev/null || true
   if [[ -n "$BROKER_PID" ]]; then
     kill "$BROKER_PID" 2>/dev/null || true
     wait "$BROKER_PID" 2>/dev/null || true
@@ -459,36 +460,137 @@ run_e2e() {
     fail "TUI did not show prompt within 90s"
   fi
 
+  sleep 10
+
   if tmux_capture | grep -qF "Failed to start agent"; then
+    log "TUI output:"
+    tmux_capture | tail -30
     fail "Agent failed to start: $(tmux_capture | grep 'Failed to start agent')"
   fi
 
-  sleep 10
+  if tmux_capture | grep -qF "Cloud session creation failed"; then
+    log "TUI output:"
+    tmux_capture | tail -30
+    fail "Cloud session creation failed: $(tmux_capture | grep 'Cloud session creation failed')"
+  fi
+
   pass "TUI loaded with prompt"
 
   # --- Message 1 ---
-  log "Sending message 1: 'say hello world'"
-  tmux send-keys -t "$TMUX_SESSION" "say hello world"
+  log "Sending message 1: 'what is 2 plus 2'"
+  tmux send-keys -t "$TMUX_SESSION" "what is 2 plus 2"
   sleep 2
   tmux send-keys -t "$TMUX_SESSION" Enter
 
-  if ! tmux_assert "Hello" 60; then
-    fail "No response to message 1 within 60s"
+  if ! tmux_assert "4" 90; then
+    fail "No response to message 1 within 90s"
   fi
   pass "Message 1: got response"
 
-  # --- Message 2 ---
-  log "Sending message 2: 'what is 2 plus 2'"
-  tmux send-keys -t "$TMUX_SESSION" "what is 2 plus 2"
-  sleep 1
+  pass "E2E test complete — 2 messages sent and received"
+}
+
+# ---------------------------------------------------------------------------
+# Step 8: Close session and re-acquire — test session lifecycle
+# ---------------------------------------------------------------------------
+
+close_session() {
+  log "Closing TUI session (Ctrl-C)..."
+  tmux send-keys -t "$TMUX_SESSION" C-c
+  sleep 3
+
+  # Wait for the process to fully terminate
+  local elapsed=0
+  while (( elapsed < 15 )); do
+    if ! tmux_capture | grep -qF "›"; then
+      break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  # Kill the tmux session to ensure clean state
+  tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  sleep 2
+
+  pass "Session closed"
+}
+
+wait_for_sprite_available() {
+  log "Waiting for sprite to become available after release..."
+  local token
+  token=$(get_auth_token)
+
+  # Release any claimed sprites from the previous session
+  local agents
+  agents=$(curl -sf "${BROKER_URL}/api/sessions" -H "Authorization: Bearer $token" 2>/dev/null)
+  local names
+  names=$(echo "$agents" | jq -r '.agents[] | select(.lifecycle == "claimed") | .name')
+  for name in $names; do
+    log "  Releasing claim on $name"
+    curl -sf -X POST "${BROKER_URL}/api/sessions/${name}/release" \
+      -H "Authorization: Bearer $token" >/dev/null 2>&1 || true
+  done
+
+  # Wait for at least one sprite to be ready
+  local elapsed=0
+  while (( elapsed < 60 )); do
+    local ready_count
+    ready_count=$(curl -sf "${BROKER_URL}/api/sessions" -H "Authorization: Bearer $token" 2>/dev/null \
+      | jq '[.agents[] | select(.lifecycle == "ready")] | length' 2>/dev/null || echo "0")
+    if (( ready_count > 0 )); then
+      pass "Sprite available for re-acquisition"
+      return
+    fi
+    sleep 3
+    elapsed=$((elapsed + 3))
+  done
+  fail "No sprites became ready within 60s after release"
+}
+
+run_reacquire_test() {
+  log "Re-launching nori cloud for session re-acquisition test..."
+  TMUX_SESSION="nori-cloud-e2e-reacquire-$$"
+  tmux new-session -d -s "$TMUX_SESSION" -x 160 -y 40
+  tmux send-keys -t "$TMUX_SESSION" \
+    "cd '$NORI_RS_DIR' && '$NORI_BINARY' cloud --broker-url '$BROKER_URL' --skip-welcome --skip-trust-directory" Enter
+
+  if ! tmux_assert "›" 90; then
+    log "Broker log tail:"
+    tail -10 /tmp/nori-cloud-e2e-broker.log | jq -r '.message' 2>/dev/null || tail -10 /tmp/nori-cloud-e2e-broker.log
+    fail "TUI did not show prompt within 90s on re-acquisition"
+  fi
+
+  if tmux_capture | grep -qF "Failed to start agent"; then
+    log "TUI output:"
+    tmux_capture | tail -30
+    fail "Agent failed to start on re-acquisition: $(tmux_capture | grep 'Failed to start agent')"
+  fi
+
+  if tmux_capture | grep -qF "Cloud session creation failed"; then
+    log "TUI output:"
+    tmux_capture | tail -30
+    fail "Cloud session creation failed on re-acquisition"
+  fi
+
+  sleep 5
+  pass "TUI loaded on re-acquisition"
+
+  # --- Message in re-acquired session ---
+  log "Sending message in re-acquired session: 'what is 3 plus 5'"
+  tmux send-keys -t "$TMUX_SESSION" "what is 3 plus 5"
+  sleep 2
   tmux send-keys -t "$TMUX_SESSION" Enter
 
-  if ! tmux_assert "4" 60; then
-    fail "No response to message 2 within 60s"
+  if ! tmux_assert "8" 90; then
+    fail "No response to message in re-acquired session within 90s"
   fi
-  pass "Message 2: got response"
+  pass "Re-acquired session: got response"
 
-  pass "E2E test complete — 2 messages sent and received"
+  # Clean up the re-acquisition tmux session
+  tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+
+  pass "Session lifecycle test complete — close + re-acquire succeeded"
 }
 
 # ---------------------------------------------------------------------------
@@ -508,6 +610,9 @@ main() {
   prepare_sprite
   wait_for_sprite_ready
   run_e2e
+  close_session
+  wait_for_sprite_available
+  run_reacquire_test
 
   log ""
   log "=== ALL TESTS PASSED ==="

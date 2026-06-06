@@ -32,6 +32,22 @@
    - Updated all relevant noridocs files
    - Created new `cliLifecycle/docs.md`
 
+### Bug Fix: SACP Proxy Field Name Mismatch (broker-side)
+
+9. **Fix camelCase field names in SACP proxy responses** (commit `ce583f7a` on `cli-cloud-sessions`)
+   - Root cause: `cli-session.ts:280` was sending `{ session_id: sessionId }` but the ACP schema (`NewSessionResponse`) uses `#[serde(rename_all = "camelCase")]`, requiring `{ sessionId }` in JSON. This caused deserialization failure → "Failed to create ACP session" error.
+   - Fixed `session/new` response: `session_id` → `sessionId`
+   - Fixed `initialize` response: `serverCapabilities`/`serverInfo` → `agentCapabilities`/`agentInfo`
+   - Updated broker unit test to match
+
+### E2E Test Improvements (CLI-side)
+
+10. **Session lifecycle test** — `cloud-e2e-test.sh` now tests close + re-acquisition flow:
+    - After first session messages, sends Ctrl-C to close the TUI
+    - Waits for sprite to become available again
+    - Re-launches `nori cloud` and verifies a new session works
+    - Added explicit error checking for "Cloud session creation failed" in TUI output
+
 ## Not Yet Done (broker-side only)
 
 1. **Broker PR** — The broker changes on `cli-cloud-sessions` branch (PR #830) need to be pushed and reviewed.

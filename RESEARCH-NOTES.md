@@ -54,6 +54,32 @@ Replace the dumb relay with an SACP proxy state machine:
 - `sendPrompt()` uses `channelId`/`threadTs` — CLI maps both to `sessionId`
 - No public method to forward `session/set_config_option`, `session/set_model`, `session/load` to underlying AcpClient — may need new pass-through methods or direct client access
 
+### Root Cause: "Failed to create ACP session" in Cloud Mode (2026-06-06)
+
+**Error chain:** `Failed to start agent 'claude-code'` → `Failed to spawn ACP agent` → `Cloud session creation failed` → `Failed to create ACP session`
+
+**Root cause:** JSON field name mismatch in the broker's `session/new` response.
+
+The broker proxy (`cli-session.ts:280`) sends:
+```json
+{"jsonrpc":"2.0","id":2,"result":{"session_id":"nori-abc"}}
+```
+
+But the ACP schema's `NewSessionResponse` (agent-client-protocol-schema v0.11.6) uses `#[serde(rename_all = "camelCase")]`, so the CLI deserializer expects:
+```json
+{"jsonrpc":"2.0","id":2,"result":{"sessionId":"nori-abc"}}
+```
+
+The `session_id` field on `NewSessionResponse` is required (no default), so deserialization fails when the camelCase key is missing.
+
+**Fix:** Change `{ session_id: sessionId }` to `{ sessionId }` on line 280 of `cli-session.ts` in the broker repo.
+
+**Secondary issues (non-blocking):**
+- The `initialize` response sends `serverCapabilities`/`serverInfo` instead of `agentCapabilities`/`agentInfo`, but these have `#[serde(default)]` so they default to empty — no failure, just missing capability data.
+- The `session/prompt` response sends `{ stopReason, text }` — `stopReason` matches the expected camelCase field name, `text` is ignored (unknown fields are silently dropped by serde). The `StopReason` enum uses `#[serde(rename_all = "snake_case")]` so values must be like `"end_turn"`, which should match what `AcpTunnelManager.sendPrompt()` returns.
+
+**E2E test gap:** The existing e2e test (`cloud-e2e-test.sh`) doesn't catch this because it doesn't actually exercise the SACP protocol — the script checks for TUI prompt appearance and text responses but doesn't verify the underlying protocol exchanges. A proper e2e test must actually run `nori cloud` through the full session lifecycle: connect → initialize → session/new → session/prompt → close → re-acquire.
+
 ### Test Infrastructure
 
 - Broker uses `bun:test` with `mock.module()` pattern
