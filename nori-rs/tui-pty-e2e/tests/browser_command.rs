@@ -9,7 +9,6 @@
 //!
 //! Requires Chrome/Chromium installed and a display server (X11/Wayland).
 
-use std::io::Read as _;
 use std::time::Duration;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;

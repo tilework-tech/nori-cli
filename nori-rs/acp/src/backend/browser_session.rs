@@ -31,8 +31,9 @@ pub fn active_session_info() -> Option<(String, i32)> {
 
 /// Store a browser session as the active session, closing any previous one.
 fn store_session(session: BrowserSession) {
-    let mut guard = ACTIVE_SESSION.lock().unwrap();
-    *guard = Some(session);
+    if let Ok(mut guard) = ACTIVE_SESSION.lock() {
+        *guard = Some(session);
+    }
 }
 
 /// Parses the CDP WebSocket URL from a line of Chrome's stderr output.

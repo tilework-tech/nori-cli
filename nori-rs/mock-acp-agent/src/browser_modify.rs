@@ -1,4 +1,3 @@
-use std::io::Read as _;
 use std::time::Duration;
 
 use serde_json::json;
@@ -6,10 +5,10 @@ use serde_json::json;
 /// Extract the CDP HTTP port from a prompt text containing browser session info.
 pub fn extract_cdp_port_from_prompt(prompt_text: &str) -> Option<u16> {
     for line in prompt_text.lines() {
-        if let Some(rest) = line.strip_prefix("CDP endpoint: http://127.0.0.1:") {
-            if let Ok(port) = rest.trim().parse::<u16>() {
-                return Some(port);
-            }
+        if let Some(rest) = line.strip_prefix("CDP endpoint: http://127.0.0.1:")
+            && let Ok(port) = rest.trim().parse::<u16>()
+        {
+            return Some(port);
         }
     }
     None
