@@ -244,6 +244,39 @@ impl ChatWidget {
             SlashCommand::Fork => {
                 self.app_event_tx.send(AppEvent::OpenForkPicker);
             }
+            #[cfg(unix)]
+            SlashCommand::Browser => {
+                if let Some((ws_url, cdp_port)) =
+                    nori_acp::backend::browser_session::active_session_info()
+                {
+                    self.add_info_message(
+                        format!("Browser already running on CDP port {cdp_port} ({ws_url})"),
+                        None,
+                    );
+                    return;
+                }
+                self.add_info_message("Launching browser...".to_string(), None);
+                let tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    match nori_acp::backend::browser_session::BrowserSession::launch_and_store()
+                        .await
+                    {
+                        Ok((ws_url, cdp_port)) => {
+                            tx.send(AppEvent::BrowserLaunched { ws_url, cdp_port });
+                        }
+                        Err(err) => {
+                            tx.send(AppEvent::BrowserLaunchFailed(format!("{err:#}")));
+                        }
+                    }
+                });
+            }
+            #[cfg(not(unix))]
+            SlashCommand::Browser => {
+                self.add_info_message(
+                    "/browser is only available on Unix systems".to_string(),
+                    None,
+                );
+            }
         }
     }
 

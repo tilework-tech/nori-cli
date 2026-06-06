@@ -358,6 +358,8 @@ fn fallback_session_context_for_connection(
     }
 }
 
+#[cfg(unix)]
+pub mod browser_session;
 mod helpers;
 mod nori_client_context;
 mod nori_client_mcp;
