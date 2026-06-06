@@ -133,6 +133,16 @@ Goal state is also part of the replay contract. `transcript.rs` passes Nori-owne
 
 When a resumed goal is paused, blocked, or usage-limited, `thread_goal.rs` derives a one-time `SessionUpdateInfo` notice from the rehydrated snapshot so the TUI can show why goal automation will not continue until the user resumes, edits, clears, or resolves the blocker. That notice is emitted directly by `session.rs` after deferred replay events and is not written back into the transcript, so each future resume still derives its notice from goal state instead of accumulating duplicate history entries. ACP usage updates still normalize to `SessionUpdateInfo`, but `session_runtime_driver.rs` observes those events and asks the goal state to refresh `tokens_used`; when a goal exists, the backend emits a follow-up `ThreadGoalUpdated` snapshot so the TUI and transcript stay synchronized with usage accounting.
 
+**Browser Session** (`backend/browser_session.rs`):
+
+The browser session module manages launching a headed Chrome browser with CDP (Chrome DevTools Protocol) remote debugging enabled, so the ACP agent can script the browser via its existing shell tool. This is invoked by the TUI's `/browser` slash command (see `@/nori-rs/tui/docs.md`).
+
+`BrowserSession::launch()` finds a Chrome or Chromium binary via the `which` crate (searching `google-chrome-stable`, `google-chrome`, `chromium-browser`, `chromium`), then spawns it with `--remote-debugging-port=0` (OS-assigned port) in a temporary user data directory. It parses the CDP WebSocket URL from Chrome's stderr output (the `DevTools listening on ws://...` line) with a 15-second timeout via `tokio::time::timeout`. Helper functions `parse_cdp_ws_url()` and `extract_cdp_port()` handle the stderr parsing and port extraction.
+
+`compose_agent_prompt()` builds a structured user message containing the CDP HTTP endpoint and WebSocket URL, plus instructions for using Playwright, Puppeteer, or raw CDP commands. The prompt explicitly tells the agent not to call `browser.close()` since the browser stays open for the user.
+
+The `BrowserSession` is intentionally `std::mem::forget`'d by the TUI after launch. The `Drop` impl sends `SIGTERM` to the Chrome process via `libc::kill`, and the `tempfile::TempDir` holding the Chrome profile is cleaned up by its own `Drop`.
+
 **Custom Agent TOML Schema** (`config/types/mod.rs`):
 
 Custom agents are defined under `[[agents]]` in `config.toml`. Each entry is deserialized as `AgentConfigToml`:

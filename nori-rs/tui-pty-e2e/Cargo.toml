@@ -20,3 +20,5 @@ tempfile = "3"
 regex = "1"
 pretty_assertions = { workspace = true }
 serde_json = { workspace = true }
+tungstenite = "0.26"
+ureq = "3"

@@ -1,5 +1,6 @@
 //! Mock ACP agent for testing nori-cli
 
+mod browser_modify;
 mod runaway_search;
 
 use std::cell::Cell;
@@ -860,6 +861,90 @@ impl acp::Agent for MockAgent {
                 .join("\n");
             self.send_text_chunk(session_id.clone(), &user_text).await?;
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
+        if std::env::var("MOCK_AGENT_BROWSER_MODIFY").is_ok() {
+            let user_text = arguments
+                .prompt
+                .iter()
+                .filter_map(|block| match block {
+                    acp::ContentBlock::Text(t) => Some(t.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            if let Some(cdp_port) = browser_modify::extract_cdp_port_from_prompt(&user_text) {
+                eprintln!("Mock agent: detected CDP port {cdp_port}, modifying browser");
+
+                let new_title = "NORI_BROWSER_TEST";
+
+                let tool_call_id = acp::ToolCallId::new("browser-modify-001");
+                self.send_tool_call(
+                    session_id.clone(),
+                    acp::ToolCall::new(tool_call_id.clone(), "Modifying browser page title")
+                        .kind(acp::ToolKind::Execute)
+                        .status(acp::ToolCallStatus::InProgress)
+                        .raw_input(json!({"action": "set document.title", "value": new_title})),
+                )
+                .await?;
+
+                let result = std::thread::spawn(move || {
+                    browser_modify::modify_browser_title(cdp_port, new_title)
+                })
+                .join()
+                .map_err(|_| acp::Error::internal_error())?;
+
+                match result {
+                    Ok(title) => {
+                        self.send_tool_call_update(
+                            session_id.clone(),
+                            acp::ToolCallUpdate::new(
+                                tool_call_id,
+                                acp::ToolCallUpdateFields::new()
+                                    .status(acp::ToolCallStatus::Completed)
+                                    .content(vec![acp::ToolCallContent::Content(
+                                        acp::Content::new(acp::ContentBlock::Text(
+                                            acp::TextContent::new(format!(
+                                                "Page title set to: {title}"
+                                            )),
+                                        )),
+                                    )]),
+                            ),
+                        )
+                        .await?;
+                        self.send_text_chunk(
+                            session_id.clone(),
+                            &format!("BROWSER_MODIFIED:title={title}"),
+                        )
+                        .await?;
+                    }
+                    Err(err) => {
+                        self.send_tool_call_update(
+                            session_id.clone(),
+                            acp::ToolCallUpdate::new(
+                                tool_call_id,
+                                acp::ToolCallUpdateFields::new()
+                                    .status(acp::ToolCallStatus::Completed)
+                                    .content(vec![acp::ToolCallContent::Content(
+                                        acp::Content::new(acp::ContentBlock::Text(
+                                            acp::TextContent::new(format!(
+                                                "Failed to modify browser: {err}"
+                                            )),
+                                        )),
+                                    )]),
+                            ),
+                        )
+                        .await?;
+                        self.send_text_chunk(
+                            session_id.clone(),
+                            &format!("BROWSER_MODIFY_FAILED:{err}"),
+                        )
+                        .await?;
+                    }
+                }
+                return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+            }
         }
 
         if complete_after_default_response {
