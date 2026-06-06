@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncBufReadExt as _;
 use tokio::io::BufReader;
 
 const CHROME_CANDIDATES: &[&str] = &[
@@ -82,7 +82,6 @@ pub struct BrowserSession {
     child: tokio::process::Child,
     ws_url: String,
     cdp_port: i32,
-    _user_data_dir: tempfile::TempDir,
 }
 
 impl BrowserSession {
@@ -96,15 +95,9 @@ impl BrowserSession {
         }
 
         let chrome = find_chrome_binary()?;
-        let user_data_dir =
-            tempfile::tempdir().context("failed to create temp dir for Chrome profile")?;
 
         let mut child = tokio::process::Command::new(&chrome)
             .arg("--remote-debugging-port=0")
-            .arg(format!(
-                "--user-data-dir={}",
-                user_data_dir.path().display()
-            ))
             .arg("--no-first-run")
             .arg("--no-default-browser-check")
             .arg("--disable-gpu")
@@ -138,7 +131,6 @@ impl BrowserSession {
             child,
             ws_url: ws_url.clone(),
             cdp_port,
-            _user_data_dir: user_data_dir,
         };
 
         store_session(session);
