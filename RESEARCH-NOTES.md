@@ -86,6 +86,30 @@
 - `SessionInfo.is_cloud` ← `SessionMetaEntry.is_cloud` (loader.rs:513)
 - Both are available when constructing `SessionPickerInfo`
 
+### V1 Feature Parity Audit (2026-06-07)
+
+**Finding:** All session features have been verified to work for cloud sessions. No gaps exist on the CLI side.
+
+**Verified features (cloud parity confirmed):**
+1. **Transcript recording** — `TranscriptRecorder::new()` at `spawn_and_relay.rs:155` and `session.rs:404` both pass `config.cloud_connection.is_some()` as `is_cloud`
+2. **Session metadata** — `SessionMetaEntry.is_cloud` with `#[serde(skip_serializing_if, default)]` for backward compat
+3. **Server-side resume** — `session.rs:84-254` uses `session/load` when `acp_session_id` available and agent supports it, regardless of cloud/local
+4. **Client-side replay fallback** — `session.rs:255-316` creates fresh session with transcript summary, same for both paths
+5. **Session pickers** — `[cloud]` badge in all three: startup (`helpers.rs:14-15`), `/resume` (`resume_session_picker.rs:46-48,104-109`), `/resume-viewonly` (`viewonly_session_picker.rs:228-230`)
+6. **Cloud disconnect** — `spawn_and_relay.rs:349-361` emits informative error; `event_handling.rs:1132-1136` warns on mode mismatch during resume
+7. **Session release on exit** — `main.rs:596-605` calls `broker.release_session()` with 5s timeout
+8. **MCP registration** — `spawn_and_relay.rs:63-76` registers MCP servers outside the cloud/local branch
+9. **Thread goals** — replayed from transcript identically for both paths
+10. **Ghost snapshots (/undo)** — same infrastructure used for both paths
+11. **Hooks** — all hook fields shared in `AcpBackendConfig`
+
+**Known non-parity (by design, not gaps):**
+- `WireLogger` only available for local spawn (cloud uses WebSocket, no process stdio)
+- `agent_config` is `None` for cloud — enhanced error messages fall through to generic cloud messages
+- No auto-re-acquire of cloud connection on resume — user must launch `nori cloud` again
+
+**No "session manifest" concept exists in the codebase.** The closest equivalent is `SessionMetaEntry` (first JSONL line of transcript files). The user's term maps to this.
+
 ### Prior Research (from sub-worktree)
 
 - cwd fix: Removed hardcoded `/home/sprite/org/workspace` — the broker handles sprite-side cwd

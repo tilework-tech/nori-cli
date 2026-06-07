@@ -77,9 +77,13 @@
 3. **`session/set_config_option` and `session/set_model` forwarding** — Currently stubbed with empty responses in the broker. Need pass-through methods on AcpTunnelManager to forward to underlying AcpClient. No CLI changes needed.
 4. **Reconnection (V2)** — The broker-side plumbing enables reconnection (AcpTunnelManager holds session across CLI disconnects), but the CLI session picker UI is deferred.
 
+### V1 Feature Parity Audit (2026-06-07)
+
+Full audit of all session features confirmed cloud/local parity on the CLI side. All 11 session features (transcript recording, metadata, server-side resume, client-side replay, session pickers with badges, disconnect handling, session release, MCP registration, thread goals, ghost snapshots, hooks) verified working for cloud sessions. No gaps found. See RESEARCH-NOTES.md "V1 Feature Parity Audit" section for details.
+
 ## Verification (2026-06-07)
 
-- All 598 ACP tests pass (including 3 cloud tests in `part6.rs` and 30 broker client tests)
+- All 609 ACP tests pass (including 3 cloud tests in `part6.rs` and 30 broker client tests)
 - All 1343 TUI tests pass (including 6 new cloud badge tests)
 - All 27 CLI tests pass
 - `just fmt` and `just fix` clean — no warnings or errors
