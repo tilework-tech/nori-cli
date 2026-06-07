@@ -92,6 +92,9 @@ pub struct SessionMetaEntry {
     /// The ACP agent's session ID, used for resuming sessions via `session/load`.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub acp_session_id: Option<String>,
+    /// Whether this session was connected to a cloud sprite (via `nori cloud`).
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub is_cloud: bool,
 }
 
 /// Attachment type for user messages (images, files, etc.)
@@ -219,6 +222,7 @@ mod tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: None,
+            is_cloud: false,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
@@ -285,6 +289,7 @@ mod tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: Some("acp-sess-abc123".to_string()),
+            is_cloud: false,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
@@ -336,6 +341,7 @@ mod tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: None,
+            is_cloud: false,
         };
 
         let json = serde_json::to_string(&entry).unwrap();

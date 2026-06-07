@@ -152,6 +152,7 @@ impl AcpBackend {
             Some(config.agent.clone()),
             &config.cli_version,
             Some(session_id.to_string()),
+            config.cloud_connection.is_some(),
         )
         .await
         {

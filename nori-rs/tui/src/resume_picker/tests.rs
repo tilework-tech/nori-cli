@@ -15,6 +15,18 @@ fn metadata(session_id: &str, project_id: &str, cwd: &str, agent: &str) -> Sessi
         started_at: "2025-01-01T00:00:00Z".to_string(),
         cwd: PathBuf::from(cwd),
         agent: Some(agent.to_string()),
+        is_cloud: false,
+    }
+}
+
+fn cloud_metadata(session_id: &str, project_id: &str, cwd: &str, agent: &str) -> SessionMetadata {
+    SessionMetadata {
+        session_id: session_id.to_string(),
+        project_id: project_id.to_string(),
+        started_at: "2025-01-01T00:00:00Z".to_string(),
+        cwd: PathBuf::from(cwd),
+        agent: Some(agent.to_string()),
+        is_cloud: true,
     }
 }
 
@@ -31,6 +43,7 @@ fn row(session_id: &str, cwd: Option<PathBuf>) -> Row {
         updated_at: None,
         cwd,
         git_branch: None,
+        is_cloud: false,
     }
 }
 
@@ -65,6 +78,43 @@ fn block_on_future<F: Future<Output = T>, T>(future: F) -> T {
         .build()
         .unwrap()
         .block_on(future)
+}
+
+#[test]
+fn cloud_sessions_show_cloud_badge_in_preview() {
+    let rows = helpers::rows_from_items(
+        vec![cloud_metadata(
+            "session-cloud",
+            "project-a",
+            "/tmp/a",
+            "codex",
+        )],
+        PathBuf::from("/tmp/nori-home"),
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].is_cloud);
+    assert!(
+        rows[0].preview.contains("[cloud]"),
+        "Cloud session preview should contain [cloud] badge, got: {}",
+        rows[0].preview
+    );
+}
+
+#[test]
+fn local_sessions_do_not_show_cloud_badge_in_preview() {
+    let rows = helpers::rows_from_items(
+        vec![metadata("session-local", "project-a", "/tmp/a", "codex")],
+        PathBuf::from("/tmp/nori-home"),
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].is_cloud);
+    assert!(
+        !rows[0].preview.contains("[cloud]"),
+        "Local session preview should not contain [cloud] badge, got: {}",
+        rows[0].preview
+    );
 }
 
 #[test]
@@ -195,6 +245,7 @@ fn resume_table_snapshot() {
             updated_at: Some(now - Duration::seconds(42)),
             cwd: None,
             git_branch: None,
+            is_cloud: false,
             ..row("session-a", None)
         },
         Row {
@@ -203,6 +254,7 @@ fn resume_table_snapshot() {
             updated_at: Some(now - Duration::minutes(35)),
             cwd: None,
             git_branch: None,
+            is_cloud: false,
             ..row("session-b", None)
         },
     ];

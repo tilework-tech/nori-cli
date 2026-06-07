@@ -242,6 +242,7 @@ mod tests {
                 started_at: "2025-01-27T12:00:00Z".to_string(),
                 user_turn_count: Some(4),
                 first_message_preview: Some("Hello world".to_string()),
+                is_cloud: false,
             },
             SessionPickerInfo {
                 session_id: "sess-2".to_string(),
@@ -249,6 +250,7 @@ mod tests {
                 started_at: "2025-01-26T10:00:00Z".to_string(),
                 user_turn_count: Some(2),
                 first_message_preview: None,
+                is_cloud: false,
             },
         ];
 
@@ -275,6 +277,7 @@ mod tests {
             started_at: "2025-01-27T12:00:00Z".to_string(),
             user_turn_count: None,
             first_message_preview: None,
+            is_cloud: false,
         }];
 
         let params = resume_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
@@ -297,6 +300,7 @@ mod tests {
             Some("claude-code".to_string()),
             "0.1.0",
             None,
+            false,
         )
         .await
         .unwrap();
@@ -308,10 +312,16 @@ mod tests {
         nonmatching_recorder.flush().await.unwrap();
         nonmatching_recorder.shutdown().await.unwrap();
 
-        let matching_recorder =
-            TranscriptRecorder::new(&nori_home, &cwd, Some("codex".to_string()), "0.1.0", None)
-                .await
-                .unwrap();
+        let matching_recorder = TranscriptRecorder::new(
+            &nori_home,
+            &cwd,
+            Some("codex".to_string()),
+            "0.1.0",
+            None,
+            false,
+        )
+        .await
+        .unwrap();
         let matching_session_id = matching_recorder.session_id().to_string();
         matching_recorder
             .record_user_message("msg-matching", "preview me", vec![])

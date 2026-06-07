@@ -778,6 +778,7 @@ mod tests {
             started_at: "2025-01-01T00:00:00Z".to_string(),
             cwd: PathBuf::from("/tmp/project"),
             agent: agent.map(str::to_string),
+            is_cloud: false,
         }
     }
 

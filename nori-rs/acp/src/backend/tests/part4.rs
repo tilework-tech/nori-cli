@@ -1109,6 +1109,7 @@ fn transcript_to_summary_builds_conversation_text() {
             cli_version: "0.1.0".into(),
             git: None,
             acp_session_id: None,
+            is_cloud: false,
         })),
         TranscriptLine::new(TranscriptEntry::User(UserEntry {
             id: "msg-001".into(),
@@ -1167,6 +1168,7 @@ fn transcript_to_summary_preserves_large_content_without_truncation() {
             cli_version: "0.1.0".into(),
             git: None,
             acp_session_id: None,
+            is_cloud: false,
         })),
         TranscriptLine::new(TranscriptEntry::User(UserEntry {
             id: "msg-001".into(),
@@ -1206,6 +1208,7 @@ fn transcript_to_summary_includes_normalized_tool_snapshots() {
             cli_version: "0.1.0".into(),
             git: None,
             acp_session_id: None,
+            is_cloud: false,
         })),
         TranscriptLine::new(TranscriptEntry::ClientEvent(ClientEventEntry {
             event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {

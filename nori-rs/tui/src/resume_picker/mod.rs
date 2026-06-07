@@ -272,4 +272,5 @@ struct Row {
     pub(super) updated_at: Option<DateTime<Utc>>,
     pub(super) cwd: Option<PathBuf>,
     pub(super) git_branch: Option<String>,
+    pub(super) is_cloud: bool,
 }

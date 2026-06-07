@@ -11,7 +11,12 @@ fn metadata_to_row(item: SessionMetadata, nori_home: PathBuf) -> Row {
     let created_at = parse_timestamp_str(&item.started_at);
     let updated_at = created_at;
     let cwd = Some(item.cwd.clone());
-    let preview = item.session_id.clone();
+    let is_cloud = item.is_cloud;
+    let preview = if is_cloud {
+        format!("{} [cloud]", item.session_id)
+    } else {
+        item.session_id.clone()
+    };
 
     Row {
         target: ResumeTarget {
@@ -25,6 +30,7 @@ fn metadata_to_row(item: SessionMetadata, nori_home: PathBuf) -> Row {
         updated_at,
         cwd,
         git_branch: None,
+        is_cloud,
     }
 }
 

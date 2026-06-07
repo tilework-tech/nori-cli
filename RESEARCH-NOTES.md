@@ -48,6 +48,28 @@
 - Cloud sessions don't have local agent config — `get_agent_config()` will fail. Must be skipped for cloud mode.
 - The `is_cloud` flag on `AcpBackend` (set from `config.cloud_connection.is_some()`) already correctly propagates through both spawn and resume paths.
 
+### Cloud Session Metadata Gap (2026-06-07)
+
+**Problem:** Cloud sessions are recorded to local transcripts identically to local sessions — there is no `is_cloud` field in `SessionMetaEntry`. This means:
+- Session pickers cannot distinguish cloud from local sessions
+- Users cannot tell which sessions were cloud-based when browsing `/resume`
+- No warning when attempting to resume a cloud session from a non-cloud `nori` instance
+
+**Scope of change (9 files + tests):**
+1. `transcript/types.rs` — Add `is_cloud: bool` to `SessionMetaEntry` with `#[serde(default)]` for backward compat
+2. `transcript/recorder.rs` — Accept `is_cloud: bool` param in `TranscriptRecorder::new()`, pass to `SessionMetaEntry`
+3. `transcript/loader.rs` — Add `is_cloud: bool` to `SessionMetadata` and `SessionInfo`, propagate from `SessionMetaEntry`
+4. `backend/spawn_and_relay.rs` — Pass `config.cloud_connection.is_some()` to `TranscriptRecorder::new()`
+5. `backend/session.rs` — Same for resume path
+6. `tui/src/nori/viewonly_session_picker.rs` — Add `is_cloud` to `SessionPickerInfo`, update `From<SessionMetadata>` impl
+7. `tui/src/nori/resume_session_picker.rs` — Show `[cloud]` tag in session picker item
+8. `tui/src/resume_picker/` — Surface cloud indicator in startup resume picker
+9. `tui/src/app/event_handling.rs` — When resuming a cloud session without `cloud_connection`, show a non-blocking warning
+
+**UX pattern (from research):** No major CLI tool uses a cloud badge in session pickers yet. Recommendation: append a short `[cloud]` text tag to the session row. Show a non-blocking warning on mode mismatch rather than preventing resume.
+
+**Backward compatibility:** Old transcripts without `is_cloud` will deserialize with `is_cloud: false` via `#[serde(default)]`. No migration needed.
+
 ### Prior Research (from sub-worktree)
 
 - cwd fix: Removed hardcoded `/home/sprite/org/workspace` — the broker handles sprite-side cwd

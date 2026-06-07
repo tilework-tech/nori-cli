@@ -775,7 +775,7 @@ Entry types (from `@/nori-rs/acp/src/transcript/types.rs`):
 
 | Type           | Description                  | Key Fields (JSON)                                                                |
 | -------------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git, acp_session_id |
+| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git, acp_session_id, is_cloud |
 | `user`         | User message                 | id, content, attachments                                                         |
 | `assistant`    | Complete assistant turn      | id, content (blocks), agent                                                      |
 | `tool_call`    | Tool execution start         | call_id, name, input                                                             |
@@ -787,6 +787,8 @@ Entry types (from `@/nori-rs/acp/src/transcript/types.rs`):
 The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which ACP agent (e.g., "claude-code", "codex", "gemini") processed the session or message. The field is named `agent` rather than `model` to emphasize that it identifies the agent software, not a specific model variant.
 
 The `SessionMetaEntry.acp_session_id` field stores the ACP agent's session ID (from `session/new` or `session/load`). This enables the `/resume` command to reconnect to the same agent session. The field is `Option<String>` with `skip_serializing_if = "Option::is_none"` and `default` for backward compatibility with transcripts created before this field existed.
+
+The `SessionMetaEntry.is_cloud` field records whether the session was connected to a cloud sprite (via `nori cloud`). The field is `bool` with `#[serde(skip_serializing_if = "std::ops::Not::not", default)]` so it is omitted from JSON when `false` and defaults to `false` when absent -- following the same backward-compatibility pattern as `acp_session_id`. Cloud detection is determined at recording time by checking `config.cloud_connection.is_some()`. The TUI uses this field to show a `[cloud]` badge in the resume picker and to warn when resuming a cloud session without a cloud connection.
 
 **TranscriptRecorder:**
 
@@ -804,7 +806,7 @@ The `TranscriptRecorder` (in `@/nori-rs/acp/src/transcript/recorder.rs`) handles
 
 Key methods:
 
-- `new()`: Creates recorder, writes session_meta (including optional `acp_session_id`) and project.json
+- `new()`: Creates recorder, writes session_meta (including optional `acp_session_id` and `is_cloud`) and project.json
 - `record_user_message()`: Records user input with optional attachments
 - `record_assistant_message()`: Records complete assistant turn with content blocks
 - `record_tool_call()` / `record_tool_result()`: Records tool execution
@@ -832,13 +834,13 @@ Key methods:
 
 **Forward/backward compatibility:** `load_transcript_from_path()` gracefully skips JSONL lines that fail to deserialize after the first line (session metadata). This means transcripts remain loadable across schema changes -- older binaries skip unknown entry types written by newer versions, and newer binaries skip removed entry types from older transcripts (e.g., the removed `turn_lifecycle` variant). The first line must always be valid `SessionMeta`; a deserialization failure there is a hard error. Skipped lines are logged at `tracing::debug` level. `load_session_meta_from_path()` is unaffected since it only reads the first line.
 
-Large transcript paths avoid full-file reads when building `/resume` and startup `nori resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after picker rows are visible.
+Large transcript paths avoid full-file reads when building `/resume` and startup `nori resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line -- including `is_cloud: bool` -- so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after picker rows are visible. The `SessionInfo` struct also carries `is_cloud` for the full-session-info path.
 
 **ACP Integration:**
 
 The `AcpBackend` automatically:
 
-1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
+1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` and `is_cloud` (derived from `config.cloud_connection.is_some()`) for session resume support. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
 4. Records normalized ACP session events via `record_client_event()` in the update and approval handlers
@@ -1092,7 +1094,7 @@ Deferred replay relay spawned (sends buffered events, then optional goal resume 
 
 **Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is replayed through normalized `ClientEvent::ReplayEntry` items derived from the transcript rather than through `SessionConfigured.initial_messages`. The transcript summary path remains available for context management and `/compact`-style behavior. A `TRANSCRIPT_SUMMARY_WARN_CHARS` threshold (200K chars) logs a warning when summaries are very large; the actual safety net is the agent-side "prompt too long" rejection, which the caller handles gracefully.
 
-A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` so the session can be resumed again in the future.
+A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` and `is_cloud` flag so the session can be resumed again in the future and the TUI can identify cloud sessions in picker UIs.
 
 **Prompt Summary** (`backend/mod.rs`):
 

@@ -277,6 +277,7 @@ mod types_tests {
                 commit_hash: Some("abc123def456".to_string()),
             }),
             acp_session_id: None,
+            is_cloud: false,
         });
 
         let line = TranscriptLine {
@@ -307,6 +308,7 @@ mod types_tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: None,
+            is_cloud: false,
         });
 
         let line = TranscriptLine {

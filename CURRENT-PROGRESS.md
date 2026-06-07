@@ -42,6 +42,22 @@
 
 4. **Documentation** — Updated `acp/docs.md`, `acp/src/broker/docs.md`, `acp/src/connection/docs.md`, and `tui/docs.md` to reflect cloud session resume support.
 
+### Cloud Session `is_cloud` Metadata (2026-06-07)
+
+1. **`is_cloud` field on `SessionMetaEntry`** — Added `is_cloud: bool` to the transcript schema (`types.rs`) with `#[serde(skip_serializing_if = "std::ops::Not::not", default)]` for backward compatibility. Old transcripts deserialize with `is_cloud: false`; `false` values are omitted from serialization.
+
+2. **`TranscriptRecorder` propagation** — `TranscriptRecorder::new()` accepts `is_cloud: bool`. Both backend spawn paths (`spawn_and_relay.rs`, `session.rs`) pass `config.cloud_connection.is_some()` to detect cloud sessions at recording time.
+
+3. **Loader pipeline** — `SessionInfo`, `SessionMetadata`, `SessionPickerInfo`, and `Row` all carry `is_cloud`. Round-trip tests verify cloud metadata survives write→read.
+
+4. **Startup resume picker badge** — `metadata_to_row()` in `resume_picker/helpers.rs` appends `[cloud]` to the preview text for cloud sessions.
+
+5. **In-session resume warning** — `event_handling.rs` shows an info message ("This session was started with nori cloud. Resuming locally — cloud features may not be available.") when resuming a cloud session without a cloud connection.
+
+6. **Tests** — 4 new tests: 2 round-trip tests in `loader.rs`, 2 badge tests in `resume_picker/tests.rs`. All existing tests updated with `is_cloud: false`.
+
+7. **Documentation** — Updated `acp/docs.md`, `acp/src/broker/docs.md`, and `tui/docs.md`.
+
 ## Not Yet Done
 2. **Broker PR** — The broker changes on `cli-cloud-sessions` branch (PR #830) need to be pushed and reviewed.
 3. **`session/set_config_option` and `session/set_model` forwarding** — Currently stubbed with empty responses in the broker. Need pass-through methods on AcpTunnelManager to forward to underlying AcpClient. No CLI changes needed.
