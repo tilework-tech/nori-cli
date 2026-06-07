@@ -87,11 +87,10 @@ fn verify_browser_title(cdp_port: u16, expected_title: &str) -> Result<(), Strin
 fn extract_cdp_port_from_screen(screen: &str) -> Option<u16> {
     for line in screen.lines() {
         let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("CDP endpoint: http://127.0.0.1:") {
-            if let Ok(port) = rest.trim().parse::<u16>() {
+        if let Some(rest) = trimmed.strip_prefix("CDP endpoint: http://127.0.0.1:")
+            && let Ok(port) = rest.trim().parse::<u16>() {
                 return Some(port);
             }
-        }
     }
     None
 }
