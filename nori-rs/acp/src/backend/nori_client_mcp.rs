@@ -395,6 +395,29 @@ impl Drop for NoriClientServer {
     }
 }
 
+pub(super) struct PendingNoriClientServer {
+    server: Option<NoriClientServer>,
+    connected: Arc<AtomicBool>,
+    previous_connected: bool,
+    committed: bool,
+}
+
+impl PendingNoriClientServer {
+    pub(super) async fn commit(mut self, http_server: &Arc<Mutex<Option<NoriClientServer>>>) {
+        *http_server.lock().await = self.server.take();
+        self.committed = true;
+    }
+}
+
+impl Drop for PendingNoriClientServer {
+    fn drop(&mut self) {
+        if !self.committed {
+            self.connected
+                .store(self.previous_connected, Ordering::Relaxed);
+        }
+    }
+}
+
 async fn require_bearer_token(
     State(expected): State<Arc<String>>,
     request: Request<Body>,
@@ -464,15 +487,11 @@ pub(super) async fn register_for_session(
     backend_event_tx: mpsc::Sender<BackendEvent>,
     transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     connected: Arc<AtomicBool>,
-    http_server: Arc<Mutex<Option<NoriClientServer>>>,
-) -> Result<()> {
-    connected.store(false, Ordering::Relaxed);
-
+) -> Result<Option<PendingNoriClientServer>> {
     if !connection.capabilities().mcp_capabilities.http {
-        return Ok(());
+        return Ok(None);
     }
 
-    let mut server = http_server.lock().await;
     let next_server = NoriClientServer::spawn(NoriClientShared::new(
         thread_goal_state,
         backend_event_tx,
@@ -489,10 +508,15 @@ pub(super) async fn register_for_session(
         acp::McpServerHttp::new("nori-client", next_server.url().to_string())
             .headers(vec![next_server.authorization_header()]),
     );
-    *server = Some(next_server);
+    let previous_connected = connected.swap(false, Ordering::Relaxed);
     mcp_servers.push(advertised_server);
 
-    Ok(())
+    Ok(Some(PendingNoriClientServer {
+        server: Some(next_server),
+        connected,
+        previous_connected,
+        committed: false,
+    }))
 }
 
 #[cfg(test)]

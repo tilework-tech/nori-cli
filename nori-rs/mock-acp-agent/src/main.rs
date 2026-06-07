@@ -331,6 +331,16 @@ impl acp::Agent for MockAgent {
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let session_id = self.next_session_id.get();
         self.next_session_id.set(session_id + 1);
+        if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
+            && let Ok(fail_from) = fail_from.parse::<i64>()
+            && i64::try_from(session_id).unwrap_or(i64::MAX) >= fail_from
+        {
+            eprintln!("Mock agent: simulating new_session failure at id={session_id}");
+            return Err(acp::Error::new(
+                -32002,
+                "Mock new_session failure for testing",
+            ));
+        }
         eprintln!("Mock agent: new_session id={}", session_id);
 
         let session_key = session_id.to_string();

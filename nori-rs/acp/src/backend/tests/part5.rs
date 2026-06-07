@@ -1218,6 +1218,74 @@ async fn session_capabilities_refresh_when_nori_client_initializes() {
 
 #[tokio::test]
 #[serial]
+async fn compact_session_failure_keeps_original_nori_client_mcp_server_alive() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _fail_new_session_guard = EnvGuard::set("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let configured = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+    assert!(
+        matches!(configured.msg, EventMsg::SessionConfigured(_)),
+        "expected SessionConfigured event, got: {configured:?}"
+    );
+
+    let initial_session = latest_logged_new_session(&wire_log_dir);
+    let original_nori_client = nori_client_http_server(&initial_session)
+        .expect("session/new should advertise nori-client HTTP MCP server");
+    let original_url = original_nori_client.url.clone();
+    let original_authorization = nori_client_authorization_header(original_nori_client);
+    initialize_nori_client_mcp(&original_url, Some(&original_authorization)).await;
+
+    backend
+        .submit(Op::Compact)
+        .await
+        .expect("Failed to submit Op::Compact");
+
+    loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(10)).await {
+            Some(nori_protocol::ClientEvent::ContextCompacted(_)) => break,
+            Some(_) => {}
+            None => panic!("Timed out waiting for ContextCompacted after compact"),
+        }
+    }
+    assert_eq!(count_logged_requests(&wire_log_dir, "session/new"), 2);
+
+    initialize_nori_client_mcp(&original_url, Some(&original_authorization)).await;
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+}
+
+#[tokio::test]
+#[serial]
 async fn resume_session_advertises_nori_client_and_refreshes_capabilities() {
     use std::time::Duration;
 

@@ -491,19 +491,22 @@ impl AcpBackend {
                     &self.mcp_servers,
                     self.mcp_oauth_credentials_store_mode,
                 );
-                if let Err(err) = nori_client_mcp::register_for_session(
+                let pending_nori_client_server = match nori_client_mcp::register_for_session(
                     &self.connection,
                     &mut mcp_servers,
                     Arc::clone(&self.thread_goal_state),
                     self.backend_event_tx.clone(),
                     Arc::clone(&self.transcript_recorder_cell),
                     Arc::clone(&self.goal_mcp_connected),
-                    Arc::clone(&self.goal_mcp_http_server),
                 )
                 .await
                 {
-                    warn!("Failed to register goal MCP server after compact: {err}");
-                }
+                    Ok(server) => server,
+                    Err(err) => {
+                        warn!("Failed to register goal MCP server after compact: {err}");
+                        None
+                    }
+                };
                 let nori_client_advertised = mcp_servers.iter().any(|server| {
                     matches!(
                         server,
@@ -512,6 +515,9 @@ impl AcpBackend {
                 });
                 match self.connection.create_session(&cwd, mcp_servers).await {
                     Ok(new_session_id) => {
+                        if let Some(server) = pending_nori_client_server {
+                            server.commit(&self.goal_mcp_http_server).await;
+                        }
                         debug!("Created new session after compact: {:?}", new_session_id);
                         *self.session_id.write().await = new_session_id;
                         self.forward_and_record_client_event(
