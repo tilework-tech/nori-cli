@@ -576,7 +576,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             };
             eprintln!("Connected to session {}", session_info.session_id);
 
-            interactive = cloud_cmd.config_overrides;
+            merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
             prepend_config_flags(
                 &mut interactive.config_overrides,
                 root_config_overrides.clone(),
@@ -1042,6 +1042,69 @@ mod tests {
             }
             _ => panic!("expected Skillsets subcommand"),
         }
+    }
+
+    fn finalize_cloud_from_args(args: &[&str]) -> TuiCli {
+        let cli = MultitoolCli::try_parse_from(args).expect("parse");
+        let MultitoolCli {
+            mut interactive,
+            config_overrides: root_overrides,
+            subcommand,
+        } = cli;
+
+        let Subcommand::Cloud(cloud_cmd) = subcommand.expect("cloud present") else {
+            unreachable!()
+        };
+
+        merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
+        prepend_config_flags(&mut interactive.config_overrides, root_overrides);
+        interactive
+    }
+
+    #[test]
+    fn cloud_preserves_root_level_flags() {
+        let interactive = finalize_cloud_from_args(
+            [
+                "nori",
+                "--skip-trust-directory",
+                "cloud",
+                "--agent",
+                "codex",
+            ]
+            .as_ref(),
+        );
+        assert!(
+            interactive.skip_trust_directory,
+            "root --skip-trust-directory should be preserved through cloud subcommand"
+        );
+        assert_eq!(interactive.agent.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn cloud_merges_subcommand_flags_into_root() {
+        let interactive = finalize_cloud_from_args(
+            [
+                "nori",
+                "cloud",
+                "--agent",
+                "codex",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "-C",
+                "/tmp",
+                "--skip-welcome",
+                "--skip-trust-directory",
+            ]
+            .as_ref(),
+        );
+
+        assert_eq!(interactive.agent.as_deref(), Some("codex"));
+        assert!(interactive.dangerously_bypass_approvals_and_sandbox);
+        assert_eq!(
+            interactive.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp"))
+        );
+        assert!(interactive.skip_welcome);
+        assert!(interactive.skip_trust_directory);
     }
 
     #[test]
