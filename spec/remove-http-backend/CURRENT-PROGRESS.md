@@ -1,99 +1,25 @@
 # Current Progress
 
-## Status: Twenty-seventh component removed
-
-### Completed: Remove `CodexErrorInfo` enum and `codex_error_info` field entirely
-
-Removed the now-meaningless `CodexErrorInfo` enum (single `Other` variant) and the dead `codex_error_info: Option<CodexErrorInfo>` field from `ErrorEvent`, `StreamErrorEvent`, and `TurnError`. The field was always set to `None` in production and never read by any consumer.
-
-- `protocol/src/protocol/mod.rs` — Removed `CodexErrorInfo` enum (~8 lines), removed `codex_error_info` field from `ErrorEvent` and `StreamErrorEvent`
-- `app-server-protocol/src/protocol/v2.rs` — Removed `CodexErrorInfo` enum, `From` impl, import, and `codex_error_info` field from `TurnError`
-- `acp/src/backend/session_runtime_driver.rs` — Removed `codex_error_info: None` from ErrorEvent construction
-- `acp/src/backend/submit_and_ops.rs` — Removed `codex_error_info: None` from ErrorEvent construction
-- `acp/src/backend/spawn_and_relay.rs` — Removed `codex_error_info: None` from ErrorEvent construction
-- `tui/src/chatwidget/tests/mod.rs` — Removed unused `CodexErrorInfo` import
-- `tui/src/chatwidget/tests/part4.rs` — Removed `codex_error_info` from test construction
-- `tui/src/chatwidget/tests/part5.rs` — Removed `codex_error_info` from test construction
-
-Backwards compat: Neither `ErrorEvent` nor `StreamErrorEvent` uses `deny_unknown_fields`. Old serialized data with `"codex_error_info": null` or `"codex_error_info": "other"` is silently ignored by serde during deserialization.
-
-**Impact:** ~30 lines of dead protocol scaffolding removed. `ErrorEvent` and `StreamErrorEvent` are now single-field structs (`message: String`). codex-protocol: 20 tests pass. ASP: 17 tests pass. ACP: 16 pass. TUI: 1328 pass. codex-core: 371 unit + 14 integration pass.
-
-### Suggested next steps for future commits
-1. Investigate whether `env_key` and `env_key_instructions` fields on `ModelProviderInfo` are still needed — they have zero runtime readers, but may be conceptually relevant for future ACP provider auth
-2. Investigate whether `ErrorEvent` and `StreamErrorEvent` should be simplified to just `String` (they're now single-field wrapper structs)
-3. Continue removing HTTP-backend remnants from codex-core
-
-### Completed: Remove dead `ModelProviderInfo` fields and `api_key()` method
-
-Removed 5 HTTP-backend-only fields from `ModelProviderInfo` that were deserialized but never read at runtime: `base_url`, `experimental_bearer_token`, `query_params`, `http_headers`, `env_http_headers`. Also removed the dead `api_key()` method (zero callers), the dead `create_oss_provider_with_base_url()` function, and the dead `DEFAULT_LMSTUDIO_PORT`/`DEFAULT_OLLAMA_PORT` constants.
-
-- `core/src/model_provider_info.rs` — Removed 5 fields, `api_key()` method, `create_oss_provider_with_base_url()`, port constants. Simplified `create_oss_provider()` to not take a port parameter.
-- `core/src/lib.rs` — Removed re-exports: `DEFAULT_LMSTUDIO_PORT`, `DEFAULT_OLLAMA_PORT`, `create_oss_provider_with_base_url`
-- `core/src/config/tests/mod.rs` — Removed dead fields from test expected struct
-
-Backwards compat: `ModelProviderInfo` has no `deny_unknown_fields`, so existing config files with removed fields are silently ignored by serde.
-
-**Impact:** ~140 lines of dead HTTP config code removed. codex-core unit tests: 371 pass. Integration tests: 14 pass. E2E: 12 pass. nori binary builds successfully.
-
-### Suggested next steps for future commits
-1. Investigate whether `env_key` and `env_key_instructions` fields on `ModelProviderInfo` are still needed — they have zero runtime readers, but may be conceptually relevant for future ACP provider auth
-2. Remove `ErrorEvent` type if `codex_error_info` is always `None` in ACP — the field exists but is never set to a meaningful value
-3. Continue removing HTTP-backend remnants from codex-core
-
-### Completed: Remove all dead `CodexErrorInfo` variants
-
-Removed 7 dead `CodexErrorInfo` enum variants from both `codex-protocol` and `app-server-protocol`. Only `Other` remains. Added `#[serde(other)]` to `Other` for backwards compatibility with any previously-serialized variant names.
-
-**Variants removed:** `ContextWindowExceeded`, `UsageLimitExceeded`, `HttpConnectionFailed`, `InternalServerError`, `Unauthorized`, `BadRequest`, `SandboxError`, `ResponseTooManyFailedAttempts`
-
-- `protocol/src/protocol/mod.rs` — Removed 7 variants (~15 lines), added `#[serde(other)]` to `Other`
-- `app-server-protocol/src/protocol/v2.rs` — Removed 7 variants (~20 lines), removed `From` conversion arms (~10 lines), removed `codex_error_info_serializes_http_status_code_in_camel_case` test
-
-**Impact:** ~60 lines removed. codex-protocol: 20 tests pass. ASP: 17 tests pass.
-
-### Completed: Remove `chatgpt_base_url`, dead error variants, and stale `wire_api` references
-
-Three surgical removals of HTTP backend remnants:
-
-**1. Removed `chatgpt_base_url` field**
-
-This config field was set during config loading but never read at runtime — it was part of the HTTP backend's ChatGPT API URL configuration.
-
-- `core/src/config/mod.rs` — Removed from `Config` struct (field), `ConfigToml` struct (field), and resolution logic (3 lines)
-- `core/src/config/profile.rs` — Removed from `ConfigProfile` struct (field) and `From<ConfigProfile> for Profile` impl (1 line)
-- `app-server-protocol/src/protocol/v1.rs` — Removed from ASP `Profile` struct (field)
-- `core/src/config/tests/part3.rs`, `part4.rs` — Removed from expected `Config` struct literals (4 sites)
-
-Backwards compat: existing config.toml files with `chatgpt_base_url` are silently ignored by serde (no `deny_unknown_fields`).
-
-**2. Removed dead error variants `ResponseStreamConnectionFailed` and `ResponseStreamDisconnected`**
-
-These `CodexErrorInfo` variants were never constructed or matched — HTTP streaming error types with zero consumers.
-
-- `protocol/src/protocol/mod.rs` — Removed both variants (8 lines)
-- `app-server-protocol/src/protocol/v2.rs` — Removed both ASP variants and two `From` conversion arms (18 lines)
-
-**3. Cleaned up stale `wire_api` references**
-
-Three leftover references after the `WireApi` enum was removed in a prior commit.
-
-- `core/src/config/tests/mod.rs` — Removed `wire_api = "chat"` from test TOML fixture (silently ignored)
-- `tui-pty-e2e/tests/live_acp.rs` — Removed `wire_api = "acp"` from config generator (silently ignored)
-- `tui-pty-e2e/tests/acp_mode.rs` — Updated doc comment: `wire_api = "acp"` → `with a mock agent`
-
-**Documentation updated:**
-- `protocol/docs.md` — Removed stale reference to "legacy Codex backend path"
-- `nori-protocol/docs.md` — Updated `parsed_cmd` description to remove Codex backend reference
-
-**Impact:** ~50 lines of dead config/error/reference code removed. codex-core unit tests: 371 pass. Integration tests: 14 pass. codex-protocol: 20 pass. ASP: 18 pass. nori binary builds successfully.
-
-### Suggested next steps for future commits
-1. Investigate whether `ModelProviderInfo` fields `base_url`, `experimental_bearer_token`, `query_params`, `http_headers`, `env_http_headers` are functionally dead — they were consumed by the HTTP client but may still be read by auth or config validation
-2. Remove `forced_chatgpt_workspace_id` and `forced_login_method` if dead — investigate whether these are still consumed by auth flow
-3. Remove remaining HTTP-specific `CodexErrorInfo` variants (`ContextWindowExceeded`, `UsageLimitExceeded`, `HttpConnectionFailed`, `ResponseTooManyFailedAttempts`) if confirmed dead
+## Status: Twenty-first component removed
 
 ### Completed: Delete orphaned test files from core_test_support
+
+Deleted two orphaned files from `core/tests/common/` that were left behind when the HTTP backend was removed. These files were never compiled (not declared as modules in `lib.rs`) and referenced removed types (`CodexConversation`, `ConversationManager`).
+
+**What was removed:**
+- `core/tests/common/test_codex.rs` (~360 lines) — HTTP backend test harness (`TestCodex`, `TestCodexBuilder`, `ApplyPatchModelOutput`) that created `ConversationManager` instances backed by wiremock HTTP servers
+- `core/tests/common/responses.rs` (~715 lines) — HTTP Responses API mock infrastructure (`ResponseMock`, `ResponsesRequest`, SSE event builders, request capture helpers)
+
+**What was preserved:**
+- `core/tests/common/lib.rs` — shared test utilities (`load_default_config_for_test`, `fs_wait`, `skip_if_sandbox`, `skip_if_no_network` macros)
+- `core/tests/common/Cargo.toml` — crate definition
+
+**Impact:** ~1,075 lines of dead files removed. codex-core unit tests: 360 pass. Integration tests: 14 pass. nori binary builds successfully.
+
+### Suggested next steps for future commits
+1. Remove `chatgpt_base_url` field from `Config`, `ConfigToml`, `ConfigProfile`, and ASP `Profile` — set but never read at runtime
+2. Remove dead error variants `ResponseStreamConnectionFailed` and `ResponseStreamDisconnected` from `CodexErrorInfo` in codex-protocol and app-server-protocol
+3. Clean up stale `wire_api` references in test TOML fixtures and comments
 
 ### Completed: Remove dead HTTP retry/timeout methods from ModelProviderInfo
 
