@@ -25,3 +25,4 @@
 - Decision: when resume replays an active goal into a non-MCP session, emit the existing `/goal is unavailable` notice instead of inventing a separate resume-only warning, so all unavailable goal paths share wording.
 - Decision: treat server-side `session/load` as the resume capability-refresh proof case, because it is the resume path that forwards MCP servers to an existing ACP session.
 - Decision: verify replayed non-MCP active goals through the first post-resume user prompt, because the observable contract is no hidden completion before input and no `<goal_context>` on that prompt.
+- Decision: renamed the ACP wire help resource to `nori://help/acp-wire-logs` so the resource URI stays noun-like while `debug_acp_wire_protocol` carries the workflow. The resource now says ACP wire logging is off by default because logs can grow to many MB per file and may contain sensitive environment variables or command output.

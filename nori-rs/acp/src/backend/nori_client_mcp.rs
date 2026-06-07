@@ -784,9 +784,9 @@ mod tests {
         assert_eq!(
             resource_uris,
             BTreeSet::from([
-                "nori://debug/acp-wire",
                 "nori://context/cli",
                 "nori://context/repo",
+                "nori://help/acp-wire-logs",
                 "nori://help/custom-acp-agent",
             ])
         );
@@ -829,21 +829,23 @@ mod tests {
         };
         assert!(text.contains("[[agents]]"));
         assert!(text.contains("exactly one distribution block"));
-        assert!(text.contains("/agent"));
+        assert!(text.contains("[agents.distribution.uvx]"));
 
-        let wire_debug = client
+        let wire_logs = client
             .read_resource(ReadResourceRequestParam {
-                uri: "nori://debug/acp-wire".to_string(),
+                uri: "nori://help/acp-wire-logs".to_string(),
             })
             .await
-            .expect("client should read ACP wire debug help");
-        let ResourceContents::TextResourceContents { text, .. } = &wire_debug.contents[0] else {
-            panic!("ACP wire debug help should be text");
+            .expect("client should read ACP wire logs help");
+        let ResourceContents::TextResourceContents { text, .. } = &wire_logs.contents[0] else {
+            panic!("ACP wire logs help should be text");
         };
+        assert!(text.contains("off by default"));
+        assert!(text.contains("many MB per log file"));
+        assert!(text.contains("sensitive environment variables or command output"));
         assert!(text.contains("[acp_proxy]"));
         assert!(text.contains("$NORI_HOME/acp-wire"));
-        assert!(text.contains("client_to_agent"));
-        assert!(text.contains("agent_to_client"));
+        assert!(text.contains("direction"));
 
         client.cancel().await.expect("client should shut down");
     }
@@ -907,6 +909,20 @@ mod tests {
         };
         assert!(text.contains("nori://context/repo"));
         assert!(text.contains("Nori CLI"));
+
+        let prompt = client
+            .get_prompt(GetPromptRequestParam {
+                name: "debug_acp_wire_protocol".to_string(),
+                arguments: None,
+            })
+            .await
+            .expect("client should get ACP wire debug prompt");
+        let PromptMessageContent::Text { text } = &prompt.messages[0].content else {
+            panic!("ACP wire debug prompt should be text");
+        };
+        assert!(text.contains("nori://help/acp-wire-logs"));
+        assert!(text.contains("timestamp-ordered request/response timeline"));
+        assert!(text.contains("first divergent protocol boundary"));
 
         client.cancel().await.expect("client should shut down");
     }

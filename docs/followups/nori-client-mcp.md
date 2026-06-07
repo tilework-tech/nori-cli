@@ -50,7 +50,7 @@ The server should expose:
     implementation questions from the repo source.
 - Help resources and prompts:
   - `nori://help/custom-acp-agent` and `register_custom_acp_agent`
-  - `nori://debug/acp-wire` and `debug_acp_wire_protocol`
+  - `nori://help/acp-wire-logs` and `debug_acp_wire_protocol`
   - `answer_nori_cli_question`, which points at `nori://context/repo`
 
 The agent should be able to discover this context through MCP list/read/get

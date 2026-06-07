@@ -46,33 +46,33 @@ const RESOURCE_SPECS: &[NoriResourceSpec] = &[
     },
     NoriResourceSpec {
         uri: "nori://help/custom-acp-agent",
-        name: "Custom ACP agent registration help",
-        description: "Minimal instructions for registering local ACP agents in Nori.",
-        text: "Register custom ACP agents in `~/.nori/cli/config.toml` with `[[agents]]` entries. Each ACP agent communicates over JSON-RPC 2.0 on stdin/stdout. Each entry needs `name`, `slug`, and exactly one distribution block.\n\nFor a local command:\n\n```toml\n[[agents]]\nname = \"ElizACP\"\nslug = \"elizacp\"\n\n[agents.distribution.local]\ncommand = \"elizacp\"\nargs = [\"acp\"]\nenv = { \"EXAMPLE_ENV\" = \"value\" }\n```\n\nPackage-manager distributions use the same shape under `[agents.distribution.npx]`, `[agents.distribution.bunx]`, `[agents.distribution.pipx]`, or `[agents.distribution.uvx]` with `package` and optional `args`. Preserve existing config entries, use `/agent` to switch to the new agent, and verify it starts an ACP session.",
+        name: "Custom ACP agent configuration reference",
+        description: "Reference for configuring local ACP agents in Nori.",
+        text: "Custom ACP agents are configured in `~/.nori/cli/config.toml` with `[[agents]]` entries. Each ACP agent communicates with Nori over JSON-RPC 2.0 on stdin/stdout. Each entry has a `name`, a `slug`, and exactly one distribution block.\n\nLocal command example:\n\n```toml\n[[agents]]\nname = \"ElizACP\"\nslug = \"elizacp\"\n\n[agents.distribution.local]\ncommand = \"elizacp\"\nargs = [\"acp\"]\nenv = { \"EXAMPLE_ENV\" = \"value\" }\n```\n\nPackage-manager distributions use the same shape under `[agents.distribution.npx]`, `[agents.distribution.bunx]`, `[agents.distribution.pipx]`, or `[agents.distribution.uvx]` with `package` and optional `args`.",
     },
     NoriResourceSpec {
-        uri: "nori://debug/acp-wire",
-        name: "ACP wire debugging help",
-        description: "Minimal instructions for debugging underlying agents with ACP JSONL logs.",
-        text: "Enable ACP wire recording when you need to debug the JSON-RPC messages between Nori and the underlying agent.\n\nIn `~/.nori/cli/config.toml`:\n\n```toml\n[acp_proxy]\nenabled = true\n```\n\nYou can also toggle recording for future agent subprocesses from the `/agent` picker with `Shift-Tab`. New ACP subprocesses write JSONL files under `$NORI_HOME/acp-wire` or `~/.nori/cli/acp-wire`; filenames are `{timestamp_ms}-{child_pid}-{agent_slug}.jsonl`. Each record includes `ts_ms`, `direction`, `agent`, `child_pid`, and either parsed `message` or `raw_line` plus `parse_error`. Debug by sorting records by timestamp, following `client_to_agent` and `agent_to_client` pairs, and identifying the first request, response, or notification where the agent and Nori diverge.",
+        uri: "nori://help/acp-wire-logs",
+        name: "ACP wire logs reference",
+        description: "Reference for enabling and reading ACP JSON-RPC wire logs.",
+        text: "ACP wire recording captures JSON-RPC messages between Nori and the underlying ACP agent. It is off by default because recordings can grow to many MB per log file and may contain sensitive environment variables or command output.\n\nEnable recording in `~/.nori/cli/config.toml`:\n\n```toml\n[acp_proxy]\nenabled = true\n```\n\nRecording can also be toggled for future agent subprocesses from the `/agent` picker with `Shift-Tab`. New ACP subprocesses write JSONL files under `$NORI_HOME/acp-wire` or `~/.nori/cli/acp-wire`. Filenames use `{timestamp_ms}-{child_pid}-{agent_slug}.jsonl`.\n\nEach record includes `ts_ms`, `direction`, `agent`, `child_pid`, and either parsed `message` or `raw_line` plus `parse_error`.",
     },
 ];
 
 const PROMPT_SPECS: &[NoriPromptSpec] = &[
     NoriPromptSpec {
         name: "register_custom_acp_agent",
-        description: "Register or try a custom ACP agent in Nori.",
-        text: "Read nori://help/custom-acp-agent, then help the user register or verify the requested custom ACP agent. Preserve existing configuration and verify the agent can start over ACP.",
+        description: "Register or verify a custom ACP agent in Nori.",
+        text: "Read nori://help/custom-acp-agent. Help the user add or verify the requested ACP agent configuration. Preserve unrelated config entries, avoid changing third-party service state, and verify the agent can start an ACP session before considering the task complete.",
     },
     NoriPromptSpec {
         name: "debug_acp_wire_protocol",
-        description: "Debug an underlying ACP agent with wire protocol JSONL.",
-        text: "Read nori://debug/acp-wire, then use the ACP wire JSONL to build a request/response timeline. Identify the first divergent protocol message before proposing a fix.",
+        description: "Debug an ACP agent using Nori wire logs.",
+        text: "Read nori://help/acp-wire-logs. Use the ACP JSONL records to build a timestamp-ordered request/response timeline. Compare `client_to_agent` and `agent_to_client` messages, identify the first divergent protocol boundary, and only then propose a fix.",
     },
     NoriPromptSpec {
         name: "answer_nori_cli_question",
         description: "Answer a Nori CLI implementation question from curated source context.",
-        text: "Read nori://context/repo, then inspect the relevant Nori CLI source files before answering. Cite the concrete files or modules you used.",
+        text: "Read nori://context/repo. Inspect the smallest relevant Nori CLI source area before answering, and cite the concrete files or modules used.",
     },
 ];
 
