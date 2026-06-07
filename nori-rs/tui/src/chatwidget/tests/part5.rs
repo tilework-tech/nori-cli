@@ -1,4 +1,5 @@
 use super::*;
+use pretty_assertions::assert_eq;
 
 /// ACP agents may stream reasoning before producing their final answer.
 /// This test verifies reasoning + answer rendering from an ACP agent.
@@ -894,4 +895,44 @@ fn exec_end_not_deferred_during_streaming() {
         tool_pos.unwrap(),
         done_pos.unwrap(),
     );
+}
+
+#[test]
+fn repeated_agent_messages_after_tool_use_share_one_separator() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_codex_event(Event {
+        id: "turn-1".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+    drain_insert_history(&mut rx);
+
+    let begin_ev = begin_exec(&mut chat, "call-1", "cargo test");
+    end_exec(&mut chat, begin_ev, "ok\n", "", 0);
+
+    for message in ["The", "suite is", "now in the ACP backend"] {
+        chat.handle_codex_event(Event {
+            id: "turn-1".into(),
+            msg: EventMsg::AgentMessage(AgentMessageEvent {
+                message: message.to_string(),
+            }),
+        });
+    }
+
+    chat.handle_codex_event(Event {
+        id: "turn-1".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    let rendered = drain_insert_history(&mut rx)
+        .into_iter()
+        .map(|lines| lines_to_single_string(&lines))
+        .collect::<Vec<_>>()
+        .join("");
+
+    assert_eq!(rendered.matches("Worked for").count(), 1, "{rendered}");
 }

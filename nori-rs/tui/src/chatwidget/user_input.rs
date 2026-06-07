@@ -39,7 +39,9 @@ impl ChatWidget {
             // Always flush active cell before inserting new history to preserve
             // chronological ordering.
             self.flush_active_cell();
-            self.needs_final_message_separator = true;
+            if !cell.as_any().is::<history_cell::AgentMessageCell>() {
+                self.needs_final_message_separator = true;
+            }
         }
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
     }
