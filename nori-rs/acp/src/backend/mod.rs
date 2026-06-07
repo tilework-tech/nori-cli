@@ -347,6 +347,7 @@ pub struct AcpBackend {
     cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
+pub mod browser_cdp;
 #[cfg(unix)]
 pub mod browser_session;
 mod helpers;

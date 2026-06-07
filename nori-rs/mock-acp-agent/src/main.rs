@@ -874,7 +874,9 @@ impl acp::Agent for MockAgent {
                 .collect::<Vec<_>>()
                 .join("\n");
 
-            if let Some(cdp_port) = browser_modify::extract_cdp_port_from_prompt(&user_text) {
+            if let Some(cdp_port) =
+                nori_acp::backend::browser_cdp::extract_cdp_port_from_prompt(&user_text)
+            {
                 eprintln!("Mock agent: detected CDP port {cdp_port}, modifying browser");
 
                 let new_title = "NORI_BROWSER_TEST";

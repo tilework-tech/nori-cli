@@ -17,7 +17,7 @@ use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 
 /// Verify Chrome is reachable and the page title was modified.
-fn verify_browser_title(cdp_port: u16, expected_title: &str) -> Result<(), String> {
+fn verify_browser_title(cdp_port: i32, expected_title: &str) -> Result<(), String> {
     let agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(5)))
         .build()
@@ -82,20 +82,6 @@ fn verify_browser_title(cdp_port: u16, expected_title: &str) -> Result<(), Strin
     }
 }
 
-/// Extract the CDP port from the TUI screen contents.
-/// Looks for "CDP endpoint: http://127.0.0.1:PORT" in the browser session prompt.
-fn extract_cdp_port_from_screen(screen: &str) -> Option<u16> {
-    for line in screen.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("CDP endpoint: http://127.0.0.1:") {
-            if let Ok(port) = rest.trim().parse::<u16>() {
-                return Some(port);
-            }
-        }
-    }
-    None
-}
-
 /// Full end-to-end test: start app → launch browser → agent modifies page → verify HTML changed.
 ///
 /// This test is ignored by default because it requires Chrome and a display server.
@@ -131,7 +117,7 @@ fn browser_command_agent_modifies_page() {
 
     // Extract the CDP port from the screen
     let screen = session.screen_contents();
-    let cdp_port = extract_cdp_port_from_screen(&screen)
+    let cdp_port = nori_acp::backend::browser_cdp::extract_cdp_port_from_prompt(&screen)
         .unwrap_or_else(|| panic!("could not extract CDP port from screen:\n{screen}"));
 
     eprintln!("E2E test: detected CDP port {cdp_port}");

@@ -16,6 +16,7 @@ owo-colors = { workspace = true }
 libc = "0.2"
 
 [dev-dependencies]
+nori-acp = { workspace = true }
 tempfile = "3"
 regex = "1"
 pretty_assertions = { workspace = true }

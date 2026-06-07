@@ -2,18 +2,6 @@ use std::time::Duration;
 
 use serde_json::json;
 
-/// Extract the CDP HTTP port from a prompt text containing browser session info.
-pub fn extract_cdp_port_from_prompt(prompt_text: &str) -> Option<u16> {
-    for line in prompt_text.lines() {
-        if let Some(rest) = line.strip_prefix("CDP endpoint: http://127.0.0.1:")
-            && let Ok(port) = rest.trim().parse::<u16>()
-        {
-            return Some(port);
-        }
-    }
-    None
-}
-
 fn http_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(5)))
@@ -23,7 +11,7 @@ fn http_agent() -> ureq::Agent {
 
 /// Connect to Chrome via CDP and change document.title.
 /// Returns Ok(new_title) on success.
-pub fn modify_browser_title(cdp_port: u16, new_title: &str) -> Result<String, String> {
+pub fn modify_browser_title(cdp_port: i32, new_title: &str) -> Result<String, String> {
     let targets_url = format!("http://127.0.0.1:{cdp_port}/json");
     let agent = http_agent();
 
