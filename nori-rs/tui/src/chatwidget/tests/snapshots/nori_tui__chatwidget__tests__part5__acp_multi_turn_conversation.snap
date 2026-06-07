@@ -4,8 +4,6 @@ expression: combined
 ---
 • I can help you refactor that function. First, let me analyze the current
   implementation.
-─ Worked for 0s ────────────────────────────────────────────────────────────────
-
 • Here's the refactored version:
   
   fn process(data: &str) -> Result<String, Error> {
