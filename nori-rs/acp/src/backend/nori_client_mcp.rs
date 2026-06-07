@@ -788,8 +788,6 @@ mod tests {
                 "nori://context/cli",
                 "nori://context/repo",
                 "nori://help/custom-acp-agent",
-                "nori://skills/workflows",
-                "nori://source/nori-cli-map",
             ])
         );
 
@@ -803,8 +801,49 @@ mod tests {
         let ResourceContents::TextResourceContents { text, .. } = &context.contents[0] else {
             panic!("CLI context should be text");
         };
-        assert!(text.contains("Nori CLI over ACP"));
+        assert!(text.contains("terminal harness for agent sessions"));
+        assert!(text.contains("internal-only, backend-owned MCP server"));
         assert!(text.contains("https://github.com/tilework-tech/nori-cli"));
+
+        let repo = client
+            .read_resource(ReadResourceRequestParam {
+                uri: "nori://context/repo".to_string(),
+            })
+            .await
+            .expect("client should read repo source context");
+        let ResourceContents::TextResourceContents { text, .. } = &repo.contents[0] else {
+            panic!("repo context should be text");
+        };
+        assert!(text.contains("answering Nori CLI questions"));
+        assert!(text.contains("nori-rs/acp"));
+        assert!(text.contains("nori-rs/tui"));
+
+        let custom_agent = client
+            .read_resource(ReadResourceRequestParam {
+                uri: "nori://help/custom-acp-agent".to_string(),
+            })
+            .await
+            .expect("client should read custom ACP agent help");
+        let ResourceContents::TextResourceContents { text, .. } = &custom_agent.contents[0] else {
+            panic!("custom ACP agent help should be text");
+        };
+        assert!(text.contains("[[agents]]"));
+        assert!(text.contains("exactly one distribution block"));
+        assert!(text.contains("/agent"));
+
+        let wire_debug = client
+            .read_resource(ReadResourceRequestParam {
+                uri: "nori://debug/acp-wire".to_string(),
+            })
+            .await
+            .expect("client should read ACP wire debug help");
+        let ResourceContents::TextResourceContents { text, .. } = &wire_debug.contents[0] else {
+            panic!("ACP wire debug help should be text");
+        };
+        assert!(text.contains("[acp_proxy]"));
+        assert!(text.contains("$NORI_HOME/acp-wire"));
+        assert!(text.contains("client_to_agent"));
+        assert!(text.contains("agent_to_client"));
 
         client.cancel().await.expect("client should shut down");
     }
@@ -851,7 +890,6 @@ mod tests {
             BTreeSet::from([
                 "answer_nori_cli_question",
                 "debug_acp_wire_protocol",
-                "choose_nori_workflow",
                 "register_custom_acp_agent",
             ])
         );
@@ -867,7 +905,7 @@ mod tests {
         let PromptMessageContent::Text { text } = &prompt.messages[0].content else {
             panic!("source Q&A prompt should be text");
         };
-        assert!(text.contains("nori://source/nori-cli-map"));
+        assert!(text.contains("nori://context/repo"));
         assert!(text.contains("Nori CLI"));
 
         client.cancel().await.expect("client should shut down");

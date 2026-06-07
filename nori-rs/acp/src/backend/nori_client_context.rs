@@ -1,7 +1,7 @@
 //! Curated read-only context exposed by the backend-owned `nori-client` MCP server.
 //!
 //! This module intentionally serves a fixed catalog. It is not a filesystem API;
-//! the ACP agent receives only Nori-owned harness facts and reusable workflows.
+//! the ACP agent receives only Nori-owned harness facts and source guidance.
 
 use rmcp::ErrorData as McpError;
 use rmcp::model::AnnotateAble;
@@ -36,37 +36,25 @@ const RESOURCE_SPECS: &[NoriResourceSpec] = &[
         uri: "nori://context/cli",
         name: "Nori CLI operating context",
         description: "Concise facts about the current Nori CLI ACP harness.",
-        text: "You are operating inside Nori CLI over ACP.\n\nnori-client is Nori's backend-owned, harness-side MCP channel for structured client context and Nori-owned live state. The open source implementation lives at https://github.com/tilework-tech/nori-cli.",
+        text: "You are running inside Nori CLI, the terminal harness for agent sessions and user interaction. ACP is the JSON-RPC wire protocol between Nori and the underlying agent, and implementation details live in the Nori CLI source repo at https://github.com/tilework-tech/nori-cli. nori-client is an internal-only, backend-owned MCP server for common harness-owned tools and curated context; it is not a user-configured MCP server.",
     },
     NoriResourceSpec {
         uri: "nori://context/repo",
-        name: "Nori CLI repo source map",
-        description: "Compact map of the Nori CLI source areas an agent most often needs.",
-        text: "Nori CLI source map:\n\n- nori-rs/acp: ACP backend, session runtime, agent connection, nori-client MCP server, transcript handling.\n- nori-rs/tui: terminal UI, slash commands, composer, popups, session rendering.\n- nori-rs/nori-protocol and nori-rs/protocol: client events, ops, session runtime views, shared protocol types.\n- nori-rs/acp/src/config and registry modules: agent registry and config normalization.\n- nori-rs/rmcp-client and nori-rs/mcp-types: external MCP client support and MCP wire types.\n- docs/followups: durable follow-up behavior specs, including nori-client MCP.",
+        name: "Answering with Nori CLI source",
+        description: "Compact source map for answering Nori CLI implementation questions.",
+        text: "Use this resource for answering Nori CLI questions from source instead of guessing.\n\nStart in the smallest relevant area:\n\n- nori-rs/acp: ACP backend, session runtime, agent connection, nori-client MCP server, transcript handling.\n- nori-rs/tui: terminal UI, slash commands, composer, popups, session rendering.\n- nori-rs/nori-protocol and nori-rs/protocol: client events, ops, session runtime views, shared protocol types.\n- nori-rs/acp/src/config: Nori config, custom agent definitions, and agent registry normalization.\n- nori-rs/rmcp-client and nori-rs/mcp-types: external MCP client support and MCP wire types.\n- docs/followups: durable behavior specs and follow-up design notes.\n\nCite the concrete source files you used.",
     },
     NoriResourceSpec {
         uri: "nori://help/custom-acp-agent",
         name: "Custom ACP agent registration help",
-        description: "Workflow guidance for registering local ACP agents in Nori.",
-        text: "Use this workflow when the user wants to register or try a custom ACP agent in Nori.\n\nCheck the requested agent command, add or update the Nori agent config, preserve existing user config, and verify the agent can start an ACP session. Prefer local commands the user explicitly chose. Do not mutate third-party API state.",
+        description: "Minimal instructions for registering local ACP agents in Nori.",
+        text: "Register custom ACP agents in `~/.nori/cli/config.toml` with `[[agents]]` entries. Each ACP agent communicates over JSON-RPC 2.0 on stdin/stdout. Each entry needs `name`, `slug`, and exactly one distribution block.\n\nFor a local command:\n\n```toml\n[[agents]]\nname = \"ElizACP\"\nslug = \"elizacp\"\n\n[agents.distribution.local]\ncommand = \"elizacp\"\nargs = [\"acp\"]\nenv = { \"EXAMPLE_ENV\" = \"value\" }\n```\n\nPackage-manager distributions use the same shape under `[agents.distribution.npx]`, `[agents.distribution.bunx]`, `[agents.distribution.pipx]`, or `[agents.distribution.uvx]` with `package` and optional `args`. Preserve existing config entries, use `/agent` to switch to the new agent, and verify it starts an ACP session.",
     },
     NoriResourceSpec {
         uri: "nori://debug/acp-wire",
         name: "ACP wire debugging help",
-        description: "Workflow guidance for debugging ACP protocol traffic and session issues.",
-        text: "Use this workflow when diagnosing ACP wire, session, or connectivity behavior.\n\nBuild an evidence timeline from broker logs, worker logs, ACP JSON-RPC messages, backend events, and TUI-visible symptoms. Identify the first divergent boundary before changing code, then verify the fix at the protocol boundary.",
-    },
-    NoriResourceSpec {
-        uri: "nori://source/nori-cli-map",
-        name: "Nori CLI source Q&A map",
-        description: "Curated source map for answering Nori CLI implementation questions.",
-        text: "For Nori CLI implementation questions, start from the relevant source area instead of guessing:\n\n- ACP backend: nori-rs/acp/src/backend\n- ACP connection and capability forwarding: nori-rs/acp/src/connection\n- TUI command handling and rendering: nori-rs/tui/src\n- Shared protocol events and ops: nori-rs/protocol/src and nori-rs/nori-protocol/src\n- MCP client support: nori-rs/rmcp-client\n\nStable public source reference: https://github.com/tilework-tech/nori-cli.",
-    },
-    NoriResourceSpec {
-        uri: "nori://skills/workflows",
-        name: "Nori workflow chooser",
-        description: "Guidance for choosing Nori-specific workflows and skills.",
-        text: "Choose Nori workflows from the task boundary:\n\n- For code changes, use test-driven development and update noridocs when architecture changes.\n- For bugs, use systematic debugging and trace back to the first invalid state.\n- For TUI behavior, verify through focused tests and end-to-end TUI driving when practical.\n- For ACP agent setup, use the custom ACP agent registration workflow.\n- For ACP connectivity, use the ACP wire debugging workflow.",
+        description: "Minimal instructions for debugging underlying agents with ACP JSONL logs.",
+        text: "Enable ACP wire recording when you need to debug the JSON-RPC messages between Nori and the underlying agent.\n\nIn `~/.nori/cli/config.toml`:\n\n```toml\n[acp_proxy]\nenabled = true\n```\n\nYou can also toggle recording for future agent subprocesses from the `/agent` picker with `Shift-Tab`. New ACP subprocesses write JSONL files under `$NORI_HOME/acp-wire` or `~/.nori/cli/acp-wire`; filenames are `{timestamp_ms}-{child_pid}-{agent_slug}.jsonl`. Each record includes `ts_ms`, `direction`, `agent`, `child_pid`, and either parsed `message` or `raw_line` plus `parse_error`. Debug by sorting records by timestamp, following `client_to_agent` and `agent_to_client` pairs, and identifying the first request, response, or notification where the agent and Nori diverge.",
     },
 ];
 
@@ -78,18 +66,13 @@ const PROMPT_SPECS: &[NoriPromptSpec] = &[
     },
     NoriPromptSpec {
         name: "debug_acp_wire_protocol",
-        description: "Debug ACP wire protocol or session connectivity behavior.",
-        text: "Read nori://debug/acp-wire, then build an evidence-backed timeline of ACP messages, backend events, and user-visible symptoms. Identify the first divergent boundary before proposing a fix.",
+        description: "Debug an underlying ACP agent with wire protocol JSONL.",
+        text: "Read nori://debug/acp-wire, then use the ACP wire JSONL to build a request/response timeline. Identify the first divergent protocol message before proposing a fix.",
     },
     NoriPromptSpec {
         name: "answer_nori_cli_question",
         description: "Answer a Nori CLI implementation question from curated source context.",
-        text: "Read nori://source/nori-cli-map, then inspect the relevant Nori CLI source files before answering. Cite the concrete files or modules you used.",
-    },
-    NoriPromptSpec {
-        name: "choose_nori_workflow",
-        description: "Choose the right Nori workflow for the current task.",
-        text: "Read nori://skills/workflows, then select the smallest relevant workflow for the user's task. Explain any uncertainty before proceeding.",
+        text: "Read nori://context/repo, then inspect the relevant Nori CLI source files before answering. Cite the concrete files or modules you used.",
     },
 ];
 
