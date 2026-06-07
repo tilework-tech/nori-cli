@@ -64,19 +64,23 @@ impl AcpBackend {
             &config.mcp_servers,
             config.mcp_oauth_credentials_store_mode,
         );
-        nori_client_mcp::register_for_session(
+        let pending_nori_client_server = nori_client_mcp::register_for_session(
             &connection,
             &mut mcp_servers,
             Arc::clone(&thread_goal_state),
             backend_event_tx.clone(),
             Arc::clone(&transcript_recorder_cell),
             Arc::clone(&goal_mcp_connected),
-            Arc::clone(&goal_mcp_http_server),
         )
         .await?;
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
-            Ok(id) => id,
+            Ok(id) => {
+                if let Some(server) = pending_nori_client_server {
+                    server.commit(&goal_mcp_http_server).await;
+                }
+                id
+            }
             Err(e) => {
                 // Get the full error chain to check for nested auth errors
                 let error_string = format!("{e:?}");
@@ -122,7 +126,8 @@ impl AcpBackend {
             }
         }
 
-        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
+        let capabilities_update =
+            nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
         let event_rx = connection.take_event_receiver();
 
         let connection = Arc::new(connection);

@@ -327,10 +327,20 @@ impl acp::Agent for MockAgent {
 
     async fn new_session(
         &self,
-        _arguments: acp::NewSessionRequest,
+        arguments: acp::NewSessionRequest,
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let session_id = self.next_session_id.get();
         self.next_session_id.set(session_id + 1);
+        if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
+            && let Ok(fail_from) = fail_from.parse::<i64>()
+            && i64::try_from(session_id).unwrap_or(i64::MAX) >= fail_from
+        {
+            eprintln!("Mock agent: simulating new_session failure at id={session_id}");
+            return Err(acp::Error::new(
+                -32002,
+                "Mock new_session failure for testing",
+            ));
+        }
         eprintln!("Mock agent: new_session id={}", session_id);
 
         let session_key = session_id.to_string();
@@ -338,6 +348,13 @@ impl acp::Agent for MockAgent {
         self.session_configs
             .borrow_mut()
             .insert(session_key.clone(), session_config.clone());
+        if std::env::var("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION").is_ok()
+            && let Err(error) = initialize_advertised_nori_client(&arguments.mcp_servers).await
+        {
+            eprintln!(
+                "Mock agent: failed to initialize advertised nori-client MCP server: {error}"
+            );
+        }
 
         Ok(
             acp::NewSessionResponse::new(acp::SessionId::new(session_key))
@@ -1431,6 +1448,63 @@ impl acp::Agent for MockAgent {
     async fn ext_notification(&self, _args: acp::ExtNotification) -> Result<(), acp::Error> {
         Ok(())
     }
+}
+
+async fn initialize_advertised_nori_client(
+    mcp_servers: &[acp::McpServer],
+) -> Result<(), Box<dyn std::error::Error>> {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    let Some(http) = mcp_servers.iter().find_map(|server| match server {
+        acp::McpServer::Http(http) if http.name == "nori-client" => Some(http),
+        _ => None,
+    }) else {
+        return Ok(());
+    };
+    let authorization = http
+        .headers
+        .iter()
+        .find(|header| header.name == "Authorization")
+        .map(|header| format!("Authorization: {}\r\n", header.value))
+        .unwrap_or_default();
+    let without_scheme = http
+        .url
+        .strip_prefix("http://")
+        .ok_or("nori-client URL should use plain HTTP")?;
+    let (host_port, path) = without_scheme
+        .split_once('/')
+        .ok_or("nori-client URL should include a path")?;
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "mock-acp-agent", "version": "0" }
+        }
+    })
+    .to_string();
+    let request = format!(
+        "POST /{path} HTTP/1.1\r\n\
+Host: {host_port}\r\n\
+Accept: application/json, text/event-stream\r\n\
+Content-Type: application/json\r\n\
+{authorization}\
+Content-Length: {}\r\n\
+Connection: close\r\n\r\n\
+{body}",
+        body.len()
+    );
+    let mut stream = tokio::net::TcpStream::connect(host_port).await?;
+    stream.write_all(request.as_bytes()).await?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await?;
+    if !response.contains("200 OK") {
+        return Err(format!("nori-client initialize failed: {response}").into());
+    }
+    Ok(())
 }
 
 #[tokio::main(flavor = "current_thread")]
