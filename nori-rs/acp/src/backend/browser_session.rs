@@ -36,6 +36,18 @@ fn store_session(session: BrowserSession) {
     }
 }
 
+/// Terminate the active browser session, if any, and remove its profile dir.
+///
+/// The session is owned by a process-lifetime `static`, which Rust never drops
+/// at exit, so the nori shutdown path must call this explicitly. Dropping the
+/// taken session kills Chrome (`kill_on_drop`) and removes the temp profile
+/// (`TempDir`). A no-op when no session is active; safe to call more than once.
+pub fn shutdown_active_session() {
+    if let Ok(mut guard) = ACTIVE_SESSION.lock() {
+        guard.take();
+    }
+}
+
 /// Parses the CDP WebSocket URL from a line of Chrome's stderr output.
 ///
 /// Chrome prints a line like:
@@ -79,9 +91,13 @@ pub fn find_chrome_binary() -> Result<PathBuf> {
 
 /// A running Chrome browser session with CDP enabled.
 pub struct BrowserSession {
-    child: tokio::process::Child,
+    /// Held only for its `kill_on_drop` side effect: dropping it kills Chrome.
+    _child: tokio::process::Child,
     ws_url: String,
     cdp_port: i32,
+    /// Throwaway Chrome profile. Declared last so it is removed only after the
+    /// child has been dropped (and thus killed) above it.
+    _user_data_dir: tempfile::TempDir,
 }
 
 impl BrowserSession {
@@ -96,8 +112,18 @@ impl BrowserSession {
 
         let chrome = find_chrome_binary()?;
 
+        // Launch against a throwaway profile so we never attach to (or disturb)
+        // the user's already-running Chrome; reusing the default profile would
+        // hand off to that instance and never expose CDP on our debugging port.
+        let user_data_dir =
+            tempfile::tempdir().context("failed to create temporary Chrome profile dir")?;
+
         let mut child = tokio::process::Command::new(&chrome)
             .arg("--remote-debugging-port=0")
+            .arg(format!(
+                "--user-data-dir={}",
+                user_data_dir.path().display()
+            ))
             .arg("--no-first-run")
             .arg("--no-default-browser-check")
             .arg("--disable-gpu")
@@ -128,9 +154,10 @@ impl BrowserSession {
         tracing::info!("Browser launched: cdp_port={cdp_port} ws_url={ws_url}");
 
         let session = Self {
-            child,
+            _child: child,
             ws_url: ws_url.clone(),
             cdp_port,
+            _user_data_dir: user_data_dir,
         };
 
         store_session(session);
@@ -147,16 +174,6 @@ impl BrowserSession {
             }
         }
         bail!("Chrome exited before printing CDP WebSocket URL")
-    }
-}
-
-impl Drop for BrowserSession {
-    fn drop(&mut self) {
-        if let Some(id) = self.child.id() {
-            unsafe {
-                libc::kill(id as i32, libc::SIGTERM);
-            }
-        }
     }
 }
 

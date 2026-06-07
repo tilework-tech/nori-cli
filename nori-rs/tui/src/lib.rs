@@ -622,6 +622,11 @@ async fn run_ratatui_app(
     )
     .await;
 
+    // Tear down any /browser Chrome session before we exit: it lives in a
+    // process-lifetime static that Rust never drops at exit.
+    #[cfg(unix)]
+    nori_acp::backend::browser_session::shutdown_active_session();
+
     restore();
     // Mark the end of the recorded session.
     session_log::log_session_end();

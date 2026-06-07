@@ -52,6 +52,7 @@ which = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
 filetime = "0.2"

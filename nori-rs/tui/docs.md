@@ -483,12 +483,12 @@ The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` 
 
 The `/browser` slash command launches a headed Chrome browser with CDP (Chrome DevTools Protocol) remote debugging enabled, then injects the connection details into the conversation so the agent can script the browser via its existing shell tool. It is not available during a task (`available_during_task = false`). The flow:
 
-1. `SlashCommand::Browser` in `key_handling.rs` shows an info message ("Launching browser...") and spawns a `tokio` task calling `nori_acp::backend::browser_session::BrowserSession::launch()` (see `@/nori-rs/acp/docs.md`)
+1. `SlashCommand::Browser` in `key_handling.rs` shows an info message ("Launching browser...") and spawns a `tokio` task calling `nori_acp::backend::browser_session::BrowserSession::launch_and_store()` (see `@/nori-rs/acp/docs.md`)
 2. On success, the task posts `AppEvent::BrowserLaunched { ws_url, cdp_port }`. On failure, it posts `AppEvent::BrowserLaunchFailed(error_string)`
 3. The `BrowserLaunched` handler in `app/event_handling.rs` calls `browser_session::compose_agent_prompt()` to build a structured message containing the CDP HTTP endpoint and WebSocket URL, then submits it as a user message via `submit_user_message_text()`
 4. The agent receives the CDP connection details and can use Playwright, Puppeteer, or raw CDP commands via its shell tool to control the browser
 
-The `BrowserSession` is intentionally `std::mem::forget`'d after launch so Chrome stays alive for the duration of the nori session. The `BrowserSession::Drop` impl sends SIGTERM to the Chrome process, which fires when the nori process exits. This is distinct from `/browse` which opens a terminal file manager.
+`launch_and_store()` keeps Chrome alive by storing the `BrowserSession` in a process-lifetime `static` in the ACP backend, so it outlives the spawning task and a second `/browser` reuses it. On exit, `run_ratatui_app` (`lib.rs`) calls `browser_session::shutdown_active_session()` to kill Chrome and remove its temp profile (see the lifecycle and shutdown notes, including the remaining hard-kill limitation, in `@/nori-rs/acp/docs.md`). This is distinct from `/browse` which opens a terminal file manager.
 
 The `/logout` command is only available when the `login` feature is enabled. The `/settings` command requires the `nori-config` feature.
 
