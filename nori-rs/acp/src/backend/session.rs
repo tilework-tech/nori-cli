@@ -311,7 +311,8 @@ impl AcpBackend {
                 thread_goal::ThreadGoalState::from_replay_events(&replay_events_for_goal_state);
         }
 
-        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
+        let capabilities_update =
+            nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let session_driver = Arc::new(Mutex::new(session_driver_state));

@@ -126,7 +126,8 @@ impl AcpBackend {
             }
         }
 
-        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
+        let capabilities_update =
+            nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
         let event_rx = connection.take_event_receiver();
 
         let connection = Arc::new(connection);

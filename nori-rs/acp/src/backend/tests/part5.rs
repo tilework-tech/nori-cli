@@ -1286,6 +1286,69 @@ async fn compact_session_failure_keeps_original_nori_client_mcp_server_alive() {
 
 #[tokio::test]
 #[serial]
+async fn eager_nori_client_initialization_does_not_regress_capabilities() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _eager_guard = EnvGuard::set("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let mut updates = Vec::new();
+    let start = std::time::Instant::now();
+    let mut saw_configured = false;
+    while start.elapsed() < Duration::from_secs(5) && (!saw_configured || updates.len() < 2) {
+        match tokio::time::timeout(Duration::from_millis(200), backend_event_rx.recv()).await {
+            Ok(Some(BackendEvent::Client(
+                nori_protocol::ClientEvent::SessionCapabilitiesChanged(update),
+            ))) => updates.push(update),
+            Ok(Some(BackendEvent::Control(event))) => {
+                if matches!(event.msg, EventMsg::SessionConfigured(_)) {
+                    saw_configured = true;
+                }
+            }
+            Ok(Some(BackendEvent::Client(_))) => {}
+            Ok(None) => break,
+            Err(_) => {}
+        }
+    }
+
+    assert!(saw_configured, "expected SessionConfigured event");
+    assert!(
+        updates.iter().any(|update| update.nori_client.initialized),
+        "expected eager nori-client initialize to emit initialized capabilities, got: {updates:?}"
+    );
+    assert!(
+        !updates
+            .windows(2)
+            .any(|window| window[0].nori_client.initialized && !window[1].nori_client.initialized),
+        "initialized capabilities must not regress after eager initialize, got: {updates:?}"
+    );
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+}
+
+#[tokio::test]
+#[serial]
 async fn resume_session_advertises_nori_client_and_refreshes_capabilities() {
     use std::time::Duration;
 

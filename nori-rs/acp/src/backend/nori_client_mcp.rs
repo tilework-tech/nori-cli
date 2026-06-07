@@ -436,11 +436,12 @@ async fn require_bearer_token(
 
 pub(super) fn capabilities_update_for_session(
     connection: &SacpConnection,
+    connected: &AtomicBool,
 ) -> nori_protocol::SessionCapabilitiesView {
     capabilities_update_for_nori_client(
         connection,
         connection.capabilities().mcp_capabilities.http,
-        false,
+        connected.load(Ordering::Relaxed),
     )
 }
 

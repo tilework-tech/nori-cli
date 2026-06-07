@@ -525,7 +525,8 @@ impl AcpBackend {
                                 nori_client_mcp::capabilities_update_for_nori_client(
                                     &self.connection,
                                     nori_client_advertised,
-                                    false,
+                                    self.goal_mcp_connected
+                                        .load(std::sync::atomic::Ordering::Relaxed),
                                 ),
                             ),
                         )
