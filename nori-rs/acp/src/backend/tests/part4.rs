@@ -1618,8 +1618,10 @@ async fn test_resume_session_uses_server_side_when_load_session_succeeds() {
     }
 }
 
-/// When transcript replay restores a paused goal, the resumed session should
-/// surface a direct notice with the next available goal commands.
+/// When transcript replay restores a paused goal into an MCP-capable session,
+/// the resumed session should surface a direct notice with the next available
+/// goal commands. The `/goal resume` affordance is only valid when goal
+/// automation is available, so the agent must advertise HTTP MCP support.
 #[tokio::test]
 #[serial]
 async fn test_resume_session_notifies_about_paused_goal() {
@@ -1634,6 +1636,17 @@ async fn test_resume_session_notifies_about_paused_goal() {
         );
         return;
     }
+
+    let previous_mcp_http = std::env::var("MOCK_AGENT_MCP_HTTP").ok();
+    unsafe {
+        std::env::set_var("MOCK_AGENT_MCP_HTTP", "1");
+    }
+    let restore_mcp_http = || unsafe {
+        match &previous_mcp_http {
+            Some(value) => std::env::set_var("MOCK_AGENT_MCP_HTTP", value),
+            None => std::env::remove_var("MOCK_AGENT_MCP_HTTP"),
+        }
+    };
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -1686,6 +1699,7 @@ async fn test_resume_session_notifies_about_paused_goal() {
                     saw_replayed_goal,
                     "resume notice should follow the replayed goal snapshot"
                 );
+                restore_mcp_http();
                 return;
             }
             Some(_) => continue,
@@ -1693,6 +1707,7 @@ async fn test_resume_session_notifies_about_paused_goal() {
         }
     }
 
+    restore_mcp_http();
     panic!("Timed out waiting for paused goal resume notice");
 }
 
