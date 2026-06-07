@@ -31,8 +31,6 @@ pub struct SessionPickerInfo {
     pub user_turn_count: Option<usize>,
     /// Preview of first user message (truncated)
     pub first_message_preview: Option<String>,
-    /// Whether this session was connected to a cloud sprite.
-    pub is_cloud: bool,
 }
 
 impl From<SessionMetadata> for SessionPickerInfo {
@@ -43,7 +41,6 @@ impl From<SessionMetadata> for SessionPickerInfo {
             started_at: session.started_at,
             user_turn_count: None,
             first_message_preview: None,
-            is_cloud: session.is_cloud,
         }
     }
 }
@@ -142,7 +139,6 @@ async fn load_session_previews(
             started_at: session.started_at,
             user_turn_count: None,
             first_message_preview: preview,
-            is_cloud: session.is_cloud,
         });
 
         tracing::info!(

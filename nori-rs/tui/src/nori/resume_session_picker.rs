@@ -242,7 +242,6 @@ mod tests {
                 started_at: "2025-01-27T12:00:00Z".to_string(),
                 user_turn_count: Some(4),
                 first_message_preview: Some("Hello world".to_string()),
-                is_cloud: false,
             },
             SessionPickerInfo {
                 session_id: "sess-2".to_string(),
@@ -250,7 +249,6 @@ mod tests {
                 started_at: "2025-01-26T10:00:00Z".to_string(),
                 user_turn_count: Some(2),
                 first_message_preview: None,
-                is_cloud: false,
             },
         ];
 
@@ -277,7 +275,6 @@ mod tests {
             started_at: "2025-01-27T12:00:00Z".to_string(),
             user_turn_count: None,
             first_message_preview: None,
-            is_cloud: false,
         }];
 
         let params = resume_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);

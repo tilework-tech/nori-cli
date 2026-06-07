@@ -43,7 +43,6 @@ fn row(session_id: &str, cwd: Option<PathBuf>) -> Row {
         updated_at: None,
         cwd,
         git_branch: None,
-        is_cloud: false,
     }
 }
 
@@ -93,7 +92,6 @@ fn cloud_sessions_show_cloud_badge_in_preview() {
     );
 
     assert_eq!(rows.len(), 1);
-    assert!(rows[0].is_cloud);
     assert!(
         rows[0].preview.contains("[cloud]"),
         "Cloud session preview should contain [cloud] badge, got: {}",
@@ -109,7 +107,6 @@ fn local_sessions_do_not_show_cloud_badge_in_preview() {
     );
 
     assert_eq!(rows.len(), 1);
-    assert!(!rows[0].is_cloud);
     assert!(
         !rows[0].preview.contains("[cloud]"),
         "Local session preview should not contain [cloud] badge, got: {}",
@@ -245,7 +242,6 @@ fn resume_table_snapshot() {
             updated_at: Some(now - Duration::seconds(42)),
             cwd: None,
             git_branch: None,
-            is_cloud: false,
             ..row("session-a", None)
         },
         Row {
@@ -254,7 +250,6 @@ fn resume_table_snapshot() {
             updated_at: Some(now - Duration::minutes(35)),
             cwd: None,
             git_branch: None,
-            is_cloud: false,
             ..row("session-b", None)
         },
     ];
