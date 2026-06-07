@@ -475,12 +475,15 @@ impl AcpBackend {
     }
 
     async fn emit_goal_unavailable(&self) {
-        emit_client_event(
-            &self.backend_event_tx,
-            self.transcript_recorder.as_ref(),
-            ClientEvent::SessionUpdateInfo(unavailable_notice()),
-        )
-        .await;
+        // Deliberately not recorded to the transcript: like resume notices this
+        // is a transient affordance derived from session state. Recording it
+        // would replay and accumulate a duplicate notice on every /goal op.
+        let _ = self
+            .backend_event_tx
+            .send(BackendEvent::Client(ClientEvent::SessionUpdateInfo(
+                unavailable_notice(),
+            )))
+            .await;
     }
 
     async fn emit_thread_goal_updated(&self, goal: ThreadGoalSnapshot) {
