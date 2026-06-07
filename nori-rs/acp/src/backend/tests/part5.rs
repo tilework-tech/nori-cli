@@ -1,10 +1,5 @@
 use super::*;
 
-struct EnvGuard {
-    name: &'static str,
-    previous: Option<String>,
-}
-
 struct RegistryGuard;
 
 impl RegistryGuard {
@@ -17,37 +12,6 @@ impl RegistryGuard {
 impl Drop for RegistryGuard {
     fn drop(&mut self) {
         crate::registry::initialize_registry(Vec::new()).expect("registry reset should be valid");
-    }
-}
-
-impl EnvGuard {
-    fn set(name: &'static str, value: &str) -> Self {
-        let previous = std::env::var(name).ok();
-        unsafe {
-            std::env::set_var(name, value);
-        }
-        Self { name, previous }
-    }
-
-    fn remove(name: &'static str) -> Self {
-        let previous = std::env::var(name).ok();
-        unsafe {
-            std::env::remove_var(name);
-        }
-        Self { name, previous }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => unsafe {
-                std::env::set_var(self.name, value);
-            },
-            None => unsafe {
-                std::env::remove_var(self.name);
-            },
-        }
     }
 }
 

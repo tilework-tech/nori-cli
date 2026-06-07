@@ -1637,16 +1637,7 @@ async fn test_resume_session_notifies_about_paused_goal() {
         return;
     }
 
-    let previous_mcp_http = std::env::var("MOCK_AGENT_MCP_HTTP").ok();
-    unsafe {
-        std::env::set_var("MOCK_AGENT_MCP_HTTP", "1");
-    }
-    let restore_mcp_http = || unsafe {
-        match &previous_mcp_http {
-            Some(value) => std::env::set_var("MOCK_AGENT_MCP_HTTP", value),
-            None => std::env::remove_var("MOCK_AGENT_MCP_HTTP"),
-        }
-    };
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -1699,7 +1690,6 @@ async fn test_resume_session_notifies_about_paused_goal() {
                     saw_replayed_goal,
                     "resume notice should follow the replayed goal snapshot"
                 );
-                restore_mcp_http();
                 return;
             }
             Some(_) => continue,
@@ -1707,7 +1697,6 @@ async fn test_resume_session_notifies_about_paused_goal() {
         }
     }
 
-    restore_mcp_http();
     panic!("Timed out waiting for paused goal resume notice");
 }
 
@@ -1728,16 +1717,7 @@ async fn test_resume_session_non_mcp_active_goal_reports_unavailable() {
         return;
     }
 
-    let previous_mcp_http = std::env::var("MOCK_AGENT_MCP_HTTP").ok();
-    unsafe {
-        std::env::remove_var("MOCK_AGENT_MCP_HTTP");
-    }
-    let restore_mcp_http = || unsafe {
-        match &previous_mcp_http {
-            Some(value) => std::env::set_var("MOCK_AGENT_MCP_HTTP", value),
-            None => std::env::remove_var("MOCK_AGENT_MCP_HTTP"),
-        }
-    };
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -1790,7 +1770,6 @@ async fn test_resume_session_non_mcp_active_goal_reports_unavailable() {
                     saw_replayed_goal,
                     "unavailable notice should follow the replayed goal snapshot"
                 );
-                restore_mcp_http();
                 return;
             }
             Some(_) => continue,
@@ -1798,6 +1777,5 @@ async fn test_resume_session_non_mcp_active_goal_reports_unavailable() {
         }
     }
 
-    restore_mcp_http();
     panic!("Timed out waiting for active-goal unavailable notice");
 }
