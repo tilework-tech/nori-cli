@@ -58,15 +58,29 @@
 
 7. **Documentation** — Updated `acp/docs.md`, `acp/src/broker/docs.md`, and `tui/docs.md`.
 
+### Cloud Badge in `/resume` and `/resume-viewonly` Pickers (2026-06-07)
+
+1. **`is_cloud` on `SessionPickerInfo`** — Re-added `is_cloud: bool` to `SessionPickerInfo` (previously removed in `083e718d` due to dead_code lint). Now propagated from `SessionMetadata` via `From` impl and from `SessionInfo` in `load_session_previews()`.
+
+2. **`[cloud]` badge in `/resume-viewonly` picker** — `viewonly_session_picker_params()` appends ` [cloud]` to the session name for cloud sessions.
+
+3. **`[cloud]` badge in `/resume` picker** — `resume_session_picker_params()` appends ` [cloud]` to the session name for cloud sessions. `resume_session_item_update()` also preserves the badge during lazy background updates.
+
+4. **Lazy update path fix** — Added `is_cloud: bool` to `ResumeSessionSummaryReady` event (`app_event.rs`), threaded it through `spawn_resume_summary_task()` (`pickers.rs`), `update_resume_session_picker_item()` (`pickers.rs`), and `resume_session_item_update()` (`resume_session_picker.rs`). Without this, the `[cloud]` badge was stripped when the background summary task fired.
+
+5. **Tests** — 6 new tests: 2 in `viewonly_session_picker.rs` (cloud badge shown/hidden), 4 in `resume_session_picker.rs` (cloud badge shown/hidden for initial display and for lazy update path). All 1343 TUI tests pass.
+
+6. **Documentation** — Updated `tui/docs.md` and `acp/docs.md` to reflect `[cloud]` badge consistency across all three session pickers.
+
 ## Not Yet Done
 2. **Broker PR** — The broker changes on `cli-cloud-sessions` branch (PR #830) need to be pushed and reviewed.
 3. **`session/set_config_option` and `session/set_model` forwarding** — Currently stubbed with empty responses in the broker. Need pass-through methods on AcpTunnelManager to forward to underlying AcpClient. No CLI changes needed.
 4. **Reconnection (V2)** — The broker-side plumbing enables reconnection (AcpTunnelManager holds session across CLI disconnects), but the CLI session picker UI is deferred.
 
-## Verification (2026-06-05)
+## Verification (2026-06-07)
 
 - All 598 ACP tests pass (including 3 cloud tests in `part6.rs` and 30 broker client tests)
-- All 1329 TUI tests pass
+- All 1343 TUI tests pass (including 6 new cloud badge tests)
 - All 27 CLI tests pass
 - `just fmt` and `just fix` clean — no warnings or errors
 - E2E test script (`scripts/cloud-e2e-test.sh`) does not need updates — the patches target broker startup behavior, not session routing

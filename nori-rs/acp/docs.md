@@ -788,7 +788,7 @@ The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which AC
 
 The `SessionMetaEntry.acp_session_id` field stores the ACP agent's session ID (from `session/new` or `session/load`). This enables the `/resume` command to reconnect to the same agent session. The field is `Option<String>` with `skip_serializing_if = "Option::is_none"` and `default` for backward compatibility with transcripts created before this field existed.
 
-The `SessionMetaEntry.is_cloud` field records whether the session was connected to a cloud sprite (via `nori cloud`). The field is `bool` with `#[serde(skip_serializing_if = "std::ops::Not::not", default)]` so it is omitted from JSON when `false` and defaults to `false` when absent -- following the same backward-compatibility pattern as `acp_session_id`. Cloud detection is determined at recording time by checking `config.cloud_connection.is_some()`. The TUI uses this field to show a `[cloud]` badge in the resume picker and to warn when resuming a cloud session without a cloud connection.
+The `SessionMetaEntry.is_cloud` field records whether the session was connected to a cloud sprite (via `nori cloud`). The field is `bool` with `#[serde(skip_serializing_if = "std::ops::Not::not", default)]` so it is omitted from JSON when `false` and defaults to `false` when absent -- following the same backward-compatibility pattern as `acp_session_id`. Cloud detection is determined at recording time by checking `config.cloud_connection.is_some()`. The TUI uses this field to show a `[cloud]` badge in all session pickers (startup resume picker, `/resume`, and `/resume-viewonly`) and to warn when resuming a cloud session without a cloud connection.
 
 **TranscriptRecorder:**
 

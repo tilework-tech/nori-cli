@@ -504,6 +504,8 @@ pub(crate) enum AppEvent {
         first_message_preview: Option<String>,
         /// Exact number of user turns, once known.
         user_turn_count: Option<usize>,
+        /// Whether this session was connected to a cloud sprite.
+        is_cloud: bool,
     },
 
     /// Resume a previous session via ACP session/load or client-side replay.

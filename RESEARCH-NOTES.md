@@ -70,6 +70,22 @@
 
 **Backward compatibility:** Old transcripts without `is_cloud` will deserialize with `is_cloud: false` via `#[serde(default)]`. No migration needed.
 
+### Cloud Badge Gap in `/resume` and `/resume-viewonly` Pickers (2026-06-07)
+
+**Problem:** The startup resume picker (at app launch) shows `[cloud]` badges via `metadata_to_row()` in `resume_picker/helpers.rs:14-18`. But the `/resume` and `/resume-viewonly` pickers both use `SessionPickerInfo` from `viewonly_session_picker.rs`, which does NOT carry `is_cloud`. Cloud sessions are listed but visually indistinguishable from local sessions.
+
+**History:** `is_cloud` was added to `SessionPickerInfo` but then removed in commit `083e718d` because nothing read the field, triggering `dead_code` lint. The fix: re-add the field and actually USE it in the display path.
+
+**Files to change:**
+1. `tui/src/nori/viewonly_session_picker.rs` — Add `is_cloud: bool` to `SessionPickerInfo`, update `From<SessionMetadata>`, update `load_session_previews()` to carry `is_cloud` from `SessionInfo`, and append `[cloud]` to session name in `viewonly_session_picker_params()`
+2. `tui/src/nori/resume_session_picker.rs` — Append `[cloud]` to session name in `resume_session_picker_params()`
+3. Tests for both pickers
+
+**Data flow:**
+- `SessionMetadata.is_cloud` ← `SessionMetaEntry.is_cloud` (loader.rs:525)
+- `SessionInfo.is_cloud` ← `SessionMetaEntry.is_cloud` (loader.rs:513)
+- Both are available when constructing `SessionPickerInfo`
+
 ### Prior Research (from sub-worktree)
 
 - cwd fix: Removed hardcoded `/home/sprite/org/workspace` — the broker handles sprite-side cwd

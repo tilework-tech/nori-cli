@@ -43,7 +43,14 @@ pub fn resume_session_picker_params(
         .into_iter()
         .map(|session| {
             let timestamp = format_relative_time(&session.started_at);
-            let name = format_session_name(&timestamp, session.user_turn_count);
+            let name = if session.is_cloud {
+                format!(
+                    "{} [cloud]",
+                    format_session_name(&timestamp, session.user_turn_count)
+                )
+            } else {
+                format_session_name(&timestamp, session.user_turn_count)
+            };
 
             let description = session
                 .first_message_preview
@@ -94,9 +101,15 @@ pub(crate) fn resume_session_item_update(
     started_at: &str,
     first_message_preview: Option<&str>,
     user_turn_count: Option<usize>,
+    is_cloud: bool,
 ) -> (String, Option<String>, String) {
     let timestamp = format_relative_time(started_at);
-    let name = format_session_name(&timestamp, user_turn_count);
+    let base_name = format_session_name(&timestamp, user_turn_count);
+    let name = if is_cloud {
+        format!("{base_name} [cloud]")
+    } else {
+        base_name
+    };
     let description = first_message_preview.map(|preview| format!("\"{preview}\""));
     let search_value = resume_session_search_value(session_id, first_message_preview);
     (name, description, search_value)
@@ -242,6 +255,7 @@ mod tests {
                 started_at: "2025-01-27T12:00:00Z".to_string(),
                 user_turn_count: Some(4),
                 first_message_preview: Some("Hello world".to_string()),
+                is_cloud: false,
             },
             SessionPickerInfo {
                 session_id: "sess-2".to_string(),
@@ -249,6 +263,7 @@ mod tests {
                 started_at: "2025-01-26T10:00:00Z".to_string(),
                 user_turn_count: Some(2),
                 first_message_preview: None,
+                is_cloud: false,
             },
         ];
 
@@ -275,6 +290,7 @@ mod tests {
             started_at: "2025-01-27T12:00:00Z".to_string(),
             user_turn_count: None,
             first_message_preview: None,
+            is_cloud: false,
         }];
 
         let params = resume_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
@@ -359,6 +375,84 @@ mod tests {
         assert!(
             !preview_started_for(&nonmatching_session_id),
             "nonmatching session should be filtered before preview loading; logs:\n{logs}"
+        );
+    }
+
+    #[test]
+    fn resume_picker_shows_cloud_badge_for_cloud_sessions() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let app_event_tx = AppEventSender::new(tx);
+
+        let sessions = vec![SessionPickerInfo {
+            session_id: "sess-cloud".to_string(),
+            project_id: "proj-1".to_string(),
+            started_at: "2020-01-15T10:30:00Z".to_string(),
+            user_turn_count: Some(5),
+            first_message_preview: None,
+            is_cloud: true,
+        }];
+
+        let params = resume_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
+
+        assert_eq!(params.items.len(), 1);
+        assert!(
+            params.items[0].name.contains("[cloud]"),
+            "expected [cloud] badge in name: {}",
+            params.items[0].name
+        );
+    }
+
+    #[test]
+    fn resume_picker_no_cloud_badge_for_local_sessions() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let app_event_tx = AppEventSender::new(tx);
+
+        let sessions = vec![SessionPickerInfo {
+            session_id: "sess-local".to_string(),
+            project_id: "proj-1".to_string(),
+            started_at: "2020-01-15T10:30:00Z".to_string(),
+            user_turn_count: Some(2),
+            first_message_preview: None,
+            is_cloud: false,
+        }];
+
+        let params = resume_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
+
+        assert_eq!(params.items.len(), 1);
+        assert!(
+            !params.items[0].name.contains("[cloud]"),
+            "unexpected [cloud] badge in name: {}",
+            params.items[0].name
+        );
+    }
+
+    #[test]
+    fn resume_item_update_preserves_cloud_badge() {
+        let (name, _, _) = resume_session_item_update(
+            "sess-cloud",
+            "2020-01-15T10:30:00Z",
+            Some("hello world"),
+            Some(3),
+            true,
+        );
+        assert!(
+            name.contains("[cloud]"),
+            "expected [cloud] badge in updated name: {name}",
+        );
+    }
+
+    #[test]
+    fn resume_item_update_no_cloud_badge_for_local() {
+        let (name, _, _) = resume_session_item_update(
+            "sess-local",
+            "2020-01-15T10:30:00Z",
+            Some("hello world"),
+            Some(3),
+            false,
+        );
+        assert!(
+            !name.contains("[cloud]"),
+            "unexpected [cloud] badge in updated name: {name}",
         );
     }
 }

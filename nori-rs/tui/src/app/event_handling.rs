@@ -1085,6 +1085,7 @@ impl App {
                 started_at,
                 first_message_preview,
                 user_turn_count,
+                is_cloud,
             } => {
                 self.chat_widget.update_resume_session_picker_item(
                     generation,
@@ -1092,6 +1093,7 @@ impl App {
                     &started_at,
                     first_message_preview.as_deref(),
                     user_turn_count,
+                    is_cloud,
                 );
             }
             AppEvent::ResumeSession {
