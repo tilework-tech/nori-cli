@@ -81,7 +81,10 @@ cleanup() {
   if (( ${#PATCHED_FILES[@]} > 0 )); then
     log "Restored patched broker files"
   fi
-  rm -f /tmp/nori-cloud-e2e-broker.log /tmp/nori-cloud-e2e-sprite-helper.ts
+  rm -f /tmp/nori-cloud-e2e-broker.log /tmp/nori-cloud-e2e-sprite-helper.ts /tmp/nori-e2e-snap.*
+  if [[ -n "${E2E_NORI_HOME:-}" ]]; then
+    rm -rf "$E2E_NORI_HOME"
+  fi
 }
 
 get_auth_token() {
@@ -149,6 +152,40 @@ tmux_assert() {
   log "Timed out waiting for: $pattern"
   log "Current screen:"
   tmux_capture | tail -20
+  return 1
+}
+
+# Wait for a pattern to appear in content that wasn't on screen before.
+# Usage: tmux_snapshot; <do something>; tmux_assert_new "pattern" [timeout]
+TMUX_SNAPSHOT_FILE=""
+tmux_snapshot() {
+  TMUX_SNAPSHOT_FILE=$(mktemp /tmp/nori-e2e-snap.XXXXXX)
+  tmux_capture > "$TMUX_SNAPSHOT_FILE"
+}
+
+tmux_assert_new() {
+  local pattern="$1"
+  local timeout="${2:-30}"
+  local elapsed=0
+  local new_content
+  while (( elapsed < timeout )); do
+    # diff returns 1 when files differ, which pipefail would propagate.
+    # Capture to a variable instead of piping.
+    new_content=$(diff --new-line-format='%L' --old-line-format='' --unchanged-line-format='' \
+         "$TMUX_SNAPSHOT_FILE" <(tmux_capture) 2>/dev/null || true)
+    if echo "$new_content" | grep -qF "$pattern"; then
+      rm -f "$TMUX_SNAPSHOT_FILE"
+      return 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  log "Timed out waiting for NEW content matching: $pattern"
+  log "New content since snapshot:"
+  new_content=$(diff --new-line-format='%L' --old-line-format='' --unchanged-line-format='' \
+    "$TMUX_SNAPSHOT_FILE" <(tmux_capture) 2>/dev/null || true)
+  echo "$new_content" | tail -20
+  rm -f "$TMUX_SNAPSHOT_FILE"
   return 1
 }
 
@@ -236,13 +273,21 @@ ${creds_json}
 ENDCREDS
 chmod 600 /home/sprite/.claude/.credentials.json" >/dev/null
 
+  log "  Updating Claude agent SDK..."
+  sprite_exec "$sprite_name" \
+    "cd /home/sprite/.nori/npm/cli-runtime && npm install @anthropic-ai/claude-agent-sdk@latest @anthropic-ai/claude-agent-sdk-linux-x64@latest --legacy-peer-deps 2>/dev/null && cd node_modules/@agentclientprotocol/claude-agent-acp && npm install @anthropic-ai/claude-agent-sdk@latest @anthropic-ai/claude-agent-sdk-linux-x64@latest --legacy-peer-deps 2>/dev/null && echo ok" >/dev/null || true
+
+  log "  Clearing stale session data..."
+  sprite_exec "$sprite_name" \
+    "rm -rf /home/sprite/.claude/projects /home/sprite/.claude/sessions" >/dev/null || true
+
   log "  Restarting ACP bridge..."
   curl -s -X POST "https://api.sprites.dev/v1/sprites/${sprite_name}/services/nori-acp-bridge/stop" \
     -H "Authorization: Bearer $NORI_SPRITE_TOKEN" >/dev/null 2>&1
   sleep 2
   curl -s -X POST "https://api.sprites.dev/v1/sprites/${sprite_name}/services/nori-acp-bridge/start" \
     -H "Authorization: Bearer $NORI_SPRITE_TOKEN" >/dev/null 2>&1
-  sleep 3
+  sleep 5
 
   PREPARED_SPRITE="$sprite_name"
   pass "Sprite $sprite_name prepared"
@@ -448,18 +493,43 @@ verify_auth() {
 # Step 7: Run E2E test — two messages via nori cloud
 # ---------------------------------------------------------------------------
 
-run_e2e() {
-  log "Starting nori cloud in tmux..."
-  tmux new-session -d -s "$TMUX_SESSION" -x 160 -y 40
-  tmux send-keys -t "$TMUX_SESSION" \
-    "cd '$NORI_RS_DIR' && '$NORI_BINARY' cloud --broker-url '$BROKER_URL' --skip-welcome --skip-trust-directory" Enter
+setup_clean_nori_home() {
+  E2E_NORI_HOME=$(mktemp -d /tmp/nori-e2e-home.XXXXXX)
+  # Write auth file with both broker_url (required by CloudCredentials) and auth_token.
+  local token
+  token=$(get_auth_token)
+  python3 -c "
+import json
+json.dump({'broker_url': '${BROKER_URL}', 'auth_token': '''${token}'''}, open('${E2E_NORI_HOME}/cloud-auth.json', 'w'))
+"
+  # Minimal config: set agent to claude-code to skip agent picker
+  cat > "$E2E_NORI_HOME/config.toml" << TOML
+agent = "claude-code"
+TOML
+}
 
-  if ! tmux_assert "›" 90; then
+# Launch nori cloud in a tmux session using the clean NORI_HOME.
+# Runs from /tmp to avoid worktree-detection prompts.
+launch_nori_cloud() {
+  local session_name="$1"
+  tmux new-session -d -s "$session_name" -x 160 -y 40
+  tmux send-keys -t "$session_name" \
+    "cd /tmp && NORI_HOME='$E2E_NORI_HOME' CODEX_HOME='$E2E_NORI_HOME' '$NORI_BINARY' cloud --broker-url '$BROKER_URL' --skip-welcome --skip-trust-directory" Enter
+}
+
+# Wait for the TUI chat prompt, failing on agent errors.
+wait_for_chat_prompt() {
+  local session_name="$1"
+  local timeout="${2:-90}"
+
+  if ! tmux_assert "›" "$timeout"; then
     log "Broker log tail:"
-    tail -10 /tmp/nori-cloud-e2e-broker.log | jq -r '.message' 2>/dev/null || tail -10 /tmp/nori-cloud-e2e-broker.log
-    fail "TUI did not show prompt within 90s"
+    tail -10 /tmp/nori-cloud-e2e-broker.log 2>/dev/null | head -10
+    fail "TUI did not show prompt within ${timeout}s"
   fi
 
+  # The › character also appears in picker menus. Wait for the agent to
+  # fully connect by checking that no error appeared after a settle period.
   sleep 10
 
   if tmux_capture | grep -qF "Failed to start agent"; then
@@ -473,21 +543,38 @@ run_e2e() {
     tmux_capture | tail -30
     fail "Cloud session creation failed: $(tmux_capture | grep 'Cloud session creation failed')"
   fi
+}
 
+run_e2e() {
+  log "Setting up clean NORI_HOME for E2E..."
+  setup_clean_nori_home
+
+  log "Starting nori cloud in tmux..."
+  launch_nori_cloud "$TMUX_SESSION"
+  wait_for_chat_prompt "$TMUX_SESSION"
   pass "TUI loaded with prompt"
 
   # --- Message 1 ---
-  log "Sending message 1: 'what is 2 plus 2'"
-  tmux send-keys -t "$TMUX_SESSION" "what is 2 plus 2"
+  log "Sending message 1: 'say exactly CLOUD_E2E_OK_1'"
+  tmux_snapshot
+  tmux send-keys -t "$TMUX_SESSION" "say exactly CLOUD_E2E_OK_1 and nothing else"
   sleep 2
   tmux send-keys -t "$TMUX_SESSION" Enter
 
-  if ! tmux_assert "4" 90; then
-    fail "No response to message 1 within 90s"
+  if ! tmux_assert_new "CLOUD_E2E_OK_1" 120; then
+    # Check for errors in the new content
+    if tmux_capture | grep -qF "ACP prompt failed"; then
+      fail "ACP prompt error: $(tmux_capture | grep 'ACP prompt failed')"
+    fi
+    fail "Agent did not respond with 'CLOUD_E2E_OK_1' within 120s"
   fi
-  pass "Message 1: got response"
 
-  pass "E2E test complete — message sent and received"
+  if tmux_capture | grep -qF "Failed to start agent"; then
+    fail "Agent error after message 1: $(tmux_capture | grep 'Failed to start agent')"
+  fi
+  pass "Message 1: agent responded with expected token"
+
+  pass "E2E test complete — message sent and agent responded"
 }
 
 # ---------------------------------------------------------------------------
@@ -551,41 +638,28 @@ wait_for_sprite_available() {
 run_reacquire_test() {
   log "Re-launching nori cloud for session re-acquisition test..."
   TMUX_SESSION="nori-cloud-e2e-reacquire-$$"
-  tmux new-session -d -s "$TMUX_SESSION" -x 160 -y 40
-  tmux send-keys -t "$TMUX_SESSION" \
-    "cd '$NORI_RS_DIR' && '$NORI_BINARY' cloud --broker-url '$BROKER_URL' --skip-welcome --skip-trust-directory" Enter
-
-  if ! tmux_assert "›" 90; then
-    log "Broker log tail:"
-    tail -10 /tmp/nori-cloud-e2e-broker.log | jq -r '.message' 2>/dev/null || tail -10 /tmp/nori-cloud-e2e-broker.log
-    fail "TUI did not show prompt within 90s on re-acquisition"
-  fi
-
-  if tmux_capture | grep -qF "Failed to start agent"; then
-    log "TUI output:"
-    tmux_capture | tail -30
-    fail "Agent failed to start on re-acquisition: $(tmux_capture | grep 'Failed to start agent')"
-  fi
-
-  if tmux_capture | grep -qF "Cloud session creation failed"; then
-    log "TUI output:"
-    tmux_capture | tail -30
-    fail "Cloud session creation failed on re-acquisition"
-  fi
-
-  sleep 5
+  launch_nori_cloud "$TMUX_SESSION"
+  wait_for_chat_prompt "$TMUX_SESSION"
   pass "TUI loaded on re-acquisition"
 
   # --- Message in re-acquired session ---
-  log "Sending message in re-acquired session: 'what is 3 plus 5'"
-  tmux send-keys -t "$TMUX_SESSION" "what is 3 plus 5"
+  log "Sending message in re-acquired session: 'say exactly CLOUD_E2E_OK_2'"
+  tmux_snapshot
+  tmux send-keys -t "$TMUX_SESSION" "say exactly CLOUD_E2E_OK_2 and nothing else"
   sleep 2
   tmux send-keys -t "$TMUX_SESSION" Enter
 
-  if ! tmux_assert "8" 90; then
-    fail "No response to message in re-acquired session within 90s"
+  if ! tmux_assert_new "CLOUD_E2E_OK_2" 120; then
+    if tmux_capture | grep -qF "ACP prompt failed"; then
+      fail "ACP prompt error in re-acquired session: $(tmux_capture | grep 'ACP prompt failed')"
+    fi
+    fail "Agent did not respond with 'CLOUD_E2E_OK_2' in re-acquired session within 120s"
   fi
-  pass "Re-acquired session: got response"
+
+  if tmux_capture | grep -qF "Failed to start agent"; then
+    fail "Agent error in re-acquired session: $(tmux_capture | grep 'Failed to start agent')"
+  fi
+  pass "Re-acquired session: agent responded with expected token"
 
   # Clean up the re-acquisition tmux session
   tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
