@@ -110,6 +110,28 @@
 
 **No "session manifest" concept exists in the codebase.** The closest equivalent is `SessionMetaEntry` (first JSONL line of transcript files). The user's term maps to this.
 
+### Test Coverage Audit (2026-06-07)
+
+**Total cloud-specific tests:** 49 across the codebase
+- Broker client: 26 tests (auth, acquire, release, credentials persistence)
+- Backend spawn/resume/disconnect: 5 tests (part6.rs)
+- Transcript loader `is_cloud` round-trip: 2 tests
+- TUI resume_picker badges: 2 tests
+- TUI nori resume_session_picker badges: 4 tests (including lazy update path)
+- TUI nori viewonly_session_picker badges: 2 tests
+- CLI subcommand parsing: 4 tests
+- Config broker URL persistence: 4 tests
+
+**Gaps identified:**
+1. No test for `is_cloud: true` serialization round-trip in `transcript/tests.rs` — existing test sets `is_cloud: false` but never asserts on the field
+2. No test for backward-compat deserialization of old transcripts without `is_cloud` field — pattern matches `acp_session_id` backward-compat test but was never written
+3. No test for cloud resume warning in `event_handling.rs` — the `was_cloud` + `cloud_connection.is_none()` guard at lines 1108/1132 is untested
+
+**Non-gaps (investigated and cleared):**
+- `is_cloud` propagation through `session.rs` into recorder: structurally verified, code is identical to `spawn_and_relay.rs` which has the same pattern
+- `serde(skip_serializing_if = "std::ops::Not::not", default)`: confirmed correct — `Not::not` is implemented for `&bool`, no gotchas
+- All three picker surfaces show `[cloud]` badge: verified in code and tests
+
 ### Prior Research (from sub-worktree)
 
 - cwd fix: Removed hardcoded `/home/sprite/org/workspace` — the broker handles sprite-side cwd

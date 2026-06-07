@@ -72,6 +72,14 @@
 
 6. **Documentation** — Updated `tui/docs.md` and `acp/docs.md` to reflect `[cloud]` badge consistency across all three session pickers.
 
+### Test Coverage Hardening (2026-06-07)
+
+1. **`is_cloud` serialization round-trip test** — New test `cloud_session_meta_entry_round_trips_is_cloud` in `transcript/tests.rs` verifies that `SessionMetaEntry` with `is_cloud: true` serializes the field to JSON and deserializes it back correctly.
+
+2. **Backward-compat deserialization test** — New test `old_transcript_without_is_cloud_deserializes_as_false` in `transcript/tests.rs` verifies that old transcript JSON without an `is_cloud` field deserializes with `is_cloud: false` (via `#[serde(default)]`).
+
+3. **Existing test enhanced** — `test_session_meta_entry_serialization` now also asserts that `is_cloud: false` is omitted from serialized JSON (via `skip_serializing_if`).
+
 ## Not Yet Done
 2. **Broker PR** — The broker changes on `cli-cloud-sessions` branch (PR #830) need to be pushed and reviewed.
 3. **`session/set_config_option` and `session/set_model` forwarding** — Currently stubbed with empty responses in the broker. Need pass-through methods on AcpTunnelManager to forward to underlying AcpClient. No CLI changes needed.
@@ -83,7 +91,7 @@ Full audit of all session features confirmed cloud/local parity on the CLI side.
 
 ## Verification (2026-06-07)
 
-- All 609 ACP tests pass (including 3 cloud tests in `part6.rs` and 30 broker client tests)
+- All 611 ACP tests pass (including 3 cloud tests in `part6.rs`, 30 broker client tests, and 2 new `is_cloud` serde tests)
 - All 1343 TUI tests pass (including 6 new cloud badge tests)
 - All 27 CLI tests pass
 - `just fmt` and `just fix` clean — no warnings or errors
