@@ -117,7 +117,7 @@ fn save_credentials_sets_restrictive_permissions() {
     assert_eq!(mode, 0o600);
 }
 
-// ── Callback URL token extraction ───────────────────────────────────
+// ── Callback URL token extraction ──────────────────────────────────
 
 #[test]
 fn extracts_token_from_callback_url() {
@@ -143,7 +143,16 @@ fn returns_none_for_url_without_query_string() {
     assert_eq!(token, None);
 }
 
-// ── BrokerClient construction ───────────────────────────────────────
+#[test]
+fn builds_cli_auth_url_under_api_prefix() {
+    let url = build_cli_auth_url("https://broker.test", 4321);
+    assert_eq!(
+        url,
+        "https://broker.test/api/auth/cli?redirect_uri=http://localhost:4321/callback"
+    );
+}
+
+// ── BrokerClient construction ──────────────────────────────────────
 
 #[test]
 fn new_client_loads_existing_credentials() {

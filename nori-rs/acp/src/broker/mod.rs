@@ -173,10 +173,7 @@ impl BrokerClient {
             .ok_or_else(|| anyhow::anyhow!("server did not bind to an IP address"))?
             .port();
 
-        let auth_url = format!(
-            "{}/auth/cli?redirect_uri=http://localhost:{port}/callback",
-            self.broker_url
-        );
+        let auth_url = build_cli_auth_url(&self.broker_url, port);
 
         if webbrowser::open(&auth_url).is_err() {
             eprintln!("Could not open browser. Please visit:\n{auth_url}");
@@ -306,6 +303,10 @@ fn extract_token_from_callback(url_path: &str) -> Option<String> {
         .query_pairs()
         .find(|(k, _)| k == "token")
         .map(|(_, v)| v.into_owned())
+}
+
+fn build_cli_auth_url(broker_url: &str, port: u16) -> String {
+    format!("{broker_url}/api/auth/cli?redirect_uri=http://localhost:{port}/callback")
 }
 
 #[cfg(test)]
