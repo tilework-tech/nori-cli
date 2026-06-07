@@ -50,8 +50,6 @@ pub struct SessionInfo {
     pub agent: Option<String>,
     /// Number of entries in the transcript (approximate)
     pub entry_count: usize,
-    /// Whether this session was connected to a cloud sprite.
-    pub is_cloud: bool,
 }
 
 /// Cheap session metadata loaded from the first transcript line only.
@@ -67,8 +65,6 @@ pub struct SessionMetadata {
     pub cwd: PathBuf,
     /// ACP agent used for the session (e.g., "claude-code", "codex", "gemini")
     pub agent: Option<String>,
-    /// Whether this session was connected to a cloud sprite.
-    pub is_cloud: bool,
 }
 
 /// A loaded transcript with all entries.
@@ -510,7 +506,6 @@ async fn load_session_info(path: &Path, project_id: &str) -> io::Result<SessionI
         cwd: meta.cwd,
         agent: meta.agent,
         entry_count,
-        is_cloud: meta.is_cloud,
     })
 }
 
@@ -522,7 +517,6 @@ async fn load_session_metadata(path: &Path, project_id: &str) -> io::Result<Sess
         started_at: meta.started_at,
         cwd: meta.cwd,
         agent: meta.agent,
-        is_cloud: meta.is_cloud,
     })
 }
 
@@ -784,7 +778,7 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create a session to populate the project
-        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         recorder
@@ -808,7 +802,7 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create two sessions
-        let recorder1 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None, false)
+        let recorder1 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         let project_id = recorder1.project_id().to_string();
@@ -817,7 +811,7 @@ mod tests {
 
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-        let recorder2 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None, false)
+        let recorder2 = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         recorder2.flush().await.unwrap();
@@ -838,7 +832,7 @@ mod tests {
         let nori_home = temp_dir.path();
 
         // Create a session
-        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         recorder.flush().await.unwrap();
@@ -863,7 +857,6 @@ mod tests {
             Some("claude".to_string()),
             "0.1.0",
             None,
-            false,
         )
         .await
         .unwrap();
@@ -903,7 +896,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let nori_home = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
             .await
             .unwrap();
         let project_id = recorder.project_id().to_string();
@@ -954,7 +947,6 @@ mod tests {
             Some("claude".to_string()),
             "0.1.0",
             None,
-            false,
         )
         .await
         .unwrap();
@@ -1045,16 +1037,10 @@ mod tests {
         let cwd = temp_dir.path().join("repo");
         tokio::fs::create_dir_all(&cwd).await.unwrap();
 
-        let recorder = TranscriptRecorder::new(
-            nori_home,
-            &cwd,
-            Some("codex".to_string()),
-            "0.1.0",
-            None,
-            false,
-        )
-        .await
-        .unwrap();
+        let recorder =
+            TranscriptRecorder::new(nori_home, &cwd, Some("codex".to_string()), "0.1.0", None)
+                .await
+                .unwrap();
         let project_id = recorder.project_id().to_string();
         let session_id = recorder.session_id().to_string();
         recorder.flush().await.unwrap();
@@ -1090,7 +1076,6 @@ mod tests {
             Some("claude-code".to_string()),
             "0.1.0",
             None,
-            false,
         )
         .await
         .unwrap();
@@ -1102,7 +1087,6 @@ mod tests {
             Some("codex".to_string()),
             "0.1.0",
             None,
-            false,
         )
         .await
         .unwrap();
@@ -1407,59 +1391,5 @@ mod tests {
         let loader = TranscriptLoader::new(nori_home.to_path_buf());
         let result = loader.load_transcript(project_id, session_id).await;
         assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn cloud_session_metadata_propagates_is_cloud() {
-        let temp_dir = TempDir::new().unwrap();
-        let nori_home = temp_dir.path();
-        let cwd = temp_dir.path().join("repo");
-        tokio::fs::create_dir_all(&cwd).await.unwrap();
-
-        let recorder = TranscriptRecorder::new(
-            nori_home,
-            &cwd,
-            Some("codex".to_string()),
-            "0.1.0",
-            None,
-            true,
-        )
-        .await
-        .unwrap();
-        recorder.flush().await.unwrap();
-        recorder.shutdown().await.unwrap();
-
-        let loader = TranscriptLoader::new(nori_home.to_path_buf());
-        let sessions = loader.find_session_metadata_for_cwd(&cwd).await.unwrap();
-
-        assert_eq!(sessions.len(), 1);
-        assert!(sessions[0].is_cloud);
-    }
-
-    #[tokio::test]
-    async fn local_session_metadata_has_is_cloud_false() {
-        let temp_dir = TempDir::new().unwrap();
-        let nori_home = temp_dir.path();
-        let cwd = temp_dir.path().join("repo");
-        tokio::fs::create_dir_all(&cwd).await.unwrap();
-
-        let recorder = TranscriptRecorder::new(
-            nori_home,
-            &cwd,
-            Some("codex".to_string()),
-            "0.1.0",
-            None,
-            false,
-        )
-        .await
-        .unwrap();
-        recorder.flush().await.unwrap();
-        recorder.shutdown().await.unwrap();
-
-        let loader = TranscriptLoader::new(nori_home.to_path_buf());
-        let sessions = loader.find_session_metadata_for_cwd(&cwd).await.unwrap();
-
-        assert_eq!(sessions.len(), 1);
-        assert_eq!(sessions[0].is_cloud, false);
     }
 }

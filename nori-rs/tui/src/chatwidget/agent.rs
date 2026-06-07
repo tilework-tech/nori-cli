@@ -428,7 +428,6 @@ pub(crate) fn spawn_acp_agent_resume(
     acp_session_id: Option<String>,
     transcript: nori_acp::transcript::Transcript,
     app_event_tx: AppEventSender,
-    cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
 ) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
 
@@ -500,7 +499,7 @@ pub(crate) fn spawn_acp_agent_resume(
             session_context: Some(include_str!("../../session_context.md").to_string()),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
-            cloud_connection,
+            cloud_connection: None,
         };
 
         // Race backend resume against shutdown requests and a timeout.

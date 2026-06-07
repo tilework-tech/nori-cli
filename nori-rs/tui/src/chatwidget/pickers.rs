@@ -206,7 +206,6 @@ impl ChatWidget {
         started_at: &str,
         first_message_preview: Option<&str>,
         user_turn_count: Option<usize>,
-        is_cloud: bool,
     ) {
         if self.active_resume_picker_generation != Some(generation) {
             tracing::info!(
@@ -230,7 +229,6 @@ impl ChatWidget {
                 started_at,
                 first_message_preview,
                 user_turn_count,
-                is_cloud,
             );
         self.bottom_pane
             .update_selection_item(session_id, name, description, search_value);
@@ -830,7 +828,6 @@ fn spawn_resume_summary_task(
                 started_at: session.started_at.clone(),
                 first_message_preview: preview,
                 user_turn_count: None,
-                is_cloud: session.is_cloud,
             });
         }
 
@@ -846,7 +843,6 @@ fn spawn_resume_summary_task(
                 started_at: session.started_at,
                 first_message_preview: preview,
                 user_turn_count,
-                is_cloud: session.is_cloud,
             });
         }
     });

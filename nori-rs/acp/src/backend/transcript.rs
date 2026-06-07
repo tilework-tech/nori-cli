@@ -254,7 +254,6 @@ mod tests {
             cli_version: "0.1.0".into(),
             git: None,
             acp_session_id: None,
-            is_cloud: false,
         };
 
         let mut lines = vec![TranscriptLine::new(TranscriptEntry::SessionMeta(

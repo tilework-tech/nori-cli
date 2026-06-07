@@ -31,8 +31,6 @@ pub struct SessionPickerInfo {
     pub user_turn_count: Option<usize>,
     /// Preview of first user message (truncated)
     pub first_message_preview: Option<String>,
-    /// Whether this session was connected to a cloud sprite.
-    pub is_cloud: bool,
 }
 
 impl From<SessionMetadata> for SessionPickerInfo {
@@ -43,7 +41,6 @@ impl From<SessionMetadata> for SessionPickerInfo {
             started_at: session.started_at,
             user_turn_count: None,
             first_message_preview: None,
-            is_cloud: session.is_cloud,
         }
     }
 }
@@ -142,7 +139,6 @@ async fn load_session_previews(
             started_at: session.started_at,
             user_turn_count: None,
             first_message_preview: preview,
-            is_cloud: session.is_cloud,
         });
 
         tracing::info!(
@@ -225,14 +221,7 @@ pub fn viewonly_session_picker_params(
         .into_iter()
         .map(|session| {
             let timestamp = format_relative_time(&session.started_at);
-            let name = if session.is_cloud {
-                format!(
-                    "{} [cloud]",
-                    format_session_name(&timestamp, session.user_turn_count)
-                )
-            } else {
-                format_session_name(&timestamp, session.user_turn_count)
-            };
+            let name = format_session_name(&timestamp, session.user_turn_count);
 
             // Description shows first message preview
             let description = session
@@ -335,53 +324,5 @@ mod tests {
     fn test_format_relative_time_old_date() {
         let result = format_relative_time("2020-01-15T10:30:00Z");
         assert!(result.starts_with("2020-01-15"));
-    }
-
-    #[test]
-    fn viewonly_picker_shows_cloud_badge_for_cloud_sessions() {
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let app_event_tx = AppEventSender::new(tx);
-
-        let sessions = vec![SessionPickerInfo {
-            session_id: "sess-cloud".to_string(),
-            project_id: "proj-1".to_string(),
-            started_at: "2020-01-15T10:30:00Z".to_string(),
-            user_turn_count: Some(3),
-            first_message_preview: None,
-            is_cloud: true,
-        }];
-
-        let params = viewonly_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
-
-        assert_eq!(params.items.len(), 1);
-        assert!(
-            params.items[0].name.contains("[cloud]"),
-            "expected [cloud] badge in name: {}",
-            params.items[0].name
-        );
-    }
-
-    #[test]
-    fn viewonly_picker_no_cloud_badge_for_local_sessions() {
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let app_event_tx = AppEventSender::new(tx);
-
-        let sessions = vec![SessionPickerInfo {
-            session_id: "sess-local".to_string(),
-            project_id: "proj-1".to_string(),
-            started_at: "2020-01-15T10:30:00Z".to_string(),
-            user_turn_count: Some(2),
-            first_message_preview: None,
-            is_cloud: false,
-        }];
-
-        let params = viewonly_session_picker_params(sessions, PathBuf::from("/tmp"), app_event_tx);
-
-        assert_eq!(params.items.len(), 1);
-        assert!(
-            !params.items[0].name.contains("[cloud]"),
-            "unexpected [cloud] badge in name: {}",
-            params.items[0].name
-        );
     }
 }

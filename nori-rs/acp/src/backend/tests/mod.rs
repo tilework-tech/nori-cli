@@ -213,7 +213,6 @@ fn build_test_transcript() -> crate::transcript::Transcript {
             cli_version: "0.1.0".into(),
             git: None,
             acp_session_id: Some("acp-session-42".into()),
-            is_cloud: false,
         })),
         TranscriptLine::new(TranscriptEntry::User(UserEntry {
             id: "msg-001".into(),

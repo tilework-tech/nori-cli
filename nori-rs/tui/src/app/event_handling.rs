@@ -1085,7 +1085,6 @@ impl App {
                 started_at,
                 first_message_preview,
                 user_turn_count,
-                is_cloud,
             } => {
                 self.chat_widget.update_resume_session_picker_item(
                     generation,
@@ -1093,7 +1092,6 @@ impl App {
                     &started_at,
                     first_message_preview.as_deref(),
                     user_turn_count,
-                    is_cloud,
                 );
             }
             AppEvent::ResumeSession {
@@ -1105,7 +1103,6 @@ impl App {
                 match loader.load_transcript(&project_id, &session_id).await {
                     Ok(transcript) => {
                         let acp_session_id = transcript.meta.acp_session_id.clone();
-                        let was_cloud = transcript.meta.is_cloud;
                         let display_name =
                             crate::nori::agent_picker::get_agent_info(&self.config.model)
                                 .map(|info| info.display_name)
@@ -1129,12 +1126,6 @@ impl App {
                             format!("Resuming session with {display_name}..."),
                             None,
                         );
-                        if was_cloud && self.cloud_connection.is_none() {
-                            self.chat_widget.add_info_message(
-                                "This session was started with nori cloud. Resuming locally — cloud features may not be available.".to_string(),
-                                None,
-                            );
-                        }
                         tui.frame_requester().schedule_frame();
                     }
                     Err(e) => {

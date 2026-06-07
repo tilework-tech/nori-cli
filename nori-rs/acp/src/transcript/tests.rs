@@ -277,7 +277,6 @@ mod types_tests {
                 commit_hash: Some("abc123def456".to_string()),
             }),
             acp_session_id: None,
-            is_cloud: false,
         });
 
         let line = TranscriptLine {
@@ -295,64 +294,6 @@ mod types_tests {
         assert_eq!(parsed["cli_version"], "0.1.0");
         assert_eq!(parsed["git"]["branch"], "main");
         assert_eq!(parsed["git"]["commit_hash"], "abc123def456");
-        assert!(
-            parsed.get("is_cloud").is_none(),
-            "is_cloud=false should be omitted"
-        );
-    }
-
-    #[test]
-    fn cloud_session_meta_entry_round_trips_is_cloud() {
-        let meta = SessionMetaEntry {
-            session_id: "cloud-session-1".to_string(),
-            project_id: "proj-1".to_string(),
-            started_at: "2026-06-07T10:00:00.000Z".to_string(),
-            cwd: PathBuf::from("/workspace"),
-            agent: Some("test-agent".to_string()),
-            cli_version: "0.2.0".to_string(),
-            git: None,
-            acp_session_id: Some("acp-123".to_string()),
-            is_cloud: true,
-        };
-
-        let entry = TranscriptEntry::SessionMeta(meta);
-        let json = serde_json::to_string(&entry).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(
-            parsed["is_cloud"], true,
-            "is_cloud=true should be serialized"
-        );
-
-        let deserialized: TranscriptEntry = serde_json::from_str(&json).unwrap();
-        if let TranscriptEntry::SessionMeta(m) = deserialized {
-            assert!(m.is_cloud);
-        } else {
-            panic!("Expected SessionMeta entry");
-        }
-    }
-
-    #[test]
-    fn old_transcript_without_is_cloud_deserializes_as_false() {
-        let old_json = r#"{
-            "type": "session_meta",
-            "session_id": "old-session",
-            "project_id": "proj-old",
-            "started_at": "2025-01-01T00:00:00.000Z",
-            "cwd": "/old/path",
-            "cli_version": "0.1.0"
-        }"#;
-
-        let entry: TranscriptEntry = serde_json::from_str(old_json).unwrap();
-        if let TranscriptEntry::SessionMeta(m) = entry {
-            assert!(
-                !m.is_cloud,
-                "old transcripts without is_cloud should default to false"
-            );
-            assert!(m.acp_session_id.is_none());
-        } else {
-            panic!("Expected SessionMeta entry");
-        }
     }
 
     #[test]
@@ -366,7 +307,6 @@ mod types_tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: None,
-            is_cloud: false,
         });
 
         let line = TranscriptLine {

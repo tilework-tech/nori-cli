@@ -66,7 +66,6 @@ impl TranscriptRecorder {
         agent: Option<String>,
         cli_version: &str,
         acp_session_id: Option<String>,
-        is_cloud: bool,
     ) -> io::Result<Self> {
         // Compute project ID from cwd
         let project_id_info = compute_project_id(cwd).await?;
@@ -119,7 +118,6 @@ impl TranscriptRecorder {
             cli_version: cli_version.to_string(),
             git: git_info,
             acp_session_id,
-            is_cloud,
         };
 
         // Spawn background writer
@@ -419,7 +417,6 @@ mod tests {
             Some("claude-code".to_string()),
             "0.1.0",
             None,
-            false,
         )
         .await
         .unwrap();
@@ -451,7 +448,6 @@ mod tests {
             Some("claude-code".to_string()),
             "0.1.0",
             None,
-            false,
         )
         .await
         .unwrap();
@@ -487,7 +483,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
@@ -522,7 +518,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
@@ -571,7 +567,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
@@ -612,7 +608,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 
@@ -660,7 +656,6 @@ mod tests {
             Some("claude-code".to_string()),
             "0.1.0",
             None,
-            false,
         )
         .await
         .unwrap();
@@ -719,7 +714,7 @@ mod tests {
         let nori_home = temp_dir.path();
         let cwd = temp_dir.path();
 
-        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None, false)
+        let recorder = TranscriptRecorder::new(nori_home, cwd, None, "0.1.0", None)
             .await
             .unwrap();
 

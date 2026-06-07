@@ -145,21 +145,26 @@ impl AcpBackend {
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
 
-        // Initialize transcript recorder (non-fatal if it fails)
-        let transcript_recorder = match TranscriptRecorder::new(
-            &config.nori_home,
-            &cwd,
-            Some(config.agent.clone()),
-            &config.cli_version,
-            Some(session_id.to_string()),
-            config.cloud_connection.is_some(),
-        )
-        .await
-        {
-            Ok(recorder) => Some(Arc::new(recorder)),
-            Err(e) => {
-                warn!("Failed to initialize transcript recorder: {e}");
-                None
+        // Initialize transcript recorder (non-fatal if it fails).
+        // Cloud sessions skip local transcript recording — the broker records
+        // transcripts server-side.
+        let transcript_recorder = if config.cloud_connection.is_some() {
+            None
+        } else {
+            match TranscriptRecorder::new(
+                &config.nori_home,
+                &cwd,
+                Some(config.agent.clone()),
+                &config.cli_version,
+                Some(session_id.to_string()),
+            )
+            .await
+            {
+                Ok(recorder) => Some(Arc::new(recorder)),
+                Err(e) => {
+                    warn!("Failed to initialize transcript recorder: {e}");
+                    None
+                }
             }
         };
         *transcript_recorder_cell.lock().await = transcript_recorder.clone();
