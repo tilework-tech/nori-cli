@@ -153,7 +153,7 @@ impl ChatWidget {
             footer_layout_config,
             expected_agent,
             deferred_spawn: _,
-            cloud_connection: _,
+            cloud_connection,
             fork_context: _,
         } = common;
         let mut rng = rand::rng();
@@ -165,6 +165,7 @@ impl ChatWidget {
             acp_session_id,
             transcript,
             app_event_tx.clone(),
+            cloud_connection,
         );
 
         let first_prompt_text = initial_prompt.clone();

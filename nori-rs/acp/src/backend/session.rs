@@ -17,7 +17,6 @@ impl AcpBackend {
     ) -> Result<Self> {
         let (event_tx, event_rx) = mpsc::channel(32);
         tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
-        let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
 
         debug!(
@@ -25,21 +24,31 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
-        let mut connection = SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
-            .await
-            .map_err(|e| {
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-                let display_error = format!("{e}");
-                anyhow::anyhow!(enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                ))
-            })?;
+        let (mut connection, agent_config) = if let Some(ref cloud) = config.cloud_connection {
+            debug!("Resuming cloud session: {}", cloud.ws_url);
+            let conn = SacpConnection::connect_remote(&cloud.ws_url, &cloud.auth_token, &cwd)
+                .await
+                .map_err(|e| anyhow::anyhow!("Cloud session resume failed: {e}"))?;
+            (conn, None)
+        } else {
+            let ac = get_agent_config(&config.agent)?;
+            let conn = SacpConnection::spawn(&ac, &cwd, config.acp_proxy.clone())
+                .await
+                .map_err(|e| {
+                    let error_string = format!("{e:?}");
+                    let category = categorize_acp_error(&error_string);
+                    let display_error = format!("{e}");
+                    anyhow::anyhow!(enhanced_error_message(
+                        category,
+                        &display_error,
+                        &ac.provider_info.name,
+                        &ac.auth_hint,
+                        &ac.display_name,
+                        &ac.install_hint,
+                    ))
+                })?;
+            (conn, Some(ac))
+        };
 
         let supports_load_session = connection.capabilities().load_session;
         let initial_goal_replay_events = transcript
@@ -202,17 +211,21 @@ impl AcpBackend {
                             .create_session(&cwd, mcp_servers)
                             .await
                             .map_err(|e| {
-                                let error_string = format!("{e:?}");
-                                let category = categorize_acp_error(&error_string);
-                                let display_error = format!("{e}");
-                                anyhow::anyhow!(enhanced_error_message(
-                                    category,
-                                    &display_error,
-                                    &agent_config.provider_info.name,
-                                    &agent_config.auth_hint,
-                                    &agent_config.display_name,
-                                    &agent_config.install_hint,
-                                ))
+                                if let Some(ref ac) = agent_config {
+                                    let error_string = format!("{e:?}");
+                                    let category = categorize_acp_error(&error_string);
+                                    let display_error = format!("{e}");
+                                    anyhow::anyhow!(enhanced_error_message(
+                                        category,
+                                        &display_error,
+                                        &ac.provider_info.name,
+                                        &ac.auth_hint,
+                                        &ac.display_name,
+                                        &ac.install_hint,
+                                    ))
+                                } else {
+                                    anyhow::anyhow!("Cloud session creation failed: {e}")
+                                }
                             })?;
 
                     let (replay_events, summary) = if let Some(t) = transcript {
@@ -260,17 +273,21 @@ impl AcpBackend {
                 .create_session(&cwd, mcp_servers)
                 .await
                 .map_err(|e| {
-                    let error_string = format!("{e:?}");
-                    let category = categorize_acp_error(&error_string);
-                    let display_error = format!("{e}");
-                    anyhow::anyhow!(enhanced_error_message(
-                        category,
-                        &display_error,
-                        &agent_config.provider_info.name,
-                        &agent_config.auth_hint,
-                        &agent_config.display_name,
-                        &agent_config.install_hint,
-                    ))
+                    if let Some(ref ac) = agent_config {
+                        let error_string = format!("{e:?}");
+                        let category = categorize_acp_error(&error_string);
+                        let display_error = format!("{e}");
+                        anyhow::anyhow!(enhanced_error_message(
+                            category,
+                            &display_error,
+                            &ac.provider_info.name,
+                            &ac.auth_hint,
+                            &ac.display_name,
+                            &ac.install_hint,
+                        ))
+                    } else {
+                        anyhow::anyhow!("Cloud session creation failed: {e}")
+                    }
                 })?;
 
             let (replay_events, summary) = if let Some(t) = transcript {

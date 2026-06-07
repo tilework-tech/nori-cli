@@ -27,7 +27,7 @@ SacpConnection
                             Remote ACP Agent (cloud sprite via broker)
 ```
 
-- `AcpBackend` in `@/nori-rs/acp/src/backend/` is the sole consumer of `SacpConnection` -- it calls `spawn()` for local agents and `connect_remote()` when `AcpBackendConfig.cloud_connection` is `Some`
+- `AcpBackend` in `@/nori-rs/acp/src/backend/` is the sole consumer of `SacpConnection` -- both `AcpBackend::spawn()` and `AcpBackend::resume_session()` call `SacpConnection::spawn()` for local agents and `SacpConnection::connect_remote()` when `AcpBackendConfig.cloud_connection` is `Some`
 - The `broker` module (`@/nori-rs/acp/src/broker/`) provides the `CloudConnectionInfo` (ws_url + auth_token) consumed by `connect_remote()`
 - MCP server configuration from `config.toml` is converted to ACP schema types via `mcp.rs` and passed at session creation time
 - All transport events (session updates, permission requests, file operations) flow into a single ordered `mpsc::Receiver<ConnectionEvent>` consumed by the backend's relay loop

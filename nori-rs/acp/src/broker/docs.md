@@ -23,7 +23,7 @@ CloudConnectionInfo { ws_url, auth_token }   SessionInfo { session_id, ws_url }
 TuiCli.cloud_connection --> App --> ChatWidgetInit --> spawn_agent()
       |
       v
-AcpBackendConfig.cloud_connection --> AcpBackend::spawn()
+AcpBackendConfig.cloud_connection --> AcpBackend::spawn() / resume_session()
       |
       v
 SacpConnection::connect_remote(ws_url, auth_token, cwd)
@@ -37,8 +37,8 @@ BrokerClient ----HTTP POST /api/sessions/{id}/release---->|
 ```
 
 - The CLI (`@/nori-rs/cli/src/main.rs`) is the sole caller of `BrokerClient` -- it authenticates, acquires a session, constructs the `CloudConnectionInfo` that flows downstream, and releases the session after the TUI exits
-- `CloudConnectionInfo` is threaded through the TUI layer (`Cli` -> `App` -> `ChatWidgetInit` -> `spawn_agent()`) without modification; the TUI does not interact with the broker directly
-- The ACP backend (`@/nori-rs/acp/src/backend/spawn_and_relay.rs`) branches on `config.cloud_connection`: when present, it calls `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`
+- `CloudConnectionInfo` is threaded through the TUI layer (`Cli` -> `App` -> `ChatWidgetInit` -> `spawn_agent()` or `spawn_acp_agent_resume()`) without modification; the TUI does not interact with the broker directly
+- The ACP backend (`@/nori-rs/acp/src/backend/spawn_and_relay.rs` and `@/nori-rs/acp/src/backend/session.rs`) branches on `config.cloud_connection` in both `spawn()` and `resume_session()`: when present, it calls `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`
 - The WebSocket transport adapter (`@/nori-rs/acp/src/connection/ws_transport.rs`) is the component that actually opens the WebSocket connection using the `ws_url` and `auth_token` from `CloudConnectionInfo`
 - The broker URL is resolved by the CLI through a three-step priority chain: `--broker-url` flag > `[cloud] broker_url` in `config.toml` > interactive stdin prompt (terminal only). The interactive prompt validates the URL scheme (`http://` or `https://`) and persists the entered value via `save_cloud_broker_url()` in `@/nori-rs/acp/src/config/loader.rs`. Non-interactive (piped) invocations that lack a configured URL receive an error with setup instructions
 
@@ -58,7 +58,7 @@ BrokerClient ----HTTP POST /api/sessions/{id}/release---->|
 - JWT expiry checking (`is_token_expired()`) is deliberately lenient: any token that cannot be decoded as a three-part base64url JWT with a valid `exp` claim is treated as expired. This avoids storing invalid tokens
 - The `auth_token()` accessor on `BrokerClient` is used by the CLI to extract the token for constructing `CloudConnectionInfo` after session acquisition -- the token flows to the WebSocket connection as a Bearer auth header
 - `BrokerClient` now covers the full session lifecycle: authenticate -> acquire -> release. Release is the terminal step, called from the CLI layer (not the backend) since the broker client and session ID are scoped there
-- Cloud mode in `AcpBackend::spawn()` skips agent config lookup (`get_agent_config`) since the remote agent is already running on the cloud VM. Error messages for cloud connection failures use simple messages instead of the enhanced error categorization used for local subprocess failures
+- Cloud mode in both `AcpBackend::spawn()` and `AcpBackend::resume_session()` skips agent config lookup (`get_agent_config`) since the remote agent is already running on the cloud VM. Error messages for cloud connection failures use simple messages instead of the enhanced error categorization used for local subprocess failures
 - The CLI uses its local cwd for cloud sessions -- the broker's SACP proxy (in the nori-sessions repo) manages the sprite-side working directory independently via `AcpTunnelManager`. The `cwd` sent in the `session/new` RPC is discarded by the broker. This means client-side file handlers, transcript recording, and TUI display all reflect the user's local directory, not the sprite's workspace path
 
 Created and maintained by Nori.

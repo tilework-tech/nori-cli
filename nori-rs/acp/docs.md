@@ -868,7 +868,7 @@ Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 - `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
-- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, `AcpBackend::spawn()` uses `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`). The backend also stores `is_cloud: bool` (derived from `cloud_connection.is_some()`) to enable cloud-specific behavior in the event relay loop. In cloud mode, the CLI uses its local cwd (from `config.cwd`) for all client-side operations -- `SessionConfigured` metadata, file operation handlers, transcript recording, and TUI display. The broker's SACP proxy independently manages the sprite-side working directory; the CLI's cwd sent in `session/new` is discarded by the broker.
+- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, both `AcpBackend::spawn()` and `AcpBackend::resume_session()` use `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup and setting `agent_config = None`. Error messages in both paths use cloud-specific messages instead of the enhanced error categorization used for local subprocess failures. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`). The backend also stores `is_cloud: bool` (derived from `cloud_connection.is_some()`) to enable cloud-specific behavior in the event relay loop. In cloud mode, the CLI uses its local cwd (from `config.cwd`) for all client-side operations -- `SessionConfigured` metadata, file operation handlers, transcript recording, and TUI display. The broker's SACP proxy independently manages the sprite-side working directory; the CLI's cwd sent in `session/new` is discarded by the broker.
 - `AcpBackendConfig.session_context`: Optional string injected into `pending_hook_context` at spawn time (`spawn_and_relay.rs`). Unlike `initial_context`, session context is prepended to the first user prompt **without** `SUMMARY_PREFIX` framing -- it appears as raw text before the user's message. If session start hooks also produce `::context::` lines, those are appended to the session context (both accumulate in the same `pending_hook_context` mutex). The context is consumed on the first prompt and not repeated. The TUI populates this with an embedded markdown blurb (`@/nori-rs/tui/session_context.md`) that tells the agent it is running inside the nori CLI.
 
 **Re-exported Types:**
@@ -1039,13 +1039,21 @@ The `ContextCompactedEvent.summary` field is the coupling point between the ACP 
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
 
-`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, and a single `backend_event_tx`, then selects between two resume strategies based on agent capabilities. The resulting `BackendEvent` stream carries both normalized ACP session events and shared control-plane events:
+`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, and a single `backend_event_tx`, then selects between two resume strategies based on agent capabilities. The resulting `BackendEvent` stream carries both normalized ACP session events and shared control-plane events.
+
+`resume_session()` mirrors the same cloud-vs-local connection branching as `spawn()`: when `config.cloud_connection` is `Some`, it calls `SacpConnection::connect_remote()` and sets `agent_config = None`; otherwise it calls `SacpConnection::spawn()` with the local agent config. This enables `/resume` and `nori resume` for cloud sessions started via `nori cloud`.
 
 ```
 AcpBackend::resume_session(config, acp_session_id, transcript, backend_event_tx)
     |
     v
-SacpConnection::spawn() -> check capabilities().load_session
+config.cloud_connection is Some?
+    |
+    ├── Yes: SacpConnection::connect_remote() (agent_config = None)
+    └── No:  SacpConnection::spawn()          (agent_config = Some)
+    |
+    v
+check capabilities().load_session
     |
     ├── Agent supports session/load AND acp_session_id is Some:
     │       |
