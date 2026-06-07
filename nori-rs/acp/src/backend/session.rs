@@ -72,7 +72,6 @@ impl AcpBackend {
             deferred_replay_client_events,
             event_rx,
             session_driver_state,
-            nori_client_context_window,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
             debug!("Agent supports session/load — using server-side resume");
 
@@ -139,7 +138,7 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            let nori_client_context_window = nori_client_mcp::register_for_session(
+            nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
@@ -173,7 +172,6 @@ impl AcpBackend {
                         buffered_client_events,
                         recovered_rx,
                         session_driver,
-                        nori_client_context_window,
                     )
                 }
                 Err(e) => {
@@ -189,7 +187,7 @@ impl AcpBackend {
                         &config.mcp_servers,
                         config.mcp_oauth_credentials_store_mode,
                     );
-                    let nori_client_context_window = nori_client_mcp::register_for_session(
+                    nori_client_mcp::register_for_session(
                         &connection,
                         &mut mcp_servers,
                         Arc::clone(&thread_goal_state),
@@ -238,7 +236,6 @@ impl AcpBackend {
                         replay_events,
                         recovered_rx,
                         session_runtime_driver::SessionDriver::new(),
-                        nori_client_context_window,
                     )
                 }
             }
@@ -249,7 +246,7 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            let nori_client_context_window = nori_client_mcp::register_for_session(
+            nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
@@ -298,7 +295,6 @@ impl AcpBackend {
                 replay_events,
                 event_rx,
                 session_runtime_driver::SessionDriver::new(),
-                nori_client_context_window,
             )
         };
 
@@ -309,12 +305,7 @@ impl AcpBackend {
                 thread_goal::ThreadGoalState::from_replay_events(&replay_events_for_goal_state);
         }
 
-        let capabilities_update = nori_client_mcp::capabilities_update_for_nori_client(
-            &connection,
-            connection.capabilities().mcp_capabilities.http,
-            false,
-            nori_client_context_window,
-        );
+        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let session_driver = Arc::new(Mutex::new(session_driver_state));

@@ -1151,32 +1151,6 @@ async fn session_capabilities_enable_goal_for_http_mcp_agents() {
 
 #[tokio::test]
 #[serial]
-async fn session_capabilities_report_nori_client_context_window_estimate() {
-    let Some((new_session, update)) =
-        logged_new_session_and_capabilities_for_mock_agent(true).await
-    else {
-        return;
-    };
-
-    let nori_client = nori_client_http_server(&new_session)
-        .expect("HTTP MCP agents should receive the nori-client MCP server");
-    let expected = context_window_for_nori_client_server(nori_client);
-
-    assert_eq!(
-        update.nori_client.context_window.advertised_server_bytes,
-        expected.advertised_server_bytes
-    );
-    assert_eq!(
-        update
-            .nori_client
-            .context_window
-            .advertised_server_estimated_tokens,
-        expected.advertised_server_estimated_tokens
-    );
-}
-
-#[tokio::test]
-#[serial]
 async fn session_capabilities_refresh_when_nori_client_initializes() {
     use std::time::Duration;
 
@@ -1218,7 +1192,6 @@ async fn session_capabilities_refresh_when_nori_client_initializes() {
     let new_session = latest_logged_new_session(&wire_log_dir);
     let nori_client = nori_client_http_server(&new_session)
         .expect("session/new should advertise nori-client HTTP MCP server");
-    let expected_context_window = context_window_for_nori_client_server(nori_client);
     let unauthorized = send_nori_client_mcp_initialize(&nori_client.url, None).await;
     assert!(
         unauthorized.contains("401 Unauthorized"),
@@ -1236,10 +1209,6 @@ async fn session_capabilities_refresh_when_nori_client_initializes() {
     };
     assert!(refreshed.nori_client.advertised);
     assert!(refreshed.nori_client.initialized);
-    assert_eq!(
-        refreshed.nori_client.context_window, expected_context_window,
-        "initialized refresh should preserve the advertised-server footprint"
-    );
 
     backend
         .submit(Op::Shutdown)
@@ -1396,60 +1365,6 @@ async fn logged_new_session_for_mock_agent(
     advertise_http_mcp: bool,
 ) -> Option<acp::NewSessionRequest> {
     logged_new_session_for_agent("mock-model", advertise_http_mcp).await
-}
-
-async fn logged_new_session_and_capabilities_for_mock_agent(
-    advertise_http_mcp: bool,
-) -> Option<(
-    acp::NewSessionRequest,
-    nori_protocol::SessionCapabilitiesView,
-)> {
-    use std::time::Duration;
-
-    let mock_config =
-        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
-    if !std::path::Path::new(&mock_config.command).exists() {
-        eprintln!(
-            "Skipping test: mock_acp_agent not found at {}",
-            mock_config.command
-        );
-        return None;
-    }
-
-    let _env_guard = if advertise_http_mcp {
-        EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1")
-    } else {
-        EnvGuard::remove("MOCK_AGENT_MCP_HTTP")
-    };
-
-    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wire_log_dir = temp_dir.path().join("acp-wire");
-    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
-    let mut config = build_test_config(temp_dir.path());
-    config.agent = "mock-model".to_string();
-    config.acp_proxy = crate::config::AcpProxyConfig {
-        enabled: true,
-        log_dir: wire_log_dir.clone(),
-    };
-
-    let backend = AcpBackend::spawn(&config, backend_event_tx)
-        .await
-        .expect("Failed to spawn ACP backend");
-
-    let update = loop {
-        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
-            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
-            Some(_) => {}
-            None => panic!("Timed out waiting for SessionCapabilitiesChanged"),
-        }
-    };
-
-    backend
-        .submit(Op::Shutdown)
-        .await
-        .expect("Failed to shut down ACP backend");
-
-    Some((latest_logged_new_session(&wire_log_dir), update))
 }
 
 async fn session_capabilities_for_mock_agent(
@@ -1617,21 +1532,6 @@ fn nori_client_authorization_header(http: &acp::McpServerHttp) -> String {
         .find(|header| header.name == "Authorization")
         .map(|header| header.value.clone())
         .expect("nori-client should advertise an Authorization header")
-}
-
-fn context_window_for_nori_client_server(
-    http: &acp::McpServerHttp,
-) -> nori_protocol::NoriClientContextWindowView {
-    let advertised_server = acp::McpServer::Http(http.clone());
-    let advertised_server_json =
-        serde_json::to_string(&advertised_server).expect("MCP server config should serialize");
-    let advertised_server_bytes = advertised_server_json.len() as i64;
-    let advertised_server_estimated_tokens = (advertised_server_bytes + 3) / 4;
-
-    nori_protocol::NoriClientContextWindowView {
-        advertised_server_bytes,
-        advertised_server_estimated_tokens,
-    }
 }
 
 /// Drive a real MCP `initialize` against the loopback `nori-client` server,

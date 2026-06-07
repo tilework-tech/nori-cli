@@ -95,7 +95,6 @@ fn goal_capabilities(goal_enabled: bool) -> nori_protocol::SessionCapabilitiesVi
         nori_client: nori_protocol::NoriClientCapabilitiesView {
             advertised: goal_enabled,
             initialized: false,
-            context_window: nori_protocol::NoriClientContextWindowView::default(),
         },
         builtin_commands: std::collections::HashMap::from([(
             "goal".to_string(),

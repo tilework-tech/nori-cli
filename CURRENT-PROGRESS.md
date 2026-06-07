@@ -25,4 +25,3 @@
 - Decision: when resume replays an active goal into a non-MCP session, emit the existing `/goal is unavailable` notice instead of inventing a separate resume-only warning, so all unavailable goal paths share wording.
 - Decision: treat server-side `session/load` as the resume capability-refresh proof case, because it is the resume path that forwards MCP servers to an existing ACP session.
 - Decision: verify replayed non-MCP active goals through the first post-resume user prompt, because the observable contract is no hidden completion before input and no `<goal_context>` on that prompt.
-- Decision: expose `nori_client.context_window` as bytes plus a conservative bytes/4 token estimate for the exact serialized ACP MCP server entry advertised to the agent. This gives Nori-side observability into setup payload size without claiming that every ACP agent inserts MCP metadata into provider context unchanged.

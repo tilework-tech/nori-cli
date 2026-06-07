@@ -97,15 +97,6 @@ pub struct AgentCapabilitiesView {
 pub struct NoriClientCapabilitiesView {
     pub advertised: bool,
     pub initialized: bool,
-    #[serde(default)]
-    pub context_window: NoriClientContextWindowView,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct NoriClientContextWindowView {
-    pub advertised_server_bytes: i64,
-    pub advertised_server_estimated_tokens: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1854,7 +1845,6 @@ mod tests {
             nori_client: NoriClientCapabilitiesView {
                 advertised: false,
                 initialized: false,
-                context_window: NoriClientContextWindowView::default(),
             },
             builtin_commands: HashMap::from([(
                 "goal".to_string(),
@@ -1869,21 +1859,6 @@ mod tests {
         let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed, event);
-    }
-
-    #[test]
-    fn session_capabilities_event_defaults_missing_nori_client_context_window() {
-        let json = r#"{"event_type":"session_capabilities_changed","agent":{"http_mcp":true,"load_session":false},"nori_client":{"advertised":true,"initialized":false},"builtin_commands":{}}"#;
-
-        let parsed: ClientEvent = serde_json::from_str(json).unwrap();
-        let ClientEvent::SessionCapabilitiesChanged(update) = parsed else {
-            panic!("expected SessionCapabilitiesChanged event");
-        };
-
-        assert_eq!(
-            update.nori_client.context_window,
-            NoriClientContextWindowView::default()
-        );
     }
 
     #[test]
