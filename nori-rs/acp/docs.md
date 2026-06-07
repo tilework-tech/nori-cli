@@ -775,7 +775,7 @@ Entry types (from `@/nori-rs/acp/src/transcript/types.rs`):
 
 | Type           | Description                  | Key Fields (JSON)                                                                |
 | -------------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git, acp_session_id, is_cloud |
+| `session_meta` | First line, session metadata | session_id, project_id, started_at, cwd, agent, cli_version, git, acp_session_id |
 | `user`         | User message                 | id, content, attachments                                                         |
 | `assistant`    | Complete assistant turn      | id, content (blocks), agent                                                      |
 | `tool_call`    | Tool execution start         | call_id, name, input                                                             |
@@ -788,7 +788,7 @@ The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which AC
 
 The `SessionMetaEntry.acp_session_id` field stores the ACP agent's session ID (from `session/new` or `session/load`). This enables the `/resume` command to reconnect to the same agent session. The field is `Option<String>` with `skip_serializing_if = "Option::is_none"` and `default` for backward compatibility with transcripts created before this field existed.
 
-The `SessionMetaEntry.is_cloud` field records whether the session was connected to a cloud sprite (via `nori cloud`). The field is `bool` with `#[serde(skip_serializing_if = "std::ops::Not::not", default)]` so it is omitted from JSON when `false` and defaults to `false` when absent -- following the same backward-compatibility pattern as `acp_session_id`. Cloud detection is determined at recording time by checking `config.cloud_connection.is_some()`. The TUI uses this field to show a `[cloud]` badge in all session pickers (startup resume picker, `/resume`, and `/resume-viewonly`) and to warn when resuming a cloud session without a cloud connection.
+Cloud sessions (started via `nori cloud`) are not persisted to local transcripts at all -- the broker records them server-side -- so there is no cloud marker in `session_meta` and cloud sessions do not appear in the local resume pickers.
 
 **TranscriptRecorder:**
 
@@ -806,7 +806,7 @@ The `TranscriptRecorder` (in `@/nori-rs/acp/src/transcript/recorder.rs`) handles
 
 Key methods:
 
-- `new()`: Creates recorder, writes session_meta (including optional `acp_session_id` and `is_cloud`) and project.json
+- `new()`: Creates recorder, writes session_meta (including optional `acp_session_id`) and project.json
 - `record_user_message()`: Records user input with optional attachments
 - `record_assistant_message()`: Records complete assistant turn with content blocks
 - `record_tool_call()` / `record_tool_result()`: Records tool execution
@@ -834,13 +834,13 @@ Key methods:
 
 **Forward/backward compatibility:** `load_transcript_from_path()` gracefully skips JSONL lines that fail to deserialize after the first line (session metadata). This means transcripts remain loadable across schema changes -- older binaries skip unknown entry types written by newer versions, and newer binaries skip removed entry types from older transcripts (e.g., the removed `turn_lifecycle` variant). The first line must always be valid `SessionMeta`; a deserialization failure there is a hard error. Skipped lines are logged at `tracing::debug` level. `load_session_meta_from_path()` is unaffected since it only reads the first line.
 
-Large transcript paths avoid full-file reads when building `/resume` and startup `nori resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line -- including `is_cloud: bool` -- so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after picker rows are visible. The `SessionInfo` struct also carries `is_cloud` for the full-session-info path.
+Large transcript paths avoid full-file reads when building `/resume` and startup `nori resume` picker rows. `SessionMetadata` intentionally contains only fields available from the `session_meta` line so callers can filter and display initial rows without counting or parsing the transcript body. Preview and turn-count helpers are separate streaming operations used after picker rows are visible.
 
 **ACP Integration:**
 
 The `AcpBackend` automatically:
 
-1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` and `is_cloud` (derived from `config.cloud_connection.is_some()`) for session resume support. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
+1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support. Cloud sessions skip transcript recording entirely. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
 4. Records normalized ACP session events via `record_client_event()` in the update and approval handlers
@@ -870,7 +870,7 @@ Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 - `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
-- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, both `AcpBackend::spawn()` and `AcpBackend::resume_session()` use `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup and setting `agent_config = None`. Error messages in both paths use cloud-specific messages instead of the enhanced error categorization used for local subprocess failures. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`). The backend also stores `is_cloud: bool` (derived from `cloud_connection.is_some()`) to enable cloud-specific behavior in the event relay loop. In cloud mode, the CLI uses its local cwd (from `config.cwd`) for all client-side operations -- `SessionConfigured` metadata, file operation handlers, transcript recording, and TUI display. The broker's SACP proxy independently manages the sprite-side working directory; the CLI's cwd sent in `session/new` is discarded by the broker.
+- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, `AcpBackend::spawn()` uses `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup and setting `agent_config = None`. Cloud connection errors use cloud-specific messages instead of the enhanced error categorization used for local subprocess failures. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`). The backend also stores `is_cloud: bool` (derived from `cloud_connection.is_some()`) to drive cloud-disconnect detection in the event relay loop. In cloud mode, the CLI uses its local cwd (from `config.cwd`) for all client-side operations -- `SessionConfigured` metadata, file operation handlers, and TUI display. The broker's SACP proxy independently manages the sprite-side working directory; the CLI's cwd sent in `session/new` is discarded by the broker. `resume_session()` has no cloud path: cloud sessions are not recorded locally, so they never reach the resume flow.
 - `AcpBackendConfig.session_context`: Optional string injected into `pending_hook_context` at spawn time (`spawn_and_relay.rs`). Unlike `initial_context`, session context is prepended to the first user prompt **without** `SUMMARY_PREFIX` framing -- it appears as raw text before the user's message. If session start hooks also produce `::context::` lines, those are appended to the session context (both accumulate in the same `pending_hook_context` mutex). The context is consumed on the first prompt and not repeated. The TUI populates this with an embedded markdown blurb (`@/nori-rs/tui/session_context.md`) that tells the agent it is running inside the nori CLI.
 
 **Re-exported Types:**
@@ -1043,7 +1043,7 @@ The `ContextCompactedEvent.summary` field is the coupling point between the ACP 
 
 `AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, and a single `backend_event_tx`, then selects between two resume strategies based on agent capabilities. The resulting `BackendEvent` stream carries both normalized ACP session events and shared control-plane events.
 
-`resume_session()` mirrors the same cloud-vs-local connection branching as `spawn()`: when `config.cloud_connection` is `Some`, it calls `SacpConnection::connect_remote()` and sets `agent_config = None`; otherwise it calls `SacpConnection::spawn()` with the local agent config. This enables `/resume` and `nori resume` for cloud sessions started via `nori cloud`.
+`resume_session()` always spawns the local agent via `SacpConnection::spawn()` -- it has no cloud branch. Cloud sessions are not recorded to local transcripts, so they never surface in the resume pickers and never reach this path. It still reads `config.cloud_connection.is_some()` to set the runtime `is_cloud` flag, but resume itself is local-only.
 
 ```
 AcpBackend::resume_session(config, acp_session_id, transcript, backend_event_tx)
@@ -1094,7 +1094,7 @@ Deferred replay relay spawned (sends buffered events, then optional goal resume 
 
 **Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is replayed through normalized `ClientEvent::ReplayEntry` items derived from the transcript rather than through `SessionConfigured.initial_messages`. The transcript summary path remains available for context management and `/compact`-style behavior. A `TRANSCRIPT_SUMMARY_WARN_CHARS` threshold (200K chars) logs a warning when summaries are very large; the actual safety net is the agent-side "prompt too long" rejection, which the caller handles gracefully.
 
-A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` and `is_cloud` flag so the session can be resumed again in the future and the TUI can identify cloud sessions in picker UIs.
+A new `TranscriptRecorder` is created for the resumed session in all paths, persisting the `acp_session_id` so the session can be resumed again in the future.
 
 **Prompt Summary** (`backend/mod.rs`):
 
