@@ -440,21 +440,6 @@ mod tests {
     }
 
     #[test]
-    fn cloud_mode_tests_cover_all_variants() {
-        let cloud_disabled = SlashCommand::iter()
-            .filter(|c| !c.available_in_cloud_mode())
-            .count();
-        let cloud_enabled = SlashCommand::iter()
-            .filter(|c| c.available_in_cloud_mode())
-            .count();
-        assert_eq!(
-            cloud_disabled + cloud_enabled,
-            SlashCommand::iter().count(),
-            "cloud mode classification must cover every SlashCommand variant"
-        );
-    }
-
-    #[test]
     fn browse_parses_from_string() {
         let cmd: SlashCommand = "browse".parse().expect("/browse should parse from string");
         assert_eq!(cmd, SlashCommand::Browse);

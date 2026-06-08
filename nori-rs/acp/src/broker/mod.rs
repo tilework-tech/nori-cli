@@ -75,6 +75,9 @@ pub enum BrokerError {
     #[error("session resume failed: HTTP {status}: {body}")]
     ResumeFailed { status: u16, body: String },
 
+    #[error("invalid session ID: {0}")]
+    InvalidSessionId(String),
+
     #[error("network error: {0}")]
     NetworkError(#[from] reqwest::Error),
 
@@ -83,6 +86,17 @@ pub enum BrokerError {
 
     #[error("invalid response: {0}")]
     InvalidResponse(String),
+}
+
+fn validate_session_id(session_id: &str) -> std::result::Result<(), BrokerError> {
+    if session_id.is_empty()
+        || !session_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(BrokerError::InvalidSessionId(session_id.to_string()));
+    }
+    Ok(())
 }
 
 pub struct BrokerClient {
@@ -192,6 +206,7 @@ impl BrokerClient {
         &self,
         session_id: &str,
     ) -> std::result::Result<SessionInfo, BrokerError> {
+        validate_session_id(session_id)?;
         let token = self
             .auth_token
             .as_deref()
@@ -226,6 +241,7 @@ impl BrokerClient {
     }
 
     pub async fn release_session(&self, session_id: &str) -> std::result::Result<(), BrokerError> {
+        validate_session_id(session_id)?;
         let token = self
             .auth_token
             .as_deref()

@@ -923,3 +923,74 @@ async fn resume_session_returns_error_for_malformed_response() {
 
     server_handle.join().unwrap();
 }
+
+// ── session_id validation ────────────────────────────────────────
+
+#[test]
+fn validate_session_id_accepts_valid_ids() {
+    assert!(validate_session_id("sess-abc123").is_ok());
+    assert!(validate_session_id("my_session_42").is_ok());
+    assert!(validate_session_id("ABC").is_ok());
+}
+
+#[test]
+fn validate_session_id_rejects_path_traversal() {
+    assert!(matches!(
+        validate_session_id("../etc/passwd"),
+        Err(BrokerError::InvalidSessionId(_))
+    ));
+    assert!(matches!(
+        validate_session_id("sess/../../admin"),
+        Err(BrokerError::InvalidSessionId(_))
+    ));
+}
+
+#[test]
+fn validate_session_id_rejects_empty() {
+    assert!(matches!(
+        validate_session_id(""),
+        Err(BrokerError::InvalidSessionId(_))
+    ));
+}
+
+#[test]
+fn validate_session_id_rejects_special_characters() {
+    assert!(matches!(
+        validate_session_id("sess id"),
+        Err(BrokerError::InvalidSessionId(_))
+    ));
+    assert!(matches!(
+        validate_session_id("sess?query=1"),
+        Err(BrokerError::InvalidSessionId(_))
+    ));
+}
+
+#[tokio::test]
+async fn resume_session_rejects_malformed_session_id() {
+    let dir = tempdir().unwrap();
+    let broker_url = "http://unused.test".to_string();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: future_jwt(),
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.resume_session("../admin").await.unwrap_err();
+    assert!(matches!(err, BrokerError::InvalidSessionId(_)));
+}
+
+#[tokio::test]
+async fn release_session_rejects_malformed_session_id() {
+    let dir = tempdir().unwrap();
+    let broker_url = "http://unused.test".to_string();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: future_jwt(),
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.release_session("sess/../../x").await.unwrap_err();
+    assert!(matches!(err, BrokerError::InvalidSessionId(_)));
+}
