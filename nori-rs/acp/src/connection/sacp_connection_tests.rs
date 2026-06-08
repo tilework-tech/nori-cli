@@ -9,93 +9,7 @@ use serde_json::Value;
 use serial_test::serial;
 use tempfile::tempdir;
 
-mod ws_server_helper {
-    use futures::SinkExt;
-    use futures::StreamExt;
-    use tokio::net::TcpListener;
-    use tokio_tungstenite::tungstenite::Message;
-
-    pub struct MockWsServer {
-        pub port: i32,
-        _task: tokio::task::JoinHandle<()>,
-    }
-
-    pub async fn start_mock_acp_ws_server() -> MockWsServer {
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind to random port");
-        let port = listener.local_addr().expect("get local addr").port() as i32;
-
-        let task = tokio::spawn(async move {
-            while let Ok((stream, _)) = listener.accept().await {
-                let ws_stream = tokio_tungstenite::accept_async(stream)
-                    .await
-                    .expect("ws handshake");
-                let (mut write, mut read) = ws_stream.split();
-
-                tokio::spawn(async move {
-                    while let Some(Ok(msg)) = read.next().await {
-                        if let Message::Text(text) = msg {
-                            let text_str: &str = &text;
-                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text_str)
-                            {
-                                if parsed.get("method").and_then(|m| m.as_str())
-                                    == Some("initialize")
-                                {
-                                    let id = parsed.get("id").cloned().unwrap_or(
-                                        serde_json::Value::Number(serde_json::Number::from(0)),
-                                    );
-                                    let response = serde_json::json!({
-                                        "jsonrpc": "2.0",
-                                        "id": id,
-                                        "result": {
-                                            "protocolVersion": 1,
-                                            "agentCapabilities": {},
-                                            "agentInfo": {
-                                                "name": "mock-ws-agent",
-                                                "version": "0.1.0",
-                                                "title": "Mock WS Agent"
-                                            }
-                                        }
-                                    });
-                                    let _ = write
-                                        .send(Message::Text(
-                                            serde_json::to_string(&response)
-                                                .expect("serialize response")
-                                                .into(),
-                                        ))
-                                        .await;
-                                } else if parsed.get("method").and_then(|m| m.as_str())
-                                    == Some("session/new")
-                                {
-                                    let id = parsed.get("id").cloned().unwrap_or(
-                                        serde_json::Value::Number(serde_json::Number::from(0)),
-                                    );
-                                    let response = serde_json::json!({
-                                        "jsonrpc": "2.0",
-                                        "id": id,
-                                        "result": {
-                                            "sessionId": "test-session-1"
-                                        }
-                                    });
-                                    let _ = write
-                                        .send(Message::Text(
-                                            serde_json::to_string(&response)
-                                                .expect("serialize response")
-                                                .into(),
-                                        ))
-                                        .await;
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        });
-
-        MockWsServer { port, _task: task }
-    }
-}
+use crate::test_support::start_mock_acp_ws_server;
 
 /// Helper: get the mock agent config and skip if binary is not built.
 fn mock_agent_config() -> Option<crate::registry::AcpAgentConfig> {
@@ -1063,7 +977,7 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
 /// The mock WS server responds to initialize and session/new requests.
 #[tokio::test]
 async fn test_connect_remote_establishes_connection() {
-    let server = ws_server_helper::start_mock_acp_ws_server().await;
+    let server = start_mock_acp_ws_server(false).await;
     let temp_dir = tempdir().expect("temp dir");
     let ws_url = format!("ws://127.0.0.1:{}", server.port);
 
@@ -1081,7 +995,7 @@ async fn test_connect_remote_establishes_connection() {
 /// Test that connect_remote can create a session after establishing a connection.
 #[tokio::test]
 async fn test_connect_remote_create_session() {
-    let server = ws_server_helper::start_mock_acp_ws_server().await;
+    let server = start_mock_acp_ws_server(false).await;
     let temp_dir = tempdir().expect("temp dir");
     let ws_url = format!("ws://127.0.0.1:{}", server.port);
 
@@ -1121,7 +1035,7 @@ async fn test_connect_remote_fails_on_unreachable_url() {
 /// Test that shutdown on a remote connection doesn't panic (no child process).
 #[tokio::test]
 async fn test_connect_remote_shutdown_no_panic() {
-    let server = ws_server_helper::start_mock_acp_ws_server().await;
+    let server = start_mock_acp_ws_server(false).await;
     let temp_dir = tempdir().expect("temp dir");
     let ws_url = format!("ws://127.0.0.1:{}", server.port);
 
