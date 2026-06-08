@@ -152,6 +152,71 @@ fn builds_cli_auth_url_under_api_prefix() {
     );
 }
 
+#[tokio::test]
+async fn authenticate_prints_url_during_browser_login() {
+    let dir = tempdir().unwrap();
+    let broker_url = "https://broker.test".to_string();
+    let mut client = BrokerClient::new(broker_url.clone(), dir.path().to_path_buf());
+    let token = future_jwt();
+    let callback_token = token.clone();
+    let mut output = Vec::new();
+
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        client.authenticate_with(&mut output, move |auth_url| {
+            let auth_url = auth_url.to_string();
+            let callback_token = callback_token;
+            std::thread::spawn(move || complete_auth_callback(&auth_url, &callback_token));
+            true
+        }),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let output = String::from_utf8(output).unwrap();
+    let expected_url_prefix = "https://broker.test/api/auth/cli?redirect_uri=http://localhost:";
+    assert!(
+        output.contains(expected_url_prefix),
+        "expected auth output to include URL prefix {expected_url_prefix}, got {output:?}"
+    );
+
+    assert_eq!(
+        load_credentials(dir.path()),
+        Some(CloudCredentials {
+            broker_url,
+            auth_token: token,
+        })
+    );
+}
+
+fn complete_auth_callback(auth_url: &str, token: &str) {
+    use std::io::Read as _;
+    use std::io::Write as _;
+
+    let auth_url = url::Url::parse(auth_url).unwrap();
+    let redirect_uri = auth_url
+        .query_pairs()
+        .find(|(key, _)| key == "redirect_uri")
+        .map(|(_, value)| value.into_owned())
+        .unwrap();
+    let redirect_uri = url::Url::parse(&redirect_uri).unwrap();
+    let port = redirect_uri.port().unwrap();
+    let request_path = format!("{}?token={token}", redirect_uri.path());
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    write!(
+        stream,
+        "GET {request_path} HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n"
+    )
+    .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    assert!(
+        response.contains("Authentication successful"),
+        "expected success response, got {response:?}"
+    );
+}
+
 // ── BrokerClient construction ──────────────────────────────────────
 
 #[test]
