@@ -163,6 +163,24 @@ pub fn enhanced_error_message(
     }
 }
 
+/// Wrap a local spawn/session error with category-based hints derived from the
+/// agent's config. Shared by every local connection and session-creation
+/// failure path in `spawn()` and `resume_session()`.
+pub fn enhance_agent_error(
+    error: anyhow::Error,
+    config: &crate::registry::AcpAgentConfig,
+) -> anyhow::Error {
+    let category = categorize_acp_error(&format!("{error:?}"));
+    anyhow::anyhow!(enhanced_error_message(
+        category,
+        &format!("{error}"),
+        &config.provider_info.name,
+        &config.auth_hint,
+        &config.display_name,
+        &config.install_hint,
+    ))
+}
+
 /// Configuration for spawning an ACP backend.
 ///
 /// This contains the subset of Codex configuration needed for ACP mode,

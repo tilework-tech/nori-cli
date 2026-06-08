@@ -54,15 +54,6 @@ struct SessionPromptState {
     draining_cancel_tail: bool,
 }
 
-struct EstablishResult {
-    cx: ConnectionTo<Agent>,
-    agent_capabilities: acp::AgentCapabilities,
-    event_rx: mpsc::Receiver<ConnectionEvent>,
-    prompt_state: std::sync::Arc<Mutex<HashMap<String, SessionPromptState>>>,
-    session_config_state: std::sync::Arc<std::sync::RwLock<AcpSessionConfigState>>,
-    connection_task: tokio::task::JoinHandle<()>,
-}
-
 /// A thread-safe connection to an ACP agent subprocess using SACP v11.
 ///
 /// Unlike the old `AcpConnection`, this does NOT require a dedicated worker thread.
@@ -105,11 +96,13 @@ pub struct SacpConnection {
 }
 
 /// Shared SACP connection setup: registers notification/request handlers,
-/// performs the initialization handshake, and returns the connection context.
+/// performs the initialization handshake, and returns a `SacpConnection` with
+/// no process handles (`child`/`stderr_task` are `None`). `spawn()` fills in the
+/// subprocess handles afterward; `connect_remote()` uses the result as-is.
 async fn establish_connection(
     transport: impl sacp::ConnectTo<Client> + 'static,
     cwd: &Path,
-) -> Result<EstablishResult> {
+) -> Result<SacpConnection> {
     let (event_tx, event_rx) = mpsc::channel::<ConnectionEvent>(1024);
 
     let event_tx_for_notifications = event_tx.clone();
@@ -421,13 +414,16 @@ async fn establish_connection(
         .await
         .context("SACP connection task died during initialization")??;
 
-    Ok(EstablishResult {
+    Ok(SacpConnection {
         cx,
         agent_capabilities: capabilities,
         event_rx,
         prompt_state,
+        model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
         session_config_state,
         connection_task,
+        child: None,
+        stderr_task: None,
     })
 }
 
@@ -543,19 +539,10 @@ impl SacpConnection {
         ));
         let transport = Lines::new(outgoing_sink, incoming_lines);
 
-        let result = establish_connection(transport, cwd).await?;
-
-        Ok(Self {
-            cx: result.cx,
-            agent_capabilities: result.agent_capabilities,
-            event_rx: result.event_rx,
-            prompt_state: result.prompt_state,
-            model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
-            session_config_state: result.session_config_state,
-            connection_task: result.connection_task,
-            child: Some(child),
-            stderr_task: Some(stderr_task),
-        })
+        let mut connection = establish_connection(transport, cwd).await?;
+        connection.child = Some(child);
+        connection.stderr_task = Some(stderr_task);
+        Ok(connection)
     }
 
     /// Connect to a remote ACP agent over WebSocket.
@@ -567,19 +554,7 @@ impl SacpConnection {
             .with_context(|| format!("Failed to connect to remote ACP agent at {ws_url}"))?;
 
         let transport = Lines::new(sink, stream);
-        let result = establish_connection(transport, cwd).await?;
-
-        Ok(Self {
-            cx: result.cx,
-            agent_capabilities: result.agent_capabilities,
-            event_rx: result.event_rx,
-            prompt_state: result.prompt_state,
-            model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
-            session_config_state: result.session_config_state,
-            connection_task: result.connection_task,
-            child: None,
-            stderr_task: None,
-        })
+        establish_connection(transport, cwd).await
     }
 
     /// Create a new session with the agent.

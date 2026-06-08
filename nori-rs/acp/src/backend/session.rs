@@ -27,19 +27,7 @@ impl AcpBackend {
         let agent_config = get_agent_config(&config.agent)?;
         let mut connection = SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
             .await
-            .map_err(|e| {
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-                let display_error = format!("{e}");
-                anyhow::anyhow!(enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                ))
-            })?;
+            .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
         let supports_load_session = connection.capabilities().load_session;
         let initial_goal_replay_events = transcript
@@ -197,23 +185,10 @@ impl AcpBackend {
                         Arc::clone(&goal_mcp_http_server),
                     )
                     .await?;
-                    let session_id =
-                        connection
-                            .create_session(&cwd, mcp_servers)
-                            .await
-                            .map_err(|e| {
-                                let error_string = format!("{e:?}");
-                                let category = categorize_acp_error(&error_string);
-                                let display_error = format!("{e}");
-                                anyhow::anyhow!(enhanced_error_message(
-                                    category,
-                                    &display_error,
-                                    &agent_config.provider_info.name,
-                                    &agent_config.auth_hint,
-                                    &agent_config.display_name,
-                                    &agent_config.install_hint,
-                                ))
-                            })?;
+                    let session_id = connection
+                        .create_session(&cwd, mcp_servers)
+                        .await
+                        .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
                     let (replay_events, summary) = if let Some(t) = transcript {
                         let client_events = transcript_to_replay_client_events(t);
@@ -259,19 +234,7 @@ impl AcpBackend {
             let session_id = connection
                 .create_session(&cwd, mcp_servers)
                 .await
-                .map_err(|e| {
-                    let error_string = format!("{e:?}");
-                    let category = categorize_acp_error(&error_string);
-                    let display_error = format!("{e}");
-                    anyhow::anyhow!(enhanced_error_message(
-                        category,
-                        &display_error,
-                        &agent_config.provider_info.name,
-                        &agent_config.auth_hint,
-                        &agent_config.display_name,
-                        &agent_config.install_hint,
-                    ))
-                })?;
+                .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
             let (replay_events, summary) = if let Some(t) = transcript {
                 let client_events = transcript_to_replay_client_events(t);

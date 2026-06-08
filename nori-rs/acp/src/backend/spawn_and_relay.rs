@@ -37,20 +37,7 @@ impl AcpBackend {
             let conn =
                 match SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
                     Ok(conn) => conn,
-                    Err(e) => {
-                        let error_string = format!("{e:?}");
-                        let category = categorize_acp_error(&error_string);
-                        let display_error = format!("{e}");
-                        let enhanced_message = enhanced_error_message(
-                            category,
-                            &display_error,
-                            &agent_config.provider_info.name,
-                            &agent_config.auth_hint,
-                            &agent_config.display_name,
-                            &agent_config.install_hint,
-                        );
-                        return Err(anyhow::anyhow!(enhanced_message));
-                    }
+                    Err(e) => return Err(enhance_agent_error(e, &agent_config)),
                 };
             (conn, Some(agent_config))
         };
@@ -77,23 +64,10 @@ impl AcpBackend {
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
             Ok(id) => id,
-            Err(e) => {
-                if let Some(ref ac) = agent_config {
-                    let error_string = format!("{e:?}");
-                    let category = categorize_acp_error(&error_string);
-                    let display_error = format!("{e}");
-                    let enhanced_message = enhanced_error_message(
-                        category,
-                        &display_error,
-                        &ac.provider_info.name,
-                        &ac.auth_hint,
-                        &ac.display_name,
-                        &ac.install_hint,
-                    );
-                    return Err(anyhow::anyhow!(enhanced_message));
-                }
-                return Err(anyhow::anyhow!("Cloud session creation failed: {e}"));
-            }
+            Err(e) => match &agent_config {
+                Some(ac) => return Err(enhance_agent_error(e, ac)),
+                None => return Err(anyhow::anyhow!("Cloud session creation failed: {e}")),
+            },
         };
 
         debug!("ACP session created: {:?}", session_id);
