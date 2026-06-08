@@ -66,10 +66,13 @@ Client-side only (need local filesystem/process/config access):
 Keep enabled in cloud mode (interact with backend or are UI-only):
 - `/agent`, `/model`, `/config`, `/approvals` — remote session config
 - `/goal`, `/compact`, `/status`, `/first-prompt` — session state
-- `/new`, `/resume`, `/resume-viewonly` — session management
+- `/new` — start new session
 - `/undo`, `/fork` — conversation operations (sent to backend)
 - `/quit`, `/exit` — exit TUI
 - `/login`, `/logout` — authentication
+
+Disabled in cloud mode (added during implementation):
+- `/resume`, `/resume-viewonly` — these pick from local transcripts which don't exist for cloud sessions
 
 ### Additional Gating Needed
 1. **Auto-worktree setup** (`lib.rs:217-277`): skip when `cloud_connection.is_some()`

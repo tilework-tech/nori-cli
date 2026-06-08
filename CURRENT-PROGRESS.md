@@ -1,6 +1,6 @@
 # Current Progress
 
-## Status: Item 1 implemented (CLI side)
+## Status: All CLI-side items complete
 
 ### Completed: Cloud Session Selection (Spec Item 1)
 
@@ -34,13 +34,24 @@
 **Design decisions:**
 - Reuses existing `CommandAvailability` infrastructure rather than a new mechanism
 - Exhaustive match forces classification of new commands at compile time
-- Cloud-only commands kept enabled: `/agent`, `/model`, `/config`, `/approvals`, `/goal`, `/new`, `/resume`, `/compact`, `/status`, `/quit`, etc.
-- Backend capabilities are authoritative — if the remote backend sends `SessionCapabilitiesView`, it overwrites local cloud-mode settings
+- Cloud-enabled commands: `/agent`, `/model`, `/config`, `/approvals`, `/goal`, `/new`, `/compact`, `/undo`, `/status`, `/first-prompt`, `/quit`, `/exit`, `/login`, `/logout`, `/fork`
+- Cloud restrictions re-applied after `SessionCapabilitiesChanged` events to ensure local-only commands stay disabled even if the backend sends new capabilities
 
-### Remaining: Item 3
+### Completed: Slack/Discord Session Resumption (Spec Item 3)
 
-**Item 3**: Resume Slack/Discord sessions via CLI. This is naturally supported by item 1 — if the broker returns all sessions regardless of source, the `source` field on `CloudSessionSummary` shows where each session originated. The broker-side implementation needs to return these sessions.
+**What was done:**
+- Naturally supported by item 1 — the session picker displays all sessions from the broker, with a `source` field (cli, slack, discord, etc.) shown next to each entry
+- `CloudSessionSummary.source` field differentiates session origins
+- No additional CLI code needed; the `format_cloud_session_list()` function already renders `(source)` per session
 
-### Broker-side work needed (nori-sessions repo)
-- `GET /api/sessions` endpoint returning `Vec<CloudSessionSummary>` with sessions from all sources
+**Design decisions:**
+- No CLI-side filtering by source — all sessions are shown regardless of origin
+- The broker is responsible for returning sessions from all sources
+
+### Broker-side work needed (nori-sessions repo — separate PR)
+- `GET /api/sessions` endpoint returning `Vec<CloudSessionSummary>` with sessions from all sources (cli, slack, discord)
 - `POST /api/sessions/{id}/resume` endpoint returning `SessionInfo { session_id, ws_url }`
+
+## Status: All CLI-side items complete
+
+All three spec items are implemented on the CLI side. The broker-side work (nori-sessions repo) is tracked separately.
