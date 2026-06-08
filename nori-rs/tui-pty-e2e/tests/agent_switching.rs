@@ -7,6 +7,7 @@
 //! 4. Cleanup happens outside of prompt turns
 //! 5. Different agents use different subprocesses
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
 use tui_pty_e2e::Key;
@@ -34,6 +35,32 @@ fn extract_mock_agent_pids_from_log(log_path: &Path) -> Vec<u32> {
                 .and_then(|caps| caps.get(1).and_then(|m| m.as_str().parse().ok()))
         })
         .collect()
+}
+
+fn wait_for_mock_agent_pid_count(
+    session: &mut TuiSession,
+    log_path: &Path,
+    count: usize,
+    timeout: Duration,
+) -> Vec<u32> {
+    let latest_pids = RefCell::new(Vec::new());
+    session
+        .wait_for(
+            |_| {
+                let pids = extract_mock_agent_pids_from_log(log_path);
+                let has_enough_pids = pids.len() >= count;
+                *latest_pids.borrow_mut() = pids;
+                has_enough_pids
+            },
+            timeout,
+        )
+        .unwrap_or_else(|err| {
+            panic!(
+                "Should have at least {count} PIDs after switch, got: {:?}: {err}",
+                latest_pids.borrow()
+            )
+        });
+    latest_pids.into_inner()
 }
 
 /// Check if a process with the given PID exists and is not a zombie
@@ -132,26 +159,11 @@ fn test_acp_agent_switch_via_new_creates_new_subprocess() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for new session to start
-    session
-        .wait_for_text("›", Duration::from_secs(10))
-        .expect("New session should start");
-
-    // Poll the log for the new PID — the non-blocking writer may lag.
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    let mut post_switch_pids;
-    loop {
-        post_switch_pids = extract_mock_agent_pids_from_log(&log_path);
-        if post_switch_pids.len() >= 2 {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "Should have at least 2 PIDs after switch, got: {:?}",
-            post_switch_pids
-        );
-        std::thread::sleep(Duration::from_millis(250));
-    }
+    // Poll the TUI while waiting for the log. The prompt glyph may already be
+    // present from the previous session, so waiting for "›" can return before
+    // the /new command has been processed.
+    let post_switch_pids =
+        wait_for_mock_agent_pid_count(&mut session, &log_path, 2, Duration::from_secs(10));
 
     let new_pid = *post_switch_pids.last().unwrap();
     assert_ne!(
@@ -194,24 +206,16 @@ fn test_acp_agent_old_subprocess_cleanup() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for new session
     session
-        .wait_for_text("›", Duration::from_secs(10))
-        .expect("New session should start");
-
-    // Poll until old process is cleaned up — may take time on loaded CI.
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        if !process_exists(initial_pid) || !process_exists_and_not_zombie(initial_pid) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "Old subprocess {} should be cleaned up (terminated or gone) after switch",
-            initial_pid
-        );
-        std::thread::sleep(Duration::from_millis(250));
-    }
+        .wait_for(
+            |_| !process_exists(initial_pid) || !process_exists_and_not_zombie(initial_pid),
+            Duration::from_secs(10),
+        )
+        .unwrap_or_else(|err| {
+            panic!(
+                "Old subprocess {initial_pid} should be cleaned up (terminated or gone) after switch: {err}"
+            )
+        });
 }
 
 // ============================================================================
@@ -542,24 +546,14 @@ fn test_agent_switch_on_prompt_submission() {
         .wait_for_text("Test message", Duration::from_secs(10))
         .expect("Response from switched agent should appear");
 
-    // Poll the log file for the new PID. The ACP log uses a non-blocking
-    // (async) writer that may not have flushed the "ACP agent spawned" line
-    // to disk yet, even though the agent has already responded on screen.
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    let mut post_prompt_pids;
-    loop {
-        post_prompt_pids = extract_mock_agent_pids_from_log(&log_path);
-        if post_prompt_pids.len() > initial_pids.len() {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "New subprocess should be spawned after prompt submission with pending agent: initial={:?}, after={:?}",
-            initial_pids,
-            post_prompt_pids
-        );
-        std::thread::sleep(Duration::from_millis(250));
-    }
+    // Poll the log through the TUI harness so terminal control-sequence
+    // responses are still handled while the async log writer catches up.
+    let post_prompt_pids = wait_for_mock_agent_pid_count(
+        &mut session,
+        &log_path,
+        initial_pids.len() + 1,
+        Duration::from_secs(10),
+    );
 
     let new_pid = *post_prompt_pids.last().unwrap();
     assert_ne!(
@@ -727,19 +721,14 @@ fn test_agent_cleanup_after_switch_on_prompt() {
         .wait_for_text("Test message", Duration::from_secs(10))
         .expect("Response from switched agent should appear");
 
-    // Poll until old process is cleaned up — may take time on loaded CI.
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        if !process_exists(initial_pid) || !process_exists_and_not_zombie(initial_pid) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "Old agent subprocess {} should be cleaned up after switch",
-            initial_pid
-        );
-        std::thread::sleep(Duration::from_millis(250));
-    }
+    session
+        .wait_for(
+            |_| !process_exists(initial_pid) || !process_exists_and_not_zombie(initial_pid),
+            Duration::from_secs(10),
+        )
+        .unwrap_or_else(|err| {
+            panic!("Old agent subprocess {initial_pid} should be cleaned up after switch: {err}")
+        });
 }
 
 // ============================================================================
@@ -832,30 +821,39 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Poll the log until both prompt and new_session counts are met.
-    // The ACP log uses a non-blocking writer that may lag behind screen state.
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    let msgs_after_prompt = loop {
-        let msgs = extract_agent_messages_from_log(&log_path);
-        let prompt_count = msgs
-            .iter()
-            .filter(|m| m.contains("Mock agent: prompt"))
-            .count();
-        let new_session_count = msgs.iter().filter(|m| m.contains("new_session")).count();
-        if prompt_count >= 2 && new_session_count >= 2 {
-            break msgs;
-        }
-        if std::time::Instant::now() >= deadline {
+    // Poll the log through the TUI harness so terminal control-sequence
+    // responses are still handled while the async log writer catches up.
+    let latest_msgs = RefCell::new(Vec::new());
+    session
+        .wait_for(
+            |_| {
+                let msgs = extract_agent_messages_from_log(&log_path);
+                let prompt_count = msgs
+                    .iter()
+                    .filter(|m| m.contains("Mock agent: prompt"))
+                    .count();
+                let new_session_count = msgs.iter().filter(|m| m.contains("new_session")).count();
+                let ready = prompt_count >= 2 && new_session_count >= 2;
+                *latest_msgs.borrow_mut() = msgs;
+                ready
+            },
+            Duration::from_secs(10),
+        )
+        .unwrap_or_else(|err| {
             let screen = session.screen_contents();
+            let msgs = latest_msgs.borrow();
+            let prompt_count = msgs
+                .iter()
+                .filter(|m| m.contains("Mock agent: prompt"))
+                .count();
+            let new_session_count = msgs.iter().filter(|m| m.contains("new_session")).count();
             panic!(
-                "Expected 2 prompt and 2 new_session calls, got prompts={}, sessions={}.\n\
-                 Screen contents: {}\n\
-                 Agent messages in log: {:?}",
-                prompt_count, new_session_count, screen, msgs
+                "Expected 2 prompt and 2 new_session calls, got prompts={prompt_count}, sessions={new_session_count}.\n\
+                 Screen contents: {screen}\n\
+                 Agent messages in log: {msgs:?}: {err}"
             );
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    };
+        });
+    let msgs_after_prompt = latest_msgs.into_inner();
     eprintln!("Messages after prompt submission: {:?}", msgs_after_prompt);
 
     // Verify message flow in logs:
@@ -1032,36 +1030,50 @@ fn test_agent_switch_logs_correct_sequence() {
         .wait_for_text("Test message", Duration::from_secs(10))
         .expect("Should see response from new agent");
 
-    // Poll the log until we see the expected spawn and message counts.
-    // The ACP log uses a non-blocking writer that may lag behind screen state.
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    let log_content = loop {
-        let content = std::fs::read_to_string(&log_path).unwrap_or_default();
-        let spawn_count = content
-            .lines()
-            .filter(|l| l.contains("ACP agent spawned"))
-            .count();
-        let new_session_count = content
-            .lines()
-            .filter(|l| l.contains("Mock agent:") && l.contains("new_session"))
-            .count();
-        let prompt_count = content
-            .lines()
-            .filter(|l| l.contains("Mock agent:") && l.contains("prompt"))
-            .count();
-        if spawn_count >= 2 && new_session_count >= 2 && prompt_count >= 1 {
-            break content;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "Expected spawns>=2, sessions>=2, prompts>=1; got spawns={}, sessions={}, prompts={}. Log:\n{}",
-            spawn_count,
-            new_session_count,
-            prompt_count,
-            content
-        );
-        std::thread::sleep(Duration::from_millis(250));
-    };
+    // Poll the log through the TUI harness so terminal control-sequence
+    // responses are still handled while the async log writer catches up.
+    let latest_log_content = RefCell::new(String::new());
+    session
+        .wait_for(
+            |_| {
+                let content = std::fs::read_to_string(&log_path).unwrap_or_default();
+                let spawn_count = content
+                    .lines()
+                    .filter(|l| l.contains("ACP agent spawned"))
+                    .count();
+                let new_session_count = content
+                    .lines()
+                    .filter(|l| l.contains("Mock agent:") && l.contains("new_session"))
+                    .count();
+                let prompt_count = content
+                    .lines()
+                    .filter(|l| l.contains("Mock agent:") && l.contains("prompt"))
+                    .count();
+                let ready = spawn_count >= 2 && new_session_count >= 2 && prompt_count >= 1;
+                *latest_log_content.borrow_mut() = content;
+                ready
+            },
+            Duration::from_secs(10),
+        )
+        .unwrap_or_else(|err| {
+            let content = latest_log_content.borrow();
+            let spawn_count = content
+                .lines()
+                .filter(|l| l.contains("ACP agent spawned"))
+                .count();
+            let new_session_count = content
+                .lines()
+                .filter(|l| l.contains("Mock agent:") && l.contains("new_session"))
+                .count();
+            let prompt_count = content
+                .lines()
+                .filter(|l| l.contains("Mock agent:") && l.contains("prompt"))
+                .count();
+            panic!(
+                "Expected spawns>=2, sessions>=2, prompts>=1; got spawns={spawn_count}, sessions={new_session_count}, prompts={prompt_count}. Log:\n{content}: {err}"
+            );
+        });
+    let log_content = latest_log_content.into_inner();
 
     // Verify new_session and prompt sequence
     let agent_messages: Vec<&str> = log_content

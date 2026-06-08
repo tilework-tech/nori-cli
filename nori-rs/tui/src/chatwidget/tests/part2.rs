@@ -73,6 +73,7 @@ fn typed_goal_command_is_disabled_when_goal_tools_are_unsupported() {
 
     chat.submit_user_message("/goal Ship this".to_string().into());
 
+    assert_prompt_history_entry(&mut op_rx, "/goal Ship this");
     assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
     let cells = drain_insert_history(&mut rx);
     assert!(
@@ -147,6 +148,22 @@ fn goal_objective_submits_thread_goal_set() {
 }
 
 #[test]
+fn goal_objective_is_added_to_prompt_history() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+
+    chat.submit_user_message("/goal Ship the ACP goal command".to_string().into());
+
+    assert_eq!(
+        op_rx.try_recv(),
+        Ok(Op::ThreadGoalSet {
+            objective: Some("Ship the ACP goal command".to_string()),
+            status: Some(ThreadGoalStatus::Active),
+        })
+    );
+    assert_prompt_history_entry(&mut op_rx, "/goal Ship the ACP goal command");
+}
+
+#[test]
 fn goal_objective_confirms_before_replacing_unfinished_goal() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
     chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
@@ -157,6 +174,7 @@ fn goal_objective_confirms_before_replacing_unfinished_goal() {
 
     chat.submit_user_message("/goal Replacement goal".to_string().into());
 
+    assert_prompt_history_entry(&mut op_rx, "/goal Replacement goal");
     assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
     let popup = render_bottom_popup(&chat, 80);
     assert_snapshot!("goal_replace_confirmation_popup", popup);
@@ -191,6 +209,7 @@ fn goal_replace_confirmation_submits_new_objective() {
             other => panic!("expected replacement ThreadGoalSet event, got {other:?}"),
         }
     }
+    assert_prompt_history_entry(&mut op_rx, "/goal Replacement goal");
     assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
 }
 
@@ -240,6 +259,7 @@ fn goal_status_commands_submit_goal_mutations() {
         chat.submit_user_message(input.to_string().into());
 
         assert_eq!(op_rx.try_recv(), Ok(expected));
+        assert_prompt_history_entry(&mut op_rx, input);
     }
 }
 
@@ -301,6 +321,7 @@ fn explicit_goal_status_request_renders_current_goal_summary() {
 
     chat.submit_user_message("/goal".to_string().into());
     assert_eq!(op_rx.try_recv(), Ok(Op::ThreadGoalGet));
+    assert_prompt_history_entry(&mut op_rx, "/goal");
     chat.handle_client_event(nori_protocol::ClientEvent::ThreadGoalUpdated(
         nori_protocol::ThreadGoalUpdated { goal },
     ));
@@ -357,6 +378,7 @@ fn goal_edit_prefills_current_goal_objective() {
         chat.bottom_pane.composer_text(),
         "/goal Keep improving the ACP goal command"
     );
+    assert_prompt_history_entry(&mut op_rx, "/goal edit");
     assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
 }
 
@@ -366,6 +388,7 @@ fn goal_edit_without_goal_does_not_open_editor_on_later_goal_update() {
 
     chat.submit_user_message("/goal edit".to_string().into());
     assert_matches!(op_rx.try_recv(), Ok(Op::ThreadGoalGet));
+    assert_prompt_history_entry(&mut op_rx, "/goal edit");
 
     chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
         nori_protocol::SessionUpdateInfo {
@@ -416,6 +439,18 @@ fn test_thread_goal_with_tokens(
         created_at: 10,
         updated_at: 10,
     }
+}
+
+fn assert_prompt_history_entry(
+    op_rx: &mut tokio::sync::mpsc::UnboundedReceiver<Op>,
+    expected_text: &str,
+) {
+    assert_eq!(
+        op_rx.try_recv(),
+        Ok(Op::AddToHistory {
+            text: expected_text.to_string(),
+        })
+    );
 }
 
 #[test]

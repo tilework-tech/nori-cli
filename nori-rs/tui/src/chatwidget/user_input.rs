@@ -60,6 +60,7 @@ impl ChatWidget {
         }
 
         if image_paths.is_empty() && self.handle_goal_user_message(&text) {
+            self.persist_prompt_history(&text);
             return;
         }
 
@@ -166,19 +167,27 @@ impl ChatWidget {
             });
 
         // Persist the text to cross-session message history.
-        if !text.is_empty() {
-            self.codex_op_tx
-                .send(Op::AddToHistory { text: text.clone() })
-                .unwrap_or_else(|e| {
-                    tracing::error!("failed to send AddHistory op: {e}");
-                });
-        }
+        self.persist_prompt_history(&text);
 
         // Only show the text portion in conversation history.
         if !text.is_empty() {
             self.add_to_history(history_cell::new_user_prompt(text));
         }
         self.needs_final_message_separator = false;
+    }
+
+    fn persist_prompt_history(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        self.codex_op_tx
+            .send(Op::AddToHistory {
+                text: text.to_string(),
+            })
+            .unwrap_or_else(|e| {
+                tracing::error!("failed to send AddHistory op: {e}");
+            });
     }
 
     /// Replay a subset of initial events into the UI to seed the transcript when
