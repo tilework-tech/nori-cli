@@ -440,6 +440,21 @@ mod tests {
     }
 
     #[test]
+    fn cloud_mode_tests_cover_all_variants() {
+        let client_only: Vec<SlashCommand> = SlashCommand::iter()
+            .filter(|cmd| !cmd.available_in_cloud_mode())
+            .collect();
+        let cloud_enabled: Vec<SlashCommand> = SlashCommand::iter()
+            .filter(|cmd| cmd.available_in_cloud_mode())
+            .collect();
+        assert_eq!(
+            client_only.len() + cloud_enabled.len(),
+            SlashCommand::iter().count(),
+            "every SlashCommand variant must be classified as either cloud-disabled or cloud-enabled"
+        );
+    }
+
+    #[test]
     fn browse_parses_from_string() {
         let cmd: SlashCommand = "browse".parse().expect("/browse should parse from string");
         assert_eq!(cmd, SlashCommand::Browse);

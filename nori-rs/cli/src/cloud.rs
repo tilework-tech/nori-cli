@@ -148,6 +148,12 @@ mod tests {
     }
 
     #[test]
+    fn parse_choice_rejects_negative_numbers() {
+        assert!(parse_session_choice("-1", 3).is_err());
+        assert!(parse_session_choice("-100", 3).is_err());
+    }
+
+    #[test]
     fn parse_choice_works_with_zero_sessions() {
         assert_eq!(parse_session_choice("n", 0), Ok(SessionChoice::New));
         assert!(parse_session_choice("1", 0).is_err());

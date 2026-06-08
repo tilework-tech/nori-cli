@@ -533,16 +533,27 @@ async fn list_sessions_sends_get_with_auth_and_parses_response() {
     let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
 
     let sessions = client.list_sessions().await.unwrap();
-    assert_eq!(sessions.len(), 2);
-    assert_eq!(sessions[0].session_id, "sess-1");
-    assert_eq!(sessions[0].source, "cli");
     assert_eq!(
-        sessions[0].first_message_preview.as_deref(),
-        Some("Fix the login bug")
+        sessions,
+        vec![
+            CloudSessionSummary {
+                session_id: "sess-1".to_string(),
+                source: "cli".to_string(),
+                created_at: "2025-01-27T12:00:00Z".to_string(),
+                last_active_at: "2025-01-27T14:30:00Z".to_string(),
+                first_message_preview: Some("Fix the login bug".to_string()),
+                status: "idle".to_string(),
+            },
+            CloudSessionSummary {
+                session_id: "sess-2".to_string(),
+                source: "slack".to_string(),
+                created_at: "2025-01-26T10:00:00Z".to_string(),
+                last_active_at: "2025-01-26T11:00:00Z".to_string(),
+                first_message_preview: None,
+                status: "idle".to_string(),
+            },
+        ]
     );
-    assert_eq!(sessions[1].session_id, "sess-2");
-    assert_eq!(sessions[1].source, "slack");
-    assert!(sessions[1].first_message_preview.is_none());
 
     server_handle.join().unwrap();
 }
@@ -685,8 +696,13 @@ async fn resume_session_sends_post_with_auth_and_parses_response() {
     let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
 
     let info = client.resume_session("sess-abc123").await.unwrap();
-    assert_eq!(info.session_id, "sess-abc123");
-    assert_eq!(info.ws_url, "wss://broker.test/ws/sess-abc123");
+    assert_eq!(
+        info,
+        SessionInfo {
+            session_id: "sess-abc123".to_string(),
+            ws_url: "wss://broker.test/ws/sess-abc123".to_string(),
+        }
+    );
 
     server_handle.join().unwrap();
 }
