@@ -553,7 +553,6 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let mut broker = nori_acp::broker::BrokerClient::new(broker_url, nori_home);
 
             if !broker.has_valid_token() {
-                eprintln!("Opening browser for authentication...");
                 broker.authenticate().await?;
                 eprintln!("Authenticated.");
             }
