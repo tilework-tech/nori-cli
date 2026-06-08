@@ -322,7 +322,6 @@ mod tests {
 
     #[test]
     fn test_format_relative_time_old_date() {
-        // Test with a date far in the past
         let result = format_relative_time("2020-01-15T10:30:00Z");
         assert!(result.starts_with("2020-01-15"));
     }

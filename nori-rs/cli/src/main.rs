@@ -90,6 +90,9 @@ enum Subcommand {
 
     /// Resume a previous interactive session (picker by default; use --last to continue the most recent).
     Resume(ResumeCommand),
+
+    /// Run a TUI session backed by a cloud VM via the nori-sessions broker.
+    Cloud(CloudCommand),
 }
 
 #[derive(Debug, Parser)]
@@ -111,6 +114,16 @@ struct ResumeCommand {
     /// Show all sessions instead of filtering to the current working directory.
     #[arg(long = "all", default_value_t = false)]
     all: bool,
+
+    #[clap(flatten)]
+    config_overrides: TuiCli,
+}
+
+#[derive(Debug, Parser)]
+struct CloudCommand {
+    /// Broker URL (overrides config.toml [cloud] broker_url).
+    #[arg(long = "broker-url")]
+    broker_url: Option<String>,
 
     #[clap(flatten)]
     config_overrides: TuiCli,
@@ -505,6 +518,93 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let socket_path = cmd.socket_path;
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
+        }
+        Some(Subcommand::Cloud(cloud_cmd)) => {
+            let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+            let nori_home = find_nori_home()?;
+            let broker_url = if let Some(url) =
+                cloud_cmd.broker_url.or(nori_config.cloud_broker_url)
+            {
+                url
+            } else if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                use std::io::BufRead;
+                use std::io::Write;
+
+                eprint!("Enter your org's broker URL: ");
+                std::io::stderr().flush()?;
+                let mut line = String::new();
+                std::io::stdin().lock().read_line(&mut line)?;
+                let url = line.trim().trim_end_matches('/').to_string();
+                if url.is_empty() {
+                    anyhow::bail!("No broker URL provided.");
+                }
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    anyhow::bail!("Broker URL must start with http:// or https://");
+                }
+                nori_acp::config::save_cloud_broker_url(&nori_home, &url)?;
+                eprintln!("Broker URL saved to config.");
+                url
+            } else {
+                anyhow::bail!(
+                    "No broker URL configured. Use --broker-url or set [cloud] broker_url in ~/.nori/cli/config.toml"
+                );
+            };
+
+            let mut broker = nori_acp::broker::BrokerClient::new(broker_url, nori_home);
+
+            if !broker.has_valid_token() {
+                eprintln!("Opening browser for authentication...");
+                broker.authenticate().await?;
+                eprintln!("Authenticated.");
+            }
+
+            eprintln!("Acquiring cloud session...");
+            let session_info = match broker.acquire_session().await {
+                Ok(info) => info,
+                Err(nori_acp::broker::BrokerError::TokenExpired) => {
+                    eprintln!("Token expired, re-authenticating...");
+                    broker.authenticate().await?;
+                    broker.acquire_session().await.map_err(|e| {
+                        anyhow::anyhow!(
+                            "Failed to acquire cloud session after re-authentication: {e}"
+                        )
+                    })?
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to acquire cloud session: {e}");
+                }
+            };
+            eprintln!("Connected to session {}", session_info.session_id);
+
+            merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
+            prepend_config_flags(
+                &mut interactive.config_overrides,
+                root_config_overrides.clone(),
+            );
+            interactive.cloud_connection = Some(nori_acp::broker::CloudConnectionInfo {
+                ws_url: session_info.ws_url,
+                auth_token: broker
+                    .auth_token()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("auth token missing after authenticate + acquire_session")
+                    })?
+                    .to_string(),
+            });
+
+            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                broker.release_session(&session_info.session_id),
+            )
+            .await
+            {
+                Ok(Ok(())) => tracing::debug!("Cloud session released"),
+                Ok(Err(e)) => tracing::warn!("Cloud session release failed: {e}"),
+                Err(_) => tracing::warn!("Cloud session release timed out"),
+            }
+
+            handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Completions(cmd)) => {
             clap_complete::generate(
@@ -942,5 +1042,68 @@ mod tests {
             }
             _ => panic!("expected Skillsets subcommand"),
         }
+    }
+
+    fn finalize_cloud_from_args(args: &[&str]) -> TuiCli {
+        let cli = MultitoolCli::try_parse_from(args).expect("parse");
+        let MultitoolCli {
+            mut interactive,
+            config_overrides: root_overrides,
+            subcommand,
+        } = cli;
+
+        let Subcommand::Cloud(cloud_cmd) = subcommand.expect("cloud present") else {
+            unreachable!()
+        };
+
+        merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
+        prepend_config_flags(&mut interactive.config_overrides, root_overrides);
+        interactive
+    }
+
+    #[test]
+    fn cloud_preserves_root_level_flags() {
+        let interactive = finalize_cloud_from_args(
+            [
+                "nori",
+                "--skip-trust-directory",
+                "cloud",
+                "--agent",
+                "codex",
+            ]
+            .as_ref(),
+        );
+        assert!(
+            interactive.skip_trust_directory,
+            "root --skip-trust-directory should be preserved through cloud subcommand"
+        );
+        assert_eq!(interactive.agent.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn cloud_merges_subcommand_flags_into_root() {
+        let interactive = finalize_cloud_from_args(
+            [
+                "nori",
+                "cloud",
+                "--agent",
+                "codex",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "-C",
+                "/tmp",
+                "--skip-welcome",
+                "--skip-trust-directory",
+            ]
+            .as_ref(),
+        );
+
+        assert_eq!(interactive.agent.as_deref(), Some("codex"));
+        assert!(interactive.dangerously_bypass_approvals_and_sandbox);
+        assert_eq!(
+            interactive.cwd.as_deref(),
+            Some(std::path::Path::new("/tmp"))
+        );
+        assert!(interactive.skip_welcome);
+        assert!(interactive.skip_trust_directory);
     }
 }

@@ -222,6 +222,18 @@ pub struct NoriConfigToml {
     /// Custom agent definitions
     #[serde(default)]
     pub agents: Vec<AgentConfigToml>,
+
+    /// Cloud session settings
+    #[serde(default)]
+    pub cloud: CloudConfigToml,
+}
+
+/// TOML settings for cloud session integration.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CloudConfigToml {
+    /// Broker URL for cloud sessions (e.g., "https://nori-broker.myorg.fly.dev")
+    pub broker_url: Option<String>,
 }
 
 /// TOML settings for ACP wire proxy logging.
@@ -1768,6 +1780,9 @@ pub struct NoriConfig {
 
     /// Custom agent definitions from config
     pub agents: Vec<AgentConfigToml>,
+
+    /// Cloud broker URL from config (e.g., "https://nori-broker.myorg.fly.dev")
+    pub cloud_broker_url: Option<String>,
 }
 
 impl Default for NoriConfig {
@@ -1820,6 +1835,7 @@ impl Default for NoriConfig {
             async_post_agent_response_hooks: Vec::new(),
             default_models: HashMap::new(),
             agents: Vec::new(),
+            cloud_broker_url: None,
         }
     }
 }

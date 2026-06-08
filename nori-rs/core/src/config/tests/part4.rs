@@ -46,7 +46,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         model_reasoning_effort: None,
         model_reasoning_summary: ReasoningSummary::default(),
         model_verbosity: None,
-        chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
+
         base_instructions: None,
         developer_instructions: None,
         compact_prompt: None,
@@ -122,7 +122,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         model_reasoning_effort: Some(ReasoningEffort::High),
         model_reasoning_summary: ReasoningSummary::Detailed,
         model_verbosity: Some(Verbosity::High),
-        chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
+
         base_instructions: None,
         developer_instructions: None,
         compact_prompt: None,

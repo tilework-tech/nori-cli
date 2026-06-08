@@ -37,6 +37,7 @@ This crate is the primary entry point that ties together the core crates:
 match subcommand {
     None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Resume(cmd)) => nori_tui::run_main(...),
+    Some(Subcommand::Cloud(cmd)) => nori_tui::run_main(...),  // Cloud VM session
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
@@ -44,6 +45,15 @@ match subcommand {
     // ... other subcommands
 }
 ```
+
+**CloudCommand**: Runs a TUI session backed by a cloud VM via the nori-sessions broker:
+- `nori cloud` - Connects to a cloud session using the broker URL from `config.toml`, or prompts interactively on first run
+- `nori cloud --broker-url https://broker.example.com` - Overrides the broker URL
+- TUI flags such as `--agent`, `--profile`, `--sandbox` can be passed after `cloud`
+- Broker URL resolution follows a three-step priority chain: `--broker-url` flag > `[cloud] broker_url` in `config.toml` > interactive stdin prompt. The interactive prompt only activates when stdin is a terminal (`std::io::IsTerminal`); non-interactive invocations without a configured URL receive an error with setup instructions. The prompt validates that the URL starts with `http://` or `https://` and persists the value to `config.toml` via `save_cloud_broker_url()` from `@/nori-rs/acp/src/config/loader.rs`, so subsequent runs use the saved URL automatically
+- The dispatch flow: resolves broker URL (see above), creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, acquires a session (with automatic re-authentication retry on `BrokerError::TokenExpired`), then sets `TuiCli.cloud_connection` and calls `nori_tui::run_main()`. The retry handles the edge case where `has_valid_token()` passes at startup but the broker rejects the token with HTTP 401 during `acquire_session()` -- the CLI re-triggers `broker.authenticate()` and retries once
+- After `run_main()` returns, the CLI calls `broker.release_session()` with a 5-second timeout as best-effort cleanup. Release failures or timeouts are logged but do not affect the exit code
+- The `CloudConnectionInfo` flows through the TUI unchanged until it reaches `AcpBackend::spawn()`, which uses `SacpConnection::connect_remote()` instead of spawning a local subprocess
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 

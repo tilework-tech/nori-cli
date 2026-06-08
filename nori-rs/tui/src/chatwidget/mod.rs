@@ -327,6 +327,8 @@ pub(crate) struct ChatWidgetInit {
     /// call `spawn_deferred_agent()` once pre-session setup (e.g., skillset
     /// switch) is complete.
     pub(crate) deferred_spawn: bool,
+    /// Cloud connection info for remote WebSocket sessions.
+    pub(crate) cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
     /// Optional conversation context to inject into the first prompt.
     /// Used by `/fork` to pass prior conversation history to the new session.
     pub(crate) fork_context: Option<String>,

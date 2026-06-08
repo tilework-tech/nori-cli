@@ -688,6 +688,7 @@ mod tests {
             pinned_plan_drawer: false,
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
+            cloud_broker_url: None,
         }
     }
 

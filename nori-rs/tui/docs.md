@@ -478,6 +478,8 @@ The `/fork` slash command lets users rewind to a previous user message and branc
 
 The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
 
+**Cloud connection threading:** `ChatWidgetInit.cloud_connection` carries an optional `CloudConnectionInfo` from the CLI's `nori cloud` subcommand. The value flows through `Cli` -> `App::run()` -> `ChatWidgetInit` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.cloud_connection`. When present, `spawn_agent()` bypasses the `get_agent_config()` check (the remote agent is already running) and routes directly to `spawn_acp_agent()`. The resume path is local-only: `new_resumed_acp()` ignores `cloud_connection`, because cloud sessions are not recorded locally and therefore never appear in the resume pickers. `spawn_deferred_agent()` passes cloud_connection from its caller. See `@/nori-rs/acp/src/broker/docs.md` for the broker client and `@/nori-rs/acp/docs.md` for the backend cloud-vs-local branching in `spawn()`.
+
 **Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). The ACP backend only prepends that fallback `<context>` block to the first user prompt when the active ACP connection lacks HTTP MCP support. MCP-capable agents instead receive the backend-owned `nori-client` server and discover Nori operating context through its resources and prompts (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
 
 **Browser Session (`/browser`) (`chatwidget/key_handling.rs`, `app/event_handling.rs`, `app_event.rs`):**
@@ -806,7 +808,7 @@ The file manager setting is configurable via `/settings` -> "File Manager" which
 The `/resume-viewonly` command allows viewing previous session transcripts without replaying the conversation. Implementation in `@/nori-rs/tui/src/`:
 
 - `viewonly_transcript.rs`: Converts `nori_acp::transcript::Transcript` entries to `ViewonlyEntry` enum (User, Assistant, Thinking, Info variants)
-- `nori/viewonly_session_picker.rs`: Session picker UI for selecting past sessions
+- `nori/viewonly_session_picker.rs`: Session picker UI for selecting past sessions; also defines `SessionPickerInfo` (shared with `/resume` picker)
 - `app/session_setup.rs::display_viewonly_transcript()`: Renders entries in the chat history
 
 Rendering behavior:
@@ -846,7 +848,7 @@ Selection behavior:
 - `nori resume` opens `resume_picker/`, which lists metadata-only transcript rows and returns a `ResumeTarget`.
 - `--agent` is optional. When omitted, the recorded `session_meta.agent` is used. When present, it must match the recorded agent or startup fails with a clear error.
 
-The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It uses `TranscriptLoader::list_resumable_session_metadata()` and keeps rows lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery.
+The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It uses `TranscriptLoader::list_resumable_session_metadata()` and keeps rows lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery. Cloud sessions are not recorded to local transcripts, so they never appear in any of the session pickers.
 
 Resume hints use the shared `RESUME_HINT_LEAD` and `resume_command_for_conversation()` helpers from `app/` so the in-TUI new-conversation summary and the post-exit CLI output stay aligned. Both surfaces put the copyable `nori resume <session-id>` command on its own line after the `run:` lead text.
 
@@ -889,7 +891,7 @@ Lazy picker summaries: after `ShowResumeSessionPicker` is sent, `ChatWidget::ope
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/nori-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing both the optional `acp_session_id` and the full `Transcript`. Both spawn paths receive a single `BackendEvent` stream from `nori-acp`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
+`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing the optional `acp_session_id` and the full `Transcript`. Resume is local-only -- there is no `cloud_connection` parameter on this path, since cloud sessions are not recorded locally and never reach the resume flow. Both spawn paths receive a single `BackendEvent` stream from `nori-acp`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
 
 **Agent Connection Lifecycle & Failure Recovery:**
 

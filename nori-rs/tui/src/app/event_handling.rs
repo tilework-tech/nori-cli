@@ -964,8 +964,11 @@ impl App {
                 #[cfg(feature = "nori-config")]
                 if success && self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
-                    self.chat_widget
-                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
+                    self.chat_widget.spawn_deferred_agent(
+                        self.config.clone(),
+                        self.app_event_tx.clone(),
+                        self.cloud_connection.clone(),
+                    );
                 }
                 if success {
                     self.request_system_info_refresh(
@@ -982,8 +985,11 @@ impl App {
                 #[cfg(feature = "nori-config")]
                 if self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
-                    self.chat_widget
-                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
+                    self.chat_widget.spawn_deferred_agent(
+                        self.config.clone(),
+                        self.app_event_tx.clone(),
+                        self.cloud_connection.clone(),
+                    );
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {

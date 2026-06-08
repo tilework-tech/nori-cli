@@ -491,20 +491,36 @@ impl AcpBackend {
                     &self.mcp_servers,
                     self.mcp_oauth_credentials_store_mode,
                 );
-                let pending_nori_client_server = match nori_client_mcp::register_for_session(
-                    &self.connection,
-                    &mut mcp_servers,
-                    Arc::clone(&self.thread_goal_state),
-                    self.backend_event_tx.clone(),
-                    Arc::clone(&self.transcript_recorder_cell),
-                    Arc::clone(&self.goal_mcp_connected),
-                )
-                .await
-                {
-                    Ok(server) => server,
-                    Err(err) => {
-                        warn!("Failed to register goal MCP server after compact: {err}");
+                let previous_goal_mcp_connected = {
+                    let goal_mcp_http_server = self.goal_mcp_http_server.lock().await;
+                    if let Some(server) = goal_mcp_http_server.as_ref() {
+                        mcp_servers.push(server.as_mcp_server());
+                        Some(
+                            self.goal_mcp_connected
+                                .swap(false, std::sync::atomic::Ordering::Relaxed),
+                        )
+                    } else {
                         None
+                    }
+                };
+                let pending_nori_client_server = if previous_goal_mcp_connected.is_some() {
+                    None
+                } else {
+                    match nori_client_mcp::register_for_session(
+                        &self.connection,
+                        &mut mcp_servers,
+                        Arc::clone(&self.thread_goal_state),
+                        self.backend_event_tx.clone(),
+                        Arc::clone(&self.transcript_recorder_cell),
+                        Arc::clone(&self.goal_mcp_connected),
+                    )
+                    .await
+                    {
+                        Ok(server) => server,
+                        Err(err) => {
+                            warn!("Failed to register goal MCP server after compact: {err}");
+                            None
+                        }
                     }
                 };
                 let nori_client_advertised = mcp_servers.iter().any(|server| {
@@ -533,6 +549,10 @@ impl AcpBackend {
                         .await;
                     }
                     Err(err) => {
+                        if let Some(previous) = previous_goal_mcp_connected {
+                            self.goal_mcp_connected
+                                .store(previous, std::sync::atomic::Ordering::Relaxed);
+                        }
                         warn!("Failed to create new session after compact: {err}");
                     }
                 }
@@ -769,10 +789,7 @@ impl AcpBackend {
             .event_tx
             .send(Event {
                 id: String::new(),
-                msg: EventMsg::Error(ErrorEvent {
-                    message,
-                    codex_error_info: None,
-                }),
+                msg: EventMsg::Error(ErrorEvent { message }),
             })
             .await;
     }

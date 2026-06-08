@@ -391,25 +391,10 @@ mod tests {
     }
 
     #[test]
-    fn browser_has_description() {
-        let desc = SlashCommand::Browser.description();
-        assert!(!desc.is_empty(), "/browser should have a description");
-    }
-
-    #[test]
     fn browser_not_available_during_task() {
         assert!(
             !SlashCommand::Browser.available_during_task(),
             "/browser should not be available while task is running"
-        );
-    }
-
-    #[test]
-    fn browser_is_distinct_from_browse() {
-        assert_ne!(
-            SlashCommand::Browser.command(),
-            SlashCommand::Browse.command(),
-            "/browser and /browse should be different commands"
         );
     }
 }

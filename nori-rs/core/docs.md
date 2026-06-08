@@ -87,7 +87,7 @@ The builder is used by the TUI layer (`@/nori-rs/tui/`) to persist user preferen
 **Data Flow (ACP path):**
 
 ```
-User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/acp) -> Agent subprocess (JSON-RPC)
+User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/acp) -> Agent (JSON-RPC via subprocess or WebSocket)
     |
     v
 Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
@@ -97,7 +97,7 @@ ACP (Agent Context Protocol) integration is handled in `@/nori-rs/acp`, not embe
 
 **Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/nori-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
 
-**Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (base URL, auth, headers). Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`.
+**Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (provider name, optional env-key reference, and retry/timeout settings). The ACP backend communicates over subprocess stdio rather than HTTP, so HTTP-specific fields (base URL, headers, query params, bearer token) have been removed. Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`. User-defined providers in `config.toml` may still include removed fields; serde silently ignores them for backwards compatibility.
 
 **Compact Utilities (`compact.rs`):** Provides shared compaction constants for conversation summarization: `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX`, which are loaded from prompt templates in `templates/compact/`.
 

@@ -116,7 +116,6 @@ model_provider = "live_acp_provider"
 
 [model_providers.live_acp_provider]
 name = "Live ACP provider for tests"
-wire_api = "acp"
 "#
     )
 }

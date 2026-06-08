@@ -69,6 +69,9 @@ pub struct Cli {
     /// Intended for testing and automation scenarios.
     #[arg(long = "skip-trust-directory", default_value_t = false)]
     pub skip_trust_directory: bool,
+
+    #[clap(skip)]
+    pub cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
 }
 
 #[cfg(test)]

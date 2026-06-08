@@ -20,38 +20,26 @@ impl AcpBackend {
         config: &AcpBackendConfig,
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
-        let agent_config = get_agent_config(&config.agent)?;
-        let cwd = config.cwd.clone();
-
         let (event_tx, event_rx) = mpsc::channel(32);
         tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
 
-        debug!("Spawning ACP backend for agent: {}", config.agent);
+        let cwd = config.cwd.clone();
 
-        // Spawn the ACP connection with enhanced error handling
-        let connection_result =
-            SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await;
-
-        let mut connection = match connection_result {
-            Ok(conn) => conn,
-            Err(e) => {
-                // Get the full error chain to check for nested auth errors
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-
-                // Use the display format for the user-facing message
-                let display_error = format!("{e}");
-                let enhanced_message = enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                );
-
-                return Err(anyhow::anyhow!(enhanced_message));
-            }
+        let (mut connection, agent_config) = if let Some(ref cloud) = config.cloud_connection {
+            debug!("Connecting to cloud session: {}", cloud.ws_url);
+            let conn = SacpConnection::connect_remote(&cloud.ws_url, &cloud.auth_token, &cwd)
+                .await
+                .map_err(|e| anyhow::anyhow!("Cloud connection failed: {e}"))?;
+            (conn, None)
+        } else {
+            let agent_config = get_agent_config(&config.agent)?;
+            debug!("Spawning ACP backend for agent: {}", config.agent);
+            let conn =
+                match SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
+                    Ok(conn) => conn,
+                    Err(e) => return Err(enhance_agent_error(e, &agent_config)),
+                };
+            (conn, Some(agent_config))
         };
 
         let thread_goal_state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
@@ -59,12 +47,11 @@ impl AcpBackend {
         let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let goal_mcp_http_server = Arc::new(Mutex::new(None));
 
-        // Create a session with enhanced error handling, forwarding CLI MCP servers.
         let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
             &config.mcp_servers,
             config.mcp_oauth_credentials_store_mode,
         );
-        let pending_nori_client_server = nori_client_mcp::register_for_session(
+        let nori_client_server = nori_client_mcp::register_for_session(
             &connection,
             &mut mcp_servers,
             Arc::clone(&thread_goal_state),
@@ -73,32 +60,16 @@ impl AcpBackend {
             Arc::clone(&goal_mcp_connected),
         )
         .await?;
+        if let Some(server) = nori_client_server {
+            server.commit(&goal_mcp_http_server).await;
+        }
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
-            Ok(id) => {
-                if let Some(server) = pending_nori_client_server {
-                    server.commit(&goal_mcp_http_server).await;
-                }
-                id
-            }
-            Err(e) => {
-                // Get the full error chain to check for nested auth errors
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-
-                // Use the display format for the user-facing message
-                let display_error = format!("{e}");
-                let enhanced_message = enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                );
-
-                return Err(anyhow::anyhow!(enhanced_message));
-            }
+            Ok(id) => id,
+            Err(e) => match &agent_config {
+                Some(ac) => return Err(enhance_agent_error(e, ac)),
+                None => return Err(anyhow::anyhow!("Cloud session creation failed: {e}")),
+            },
         };
 
         debug!("ACP session created: {:?}", session_id);
@@ -151,20 +122,26 @@ impl AcpBackend {
         let (history_log_id, history_entry_count) =
             crate::message_history::history_metadata(&config.nori_home).await;
 
-        // Initialize transcript recorder (non-fatal if it fails)
-        let transcript_recorder = match TranscriptRecorder::new(
-            &config.nori_home,
-            &cwd,
-            Some(config.agent.clone()),
-            &config.cli_version,
-            Some(session_id.to_string()),
-        )
-        .await
-        {
-            Ok(recorder) => Some(Arc::new(recorder)),
-            Err(e) => {
-                warn!("Failed to initialize transcript recorder: {e}");
-                None
+        // Initialize transcript recorder (non-fatal if it fails).
+        // Cloud sessions skip local transcript recording — the broker records
+        // transcripts server-side.
+        let transcript_recorder = if config.cloud_connection.is_some() {
+            None
+        } else {
+            match TranscriptRecorder::new(
+                &config.nori_home,
+                &cwd,
+                Some(config.agent.clone()),
+                &config.cli_version,
+                Some(session_id.to_string()),
+            )
+            .await
+            {
+                Ok(recorder) => Some(Arc::new(recorder)),
+                Err(e) => {
+                    warn!("Failed to initialize transcript recorder: {e}");
+                    None
+                }
             }
         };
         *transcript_recorder_cell.lock().await = transcript_recorder.clone();
@@ -215,6 +192,8 @@ impl AcpBackend {
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            is_cloud: config.cloud_connection.is_some(),
+            is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),
         };
@@ -349,7 +328,22 @@ impl AcpBackend {
                                 )
                                 .await;
                         }
-                        None => break,
+                        None => {
+                            if backend.is_cloud
+                                && !backend.is_shutting_down.load(Ordering::Relaxed)
+                            {
+                                let _ = backend
+                                    .event_tx
+                                    .send(Event {
+                                        id: String::new(),
+                                        msg: EventMsg::Error(ErrorEvent {
+                                            message: "Cloud session disconnected. The remote session may still be active.".to_string(),
+                                        }),
+                                    })
+                                    .await;
+                            }
+                            break;
+                        }
                     }
                 }
                 maybe_result = prompt_result_rx.recv() => {

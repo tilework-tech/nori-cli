@@ -13,7 +13,6 @@ use codex_protocol::models::ResponseItem;
 use codex_protocol::parse_command::ParsedCommand as CoreParsedCommand;
 use codex_protocol::plan_tool::PlanItemArg as CorePlanItemArg;
 use codex_protocol::plan_tool::StepStatus as CorePlanStepStatus;
-use codex_protocol::protocol::CodexErrorInfo as CoreCodexErrorInfo;
 use codex_protocol::protocol::CreditsSnapshot as CoreCreditsSnapshot;
 use codex_protocol::protocol::RateLimitSnapshot as CoreRateLimitSnapshot;
 use codex_protocol::protocol::RateLimitWindow as CoreRateLimitWindow;
@@ -52,72 +51,6 @@ macro_rules! v2_enum_from_core {
             }
         }
     };
-}
-
-/// This translation layer make sure that we expose codex error code in camel case.
-///
-/// When an upstream HTTP status is available (for example, from the Responses API or a provider),
-/// it is forwarded in `httpStatusCode` on the relevant `codexErrorInfo` variant.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub enum CodexErrorInfo {
-    ContextWindowExceeded,
-    UsageLimitExceeded,
-    HttpConnectionFailed {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
-    /// Failed to connect to the response SSE stream.
-    ResponseStreamConnectionFailed {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
-    InternalServerError,
-    Unauthorized,
-    BadRequest,
-    SandboxError,
-    /// The response SSE stream disconnected in the middle of a turn before completion.
-    ResponseStreamDisconnected {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
-    /// Reached the retry limit for responses.
-    ResponseTooManyFailedAttempts {
-        #[serde(rename = "httpStatusCode")]
-        #[ts(rename = "httpStatusCode")]
-        http_status_code: Option<u16>,
-    },
-    Other,
-}
-
-impl From<CoreCodexErrorInfo> for CodexErrorInfo {
-    fn from(value: CoreCodexErrorInfo) -> Self {
-        match value {
-            CoreCodexErrorInfo::ContextWindowExceeded => CodexErrorInfo::ContextWindowExceeded,
-            CoreCodexErrorInfo::UsageLimitExceeded => CodexErrorInfo::UsageLimitExceeded,
-            CoreCodexErrorInfo::HttpConnectionFailed { http_status_code } => {
-                CodexErrorInfo::HttpConnectionFailed { http_status_code }
-            }
-            CoreCodexErrorInfo::ResponseStreamConnectionFailed { http_status_code } => {
-                CodexErrorInfo::ResponseStreamConnectionFailed { http_status_code }
-            }
-            CoreCodexErrorInfo::InternalServerError => CodexErrorInfo::InternalServerError,
-            CoreCodexErrorInfo::Unauthorized => CodexErrorInfo::Unauthorized,
-            CoreCodexErrorInfo::BadRequest => CodexErrorInfo::BadRequest,
-            CoreCodexErrorInfo::SandboxError => CodexErrorInfo::SandboxError,
-            CoreCodexErrorInfo::ResponseStreamDisconnected { http_status_code } => {
-                CodexErrorInfo::ResponseStreamDisconnected { http_status_code }
-            }
-            CoreCodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code } => {
-                CodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code }
-            }
-            CoreCodexErrorInfo::Other => CodexErrorInfo::Other,
-        }
-    }
 }
 
 v2_enum_from_core!(
@@ -860,7 +793,6 @@ pub struct Turn {
 #[error("{message}")]
 pub struct TurnError {
     pub message: String,
-    pub codex_error_info: Option<CodexErrorInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -1465,7 +1397,7 @@ mod tests {
     use codex_protocol::items::WebSearchItem;
     use codex_protocol::user_input::UserInput as CoreUserInput;
     use pretty_assertions::assert_eq;
-    use serde_json::json;
+
     use std::path::PathBuf;
 
     #[test]
@@ -1549,22 +1481,6 @@ mod tests {
                 id: "search-1".to_string(),
                 query: "docs".to_string(),
             }
-        );
-    }
-
-    #[test]
-    fn codex_error_info_serializes_http_status_code_in_camel_case() {
-        let value = CodexErrorInfo::ResponseTooManyFailedAttempts {
-            http_status_code: Some(401),
-        };
-
-        assert_eq!(
-            serde_json::to_value(value).unwrap(),
-            json!({
-                "responseTooManyFailedAttempts": {
-                    "httpStatusCode": 401
-                }
-            })
         );
     }
 }

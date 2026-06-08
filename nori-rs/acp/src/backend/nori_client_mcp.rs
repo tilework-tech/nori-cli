@@ -343,7 +343,7 @@ fn status_label(status: ThreadGoalStatus) -> &'static str {
 pub(crate) struct NoriClientServer {
     url: String,
     authorization_header_value: String,
-    abort_handle: tokio::task::AbortHandle,
+    task: tokio::task::JoinHandle<()>,
 }
 
 impl NoriClientServer {
@@ -367,19 +367,25 @@ impl NoriClientServer {
         let router = axum::Router::new().nest_service("/mcp", service).layer(
             middleware::from_fn_with_state(expected_authorization, require_bearer_token),
         );
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
+            let _ = ready_tx.send(());
             if let Err(err) = axum::serve(listener, router).await {
                 tracing::debug!("nori-client MCP server stopped: {err}");
             }
         });
+        ready_rx
+            .await
+            .context("nori-client MCP server task exited before becoming ready")?;
 
         Ok(Self {
             url,
             authorization_header_value,
-            abort_handle: task.abort_handle(),
+            task,
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn url(&self) -> &str {
         &self.url
     }
@@ -387,11 +393,18 @@ impl NoriClientServer {
     fn authorization_header(&self) -> acp::HttpHeader {
         acp::HttpHeader::new("Authorization", self.authorization_header_value.clone())
     }
+
+    pub(super) fn as_mcp_server(&self) -> acp::McpServer {
+        acp::McpServer::Http(
+            acp::McpServerHttp::new("nori-client", self.url.clone())
+                .headers(vec![self.authorization_header()]),
+        )
+    }
 }
 
 impl Drop for NoriClientServer {
     fn drop(&mut self) {
-        self.abort_handle.abort();
+        self.task.abort();
     }
 }
 
@@ -505,10 +518,7 @@ pub(super) async fn register_for_session(
         true,
     ))
     .await?;
-    let advertised_server = acp::McpServer::Http(
-        acp::McpServerHttp::new("nori-client", next_server.url().to_string())
-            .headers(vec![next_server.authorization_header()]),
-    );
+    let advertised_server = next_server.as_mcp_server();
     let previous_connected = connected.swap(false, Ordering::Relaxed);
     mcp_servers.push(advertised_server);
 

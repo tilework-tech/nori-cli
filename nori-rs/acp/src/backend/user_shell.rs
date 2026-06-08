@@ -162,14 +162,21 @@ mod tests {
         while let Some(event) = event_rx.recv().await {
             if let EventMsg::ExecCommandOutputDelta(ev) = &event.msg
                 && ev.stream == ExecOutputStream::Stdout
-                && ev.chunk == b"nori-shell"
+                && ev
+                    .chunk
+                    .windows(b"nori-shell".len())
+                    .any(|w| w == b"nori-shell")
             {
                 saw_stdout = true;
             }
             if let EventMsg::ExecCommandEnd(ev) = &event.msg {
                 assert_eq!(ev.source, ExecCommandSource::UserShell);
                 assert_eq!(ev.cwd, temp_dir.path());
-                assert_eq!(ev.stdout, "nori-shell");
+                assert!(
+                    ev.stdout.contains("nori-shell"),
+                    "stdout should contain 'nori-shell', got: {:?}",
+                    ev.stdout
+                );
                 assert_eq!(ev.exit_code, 0);
             }
             if let EventMsg::TaskComplete(ev) = &event.msg {

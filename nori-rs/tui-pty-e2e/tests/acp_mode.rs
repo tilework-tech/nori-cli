@@ -1,7 +1,7 @@
 //! E2E tests for ACP mode startup and approval bridging
 //!
 //! These tests verify that:
-//! 1. ACP mode starts correctly when configured via wire_api = "acp"
+//! 1. ACP mode starts correctly with a mock agent
 //! 2. The approval bridging infrastructure works correctly
 //! 3. Permission requests from ACP agents are properly displayed in the TUI
 

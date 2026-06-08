@@ -62,6 +62,7 @@ fn make_test_app() -> App {
         #[cfg(feature = "nori-config")]
         deferred_spawn_pending: false,
         mcp_oauth_cancel_tx: None,
+        cloud_connection: None,
     }
 }
 
@@ -108,6 +109,7 @@ fn make_test_app_with_channels() -> (
             #[cfg(feature = "nori-config")]
             deferred_spawn_pending: false,
             mcp_oauth_cancel_tx: None,
+            cloud_connection: None,
         },
         rx,
         op_rx,

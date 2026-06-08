@@ -50,6 +50,8 @@ impl AcpBackend {
                 self.handle_exec_approval(&call_id, decision).await;
             }
             Op::Shutdown => {
+                self.is_shutting_down
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 debug!("Processing Op::Shutdown in ACP mode");
                 if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
                     abort.abort();
@@ -301,7 +303,6 @@ impl AcpBackend {
                 id: String::new(),
                 msg: EventMsg::Error(ErrorEvent {
                     message: message.to_string(),
-                    codex_error_info: None,
                 }),
             })
             .await;

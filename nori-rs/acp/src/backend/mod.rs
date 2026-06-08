@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use agent_client_protocol_schema as acp;
 use anyhow::Result;
@@ -162,6 +163,24 @@ pub fn enhanced_error_message(
     }
 }
 
+/// Wrap a local spawn/session error with category-based hints derived from the
+/// agent's config. Shared by every local connection and session-creation
+/// failure path in `spawn()` and `resume_session()`.
+pub fn enhance_agent_error(
+    error: anyhow::Error,
+    config: &crate::registry::AcpAgentConfig,
+) -> anyhow::Error {
+    let category = categorize_acp_error(&format!("{error:?}"));
+    anyhow::anyhow!(enhanced_error_message(
+        category,
+        &format!("{error}"),
+        &config.provider_info.name,
+        &config.auth_hint,
+        &config.display_name,
+        &config.install_hint,
+    ))
+}
+
 /// Configuration for spawning an ACP backend.
 ///
 /// This contains the subset of Codex configuration needed for ACP mode,
@@ -241,6 +260,8 @@ pub struct AcpBackendConfig {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+    /// Cloud connection info for remote WebSocket sessions (None for local mode)
+    pub cloud_connection: Option<crate::broker::CloudConnectionInfo>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -341,6 +362,10 @@ pub struct AcpBackend {
     mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credential store mode used when forwarding MCP auth to ACP agents.
     mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+    /// Whether this backend is connected to a cloud session (affects disconnect behavior)
+    is_cloud: bool,
+    /// Set to true when Op::Shutdown is initiated, to avoid spurious disconnect errors
+    is_shutting_down: Arc<AtomicBool>,
     /// Abort handle for the in-flight prompt task (if any)
     prompt_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
     /// Abort handle for the cancel timeout watchdog (if any)

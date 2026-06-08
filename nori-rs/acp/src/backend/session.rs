@@ -17,7 +17,6 @@ impl AcpBackend {
     ) -> Result<Self> {
         let (event_tx, event_rx) = mpsc::channel(32);
         tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
-        let agent_config = get_agent_config(&config.agent)?;
         let cwd = config.cwd.clone();
 
         debug!(
@@ -25,21 +24,10 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
+        let agent_config = get_agent_config(&config.agent)?;
         let mut connection = SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
             .await
-            .map_err(|e| {
-                let error_string = format!("{e:?}");
-                let category = categorize_acp_error(&error_string);
-                let display_error = format!("{e}");
-                anyhow::anyhow!(enhanced_error_message(
-                    category,
-                    &display_error,
-                    &agent_config.provider_info.name,
-                    &agent_config.auth_hint,
-                    &agent_config.display_name,
-                    &agent_config.install_hint,
-                ))
-            })?;
+            .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
         let supports_load_session = connection.capabilities().load_session;
         let initial_goal_replay_events = transcript
@@ -138,7 +126,7 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            let pending_nori_client_server = nori_client_mcp::register_for_session(
+            let nori_client_server = nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
@@ -147,12 +135,12 @@ impl AcpBackend {
                 Arc::clone(&goal_mcp_connected),
             )
             .await?;
+            if let Some(server) = nori_client_server {
+                server.commit(&goal_mcp_http_server).await;
+            }
 
             match connection.load_session(sid, &cwd, mcp_servers).await {
                 Ok(session_id) => {
-                    if let Some(server) = pending_nori_client_server {
-                        server.commit(&goal_mcp_http_server).await;
-                    }
                     // Signal the collector that load is done, then collect results.
                     let _ = load_done_tx.send(());
                     let (session_driver, recovered_rx, buffered_client_events) =
@@ -189,7 +177,7 @@ impl AcpBackend {
                         &config.mcp_servers,
                         config.mcp_oauth_credentials_store_mode,
                     );
-                    let pending_nori_client_server = nori_client_mcp::register_for_session(
+                    let nori_client_server = nori_client_mcp::register_for_session(
                         &connection,
                         &mut mcp_servers,
                         Arc::clone(&thread_goal_state),
@@ -198,26 +186,13 @@ impl AcpBackend {
                         Arc::clone(&goal_mcp_connected),
                     )
                     .await?;
-                    let session_id =
-                        connection
-                            .create_session(&cwd, mcp_servers)
-                            .await
-                            .map_err(|e| {
-                                let error_string = format!("{e:?}");
-                                let category = categorize_acp_error(&error_string);
-                                let display_error = format!("{e}");
-                                anyhow::anyhow!(enhanced_error_message(
-                                    category,
-                                    &display_error,
-                                    &agent_config.provider_info.name,
-                                    &agent_config.auth_hint,
-                                    &agent_config.display_name,
-                                    &agent_config.install_hint,
-                                ))
-                            })?;
-                    if let Some(server) = pending_nori_client_server {
+                    if let Some(server) = nori_client_server {
                         server.commit(&goal_mcp_http_server).await;
                     }
+                    let session_id = connection
+                        .create_session(&cwd, mcp_servers)
+                        .await
+                        .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
                     let (replay_events, summary) = if let Some(t) = transcript {
                         let client_events = transcript_to_replay_client_events(t);
@@ -250,7 +225,7 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            let pending_nori_client_server = nori_client_mcp::register_for_session(
+            let nori_client_server = nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
@@ -259,25 +234,13 @@ impl AcpBackend {
                 Arc::clone(&goal_mcp_connected),
             )
             .await?;
+            if let Some(server) = nori_client_server {
+                server.commit(&goal_mcp_http_server).await;
+            }
             let session_id = connection
                 .create_session(&cwd, mcp_servers)
                 .await
-                .map_err(|e| {
-                    let error_string = format!("{e:?}");
-                    let category = categorize_acp_error(&error_string);
-                    let display_error = format!("{e}");
-                    anyhow::anyhow!(enhanced_error_message(
-                        category,
-                        &display_error,
-                        &agent_config.provider_info.name,
-                        &agent_config.auth_hint,
-                        &agent_config.display_name,
-                        &agent_config.install_hint,
-                    ))
-                })?;
-            if let Some(server) = pending_nori_client_server {
-                server.commit(&goal_mcp_http_server).await;
-            }
+                .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
             let (replay_events, summary) = if let Some(t) = transcript {
                 let client_events = transcript_to_replay_client_events(t);
@@ -391,6 +354,8 @@ impl AcpBackend {
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+            is_cloud: config.cloud_connection.is_some(),
+            is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),
         };

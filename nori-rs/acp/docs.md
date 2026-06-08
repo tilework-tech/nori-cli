@@ -4,7 +4,7 @@ Path: @/nori-rs/acp
 
 ### Overview
 
-- The ACP crate implements the Agent Client Protocol integration for Nori. It manages spawning ACP-compliant agent subprocesses, communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers.
+- The ACP crate implements the Agent Client Protocol integration for Nori. It manages connecting to ACP-compliant agents -- either by spawning local subprocesses (like Claude Code, Codex, or Gemini) or by connecting to remote agents over WebSocket -- communicating with them over JSON-RPC, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers.
 - It owns ACP backend session state that is not provided by agents, including per-session thread goals used by the `/goal` TUI command and prompt-context injection.
 - `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 
@@ -14,8 +14,8 @@ Path: @/nori-rs/acp
 nori-tui
     |
     v
-nori-acp <---> ACP Agent subprocess (claude-agent-acp, codex-acp, gemini-cli)
-    |
+nori-acp <---> ACP Agent subprocess (local, via stdin/stdout)
+    |      <---> ACP Agent (remote, via WebSocket)
     v
 nori-protocol (normalized ACP session events)
 ```
@@ -23,7 +23,7 @@ nori-protocol (normalized ACP session events)
 The ACP crate serves as a bridge between:
 
 - The TUI layer (`@/nori-rs/tui/`) which displays UI and collects user input
-- External ACP agent processes installed via npm (@anthropic-ai/claude-code, @openai/codex, @google/gemini-cli)
+- External ACP agent processes, either local (installed via npm) or remote (cloud sprites connected via WebSocket)
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
 - `SessionRuntime` in `@/nori-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
@@ -33,7 +33,8 @@ The ACP crate serves as a bridge between:
 Key files:
 
 - `registry.rs` - Agent configuration and npm package detection
-- `connection/` - SACP v11-based subprocess spawning and JSON-RPC communication
+- `connection/` - SACP v11-based agent communication (local subprocess and remote WebSocket)
+- `broker/` - Cloud session broker client: OAuth auth, JWT management, session acquisition/release, and `CloudConnectionInfo` (see `@/nori-rs/acp/src/broker/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage checkpoint updates
@@ -183,6 +184,21 @@ The config module provides the **canonical source of truth** for Nori home path 
 - `NORI_HOME_DIR`: Default relative path (`".nori/cli"`)
 - `CONFIG_FILE`: Config filename (`"config.toml"`)
 - `DEFAULT_AGENT`: Default agent (`"claude-code"`)
+
+**Cloud Broker Configuration** (`config/types/mod.rs`, `loader.rs`):
+
+The `[cloud]` TOML section stores the broker URL for cloud sessions:
+
+```toml
+[cloud]
+broker_url = "https://nori-broker.myorg.fly.dev"
+```
+
+The value is resolved onto `NoriConfig.cloud_broker_url` during config loading. The CLI's `nori cloud` subcommand uses this as a fallback when `--broker-url` is not passed on the command line. When neither the flag nor the config value is present and stdin is a terminal, the CLI prompts the user interactively and persists the entered URL via `save_cloud_broker_url()`. See `@/nori-rs/acp/src/broker/docs.md` for the broker client and `@/nori-rs/cli/docs.md` for the CLI subcommand.
+
+**Config Persistence** (`loader.rs`):
+
+`save_cloud_broker_url(nori_home, broker_url)` is a format-preserving write function that sets `[cloud] broker_url` in `config.toml` without clobbering other settings. It uses `toml_edit::DocumentMut` to parse the existing file (or start from an empty document), insert or update the value, and write back. It also creates the `nori_home` directory if it does not exist. This is called by the CLI's interactive broker URL prompt (see `@/nori-rs/cli/docs.md`).
 
 **ACP Wire Proxy Configuration** (`config/types/mod.rs`, `connection/`):
 
@@ -650,23 +666,38 @@ Footer renders "Tokens: 45K in / 78K out (32K cached)"
 `subagents_used` is consumed by `nori-tui` during system-info refresh and merged into the goodbye-card session stats. It does not affect footer token rendering.
 **Connection Management** (`connection/`):
 
-The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with agent subprocesses over stdin/stdout JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread.
+The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with ACP agents via JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread. `SacpConnection` supports two construction paths -- local subprocess (`spawn()`) and remote WebSocket (`connect_remote()`) -- with identical downstream API surface.
 
 ```
-┌─────────────────────────┐   SACP v11 (JSON-RPC)   ┌─────────────────────────┐
-│   Main Tokio Runtime    │◄────────────────────────►│  ACP Agent Subprocess   │
-│                         │   stdin/stdout           │  (spawned child process)│
-│   SacpConnection        │                          │                         │
-│   - spawn()             │                          │  Receives:              │
-│   - create_session()    │                          │  - InitializeRequest    │
-│   - load_session()      │                          │  - NewSessionRequest    │
-│   - prompt()            │                          │  - PromptRequest        │
-│   - cancel()            │                          │  - CancelNotification   │
-│   - set_model() [unst]  │                          │                         │
-└─────────────────────────┘                          └─────────────────────────┘
+                          ┌─────────────────────────┐
+                          │  SacpConnection          │
+                          │  - create_session()      │
+                          │  - load_session()        │
+                          │  - prompt()              │
+                          │  - cancel()              │
+                          │  - set_model() [unstable]│
+                          └────────┬────────────────┘
+                                   │
+                  ┌────────────────┼────────────────┐
+                  │                                  │
+           spawn() path                    connect_remote() path
+                  │                                  │
+    ┌─────────────▼────────────┐    ┌───────────────▼──────────────┐
+    │  sacp::ByteStreams       │    │  sacp::Lines                 │
+    │  (stdin/stdout of child) │    │  (WebSocket via ws_transport)│
+    └─────────────┬────────────┘    └───────────────┬──────────────┘
+                  │                                  │
+    ┌─────────────▼────────────┐    ┌───────────────▼──────────────┐
+    │  Local ACP Agent Process │    │  Remote ACP Agent            │
+    │  (spawned child)         │    │  (cloud sprite via broker)   │
+    └──────────────────────────┘    └──────────────────────────────┘
 ```
 
-**Builder-based handler registration:** `SacpConnection::spawn()` uses `Client.builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `connect_with()` is called.
+**Dual transport architecture:** Both `spawn()` and `connect_remote()` delegate to a shared `establish_connection()` free function that accepts any `sacp::ConnectTo<Client>` transport. This function encapsulates all SACP builder setup -- notification handlers, permission request handlers, file read/write handlers, and the initialization handshake. The local path passes a `sacp::ByteStreams` transport (stdin/stdout of the child process), while the remote path passes a `sacp::Lines` transport (one WebSocket message = one NDJSON line). The `child` and `stderr_task` fields on `SacpConnection` are `Option<>` -- `Some` for local connections, `None` for remote. Shutdown and Drop gracefully handle both cases.
+
+**WebSocket transport adapter** (`connection/ws_transport.rs`): Bridges `tokio-tungstenite` WebSocket streams to the `sacp::Lines` transport format. `connect_ws(url, auth_token)` establishes a WebSocket connection with Bearer auth and returns split adapter halves: `WsSink<S>` (wraps WebSocket write half as `Sink<String>`) and `WsReadStream<S>` (wraps WebSocket read half as `Stream<Item = io::Result<String>>`). The read stream extracts text/binary messages, filters ping/pong/frame control messages, and terminates on close frames. WebSocket errors are mapped to `io::Error` with `ConnectionAborted` kind. This module is the foundation for the `nori cloud` feature, enabling the CLI to connect to remote ACP agents running on cloud sprites via the nori-sessions broker.
+
+**Builder-based handler registration:** The `establish_connection()` function uses `Client.builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `connect_with()` is called.
 
 **Connection initialization:** Inside `connect_with()`, the connection sends `InitializeRequest` to the agent, validates the protocol version (minimum V1), and clones the `ConnectionTo<Agent>` plus agent capabilities out of the callback via a oneshot channel. The background task then awaits `futures::future::pending()` to keep the connection alive until the task is aborted on drop.
 
@@ -697,7 +728,7 @@ This means `to_sacp_mcp_servers()` has side effects (reads from keyring/file sys
 
 The server uses a normal `http://127.0.0.1:<port>/mcp` URL because current Codex and Claude ACP adapters forward ACP MCP server entries into their underlying clients as ordinary HTTP MCP config. Avoiding `acp:` keeps startup compatible with those adapters while still keeping the tool implementation in process.
 
-ACP session setup paths build the MCP server list in two phases: first convert configured MCP servers with `to_sacp_mcp_servers()`, then let backend-owned features append local MCP servers when their own eligibility checks pass. The `nori-client` server requires HTTP MCP support. This setup applies to resumed, fresh, fallback, and compaction-created sessions. `register_for_session` returns a pending server registration; callers commit that server to `AcpBackend` only after `session/new` or `session/load` succeeds, so a failed replacement session drops the new listener and preserves the still-active session's previously advertised endpoint. Compaction-created replacement sessions re-emit `SessionCapabilitiesChanged` after `create_session` succeeds, deriving `nori_client.advertised` from the actual MCP server list passed to that replacement session. Hook-only ACP sessions pass an empty list because hooks do not need user-configured or backend-owned MCP servers.
+ACP session setup paths build the MCP server list in two phases: first convert configured MCP servers with `to_sacp_mcp_servers()`, then let backend-owned features append local MCP servers when their own eligibility checks pass. The `nori-client` server requires HTTP MCP support. This setup applies to resumed, fresh, fallback, and compaction-created sessions. New backend construction commits the server before `session/new` or `session/load` so agents that eagerly initialize MCP during session setup can reach it. Compaction-created replacement sessions re-advertise the backend's existing `nori-client` server because the tools are backend-owned rather than ACP-session-owned; if the replacement `session/new` fails, the backend restores the previous initialized flag and keeps the existing endpoint alive. After compact replacement succeeds, the backend re-emits `SessionCapabilitiesChanged`, deriving `nori_client.advertised` from the actual MCP server list passed to that replacement session. Hook-only ACP sessions pass an empty list because hooks do not need user-configured or backend-owned MCP servers.
 
 The local `nori-client` MCP server is intentionally additive. User-configured MCP servers are still forwarded normally, and ineligible agents simply do not receive the loopback endpoint. `SessionCapabilitiesChanged` exposes both endpoint advertisement and initialization so clients do not need to infer either state from raw HTTP MCP support. Continuation chaining depends on the local MCP server actually being initialized for the current advertised endpoint, not just on HTTP MCP support or endpoint advertisement. Durable follow-up work for this surface lives in `@/docs/followups/nori-client-mcp.md`.
 
@@ -759,6 +790,8 @@ The `SessionMetaEntry.agent` and `AssistantEntry.agent` fields identify which AC
 
 The `SessionMetaEntry.acp_session_id` field stores the ACP agent's session ID (from `session/new` or `session/load`). This enables the `/resume` command to reconnect to the same agent session. The field is `Option<String>` with `skip_serializing_if = "Option::is_none"` and `default` for backward compatibility with transcripts created before this field existed.
 
+Cloud sessions (started via `nori cloud`) are not persisted to local transcripts at all -- the broker records them server-side -- so there is no cloud marker in `session_meta` and cloud sessions do not appear in the local resume pickers.
+
 **TranscriptRecorder:**
 
 The `TranscriptRecorder` (in `@/nori-rs/acp/src/transcript/recorder.rs`) handles async, non-blocking writes:
@@ -809,7 +842,7 @@ Large transcript paths avoid full-file reads when building `/resume` and startup
 
 The `AcpBackend` automatically:
 
-1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
+1. Creates a `TranscriptRecorder` on spawn or resume (with graceful fallback if creation fails), persisting `acp_session_id` for session resume support. Cloud sessions skip transcript recording entirely. When recorder creation succeeds, the backend uses the transcript session ID as the conversation ID so exit hints such as `nori resume <session-id>` point at the saved transcript.
 2. Records user messages when `Op::UserInput` is processed
 3. Accumulates assistant text during the turn and records when turn completes
 4. Records normalized ACP session events via `record_client_event()` in the update and approval handlers
@@ -839,6 +872,7 @@ Configuration:
 - `AcpBackendConfig.cli_version`: CLI version included in session metadata
 - `AcpBackendConfig.default_model`: Default model to apply at session start (from config.toml [default_models])
 - `AcpBackendConfig.initial_context`: Optional string injected into `pending_compact_summary` at spawn time. Used by the TUI's `/fork` command to pass a plain-text conversation summary into a new ACP session, giving the agent prior context without a protocol-level session fork. When `None` (the default), `pending_compact_summary` starts empty as before. The same `pending_compact_summary` mechanism is shared by `/compact` and `/resume`.
+- `AcpBackendConfig.cloud_connection`: Optional `CloudConnectionInfo` from the broker module. When `Some`, `AcpBackend::spawn()` uses `SacpConnection::connect_remote()` instead of `SacpConnection::spawn()`, skipping local agent config lookup and setting `agent_config = None`. Cloud connection errors use cloud-specific messages instead of the enhanced error categorization used for local subprocess failures. Set by the CLI's `nori cloud` subcommand and threaded through the TUI layer unchanged (see `@/nori-rs/acp/src/broker/docs.md`). The backend also stores `is_cloud: bool` (derived from `cloud_connection.is_some()`) to drive cloud-disconnect detection in the event relay loop. In cloud mode, the CLI uses its local cwd (from `config.cwd`) for all client-side operations -- `SessionConfigured` metadata, file operation handlers, and TUI display. The broker's SACP proxy independently manages the sprite-side working directory; the CLI's cwd sent in `session/new` is discarded by the broker. `resume_session()` has no cloud path: cloud sessions are not recorded locally, so they never reach the resume flow.
 - `AcpBackendConfig.session_context`: Optional string injected into `pending_hook_context` at spawn time (`spawn_and_relay.rs` / `session.rs`) only for ACP connections that do not advertise HTTP MCP support. Unlike `initial_context`, session context is prepended to the first user prompt **without** `SUMMARY_PREFIX` framing -- it appears as raw text before the user's message. If session start hooks also produce `::context::` lines, those are appended to the session context (both accumulate in the same `pending_hook_context` mutex). The context is consumed on the first prompt and not repeated. The TUI populates this with an embedded `<context>` blurb (`@/nori-rs/tui/session_context.md`) that tells non-MCP agents they are running inside Nori CLI over ACP, points to the source repo, and names MCP-backed affordances as unavailable.
 
 **Re-exported Types:**
@@ -878,12 +912,12 @@ The `init_rolling_file_tracing()` function in `@/nori-rs/acp/src/tracing_setup.r
 
 **Subprocess Lifecycle Management:**
 
-Multi-layer cleanup strategy for robust process termination:
+Multi-layer cleanup strategy for robust process termination (local `spawn()` path only -- remote connections via `connect_remote()` have no child process and shutdown just aborts the connection task):
 
 1. **Process Group Isolation (Unix)**: Agent spawns in own process group via `setpgid(0, 0)`. Enables killing entire process tree with `killpg()`.
 2. **Kernel-Level Parent Death Signal (Linux)**: `PR_SET_PDEATHSIG` set to `SIGTERM`. Guarantees agent receives signal if parent crashes.
 3. **Process Group Kill**: On drop, `SIGKILL` is sent to the entire process group via `kill_child_process_group()`, ensuring grandchildren are terminated.
-4. **Async Drop**: `SacpConnection::drop()` aborts the connection and stderr tasks, then kills the child process. No blocking wait is required because SACP v11's `ConnectionTo<Agent>` is `Send + Sync` and runs as a regular tokio task.
+4. **Async Drop**: `SacpConnection::drop()` aborts the connection and stderr tasks, then kills the child process if present. No blocking wait is required because SACP v11's `ConnectionTo<Agent>` is `Send + Sync` and runs as a regular tokio task.
 
 **Environment Isolation** (`sacp_connection.rs`):
 
@@ -951,6 +985,8 @@ The connection layer now exposes exactly one ordered `mpsc::Receiver<ConnectionE
 
 This keeps the SACP-specific routing logic inside `connection/` and removes the old split between notification and approval channels.
 
+**Cloud disconnect detection:** When the transport event channel closes (the `ConnectionEvent` receiver yields `None`) during a cloud session (`is_cloud == true`), `run_connection_event_relay()` in `@/nori-rs/acp/src/backend/spawn_and_relay.rs` emits an `EventMsg::Error` with the message "Cloud session disconnected. The remote session may still be active." before exiting the relay loop. For local sessions the relay exits silently since a closed transport simply means the subprocess exited. This provides clear user-facing feedback when a WebSocket connection drops rather than leaving the TUI in an ambiguous state.
+
 **Turn Interrupt Wiring — Reducer-Owned ACP Phase** (`session_reducer.rs`, `session_runtime_driver.rs`, `submit_and_ops.rs`):
 
 When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::CancelSubmit` and calls `session/cancel` through the reducer side-effect path. The reducer remains the authority for ACP request ownership:
@@ -1007,13 +1043,21 @@ The `ContextCompactedEvent.summary` field is the coupling point between the ACP 
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
 
-`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, and a single `backend_event_tx`, then selects between two resume strategies based on agent capabilities. The resulting `BackendEvent` stream carries both normalized ACP session events and shared control-plane events:
+`AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, and a single `backend_event_tx`, then selects between two resume strategies based on agent capabilities. The resulting `BackendEvent` stream carries both normalized ACP session events and shared control-plane events.
+
+`resume_session()` always spawns the local agent via `SacpConnection::spawn()` -- it has no cloud branch. Cloud sessions are not recorded to local transcripts, so they never surface in the resume pickers and never reach this path. It still reads `config.cloud_connection.is_some()` to set the runtime `is_cloud` flag, but resume itself is local-only.
 
 ```
 AcpBackend::resume_session(config, acp_session_id, transcript, backend_event_tx)
     |
     v
-SacpConnection::spawn() -> check capabilities().load_session
+config.cloud_connection is Some?
+    |
+    ├── Yes: SacpConnection::connect_remote() (agent_config = None)
+    └── No:  SacpConnection::spawn()          (agent_config = Some)
+    |
+    v
+check capabilities().load_session
     |
     ├── Agent supports session/load AND acp_session_id is Some:
     │       |
@@ -1125,7 +1169,7 @@ Error categorization operates on the `Debug`-formatted (`{e:?}`) anyhow error to
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `broker/` (with `mod.rs`, `tests.rs`), `connection/` (with `sacp_connection.rs`, `ws_transport.rs`, `mcp.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1
