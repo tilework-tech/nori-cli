@@ -485,15 +485,7 @@ impl AcpBackend {
         let resume_goal_notice = {
             let goals = backend.thread_goal_state.lock().await;
             let now = thread_goal::now_seconds();
-            if !goal_automation_available
-                && goals.snapshot(now).is_some_and(|goal| {
-                    goal.status == codex_protocol::protocol::ThreadGoalStatus::Active
-                })
-            {
-                Some(thread_goal::unavailable_notice())
-            } else {
-                goals.resume_notice(now)
-            }
+            goals.resume_notice_for(now, goal_automation_available)
         };
 
         if !deferred_replay_client_events.is_empty() || resume_goal_notice.is_some() {

@@ -179,6 +179,27 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
         }
     }
 
+    /// Resume-time notice that respects whether goal automation is available.
+    /// Without HTTP MCP support `/goal` is disabled, so the `resume_notice`
+    /// affordances (which suggest `/goal resume`) would mislead; surface the
+    /// `unavailable_notice` for any goal that is still in play instead.
+    pub(crate) fn resume_notice_for(
+        &self,
+        now: i64,
+        goal_automation_available: bool,
+    ) -> Option<SessionUpdateInfo> {
+        if goal_automation_available {
+            return self.resume_notice(now);
+        }
+        self.snapshot(now).and_then(|goal| match goal.status {
+            ThreadGoalStatus::Active
+            | ThreadGoalStatus::Paused
+            | ThreadGoalStatus::Blocked
+            | ThreadGoalStatus::UsageLimited => Some(unavailable_notice()),
+            ThreadGoalStatus::BudgetLimited | ThreadGoalStatus::Complete => None,
+        })
+    }
+
     pub(crate) fn set_objective(
         &mut self,
         objective: String,
@@ -454,12 +475,15 @@ impl AcpBackend {
     }
 
     async fn emit_goal_unavailable(&self) {
-        emit_client_event(
-            &self.backend_event_tx,
-            self.transcript_recorder.as_ref(),
-            ClientEvent::SessionUpdateInfo(unavailable_notice()),
-        )
-        .await;
+        // Deliberately not recorded to the transcript: like resume notices this
+        // is a transient affordance derived from session state. Recording it
+        // would replay and accumulate a duplicate notice on every /goal op.
+        let _ = self
+            .backend_event_tx
+            .send(BackendEvent::Client(ClientEvent::SessionUpdateInfo(
+                unavailable_notice(),
+            )))
+            .await;
     }
 
     async fn emit_thread_goal_updated(&self, goal: ThreadGoalSnapshot) {
@@ -693,6 +717,55 @@ mod tests {
             .set_status(ThreadGoalStatus::Complete, 50)
             .expect("existing goal");
         assert_eq!(goals.resume_notice(55), None);
+    }
+
+    #[test]
+    fn resume_notice_for_non_mcp_surfaces_unavailable_for_in_play_goals() {
+        let mut goals = ThreadGoalState::default();
+        // No goal: nothing to surface, regardless of automation availability.
+        assert_eq!(goals.resume_notice_for(10, true), None);
+        assert_eq!(goals.resume_notice_for(10, false), None);
+
+        goals
+            .set_objective("Keep going".to_string(), Some(ThreadGoalStatus::Active), 10)
+            .expect("valid objective");
+        // Active goal with automation available has no resume affordance...
+        assert_eq!(goals.resume_notice_for(15, true), None);
+        // ...but without automation we surface that /goal is unavailable.
+        assert_eq!(
+            goals.resume_notice_for(15, false),
+            Some(unavailable_notice())
+        );
+
+        // Every resumable status surfaces the unavailable notice without
+        // automation, and never the misleading /goal resume affordance.
+        for status in [
+            ThreadGoalStatus::Paused,
+            ThreadGoalStatus::Blocked,
+            ThreadGoalStatus::UsageLimited,
+        ] {
+            goals.set_status(status, 20).expect("existing goal");
+            let available = goals
+                .resume_notice_for(25, true)
+                .expect("resumable goal notice");
+            assert!(
+                available
+                    .hint
+                    .as_deref()
+                    .is_some_and(|hint| hint.contains("/goal resume"))
+            );
+            assert_eq!(
+                goals.resume_notice_for(25, false),
+                Some(unavailable_notice())
+            );
+        }
+
+        // Terminal statuses surface nothing in either mode.
+        goals
+            .set_status(ThreadGoalStatus::Complete, 30)
+            .expect("existing goal");
+        assert_eq!(goals.resume_notice_for(35, true), None);
+        assert_eq!(goals.resume_notice_for(35, false), None);
     }
 
     #[test]

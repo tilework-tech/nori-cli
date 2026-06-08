@@ -1,10 +1,5 @@
 use super::*;
 
-struct EnvGuard {
-    name: &'static str,
-    previous: Option<String>,
-}
-
 struct RegistryGuard;
 
 impl RegistryGuard {
@@ -17,37 +12,6 @@ impl RegistryGuard {
 impl Drop for RegistryGuard {
     fn drop(&mut self) {
         crate::registry::initialize_registry(Vec::new()).expect("registry reset should be valid");
-    }
-}
-
-impl EnvGuard {
-    fn set(name: &'static str, value: &str) -> Self {
-        let previous = std::env::var(name).ok();
-        unsafe {
-            std::env::set_var(name, value);
-        }
-        Self { name, previous }
-    }
-
-    fn remove(name: &'static str) -> Self {
-        let previous = std::env::var(name).ok();
-        unsafe {
-            std::env::remove_var(name);
-        }
-        Self { name, previous }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => unsafe {
-                std::env::set_var(self.name, value);
-            },
-            None => unsafe {
-                std::env::remove_var(self.name);
-            },
-        }
     }
 }
 
@@ -618,6 +582,81 @@ async fn non_mcp_replayed_active_goal_does_not_drive_prompt_context_or_continuat
     assert!(
         agent_text.contains("ordinary resumed prompt"),
         "expected ordinary user prompt after replayed goal, got: {agent_text}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn non_mcp_goal_op_notice_is_not_recorded_to_transcript() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let recorder = backend
+        .transcript_recorder
+        .clone()
+        .expect("transcript recorder should be initialized");
+
+    // Repeated /goal ops in a non-MCP session each surface the unavailable
+    // notice to the user.
+    for _ in 0..2 {
+        backend
+            .submit(Op::ThreadGoalGet)
+            .await
+            .expect("Failed to submit /goal get");
+
+        let start = std::time::Instant::now();
+        let mut saw_unavailable = false;
+        while start.elapsed() < Duration::from_secs(5) {
+            match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+                Some(nori_protocol::ClientEvent::SessionUpdateInfo(update))
+                    if update.message.contains("/goal is unavailable") =>
+                {
+                    saw_unavailable = true;
+                    break;
+                }
+                Some(_) => {}
+                None => {}
+            }
+        }
+        assert!(
+            saw_unavailable,
+            "expected unavailable notice emitted to the client"
+        );
+    }
+
+    // The notice is a transient affordance (like resume notices), so it must
+    // never be persisted to the transcript, where it would replay and
+    // accumulate on every resume.
+    recorder.flush().await.expect("flush transcript");
+    let recorded = tokio::fs::read_to_string(recorder.transcript_path())
+        .await
+        .expect("read transcript");
+    assert!(
+        !recorded.contains("/goal is unavailable"),
+        "goal-unavailable notice must not be recorded to the transcript, got:\n{recorded}"
     );
 }
 
