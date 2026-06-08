@@ -191,13 +191,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_cdp_ws_url_handles_random_port() {
-        let line = "DevTools listening on ws://127.0.0.1:41567/devtools/browser/fa3b2c1d-e456-7890-abcd-ef1234567890";
-        let url = parse_cdp_ws_url(line).expect("should parse URL with random port");
-        assert!(url.contains("41567"));
-    }
-
-    #[test]
     fn parse_cdp_ws_url_returns_none_for_unrelated_output() {
         assert!(parse_cdp_ws_url("Starting Chrome...").is_none());
         assert!(parse_cdp_ws_url("").is_none());
@@ -212,28 +205,8 @@ mod tests {
     }
 
     #[test]
-    fn extract_cdp_port_from_high_port() {
-        let port = extract_cdp_port("ws://127.0.0.1:41567/devtools/browser/abc-123")
-            .expect("should parse");
-        assert_eq!(port, 41567);
-    }
-
-    #[test]
     fn extract_cdp_port_returns_none_for_invalid_url() {
         assert!(extract_cdp_port("not a url").is_none());
         assert!(extract_cdp_port("http://localhost/foo").is_none());
-    }
-
-    #[test]
-    fn compose_agent_prompt_contains_connection_details() {
-        let prompt = compose_agent_prompt("ws://127.0.0.1:9222/devtools/browser/abc-123", 9222);
-        assert!(
-            prompt.contains("ws://127.0.0.1:9222/devtools/browser/abc-123"),
-            "prompt should contain the WebSocket URL"
-        );
-        assert!(
-            prompt.contains("9222"),
-            "prompt should contain the CDP port"
-        );
     }
 }

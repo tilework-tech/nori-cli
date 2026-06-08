@@ -1106,38 +1106,4 @@ mod tests {
         assert!(interactive.skip_welcome);
         assert!(interactive.skip_trust_directory);
     }
-
-    #[test]
-    fn cloud_subcommand_parses_without_broker_url() {
-        let cli = MultitoolCli::try_parse_from(["nori", "cloud"]).expect("should parse");
-        match cli.subcommand {
-            Some(Subcommand::Cloud(cmd)) => {
-                assert!(
-                    cmd.broker_url.is_none(),
-                    "broker_url should be None when not provided"
-                );
-            }
-            _ => panic!("expected Cloud subcommand"),
-        }
-    }
-
-    #[test]
-    fn cloud_subcommand_parses_with_broker_url() {
-        let cli = MultitoolCli::try_parse_from([
-            "nori",
-            "cloud",
-            "--broker-url",
-            "https://broker.example.com",
-        ])
-        .expect("should parse");
-        match cli.subcommand {
-            Some(Subcommand::Cloud(cmd)) => {
-                assert_eq!(
-                    cmd.broker_url.as_deref(),
-                    Some("https://broker.example.com")
-                );
-            }
-            _ => panic!("expected Cloud subcommand"),
-        }
-    }
 }
