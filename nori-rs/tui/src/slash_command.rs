@@ -439,7 +439,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn browse_parses_from_string() {
         let cmd: SlashCommand = "browse".parse().expect("/browse should parse from string");
