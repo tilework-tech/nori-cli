@@ -307,8 +307,13 @@ async fn acquire_session_sends_auth_and_parses_response() {
     let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
 
     let info = client.acquire_session().await.unwrap();
-    assert_eq!(info.session_id, "sess-abc123");
-    assert_eq!(info.ws_url, "wss://broker.test/ws/sess-abc123");
+    assert_eq!(
+        info,
+        SessionInfo {
+            session_id: "sess-abc123".to_string(),
+            ws_url: "wss://broker.test/ws/sess-abc123".to_string(),
+        }
+    );
 
     server_handle.join().unwrap();
 }
@@ -731,7 +736,7 @@ async fn resume_session_sends_post_with_auth_and_parses_response() {
     let server_handle = std::thread::spawn(move || {
         let request = mock_server.recv().unwrap();
         assert_eq!(request.method(), &tiny_http::Method::Post);
-        assert!(request.url().contains("/api/sessions/sess-abc123/resume"));
+        assert_eq!(request.url(), "/api/sessions/sess-abc123/resume");
 
         let auth_header = request
             .headers()
@@ -833,4 +838,88 @@ async fn resume_session_errors_without_token() {
 
     let err = client.resume_session("sess-abc123").await.unwrap_err();
     assert!(matches!(err, BrokerError::AuthRequired));
+}
+
+#[tokio::test]
+async fn list_sessions_returns_token_expired_for_locally_expired_jwt() {
+    let dir = tempdir().unwrap();
+    let broker_url = "http://unused.test".to_string();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: expired_jwt(),
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.list_sessions().await.unwrap_err();
+    assert!(matches!(err, BrokerError::TokenExpired));
+}
+
+#[tokio::test]
+async fn resume_session_returns_token_expired_for_locally_expired_jwt() {
+    let dir = tempdir().unwrap();
+    let broker_url = "http://unused.test".to_string();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: expired_jwt(),
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.resume_session("sess-abc123").await.unwrap_err();
+    assert!(matches!(err, BrokerError::TokenExpired));
+}
+
+#[tokio::test]
+async fn list_sessions_returns_error_for_malformed_response() {
+    let mock_server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = mock_server.server_addr().to_ip().unwrap().port();
+    let broker_url = format!("http://127.0.0.1:{port}");
+    let token = future_jwt();
+
+    let server_handle = std::thread::spawn(move || {
+        let request = mock_server.recv().unwrap();
+        let response = tiny_http::Response::from_string("not valid json").with_status_code(200);
+        request.respond(response).unwrap();
+    });
+
+    let dir = tempdir().unwrap();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: token,
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.list_sessions().await.unwrap_err();
+    assert!(matches!(err, BrokerError::InvalidResponse(_)));
+
+    server_handle.join().unwrap();
+}
+
+#[tokio::test]
+async fn resume_session_returns_error_for_malformed_response() {
+    let mock_server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = mock_server.server_addr().to_ip().unwrap().port();
+    let broker_url = format!("http://127.0.0.1:{port}");
+    let token = future_jwt();
+
+    let server_handle = std::thread::spawn(move || {
+        let request = mock_server.recv().unwrap();
+        let response = tiny_http::Response::from_string("not valid json").with_status_code(200);
+        request.respond(response).unwrap();
+    });
+
+    let dir = tempdir().unwrap();
+    let creds = CloudCredentials {
+        broker_url: broker_url.clone(),
+        auth_token: token,
+    };
+    save_credentials(dir.path(), &creds).unwrap();
+    let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
+
+    let err = client.resume_session("sess-abc123").await.unwrap_err();
+    assert!(matches!(err, BrokerError::InvalidResponse(_)));
+
+    server_handle.join().unwrap();
 }

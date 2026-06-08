@@ -13,14 +13,22 @@ pub fn format_cloud_session_list(sessions: &[CloudSessionSummary]) -> String {
             .first_message_preview
             .as_deref()
             .unwrap_or("(no preview)");
+        let active = format_timestamp(&session.last_active_at);
         out.push_str(&format!(
-            "  [{num}] ({source}) \"{preview}\"\n",
+            "  [{num}] ({source}) \"{preview}\" — last active {active}\n",
             num = i + 1,
             source = session.source,
         ));
     }
     out.push_str("  [n] Start new session\n");
     out
+}
+
+fn format_timestamp(iso_timestamp: &str) -> String {
+    iso_timestamp
+        .get(..16)
+        .unwrap_or(iso_timestamp)
+        .replace('T', " ")
 }
 
 pub fn parse_session_choice(input: &str, session_count: i32) -> Result<SessionChoice, String> {
@@ -83,27 +91,23 @@ mod tests {
 
         let output = format_cloud_session_list(&sessions);
 
-        assert!(output.contains("[1]"), "should have numbered entry [1]");
-        assert!(output.contains("[2]"), "should have numbered entry [2]");
-        assert!(output.contains("[n]"), "should have new session option");
-        assert!(
-            output.contains("Fix the login bug"),
-            "should show first message preview"
+        assert_eq!(
+            output,
+            "Cloud Sessions:\n\
+             \x20 [1] (cli) \"Fix the login bug\" — last active 2025-01-27 14:30\n\
+             \x20 [2] (slack) \"(no preview)\" — last active 2025-01-27 14:30\n\
+             \x20 [n] Start new session\n"
         );
-        assert!(output.contains("cli"), "should show session source");
-        assert!(output.contains("slack"), "should show session source");
     }
 
     #[test]
     fn format_session_list_handles_empty_list() {
         let output = format_cloud_session_list(&[]);
-        assert!(
-            output.contains("[n]"),
-            "should still show new session option"
-        );
-        assert!(
-            !output.contains("[1]"),
-            "should not have numbered entries for empty list"
+
+        assert_eq!(
+            output,
+            "Cloud Sessions:\n\
+             \x20 [n] Start new session\n"
         );
     }
 
@@ -112,11 +116,12 @@ mod tests {
         let sessions = vec![make_session("sess-1", "discord", None, "idle")];
 
         let output = format_cloud_session_list(&sessions);
-        assert!(output.contains("[1]"));
-        assert!(output.contains("discord"));
-        assert!(
-            output.contains("(no preview)"),
-            "should show fallback text for missing preview"
+
+        assert_eq!(
+            output,
+            "Cloud Sessions:\n\
+             \x20 [1] (discord) \"(no preview)\" — last active 2025-01-27 14:30\n\
+             \x20 [n] Start new session\n"
         );
     }
 
