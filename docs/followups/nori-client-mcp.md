@@ -43,17 +43,15 @@ The server should expose:
   - `create_goal`
   - `update_goal`
 - Context resources:
-  - `nori://context/cli` - concise operating facts: the agent is running inside
-    Nori CLI over ACP, `nori-client` is Nori's harness-side MCP channel, and the
-    open source implementation lives at `https://github.com/tilework-tech/nori-cli`.
-  - `nori://context/repo` - a compact source map for the Nori CLI repo: ACP
-    backend, TUI, protocol normalization, config/agent registry, transcript
-    discovery, and MCP support.
-- Workflow resources/prompts:
+  - `nori://context/cli` - three concise operating facts: Nori CLI is the
+    current harness, ACP is the JSON-RPC wire protocol backed by the Nori CLI
+    source repo, and `nori-client` is an internal-only backend MCP server.
+  - `nori://context/repo` - a compact source map for answering Nori CLI
+    implementation questions from the repo source.
+- Help resources and prompts:
   - `nori://help/custom-acp-agent` and `register_custom_acp_agent`
-  - `nori://debug/acp-wire` and `debug_acp_wire_protocol`
-  - `nori://source/nori-cli-map` and `answer_nori_cli_question`
-  - `nori://skills/workflows` and `choose_nori_workflow`
+  - `nori://help/acp-wire-logs` and `debug_acp_wire_protocol`
+  - `answer_nori_cli_question`, which points at `nori://context/repo`
 
 The agent should be able to discover this context through MCP list/read/get
 requests. Nori may include short MCP server instructions that point agents

@@ -372,9 +372,21 @@ pub struct AcpBackend {
     cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
+fn fallback_session_context_for_connection(
+    config: &AcpBackendConfig,
+    connection: &SacpConnection,
+) -> Option<String> {
+    if connection.capabilities().mcp_capabilities.http {
+        None
+    } else {
+        config.session_context.clone()
+    }
+}
+
 #[cfg(unix)]
 pub mod browser_session;
 mod helpers;
+mod nori_client_context;
 mod nori_client_mcp;
 mod session;
 pub(crate) mod session_reducer;

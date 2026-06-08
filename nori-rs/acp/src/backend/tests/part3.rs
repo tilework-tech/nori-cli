@@ -1691,6 +1691,13 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
     let has_context_compacted = client_events
         .iter()
         .any(|e| matches!(e, nori_protocol::ClientEvent::ContextCompacted(_)));
+    let capability_update_count = client_events
+        .iter()
+        .filter_map(|event| match event {
+            nori_protocol::ClientEvent::SessionCapabilitiesChanged(update) => Some(update),
+            _ => None,
+        })
+        .count();
     let has_warning = warning_events
         .iter()
         .any(|e| matches!(e.msg, EventMsg::Warning(_)));
@@ -1705,6 +1712,10 @@ async fn test_compact_sends_summarization_prompt_and_emits_events() {
     assert!(
         has_context_compacted,
         "Expected normalized context compacted event. Client events: {client_events:?}"
+    );
+    assert!(
+        capability_update_count >= 2,
+        "Expected initial and post-compact capability snapshots. Client events: {client_events:?}"
     );
     assert!(
         has_warning,

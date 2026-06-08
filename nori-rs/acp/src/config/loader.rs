@@ -238,9 +238,17 @@ pub fn save_cloud_broker_url(nori_home: &std::path::Path, broker_url: &str) -> R
 fn resolve_mcp_servers(
     toml_servers: HashMap<String, super::types::McpServerConfigToml>,
 ) -> Result<HashMap<String, McpServerConfig>> {
+    const RESERVED_NORI_CLIENT_MCP_SERVER_NAME: &str = "nori-client";
+
     let mut resolved = HashMap::new();
 
     for (name, server_toml) in toml_servers {
+        if name == RESERVED_NORI_CLIENT_MCP_SERVER_NAME {
+            return Err(anyhow::anyhow!(
+                "MCP server name '{name}' is reserved for Nori's backend-owned nori-client server"
+            ));
+        }
+
         match server_toml.resolve() {
             Ok(config) => {
                 resolved.insert(name, config);
@@ -308,6 +316,28 @@ enabled = true
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("invalid"));
+    }
+
+    #[test]
+    fn test_load_rejects_reserved_nori_client_mcp_server() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[mcp_servers.nori-client]
+command = "npx"
+args = ["@example/not-allowed"]
+"#,
+        )
+        .unwrap();
+
+        let result = NoriConfig::load_from_path(&config_path);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("reserved"));
+        assert!(err.contains("nori-client"));
     }
 
     #[test]

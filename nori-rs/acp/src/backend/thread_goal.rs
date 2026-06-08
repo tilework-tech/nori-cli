@@ -50,6 +50,18 @@ pub(crate) struct ThreadGoalState {
     last_session_used_tokens: Option<i64>,
 }
 
+pub(crate) fn unavailable_notice() -> SessionUpdateInfo {
+    SessionUpdateInfo {
+        kind: SessionUpdateKind::SessionInfo,
+        message: "/goal is unavailable for this session.".to_string(),
+        hint: Some(
+            "The active agent does not advertise HTTP MCP support, so it cannot use the nori-client goal tools to close the loop."
+                .to_string(),
+        ),
+        usage: None,
+    }
+}
+
 impl ThreadGoalState {
     pub(crate) fn from_replay_events(events: &[ClientEvent]) -> Self {
         let mut state = Self::default();
@@ -165,6 +177,27 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
             }),
             ThreadGoalStatus::Active | ThreadGoalStatus::BudgetLimited | ThreadGoalStatus::Complete => None,
         }
+    }
+
+    /// Resume-time notice that respects whether goal automation is available.
+    /// Without HTTP MCP support `/goal` is disabled, so the `resume_notice`
+    /// affordances (which suggest `/goal resume`) would mislead; surface the
+    /// `unavailable_notice` for any goal that is still in play instead.
+    pub(crate) fn resume_notice_for(
+        &self,
+        now: i64,
+        goal_automation_available: bool,
+    ) -> Option<SessionUpdateInfo> {
+        if goal_automation_available {
+            return self.resume_notice(now);
+        }
+        self.snapshot(now).and_then(|goal| match goal.status {
+            ThreadGoalStatus::Active
+            | ThreadGoalStatus::Paused
+            | ThreadGoalStatus::Blocked
+            | ThreadGoalStatus::UsageLimited => Some(unavailable_notice()),
+            ThreadGoalStatus::BudgetLimited | ThreadGoalStatus::Complete => None,
+        })
     }
 
     pub(crate) fn set_objective(
@@ -331,6 +364,10 @@ impl AcpBackend {
     }
 
     pub(super) async fn prepend_goal_context_to_prompt(&self, prompt: String) -> String {
+        if !self.goal_automation_available().await {
+            return prompt;
+        }
+
         let goal_context = self
             .thread_goal_state
             .lock()
@@ -343,6 +380,11 @@ impl AcpBackend {
     }
 
     pub(super) async fn handle_thread_goal_get(&self) {
+        if !self.goal_automation_available().await {
+            self.emit_goal_unavailable().await;
+            return;
+        }
+
         let now = now_seconds();
         let goal = self.thread_goal_state.lock().await.snapshot(now);
         match goal {
@@ -370,6 +412,11 @@ impl AcpBackend {
         objective: Option<String>,
         status: Option<ThreadGoalStatus>,
     ) {
+        if !self.goal_automation_available().await {
+            self.emit_goal_unavailable().await;
+            return;
+        }
+
         let now = now_seconds();
         let result = {
             let mut state = self.thread_goal_state.lock().await;
@@ -395,6 +442,11 @@ impl AcpBackend {
     }
 
     pub(super) async fn handle_thread_goal_clear(&self) {
+        if !self.goal_automation_available().await {
+            self.emit_goal_unavailable().await;
+            return;
+        }
+
         let cleared = self.thread_goal_state.lock().await.clear();
         if cleared {
             emit_client_event(
@@ -416,6 +468,22 @@ impl AcpBackend {
             )
             .await;
         }
+    }
+
+    async fn goal_automation_available(&self) -> bool {
+        self.goal_mcp_http_server.lock().await.is_some()
+    }
+
+    async fn emit_goal_unavailable(&self) {
+        // Deliberately not recorded to the transcript: like resume notices this
+        // is a transient affordance derived from session state. Recording it
+        // would replay and accumulate a duplicate notice on every /goal op.
+        let _ = self
+            .backend_event_tx
+            .send(BackendEvent::Client(ClientEvent::SessionUpdateInfo(
+                unavailable_notice(),
+            )))
+            .await;
     }
 
     async fn emit_thread_goal_updated(&self, goal: ThreadGoalSnapshot) {
@@ -649,6 +717,55 @@ mod tests {
             .set_status(ThreadGoalStatus::Complete, 50)
             .expect("existing goal");
         assert_eq!(goals.resume_notice(55), None);
+    }
+
+    #[test]
+    fn resume_notice_for_non_mcp_surfaces_unavailable_for_in_play_goals() {
+        let mut goals = ThreadGoalState::default();
+        // No goal: nothing to surface, regardless of automation availability.
+        assert_eq!(goals.resume_notice_for(10, true), None);
+        assert_eq!(goals.resume_notice_for(10, false), None);
+
+        goals
+            .set_objective("Keep going".to_string(), Some(ThreadGoalStatus::Active), 10)
+            .expect("valid objective");
+        // Active goal with automation available has no resume affordance...
+        assert_eq!(goals.resume_notice_for(15, true), None);
+        // ...but without automation we surface that /goal is unavailable.
+        assert_eq!(
+            goals.resume_notice_for(15, false),
+            Some(unavailable_notice())
+        );
+
+        // Every resumable status surfaces the unavailable notice without
+        // automation, and never the misleading /goal resume affordance.
+        for status in [
+            ThreadGoalStatus::Paused,
+            ThreadGoalStatus::Blocked,
+            ThreadGoalStatus::UsageLimited,
+        ] {
+            goals.set_status(status, 20).expect("existing goal");
+            let available = goals
+                .resume_notice_for(25, true)
+                .expect("resumable goal notice");
+            assert!(
+                available
+                    .hint
+                    .as_deref()
+                    .is_some_and(|hint| hint.contains("/goal resume"))
+            );
+            assert_eq!(
+                goals.resume_notice_for(25, false),
+                Some(unavailable_notice())
+            );
+        }
+
+        // Terminal statuses surface nothing in either mode.
+        goals
+            .set_status(ThreadGoalStatus::Complete, 30)
+            .expect("existing goal");
+        assert_eq!(goals.resume_notice_for(35, true), None);
+        assert_eq!(goals.resume_notice_for(35, false), None);
     }
 
     #[test]

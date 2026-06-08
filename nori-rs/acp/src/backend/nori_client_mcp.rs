@@ -8,8 +8,9 @@
 //! goal-only surface.
 //!
 //! The transport is rmcp's spec-compliant streamable-HTTP server, served on a
-//! loopback port. The tools are typed `#[tool]` handlers; there is no
-//! hand-rolled HTTP or JSON-RPC framing here.
+//! loopback port and protected by a per-session bearer token before requests
+//! reach rmcp. The tools are typed `#[tool]` handlers; there is no hand-rolled
+//! HTTP or JSON-RPC framing here.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,6 +19,14 @@ use std::sync::atomic::Ordering;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use axum::body::Body;
+use axum::extract::State;
+use axum::http::Request;
+use axum::http::StatusCode;
+use axum::http::header::AUTHORIZATION;
+use axum::middleware;
+use axum::middleware::Next;
+use axum::response::Response;
 use rmcp::ErrorData as McpError;
 use rmcp::RoleServer;
 use rmcp::ServerHandler;
@@ -25,10 +34,17 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::model::Content;
+use rmcp::model::GetPromptRequestParam;
+use rmcp::model::GetPromptResult;
 use rmcp::model::Implementation;
 use rmcp::model::InitializeRequestParam;
 use rmcp::model::InitializeResult;
+use rmcp::model::ListPromptsResult;
+use rmcp::model::ListResourcesResult;
+use rmcp::model::PaginatedRequestParam;
 use rmcp::model::ProtocolVersion;
+use rmcp::model::ReadResourceRequestParam;
+use rmcp::model::ReadResourceResult;
 use rmcp::model::ServerCapabilities;
 use rmcp::model::ServerInfo;
 use rmcp::schemars;
@@ -98,6 +114,8 @@ pub(crate) struct NoriClientShared {
     backend_event_tx: mpsc::Sender<BackendEvent>,
     transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     connected: Arc<AtomicBool>,
+    agent_capabilities: nori_protocol::AgentCapabilitiesView,
+    nori_client_advertised: bool,
 }
 
 impl NoriClientShared {
@@ -106,12 +124,16 @@ impl NoriClientShared {
         backend_event_tx: mpsc::Sender<BackendEvent>,
         transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
         connected: Arc<AtomicBool>,
+        agent_capabilities: nori_protocol::AgentCapabilitiesView,
+        nori_client_advertised: bool,
     ) -> Self {
         Self {
             thread_goal_state,
             backend_event_tx,
             transcript_recorder,
             connected,
+            agent_capabilities,
+            nori_client_advertised,
         }
     }
 }
@@ -206,14 +228,53 @@ impl ServerHandler for NoriClientService {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             protocol_version: ProtocolVersion::V_2024_11_05,
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            capabilities: ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .enable_prompts()
+                .build(),
             server_info: Implementation {
                 name: "nori-client".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 ..Default::default()
             },
-            instructions: None,
+            instructions: Some(
+                "Use nori-client resources and prompts for Nori CLI harness context; use tools only for Nori-owned live state."
+                    .to_string(),
+            ),
         }
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParam>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, McpError> {
+        Ok(nori_client_context::list_resources())
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParam,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResult, McpError> {
+        nori_client_context::read_resource(request.uri)
+    }
+
+    async fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParam>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListPromptsResult, McpError> {
+        Ok(nori_client_context::list_prompts())
+    }
+
+    async fn get_prompt(
+        &self,
+        request: GetPromptRequestParam,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<GetPromptResult, McpError> {
+        nori_client_context::get_prompt(request.name)
     }
 
     /// Mark the agent connected on initialize. This flag is the sole gate that
@@ -225,7 +286,20 @@ impl ServerHandler for NoriClientService {
         request: InitializeRequestParam,
         context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
-        self.shared.connected.store(true, Ordering::Relaxed);
+        let already_connected = self.shared.connected.swap(true, Ordering::Relaxed);
+        if !already_connected {
+            let recorder = self.shared.transcript_recorder.lock().await.clone();
+            emit_client_event(
+                &self.shared.backend_event_tx,
+                recorder.as_ref(),
+                ClientEvent::SessionCapabilitiesChanged(capabilities_update(
+                    self.shared.agent_capabilities.clone(),
+                    self.shared.nori_client_advertised,
+                    true,
+                )),
+            )
+            .await;
+        }
         if context.peer.peer_info().is_none() {
             context.peer.set_peer_info(request);
         }
@@ -268,7 +342,8 @@ fn status_label(status: ThreadGoalStatus) -> &'static str {
 /// Loopback `nori-client` MCP server. Bound on first use and torn down on drop.
 pub(crate) struct NoriClientServer {
     url: String,
-    abort_handle: tokio::task::AbortHandle,
+    authorization_header_value: String,
+    task: tokio::task::JoinHandle<()>,
 }
 
 impl NoriClientServer {
@@ -277,6 +352,8 @@ impl NoriClientServer {
             .await
             .context("failed to bind local nori-client MCP server")?;
         let url = format!("http://{}/mcp", listener.local_addr()?);
+        let authorization_header_value = format!("Bearer {}", uuid::Uuid::new_v4());
+        let expected_authorization = Arc::new(authorization_header_value.clone());
 
         let service = StreamableHttpService::new(
             move || Ok(NoriClientService::new(shared.clone())),
@@ -287,44 +364,128 @@ impl NoriClientServer {
                 ..Default::default()
             },
         );
-        let router = axum::Router::new().nest_service("/mcp", service);
+        let router = axum::Router::new().nest_service("/mcp", service).layer(
+            middleware::from_fn_with_state(expected_authorization, require_bearer_token),
+        );
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
+            let _ = ready_tx.send(());
             if let Err(err) = axum::serve(listener, router).await {
                 tracing::debug!("nori-client MCP server stopped: {err}");
             }
         });
+        ready_rx
+            .await
+            .context("nori-client MCP server task exited before becoming ready")?;
 
         Ok(Self {
             url,
-            abort_handle: task.abort_handle(),
+            authorization_header_value,
+            task,
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn url(&self) -> &str {
         &self.url
+    }
+
+    fn authorization_header(&self) -> acp::HttpHeader {
+        acp::HttpHeader::new("Authorization", self.authorization_header_value.clone())
+    }
+
+    pub(super) fn as_mcp_server(&self) -> acp::McpServer {
+        acp::McpServer::Http(
+            acp::McpServerHttp::new("nori-client", self.url.clone())
+                .headers(vec![self.authorization_header()]),
+        )
     }
 }
 
 impl Drop for NoriClientServer {
     fn drop(&mut self) {
-        self.abort_handle.abort();
+        self.task.abort();
+    }
+}
+
+pub(super) struct PendingNoriClientServer {
+    server: Option<NoriClientServer>,
+    connected: Arc<AtomicBool>,
+    previous_connected: bool,
+    committed: bool,
+}
+
+impl PendingNoriClientServer {
+    pub(super) async fn commit(mut self, http_server: &Arc<Mutex<Option<NoriClientServer>>>) {
+        *http_server.lock().await = self.server.take();
+        self.committed = true;
+    }
+}
+
+impl Drop for PendingNoriClientServer {
+    fn drop(&mut self) {
+        if !self.committed {
+            self.connected
+                .store(self.previous_connected, Ordering::Relaxed);
+        }
+    }
+}
+
+async fn require_bearer_token(
+    State(expected): State<Arc<String>>,
+    request: Request<Body>,
+    next: Next,
+) -> std::result::Result<Response, StatusCode> {
+    if request
+        .headers()
+        .get(AUTHORIZATION)
+        .is_some_and(|value| value.as_bytes() == expected.as_bytes())
+    {
+        Ok(next.run(request).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
     }
 }
 
 pub(super) fn capabilities_update_for_session(
     connection: &SacpConnection,
+    connected: &AtomicBool,
 ) -> nori_protocol::SessionCapabilitiesView {
-    let http_mcp = connection.capabilities().mcp_capabilities.http;
+    capabilities_update_for_nori_client(
+        connection,
+        connection.capabilities().mcp_capabilities.http,
+        connected.load(Ordering::Relaxed),
+    )
+}
+
+pub(super) fn capabilities_update_for_nori_client(
+    connection: &SacpConnection,
+    nori_client_advertised: bool,
+    nori_client_initialized: bool,
+) -> nori_protocol::SessionCapabilitiesView {
+    let agent = nori_protocol::AgentCapabilitiesView {
+        http_mcp: connection.capabilities().mcp_capabilities.http,
+        load_session: connection.capabilities().load_session,
+    };
+    capabilities_update(agent, nori_client_advertised, nori_client_initialized)
+}
+
+fn capabilities_update(
+    agent: nori_protocol::AgentCapabilitiesView,
+    nori_client_advertised: bool,
+    nori_client_initialized: bool,
+) -> nori_protocol::SessionCapabilitiesView {
     nori_protocol::SessionCapabilitiesView {
-        agent: nori_protocol::AgentCapabilitiesView {
-            http_mcp,
-            load_session: connection.capabilities().load_session,
+        agent,
+        nori_client: nori_protocol::NoriClientCapabilitiesView {
+            advertised: nori_client_advertised,
+            initialized: nori_client_initialized,
         },
         builtin_commands: HashMap::from([(
             "goal".to_string(),
             nori_protocol::CommandAvailability {
-                enabled: http_mcp,
-                reason: (!http_mcp).then(|| {
+                enabled: nori_client_advertised,
+                reason: (!nori_client_advertised).then(|| {
                     "The active agent does not advertise HTTP MCP support, so /goal is unavailable."
                         .to_string()
                 }),
@@ -340,35 +501,33 @@ pub(super) async fn register_for_session(
     backend_event_tx: mpsc::Sender<BackendEvent>,
     transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     connected: Arc<AtomicBool>,
-    http_server: Arc<Mutex<Option<NoriClientServer>>>,
-) -> Result<()> {
-    connected.store(false, Ordering::Relaxed);
-
+) -> Result<Option<PendingNoriClientServer>> {
     if !connection.capabilities().mcp_capabilities.http {
-        return Ok(());
+        return Ok(None);
     }
 
-    let mut server = http_server.lock().await;
-    if server.is_none() {
-        *server = Some(
-            NoriClientServer::spawn(NoriClientShared::new(
-                thread_goal_state,
-                backend_event_tx,
-                transcript_recorder,
-                Arc::clone(&connected),
-            ))
-            .await?,
-        );
-    }
-    let Some(server) = server.as_ref() else {
-        return Ok(());
-    };
-    mcp_servers.push(acp::McpServer::Http(acp::McpServerHttp::new(
-        "nori-client",
-        server.url().to_string(),
-    )));
+    let next_server = NoriClientServer::spawn(NoriClientShared::new(
+        thread_goal_state,
+        backend_event_tx,
+        transcript_recorder,
+        Arc::clone(&connected),
+        nori_protocol::AgentCapabilitiesView {
+            http_mcp: connection.capabilities().mcp_capabilities.http,
+            load_session: connection.capabilities().load_session,
+        },
+        true,
+    ))
+    .await?;
+    let advertised_server = next_server.as_mcp_server();
+    let previous_connected = connected.swap(false, Ordering::Relaxed);
+    mcp_servers.push(advertised_server);
 
-    Ok(())
+    Ok(Some(PendingNoriClientServer {
+        server: Some(next_server),
+        connected,
+        previous_connected,
+        committed: false,
+    }))
 }
 
 #[cfg(test)]
@@ -378,6 +537,13 @@ mod tests {
 
     use super::*;
 
+    fn test_agent_capabilities() -> nori_protocol::AgentCapabilitiesView {
+        nori_protocol::AgentCapabilitiesView {
+            http_mcp: true,
+            load_session: false,
+        }
+    }
+
     fn service() -> NoriClientService {
         let (backend_event_tx, _backend_event_rx) = mpsc::channel(8);
         NoriClientService::new(NoriClientShared::new(
@@ -385,6 +551,8 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::new(AtomicBool::new(false)),
+            test_agent_capabilities(),
+            true,
         ))
     }
 
@@ -427,11 +595,27 @@ mod tests {
             .expect("update_goal should not fail at the protocol level")
     }
 
+    fn authenticated_transport(
+        url: String,
+        authorization_header_value: String,
+    ) -> impl rmcp::transport::Transport<rmcp::RoleClient> {
+        use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+
+        let bearer_token = authorization_header_value
+            .strip_prefix("Bearer ")
+            .expect("generated Authorization header should be a bearer token")
+            .to_string();
+        let config = StreamableHttpClientTransportConfig::with_uri(url).auth_header(bearer_token);
+        rmcp::transport::StreamableHttpClientTransport::from_config(config)
+    }
+
     #[test]
-    fn get_info_advertises_nori_client_with_tools() {
+    fn get_info_advertises_nori_client_surface() {
         let info = service().get_info();
         assert_eq!(info.server_info.name, "nori-client");
         assert!(info.capabilities.tools.is_some());
+        assert!(info.capabilities.resources.is_some());
+        assert!(info.capabilities.prompts.is_some());
     }
 
     #[tokio::test]
@@ -449,6 +633,8 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::new(AtomicBool::new(false)),
+            test_agent_capabilities(),
+            true,
         ));
 
         let create_result = create(&service, "Ship the ACP goal bridge").await;
@@ -523,7 +709,6 @@ mod tests {
     async fn real_mcp_client_round_trips_over_http() {
         use rmcp::ServiceExt;
         use rmcp::model::CallToolRequestParam;
-        use rmcp::transport::StreamableHttpClientTransport;
 
         let connected = Arc::new(AtomicBool::new(false));
         let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
@@ -533,11 +718,16 @@ mod tests {
             backend_event_tx,
             Arc::new(Mutex::new(None)),
             Arc::clone(&connected),
+            test_agent_capabilities(),
+            true,
         ))
         .await
         .expect("nori-client server should spawn");
 
-        let transport = StreamableHttpClientTransport::from_uri(server.url().to_string());
+        let transport = authenticated_transport(
+            server.url().to_string(),
+            server.authorization_header_value.clone(),
+        );
         let client = ()
             .serve(transport)
             .await
@@ -583,6 +773,191 @@ mod tests {
         let goal: serde_json::Value = serde_json::from_str(goal_text).expect("goal json");
         assert_eq!(goal["goal"]["objective"], "Round-trip over real MCP");
         assert_eq!(goal["goal"]["status"], "active");
+
+        client.cancel().await.expect("client should shut down");
+    }
+
+    #[tokio::test]
+    async fn real_mcp_client_discovers_context_resources_over_http() {
+        use std::collections::BTreeSet;
+
+        use rmcp::ServiceExt;
+        use rmcp::model::ReadResourceRequestParam;
+        use rmcp::model::ResourceContents;
+
+        let connected = Arc::new(AtomicBool::new(false));
+        let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
+        let (backend_event_tx, _backend_event_rx) = mpsc::channel(8);
+        let server = NoriClientServer::spawn(NoriClientShared::new(
+            Arc::clone(&state),
+            backend_event_tx,
+            Arc::new(Mutex::new(None)),
+            Arc::clone(&connected),
+            test_agent_capabilities(),
+            true,
+        ))
+        .await
+        .expect("nori-client server should spawn");
+
+        let transport = authenticated_transport(
+            server.url().to_string(),
+            server.authorization_header_value.clone(),
+        );
+        let client = ()
+            .serve(transport)
+            .await
+            .expect("rmcp client should complete the initialize handshake");
+
+        let resources = client
+            .list_all_resources()
+            .await
+            .expect("client should list resources");
+        let resource_uris: BTreeSet<&str> = resources
+            .iter()
+            .map(|resource| resource.raw.uri.as_str())
+            .collect();
+        assert_eq!(
+            resource_uris,
+            BTreeSet::from([
+                "nori://context/cli",
+                "nori://context/repo",
+                "nori://help/acp-wire-logs",
+                "nori://help/custom-acp-agent",
+            ])
+        );
+
+        let context = client
+            .read_resource(ReadResourceRequestParam {
+                uri: "nori://context/cli".to_string(),
+            })
+            .await
+            .expect("client should read CLI context");
+        assert_eq!(context.contents.len(), 1);
+        let ResourceContents::TextResourceContents { text, .. } = &context.contents[0] else {
+            panic!("CLI context should be text");
+        };
+        assert!(text.contains("terminal harness for agent sessions"));
+        assert!(text.contains("internal-only, backend-owned MCP server"));
+        assert!(text.contains("https://github.com/tilework-tech/nori-cli"));
+
+        let repo = client
+            .read_resource(ReadResourceRequestParam {
+                uri: "nori://context/repo".to_string(),
+            })
+            .await
+            .expect("client should read repo source context");
+        let ResourceContents::TextResourceContents { text, .. } = &repo.contents[0] else {
+            panic!("repo context should be text");
+        };
+        assert!(text.contains("answering Nori CLI questions"));
+        assert!(text.contains("nori-rs/acp"));
+        assert!(text.contains("nori-rs/tui"));
+
+        let custom_agent = client
+            .read_resource(ReadResourceRequestParam {
+                uri: "nori://help/custom-acp-agent".to_string(),
+            })
+            .await
+            .expect("client should read custom ACP agent help");
+        let ResourceContents::TextResourceContents { text, .. } = &custom_agent.contents[0] else {
+            panic!("custom ACP agent help should be text");
+        };
+        assert!(text.contains("[[agents]]"));
+        assert!(text.contains("exactly one distribution block"));
+        assert!(text.contains("[agents.distribution.uvx]"));
+
+        let wire_logs = client
+            .read_resource(ReadResourceRequestParam {
+                uri: "nori://help/acp-wire-logs".to_string(),
+            })
+            .await
+            .expect("client should read ACP wire logs help");
+        let ResourceContents::TextResourceContents { text, .. } = &wire_logs.contents[0] else {
+            panic!("ACP wire logs help should be text");
+        };
+        assert!(text.contains("off by default"));
+        assert!(text.contains("many MB per log file"));
+        assert!(text.contains("sensitive environment variables or command output"));
+        assert!(text.contains("[acp_proxy]"));
+        assert!(text.contains("$NORI_HOME/acp-wire"));
+        assert!(text.contains("direction"));
+
+        client.cancel().await.expect("client should shut down");
+    }
+
+    #[tokio::test]
+    async fn real_mcp_client_discovers_workflow_prompts_over_http() {
+        use std::collections::BTreeSet;
+
+        use rmcp::ServiceExt;
+        use rmcp::model::GetPromptRequestParam;
+        use rmcp::model::PromptMessageContent;
+
+        let connected = Arc::new(AtomicBool::new(false));
+        let state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
+        let (backend_event_tx, _backend_event_rx) = mpsc::channel(8);
+        let server = NoriClientServer::spawn(NoriClientShared::new(
+            Arc::clone(&state),
+            backend_event_tx,
+            Arc::new(Mutex::new(None)),
+            Arc::clone(&connected),
+            test_agent_capabilities(),
+            true,
+        ))
+        .await
+        .expect("nori-client server should spawn");
+
+        let transport = authenticated_transport(
+            server.url().to_string(),
+            server.authorization_header_value.clone(),
+        );
+        let client = ()
+            .serve(transport)
+            .await
+            .expect("rmcp client should complete the initialize handshake");
+
+        let prompts = client
+            .list_all_prompts()
+            .await
+            .expect("client should list prompts");
+        let prompt_names: BTreeSet<&str> =
+            prompts.iter().map(|prompt| prompt.name.as_str()).collect();
+        assert_eq!(
+            prompt_names,
+            BTreeSet::from([
+                "answer_nori_cli_question",
+                "debug_acp_wire_protocol",
+                "register_custom_acp_agent",
+            ])
+        );
+
+        let prompt = client
+            .get_prompt(GetPromptRequestParam {
+                name: "answer_nori_cli_question".to_string(),
+                arguments: None,
+            })
+            .await
+            .expect("client should get source Q&A prompt");
+        assert_eq!(prompt.messages.len(), 1);
+        let PromptMessageContent::Text { text } = &prompt.messages[0].content else {
+            panic!("source Q&A prompt should be text");
+        };
+        assert!(text.contains("nori://context/repo"));
+        assert!(text.contains("Nori CLI"));
+
+        let prompt = client
+            .get_prompt(GetPromptRequestParam {
+                name: "debug_acp_wire_protocol".to_string(),
+                arguments: None,
+            })
+            .await
+            .expect("client should get ACP wire debug prompt");
+        let PromptMessageContent::Text { text } = &prompt.messages[0].content else {
+            panic!("ACP wire debug prompt should be text");
+        };
+        assert!(text.contains("nori://help/acp-wire-logs"));
+        assert!(text.contains("timestamp-ordered request/response timeline"));
+        assert!(text.contains("first divergent protocol boundary"));
 
         client.cancel().await.expect("client should shut down");
     }

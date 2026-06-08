@@ -491,25 +491,68 @@ impl AcpBackend {
                     &self.mcp_servers,
                     self.mcp_oauth_credentials_store_mode,
                 );
-                if let Err(err) = nori_client_mcp::register_for_session(
-                    &self.connection,
-                    &mut mcp_servers,
-                    Arc::clone(&self.thread_goal_state),
-                    self.backend_event_tx.clone(),
-                    Arc::clone(&self.transcript_recorder_cell),
-                    Arc::clone(&self.goal_mcp_connected),
-                    Arc::clone(&self.goal_mcp_http_server),
-                )
-                .await
-                {
-                    warn!("Failed to register goal MCP server after compact: {err}");
-                }
+                let previous_goal_mcp_connected = {
+                    let goal_mcp_http_server = self.goal_mcp_http_server.lock().await;
+                    if let Some(server) = goal_mcp_http_server.as_ref() {
+                        mcp_servers.push(server.as_mcp_server());
+                        Some(
+                            self.goal_mcp_connected
+                                .swap(false, std::sync::atomic::Ordering::Relaxed),
+                        )
+                    } else {
+                        None
+                    }
+                };
+                let pending_nori_client_server = if previous_goal_mcp_connected.is_some() {
+                    None
+                } else {
+                    match nori_client_mcp::register_for_session(
+                        &self.connection,
+                        &mut mcp_servers,
+                        Arc::clone(&self.thread_goal_state),
+                        self.backend_event_tx.clone(),
+                        Arc::clone(&self.transcript_recorder_cell),
+                        Arc::clone(&self.goal_mcp_connected),
+                    )
+                    .await
+                    {
+                        Ok(server) => server,
+                        Err(err) => {
+                            warn!("Failed to register goal MCP server after compact: {err}");
+                            None
+                        }
+                    }
+                };
+                let nori_client_advertised = mcp_servers.iter().any(|server| {
+                    matches!(
+                        server,
+                        acp::McpServer::Http(http) if http.name == "nori-client"
+                    )
+                });
                 match self.connection.create_session(&cwd, mcp_servers).await {
                     Ok(new_session_id) => {
+                        if let Some(server) = pending_nori_client_server {
+                            server.commit(&self.goal_mcp_http_server).await;
+                        }
                         debug!("Created new session after compact: {:?}", new_session_id);
                         *self.session_id.write().await = new_session_id;
+                        self.forward_and_record_client_event(
+                            ClientEvent::SessionCapabilitiesChanged(
+                                nori_client_mcp::capabilities_update_for_nori_client(
+                                    &self.connection,
+                                    nori_client_advertised,
+                                    self.goal_mcp_connected
+                                        .load(std::sync::atomic::Ordering::Relaxed),
+                                ),
+                            ),
+                        )
+                        .await;
                     }
                     Err(err) => {
+                        if let Some(previous) = previous_goal_mcp_connected {
+                            self.goal_mcp_connected
+                                .store(previous, std::sync::atomic::Ordering::Relaxed);
+                        }
                         warn!("Failed to create new session after compact: {err}");
                     }
                 }
@@ -559,6 +602,10 @@ impl AcpBackend {
     }
 
     pub(super) async fn submit_goal_continuation_if_idle(&self) {
+        if self.goal_mcp_http_server.lock().await.is_none() {
+            return;
+        }
+
         let prompt_text = {
             self.thread_goal_state
                 .lock()

@@ -80,6 +80,8 @@ pub struct AgentCommandInfo {
 #[serde(rename_all = "snake_case")]
 pub struct SessionCapabilitiesView {
     pub agent: AgentCapabilitiesView,
+    #[serde(default)]
+    pub nori_client: NoriClientCapabilitiesView,
     pub builtin_commands: HashMap<String, CommandAvailability>,
 }
 
@@ -88,6 +90,13 @@ pub struct SessionCapabilitiesView {
 pub struct AgentCapabilitiesView {
     pub http_mcp: bool,
     pub load_session: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct NoriClientCapabilitiesView {
+    pub advertised: bool,
+    pub initialized: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1832,6 +1841,10 @@ mod tests {
             agent: AgentCapabilitiesView {
                 http_mcp: false,
                 load_session: true,
+            },
+            nori_client: NoriClientCapabilitiesView {
+                advertised: false,
+                initialized: false,
             },
             builtin_commands: HashMap::from([(
                 "goal".to_string(),

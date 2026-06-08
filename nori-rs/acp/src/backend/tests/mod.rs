@@ -1,6 +1,45 @@
 use super::*;
 use serial_test::serial;
 
+/// RAII guard that sets or removes a process env var and restores the previous
+/// value on drop, including on panic/unwind. `#[serial]` tests share process
+/// env, so a non-restored mutation would leak into later tests.
+struct EnvGuard {
+    name: &'static str,
+    previous: Option<String>,
+}
+
+impl EnvGuard {
+    fn set(name: &'static str, value: &str) -> Self {
+        let previous = std::env::var(name).ok();
+        unsafe {
+            std::env::set_var(name, value);
+        }
+        Self { name, previous }
+    }
+
+    fn remove(name: &'static str) -> Self {
+        let previous = std::env::var(name).ok();
+        unsafe {
+            std::env::remove_var(name);
+        }
+        Self { name, previous }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => unsafe {
+                std::env::set_var(self.name, value);
+            },
+            None => unsafe {
+                std::env::remove_var(self.name);
+            },
+        }
+    }
+}
+
 async fn recv_backend_control(
     rx: &mut mpsc::Receiver<BackendEvent>,
     timeout: std::time::Duration,
