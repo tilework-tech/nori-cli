@@ -439,20 +439,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn cloud_mode_tests_cover_all_variants() {
-        let client_only = SlashCommand::iter()
-            .filter(|cmd| !cmd.available_in_cloud_mode())
-            .count();
-        let cloud_enabled = SlashCommand::iter()
-            .filter(|cmd| cmd.available_in_cloud_mode())
-            .count();
-        assert_eq!(
-            client_only + cloud_enabled,
-            SlashCommand::iter().count(),
-            "every SlashCommand variant must be classified as either cloud-disabled or cloud-enabled"
-        );
-    }
 
     #[test]
     fn browse_parses_from_string() {

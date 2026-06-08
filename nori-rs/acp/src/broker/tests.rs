@@ -470,7 +470,7 @@ async fn acquire_session_returns_error_for_malformed_response() {
     let client = BrokerClient::new(broker_url, dir.path().to_path_buf());
 
     let err = client.acquire_session().await.unwrap_err();
-    assert!(matches!(err, BrokerError::InvalidToken(_)));
+    assert!(matches!(err, BrokerError::InvalidResponse(_)));
 
     server_handle.join().unwrap();
 }

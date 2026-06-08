@@ -80,6 +80,9 @@ pub enum BrokerError {
 
     #[error("invalid token: {0}")]
     InvalidToken(String),
+
+    #[error("invalid response: {0}")]
+    InvalidResponse(String),
 }
 
 pub struct BrokerClient {
@@ -145,7 +148,7 @@ impl BrokerClient {
         let info: SessionInfo = resp
             .json()
             .await
-            .map_err(|e| BrokerError::InvalidToken(format!("invalid response: {e}")))?;
+            .map_err(|e| BrokerError::InvalidResponse(e.to_string()))?;
         Ok(info)
     }
 
@@ -181,7 +184,7 @@ impl BrokerClient {
         let sessions: Vec<CloudSessionSummary> = resp
             .json()
             .await
-            .map_err(|e| BrokerError::InvalidToken(format!("invalid response: {e}")))?;
+            .map_err(|e| BrokerError::InvalidResponse(e.to_string()))?;
         Ok(sessions)
     }
 
@@ -218,7 +221,7 @@ impl BrokerClient {
         let info: SessionInfo = resp
             .json()
             .await
-            .map_err(|e| BrokerError::InvalidToken(format!("invalid response: {e}")))?;
+            .map_err(|e| BrokerError::InvalidResponse(e.to_string()))?;
         Ok(info)
     }
 
