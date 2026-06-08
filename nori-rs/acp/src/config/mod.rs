@@ -16,6 +16,7 @@ pub use types::AgentConfigToml;
 pub use types::AgentDistributionToml;
 pub use types::ApprovalPolicy;
 pub use types::AutoWorktree;
+pub use types::BrowserProfileMode;
 pub use types::DEFAULT_AGENT;
 pub use types::FileManager;
 pub use types::FooterLayoutConfig;

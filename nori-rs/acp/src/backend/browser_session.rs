@@ -7,12 +7,23 @@ use anyhow::bail;
 use tokio::io::AsyncBufReadExt as _;
 use tokio::io::BufReader;
 
+use crate::config::BrowserProfileMode;
+use crate::config::find_nori_home;
+
+use super::browser_profile::ProfileDir;
+use super::browser_profile::resolve_profile_dir;
+
 const CHROME_CANDIDATES: &[&str] = &[
     "google-chrome-stable",
     "google-chrome",
     "chromium-browser",
     "chromium",
 ];
+
+/// Appended to the launch error when the `System` profile is already locked by
+/// a running Chrome, which silently hands off and never exposes CDP.
+const SYSTEM_PROFILE_BUSY_HINT: &str = "Chrome is already running with your default profile, so CDP could not attach. \
+     Fully quit Chrome, then run `/browser` again.";
 
 static ACTIVE_SESSION: Mutex<Option<BrowserSession>> = Mutex::new(None);
 
@@ -40,8 +51,9 @@ fn store_session(session: BrowserSession) {
 ///
 /// The session is owned by a process-lifetime `static`, which Rust never drops
 /// at exit, so the nori shutdown path must call this explicitly. Dropping the
-/// taken session kills Chrome (`kill_on_drop`) and removes the temp profile
-/// (`TempDir`). A no-op when no session is active; safe to call more than once.
+/// taken session kills Chrome (`kill_on_drop`) and, for a throwaway profile,
+/// removes its temp dir; persistent and system profiles are left on disk so
+/// logins survive. A no-op when no session is active; safe to call repeatedly.
 pub fn shutdown_active_session() {
     if let Ok(mut guard) = ACTIVE_SESSION.lock() {
         guard.take();
@@ -95,15 +107,17 @@ pub struct BrowserSession {
     _child: tokio::process::Child,
     ws_url: String,
     cdp_port: i32,
-    /// Throwaway Chrome profile. Declared last so it is removed only after the
-    /// child has been dropped (and thus killed) above it.
-    _user_data_dir: tempfile::TempDir,
+    /// Resolved Chrome profile. Declared last so it is cleaned up (when
+    /// throwaway) only after the child has been dropped, and thus killed, above
+    /// it.
+    _profile_dir: ProfileDir,
 }
 
 impl BrowserSession {
-    /// Launch Chrome in headed mode with a random CDP port, storing
-    /// it as the active session. Closes any previous session.
-    pub async fn launch_and_store() -> Result<(String, i32)> {
+    /// Launch Chrome in headed mode with a random CDP port, storing it as the
+    /// active session. Closes any previous session. `mode` selects which Chrome
+    /// profile to launch against (see [`BrowserProfileMode`]).
+    pub async fn launch_and_store(mode: BrowserProfileMode) -> Result<(String, i32)> {
         if is_browser_active()
             && let Some((ws_url, cdp_port)) = active_session_info()
         {
@@ -112,18 +126,16 @@ impl BrowserSession {
 
         let chrome = find_chrome_binary()?;
 
-        // Launch against a throwaway profile so we never attach to (or disturb)
-        // the user's already-running Chrome; reusing the default profile would
-        // hand off to that instance and never expose CDP on our debugging port.
-        let user_data_dir =
-            tempfile::tempdir().context("failed to create temporary Chrome profile dir")?;
+        // Resolve the profile per the requested tier. Throwaway (the secure
+        // default) shares nothing with the user's Chrome; persistent/system are
+        // explicit opt-ins for durable logins.
+        let nori_home =
+            find_nori_home().context("failed to locate nori home for browser profile")?;
+        let profile_dir = resolve_profile_dir(mode, &chrome, &nori_home)?;
 
         let mut child = tokio::process::Command::new(&chrome)
             .arg("--remote-debugging-port=0")
-            .arg(format!(
-                "--user-data-dir={}",
-                user_data_dir.path().display()
-            ))
+            .arg(format!("--user-data-dir={}", profile_dir.path().display()))
             .arg("--no-first-run")
             .arg("--no-default-browser-check")
             .arg("--disable-gpu")
@@ -140,13 +152,24 @@ impl BrowserSession {
             .take()
             .context("failed to capture Chrome stderr")?;
 
-        let ws_url = tokio::time::timeout(
+        let ws_url_result = tokio::time::timeout(
             std::time::Duration::from_secs(15),
             Self::read_ws_url_from_stderr(stderr),
         )
         .await
-        .context("timed out waiting for Chrome CDP URL")?
-        .context("failed to read CDP URL from Chrome stderr")?;
+        .context("timed out waiting for Chrome CDP URL")
+        .and_then(|inner| inner.context("failed to read CDP URL from Chrome stderr"));
+
+        let ws_url = match ws_url_result {
+            Ok(ws_url) => ws_url,
+            // The `System` tier reuses the real profile, so an already-running
+            // Chrome hands our launch off and never prints a CDP URL. Surface a
+            // precise remedy instead of a generic timeout.
+            Err(err) if mode == BrowserProfileMode::System => {
+                return Err(err.context(SYSTEM_PROFILE_BUSY_HINT));
+            }
+            Err(err) => return Err(err),
+        };
 
         let cdp_port =
             extract_cdp_port(&ws_url).context("failed to extract port from CDP WebSocket URL")?;
@@ -157,7 +180,7 @@ impl BrowserSession {
             _child: child,
             ws_url: ws_url.clone(),
             cdp_port,
-            _user_data_dir: user_data_dir,
+            _profile_dir: profile_dir,
         };
 
         store_session(session);

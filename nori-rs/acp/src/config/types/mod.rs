@@ -338,6 +338,64 @@ impl NotifyAfterIdle {
 }
 
 // ============================================================================
+// Browser Profile Configuration
+// ============================================================================
+
+/// Which Chrome profile the `/browser` command launches against.
+///
+/// Secure-by-default: `Throwaway` shares no cookies, logins, or settings with
+/// the user's real Chrome. The other tiers are explicit power-user opt-ins that
+/// trade isolation for persistence or real credentials.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BrowserProfileMode {
+    /// Fresh throwaway profile per launch, wiped on shutdown. No shared state.
+    #[default]
+    Throwaway,
+    /// Persistent nori-owned profile (`<nori_home>/browser-profile`) reused
+    /// across launches. Logins survive, but it stays isolated from real Chrome.
+    Persistent,
+    /// The user's real default Chrome profile, with all their logins/cookies.
+    System,
+}
+
+impl BrowserProfileMode {
+    /// Human-readable name for display in the TUI picker.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "Throwaway",
+            Self::Persistent => "Persistent nori profile",
+            Self::System => "Real Chrome profile",
+        }
+    }
+
+    /// One-line description shown beneath each picker row.
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "Fresh profile, no logins or cookies (secure default)",
+            Self::Persistent => {
+                "Reuses a nori-owned profile; logins persist, isolated from your Chrome"
+            }
+            Self::System => "Your real Chrome logins & cookies — only use on trusted pages",
+        }
+    }
+
+    /// TOML string representation for persistence.
+    pub fn toml_value(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "throwaway",
+            Self::Persistent => "persistent",
+            Self::System => "system",
+        }
+    }
+
+    /// All variants in order, for building picker UIs.
+    pub fn all_variants() -> &'static [BrowserProfileMode] {
+        &[Self::Throwaway, Self::Persistent, Self::System]
+    }
+}
+
+// ============================================================================
 // Auto Worktree Configuration
 // ============================================================================
 
@@ -1506,6 +1564,9 @@ pub struct TuiConfigToml {
     /// Terminal file manager for the `/browse` command.
     pub file_manager: Option<FileManager>,
 
+    /// Which Chrome profile the `/browser` command launches against.
+    pub browser_profile: Option<BrowserProfileMode>,
+
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: Option<bool>,
 
@@ -1689,6 +1750,9 @@ pub struct NoriConfig {
     /// `None` means not configured.
     pub file_manager: Option<FileManager>,
 
+    /// Which Chrome profile the `/browser` command launches against.
+    pub browser_profile: BrowserProfileMode,
+
     /// Pin plan updates to a drawer in the viewport instead of history cells.
     pub pinned_plan_drawer: bool,
 
@@ -1794,6 +1858,7 @@ impl Default for NoriConfig {
             auto_worktree: AutoWorktree::Off,
             skillset_per_session: false,
             file_manager: None,
+            browser_profile: BrowserProfileMode::default(),
             pinned_plan_drawer: false,
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),

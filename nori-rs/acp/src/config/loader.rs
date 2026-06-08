@@ -167,6 +167,7 @@ impl NoriConfig {
             loop_count: toml.tui.loop_count,
             skillset_per_session,
             file_manager: toml.tui.file_manager,
+            browser_profile: toml.tui.browser_profile.unwrap_or_default(),
             pinned_plan_drawer: toml.tui.pinned_plan_drawer.unwrap_or(false),
             custom_working_messages: toml.tui.custom_working_messages.unwrap_or(true),
             custom_working_message_list: toml
@@ -583,6 +584,41 @@ file_manager = "ranger"
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert_eq!(config.file_manager, None);
+    }
+
+    #[test]
+    fn test_browser_profile_from_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(
+            &config_path,
+            r#"
+[tui]
+browser_profile = "system"
+"#,
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.browser_profile,
+            super::super::types::BrowserProfileMode::System
+        );
+    }
+
+    #[test]
+    fn test_browser_profile_defaults_to_throwaway() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+
+        std::fs::write(&config_path, "").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+        assert_eq!(
+            config.browser_profile,
+            super::super::types::BrowserProfileMode::Throwaway
+        );
     }
 
     #[test]

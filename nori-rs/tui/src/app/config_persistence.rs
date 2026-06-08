@@ -74,6 +74,25 @@ impl App {
         );
     }
 
+    #[cfg(all(unix, feature = "nori-config"))]
+    pub(super) async fn persist_browser_profile_setting(
+        &mut self,
+        value: nori_acp::config::BrowserProfileMode,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+            .set_path(&["tui", "browser_profile"], toml_value(value.toml_value()))
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist browser_profile setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save browser_profile setting: {err}"));
+        }
+    }
+
     #[cfg(feature = "nori-config")]
     pub(super) async fn persist_script_timeout_setting(
         &mut self,

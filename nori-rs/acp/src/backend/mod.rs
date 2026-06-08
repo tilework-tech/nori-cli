@@ -349,6 +349,8 @@ pub struct AcpBackend {
 
 pub mod browser_cdp;
 #[cfg(unix)]
+pub mod browser_profile;
+#[cfg(unix)]
 pub mod browser_session;
 mod helpers;
 mod nori_client_mcp;
