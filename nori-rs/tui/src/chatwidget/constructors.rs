@@ -19,6 +19,7 @@ impl ChatWidget {
             cloud_connection,
             fork_context,
         } = common;
+        let is_cloud_session = cloud_connection.is_some();
         let mut rng = rand::rng();
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
@@ -126,8 +127,10 @@ impl ChatWidget {
             pinned_plan: None,
             terminal_title_animation_origin: std::time::Instant::now(),
             last_terminal_title: None,
+            is_cloud_session,
         };
 
+        widget.apply_cloud_mode_restrictions();
         widget.prefetch_rate_limits();
 
         widget
@@ -255,6 +258,7 @@ impl ChatWidget {
             pinned_plan: None,
             terminal_title_animation_origin: std::time::Instant::now(),
             last_terminal_title: None,
+            is_cloud_session: false,
         };
 
         widget.prefetch_rate_limits();

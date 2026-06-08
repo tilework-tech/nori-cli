@@ -88,6 +88,7 @@ impl ChatWidget {
             self.bottom_pane
                 .set_builtin_command_disabled(command, disabled_reason);
         }
+        self.apply_cloud_mode_restrictions();
         self.request_redraw();
     }
 

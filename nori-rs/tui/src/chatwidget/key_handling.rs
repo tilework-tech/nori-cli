@@ -82,6 +82,14 @@ impl ChatWidget {
     }
 
     pub(super) fn dispatch_command(&mut self, cmd: SlashCommand) {
+        if self.is_cloud_session && !cmd.available_in_cloud_mode() {
+            self.add_to_history(history_cell::new_error_event(format!(
+                "/{} is not available in cloud mode.",
+                cmd.command()
+            )));
+            self.request_redraw();
+            return;
+        }
         if !cmd.available_during_task() && self.bottom_pane.is_task_running() {
             let message = format!(
                 "'/{}' is disabled while a task is in progress.",

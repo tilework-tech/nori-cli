@@ -18,9 +18,26 @@
 - Non-interactive terminals skip picker and use old behavior (auto-acquire)
 - No new crate dependencies
 
-### Remaining: Items 2 and 3
+### Completed: Cloud Mode Feature Gating (Spec Item 2)
 
-**Item 2**: Disable client-side features in cloud mode (settings, slash commands, worktree, skillset switching). No feature gating currently exists in the TUI for cloud mode. Needs a new mechanism to conditionally hide/disable features.
+**What was done:**
+- Added `SlashCommand::available_in_cloud_mode()` method with exhaustive match (no wildcard) classifying each command
+- 11 client-only commands disabled in cloud mode: `/settings`, `/init`, `/browse`, `/diff`, `/mention`, `/memory`, `/mcp`, `/browser`, `/switch-skillset`, `/resume`, `/resume-viewonly`
+- Created `chatwidget/cloud_mode.rs` with `apply_cloud_mode_restrictions()` that uses existing `CommandAvailability`/`disabled_builtins` infrastructure
+- Added `is_cloud_session: bool` field to `ChatWidget`, set from `cloud_connection.is_some()` at construction
+- Belt-and-suspenders dispatch guard in `dispatch_command()` blocks cloud-disabled commands even via direct entry
+- Auto-worktree setup skipped entirely when `cloud_connection.is_some()` in `lib.rs`
+- Deferred skillset-per-session spawn disabled in cloud mode in `App::run()`
+- Added 2 unit tests for command classification
+- Updated TUI docs
+
+**Design decisions:**
+- Reuses existing `CommandAvailability` infrastructure rather than a new mechanism
+- Exhaustive match forces classification of new commands at compile time
+- Cloud-only commands kept enabled: `/agent`, `/model`, `/config`, `/approvals`, `/goal`, `/new`, `/resume`, `/compact`, `/status`, `/quit`, etc.
+- Backend capabilities are authoritative — if the remote backend sends `SessionCapabilitiesView`, it overwrites local cloud-mode settings
+
+### Remaining: Item 3
 
 **Item 3**: Resume Slack/Discord sessions via CLI. This is naturally supported by item 1 — if the broker returns all sessions regardless of source, the `source` field on `CloudSessionSummary` shows where each session originated. The broker-side implementation needs to return these sessions.
 

@@ -328,7 +328,7 @@ impl App {
         #[cfg(feature = "nori-config")]
         let needs_deferred_spawn = {
             let nori_cfg = nori_acp::config::NoriConfig::load().unwrap_or_default();
-            nori_cfg.skillset_per_session
+            nori_cfg.skillset_per_session && cloud_connection.is_none()
         };
         #[cfg(not(feature = "nori-config"))]
         let needs_deferred_spawn = false;

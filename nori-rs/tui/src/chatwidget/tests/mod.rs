@@ -329,6 +329,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         pinned_plan: None,
         terminal_title_animation_origin: std::time::Instant::now(),
         last_terminal_title: None,
+        is_cloud_session: false,
     };
     (widget, rx, op_rx)
 }

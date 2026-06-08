@@ -124,6 +124,7 @@ use self::agent::spawn_agent;
 mod session_header;
 
 mod approvals;
+mod cloud_mode;
 mod constructors;
 mod event_handlers;
 mod goal;
@@ -449,6 +450,8 @@ pub(crate) struct ChatWidget {
     terminal_title_animation_origin: Instant,
     // Terminal title state: cache to avoid redundant OSC writes.
     last_terminal_title: Option<String>,
+    // Whether this session is connected to a remote cloud broker.
+    is_cloud_session: bool,
 }
 
 /// Information about a pending agent switch in ChatWidget.

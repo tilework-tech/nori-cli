@@ -110,6 +110,40 @@ impl SlashCommand {
         }
     }
 
+    /// Whether this command is available in cloud mode (remote broker session).
+    /// Client-side-only commands that require local filesystem, config, or
+    /// process access return `false`.
+    pub fn available_in_cloud_mode(self) -> bool {
+        match self {
+            SlashCommand::Settings
+            | SlashCommand::Init
+            | SlashCommand::Browse
+            | SlashCommand::Diff
+            | SlashCommand::Mention
+            | SlashCommand::Memory
+            | SlashCommand::Mcp
+            | SlashCommand::Browser
+            | SlashCommand::SwitchSkillset
+            | SlashCommand::Resume
+            | SlashCommand::ResumeViewonly => false,
+            SlashCommand::Agent
+            | SlashCommand::Model
+            | SlashCommand::Config
+            | SlashCommand::Approvals
+            | SlashCommand::Goal
+            | SlashCommand::New
+            | SlashCommand::Compact
+            | SlashCommand::Undo
+            | SlashCommand::Status
+            | SlashCommand::FirstPrompt
+            | SlashCommand::Quit
+            | SlashCommand::Exit
+            | SlashCommand::Login
+            | SlashCommand::Logout
+            | SlashCommand::Fork => true,
+        }
+    }
+
     fn is_visible(self) -> bool {
         match self {
             #[cfg(not(feature = "login"))]
@@ -351,6 +385,58 @@ mod tests {
             "test-approval".parse::<SlashCommand>().is_err(),
             "/test-approval should not parse as a slash command"
         );
+    }
+
+    #[test]
+    fn cloud_mode_disables_client_only_commands() {
+        let client_only = [
+            SlashCommand::Settings,
+            SlashCommand::Init,
+            SlashCommand::Browse,
+            SlashCommand::Diff,
+            SlashCommand::Mention,
+            SlashCommand::Memory,
+            SlashCommand::Mcp,
+            SlashCommand::Browser,
+            SlashCommand::SwitchSkillset,
+            SlashCommand::Resume,
+            SlashCommand::ResumeViewonly,
+        ];
+        for cmd in &client_only {
+            assert!(
+                !cmd.available_in_cloud_mode(),
+                "/{} should be disabled in cloud mode",
+                cmd.command()
+            );
+        }
+    }
+
+    #[test]
+    fn cloud_mode_keeps_session_commands_enabled() {
+        let cloud_enabled = [
+            SlashCommand::Agent,
+            SlashCommand::Model,
+            SlashCommand::Config,
+            SlashCommand::Approvals,
+            SlashCommand::Goal,
+            SlashCommand::New,
+            SlashCommand::Compact,
+            SlashCommand::Undo,
+            SlashCommand::Status,
+            SlashCommand::FirstPrompt,
+            SlashCommand::Quit,
+            SlashCommand::Exit,
+            SlashCommand::Login,
+            SlashCommand::Logout,
+            SlashCommand::Fork,
+        ];
+        for cmd in &cloud_enabled {
+            assert!(
+                cmd.available_in_cloud_mode(),
+                "/{} should remain enabled in cloud mode",
+                cmd.command()
+            );
+        }
     }
 
     #[test]

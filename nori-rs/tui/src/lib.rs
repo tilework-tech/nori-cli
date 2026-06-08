@@ -230,47 +230,54 @@ pub async fn run_main(
     #[cfg(feature = "nori-config")]
     let (pending_worktree_ask, worktree_blocked_reason) = {
         use nori_acp::config::AutoWorktree;
-        let auto_worktree = nori_config
-            .as_ref()
-            .map(|c| c.auto_worktree)
-            .unwrap_or_default();
 
-        if !auto_worktree.is_enabled() {
+        if cli.cloud_connection.is_some() {
             (false, None)
         } else {
-            match cwd.clone().or_else(|| std::env::current_dir().ok()) {
-                Some(ref effective_cwd) => {
-                    match nori_acp::auto_worktree::can_create_worktree(effective_cwd) {
-                        Err(reason) => {
-                            tracing::debug!("Worktree creation blocked: {reason}");
-                            (false, Some(reason.to_string()))
-                        }
-                        Ok(()) => match auto_worktree {
-                            AutoWorktree::Automatic => {
-                                match nori_acp::auto_worktree::setup_auto_worktree(effective_cwd) {
-                                    Ok(worktree_path) => {
-                                        tracing::info!(
-                                            "Auto-worktree created at {}",
-                                            worktree_path.display()
-                                        );
-                                        cwd = Some(worktree_path);
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!("Auto-worktree setup skipped: {e}");
-                                    }
-                                }
-                                (false, None)
+            let auto_worktree = nori_config
+                .as_ref()
+                .map(|c| c.auto_worktree)
+                .unwrap_or_default();
+
+            if !auto_worktree.is_enabled() {
+                (false, None)
+            } else {
+                match cwd.clone().or_else(|| std::env::current_dir().ok()) {
+                    Some(ref effective_cwd) => {
+                        match nori_acp::auto_worktree::can_create_worktree(effective_cwd) {
+                            Err(reason) => {
+                                tracing::debug!("Worktree creation blocked: {reason}");
+                                (false, Some(reason.to_string()))
                             }
-                            AutoWorktree::Ask => (true, None),
-                            AutoWorktree::Off => (false, None),
-                        },
+                            Ok(()) => match auto_worktree {
+                                AutoWorktree::Automatic => {
+                                    match nori_acp::auto_worktree::setup_auto_worktree(
+                                        effective_cwd,
+                                    ) {
+                                        Ok(worktree_path) => {
+                                            tracing::info!(
+                                                "Auto-worktree created at {}",
+                                                worktree_path.display()
+                                            );
+                                            cwd = Some(worktree_path);
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!("Auto-worktree setup skipped: {e}");
+                                        }
+                                    }
+                                    (false, None)
+                                }
+                                AutoWorktree::Ask => (true, None),
+                                AutoWorktree::Off => (false, None),
+                            },
+                        }
                     }
-                }
-                None => {
-                    tracing::warn!(
-                        "Auto-worktree setup skipped: could not determine working directory"
-                    );
-                    (false, None)
+                    None => {
+                        tracing::warn!(
+                            "Auto-worktree setup skipped: could not determine working directory"
+                        );
+                        (false, None)
+                    }
                 }
             }
         }
