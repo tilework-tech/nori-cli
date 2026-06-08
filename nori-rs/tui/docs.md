@@ -79,8 +79,9 @@ For agents without MCP, the desired fallback is backend-owned context rather tha
 UI-specific hacks: the first prompt should carry a concise `<context>` block
 explaining that the session is running in Nori CLI, linking to
 `https://github.com/tilework-tech/nori-cli`, and noting which MCP-backed Nori
-affordances are unavailable. MCP-capable agents should receive that kind of Nori
-operating context through `nori-client` prompts/resources instead.
+affordances are unavailable. MCP-capable agents receive Nori operating context
+through the backend-owned `nori-client` resources/prompts described in
+`@/nori-rs/acp/docs.md`.
 
 `/goal edit` uses the cached goal immediately when available. If no snapshot is cached, it requests one from the ACP backend and marks the edit as pending until the backend replies. A no-goal response clears that pending flag before rendering the usage hint, preventing a later unrelated goal update from unexpectedly replacing the user's composer contents.
 
@@ -477,7 +478,7 @@ The `/fork` slash command lets users rewind to a previous user message and branc
 
 The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
 
-**Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). This tells the ACP agent that it is running inside the nori CLI and provides a source-code URL for self-referential questions. The context is prepended (without `SUMMARY_PREFIX` framing) to the first user prompt only and then consumed (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
+**Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). The ACP backend only prepends that fallback `<context>` block to the first user prompt when the active ACP connection lacks HTTP MCP support. MCP-capable agents instead receive the backend-owned `nori-client` server and discover Nori operating context through its resources and prompts (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
 
 **Browser Session (`/browser`) (`chatwidget/key_handling.rs`, `app/event_handling.rs`, `app_event.rs`):**
 

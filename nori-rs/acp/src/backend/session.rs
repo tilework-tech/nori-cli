@@ -138,19 +138,21 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            nori_client_mcp::register_for_session(
+            let pending_nori_client_server = nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
                 backend_event_tx.clone(),
                 Arc::clone(&transcript_recorder_cell),
                 Arc::clone(&goal_mcp_connected),
-                Arc::clone(&goal_mcp_http_server),
             )
             .await?;
 
             match connection.load_session(sid, &cwd, mcp_servers).await {
                 Ok(session_id) => {
+                    if let Some(server) = pending_nori_client_server {
+                        server.commit(&goal_mcp_http_server).await;
+                    }
                     // Signal the collector that load is done, then collect results.
                     let _ = load_done_tx.send(());
                     let (session_driver, recovered_rx, buffered_client_events) =
@@ -187,14 +189,13 @@ impl AcpBackend {
                         &config.mcp_servers,
                         config.mcp_oauth_credentials_store_mode,
                     );
-                    nori_client_mcp::register_for_session(
+                    let pending_nori_client_server = nori_client_mcp::register_for_session(
                         &connection,
                         &mut mcp_servers,
                         Arc::clone(&thread_goal_state),
                         backend_event_tx.clone(),
                         Arc::clone(&transcript_recorder_cell),
                         Arc::clone(&goal_mcp_connected),
-                        Arc::clone(&goal_mcp_http_server),
                     )
                     .await?;
                     let session_id =
@@ -214,6 +215,9 @@ impl AcpBackend {
                                     &agent_config.install_hint,
                                 ))
                             })?;
+                    if let Some(server) = pending_nori_client_server {
+                        server.commit(&goal_mcp_http_server).await;
+                    }
 
                     let (replay_events, summary) = if let Some(t) = transcript {
                         let client_events = transcript_to_replay_client_events(t);
@@ -246,14 +250,13 @@ impl AcpBackend {
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
-            nori_client_mcp::register_for_session(
+            let pending_nori_client_server = nori_client_mcp::register_for_session(
                 &connection,
                 &mut mcp_servers,
                 Arc::clone(&thread_goal_state),
                 backend_event_tx.clone(),
                 Arc::clone(&transcript_recorder_cell),
                 Arc::clone(&goal_mcp_connected),
-                Arc::clone(&goal_mcp_http_server),
             )
             .await?;
             let session_id = connection
@@ -272,6 +275,9 @@ impl AcpBackend {
                         &agent_config.install_hint,
                     ))
                 })?;
+            if let Some(server) = pending_nori_client_server {
+                server.commit(&goal_mcp_http_server).await;
+            }
 
             let (replay_events, summary) = if let Some(t) = transcript {
                 let client_events = transcript_to_replay_client_events(t);
@@ -305,7 +311,8 @@ impl AcpBackend {
                 thread_goal::ThreadGoalState::from_replay_events(&replay_events_for_goal_state);
         }
 
-        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
+        let capabilities_update =
+            nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
         let session_driver = Arc::new(Mutex::new(session_driver_state));
@@ -342,6 +349,7 @@ impl AcpBackend {
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
+        let pending_hook_context = fallback_session_context_for_connection(config, &connection);
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -361,7 +369,7 @@ impl AcpBackend {
             goal_mcp_connected,
             goal_mcp_http_server,
             transcript_recorder_cell,
-            pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
+            pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),
             prompt_result_tx: prompt_result_tx.clone(),
@@ -473,11 +481,12 @@ impl AcpBackend {
             approval_policy_rx,
         ));
 
-        let resume_goal_notice = backend
-            .thread_goal_state
-            .lock()
-            .await
-            .resume_notice(thread_goal::now_seconds());
+        let goal_automation_available = backend.goal_mcp_http_server.lock().await.is_some();
+        let resume_goal_notice = {
+            let goals = backend.thread_goal_state.lock().await;
+            let now = thread_goal::now_seconds();
+            goals.resume_notice_for(now, goal_automation_available)
+        };
 
         if !deferred_replay_client_events.is_empty() || resume_goal_notice.is_some() {
             let backend_event_tx = backend.backend_event_tx.clone();

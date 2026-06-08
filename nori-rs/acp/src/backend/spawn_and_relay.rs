@@ -64,19 +64,23 @@ impl AcpBackend {
             &config.mcp_servers,
             config.mcp_oauth_credentials_store_mode,
         );
-        nori_client_mcp::register_for_session(
+        let pending_nori_client_server = nori_client_mcp::register_for_session(
             &connection,
             &mut mcp_servers,
             Arc::clone(&thread_goal_state),
             backend_event_tx.clone(),
             Arc::clone(&transcript_recorder_cell),
             Arc::clone(&goal_mcp_connected),
-            Arc::clone(&goal_mcp_http_server),
         )
         .await?;
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
-            Ok(id) => id,
+            Ok(id) => {
+                if let Some(server) = pending_nori_client_server {
+                    server.commit(&goal_mcp_http_server).await;
+                }
+                id
+            }
             Err(e) => {
                 // Get the full error chain to check for nested auth errors
                 let error_string = format!("{e:?}");
@@ -122,7 +126,8 @@ impl AcpBackend {
             }
         }
 
-        let capabilities_update = nori_client_mcp::capabilities_update_for_session(&connection);
+        let capabilities_update =
+            nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
         let event_rx = connection.take_event_receiver();
 
         let connection = Arc::new(connection);
@@ -167,6 +172,7 @@ impl AcpBackend {
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
+        let pending_hook_context = fallback_session_context_for_connection(config, &connection);
 
         let backend = Self {
             connection,
@@ -187,7 +193,7 @@ impl AcpBackend {
             goal_mcp_connected,
             goal_mcp_http_server,
             transcript_recorder_cell,
-            pending_hook_context: Arc::new(Mutex::new(config.session_context.clone())),
+            pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),
             prompt_result_tx: prompt_result_tx.clone(),

@@ -1,10 +1,5 @@
 use super::*;
 
-struct EnvGuard {
-    name: &'static str,
-    previous: Option<String>,
-}
-
 struct RegistryGuard;
 
 impl RegistryGuard {
@@ -17,37 +12,6 @@ impl RegistryGuard {
 impl Drop for RegistryGuard {
     fn drop(&mut self) {
         crate::registry::initialize_registry(Vec::new()).expect("registry reset should be valid");
-    }
-}
-
-impl EnvGuard {
-    fn set(name: &'static str, value: &str) -> Self {
-        let previous = std::env::var(name).ok();
-        unsafe {
-            std::env::set_var(name, value);
-        }
-        Self { name, previous }
-    }
-
-    fn remove(name: &'static str) -> Self {
-        let previous = std::env::var(name).ok();
-        unsafe {
-            std::env::remove_var(name);
-        }
-        Self { name, previous }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => unsafe {
-                std::env::set_var(self.name, value);
-            },
-            None => unsafe {
-                std::env::remove_var(self.name);
-            },
-        }
     }
 }
 
@@ -226,13 +190,13 @@ async fn user_shell_command_submit_returns_while_command_is_running() {
     );
 }
 
-/// Test that session_context is prepended to the first user prompt.
+/// Non-MCP agents receive session_context on the first user prompt.
 ///
-/// When `session_context` is set on `AcpBackendConfig`, its value should appear
-/// in the prompt text sent to the ACP agent on the first user turn.
+/// This is the fallback path for agents that cannot discover Nori operating
+/// context through the backend-owned `nori-client` MCP server.
 #[tokio::test]
 #[serial]
-async fn test_session_context_prepended_to_first_prompt() {
+async fn non_mcp_agent_receives_session_context_on_first_prompt() {
     use std::time::Duration;
 
     let mock_config =
@@ -246,6 +210,7 @@ async fn test_session_context_prepended_to_first_prompt() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -302,6 +267,66 @@ async fn test_session_context_prepended_to_first_prompt() {
     );
 }
 
+/// MCP-capable agents should discover Nori operating context through
+/// `nori-client` resources/prompts, not through the first user prompt.
+#[tokio::test]
+#[serial]
+async fn mcp_capable_agent_does_not_receive_session_context_fallback() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+
+    let mut config = build_test_config(temp_dir.path());
+    config.session_context = Some("NORI_MCP_SHOULD_NOT_GET_FALLBACK".to_string());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "hello mcp agent".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for PromptCompleted",
+    )
+    .await;
+
+    assert!(
+        !agent_text.contains("NORI_MCP_SHOULD_NOT_GET_FALLBACK"),
+        "MCP-capable agent should not receive fallback session context, got: {agent_text}"
+    );
+    assert!(
+        agent_text.contains("hello mcp agent"),
+        "Expected user prompt in agent's echoed prompt, got: {agent_text}"
+    );
+}
+
 /// When a session goal is active, the next user prompt sent to the ACP agent
 /// includes a structured goal context block.
 #[tokio::test]
@@ -320,7 +345,7 @@ async fn test_goal_context_prepended_to_user_prompt() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
-    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -380,6 +405,263 @@ async fn test_goal_context_prepended_to_user_prompt() {
 
 #[tokio::test]
 #[serial]
+async fn non_mcp_thread_goal_set_is_inert() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    backend
+        .submit(Op::ThreadGoalSet {
+            objective: Some("This should not start autonomous work".to_string()),
+            status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+        })
+        .await
+        .expect("Failed to submit inert goal operation");
+
+    let notice = recv_backend_client(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("expected unavailable goal notice");
+    match notice {
+        nori_protocol::ClientEvent::SessionUpdateInfo(update) => {
+            assert!(
+                update.message.contains("/goal is unavailable"),
+                "expected unavailable /goal notice, got: {update:?}"
+            );
+        }
+        other => panic!("expected unavailable /goal notice, got {other:?}"),
+    }
+
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(300)).await;
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "ordinary prompt after inert goal".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for user prompt after inert goal",
+    )
+    .await;
+
+    assert!(
+        !agent_text.contains("<goal_context>"),
+        "non-MCP inert goal should not inject goal context, got: {agent_text}"
+    );
+    assert!(
+        agent_text.contains("ordinary prompt after inert goal"),
+        "expected user prompt after inert goal, got: {agent_text}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn non_mcp_replayed_active_goal_does_not_drive_prompt_context_or_continuation() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+    let mut transcript = build_test_transcript();
+    transcript
+        .entries
+        .push(crate::transcript::TranscriptLine::new(
+            crate::transcript::TranscriptEntry::ClientEvent(crate::transcript::ClientEventEntry {
+                event: nori_protocol::ClientEvent::ThreadGoalUpdated(
+                    nori_protocol::ThreadGoalUpdated {
+                        goal: nori_protocol::ThreadGoal {
+                            objective: "Replayed goal cannot close itself".to_string(),
+                            status: nori_protocol::ThreadGoalStatus::Active,
+                            tokens_used: 12,
+                            time_used_seconds: 34,
+                            created_at: 100,
+                            updated_at: 200,
+                        },
+                    },
+                ),
+            }),
+        ));
+
+    let backend = AcpBackend::resume_session(&config, None, Some(&transcript), backend_event_tx)
+        .await
+        .expect("resume_session should succeed");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let start = std::time::Instant::now();
+    let mut saw_replayed_goal = false;
+    let mut saw_unavailable_notice = false;
+    while start.elapsed() < Duration::from_secs(5) {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+            Some(nori_protocol::ClientEvent::ThreadGoalUpdated(update)) => {
+                if update.goal.objective == "Replayed goal cannot close itself" {
+                    saw_replayed_goal = true;
+                }
+            }
+            Some(nori_protocol::ClientEvent::SessionUpdateInfo(update))
+                if update.message.contains("/goal is unavailable") =>
+            {
+                saw_unavailable_notice = true;
+                break;
+            }
+            Some(_) => {}
+            None => {}
+        }
+    }
+
+    assert!(saw_replayed_goal, "expected replayed active goal snapshot");
+    assert!(
+        saw_unavailable_notice,
+        "expected unavailable notice for replayed non-MCP goal"
+    );
+    assert_no_prompt_completed(&mut backend_event_rx, Duration::from_millis(300)).await;
+
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "ordinary resumed prompt".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit user input");
+
+    let agent_text = collect_completed_prompt_text(
+        &mut backend_event_rx,
+        Duration::from_secs(10),
+        "Timed out waiting for user prompt after replayed non-MCP goal",
+    )
+    .await;
+
+    assert!(
+        !agent_text.contains("<goal_context>"),
+        "replayed non-MCP goal should not inject goal context, got: {agent_text}"
+    );
+    assert!(
+        agent_text.contains("ordinary resumed prompt"),
+        "expected ordinary user prompt after replayed goal, got: {agent_text}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn non_mcp_goal_op_notice_is_not_recorded_to_transcript() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let _ = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+
+    let recorder = backend
+        .transcript_recorder
+        .clone()
+        .expect("transcript recorder should be initialized");
+
+    // Repeated /goal ops in a non-MCP session each surface the unavailable
+    // notice to the user.
+    for _ in 0..2 {
+        backend
+            .submit(Op::ThreadGoalGet)
+            .await
+            .expect("Failed to submit /goal get");
+
+        let start = std::time::Instant::now();
+        let mut saw_unavailable = false;
+        while start.elapsed() < Duration::from_secs(5) {
+            match recv_backend_client(&mut backend_event_rx, Duration::from_millis(500)).await {
+                Some(nori_protocol::ClientEvent::SessionUpdateInfo(update))
+                    if update.message.contains("/goal is unavailable") =>
+                {
+                    saw_unavailable = true;
+                    break;
+                }
+                Some(_) => {}
+                None => {}
+            }
+        }
+        assert!(
+            saw_unavailable,
+            "expected unavailable notice emitted to the client"
+        );
+    }
+
+    // The notice is a transient affordance (like resume notices), so it must
+    // never be persisted to the transcript, where it would replay and
+    // accumulate on every resume.
+    recorder.flush().await.expect("flush transcript");
+    let recorded = tokio::fs::read_to_string(recorder.transcript_path())
+        .await
+        .expect("read transcript");
+    assert!(
+        !recorded.contains("/goal is unavailable"),
+        "goal-unavailable notice must not be recorded to the transcript, got:\n{recorded}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn setting_active_goal_starts_hidden_continuation_without_extra_prompt() {
     use std::time::Duration;
 
@@ -394,7 +676,7 @@ async fn setting_active_goal_starts_hidden_continuation_without_extra_prompt() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
-    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -448,7 +730,7 @@ async fn active_goal_submits_one_hidden_continuation_after_user_turn() {
     }
 
     let _env_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
-    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
@@ -651,8 +933,10 @@ async fn goal_mcp_initialize_allows_chained_hidden_continuations() {
         .expect("Should receive SessionConfigured event");
 
     let new_session = latest_logged_new_session(&wire_log_dir);
-    let goal_mcp_url = nori_client_http_url(&new_session);
-    initialize_nori_client_mcp(&goal_mcp_url).await;
+    let nori_client = nori_client_http_server(&new_session)
+        .expect("session/new should advertise nori-client HTTP MCP server");
+    let authorization = nori_client_authorization_header(nori_client);
+    initialize_nori_client_mcp(&nori_client.url, Some(&authorization)).await;
 
     backend
         .submit(Op::ThreadGoalSet {
@@ -789,6 +1073,8 @@ async fn usage_updates_refresh_goal_token_count() {
         return;
     }
 
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
     let config = build_test_config(temp_dir.path());
@@ -845,16 +1131,22 @@ async fn goal_mcp_server_is_advertised_to_http_mcp_agents() {
         return;
     };
 
+    let Some(nori_client) = nori_client_http_server(&new_session) else {
+        panic!(
+            "expected session/new to advertise the local loopback nori-client MCP server, got: {:?}",
+            new_session.mcp_servers
+        );
+    };
+
     assert!(
-        new_session.mcp_servers.iter().any(|server| {
-            matches!(
-                server,
-                acp::McpServer::Http(http)
-                    if http.name == "nori-client" && http.url.starts_with("http://127.0.0.1:")
-            )
-        }),
-        "expected session/new to advertise the local loopback nori-client MCP server, got: {:?}",
-        new_session.mcp_servers
+        nori_client.url.starts_with("http://127.0.0.1:"),
+        "expected loopback nori-client URL, got {}",
+        nori_client.url
+    );
+    let authorization = nori_client_authorization_header(nori_client);
+    assert!(
+        authorization.starts_with("Bearer ") && authorization.len() > "Bearer ".len(),
+        "expected nori-client to advertise a bearer Authorization header, got {authorization:?}"
     );
 }
 
@@ -894,6 +1186,279 @@ async fn session_capabilities_enable_goal_for_http_mcp_agents() {
         "expected /goal to be supported for HTTP MCP agents"
     );
     assert_eq!(goal.reason, None);
+}
+
+#[tokio::test]
+#[serial]
+async fn session_capabilities_refresh_when_nori_client_initializes() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _env_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let initial = loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
+            Some(_) => {}
+            None => panic!("Timed out waiting for initial SessionCapabilitiesChanged"),
+        }
+    };
+    assert!(initial.nori_client.advertised);
+    assert!(!initial.nori_client.initialized);
+
+    let new_session = latest_logged_new_session(&wire_log_dir);
+    let nori_client = nori_client_http_server(&new_session)
+        .expect("session/new should advertise nori-client HTTP MCP server");
+    let unauthorized = send_nori_client_mcp_initialize(&nori_client.url, None).await;
+    assert!(
+        unauthorized.contains("401 Unauthorized"),
+        "expected unauthenticated nori-client MCP initialize to be rejected, got: {unauthorized}"
+    );
+    let authorization = nori_client_authorization_header(nori_client);
+    initialize_nori_client_mcp(&nori_client.url, Some(&authorization)).await;
+
+    let refreshed = loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
+            Some(_) => {}
+            None => panic!("Timed out waiting for refreshed SessionCapabilitiesChanged"),
+        }
+    };
+    assert!(refreshed.nori_client.advertised);
+    assert!(refreshed.nori_client.initialized);
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+}
+
+#[tokio::test]
+#[serial]
+async fn compact_session_failure_keeps_original_nori_client_mcp_server_alive() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _fail_new_session_guard = EnvGuard::set("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let configured = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured event");
+    assert!(
+        matches!(configured.msg, EventMsg::SessionConfigured(_)),
+        "expected SessionConfigured event, got: {configured:?}"
+    );
+
+    let initial_session = latest_logged_new_session(&wire_log_dir);
+    let original_nori_client = nori_client_http_server(&initial_session)
+        .expect("session/new should advertise nori-client HTTP MCP server");
+    let original_url = original_nori_client.url.clone();
+    let original_authorization = nori_client_authorization_header(original_nori_client);
+    initialize_nori_client_mcp(&original_url, Some(&original_authorization)).await;
+
+    backend
+        .submit(Op::Compact)
+        .await
+        .expect("Failed to submit Op::Compact");
+
+    loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(10)).await {
+            Some(nori_protocol::ClientEvent::ContextCompacted(_)) => break,
+            Some(_) => {}
+            None => panic!("Timed out waiting for ContextCompacted after compact"),
+        }
+    }
+    assert_eq!(count_logged_requests(&wire_log_dir, "session/new"), 2);
+
+    initialize_nori_client_mcp(&original_url, Some(&original_authorization)).await;
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+}
+
+#[tokio::test]
+#[serial]
+async fn eager_nori_client_initialization_does_not_regress_capabilities() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _eager_guard = EnvGuard::set("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+
+    let backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let mut updates = Vec::new();
+    let start = std::time::Instant::now();
+    let mut saw_configured = false;
+    while start.elapsed() < Duration::from_secs(5) && (!saw_configured || updates.len() < 2) {
+        match tokio::time::timeout(Duration::from_millis(200), backend_event_rx.recv()).await {
+            Ok(Some(BackendEvent::Client(
+                nori_protocol::ClientEvent::SessionCapabilitiesChanged(update),
+            ))) => updates.push(update),
+            Ok(Some(BackendEvent::Control(event))) => {
+                if matches!(event.msg, EventMsg::SessionConfigured(_)) {
+                    saw_configured = true;
+                }
+            }
+            Ok(Some(BackendEvent::Client(_))) => {}
+            Ok(None) => break,
+            Err(_) => {}
+        }
+    }
+
+    assert!(saw_configured, "expected SessionConfigured event");
+    assert!(
+        updates.iter().any(|update| update.nori_client.initialized),
+        "expected eager nori-client initialize to emit initialized capabilities, got: {updates:?}"
+    );
+    assert!(
+        !updates
+            .windows(2)
+            .any(|window| window[0].nori_client.initialized && !window[1].nori_client.initialized),
+        "initialized capabilities must not regress after eager initialize, got: {updates:?}"
+    );
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
+}
+
+#[tokio::test]
+#[serial]
+async fn resume_session_advertises_nori_client_and_refreshes_capabilities() {
+    use std::time::Duration;
+
+    let mock_config =
+        crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
+    if !std::path::Path::new(&mock_config.command).exists() {
+        eprintln!(
+            "Skipping test: mock_acp_agent not found at {}",
+            mock_config.command
+        );
+        return;
+    }
+
+    let _mcp_guard = EnvGuard::set("MOCK_AGENT_MCP_HTTP", "1");
+    let _load_guard = EnvGuard::set("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let wire_log_dir = temp_dir.path().join("acp-wire");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let mut config = build_test_config(temp_dir.path());
+    config.agent = "mock-model".to_string();
+    config.acp_proxy = crate::config::AcpProxyConfig {
+        enabled: true,
+        log_dir: wire_log_dir.clone(),
+    };
+    let transcript = build_test_transcript();
+
+    let backend = AcpBackend::resume_session(
+        &config,
+        Some("acp-session-with-mcp"),
+        Some(&transcript),
+        backend_event_tx,
+    )
+    .await
+    .expect("resume_session should succeed");
+
+    let update = loop {
+        match recv_backend_client(&mut backend_event_rx, Duration::from_secs(5)).await {
+            Some(nori_protocol::ClientEvent::SessionCapabilitiesChanged(update)) => break update,
+            Some(_) => {}
+            None => panic!("Timed out waiting for SessionCapabilitiesChanged"),
+        }
+    };
+    assert!(update.agent.http_mcp);
+    assert!(update.agent.load_session);
+    assert!(update.nori_client.advertised);
+    assert!(!update.nori_client.initialized);
+    let goal = update
+        .builtin_commands
+        .get("goal")
+        .expect("expected /goal availability");
+    assert!(goal.enabled);
+    assert_eq!(goal.reason, None);
+
+    let load_session = latest_logged_load_session(&wire_log_dir);
+    let nori_client = nori_client_http_server_from_servers(&load_session.mcp_servers)
+        .expect("session/load should advertise nori-client HTTP MCP server");
+    assert!(
+        nori_client.url.starts_with("http://127.0.0.1:"),
+        "expected loopback nori-client URL, got {}",
+        nori_client.url
+    );
+    let authorization = nori_client_authorization_header(nori_client);
+    assert!(
+        authorization.starts_with("Bearer ") && authorization.len() > "Bearer ".len(),
+        "expected nori-client to advertise a bearer Authorization header, got {authorization:?}"
+    );
+
+    backend
+        .submit(Op::Shutdown)
+        .await
+        .expect("Failed to shut down ACP backend");
 }
 
 #[tokio::test]
@@ -1083,6 +1648,21 @@ fn latest_logged_new_session(log_dir: &std::path::Path) -> acp::NewSessionReques
         .expect("session/new params should match ACP schema")
 }
 
+fn latest_logged_load_session(log_dir: &std::path::Path) -> acp::LoadSessionRequest {
+    let log_content = read_wire_log(log_dir);
+    let load_session = log_content
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json wire log line"))
+        .filter(|record| {
+            record["direction"] == "client_to_agent"
+                && record["message"]["method"] == "session/load"
+        })
+        .next_back()
+        .expect("session/load should be logged");
+    serde_json::from_value(load_session["message"]["params"].clone())
+        .expect("session/load params should match ACP schema")
+}
+
 fn read_wire_log(log_dir: &std::path::Path) -> String {
     let log_path = std::fs::read_dir(log_dir)
         .expect("wire log dir exists")
@@ -1103,22 +1683,40 @@ fn count_logged_requests(log_dir: &std::path::Path, method: &str) -> usize {
         .count()
 }
 
-fn nori_client_http_url(new_session: &acp::NewSessionRequest) -> String {
-    new_session
-        .mcp_servers
+fn nori_client_http_server(new_session: &acp::NewSessionRequest) -> Option<&acp::McpServerHttp> {
+    nori_client_http_server_from_servers(&new_session.mcp_servers)
+}
+
+fn nori_client_http_server_from_servers(
+    mcp_servers: &[acp::McpServer],
+) -> Option<&acp::McpServerHttp> {
+    mcp_servers.iter().find_map(|server| match server {
+        acp::McpServer::Http(http) if http.name == "nori-client" => Some(http),
+        _ => None,
+    })
+}
+
+fn nori_client_authorization_header(http: &acp::McpServerHttp) -> String {
+    http.headers
         .iter()
-        .find_map(|server| match server {
-            acp::McpServer::Http(http) if http.name == "nori-client" => Some(http.url.clone()),
-            _ => None,
-        })
-        .expect("session/new should advertise nori-client HTTP MCP server")
+        .find(|header| header.name == "Authorization")
+        .map(|header| header.value.clone())
+        .expect("nori-client should advertise an Authorization header")
 }
 
 /// Drive a real MCP `initialize` against the loopback `nori-client` server,
 /// mirroring how an external agent connects. The rmcp streamable-HTTP server is
 /// spec-compliant, so the POST must send `Accept: application/json,
 /// text/event-stream` and the result arrives as an SSE `data:` line.
-async fn initialize_nori_client_mcp(url: &str) {
+async fn initialize_nori_client_mcp(url: &str, authorization: Option<&str>) {
+    let response = send_nori_client_mcp_initialize(url, authorization).await;
+    assert!(
+        response.contains("200 OK") && response.contains("\"serverInfo\""),
+        "expected successful nori-client MCP initialize response, got: {response}"
+    );
+}
+
+async fn send_nori_client_mcp_initialize(url: &str, authorization: Option<&str>) -> String {
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
 
@@ -1139,11 +1737,15 @@ async fn initialize_nori_client_mcp(url: &str) {
         }
     })
     .to_string();
+    let authorization_header = authorization
+        .map(|value| format!("Authorization: {value}\r\n"))
+        .unwrap_or_default();
     let request = format!(
         "POST /{path} HTTP/1.1\r\n\
 Host: {host_port}\r\n\
 Accept: application/json, text/event-stream\r\n\
 Content-Type: application/json\r\n\
+{authorization_header}\
 Content-Length: {}\r\n\
 Connection: close\r\n\r\n\
 {body}",
@@ -1161,10 +1763,7 @@ Connection: close\r\n\r\n\
         .read_to_string(&mut response)
         .await
         .expect("initialize response should read");
-    assert!(
-        response.contains("200 OK") && response.contains("\"serverInfo\""),
-        "expected successful nori-client MCP initialize response, got: {response}"
-    );
+    response
 }
 
 /// Test that session_context is consumed after the first prompt (not repeated).
@@ -1183,9 +1782,8 @@ async fn test_session_context_consumed_after_first_prompt() {
         return;
     }
 
-    unsafe {
-        std::env::set_var("MOCK_AGENT_ECHO_PROMPT", "1");
-    }
+    let _echo_guard = EnvGuard::set("MOCK_AGENT_ECHO_PROMPT", "1");
+    let _mcp_guard = EnvGuard::remove("MOCK_AGENT_MCP_HTTP");
 
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
