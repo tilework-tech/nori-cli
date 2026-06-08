@@ -47,11 +47,13 @@ match subcommand {
 ```
 
 **CloudCommand**: Runs a TUI session backed by a cloud VM via the nori-sessions broker:
-- `nori cloud` - Connects to a cloud session using the broker URL from `config.toml`, or prompts interactively on first run
+- `nori cloud` - Lists existing cloud sessions and lets the user pick one to resume, or start a new one
 - `nori cloud --broker-url https://broker.example.com` - Overrides the broker URL
 - TUI flags such as `--agent`, `--profile`, `--sandbox` can be passed after `cloud`
 - Broker URL resolution follows a three-step priority chain: `--broker-url` flag > `[cloud] broker_url` in `config.toml` > interactive stdin prompt. The interactive prompt only activates when stdin is a terminal (`std::io::IsTerminal`); non-interactive invocations without a configured URL receive an error with setup instructions. The prompt validates that the URL starts with `http://` or `https://` and persists the value to `config.toml` via `save_cloud_broker_url()` from `@/nori-rs/acp/src/config/loader.rs`, so subsequent runs use the saved URL automatically
-- The dispatch flow: resolves broker URL (see above), creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, acquires a session (with automatic re-authentication retry on `BrokerError::TokenExpired`), then sets `TuiCli.cloud_connection` and calls `nori_tui::run_main()`. The retry handles the edge case where `has_valid_token()` passes at startup but the broker rejects the token with HTTP 401 during `acquire_session()` -- the CLI re-triggers `broker.authenticate()` and retries once
+- The dispatch flow: resolves broker URL, creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, then enters session selection. In interactive terminals, the CLI lists existing sessions via `broker.list_sessions()`, formats them with `format_cloud_session_list()` from `@/nori-rs/cli/src/cloud.rs`, and prompts the user to select one or start new. The user enters a number to resume an existing session or "n" for new. Non-interactive terminals skip listing and go directly to `acquire_session()`. All broker calls include automatic re-authentication retry on `BrokerError::TokenExpired`
+- Session selection is a pre-TUI step -- it happens before `nori_tui::run_main()` because the TUI needs a WebSocket URL to start. The session picker logic lives in `@/nori-rs/cli/src/cloud.rs`, which provides `format_cloud_session_list()`, `parse_session_choice()`, and `prompt_session_selection()`
+- Graceful degradation: if `list_sessions()` returns 404 (broker does not support listing) or any other error, the CLI falls back to showing only the "new session" path. This ensures compatibility with older broker deployments
 - After `run_main()` returns, the CLI calls `broker.release_session()` with a 5-second timeout as best-effort cleanup. Release failures or timeouts are logged but do not affect the exit code
 - The `CloudConnectionInfo` flows through the TUI unchanged until it reaches `AcpBackend::spawn()`, which uses `SacpConnection::connect_remote()` instead of spawning a local subprocess
 

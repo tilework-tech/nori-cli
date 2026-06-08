@@ -34,7 +34,7 @@ Key files:
 
 - `registry.rs` - Agent configuration and npm package detection
 - `connection/` - SACP v11-based agent communication (local subprocess and remote WebSocket)
-- `broker/` - Cloud session broker client: OAuth auth, JWT management, session acquisition/release, and `CloudConnectionInfo` (see `@/nori-rs/acp/src/broker/docs.md`)
+- `broker/` - Cloud session broker client: OAuth auth, JWT management, session listing/acquisition/resume/release, and `CloudConnectionInfo` (see `@/nori-rs/acp/src/broker/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage checkpoint updates

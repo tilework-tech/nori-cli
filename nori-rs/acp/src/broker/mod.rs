@@ -44,6 +44,16 @@ pub struct SessionInfo {
     pub ws_url: String,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct CloudSessionSummary {
+    pub session_id: String,
+    pub source: String,
+    pub created_at: String,
+    pub last_active_at: String,
+    pub first_message_preview: Option<String>,
+    pub status: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum BrokerError {
     #[error("authentication required")]
@@ -57,6 +67,12 @@ pub enum BrokerError {
 
     #[error("session release failed: HTTP {status}: {body}")]
     ReleaseFailed { status: u16, body: String },
+
+    #[error("session list failed: HTTP {status}: {body}")]
+    ListFailed { status: u16, body: String },
+
+    #[error("session resume failed: HTTP {status}: {body}")]
+    ResumeFailed { status: u16, body: String },
 
     #[error("network error: {0}")]
     NetworkError(#[from] reqwest::Error),
@@ -123,6 +139,79 @@ impl BrokerClient {
         if !resp.status().is_success() {
             let body = resp.text().await.unwrap_or_default();
             return Err(BrokerError::AcquireFailed { status, body });
+        }
+
+        let info: SessionInfo = resp
+            .json()
+            .await
+            .map_err(|e| BrokerError::InvalidToken(format!("invalid response: {e}")))?;
+        Ok(info)
+    }
+
+    pub async fn list_sessions(
+        &self,
+    ) -> std::result::Result<Vec<CloudSessionSummary>, BrokerError> {
+        let token = self
+            .auth_token
+            .as_deref()
+            .ok_or(BrokerError::AuthRequired)?;
+
+        if is_token_expired(token) {
+            return Err(BrokerError::TokenExpired);
+        }
+
+        let url = format!("{}/api/sessions", self.broker_url);
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await?;
+
+        let status = resp.status().as_u16();
+        if status == 401 {
+            return Err(BrokerError::TokenExpired);
+        }
+        if !resp.status().is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(BrokerError::ListFailed { status, body });
+        }
+
+        let sessions: Vec<CloudSessionSummary> = resp
+            .json()
+            .await
+            .map_err(|e| BrokerError::InvalidToken(format!("invalid response: {e}")))?;
+        Ok(sessions)
+    }
+
+    pub async fn resume_session(
+        &self,
+        session_id: &str,
+    ) -> std::result::Result<SessionInfo, BrokerError> {
+        let token = self
+            .auth_token
+            .as_deref()
+            .ok_or(BrokerError::AuthRequired)?;
+
+        if is_token_expired(token) {
+            return Err(BrokerError::TokenExpired);
+        }
+
+        let url = format!("{}/api/sessions/{session_id}/resume", self.broker_url);
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await?;
+
+        let status = resp.status().as_u16();
+        if status == 401 {
+            return Err(BrokerError::TokenExpired);
+        }
+        if !resp.status().is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(BrokerError::ResumeFailed { status, body });
         }
 
         let info: SessionInfo = resp

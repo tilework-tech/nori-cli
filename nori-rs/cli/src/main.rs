@@ -558,20 +558,92 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 eprintln!("Authenticated.");
             }
 
-            eprintln!("Acquiring cloud session...");
-            let session_info = match broker.acquire_session().await {
-                Ok(info) => info,
-                Err(nori_acp::broker::BrokerError::TokenExpired) => {
-                    eprintln!("Token expired, re-authenticating...");
-                    broker.authenticate().await?;
-                    broker.acquire_session().await.map_err(|e| {
-                        anyhow::anyhow!(
-                            "Failed to acquire cloud session after re-authentication: {e}"
-                        )
-                    })?
+            let session_info = if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                let sessions = match broker.list_sessions().await {
+                    Ok(s) => s,
+                    Err(nori_acp::broker::BrokerError::TokenExpired) => {
+                        eprintln!("Token expired, re-authenticating...");
+                        broker.authenticate().await?;
+                        match broker.list_sessions().await {
+                            Ok(s) => s,
+                            Err(e) => {
+                                eprintln!(
+                                    "Could not load previous sessions: {e}. Starting new session."
+                                );
+                                vec![]
+                            }
+                        }
+                    }
+                    Err(nori_acp::broker::BrokerError::ListFailed { status: 404, .. }) => {
+                        vec![]
+                    }
+                    Err(e) => {
+                        eprintln!("Could not load previous sessions: {e}. Starting new session.");
+                        vec![]
+                    }
+                };
+
+                let choice = if sessions.is_empty() {
+                    nori_cli::cloud::SessionChoice::New
+                } else {
+                    nori_cli::cloud::prompt_session_selection(&sessions)?
+                };
+
+                match choice {
+                    nori_cli::cloud::SessionChoice::New => {
+                        eprintln!("Acquiring new cloud session...");
+                        match broker.acquire_session().await {
+                            Ok(info) => info,
+                            Err(nori_acp::broker::BrokerError::TokenExpired) => {
+                                eprintln!("Token expired, re-authenticating...");
+                                broker.authenticate().await?;
+                                broker.acquire_session().await.map_err(|e| {
+                                    anyhow::anyhow!(
+                                        "Failed to acquire cloud session after re-authentication: {e}"
+                                    )
+                                })?
+                            }
+                            Err(e) => {
+                                anyhow::bail!("Failed to acquire cloud session: {e}");
+                            }
+                        }
+                    }
+                    nori_cli::cloud::SessionChoice::Resume(idx) => {
+                        let session_id = &sessions[idx as usize].session_id;
+                        eprintln!("Resuming session {session_id}...");
+                        match broker.resume_session(session_id).await {
+                            Ok(info) => info,
+                            Err(nori_acp::broker::BrokerError::TokenExpired) => {
+                                eprintln!("Token expired, re-authenticating...");
+                                broker.authenticate().await?;
+                                broker.resume_session(session_id).await.map_err(|e| {
+                                    anyhow::anyhow!(
+                                        "Failed to resume cloud session after re-authentication: {e}"
+                                    )
+                                })?
+                            }
+                            Err(e) => {
+                                anyhow::bail!("Failed to resume cloud session: {e}");
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    anyhow::bail!("Failed to acquire cloud session: {e}");
+            } else {
+                eprintln!("Acquiring cloud session...");
+                match broker.acquire_session().await {
+                    Ok(info) => info,
+                    Err(nori_acp::broker::BrokerError::TokenExpired) => {
+                        eprintln!("Token expired, re-authenticating...");
+                        broker.authenticate().await?;
+                        broker.acquire_session().await.map_err(|e| {
+                            anyhow::anyhow!(
+                                "Failed to acquire cloud session after re-authentication: {e}"
+                            )
+                        })?
+                    }
+                    Err(e) => {
+                        anyhow::bail!("Failed to acquire cloud session: {e}");
+                    }
                 }
             };
             eprintln!("Connected to session {}", session_info.session_id);
