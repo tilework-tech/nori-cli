@@ -768,6 +768,8 @@ impl ChatWidget {
             let generation = self.acp_mode_config_generation;
             let option_name_for_result = option_name;
             let value_name_for_result = value_name;
+            let config_id_for_result = config_id.clone();
+            let value_for_result = value.clone();
             tokio::spawn(async move {
                 match handle.set_session_config_option(config_id, value).await {
                     Ok(config_options) => {
@@ -779,6 +781,8 @@ impl ChatWidget {
                         });
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: true,
+                            config_id: config_id_for_result,
+                            value: value_for_result,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
                             config_options: Some(config_options),
@@ -788,6 +792,8 @@ impl ChatWidget {
                     Err(err) => {
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: false,
+                            config_id: config_id_for_result,
+                            value: value_for_result,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
                             config_options: None,

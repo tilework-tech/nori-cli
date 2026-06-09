@@ -389,6 +389,7 @@ mod helpers;
 mod nori_client_context;
 mod nori_client_mcp;
 mod session;
+mod session_defaults;
 pub(crate) mod session_reducer;
 mod session_runtime_driver;
 mod spawn_and_relay;

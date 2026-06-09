@@ -318,8 +318,68 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
     }
 }
 
+fn read_wire_log(log_dir: &std::path::Path) -> String {
+    let log_path = std::fs::read_dir(log_dir)
+        .expect("wire log dir exists")
+        .map(|entry| entry.expect("wire log entry").path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .expect("wire log should be written");
+    std::fs::read_to_string(log_path).expect("wire log should be readable")
+}
+
+fn count_logged_requests(log_dir: &std::path::Path, method: &str) -> usize {
+    let log_content = read_wire_log(log_dir);
+    log_content
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json wire log line"))
+        .filter(|record| {
+            record["direction"] == "client_to_agent" && record["message"]["method"] == method
+        })
+        .count()
+}
+
+/// Latest logged request params for `method`, or `None` if the wire log (or a
+/// matching record) does not exist yet.
+fn try_latest_logged_request_params(
+    log_dir: &std::path::Path,
+    method: &str,
+) -> Option<serde_json::Value> {
+    let log_path = std::fs::read_dir(log_dir)
+        .ok()?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))?;
+    let log_content = std::fs::read_to_string(log_path).ok()?;
+    log_content
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|record| {
+            record["direction"] == "client_to_agent" && record["message"]["method"] == method
+        })
+        .next_back()
+        .map(|record| record["message"]["params"].clone())
+}
+
+/// Poll the wire log until a `method` request appears or `timeout` elapses.
+async fn wait_for_logged_request(
+    log_dir: &std::path::Path,
+    method: &str,
+    timeout: std::time::Duration,
+) -> Option<serde_json::Value> {
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if let Some(params) = try_latest_logged_request_params(log_dir, method) {
+            return Some(params);
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return None;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+}
+
 mod part2;
 mod part3;
 mod part4;
 mod part5;
 mod part6;
+mod part7;

@@ -258,6 +258,8 @@ pub(crate) enum AppEvent {
     /// Result of setting an ACP session config option.
     AcpSessionConfigSetResult {
         success: bool,
+        config_id: String,
+        value: String,
         option_name: String,
         value_name: String,
         config_options: Option<Vec<SessionConfigOption>>,

@@ -92,6 +92,8 @@ impl ChatWidget {
             let value_name = mode.next_label;
             self.apply_acp_mode_config_snapshot(generation, Some(next_mode));
             tokio::spawn(async move {
+                let config_id_for_result = config_id.clone();
+                let value_for_result = value.clone();
                 match handle.set_session_config_option(config_id, value).await {
                     Ok(config_options) => {
                         app_event_tx.send(AppEvent::AcpModeConfigSnapshot {
@@ -102,6 +104,8 @@ impl ChatWidget {
                         });
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: true,
+                            config_id: config_id_for_result,
+                            value: value_for_result,
                             option_name: "Mode".to_string(),
                             value_name,
                             config_options: Some(config_options),
@@ -111,6 +115,8 @@ impl ChatWidget {
                     Err(err) => {
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: false,
+                            config_id: config_id_for_result,
+                            value: value_for_result,
                             option_name: "Mode".to_string(),
                             value_name: value_name.clone(),
                             config_options: None,
@@ -159,6 +165,8 @@ impl ChatWidget {
                     });
                     app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                         success: true,
+                        config_id: mode.config_id,
+                        value: mode.next_value,
                         option_name: "Mode".to_string(),
                         value_name,
                         config_options: Some(config_options),
@@ -168,6 +176,8 @@ impl ChatWidget {
                 Err(err) => {
                     app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                         success: false,
+                        config_id: mode.config_id,
+                        value: mode.next_value,
                         option_name: "Mode".to_string(),
                         value_name: mode.next_label,
                         config_options: None,
