@@ -328,6 +328,7 @@ impl AcpBackend {
                                 )
                                 .await;
                         }
+                        Some(crate::connection::ConnectionEvent::ChildExited { .. }) => {}
                         None => {
                             if backend.is_cloud
                                 && !backend.is_shutting_down.load(Ordering::Relaxed)
@@ -381,6 +382,7 @@ impl AcpBackend {
                                             ))
                                             .await;
                                     }
+                                    crate::connection::ConnectionEvent::ChildExited { .. } => {}
                                     crate::connection::ConnectionEvent::ApprovalRequest(request) => {
                                         relay_seq += 1;
                                         let current_policy = *approval_policy_rx.borrow();

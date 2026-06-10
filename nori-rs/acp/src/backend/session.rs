@@ -96,6 +96,7 @@ impl AcpBackend {
                                     ));
                                 }
                                 Some(crate::connection::ConnectionEvent::ApprovalRequest(_)) => {}
+                                Some(crate::connection::ConnectionEvent::ChildExited { .. }) => {}
                                 None => break,
                             }
                         }

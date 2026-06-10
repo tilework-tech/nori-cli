@@ -23,6 +23,13 @@ mod sacp_connection_tests;
 pub enum ConnectionEvent {
     SessionUpdate(acp::SessionUpdate),
     ApprovalRequest(ApprovalRequest),
+    /// The agent subprocess exited on its own. `status` is the exit code
+    /// (`None` when killed by a signal); `stderr_tail` carries the child's
+    /// most recent stderr output for error reporting.
+    ChildExited {
+        status: Option<i32>,
+        stderr_tail: String,
+    },
 }
 
 pub(crate) fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {

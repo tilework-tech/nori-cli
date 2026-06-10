@@ -48,6 +48,12 @@ use sacp::UntypedMessage;
 /// Minimum supported ACP protocol version.
 const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
 
+/// How long shutdown waits for a child to exit after closing its stdin
+/// before killing it. Generous so children with network cleanup (e.g.
+/// `nori-handroll cloud-acp` releasing its broker session) can finish;
+/// well-behaved agents exit in milliseconds.
+const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(25);
+
 #[derive(Debug, Default)]
 struct SessionPromptState {
     update_seq: i64,
@@ -786,11 +792,24 @@ impl SacpConnection {
         Ok(())
     }
 
-    /// Explicitly tear down the ACP subprocess and background tasks.
+    /// Explicitly tear down the ACP subprocess and background tasks with the
+    /// default grace period.
     ///
     /// Unlike `Drop`, this async path can wait for process termination so the
     /// child is reaped promptly during agent switches and shutdown.
     pub async fn shutdown(&self) {
+        self.shutdown_with_grace(SHUTDOWN_GRACE).await;
+    }
+
+    /// Tear down the ACP subprocess gracefully: close its stdin, give it
+    /// `grace` to exit on its own (agents like `nori-handroll cloud-acp` run
+    /// their release path on stdin EOF), then kill whatever is left.
+    pub async fn shutdown_with_grace(&self, grace: std::time::Duration) {
+        let _ = grace;
+        self.shutdown_legacy().await;
+    }
+
+    async fn shutdown_legacy(&self) {
         self.connection_task.abort();
         if let Some(ref stderr_task) = self.stderr_task {
             stderr_task.abort();
