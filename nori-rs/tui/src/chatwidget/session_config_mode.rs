@@ -84,6 +84,7 @@ impl ChatWidget {
         };
         let generation = self.acp_mode_config_generation;
         let app_event_tx = self.app_event_tx.clone();
+        let agent = self.config.model.clone();
 
         if let Some(mode) = self.acp_mode_config.clone() {
             let next_mode = mode.advanced();
@@ -104,6 +105,7 @@ impl ChatWidget {
                         });
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: true,
+                            agent,
                             config_id: config_id_for_result,
                             value: value_for_result,
                             option_name: "Mode".to_string(),
@@ -115,6 +117,7 @@ impl ChatWidget {
                     Err(err) => {
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: false,
+                            agent,
                             config_id: config_id_for_result,
                             value: value_for_result,
                             option_name: "Mode".to_string(),
@@ -165,6 +168,7 @@ impl ChatWidget {
                     });
                     app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                         success: true,
+                        agent,
                         config_id: mode.config_id,
                         value: mode.next_value,
                         option_name: "Mode".to_string(),
@@ -176,6 +180,7 @@ impl ChatWidget {
                 Err(err) => {
                     app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                         success: false,
+                        agent,
                         config_id: mode.config_id,
                         value: mode.next_value,
                         option_name: "Mode".to_string(),

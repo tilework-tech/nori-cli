@@ -684,6 +684,7 @@ impl App {
             #[cfg(feature = "unstable")]
             AppEvent::AcpModelSetResult {
                 success,
+                agent,
                 model_id,
                 display_name,
                 error,
@@ -694,7 +695,6 @@ impl App {
                         .update_agent_display_name(display_name.clone());
 
                     // Persist the model selection to [default_models] in config.toml
-                    let agent = self.config.model.clone();
                     let message = match ConfigEditsBuilder::new(&self.config.codex_home)
                         .set_default_model(&agent, &model_id)
                         .apply()
@@ -739,6 +739,7 @@ impl App {
             }
             AppEvent::AcpSessionConfigSetResult {
                 success,
+                agent,
                 config_id,
                 value,
                 option_name,
@@ -750,7 +751,7 @@ impl App {
                     let saved_as_default =
                         match config_persistence::persist_default_model_selection(
                             &self.config.codex_home,
-                            &self.config.model,
+                            &agent,
                             &config_id,
                             &value,
                             config_options.as_deref().unwrap_or_default(),

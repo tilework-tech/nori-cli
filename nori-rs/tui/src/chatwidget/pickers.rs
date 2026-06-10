@@ -724,6 +724,7 @@ impl ChatWidget {
     pub(crate) fn set_acp_model(&mut self, model_id: String, display_name: String) {
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
+            let agent = self.config.model.clone();
             let model_id_for_result = model_id.clone();
             let display_name_for_result = display_name.clone();
             tokio::spawn(async move {
@@ -731,6 +732,7 @@ impl ChatWidget {
                     Ok(()) => {
                         app_event_tx.send(AppEvent::AcpModelSetResult {
                             success: true,
+                            agent,
                             model_id: model_id_for_result,
                             display_name: display_name_for_result,
                             error: None,
@@ -739,6 +741,7 @@ impl ChatWidget {
                     Err(e) => {
                         app_event_tx.send(AppEvent::AcpModelSetResult {
                             success: false,
+                            agent,
                             model_id: model_id_for_result,
                             display_name: display_name_for_result,
                             error: Some(e.to_string()),
@@ -766,6 +769,7 @@ impl ChatWidget {
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             let generation = self.acp_mode_config_generation;
+            let agent = self.config.model.clone();
             let option_name_for_result = option_name;
             let value_name_for_result = value_name;
             let config_id_for_result = config_id.clone();
@@ -781,6 +785,7 @@ impl ChatWidget {
                         });
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: true,
+                            agent,
                             config_id: config_id_for_result,
                             value: value_for_result,
                             option_name: option_name_for_result,
@@ -792,6 +797,7 @@ impl ChatWidget {
                     Err(err) => {
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: false,
+                            agent,
                             config_id: config_id_for_result,
                             value: value_for_result,
                             option_name: option_name_for_result,

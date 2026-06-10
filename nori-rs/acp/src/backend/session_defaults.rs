@@ -36,7 +36,7 @@ async fn apply_via_config_option(
     default_model: &str,
 ) {
     let acp::SessionConfigKind::Select(select) = &option.kind else {
-        debug!("Model config option is not a select; skipping default model '{default_model}'");
+        warn!("Model config option is not a select; skipping default model '{default_model}'");
         return;
     };
     if select.current_value.to_string() == default_model {
@@ -54,7 +54,7 @@ async fn apply_via_config_option(
         _ => false,
     };
     if !available {
-        debug!("Default model '{default_model}' not in config option values, skipping");
+        warn!("Default model '{default_model}' not in config option values, skipping");
         return;
     }
 
