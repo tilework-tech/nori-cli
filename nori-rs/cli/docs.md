@@ -37,7 +37,7 @@ This crate is the primary entry point that ties together the core crates:
 match subcommand {
     None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Resume(cmd)) => nori_tui::run_main(...),
-    Some(Subcommand::Cloud(cmd)) => nori_tui::run_main(...),  // Cloud VM session
+    Some(Subcommand::Cloud(cmd)) => nori_tui::run_main(...),  // Pinned nori-handroll agent
     Some(Subcommand::Login(cli)) => run_login_*(...),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
@@ -46,14 +46,13 @@ match subcommand {
 }
 ```
 
-**CloudCommand**: Runs a TUI session backed by a cloud VM via the nori-sessions broker:
-- `nori cloud` - Connects to a cloud session using the broker URL from `config.toml`, or prompts interactively on first run
-- `nori cloud --broker-url https://broker.example.com` - Overrides the broker URL
-- TUI flags such as `--agent`, `--profile`, `--sandbox` can be passed after `cloud`
-- Broker URL resolution follows a three-step priority chain: `--broker-url` flag > `[cloud] broker_url` in `config.toml` > interactive stdin prompt. The interactive prompt only activates when stdin is a terminal (`std::io::IsTerminal`); non-interactive invocations without a configured URL receive an error with setup instructions. The prompt validates that the URL starts with `http://` or `https://` and persists the value to `config.toml` via `save_cloud_broker_url()` from `@/nori-rs/acp/src/config/loader.rs`, so subsequent runs use the saved URL automatically
-- The dispatch flow: resolves broker URL (see above), creates `BrokerClient` (see `@/nori-rs/acp/src/broker/docs.md`), authenticates via browser OAuth if needed, acquires a session (with automatic re-authentication retry on `BrokerError::TokenExpired`), then sets `TuiCli.cloud_connection` and calls `nori_tui::run_main()`. Browser OAuth prints the exact URL being opened so headless SSH sessions can copy it into another browser. The retry handles the edge case where `has_valid_token()` passes at startup but the broker rejects the token with HTTP 401 during `acquire_session()` -- the CLI re-triggers `broker.authenticate()` and retries once
-- After `run_main()` returns, the CLI calls `broker.release_session()` with a 5-second timeout as best-effort cleanup. Release failures or timeouts are logged but do not affect the exit code
-- The `CloudConnectionInfo` flows through the TUI unchanged until it reaches `AcpBackend::spawn()`, which uses `SacpConnection::connect_remote()` instead of spawning a local subprocess
+**CloudCommand** (`cloud.rs`): Runs a TUI session backed by Nori Sessions by delegating everything cloud-related to the external `nori-handroll` binary (from the nori-sessions repo). The CLI no longer contains any broker client, OAuth flow, or WebSocket transport -- it does not know the word "broker" beyond translating one config value:
+- `resolve_handroll_bin()` resolves the `nori-handroll` binary. A `NORI_HANDROLL_BIN` env override wins when set and must point at an existing file (a dangling override is an error, not a fallback); otherwise the first `nori-handroll` on `PATH` is used. A missing binary fails with an actionable "install Nori Sessions" error before the TUI starts
+- `cloud_agent_config()` builds a synthetic registry entry (slug `nori-cloud`): a local distribution running `<handroll-bin> cloud-acp`, with the read-only `[cloud] broker_url` from `config.toml` (when present) translated to a `NORI_BROKER_URL` environment variable on the child, and an auth hint pointing at `nori-handroll login`
+- The dispatch in `main.rs` forces `interactive.agent = "nori-cloud"` AFTER flag merging, so `--agent` cannot bypass Sessions, and passes the entry via the clap-skipped `TuiCli.extra_agents` field (see `@/nori-rs/tui/src/cli.rs`)
+- From there the handroll child rides the ordinary local-agent path end to end: registry lookup, `SacpConnection::spawn()`, and unconditional local transcript recording (duplicating the broker's server-side recording is intentional)
+- Auth, broker REST, session acquisition/release, and tunnel transport all live inside `nori-handroll cloud-acp`. Clean release relies on the graceful stdin-EOF shutdown contract in `@/nori-rs/acp/src/connection/sacp_connection.rs`
+- TUI flags such as `--agent`, `--profile`, `--sandbox` can still be passed after `cloud` (only `--agent` is overridden)
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.
 

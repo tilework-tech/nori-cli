@@ -684,6 +684,7 @@ impl App {
             #[cfg(feature = "unstable")]
             AppEvent::AcpModelSetResult {
                 success,
+                agent,
                 model_id,
                 display_name,
                 error,
@@ -692,21 +693,23 @@ impl App {
                     // Update the approval dialog display name to reflect the new model
                     self.chat_widget
                         .update_agent_display_name(display_name.clone());
-                    self.chat_widget
-                        .add_info_message(format!("Model switched to: {display_name}"), None);
 
                     // Persist the model selection to [default_models] in config.toml
-                    let agent = self.config.model.clone();
-                    if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+                    let message = match ConfigEditsBuilder::new(&self.config.codex_home)
                         .set_default_model(&agent, &model_id)
                         .apply()
                         .await
                     {
-                        tracing::error!(
-                            error = %err,
-                            "failed to persist default model selection"
-                        );
-                    }
+                        Ok(()) => format!("Model switched to: {display_name} (saved as default)"),
+                        Err(err) => {
+                            tracing::error!(
+                                error = %err,
+                                "failed to persist default model selection"
+                            );
+                            format!("Model switched to: {display_name}")
+                        }
+                    };
+                    self.chat_widget.add_info_message(message, None);
                 } else {
                     let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
                     self.chat_widget
@@ -736,14 +739,39 @@ impl App {
             }
             AppEvent::AcpSessionConfigSetResult {
                 success,
+                agent,
+                config_id,
+                value,
                 option_name,
                 value_name,
                 config_options,
                 error,
             } => {
                 if success {
-                    self.chat_widget
-                        .add_acp_session_config_set_message(&option_name, &value_name);
+                    let saved_as_default =
+                        match config_persistence::persist_default_model_selection(
+                            &self.config.codex_home,
+                            &agent,
+                            &config_id,
+                            &value,
+                            config_options.as_deref().unwrap_or_default(),
+                        )
+                        .await
+                        {
+                            Ok(persisted) => persisted,
+                            Err(err) => {
+                                tracing::error!(
+                                    error = %err,
+                                    "failed to persist default model selection"
+                                );
+                                false
+                            }
+                        };
+                    self.chat_widget.add_acp_session_config_set_message(
+                        &option_name,
+                        &value_name,
+                        saved_as_default,
+                    );
                     if let Some(config_options) = config_options {
                         self.chat_widget
                             .sync_acp_session_config_snapshot(&config_options);
@@ -964,11 +992,8 @@ impl App {
                 #[cfg(feature = "nori-config")]
                 if success && self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
-                    self.chat_widget.spawn_deferred_agent(
-                        self.config.clone(),
-                        self.app_event_tx.clone(),
-                        self.cloud_connection.clone(),
-                    );
+                    self.chat_widget
+                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
                 }
                 if success {
                     self.request_system_info_refresh(
@@ -985,11 +1010,8 @@ impl App {
                 #[cfg(feature = "nori-config")]
                 if self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
-                    self.chat_widget.spawn_deferred_agent(
-                        self.config.clone(),
-                        self.app_event_tx.clone(),
-                        self.cloud_connection.clone(),
-                    );
+                    self.chat_widget
+                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {

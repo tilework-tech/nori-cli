@@ -277,9 +277,6 @@ pub(crate) struct App {
 
     /// Cancel sender for an in-progress MCP OAuth login flow.
     mcp_oauth_cancel_tx: Option<tokio::sync::oneshot::Sender<()>>,
-
-    /// Cloud connection info for remote WebSocket sessions.
-    cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -304,7 +301,6 @@ impl App {
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
         vertical_footer: bool,
-        cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -348,7 +344,6 @@ impl App {
                 footer_layout_config: nori_config.footer_layout_config.clone(),
                 expected_agent: None,
                 deferred_spawn: needs_deferred_spawn,
-                cloud_connection: cloud_connection.clone(),
                 fork_context: None,
             };
             match resume_selection {
@@ -405,7 +400,6 @@ impl App {
             #[cfg(feature = "nori-config")]
             deferred_spawn_pending: needs_deferred_spawn,
             mcp_oauth_cancel_tx: None,
-            cloud_connection,
         };
 
         // Propagate NoriConfig settings to the textarea.
@@ -538,7 +532,6 @@ impl App {
             footer_layout_config: self.footer_layout_config.clone(),
             expected_agent,
             deferred_spawn,
-            cloud_connection: self.cloud_connection.clone(),
             fork_context,
         }
     }

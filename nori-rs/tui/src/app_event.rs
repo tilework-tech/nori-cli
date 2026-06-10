@@ -228,6 +228,10 @@ pub(crate) enum AppEvent {
     AcpModelSetResult {
         /// Whether the model was set successfully
         success: bool,
+        /// Agent slug active when the model was set; the selection is
+        /// persisted under this key even if the user switches agents
+        /// mid-flight.
+        agent: String,
         /// The model that was set (on success) or attempted (on failure).
         /// Used for persisting the model selection to config.toml.
         model_id: String,
@@ -258,6 +262,11 @@ pub(crate) enum AppEvent {
     /// Result of setting an ACP session config option.
     AcpSessionConfigSetResult {
         success: bool,
+        /// Agent slug active when the option was set; selections are persisted
+        /// under this key even if the user switches agents mid-flight.
+        agent: String,
+        config_id: String,
+        value: String,
         option_name: String,
         value_name: String,
         config_options: Option<Vec<SessionConfigOption>>,

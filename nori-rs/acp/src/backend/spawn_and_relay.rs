@@ -25,22 +25,13 @@ impl AcpBackend {
 
         let cwd = config.cwd.clone();
 
-        let (mut connection, agent_config) = if let Some(ref cloud) = config.cloud_connection {
-            debug!("Connecting to cloud session: {}", cloud.ws_url);
-            let conn = SacpConnection::connect_remote(&cloud.ws_url, &cloud.auth_token, &cwd)
-                .await
-                .map_err(|e| anyhow::anyhow!("Cloud connection failed: {e}"))?;
-            (conn, None)
-        } else {
-            let agent_config = get_agent_config(&config.agent)?;
-            debug!("Spawning ACP backend for agent: {}", config.agent);
-            let conn =
-                match SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
-                    Ok(conn) => conn,
-                    Err(e) => return Err(enhance_agent_error(e, &agent_config)),
-                };
-            (conn, Some(agent_config))
-        };
+        let agent_config = get_agent_config(&config.agent)?;
+        debug!("Spawning ACP backend for agent: {}", config.agent);
+        let mut connection =
+            match SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
+                Ok(conn) => conn,
+                Err(e) => return Err(enhance_agent_error(e, &agent_config)),
+            };
 
         let thread_goal_state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
         let transcript_recorder_cell = Arc::new(Mutex::new(None));
@@ -66,35 +57,14 @@ impl AcpBackend {
         let session_result = connection.create_session(&cwd, mcp_servers).await;
         let session_id = match session_result {
             Ok(id) => id,
-            Err(e) => match &agent_config {
-                Some(ac) => return Err(enhance_agent_error(e, ac)),
-                None => return Err(anyhow::anyhow!("Cloud session creation failed: {e}")),
-            },
+            Err(e) => return Err(enhance_agent_error(e, &agent_config)),
         };
 
         debug!("ACP session created: {:?}", session_id);
 
         // Apply default model from config if one is set for this agent
-        #[cfg(feature = "unstable")]
         if let Some(ref default_model) = config.default_model {
-            let model_state = connection.model_state();
-            let model_available = model_state
-                .available_models
-                .iter()
-                .any(|m| m.model_id.to_string() == *default_model);
-            if model_available {
-                let model_id = acp::ModelId::from(default_model.clone());
-                match connection.set_model(&session_id, &model_id).await {
-                    Ok(()) => {
-                        debug!("Applied default model from config: {default_model}");
-                    }
-                    Err(e) => {
-                        warn!("Failed to apply default model '{default_model}': {e}");
-                    }
-                }
-            } else {
-                debug!("Default model '{default_model}' not in available models, skipping");
-            }
+            session_defaults::apply_default_model(&connection, &session_id, default_model).await;
         }
 
         let capabilities_update =
@@ -123,25 +93,19 @@ impl AcpBackend {
             crate::message_history::history_metadata(&config.nori_home).await;
 
         // Initialize transcript recorder (non-fatal if it fails).
-        // Cloud sessions skip local transcript recording — the broker records
-        // transcripts server-side.
-        let transcript_recorder = if config.cloud_connection.is_some() {
-            None
-        } else {
-            match TranscriptRecorder::new(
-                &config.nori_home,
-                &cwd,
-                Some(config.agent.clone()),
-                &config.cli_version,
-                Some(session_id.to_string()),
-            )
-            .await
-            {
-                Ok(recorder) => Some(Arc::new(recorder)),
-                Err(e) => {
-                    warn!("Failed to initialize transcript recorder: {e}");
-                    None
-                }
+        let transcript_recorder = match TranscriptRecorder::new(
+            &config.nori_home,
+            &cwd,
+            Some(config.agent.clone()),
+            &config.cli_version,
+            Some(session_id.to_string()),
+        )
+        .await
+        {
+            Ok(recorder) => Some(Arc::new(recorder)),
+            Err(e) => {
+                warn!("Failed to initialize transcript recorder: {e}");
+                None
             }
         };
         *transcript_recorder_cell.lock().await = transcript_recorder.clone();
@@ -192,7 +156,6 @@ impl AcpBackend {
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
-            is_cloud: config.cloud_connection.is_some(),
             is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),
@@ -328,22 +291,44 @@ impl AcpBackend {
                                 )
                                 .await;
                         }
-                        None => {
-                            if backend.is_cloud
-                                && !backend.is_shutting_down.load(Ordering::Relaxed)
-                            {
+                        Some(crate::connection::ConnectionEvent::ChildExited {
+                            status,
+                            stderr_tail,
+                        }) => {
+                            if !backend.is_shutting_down.load(Ordering::Relaxed) {
+                                let mut message = match status {
+                                    Some(code) => format!(
+                                        "Agent process exited unexpectedly (exit code {code})."
+                                    ),
+                                    None => {
+                                        "Agent process exited unexpectedly.".to_string()
+                                    }
+                                };
+                                if !stderr_tail.is_empty() {
+                                    message.push('\n');
+                                    message.push_str(&stderr_tail);
+                                }
                                 let _ = backend
                                     .event_tx
                                     .send(Event {
                                         id: String::new(),
-                                        msg: EventMsg::Error(ErrorEvent {
-                                            message: "Cloud session disconnected. The remote session may still be active.".to_string(),
-                                        }),
+                                        msg: EventMsg::Error(ErrorEvent { message }),
                                     })
                                     .await;
+                                // Fail any in-flight prompt loudly instead of
+                                // letting it wait on a dead transport forever.
+                                if let Some(abort) =
+                                    backend.prompt_task_abort.lock().await.take()
+                                {
+                                    abort.abort();
+                                    let _ = backend
+                                        .prompt_result_tx
+                                        .send(session_reducer::InboundEvent::PromptFailed)
+                                        .await;
+                                }
                             }
-                            break;
                         }
+                        None => break,
                     }
                 }
                 maybe_result = prompt_result_rx.recv() => {
@@ -381,6 +366,11 @@ impl AcpBackend {
                                             ))
                                             .await;
                                     }
+                                    // This drain only runs during teardown
+                                    // (prompt channel closed); the exit was
+                                    // either user-initiated or already
+                                    // reported by the main relay arm.
+                                    crate::connection::ConnectionEvent::ChildExited { .. } => {}
                                     crate::connection::ConnectionEvent::ApprovalRequest(request) => {
                                         relay_seq += 1;
                                         let current_policy = *approval_policy_rx.borrow();

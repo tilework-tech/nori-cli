@@ -1675,26 +1675,6 @@ fn latest_logged_load_session(log_dir: &std::path::Path) -> acp::LoadSessionRequ
         .expect("session/load params should match ACP schema")
 }
 
-fn read_wire_log(log_dir: &std::path::Path) -> String {
-    let log_path = std::fs::read_dir(log_dir)
-        .expect("wire log dir exists")
-        .map(|entry| entry.expect("wire log entry").path())
-        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
-        .expect("wire log should be written");
-    std::fs::read_to_string(log_path).expect("wire log should be readable")
-}
-
-fn count_logged_requests(log_dir: &std::path::Path, method: &str) -> usize {
-    let log_content = read_wire_log(log_dir);
-    log_content
-        .lines()
-        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json wire log line"))
-        .filter(|record| {
-            record["direction"] == "client_to_agent" && record["message"]["method"] == method
-        })
-        .count()
-}
-
 fn nori_client_http_server(new_session: &acp::NewSessionRequest) -> Option<&acp::McpServerHttp> {
     nori_client_http_server_from_servers(&new_session.mcp_servers)
 }

@@ -1,3 +1,4 @@
+pub mod cloud;
 pub mod debug_sandbox;
 mod exit_status;
 #[cfg(feature = "login")]

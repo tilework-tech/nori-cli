@@ -207,33 +207,6 @@ impl NoriConfig {
     }
 }
 
-/// Persist a cloud broker URL to `{nori_home}/config.toml` under `[cloud] broker_url`.
-pub fn save_cloud_broker_url(nori_home: &std::path::Path, broker_url: &str) -> Result<()> {
-    use toml_edit::DocumentMut;
-
-    std::fs::create_dir_all(nori_home)
-        .with_context(|| format!("Failed to create directory {}", nori_home.display()))?;
-
-    let config_path = nori_home.join(CONFIG_FILE);
-    let content = if config_path.exists() {
-        std::fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read {}", config_path.display()))?
-    } else {
-        String::new()
-    };
-
-    let mut doc = content
-        .parse::<DocumentMut>()
-        .with_context(|| format!("Failed to parse {}", config_path.display()))?;
-
-    doc["cloud"]["broker_url"] = toml_edit::value(broker_url);
-
-    std::fs::write(&config_path, doc.to_string())
-        .with_context(|| format!("Failed to write {}", config_path.display()))?;
-
-    Ok(())
-}
-
 /// Resolve MCP server configurations from TOML
 fn resolve_mcp_servers(
     toml_servers: HashMap<String, super::types::McpServerConfigToml>,
@@ -1142,75 +1115,6 @@ args = ["--acp"]
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert!(config.agents.is_empty());
-    }
-
-    #[test]
-    fn test_save_cloud_broker_url_to_empty_config() {
-        let temp_dir = TempDir::new().unwrap();
-        let nori_home = temp_dir.path().to_path_buf();
-        std::fs::write(nori_home.join(CONFIG_FILE), "").unwrap();
-
-        save_cloud_broker_url(&nori_home, "https://broker.example.com").unwrap();
-
-        let config = NoriConfig::load_from_path(&nori_home.join(CONFIG_FILE)).unwrap();
-        assert_eq!(
-            config.cloud_broker_url,
-            Some("https://broker.example.com".to_string())
-        );
-    }
-
-    #[test]
-    fn test_save_cloud_broker_url_preserves_existing_config() {
-        let temp_dir = TempDir::new().unwrap();
-        let nori_home = temp_dir.path().to_path_buf();
-        std::fs::write(
-            nori_home.join(CONFIG_FILE),
-            "agent = \"gemini\"\n\n[tui]\nvim_mode = true\n",
-        )
-        .unwrap();
-
-        save_cloud_broker_url(&nori_home, "https://broker.example.com").unwrap();
-
-        let config = NoriConfig::load_from_path(&nori_home.join(CONFIG_FILE)).unwrap();
-        assert_eq!(config.agent, "gemini");
-        assert_eq!(config.vim_mode, crate::config::VimEnterBehavior::Submit);
-        assert_eq!(
-            config.cloud_broker_url,
-            Some("https://broker.example.com".to_string())
-        );
-    }
-
-    #[test]
-    fn test_save_cloud_broker_url_overwrites_existing_value() {
-        let temp_dir = TempDir::new().unwrap();
-        let nori_home = temp_dir.path().to_path_buf();
-        std::fs::write(
-            nori_home.join(CONFIG_FILE),
-            "[cloud]\nbroker_url = \"https://old.example.com\"\n",
-        )
-        .unwrap();
-
-        save_cloud_broker_url(&nori_home, "https://new.example.com").unwrap();
-
-        let config = NoriConfig::load_from_path(&nori_home.join(CONFIG_FILE)).unwrap();
-        assert_eq!(
-            config.cloud_broker_url,
-            Some("https://new.example.com".to_string())
-        );
-    }
-
-    #[test]
-    fn test_save_cloud_broker_url_creates_directory_and_file() {
-        let temp_dir = TempDir::new().unwrap();
-        let nori_home = temp_dir.path().join("nonexistent").join("subdir");
-
-        save_cloud_broker_url(&nori_home, "https://broker.example.com").unwrap();
-
-        let config = NoriConfig::load_from_path(&nori_home.join(CONFIG_FILE)).unwrap();
-        assert_eq!(
-            config.cloud_broker_url,
-            Some("https://broker.example.com".to_string())
-        );
     }
 
     #[test]

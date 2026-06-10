@@ -70,8 +70,11 @@ pub struct Cli {
     #[arg(long = "skip-trust-directory", default_value_t = false)]
     pub skip_trust_directory: bool,
 
+    /// Extra agent registry entries injected by the caller, appended after
+    /// the config's `[[agents]]`. Used by `nori cloud` to pin the
+    /// handroll-backed agent. Not a CLI flag.
     #[clap(skip)]
-    pub cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
+    pub extra_agents: Vec<nori_acp::config::AgentConfigToml>,
 }
 
 #[cfg(test)]

@@ -11,7 +11,7 @@ This is the Rust implementation of Nori, a terminal-based AI coding assistant. T
 The `nori-rs` directory is the root of a Cargo workspace containing all Rust code for the project. The workspace is organized into focused crates that handle specific concerns:
 
 - **Entry points**: `tui/` provides the main TUI application, `cli/` provides sandbox testing utilities
-- **ACP integration**: `acp/` handles communication with ACP-compliant agents (local subprocesses and remote WebSocket connections)
+- **ACP integration**: `acp/` handles communication with ACP-compliant agents spawned as local subprocesses
 - **Core business logic**: `core/` contains configuration, authentication, and conversation management
 - **Protocol definitions**: `protocol/`, `app-server-protocol/`, `mcp-types/` define wire formats
 - **Sandboxing**: `linux-sandbox/`, `execpolicy/` provide command execution security
@@ -21,7 +21,7 @@ Most shared crates still follow the inherited `codex-` prefix convention (for ex
 
 ### Core Implementation
 
-The TUI drives user interaction through a Ratatui-based interface. When using ACP mode (the primary mode for Nori), user prompts flow through `nori-acp` which communicates with ACP agents over JSON-RPC 2.0 -- either via stdin/stdout of a local subprocess or via WebSocket for remote cloud agents. Configuration is loaded from `~/.nori/cli/config.toml` when the `nori-config` feature is enabled.
+The TUI drives user interaction through a Ratatui-based interface. When using ACP mode (the primary mode for Nori), user prompts flow through `nori-acp` which communicates with ACP agents over JSON-RPC 2.0 via stdin/stdout of a local subprocess. Cloud sessions (`nori cloud`) use the same path: the CLI pins the agent to an external `nori-handroll cloud-acp` child, and all broker/auth/transport concerns live in that binary (nori-sessions repo). Configuration is loaded from `~/.nori/cli/config.toml` when the `nori-config` feature is enabled.
 
 Architecture:
 - nori-tui (TUI) -> Terminal User Interface
