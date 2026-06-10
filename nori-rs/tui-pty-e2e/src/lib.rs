@@ -239,6 +239,11 @@ impl TuiSession {
             cmd.cwd(cwd);
         }
 
+        // Run a subcommand (e.g. `nori cloud`) if requested
+        if let Some(subcommand) = &config.subcommand {
+            cmd.arg(subcommand);
+        }
+
         // Use mock-acp-agent agent
         cmd.arg("--agent");
         cmd.arg(&config.model);
@@ -674,6 +679,8 @@ fn find_acp_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> 
 /// Configuration for spawning a test session
 pub struct SessionConfig {
     pub model: String,
+    /// Subcommand to run before the flags (e.g. "cloud" for `nori cloud`).
+    pub subcommand: Option<String>,
     pub mock_agent_env: HashMap<String, String>,
     pub no_color: bool,
     /// Skip the trust directory prompt (passes --skip-trust-directory flag).
@@ -712,6 +719,7 @@ impl SessionConfig {
     pub fn new() -> Self {
         Self {
             model: "mock-model".to_string(),
+            subcommand: None,
             mock_agent_env: HashMap::new(),
             no_color: true,
             skip_trust_directory: true, // Skip trust prompt by default for E2E tests
@@ -734,6 +742,12 @@ impl SessionConfig {
 
     pub fn with_model(mut self, model: String) -> Self {
         self.model = model;
+        self
+    }
+
+    /// Run `nori <subcommand>` instead of plain `nori` (e.g. "cloud").
+    pub fn with_subcommand(mut self, subcommand: impl Into<String>) -> Self {
+        self.subcommand = Some(subcommand.into());
         self
     }
 

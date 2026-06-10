@@ -34,15 +34,10 @@ codex-utils-string = { workspace = true }
 futures = { workspace = true }
 nori-protocol = { workspace = true }
 oauth2 = "5"
-reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tiny_http = { workspace = true }
-url = { workspace = true }
-webbrowser = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tokio-tungstenite = { workspace = true }
 tokio-util = { workspace = true, features = ["compat"] }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
@@ -53,7 +48,6 @@ dirs = { workspace = true }
 diffy = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-sha2 = { workspace = true }
 which = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

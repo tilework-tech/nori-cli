@@ -96,6 +96,10 @@ impl AcpBackend {
                                     ));
                                 }
                                 Some(crate::connection::ConnectionEvent::ApprovalRequest(_)) => {}
+                                // A child death mid-load is reported by the
+                                // main relay once it takes over this receiver;
+                                // the collector only buffers replay updates.
+                                Some(crate::connection::ConnectionEvent::ChildExited { .. }) => {}
                                 None => break,
                             }
                         }
@@ -368,7 +372,6 @@ impl AcpBackend {
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
-            is_cloud: config.cloud_connection.is_some(),
             is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),

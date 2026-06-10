@@ -1,8 +1,7 @@
 //! ACP Connection management
 //!
 //! Provides `SacpConnection` for communicating with ACP agents using the
-//! SACP v11 protocol, either over stdin/stdout (local subprocess via `spawn()`)
-//! or over WebSocket (remote agent via `connect_remote()`).
+//! SACP v11 protocol over stdin/stdout (local subprocess via `spawn()`).
 
 use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
 use codex_protocol::approvals::ExecApprovalRequestEvent;
@@ -10,10 +9,10 @@ use codex_protocol::protocol::ReviewDecision;
 use sacp::schema as acp;
 use tokio::sync::oneshot;
 
+mod child_lifecycle;
 pub mod mcp;
 pub mod sacp_connection;
 mod wire_log;
-pub(crate) mod ws_transport;
 
 #[cfg(test)]
 mod sacp_connection_tests;
@@ -23,6 +22,13 @@ mod sacp_connection_tests;
 pub enum ConnectionEvent {
     SessionUpdate(acp::SessionUpdate),
     ApprovalRequest(ApprovalRequest),
+    /// The agent subprocess exited on its own. `status` is the exit code
+    /// (`None` when killed by a signal); `stderr_tail` carries the child's
+    /// most recent stderr output for error reporting.
+    ChildExited {
+        status: Option<i32>,
+        stderr_tail: String,
+    },
 }
 
 pub(crate) fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {

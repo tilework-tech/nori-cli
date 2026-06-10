@@ -9,8 +9,6 @@ use serde_json::Value;
 use serial_test::serial;
 use tempfile::tempdir;
 
-use crate::test_support::start_mock_acp_ws_server;
-
 /// Helper: get the mock agent config and skip if binary is not built.
 fn mock_agent_config() -> Option<crate::registry::AcpAgentConfig> {
     let config = crate::registry::get_agent_config("mock-model").ok()?;
@@ -971,77 +969,231 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
     assert_eq!(stop_reason_2, acp::StopReason::EndTurn);
 }
 
-// --- WebSocket / connect_remote tests ---
+// ============================================================================
+// Child lifecycle: graceful teardown, exit detection, stderr surfacing
+// ============================================================================
 
-/// Test that connect_remote establishes a working SACP connection over WebSocket.
-/// The mock WS server responds to initialize and session/new requests.
-#[tokio::test]
-async fn test_connect_remote_establishes_connection() {
-    let server = start_mock_acp_ws_server(false).await;
-    let temp_dir = tempdir().expect("temp dir");
-    let ws_url = format!("ws://127.0.0.1:{}", server.port);
-
-    let conn = SacpConnection::connect_remote(&ws_url, "test-token", temp_dir.path())
-        .await
-        .expect("connect_remote should succeed");
-
-    let caps = conn.capabilities();
-    assert!(
-        !caps.prompt_capabilities.image,
-        "Mock WS agent sends empty capabilities, so image support should be false"
-    );
+/// Write an executable shell script into `dir` and return an agent config
+/// that spawns it.
+fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::AcpAgentConfig {
+    let script = dir.join("script-agent.sh");
+    std::fs::write(&script, body).expect("write script agent");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod script agent");
+    }
+    crate::registry::AcpAgentConfig {
+        agent: crate::registry::AgentKind::ClaudeCode, // placeholder, like custom agents
+        provider_slug: "script-agent".to_string(),
+        command: script.to_string_lossy().to_string(),
+        args: vec![],
+        env: std::collections::HashMap::new(),
+        provider_info: crate::registry::AcpProviderInfo::default(),
+        auth_hint: "run: script-agent login".to_string(),
+        display_name: "Script Agent".to_string(),
+        install_hint: "none".to_string(),
+    }
 }
 
-/// Test that connect_remote can create a session after establishing a connection.
+/// Shutdown must close the child's stdin and wait for it to exit on its own —
+/// not SIGKILL the process group. The script writes a marker after the mock
+/// agent exits (which it does on stdin EOF); a killed group never writes it.
 #[tokio::test]
-async fn test_connect_remote_create_session() {
-    let server = start_mock_acp_ws_server(false).await;
+async fn test_shutdown_closes_stdin_and_waits_for_child_exit() {
+    let Some(mock) = mock_agent_config() else {
+        return;
+    };
     let temp_dir = tempdir().expect("temp dir");
-    let ws_url = format!("ws://127.0.0.1:{}", server.port);
-
-    let conn = SacpConnection::connect_remote(&ws_url, "test-token", temp_dir.path())
-        .await
-        .expect("connect_remote should succeed");
-
-    let session_id = conn
-        .create_session(temp_dir.path(), vec![])
-        .await
-        .expect("create_session should succeed over WebSocket");
-
-    assert_eq!(session_id.to_string(), "test-session-1");
-}
-
-/// Test that connect_remote fails with a clear error when the URL is unreachable.
-#[tokio::test]
-async fn test_connect_remote_fails_on_unreachable_url() {
-    let temp_dir = tempdir().expect("temp dir");
-
-    let result =
-        SacpConnection::connect_remote("ws://127.0.0.1:1", "test-token", temp_dir.path()).await;
-
-    assert!(
-        result.is_err(),
-        "connect_remote should fail for unreachable URL"
+    let marker = temp_dir.path().join("released");
+    let config = script_agent_config(
+        temp_dir.path(),
+        &format!(
+            "#!/bin/sh\n'{mock}'\necho done > '{marker}'\n",
+            mock = mock.command,
+            marker = marker.display(),
+        ),
     );
-    let err_msg = format!("{:#}", result.err().expect("already checked is_err"));
-    assert!(
-        err_msg.contains("WebSocket")
-            || err_msg.contains("connect")
-            || err_msg.contains("Connection refused"),
-        "Error should mention connection failure, got: {err_msg}"
-    );
-}
 
-/// Test that shutdown on a remote connection doesn't panic (no child process).
-#[tokio::test]
-async fn test_connect_remote_shutdown_no_panic() {
-    let server = start_mock_acp_ws_server(false).await;
-    let temp_dir = tempdir().expect("temp dir");
-    let ws_url = format!("ws://127.0.0.1:{}", server.port);
-
-    let conn = SacpConnection::connect_remote(&ws_url, "test-token", temp_dir.path())
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn script agent");
+    conn.create_session(temp_dir.path(), vec![])
         .await
-        .expect("connect_remote should succeed");
+        .expect("create session");
 
     conn.shutdown().await;
+
+    // shutdown waited for the child, so the post-EOF marker must exist
+    // (allow a brief fs delay).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while !marker.exists() && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(
+        marker.exists(),
+        "child must get stdin EOF and finish its cleanup before being reaped; \
+         a missing marker means shutdown killed the process group immediately"
+    );
+}
+
+/// A child that ignores stdin EOF is killed after the grace period — shutdown
+/// must wait out the full grace first (not kill instantly), must not hang
+/// forever, and the child must actually die.
+#[tokio::test]
+#[cfg(target_os = "linux")]
+async fn test_shutdown_kills_child_that_outlives_grace() {
+    let Some(mock) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+    let pidfile = temp_dir.path().join("pid");
+    let config = script_agent_config(
+        temp_dir.path(),
+        &format!(
+            "#!/bin/sh\necho $$ > '{pidfile}'\n'{mock}'\nsleep 600\n",
+            mock = mock.command,
+            pidfile = pidfile.display(),
+        ),
+    );
+
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn script agent");
+    conn.create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    let start = std::time::Instant::now();
+    conn.shutdown_with_grace(std::time::Duration::from_millis(300))
+        .await;
+    assert!(
+        start.elapsed() >= std::time::Duration::from_millis(300),
+        "shutdown must give the child the full grace period before killing, took {:?}",
+        start.elapsed()
+    );
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(5),
+        "shutdown must not wait for a hung child beyond the grace period"
+    );
+
+    let pid: i32 = std::fs::read_to_string(&pidfile)
+        .expect("script should have written its pid")
+        .trim()
+        .parse()
+        .expect("pid parses");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let proc_path = format!("/proc/{pid}");
+    while std::path::Path::new(&proc_path).exists() && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(
+        !std::path::Path::new(&proc_path).exists(),
+        "the hung child (pid {pid}) must be killed after the grace period"
+    );
+}
+
+/// An unexpected child death must surface through the connection event
+/// stream with the child's recent stderr — not leave the session silently
+/// hung.
+#[tokio::test]
+async fn test_child_exit_emits_event_with_stderr_tail() {
+    let Some(mock) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+    let trigger = temp_dir.path().join("die");
+    let config = script_agent_config(
+        temp_dir.path(),
+        &format!(
+            "#!/bin/sh\n\
+             ( while [ ! -f '{trigger}' ]; do sleep 0.1; done; \
+               echo 'simulated crash' >&2; kill -9 $$ ) &\n\
+             exec '{mock}'\n",
+            trigger = trigger.display(),
+            mock = mock.command,
+        ),
+    );
+
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn script agent");
+    conn.create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+    std::fs::write(&trigger, "now").expect("write crash trigger");
+
+    let mut event_rx = conn.take_event_receiver();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let exited = loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        let event = tokio::time::timeout(remaining, event_rx.recv())
+            .await
+            .expect("child exit should surface as an event before the timeout")
+            .expect("event channel closed without reporting the child exit");
+        match event {
+            ConnectionEvent::ChildExited {
+                status,
+                stderr_tail,
+            } => {
+                break (status, stderr_tail);
+            }
+            ConnectionEvent::SessionUpdate(_) | ConnectionEvent::ApprovalRequest(_) => {}
+        }
+    };
+
+    let (status, stderr_tail) = exited;
+    assert_eq!(status, None, "a SIGKILLed child has no exit code");
+    assert!(
+        stderr_tail.contains("simulated crash"),
+        "the event must carry the child's recent stderr, got: {stderr_tail:?}"
+    );
+}
+
+/// When the child exits during spawn/initialize (e.g. unauthenticated), the
+/// spawn error must include the child's stderr so the real cause is visible
+/// and categorizable.
+#[tokio::test]
+async fn test_spawn_failure_surfaces_child_stderr() {
+    let temp_dir = tempdir().expect("temp dir");
+    let config = script_agent_config(
+        temp_dir.path(),
+        "#!/bin/sh\necho 'Error: not authenticated - run: nori-handroll login' >&2\nexit 1\n",
+    );
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        SacpConnection::spawn(
+            &config,
+            temp_dir.path(),
+            crate::config::AcpProxyConfig::disabled(),
+        ),
+    )
+    .await
+    .expect("spawn must fail fast when the child exits immediately, not hang");
+
+    let err = result.err().expect("spawn should fail for a dead child");
+    let err_text = format!("{err:?}");
+    assert!(
+        err_text.contains("not authenticated"),
+        "spawn error must include the child's stderr, got: {err_text}"
+    );
+    assert_eq!(
+        crate::backend::categorize_acp_error(&err_text),
+        crate::backend::AcpErrorCategory::Authentication,
+        "the surfaced stderr must drive categorization (auth, not init failure)"
+    );
 }
