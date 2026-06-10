@@ -360,7 +360,6 @@ pub struct AcpBackend {
     mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credential store mode used when forwarding MCP auth to ACP agents.
     mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
-    /// Whether this backend is connected to a cloud session (affects disconnect behavior)
     /// Set to true when Op::Shutdown is initiated, to avoid spurious disconnect errors
     is_shutting_down: Arc<AtomicBool>,
     /// Abort handle for the in-flight prompt task (if any)

@@ -96,6 +96,9 @@ impl AcpBackend {
                                     ));
                                 }
                                 Some(crate::connection::ConnectionEvent::ApprovalRequest(_)) => {}
+                                // A child death mid-load is reported by the
+                                // main relay once it takes over this receiver;
+                                // the collector only buffers replay updates.
                                 Some(crate::connection::ConnectionEvent::ChildExited { .. }) => {}
                                 None => break,
                             }

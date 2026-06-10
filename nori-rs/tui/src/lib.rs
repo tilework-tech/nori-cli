@@ -226,6 +226,14 @@ pub async fn run_main(
         .as_ref()
         .map(|config| config.agents.clone())
         .unwrap_or_default();
+    // Caller-injected entries win slug collisions (a user-defined agent with
+    // the same slug would otherwise fail registry init with a duplicate-slug
+    // error and break cloud mode with a confusing "unknown agent").
+    registry_agents.retain(|agent| {
+        !cli.extra_agents
+            .iter()
+            .any(|extra| extra.slug == agent.slug)
+    });
     registry_agents.extend(cli.extra_agents.clone());
     if let Err(e) = nori_acp::initialize_registry(registry_agents) {
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");

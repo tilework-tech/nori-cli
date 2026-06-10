@@ -39,13 +39,29 @@ pub fn resolve_handroll_bin(
         .iter()
         .flat_map(std::env::split_paths)
         .map(|dir| dir.join("nori-handroll"))
-        .find(|candidate| candidate.is_file());
+        .find(|candidate| is_executable_file(candidate));
     found.ok_or_else(|| {
         anyhow::anyhow!(
             "nori cloud requires nori-handroll, which was not found on your PATH \u{2014} \
              install Nori Sessions to get it"
         )
     })
+}
+
+/// Whether `path` is a file the current user could execute (matches `which`
+/// semantics on Unix; plain existence elsewhere).
+fn is_executable_file(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
+    }
 }
 
 /// Build the `[[agents]]`-equivalent registry entry for the cloud agent:

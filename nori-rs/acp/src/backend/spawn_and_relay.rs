@@ -384,6 +384,10 @@ impl AcpBackend {
                                             ))
                                             .await;
                                     }
+                                    // This drain only runs during teardown
+                                    // (prompt channel closed); the exit was
+                                    // either user-initiated or already
+                                    // reported by the main relay arm.
                                     crate::connection::ConnectionEvent::ChildExited { .. } => {}
                                     crate::connection::ConnectionEvent::ApprovalRequest(request) => {
                                         relay_seq += 1;
