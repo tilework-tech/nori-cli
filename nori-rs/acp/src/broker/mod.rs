@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -163,6 +164,20 @@ impl BrokerClient {
     }
 
     pub async fn authenticate(&mut self) -> Result<()> {
+        let mut stderr = std::io::stderr();
+        self.authenticate_with(&mut stderr, |auth_url| webbrowser::open(auth_url).is_ok())
+            .await
+    }
+
+    async fn authenticate_with<W, OpenBrowser>(
+        &mut self,
+        output: &mut W,
+        open_browser: OpenBrowser,
+    ) -> Result<()>
+    where
+        W: Write,
+        OpenBrowser: FnOnce(&str) -> bool,
+    {
         let server = Arc::new(
             tiny_http::Server::http("127.0.0.1:0")
                 .map_err(|e| anyhow::anyhow!("failed to bind local server: {e}"))?,
@@ -175,8 +190,12 @@ impl BrokerClient {
 
         let auth_url = build_cli_auth_url(&self.broker_url, port);
 
-        if webbrowser::open(&auth_url).is_err() {
-            eprintln!("Could not open browser. Please visit:\n{auth_url}");
+        writeln!(output, "Opening browser for authentication:\n{auth_url}")?;
+        if !open_browser(&auth_url) {
+            writeln!(
+                output,
+                "Could not open browser automatically. Please visit the URL above."
+            )?;
         }
 
         let (tx, rx) = tokio::sync::oneshot::channel::<String>();
