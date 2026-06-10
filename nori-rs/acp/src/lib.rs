@@ -8,15 +8,12 @@
 
 pub mod auto_worktree;
 pub mod backend;
-pub mod broker;
 pub mod config;
 pub mod connection;
 pub mod hooks;
 pub mod message_history;
 pub mod registry;
 pub mod session_parser;
-#[cfg(test)]
-mod test_support;
 pub mod tracing_setup;
 pub mod transcript;
 pub mod transcript_discovery;

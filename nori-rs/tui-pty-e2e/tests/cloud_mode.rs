@@ -132,7 +132,7 @@ fn transcripts_exist(nori_home: &Path) -> bool {
         .flatten()
         .filter_map(|p| std::fs::read_dir(p.path().join("sessions")).ok())
         .flat_map(|sessions| sessions.flatten())
-        .any(|f| f.path().extension().is_some_and(|e| e == "md"))
+        .any(|f| f.path().extension().is_some_and(|e| e == "jsonl"))
 }
 
 /// `nori cloud` spawns the handroll binary with the `cloud-acp` argument and
@@ -261,12 +261,8 @@ fn test_cloud_mode_writes_local_transcript() {
         .wait_for_text("transcribed response", TIMEOUT)
         .expect("should receive response");
 
-    session.send_str("/exit").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(Duration::from_secs(1));
-    drop(session);
-
+    // Assert while the session (and its temp NORI_HOME) is still alive:
+    // the transcript .jsonl is written during the session, not at exit.
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut found = transcripts_exist(&nori_home);
     while !found && Instant::now() < deadline {
@@ -284,10 +280,10 @@ fn test_cloud_mode_writes_local_transcript() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_cloud_mode_requires_handroll_binary() {
-    let mut config = SessionConfig::new()
-        .with_subcommand("cloud")
-        .with_agent_env("NORI_HANDROLL_BIN", "/nonexistent/nori-handroll");
-    // Also keep any real installation out of PATH so the failure is deterministic.
+    // No NORI_HANDROLL_BIN override and no nori-handroll on PATH: the
+    // install hint must appear. (A dangling override is a different error,
+    // covered by the cli unit tests.)
+    let mut config = SessionConfig::new().with_subcommand("cloud");
     config.exclude_binaries.push("nori-handroll".to_string());
 
     let mut session =

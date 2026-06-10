@@ -16,7 +16,6 @@ impl ChatWidget {
             footer_layout_config,
             expected_agent,
             deferred_spawn,
-            cloud_connection,
             fork_context,
         } = common;
         let mut rng = rand::rng();
@@ -30,12 +29,7 @@ impl ChatWidget {
                 acp_handle: None,
             }
         } else {
-            spawn_agent(
-                config.clone(),
-                app_event_tx.clone(),
-                fork_context,
-                cloud_connection,
-            )
+            spawn_agent(config.clone(), app_event_tx.clone(), fork_context)
         };
 
         let first_prompt_text = initial_prompt.clone();
@@ -153,7 +147,6 @@ impl ChatWidget {
             footer_layout_config,
             expected_agent,
             deferred_spawn: _,
-            cloud_connection: _,
             fork_context: _,
         } = common;
         let mut rng = rand::rng();
@@ -278,13 +271,8 @@ impl ChatWidget {
     ///
     /// This should be called after pre-session setup (e.g., skillset switch)
     /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
-    pub(crate) fn spawn_deferred_agent(
-        &mut self,
-        config: Config,
-        app_event_tx: AppEventSender,
-        cloud_connection: Option<nori_acp::broker::CloudConnectionInfo>,
-    ) {
-        let spawn_result = spawn_agent(config, app_event_tx, None, cloud_connection);
+    pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
+        let spawn_result = spawn_agent(config, app_event_tx, None);
         self.codex_op_tx = spawn_result.op_tx;
         self.acp_handle = spawn_result.acp_handle;
     }

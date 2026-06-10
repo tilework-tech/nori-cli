@@ -220,10 +220,14 @@ pub async fn run_main(
     #[cfg(not(feature = "nori-config"))]
     let nori_config: Option<nori_acp::NoriConfig> = None;
 
-    // Initialize the agent registry with custom agents from config
-    if let Some(ref config) = nori_config
-        && let Err(e) = nori_acp::initialize_registry(config.agents.clone())
-    {
+    // Initialize the agent registry with custom agents from config plus any
+    // caller-injected entries (e.g. `nori cloud`'s pinned handroll agent).
+    let mut registry_agents = nori_config
+        .as_ref()
+        .map(|config| config.agents.clone())
+        .unwrap_or_default();
+    registry_agents.extend(cli.extra_agents.clone());
+    if let Err(e) = nori_acp::initialize_registry(registry_agents) {
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
     }
 
@@ -608,12 +612,7 @@ async fn run_ratatui_app(
         config.model = agent.clone();
     }
 
-    let Cli {
-        prompt,
-        images,
-        cloud_connection,
-        ..
-    } = cli;
+    let Cli { prompt, images, .. } = cli;
 
     let app_result = App::run(
         &mut tui,
@@ -624,7 +623,6 @@ async fn run_ratatui_app(
         images,
         resume_selection,
         vertical_footer,
-        cloud_connection,
     )
     .await;
 

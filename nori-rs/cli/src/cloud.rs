@@ -24,16 +24,53 @@ pub fn resolve_handroll_bin(
     env_override: Option<std::ffi::OsString>,
     path_var: Option<std::ffi::OsString>,
 ) -> anyhow::Result<PathBuf> {
-    let _ = (env_override, path_var);
-    todo!("implemented in the GREEN phase")
+    if let Some(override_path) = env_override {
+        let override_path = PathBuf::from(override_path);
+        if override_path.is_file() {
+            return Ok(override_path);
+        }
+        anyhow::bail!(
+            "NORI_HANDROLL_BIN points at {} but no such file exists",
+            override_path.display()
+        );
+    }
+
+    let found = path_var
+        .iter()
+        .flat_map(std::env::split_paths)
+        .map(|dir| dir.join("nori-handroll"))
+        .find(|candidate| candidate.is_file());
+    found.ok_or_else(|| {
+        anyhow::anyhow!(
+            "nori cloud requires nori-handroll, which was not found on your PATH \u{2014} \
+             install Nori Sessions to get it"
+        )
+    })
 }
 
 /// Build the `[[agents]]`-equivalent registry entry for the cloud agent:
 /// the resolved handroll binary running `cloud-acp`, with the CLI's
 /// configured broker URL (if any) translated to `NORI_BROKER_URL`.
 pub fn cloud_agent_config(handroll_bin: &Path, broker_url: Option<&str>) -> AgentConfigToml {
-    let _ = (handroll_bin, broker_url);
-    todo!("implemented in the GREEN phase")
+    let mut env = std::collections::HashMap::new();
+    if let Some(url) = broker_url {
+        env.insert("NORI_BROKER_URL".to_string(), url.to_string());
+    }
+    AgentConfigToml {
+        name: "Nori Cloud".to_string(),
+        slug: CLOUD_AGENT_SLUG.to_string(),
+        distribution: nori_acp::config::AgentDistributionToml {
+            local: Some(nori_acp::config::LocalDistribution {
+                command: handroll_bin.to_string_lossy().into_owned(),
+                args: vec!["cloud-acp".to_string()],
+                env,
+            }),
+            ..Default::default()
+        },
+        context_window_size: None,
+        auth_hint: Some("run: nori-handroll login".to_string()),
+        transcript_base_dir: None,
+    }
 }
 
 #[cfg(test)]
@@ -92,8 +129,8 @@ mod tests {
         let path_dir = tempfile::tempdir().expect("tempdir");
         let bin = executable_in(path_dir.path(), "nori-handroll");
 
-        let path_var = std::env::join_paths([other_dir.path(), path_dir.path()])
-            .expect("join paths");
+        let path_var =
+            std::env::join_paths([other_dir.path(), path_dir.path()]).expect("join paths");
         let resolved =
             resolve_handroll_bin(None, Some(path_var)).expect("PATH lookup should resolve");
 

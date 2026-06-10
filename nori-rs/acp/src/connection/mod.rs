@@ -1,8 +1,7 @@
 //! ACP Connection management
 //!
 //! Provides `SacpConnection` for communicating with ACP agents using the
-//! SACP v11 protocol, either over stdin/stdout (local subprocess via `spawn()`)
-//! or over WebSocket (remote agent via `connect_remote()`).
+//! SACP v11 protocol over stdin/stdout (local subprocess via `spawn()`).
 
 use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
 use codex_protocol::approvals::ExecApprovalRequestEvent;
@@ -13,7 +12,6 @@ use tokio::sync::oneshot;
 pub mod mcp;
 pub mod sacp_connection;
 mod wire_log;
-pub(crate) mod ws_transport;
 
 #[cfg(test)]
 mod sacp_connection_tests;

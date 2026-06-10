@@ -20,7 +20,6 @@ use sacp::Agent;
 use sacp::Client;
 use sacp::ConnectionTo;
 use sacp::Lines;
-use tokio::process::Child;
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -37,7 +36,6 @@ use super::ApprovalRequest;
 use super::ConnectionEvent;
 use super::wire_log::WireDirection;
 use super::wire_log::WireLogger;
-use super::ws_transport;
 use crate::config::AcpProxyConfig;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
@@ -53,6 +51,17 @@ const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1
 /// `nori-handroll cloud-acp` releasing its broker session) can finish;
 /// well-behaved agents exit in milliseconds.
 const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(25);
+
+/// How many recent child stderr lines are kept for error reporting.
+const STDERR_TAIL_LINES: usize = 20;
+
+/// Snapshot the bounded stderr tail as one newline-joined string.
+fn collect_stderr_tail(tail: &std::sync::Mutex<std::collections::VecDeque<String>>) -> String {
+    match tail.lock() {
+        Ok(tail) => tail.iter().cloned().collect::<Vec<_>>().join("\n"),
+        Err(_) => String::new(),
+    }
+}
 
 #[derive(Debug, Default)]
 struct SessionPromptState {
@@ -94,23 +103,56 @@ pub struct SacpConnection {
     /// Handle to the background task driving the SACP connection.
     connection_task: tokio::task::JoinHandle<()>,
 
-    /// Handle to the child process for cleanup (None for remote connections).
-    child: Option<std::sync::Arc<Mutex<Child>>>,
+    /// Handles to the child process for teardown (None for remote connections).
+    child: Option<ChildHandle>,
 
     /// Handle to the stderr logging task (None for remote connections).
     stderr_task: Option<tokio::task::JoinHandle<()>>,
 }
 
+/// Teardown handles for a locally spawned agent.
+///
+/// The `Child` itself is owned by the exit-watcher task (which `wait()`s and
+/// reaps it); teardown observes the exit via `exit_rx` and requests a kill
+/// via `kill`, instead of sharing the `Child`.
+struct ChildHandle {
+    /// OS pid of the direct child, used to signal its process group on Unix.
+    pid: u32,
+    /// Becomes `Some(status)` once the child has exited and been reaped.
+    exit_rx: tokio::sync::watch::Receiver<Option<std::process::ExitStatus>>,
+    /// Tells the watcher task to kill the child now.
+    kill: std::sync::Arc<tokio::sync::Notify>,
+}
+
+impl ChildHandle {
+    /// Kill the child (and, on Unix, its whole process group) without
+    /// waiting. Safe to call repeatedly or after the child already exited.
+    fn request_kill(&self) {
+        // Only signal the group while the child is unreaped; after reaping
+        // the pid may be reused by an unrelated process.
+        if self.exit_rx.borrow().is_none() {
+            #[cfg(unix)]
+            if let Err(e) = kill_process_group(self.pid) {
+                debug!("Failed to kill agent process group: {e}");
+            }
+            self.kill.notify_one();
+        }
+    }
+}
+
 /// Shared SACP connection setup: registers notification/request handlers,
 /// performs the initialization handshake, and returns a `SacpConnection` with
 /// no process handles (`child`/`stderr_task` are `None`). `spawn()` fills in the
-/// subprocess handles afterward; `connect_remote()` uses the result as-is.
+/// subprocess handles afterward.
+///
+/// The caller supplies the connection event channel so it can hold extra
+/// senders (e.g. the child exit watcher reports through the same stream).
 async fn establish_connection(
     transport: impl sacp::ConnectTo<Client> + 'static,
     cwd: &Path,
+    event_tx: mpsc::Sender<ConnectionEvent>,
+    event_rx: mpsc::Receiver<ConnectionEvent>,
 ) -> Result<SacpConnection> {
-    let (event_tx, event_rx) = mpsc::channel::<ConnectionEvent>(1024);
-
     let event_tx_for_notifications = event_tx.clone();
     let event_tx_for_write = event_tx.clone();
     let event_tx_for_read = event_tx.clone();
@@ -490,30 +532,76 @@ impl SacpConnection {
         let stdout = child.stdout.take().context("Failed to take stdout")?;
         let stdin = child.stdin.take().context("Failed to take stdin")?;
         let stderr = child.stderr.take().context("Failed to take stderr")?;
+        let pid = child.id().context("Failed to get ACP agent pid")?;
 
-        debug!("ACP agent spawned (pid: {:?})", child.id());
+        debug!("ACP agent spawned (pid: Some({pid}))");
 
         let wire_logger = if proxy_config.enabled {
-            let pid = child.id().unwrap_or(0);
             Some(WireLogger::new(&proxy_config, config, pid)?)
         } else {
             None
         };
 
-        // Log stderr in background.
-        let stderr_task = tokio::spawn(async move {
-            let mut stderr = BufReader::new(stderr.compat());
-            let mut line = String::new();
-            while let Ok(n) = stderr.read_line(&mut line).await {
-                if n == 0 {
-                    break;
+        // Log stderr in the background, keeping a bounded tail so child
+        // failures can surface the real cause (e.g. an auth hint) to the user
+        // instead of only to the log file.
+        let stderr_tail = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::<
+            String,
+        >::new()));
+        let stderr_task = tokio::spawn({
+            let stderr_tail = std::sync::Arc::clone(&stderr_tail);
+            async move {
+                let mut stderr = BufReader::new(stderr.compat());
+                let mut line = String::new();
+                while let Ok(n) = stderr.read_line(&mut line).await {
+                    if n == 0 {
+                        break;
+                    }
+                    let trimmed = line.trim();
+                    warn!("ACP agent stderr: {trimmed}");
+                    if let Ok(mut tail) = stderr_tail.lock() {
+                        if tail.len() >= STDERR_TAIL_LINES {
+                            tail.pop_front();
+                        }
+                        tail.push_back(trimmed.to_string());
+                    }
+                    line.clear();
                 }
-                warn!("ACP agent stderr: {}", line.trim());
-                line.clear();
             }
         });
 
-        let child = std::sync::Arc::new(Mutex::new(child));
+        // The exit watcher owns the `Child`: it reaps the process, publishes
+        // the exit status, and reports unexpected deaths into the ordered
+        // event stream. Without it, a dead child is a silent EOF that the
+        // ACP layer treats as non-terminal — pending requests hang forever.
+        let (event_tx, event_rx) = mpsc::channel::<ConnectionEvent>(1024);
+        let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
+        let kill_notify = std::sync::Arc::new(tokio::sync::Notify::new());
+        tokio::spawn({
+            let event_tx = event_tx.clone();
+            let stderr_tail = std::sync::Arc::clone(&stderr_tail);
+            let kill_notify = std::sync::Arc::clone(&kill_notify);
+            async move {
+                let status = tokio::select! {
+                    status = child.wait() => status.ok(),
+                    _ = kill_notify.notified() => {
+                        let _ = child.start_kill();
+                        child.wait().await.ok()
+                    }
+                };
+                debug!("ACP agent exited: {status:?}");
+                let _ = exit_tx.send(status);
+                // Give the stderr reader a moment to drain the pipe before
+                // snapshotting the tail.
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                let _ = event_tx
+                    .send(ConnectionEvent::ChildExited {
+                        status: status.and_then(|s| s.code()),
+                        stderr_tail: collect_stderr_tail(&stderr_tail),
+                    })
+                    .await;
+            }
+        });
 
         let outgoing_logger = wire_logger.clone();
         let outgoing_sink = futures::sink::unfold(
@@ -545,22 +633,46 @@ impl SacpConnection {
         ));
         let transport = Lines::new(outgoing_sink, incoming_lines);
 
-        let mut connection = establish_connection(transport, cwd).await?;
-        connection.child = Some(child);
+        // Race initialization against the child dying: an agent that exits
+        // immediately (e.g. unauthenticated) must fail spawn fast, with its
+        // stderr as the cause — not hang the handshake forever.
+        let mut exit_watch = exit_rx.clone();
+        // The watch Ref returned by wait_for is !Send; discard it inside the
+        // branch future so the whole select stays Send.
+        let child_died = async move {
+            let _ = exit_watch.wait_for(std::option::Option::is_some).await;
+        };
+        let init = establish_connection(transport, cwd, event_tx, event_rx);
+        let mut connection = tokio::select! {
+            result = init => result?,
+            () = child_died => {
+                // Let the stderr reader drain the pipe first.
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                let status = exit_rx.borrow().as_ref().and_then(std::process::ExitStatus::code);
+                let tail = collect_stderr_tail(&stderr_tail);
+                stderr_task.abort();
+                let status_desc = match status {
+                    Some(code) => format!("exit code {code}"),
+                    None => "killed by signal".to_string(),
+                };
+                let cause = if tail.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {tail}")
+                };
+                anyhow::bail!(
+                    "ACP agent {} exited during startup ({status_desc}){cause}",
+                    config.command
+                );
+            }
+        };
+        connection.child = Some(ChildHandle {
+            pid,
+            exit_rx,
+            kill: kill_notify,
+        });
         connection.stderr_task = Some(stderr_task);
         Ok(connection)
-    }
-
-    /// Connect to a remote ACP agent over WebSocket.
-    pub async fn connect_remote(ws_url: &str, auth_token: &str, cwd: &Path) -> Result<Self> {
-        debug!("Connecting to remote ACP agent at {ws_url}");
-
-        let (sink, stream) = ws_transport::connect_ws(ws_url, auth_token)
-            .await
-            .with_context(|| format!("Failed to connect to remote ACP agent at {ws_url}"))?;
-
-        let transport = Lines::new(sink, stream);
-        establish_connection(transport, cwd).await
     }
 
     /// Create a new session with the agent.
@@ -805,27 +917,30 @@ impl SacpConnection {
     /// `grace` to exit on its own (agents like `nori-handroll cloud-acp` run
     /// their release path on stdin EOF), then kill whatever is left.
     pub async fn shutdown_with_grace(&self, grace: std::time::Duration) {
-        let _ = grace;
-        self.shutdown_legacy().await;
-    }
-
-    async fn shutdown_legacy(&self) {
+        // Aborting the connection task drops the transport and with it the
+        // child's stdin writer — the EOF is the agent's shutdown signal.
         self.connection_task.abort();
-        if let Some(ref stderr_task) = self.stderr_task {
-            stderr_task.abort();
-        }
 
         if let Some(ref child) = self.child {
-            let mut child = child.lock().await;
-
-            #[cfg(unix)]
-            if let Err(e) = kill_child_process_group(&mut child) {
-                debug!("Failed to kill process group during shutdown: {e}");
+            let mut exit_rx = child.exit_rx.clone();
+            let exited_in_time =
+                tokio::time::timeout(grace, exit_rx.wait_for(std::option::Option::is_some))
+                    .await
+                    .is_ok();
+            if !exited_in_time {
+                debug!("ACP agent did not exit within {grace:?} of stdin EOF; killing");
+                child.request_kill();
+                // Wait for the watcher to reap so no zombie outlives shutdown.
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(2),
+                    exit_rx.wait_for(std::option::Option::is_some),
+                )
+                .await;
             }
+        }
 
-            if let Err(e) = child.kill().await {
-                debug!("Failed to kill ACP agent child process during shutdown: {e}");
-            }
+        if let Some(ref stderr_task) = self.stderr_task {
+            stderr_task.abort();
         }
     }
 
@@ -864,45 +979,34 @@ impl Drop for SacpConnection {
             stderr_task.abort();
         }
 
+        // Backstop for paths that never ran `shutdown()`: kill outright.
         if let Some(ref child) = self.child {
-            let child = std::sync::Arc::clone(child);
-            if let Ok(mut child) = child.try_lock() {
-                #[cfg(unix)]
-                if let Err(e) = kill_child_process_group(&mut child) {
-                    debug!("Failed to kill process group: {e}");
-                }
-
-                if let Err(e) = child.start_kill() {
-                    debug!("Failed to kill ACP agent child process: {e}");
-                }
-            }
+            child.request_kill();
         }
     }
 }
 
 /// Kill the entire process group to ensure grandchildren are terminated.
 #[cfg(unix)]
-fn kill_child_process_group(child: &mut Child) -> std::io::Result<()> {
+fn kill_process_group(pid: u32) -> std::io::Result<()> {
     use std::io::ErrorKind;
 
-    if let Some(pid) = child.id() {
-        let pid = pid as libc::pid_t;
+    let pid = pid as libc::pid_t;
 
-        let pgid = unsafe { libc::getpgid(pid) };
-        if pgid == -1 {
-            let err = std::io::Error::last_os_error();
-            if err.kind() != ErrorKind::NotFound {
-                return Err(err);
-            }
-            return Ok(());
+    let pgid = unsafe { libc::getpgid(pid) };
+    if pgid == -1 {
+        let err = std::io::Error::last_os_error();
+        if err.kind() != ErrorKind::NotFound {
+            return Err(err);
         }
+        return Ok(());
+    }
 
-        let result = unsafe { libc::killpg(pgid, libc::SIGKILL) };
-        if result == -1 {
-            let err = std::io::Error::last_os_error();
-            if err.kind() != ErrorKind::NotFound {
-                return Err(err);
-            }
+    let result = unsafe { libc::killpg(pgid, libc::SIGKILL) };
+    if result == -1 {
+        let err = std::io::Error::last_os_error();
+        if err.kind() != ErrorKind::NotFound {
+            return Err(err);
         }
     }
 

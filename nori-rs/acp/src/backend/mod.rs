@@ -260,8 +260,6 @@ pub struct AcpBackendConfig {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
-    /// Cloud connection info for remote WebSocket sessions (None for local mode)
-    pub cloud_connection: Option<crate::broker::CloudConnectionInfo>,
 }
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
@@ -363,7 +361,6 @@ pub struct AcpBackend {
     /// OAuth credential store mode used when forwarding MCP auth to ACP agents.
     mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
     /// Whether this backend is connected to a cloud session (affects disconnect behavior)
-    is_cloud: bool,
     /// Set to true when Op::Shutdown is initiated, to avoid spurious disconnect errors
     is_shutting_down: Arc<AtomicBool>,
     /// Abort handle for the in-flight prompt task (if any)

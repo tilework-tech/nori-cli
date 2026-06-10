@@ -9,8 +9,6 @@ use serde_json::Value;
 use serial_test::serial;
 use tempfile::tempdir;
 
-use crate::test_support::start_mock_acp_ws_server;
-
 /// Helper: get the mock agent config and skip if binary is not built.
 fn mock_agent_config() -> Option<crate::registry::AcpAgentConfig> {
     let config = crate::registry::get_agent_config("mock-model").ok()?;
@@ -971,91 +969,13 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
     assert_eq!(stop_reason_2, acp::StopReason::EndTurn);
 }
 
-// --- WebSocket / connect_remote tests ---
-
-/// Test that connect_remote establishes a working SACP connection over WebSocket.
-/// The mock WS server responds to initialize and session/new requests.
-#[tokio::test]
-async fn test_connect_remote_establishes_connection() {
-    let server = start_mock_acp_ws_server(false).await;
-    let temp_dir = tempdir().expect("temp dir");
-    let ws_url = format!("ws://127.0.0.1:{}", server.port);
-
-    let conn = SacpConnection::connect_remote(&ws_url, "test-token", temp_dir.path())
-        .await
-        .expect("connect_remote should succeed");
-
-    let caps = conn.capabilities();
-    assert!(
-        !caps.prompt_capabilities.image,
-        "Mock WS agent sends empty capabilities, so image support should be false"
-    );
-}
-
-/// Test that connect_remote can create a session after establishing a connection.
-#[tokio::test]
-async fn test_connect_remote_create_session() {
-    let server = start_mock_acp_ws_server(false).await;
-    let temp_dir = tempdir().expect("temp dir");
-    let ws_url = format!("ws://127.0.0.1:{}", server.port);
-
-    let conn = SacpConnection::connect_remote(&ws_url, "test-token", temp_dir.path())
-        .await
-        .expect("connect_remote should succeed");
-
-    let session_id = conn
-        .create_session(temp_dir.path(), vec![])
-        .await
-        .expect("create_session should succeed over WebSocket");
-
-    assert_eq!(session_id.to_string(), "test-session-1");
-}
-
-/// Test that connect_remote fails with a clear error when the URL is unreachable.
-#[tokio::test]
-async fn test_connect_remote_fails_on_unreachable_url() {
-    let temp_dir = tempdir().expect("temp dir");
-
-    let result =
-        SacpConnection::connect_remote("ws://127.0.0.1:1", "test-token", temp_dir.path()).await;
-
-    assert!(
-        result.is_err(),
-        "connect_remote should fail for unreachable URL"
-    );
-    let err_msg = format!("{:#}", result.err().expect("already checked is_err"));
-    assert!(
-        err_msg.contains("WebSocket")
-            || err_msg.contains("connect")
-            || err_msg.contains("Connection refused"),
-        "Error should mention connection failure, got: {err_msg}"
-    );
-}
-
-/// Test that shutdown on a remote connection doesn't panic (no child process).
-#[tokio::test]
-async fn test_connect_remote_shutdown_no_panic() {
-    let server = start_mock_acp_ws_server(false).await;
-    let temp_dir = tempdir().expect("temp dir");
-    let ws_url = format!("ws://127.0.0.1:{}", server.port);
-
-    let conn = SacpConnection::connect_remote(&ws_url, "test-token", temp_dir.path())
-        .await
-        .expect("connect_remote should succeed");
-
-    conn.shutdown().await;
-}
-
 // ============================================================================
 // Child lifecycle: graceful teardown, exit detection, stderr surfacing
 // ============================================================================
 
 /// Write an executable shell script into `dir` and return an agent config
 /// that spawns it.
-fn script_agent_config(
-    dir: &std::path::Path,
-    body: &str,
-) -> crate::registry::AcpAgentConfig {
+fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::AcpAgentConfig {
     let script = dir.join("script-agent.sh");
     std::fs::write(&script, body).expect("write script agent");
     #[cfg(unix)]
@@ -1096,9 +1016,13 @@ async fn test_shutdown_closes_stdin_and_waits_for_child_exit() {
         ),
     );
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path(), crate::config::AcpProxyConfig::disabled())
-        .await
-        .expect("spawn script agent");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn script agent");
     conn.create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
@@ -1138,9 +1062,13 @@ async fn test_shutdown_kills_child_that_outlives_grace() {
         ),
     );
 
-    let conn = SacpConnection::spawn(&config, temp_dir.path(), crate::config::AcpProxyConfig::disabled())
-        .await
-        .expect("spawn script agent");
+    let conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn script agent");
     conn.create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
@@ -1165,9 +1093,7 @@ async fn test_shutdown_kills_child_that_outlives_grace() {
         .expect("pid parses");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
     let proc_path = format!("/proc/{pid}");
-    while std::path::Path::new(&proc_path).exists()
-        && std::time::Instant::now() < deadline
-    {
+    while std::path::Path::new(&proc_path).exists() && std::time::Instant::now() < deadline {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     assert!(
@@ -1198,9 +1124,13 @@ async fn test_child_exit_emits_event_with_stderr_tail() {
         ),
     );
 
-    let mut conn = SacpConnection::spawn(&config, temp_dir.path(), crate::config::AcpProxyConfig::disabled())
-        .await
-        .expect("spawn script agent");
+    let mut conn = SacpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn script agent");
     conn.create_session(temp_dir.path(), vec![])
         .await
         .expect("create session");
@@ -1215,7 +1145,10 @@ async fn test_child_exit_emits_event_with_stderr_tail() {
             .expect("child exit should surface as an event before the timeout")
             .expect("event channel closed without reporting the child exit");
         match event {
-            ConnectionEvent::ChildExited { status, stderr_tail } => {
+            ConnectionEvent::ChildExited {
+                status,
+                stderr_tail,
+            } => {
                 break (status, stderr_tail);
             }
             ConnectionEvent::SessionUpdate(_) | ConnectionEvent::ApprovalRequest(_) => {}
@@ -1243,7 +1176,11 @@ async fn test_spawn_failure_surfaces_child_stderr() {
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        SacpConnection::spawn(&config, temp_dir.path(), crate::config::AcpProxyConfig::disabled()),
+        SacpConnection::spawn(
+            &config,
+            temp_dir.path(),
+            crate::config::AcpProxyConfig::disabled(),
+        ),
     )
     .await
     .expect("spawn must fail fast when the child exits immediately, not hang");
