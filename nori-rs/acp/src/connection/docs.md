@@ -4,9 +4,9 @@ Path: @/nori-rs/acp/src/connection
 
 ### Overview
 
-- Provides `SacpConnection`, the unified ACP transport layer for communicating with agents over SACP v11 JSON-RPC
-- Supports two construction paths: local subprocess via `spawn()` (stdin/stdout) and remote WebSocket via `connect_remote()`
-- Both paths converge on a shared `establish_connection()` function, so the downstream API surface (session creation, prompting, cancellation) is identical regardless of transport
+- Provides `SacpConnection`, the ACP transport layer for communicating with agents over SACP v11 JSON-RPC
+- The single construction path is `spawn()`: launch the agent as a child subprocess and speak newline-delimited JSON-RPC over its stdin/stdout
+- Owns the child's full lifecycle: spawn, exit watching and reaping, stderr capture, graceful shutdown, and kill-as-backstop
 
 ### How it fits into the larger codebase
 
@@ -14,39 +14,40 @@ Path: @/nori-rs/acp/src/connection
 AcpBackend (spawn/resume)
     |
     v
-SacpConnection
+SacpConnection::spawn()
     |
-    +-- spawn() --> sacp::ByteStreams (stdin/stdout of child process)
-    |                   |
-    |                   v
-    |               Local ACP Agent (subprocess)
+    v
+sacp::Lines over child stdin/stdout
     |
-    +-- connect_remote() --> sacp::Lines (ws_transport adapters)
-                                |
-                                v
-                            Remote ACP Agent (cloud sprite via broker)
+    v
+Local ACP Agent (subprocess, own process group)
 ```
 
-- `AcpBackend` in `@/nori-rs/acp/src/backend/` is the sole consumer of `SacpConnection` -- both `AcpBackend::spawn()` and `AcpBackend::resume_session()` call `SacpConnection::spawn()` for local agents and `SacpConnection::connect_remote()` when `AcpBackendConfig.cloud_connection` is `Some`
-- The `broker` module (`@/nori-rs/acp/src/broker/`) provides the `CloudConnectionInfo` (ws_url + auth_token) consumed by `connect_remote()`
+- `AcpBackend` in `@/nori-rs/acp/src/backend/` is the sole consumer of `SacpConnection` -- both `AcpBackend::spawn()` and `AcpBackend::resume_session()` call `SacpConnection::spawn()` with an `AcpAgentConfig` resolved from the registry in `@/nori-rs/acp/src/registry.rs`
+- `nori cloud` rides this exact path: `@/nori-rs/cli/src/cloud.rs` pins a registry entry that runs `nori-handroll cloud-acp`, and that child is spawned here like any other local agent. There is no remote/WebSocket transport in this crate; it lives in the nori-sessions repo
 - MCP server configuration from `config.toml` is converted to ACP schema types via `mcp.rs` and passed at session creation time
-- All transport events (session updates, permission requests, file operations) flow into a single ordered `mpsc::Receiver<ConnectionEvent>` consumed by the backend's relay loop
-- The wire logging layer (`wire_log.rs`) optionally wraps local subprocess transports when `[acp_proxy]` is enabled in config; it is not applied to WebSocket connections
+- All transport events (session updates, permission requests, synthetic file-operation updates, and child exits) flow into a single ordered `mpsc::Receiver<ConnectionEvent>` consumed by the backend's relay loop in `@/nori-rs/acp/src/backend/spawn_and_relay.rs`
+- The wire logging layer (`wire_log.rs`) optionally wraps the subprocess transport when `[acp_proxy]` is enabled in config
 
 ### Core Implementation
 
-- **`SacpConnection`** (`sacp_connection.rs`): The central `Send + Sync` type that owns the SACP connection, child process (if local), and event receiver. Key methods: `create_session()`, `load_session()`, `prompt()`, `cancel()`, `set_model()` (behind `#[cfg(feature = "unstable")]`). The `child` and `stderr_task` fields are `Option` -- `Some` for local subprocess connections, `None` for remote WebSocket connections
-- **Dual transport convergence**: Both `spawn()` and `connect_remote()` delegate to `establish_connection()`, which accepts any `sacp::ConnectTo<Client>` transport. This function registers all SACP handlers (notification, permission request, file read/write) and performs the initialization handshake. The local path passes `sacp::ByteStreams`, the remote path passes `sacp::Lines`
-- **WebSocket transport** (`ws_transport.rs`): `connect_ws(url, auth_token)` establishes a WebSocket connection with Bearer auth via `tokio-tungstenite`. Returns split adapter halves: `WsSink<S>` (wraps write half as `Sink<String>`) and `WsReadStream<S>` (wraps read half as `Stream<Item = io::Result<String>>`). The read stream extracts text/binary messages, filters ping/pong/frame control messages, and terminates on close frames. WebSocket errors map to `io::Error` with `ConnectionAborted` kind
-- **MCP server forwarding** (`mcp.rs`): `to_sacp_mcp_servers()` converts CLI-configured MCP servers from `codex_core::config::types::McpServerConfig` to ACP `McpServer` values, resolving environment variables and OAuth tokens eagerly at conversion time. Disabled servers are filtered out. See `@/nori-rs/acp/docs.md` for details on OAuth token injection
-- **Ordered event inbox**: Session notifications, permission requests, and synthetic file-operation updates all flow through one `ConnectionEvent` channel. The backend consumes this single inbox to avoid ordering ambiguity between notification and approval channels
+- **`SacpConnection`** (`sacp_connection.rs`): The central `Send + Sync` type that owns the SACP connection task, the child's teardown handles, and the event receiver. Key methods: `create_session()`, `load_session()`, `prompt()`, `cancel()`, `set_config_option()`, `set_model()` (behind `#[cfg(feature = "unstable")]`)
+- **`establish_connection()`**: A free function that registers all SACP handlers (notification, permission request, file read/write) and performs the initialization handshake. The caller (`spawn()`) supplies the `ConnectionEvent` channel so extra producers -- notably the child exit watcher -- can report through the same ordered stream
+- **Child exit watcher**: A background task OWNS the `Child`: it `wait()`s and reaps the process, publishes the exit status on a `watch` channel, and emits `ConnectionEvent::ChildExited { status, stderr_tail }` (defined in `mod.rs`) when the child dies. The connection holds only a `ChildHandle` (pid, exit-status receiver, kill `Notify`) -- never the `Child` itself
+- **stderr capture**: A background task logs each stderr line via tracing and keeps a bounded tail of recent lines. The tail is attached to startup failures and `ChildExited` events so the real cause (e.g. an auth hint) is user-visible
+- **Startup race**: `spawn()` races the initialization handshake against child death. An agent that exits immediately (e.g. unauthenticated `nori-handroll` printing "run: nori-handroll login") fails the spawn fast with its stderr tail in the error text, which lets `categorize_acp_error` in the backend classify the failure (e.g. Authentication) instead of reporting protocol incompatibility
+- **Graceful shutdown**: `shutdown()` delegates to `shutdown_with_grace()` with a generous default. Aborting the connection task drops the transport and closes the child's stdin -- stdin EOF is the agent's shutdown signal. The connection waits up to the grace period for a voluntary exit before SIGKILLing the process group, then waits for the watcher to reap so no zombie outlives shutdown
+- **MCP server forwarding** (`mcp.rs`): `to_sacp_mcp_servers()` converts CLI-configured MCP servers to ACP `McpServer` values, resolving environment variables and OAuth tokens eagerly at conversion time. Disabled servers are filtered out. See `@/nori-rs/acp/docs.md` for details on OAuth token injection
+- **Ordered event inbox**: Session notifications, permission requests, synthetic file-operation updates, and child exits all flow through one `ConnectionEvent` channel. The backend consumes this single inbox to avoid ordering ambiguity between channels
 
 ### Things to Know
 
 - The minimum supported ACP protocol version is V1, enforced during the initialization handshake in `establish_connection()`
-- For local connections, the child process is spawned in its own process group (`setpgid(0, 0)`) and `CODEX_HOME` is stripped from the environment to prevent config parser conflicts (see `@/nori-rs/acp/docs.md` for rationale)
+- The child process is spawned in its own process group (`setpgid(0, 0)`) and `CODEX_HOME` is stripped from the environment to prevent config parser conflicts (see `@/nori-rs/acp/docs.md` for rationale)
+- The stdin-EOF-then-grace shutdown contract exists because agents may need network cleanup on exit; `nori-handroll cloud-acp` releases its broker session on stdin EOF, and the previous immediate-SIGKILL shutdown leaked every cloud session
+- `Drop` on `SacpConnection` is only a backstop for paths that never ran `shutdown()`: it requests a kill via the recorded pid, with a pid-reuse guard that only signals while the child is unreaped
+- Without the `ChildExited` event, a dead child is a silent EOF that the SACP layer treats as non-terminal -- pending requests would hang forever. The backend relay turns it into a visible error and fails any in-flight prompt
 - File write handlers restrict writes to the workspace directory or `/tmp` (canonicalized path check). File read handlers are unrestricted. Both emit synthetic `ToolCall` updates for TUI rendering
-- The `is_shutting_down` flag on `AcpBackend` suppresses cloud disconnect error messages during normal `Op::Shutdown` -- without this, WebSocket close during shutdown would produce a spurious user-visible error
 - `SacpConnection::prompt()` absorbs stale cancel-tail responses (empty `end_turn` responses left over from a previous cancellation) by retrying until streamed updates arrive, keeping the reducer contract unchanged
 
 Created and maintained by Nori.
