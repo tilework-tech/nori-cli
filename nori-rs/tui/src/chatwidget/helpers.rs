@@ -121,12 +121,14 @@ impl ChatWidget {
         &mut self,
         option_name: &str,
         value_name: &str,
+        saved_as_default: bool,
     ) {
         self.add_to_history(
             crate::nori::session_config_history::new_agent_option_set_history_cell(
                 self.bottom_pane.agent_display_name(),
                 option_name,
                 value_name,
+                saved_as_default,
             ),
         );
         self.request_redraw();

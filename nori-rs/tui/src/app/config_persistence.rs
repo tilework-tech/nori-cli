@@ -8,6 +8,33 @@ async fn persist_acp_wire_recording_config(codex_home: &Path, enabled: bool) -> 
         .await
 }
 
+/// Persist a session config option selection as the agent's default model.
+///
+/// Returns `Ok(true)` only when `config_id` names the agent's Model-category
+/// option and the selection was written to `[default_models]` in config.toml.
+/// Non-model options (mode, thought level, ...) are not persisted.
+pub(super) async fn persist_default_model_selection(
+    codex_home: &Path,
+    agent: &str,
+    config_id: &str,
+    value: &str,
+    config_options: &[nori_acp::SessionConfigOption],
+) -> anyhow::Result<bool> {
+    let is_model_option = config_options.iter().any(|option| {
+        option.id.to_string() == config_id
+            && option.category == Some(nori_acp::SessionConfigOptionCategory::Model)
+    });
+    if !is_model_option {
+        return Ok(false);
+    }
+
+    ConfigEditsBuilder::new(codex_home)
+        .set_default_model(agent, value)
+        .apply()
+        .await?;
+    Ok(true)
+}
+
 impl App {
     /// Persist a TUI config setting to config.toml and apply it immediately.
     pub(super) async fn persist_config_setting(&mut self, setting_name: &str, enabled: bool) {
@@ -524,6 +551,97 @@ mod tests {
             message,
             "failed to handle OAuth callback: OAuth token exchange failed: server returned 400"
         );
+    }
+
+    fn session_config_options_with_model() -> Vec<nori_acp::SessionConfigOption> {
+        vec![
+            nori_acp::SessionConfigOption::select(
+                "model",
+                "Model",
+                "sonnet",
+                vec![
+                    nori_acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+                    nori_acp::SessionConfigSelectOption::new("opus", "Opus"),
+                ],
+            )
+            .category(nori_acp::SessionConfigOptionCategory::Model),
+            nori_acp::SessionConfigOption::select(
+                "permission-mode",
+                "Mode",
+                "default",
+                vec![
+                    nori_acp::SessionConfigSelectOption::new("default", "Default"),
+                    nori_acp::SessionConfigSelectOption::new("acceptEdits", "Accept Edits"),
+                ],
+            )
+            .category(nori_acp::SessionConfigOptionCategory::Mode),
+        ]
+    }
+
+    #[tokio::test]
+    async fn model_selection_persists_default_model_for_agent() {
+        let temp = TempDir::new().expect("temp home");
+
+        let persisted = persist_default_model_selection(
+            temp.path(),
+            "claude-code",
+            "model",
+            "opus",
+            &session_config_options_with_model(),
+        )
+        .await
+        .expect("persist model selection");
+
+        assert!(persisted, "model selection should be persisted");
+        let content = std::fs::read_to_string(temp.path().join("config.toml"))
+            .expect("read persisted config");
+        let parsed: toml::Value = toml::from_str(&content).expect("config toml");
+        assert_eq!(
+            parsed
+                .get("default_models")
+                .and_then(|section| section.get("claude-code"))
+                .and_then(toml::Value::as_str),
+            Some("opus")
+        );
+    }
+
+    #[tokio::test]
+    async fn non_model_selection_is_not_persisted() {
+        let temp = TempDir::new().expect("temp home");
+
+        let persisted = persist_default_model_selection(
+            temp.path(),
+            "claude-code",
+            "permission-mode",
+            "acceptEdits",
+            &session_config_options_with_model(),
+        )
+        .await
+        .expect("handle mode selection");
+
+        assert!(!persisted, "mode selection should not be persisted");
+        assert!(
+            !temp.path().join("config.toml").exists(),
+            "no config file should be written for non-model selections"
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_config_id_is_not_persisted() {
+        let temp = TempDir::new().expect("temp home");
+
+        let persisted = persist_default_model_selection(
+            temp.path(),
+            "claude-code",
+            "not-a-real-option",
+            "opus",
+            &session_config_options_with_model(),
+        )
+        .await
+        .expect("handle unknown option");
+
+        assert!(!persisted, "unknown options should not be persisted");
+        assert!(!temp.path().join("config.toml").exists());
     }
 
     #[tokio::test]

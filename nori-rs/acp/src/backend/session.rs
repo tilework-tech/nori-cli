@@ -194,6 +194,15 @@ impl AcpBackend {
                         .await
                         .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
+                    if let Some(ref default_model) = config.default_model {
+                        session_defaults::apply_default_model(
+                            &connection,
+                            &session_id,
+                            default_model,
+                        )
+                        .await;
+                    }
+
                     let (replay_events, summary) = if let Some(t) = transcript {
                         let client_events = transcript_to_replay_client_events(t);
                         let summary_text = transcript_to_summary(t);
@@ -241,6 +250,11 @@ impl AcpBackend {
                 .create_session(&cwd, mcp_servers)
                 .await
                 .map_err(|e| enhance_agent_error(e, &agent_config))?;
+
+            if let Some(ref default_model) = config.default_model {
+                session_defaults::apply_default_model(&connection, &session_id, default_model)
+                    .await;
+            }
 
             let (replay_events, summary) = if let Some(t) = transcript {
                 let client_events = transcript_to_replay_client_events(t);
