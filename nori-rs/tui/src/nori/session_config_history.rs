@@ -100,6 +100,7 @@ pub(crate) fn new_agent_option_set_history_cell(
     agent_display_name: &str,
     option_name: &str,
     value_name: &str,
+    saved_as_default: bool,
 ) -> PlainHistoryCell {
     let agent_display_name = if agent_display_name.is_empty() {
         "Agent"
@@ -111,6 +112,9 @@ pub(crate) fn new_agent_option_set_history_cell(
         format!("{agent_display_name} option set: ").into(),
     ];
     line.extend(option_assignment_spans(option_name, value_name));
+    if saved_as_default {
+        line.push(" (saved as default)".dim());
+    }
 
     PlainHistoryCell::new(vec![Line::from(line)])
 }
@@ -183,9 +187,27 @@ mod tests {
         let lines = cell.display_lines(80);
         assert_value_highlighted(&lines[0].spans, "Effort", "High");
 
-        let cell = new_agent_option_set_history_cell("Claude Code", "Model", "Opus 4.6");
+        let cell = new_agent_option_set_history_cell("Claude Code", "Model", "Opus 4.6", false);
         let lines = cell.display_lines(80);
         assert_value_highlighted(&lines[0].spans, "Model", "Opus 4.6");
+
+        insta::assert_snapshot!(spans_to_style_snapshot(&lines[0].spans));
+    }
+
+    #[test]
+    fn option_set_cell_marks_saved_default() {
+        let cell = new_agent_option_set_history_cell("Claude Code", "Model", "Opus 4.6", true);
+
+        let lines = cell.display_lines(80);
+        let text: String = lines[0]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert_eq!(
+            text,
+            "• Claude Code option set: Model=Opus 4.6 (saved as default)"
+        );
 
         insta::assert_snapshot!(spans_to_style_snapshot(&lines[0].spans));
     }

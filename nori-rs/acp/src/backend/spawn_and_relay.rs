@@ -63,26 +63,8 @@ impl AcpBackend {
         debug!("ACP session created: {:?}", session_id);
 
         // Apply default model from config if one is set for this agent
-        #[cfg(feature = "unstable")]
         if let Some(ref default_model) = config.default_model {
-            let model_state = connection.model_state();
-            let model_available = model_state
-                .available_models
-                .iter()
-                .any(|m| m.model_id.to_string() == *default_model);
-            if model_available {
-                let model_id = acp::ModelId::from(default_model.clone());
-                match connection.set_model(&session_id, &model_id).await {
-                    Ok(()) => {
-                        debug!("Applied default model from config: {default_model}");
-                    }
-                    Err(e) => {
-                        warn!("Failed to apply default model '{default_model}': {e}");
-                    }
-                }
-            } else {
-                debug!("Default model '{default_model}' not in available models, skipping");
-            }
+            session_defaults::apply_default_model(&connection, &session_id, default_model).await;
         }
 
         let capabilities_update =

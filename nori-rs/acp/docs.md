@@ -339,7 +339,7 @@ When auto-worktree is active (either via `Automatic` or the user confirming in `
 
 The `AcpBackend` stores `auto_worktree: AutoWorktree` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The `is_enabled()` method returns `true` for both `Automatic` and `Ask` variants, since in both cases a worktree was actually created. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
-**Default Models Configuration** (`config/types/mod.rs`, `backend/mod.rs`):
+**Default Models Configuration** (`config/types/mod.rs`, `backend/session_defaults.rs`):
 
 Model preferences can be persisted per agent in the `[default_models]` table of `config.toml`. When a session starts, the configured default model is automatically applied if available:
 
@@ -352,27 +352,28 @@ The config flow is:
 1. `NoriConfigToml.default_models` deserializes the `[default_models]` table from TOML (empty HashMap by default via `#[serde(default)]`)
 2. `NoriConfig.default_models` stores the resolved map after config loading
 3. `AcpBackendConfig.default_model` receives `Option<String>` via lookup by agent slug in `chatwidget/agent.rs`
-4. `AcpBackend::spawn()` applies the model via `connection.set_model()` after session creation (behind `#[cfg(feature = "unstable")]`)
+4. After session creation, `AcpBackend::spawn()` delegates to `backend/session_defaults.rs` to apply the model to the new session
 
-The model is only applied if:
+`session_defaults.rs` prefers the stable mechanism: when the agent advertises a select-style config option with the `Model` category, the default is applied exclusively through `session/set_config_option` -- the unstable `session/set_model` is never sent for that agent, even when the stable application is skipped or fails. Only when no Model-category option exists does it fall back to the unstable `session/set_model` API, which is gated behind `#[cfg(feature = "unstable")]` (`unstable` is a default feature of `nori-acp` and `nori-tui`).
 
-- The feature `unstable` is enabled (model switching requires this feature)
-- The default model is listed in the agent's `available_models` (checked against `model_state`)
-- The session was successfully created
+Both paths validate before sending anything on the wire and skip with a debug log when validation fails:
 
-Failures to apply the default model (e.g., model unavailable, API error) produce warnings but do not block session startup. When users switch models via `/model` command, the TUI persists the selection by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md`).
+- Stable path: the option must be a select, the persisted value must appear among the option's advertised values (ungrouped or grouped), and application is skipped when the persisted value is already the current value
+- Unstable fallback: the persisted value must be listed in the agent's `available_models` (checked against `model_state`)
+
+Application is best-effort: wire errors produce warnings but never block session startup. The `[default_models]` entries are written by the TUI whenever the user selects a model -- through the stable Model-category config option (`/model` or `/config`) or through the unstable model picker fallback -- by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md` and `@/nori-rs/tui/docs.md`).
 
 **Live Session Configuration** (`connection/sacp_connection.rs`, `backend/submit_and_ops.rs`):
 
 ACP agents can expose runtime session configuration through `NewSessionResponse.config_options`, `LoadSessionResponse.config_options`, idle `SessionUpdate::ConfigOptionUpdate` notifications, and the `session/set_config_option` RPC. `SacpConnection` owns the latest live config snapshot in `AcpSessionConfigState`, updates it when a session is created/loaded or when config-option notifications arrive, and replaces it with the full response snapshot after `set_config_option()`.
 
-This first implementation is deliberately live-session only:
+Config option state is session-owned and, with one exception, live-session only:
 
 - `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
 - `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
 - Config options use `SessionConfigOptionCategory` to tag their purpose. The `Mode` category drives the footer mode indicator and `Shift-Tab` cycling. The `Model` category is the stable mechanism for model selection -- the TUI's `/model` command checks for a Model-category config option first (see `@/nori-rs/tui/docs.md`) before falling back to the unstable `SessionModelState`. Real ACP agents like Claude Code provide model selection through this stable config_options path.
 - No config form is shown during `/agent` switching yet.
-- No ACP session config selections are persisted to `config.toml` yet.
+- The `Model` category is the exception to live-session-only behavior: the TUI persists Model-category selections to `[default_models]` in `config.toml` (see `@/nori-rs/tui/docs.md`), and `backend/session_defaults.rs` re-applies the persisted value through this same `session/set_config_option` mechanism at session start. Selections in other categories (mode, thought level) are never persisted.
 
 **Hooks System** (`config/types/mod.rs`, `hooks.rs`, `backend/mod.rs`):
 
@@ -1159,7 +1160,7 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1
-- The `unstable` feature gates agent switching functionality
+- The `unstable` feature (a default feature) gates the unstable ACP model-selection API surface (`session/set_model`, `SessionModelState`, and related re-exports); the stable Model-category config option path is not feature-gated
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)

@@ -1,0 +1,10 @@
+---
+source: tui/src/nori/session_config_history.rs
+expression: "spans_to_style_snapshot(&lines[0].spans)"
+---
+"• " Style::new().dim()
+"Claude Code option set: " Style::new()
+"Model" Style::new()
+"=" Style::new()
+"Opus 4.6" Style::new().cyan().bold()
+" (saved as default)" Style::new().dim()
