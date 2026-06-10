@@ -1337,7 +1337,11 @@ impl ChatWidget {
     /// ClientToolCell auto-detects exploring tools (Read/Search) and renders
     /// them with "Explored" format, while Execute uses shell-style transcript.
     fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
-        self.flush_answer_stream_with_separator();
+        // NOTE: The answer stream is finalized only on paths that insert a new
+        // history cell. No-op updates (e.g., progress notifications for a
+        // long-running tool whose cell was already flushed) must not finalize
+        // the stream, or one streaming assistant message fragments into many
+        // separate `•` cells.
         self.session_stats
             .record_client_tool_snapshot(&tool_snapshot);
 
@@ -1362,6 +1366,11 @@ impl ChatWidget {
             .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
             && cell.call_id() == tool_snapshot.call_id
         {
+            // The stream cannot be open while a tool cell is active: every
+            // path that sets active_cell flushes the stream first, and every
+            // answer delta clears active_cell. This lets in-place updates
+            // skip the answer-stream flush.
+            debug_assert!(self.stream_controller.is_none());
             cell.apply_snapshot(tool_snapshot);
             if !cell.is_active() && !cell.is_exploring() {
                 self.flush_active_cell();
@@ -1387,6 +1396,7 @@ impl ChatWidget {
         {
             buffered_cell.apply_snapshot(tool_snapshot);
             if !buffered_cell.is_active() {
+                self.flush_answer_stream_with_separator();
                 // Insert directly into history without flushing active_cell.
                 // The normal add_boxed_history path flushes active_cell first
                 // (to maintain chronological order), but that would incorrectly
@@ -1415,6 +1425,9 @@ impl ChatWidget {
                 .and_then(|c| c.as_any_mut().downcast_mut::<ClientToolCell>())
             && cell.is_exploring()
         {
+            // Same invariant as the in-place update above: no open stream
+            // while an exploring cell is active, so no flush is needed.
+            debug_assert!(self.stream_controller.is_none());
             cell.merge_exploring(tool_snapshot);
             // Don't track in completed_client_tool_calls here — non-terminal
             // snapshots (Pending/InProgress) arrive first with empty invocations,
@@ -1423,6 +1436,10 @@ impl ChatWidget {
             // as completed when the cell leaves active_cell.
             return;
         }
+
+        // A genuinely new tool call starts a new visual cell: finalize the
+        // streamed answer so far to keep history chronological.
+        self.flush_answer_stream_with_separator();
 
         // Buffer incomplete Execute ClientToolCells instead of flushing
         // them to history with wrong content (description text as output).
