@@ -127,3 +127,67 @@ fn model_popup_via_config_option_snapshot() {
     let popup = render_bottom_popup(&chat, 80);
     assert_snapshot!("model_popup_via_config_option", popup);
 }
+
+/// When an agent switch is pending (the user picked a new agent but hasn't
+/// submitted a prompt yet, so no new session exists), /model must NOT query the
+/// still-live OLD agent's handle — that would show stale models. Instead it
+/// shows an explanatory message naming the pending agent.
+#[tokio::test]
+async fn model_popup_shows_pending_message_instead_of_stale_models() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // The OLD agent's handle would happily respond with a Model config option.
+    let (command_tx, mut command_rx) =
+        tokio::sync::mpsc::unbounded_channel::<crate::chatwidget::agent::AcpAgentCommand>();
+    tokio::spawn(async move {
+        while let Some(command) = command_rx.recv().await {
+            if let crate::chatwidget::agent::AcpAgentCommand::GetSessionConfig { response_tx } =
+                command
+            {
+                let _ = response_tx.send(vec![model_config_option()]);
+            }
+        }
+    });
+    chat.acp_handle = Some(crate::chatwidget::agent::AcpAgentHandle::from_command_tx(
+        command_tx,
+    ));
+
+    // But an agent switch is pending: no new session has started.
+    chat.set_pending_agent("newagent".to_string(), "New Agent".to_string());
+
+    chat.open_model_popup();
+
+    // Give any (incorrectly) spawned task time to query the OLD handle and
+    // route to its picker. The OLD agent's model picker must never open while a
+    // switch is pending — that is exactly the stale-models bug.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    while let Ok(event) = rx.try_recv() {
+        assert!(
+            !matches!(event, AppEvent::OpenAcpSessionConfigValuePicker { .. }),
+            "must not route to the OLD agent's model picker while a switch is pending"
+        );
+    }
+
+    // The popup explains that a session must start first, naming the agent.
+    let popup = render_bottom_popup(&chat, 80);
+    assert!(
+        popup.contains("New Agent"),
+        "popup should name the pending agent:\n{popup}"
+    );
+    assert!(
+        popup.contains("session"),
+        "popup should mention starting a session:\n{popup}"
+    );
+}
+
+/// Snapshot: the model picker shown while an agent switch is pending.
+#[test]
+fn model_popup_pending_agent_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.set_pending_agent("newagent".to_string(), "New Agent".to_string());
+    chat.open_model_popup();
+
+    let popup = render_bottom_popup(&chat, 80);
+    assert_snapshot!("model_popup_pending_agent", popup);
+}

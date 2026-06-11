@@ -125,6 +125,36 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
     }
 }
 
+/// Create selection view parameters for the model picker when an agent switch
+/// is pending but no new session has started yet.
+///
+/// ACP models are session-scoped: a newly-switched agent's models only become
+/// available after the next prompt creates a session. Until then the live agent
+/// handle still belongs to the OLD agent, so querying it would show the OLD
+/// agent's models. Show an explanatory message naming the pending agent instead.
+pub fn acp_model_picker_pending_agent_params(display_name: &str) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = vec![SelectionItem {
+        name: format!("Switching to {display_name}"),
+        description: Some(
+            "Send a message to start a session, then /model will show its models.".to_string(),
+        ),
+        is_current: false,
+        actions: vec![],
+        dismiss_on_select: true,
+        ..Default::default()
+    }];
+
+    SelectionViewParams {
+        title: Some("Select Model".to_string()),
+        subtitle: Some(format!(
+            "{display_name}'s models load once you start a session"
+        )),
+        footer_hint: Some(Line::from("Press esc to dismiss.")),
+        items,
+        ..Default::default()
+    }
+}
+
 /// Create selection view parameters for the ACP model picker with actual models.
 ///
 /// This function creates a picker showing models available from the ACP agent.
