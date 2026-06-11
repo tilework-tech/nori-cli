@@ -1,0 +1,11 @@
+---
+source: tui/src/chatwidget/tests/part9.rs
+expression: popup
+---
+  Select Model
+  New Agent's models load once you start a session
+
+› 1. Switching to New Agent  Send a message to start a session, then /model
+                             will show its models.
+
+  Press esc to dismiss.

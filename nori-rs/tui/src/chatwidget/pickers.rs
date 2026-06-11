@@ -613,6 +613,16 @@ impl ChatWidget {
     /// unstable model state when no Model-category config option exists,
     /// and to a static "not supported" message when neither is available.
     pub(crate) fn open_model_popup(&mut self) {
+        // An agent switch is pending: the new session hasn't started, so the new
+        // agent's (session-scoped) models aren't available yet. Querying the live
+        // handle would show the OLD agent's models, so explain instead.
+        if let Some(pending) = self.pending_agent.as_ref() {
+            let params = crate::nori::agent_picker::acp_model_picker_pending_agent_params(
+                &pending.display_name,
+            );
+            self.bottom_pane.show_selection_view(params);
+            return;
+        }
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
