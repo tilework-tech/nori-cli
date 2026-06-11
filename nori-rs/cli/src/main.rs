@@ -121,10 +121,6 @@ struct ResumeCommand {
 
 #[derive(Debug, Parser)]
 struct CloudCommand {
-    /// Broker URL (overrides config.toml [cloud] broker_url).
-    #[arg(long = "broker-url")]
-    broker_url: Option<String>,
-
     #[clap(flatten)]
     config_overrides: TuiCli,
 }
@@ -520,90 +516,30 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 .await??;
         }
         Some(Subcommand::Cloud(cloud_cmd)) => {
+            // All Sessions concerns (auth, broker, transport) live in
+            // nori-handroll; the CLI only pins the TUI's agent to a
+            // `nori-handroll cloud-acp` child. Fail before the TUI starts if
+            // the binary is missing.
+            let handroll_bin = nori_cli::cloud::resolve_handroll_bin(
+                std::env::var_os("NORI_HANDROLL_BIN"),
+                std::env::var_os("PATH"),
+            )?;
             let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
-            let nori_home = find_nori_home()?;
-            let broker_url = if let Some(url) =
-                cloud_cmd.broker_url.or(nori_config.cloud_broker_url)
-            {
-                url
-            } else if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-                use std::io::BufRead;
-                use std::io::Write;
-
-                eprint!("Enter your org's broker URL: ");
-                std::io::stderr().flush()?;
-                let mut line = String::new();
-                std::io::stdin().lock().read_line(&mut line)?;
-                let url = line.trim().trim_end_matches('/').to_string();
-                if url.is_empty() {
-                    anyhow::bail!("No broker URL provided.");
-                }
-                if !url.starts_with("http://") && !url.starts_with("https://") {
-                    anyhow::bail!("Broker URL must start with http:// or https://");
-                }
-                nori_acp::config::save_cloud_broker_url(&nori_home, &url)?;
-                eprintln!("Broker URL saved to config.");
-                url
-            } else {
-                anyhow::bail!(
-                    "No broker URL configured. Use --broker-url or set [cloud] broker_url in ~/.nori/cli/config.toml"
-                );
-            };
-
-            let mut broker = nori_acp::broker::BrokerClient::new(broker_url, nori_home);
-
-            if !broker.has_valid_token() {
-                eprintln!("Opening browser for authentication...");
-                broker.authenticate().await?;
-                eprintln!("Authenticated.");
-            }
-
-            eprintln!("Acquiring cloud session...");
-            let session_info = match broker.acquire_session().await {
-                Ok(info) => info,
-                Err(nori_acp::broker::BrokerError::TokenExpired) => {
-                    eprintln!("Token expired, re-authenticating...");
-                    broker.authenticate().await?;
-                    broker.acquire_session().await.map_err(|e| {
-                        anyhow::anyhow!(
-                            "Failed to acquire cloud session after re-authentication: {e}"
-                        )
-                    })?
-                }
-                Err(e) => {
-                    anyhow::bail!("Failed to acquire cloud session: {e}");
-                }
-            };
-            eprintln!("Connected to session {}", session_info.session_id);
 
             merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
             prepend_config_flags(
                 &mut interactive.config_overrides,
                 root_config_overrides.clone(),
             );
-            interactive.cloud_connection = Some(nori_acp::broker::CloudConnectionInfo {
-                ws_url: session_info.ws_url,
-                auth_token: broker
-                    .auth_token()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("auth token missing after authenticate + acquire_session")
-                    })?
-                    .to_string(),
-            });
+            // Cloud mode always uses the handroll adapter — `--agent` cannot
+            // bypass Sessions.
+            interactive.agent = Some(nori_cli::cloud::CLOUD_AGENT_SLUG.to_string());
+            interactive.extra_agents = vec![nori_cli::cloud::cloud_agent_config(
+                &handroll_bin,
+                nori_config.cloud_broker_url.as_deref(),
+            )];
 
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
-
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                broker.release_session(&session_info.session_id),
-            )
-            .await
-            {
-                Ok(Ok(())) => tracing::debug!("Cloud session released"),
-                Ok(Err(e)) => tracing::warn!("Cloud session release failed: {e}"),
-                Err(_) => tracing::warn!("Cloud session release timed out"),
-            }
-
             handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Completions(cmd)) => {

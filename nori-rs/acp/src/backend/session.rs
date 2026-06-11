@@ -96,6 +96,10 @@ impl AcpBackend {
                                     ));
                                 }
                                 Some(crate::connection::ConnectionEvent::ApprovalRequest(_)) => {}
+                                // A child death mid-load is reported by the
+                                // main relay once it takes over this receiver;
+                                // the collector only buffers replay updates.
+                                Some(crate::connection::ConnectionEvent::ChildExited { .. }) => {}
                                 None => break,
                             }
                         }
@@ -194,6 +198,15 @@ impl AcpBackend {
                         .await
                         .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
+                    if let Some(ref default_model) = config.default_model {
+                        session_defaults::apply_default_model(
+                            &connection,
+                            &session_id,
+                            default_model,
+                        )
+                        .await;
+                    }
+
                     let (replay_events, summary) = if let Some(t) = transcript {
                         let client_events = transcript_to_replay_client_events(t);
                         let summary_text = transcript_to_summary(t);
@@ -241,6 +254,11 @@ impl AcpBackend {
                 .create_session(&cwd, mcp_servers)
                 .await
                 .map_err(|e| enhance_agent_error(e, &agent_config))?;
+
+            if let Some(ref default_model) = config.default_model {
+                session_defaults::apply_default_model(&connection, &session_id, default_model)
+                    .await;
+            }
 
             let (replay_events, summary) = if let Some(t) = transcript {
                 let client_events = transcript_to_replay_client_events(t);
@@ -354,7 +372,6 @@ impl AcpBackend {
             session_driver: Arc::clone(&session_driver),
             mcp_servers: config.mcp_servers.clone(),
             mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
-            is_cloud: config.cloud_connection.is_some(),
             is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),

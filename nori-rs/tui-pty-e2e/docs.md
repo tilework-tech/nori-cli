@@ -9,7 +9,7 @@ The tui-pty-e2e crate provides end-to-end testing infrastructure for the Nori TU
 ### How it fits into the larger codebase
 
 This is a test-only crate that exercises:
-- `@/nori-rs/tui/` - The TUI binary being tested
+- The `nori` binary built from `@/nori-rs/cli/` (which embeds the TUI from `@/nori-rs/tui/`), optionally with a subcommand such as `nori cloud`
 - `@/nori-rs/mock-acp-agent/` - Mock agent for predictable responses
 
 Tests validate rendering behavior end-to-end by checking the actual terminal screen buffer contents, including the ordering and presence/absence of cells (tool output, agent text, approval prompts). This catches integration issues that unit tests on individual components would miss, such as race conditions between streaming text and tool event rendering.
@@ -32,7 +32,8 @@ Tests validate rendering behavior end-to-end by checking the actual terminal scr
 
 Tests in this file verify that tool call events (Explored, Ran, Searched cells) render in the correct chronological positions relative to agent text. The core invariant under test is that tool cells appear BEFORE the agent text that follows them in the scrollback, even when tool calls have not completed yet. Key test patterns include:
 - Verifying chronological ordering: tool cells appear before the final agent text in screen position (asserted via string position comparisons)
-- Verifying no duplicate tool cells when text arrives during an incomplete tool call (the `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` scenario)
+- Verifying no duplicate tool cells when text arrives during an incomplete tool call (the `MOCK_AGENT_INTERLEAVED_TOOL_CALL` scenario); the same scenario's snapshot also pins that a suppressed-duplicate tool completion arriving between two answer text chunks does not split the streamed message into separate cells (see the Chronological Ordering Invariant in `@/nori-rs/tui/docs.md`)
+- Verifying that tool completions deferred during the final text stream are discarded rather than rendered after the agent's response (the `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` scenario)
 - Verifying that cascade-deferred tool events do not produce orphan cells (the `MOCK_AGENT_ORPHAN_TOOL_CELLS` scenario), where a Begin is deferred due to a non-empty queue and later discarded, but its End must also be discarded to avoid raw call_id rendering
 - Verifying that generic tool calls with no `raw_input` (the `MOCK_AGENT_GENERIC_TOOL_CALL` scenario) display a resolved semantic name from `ev.command` instead of the raw tool call ID
 - Verifying that incomplete (stuck) tool calls that never receive End events do not block the agent's final text from rendering (the `MOCK_AGENT_STUCK_TOOL_CALLS` scenario), where `finalize_active_cell_as_failed()` cleans up incomplete ExecCells on turn boundaries
@@ -43,6 +44,10 @@ Tests in this file verify that tool call events (Explored, Ran, Searched cells) 
 Tests verify the `/mcp` slash command in ACP mode:
 - With configured MCP servers: verifies that server details (name, transport) are displayed even though individual tool names are unavailable in ACP mode
 - Without configured MCP servers: verifies the "No MCP servers configured" fallback message appears
+
+**Cloud Mode Tests** (`cloud_mode.rs`):
+
+Tests drive `nori cloud` end to end with fake `nori-handroll` shell scripts that wrap the `mock_acp_agent` binary and record their invocation and lifecycle to marker files. The harness gained `SessionConfig::with_subcommand()` so a session can run `nori <subcommand>` instead of plain `nori`, and the fake binary is injected via the `NORI_HANDROLL_BIN` env override. Scenarios cover: the prompt round-trip through the handroll child, graceful release on exit (the fake writes a `released` marker only if it sees stdin EOF rather than SIGKILL -- the same contract `nori-handroll cloud-acp` implements), mid-session child death surfacing a visible error, unconditional local transcript recording, the actionable error when no handroll binary exists, `--agent` being overridden by the pinned `nori-cloud` agent, `[cloud] broker_url` reaching the child as `NORI_BROKER_URL`, and an immediately-exiting unauthenticated child surfacing its stderr auth hint.
 
 **Browser Command Tests** (`browser_command.rs`):
 

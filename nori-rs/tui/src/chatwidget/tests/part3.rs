@@ -554,7 +554,7 @@ fn session_config_set_history_uses_final_agent_named_message() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     chat.set_agent("claude-code");
 
-    chat.add_acp_session_config_set_message("Model", "Opus 4.6");
+    chat.add_acp_session_config_set_message("Model", "Opus 4.6", false);
 
     let cells = drain_insert_history(&mut rx);
     let rendered = cells
@@ -577,7 +577,7 @@ fn synced_session_config_snapshot_prevents_duplicate_update_history() {
         &[("opus-4-6", "Opus 4.6"), ("sonnet-4-6", "Sonnet 4.6")],
     )];
 
-    chat.add_acp_session_config_set_message("Model", "Opus 4.6");
+    chat.add_acp_session_config_set_message("Model", "Opus 4.6", false);
     chat.sync_acp_session_config_snapshot(&config_options);
     assert_eq!(drain_insert_history(&mut rx).len(), 1);
 

@@ -125,6 +125,68 @@ fn acp_streamed_answer_counts_assistant_once_when_prompt_completes() {
     assert_eq!(chat.session_stats.assistant_messages, 1);
 }
 
+/// A long-running tool keeps sending ToolCallUpdate notifications while the
+/// agent streams its answer. Those no-op snapshot updates (the tool cell was
+/// already flushed to history) must not finalize the answer stream, otherwise
+/// one assistant message fragments into many `•` cells.
+#[test]
+fn noop_tool_updates_do_not_fragment_streaming_answer() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    // A long-running Execute tool call becomes the active cell.
+    let running_tool = || {
+        let mut snapshot = acp_tool_snapshot(
+            "clippy",
+            "cargo clippy",
+            nori_protocol::ToolKind::Execute,
+            nori_protocol::ToolPhase::InProgress,
+        );
+        snapshot.invocation = Some(nori_protocol::Invocation::Command {
+            command: "cargo clippy".to_string(),
+        });
+        snapshot
+    };
+    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(running_tool()));
+
+    // The agent streams its answer while the tool is still running; progress
+    // updates for the running tool interleave with the answer deltas.
+    let deltas = [
+        "Scoped clippy fix is still runn",
+        "ing; waiting for it to fin",
+        "ish.",
+    ];
+    for delta in deltas {
+        chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
+            nori_protocol::MessageDelta {
+                stream: nori_protocol::MessageStream::Answer,
+                delta: delta.to_string(),
+            },
+        ));
+        chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(running_tool()));
+    }
+
+    chat.handle_client_event(nori_protocol::ClientEvent::PromptCompleted(
+        nori_protocol::PromptCompleted {
+            stop_reason: nori_protocol::StopReason::EndTurn,
+            last_agent_message: None,
+        },
+    ));
+
+    let rendered = drain_insert_history(&mut rx)
+        .into_iter()
+        .map(|lines| lines_to_single_string(&lines))
+        .collect::<Vec<_>>()
+        .join("");
+
+    assert_eq!(
+        rendered
+            .matches("• Scoped clippy fix is still running; waiting for it to finish.")
+            .count(),
+        1,
+        "{rendered}"
+    );
+}
+
 #[test]
 fn transcript_subagents_are_merged_into_exit_stats() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
