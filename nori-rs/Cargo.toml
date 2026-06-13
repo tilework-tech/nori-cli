@@ -248,6 +248,11 @@ unwrap_used = "deny"
 [workspace.metadata.cargo-shear]
 ignored = ["icu_provider", "openssl-sys", "codex-utils-readiness"]
 
+[profile.dev]
+# Line tables keep file:line in backtraces while avoiding the full DWARF that
+# makes the final link memory-bound (slow, can thrash) on low-RAM machines.
+debug = "line-tables-only"
+
 [profile.release]
 lto = "fat"
 # Because we bundle some of these executables with the TypeScript CLI, we
