@@ -303,6 +303,7 @@ impl AcpBackend {
                 id: String::new(),
                 msg: EventMsg::Error(ErrorEvent {
                     message: message.to_string(),
+                    retryable: false,
                 }),
             })
             .await;

@@ -295,15 +295,15 @@ impl ChatWidget {
                 self.on_rate_limit_snapshot(ev.rate_limits);
             }
             EventMsg::Warning(WarningEvent { message }) => self.on_warning(message),
-            EventMsg::Error(ErrorEvent { message }) => self.on_error(message),
+            EventMsg::Error(ErrorEvent { message, retryable }) => self.on_error(message, retryable),
             EventMsg::McpStartupUpdate(ev) => self.on_mcp_startup_update(ev),
             EventMsg::McpStartupComplete(ev) => self.on_mcp_startup_complete(ev),
             EventMsg::TurnAborted(ev) => match ev.reason {
                 TurnAbortReason::Interrupted => {
-                    self.on_error("Turn aborted: interrupted".to_owned())
+                    self.on_error("Turn aborted: interrupted".to_owned(), false)
                 }
                 TurnAbortReason::Replaced => {
-                    self.on_error("Turn aborted: replaced by a new task".to_owned())
+                    self.on_error("Turn aborted: replaced by a new task".to_owned(), false)
                 }
             },
             EventMsg::PlanUpdate(update) => self.on_plan_update(update),

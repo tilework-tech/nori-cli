@@ -312,7 +312,10 @@ impl AcpBackend {
                                     .event_tx
                                     .send(Event {
                                         id: String::new(),
-                                        msg: EventMsg::Error(ErrorEvent { message }),
+                                        msg: EventMsg::Error(ErrorEvent {
+                                            message,
+                                            retryable: false,
+                                        }),
                                     })
                                     .await;
                                 // Fail any in-flight prompt loudly instead of

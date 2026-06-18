@@ -332,13 +332,22 @@ impl ChatWidget {
         self.stream_controller = None;
     }
 
-    pub(super) fn on_error(&mut self, message: String) {
+    pub(super) fn on_error(&mut self, message: String, retryable: bool) {
         self.finalize_turn();
-        self.cancel_loop();
+        // A transient/retryable error (e.g. a momentary API overload) must not
+        // tear down an armed loop: the turn still completes and the next
+        // iteration retries. Only fatal errors cancel the loop.
+        if retryable {
+            tracing::info!(
+                retryable,
+                loop_remaining = ?self.loop_remaining,
+                "error during turn; preserving loop state for retry"
+            );
+        } else {
+            self.cancel_loop();
+        }
         self.add_to_history(history_cell::new_error_event(message));
         self.request_redraw();
-
-        // After an error ends the turn, try sending the next queued input.
     }
 
     pub(super) fn on_warning(&mut self, message: impl Into<String>) {

@@ -564,6 +564,12 @@ pub struct ReasoningRawContentDeltaEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ErrorEvent {
     pub message: String,
+    /// Whether the error is transient and worth retrying. Consumers (e.g. the
+    /// TUI loop-count mode) use this to decide whether a single failure should
+    /// abort an unattended run. Defaults to `false` for backward compatibility
+    /// with serialized events that predate this field.
+    #[serde(default)]
+    pub retryable: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]

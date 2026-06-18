@@ -73,6 +73,24 @@ pub enum AcpErrorCategory {
     Unknown,
 }
 
+impl AcpErrorCategory {
+    /// Whether this error is transient and worth retrying (e.g. for an
+    /// unattended loop that should survive a momentary API blip). Server
+    /// errors are momentary and rate/quota limits ease over time (seconds for
+    /// rate limits, longer for usage windows); everything else reflects a
+    /// persistent problem that a retry cannot fix.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            AcpErrorCategory::ApiServerError | AcpErrorCategory::QuotaExceeded => true,
+            AcpErrorCategory::Authentication
+            | AcpErrorCategory::ExecutableNotFound
+            | AcpErrorCategory::Initialization
+            | AcpErrorCategory::PromptTooLong
+            | AcpErrorCategory::Unknown => false,
+        }
+    }
+}
+
 /// Categorize an ACP error based on error string patterns.
 ///
 /// This function analyzes error messages and categorizes them to enable
@@ -89,6 +107,7 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
         AcpErrorCategory::Authentication
     } else if error_lower.contains("quota")
         || error_lower.contains("rate limit")
+        || error_lower.contains("rate_limit") // e.g. Anthropic `rate_limit_error`
         || error_lower.contains("too many requests")
         || error_lower.contains("429")
         || error_lower.contains("out of extra usage")
@@ -114,6 +133,7 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
         || error_lower.contains("502")
         || error_lower.contains("503")
         || error_lower.contains("504")
+        || error_lower.contains("529") // Anthropic `overloaded_error`
         || error_lower.contains("server error")
         || error_lower.contains("api_error")
         || error_lower.contains("overloaded")

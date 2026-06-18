@@ -372,6 +372,7 @@ impl ChatWidget {
     /// Cancel any active loop.
     pub(super) fn cancel_loop(&mut self) {
         if self.loop_remaining.is_some() {
+            tracing::info!(remaining = ?self.loop_remaining, "loop cancelled");
             self.loop_remaining = None;
             self.loop_total = None;
             self.add_info_message("Loop cancelled.".to_string(), None);

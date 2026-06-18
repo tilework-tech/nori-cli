@@ -750,14 +750,21 @@ impl AcpBackend {
     }
 
     async fn send_prompt_error(&self, prompt_kind: QueuedPromptKind, err: &anyhow::Error) {
-        let message = match prompt_kind {
-            QueuedPromptKind::Compact => format!("Compact failed: {err}"),
-            QueuedPromptKind::GoalContinuation => format!("Goal continuation failed: {err}"),
+        let (message, retryable) = match prompt_kind {
+            QueuedPromptKind::Compact => (format!("Compact failed: {err}"), false),
+            QueuedPromptKind::GoalContinuation => {
+                (format!("Goal continuation failed: {err}"), false)
+            }
             QueuedPromptKind::User => {
                 let error_string = format!("{err:?}");
                 let category = categorize_acp_error(&error_string);
                 let display_error = format!("{err:#}");
-                match category {
+                let retryable = category.is_retryable();
+                warn!(
+                    ?category,
+                    retryable, "ACP user prompt failed: {error_string}"
+                );
+                let message = match category {
                     AcpErrorCategory::Authentication => {
                         format!(
                             "Authentication error: {display_error}. Please check your credentials or re-authenticate."
@@ -781,7 +788,8 @@ impl AcpBackend {
                             .to_string()
                     }
                     AcpErrorCategory::Unknown => format!("ACP prompt failed: {display_error}"),
-                }
+                };
+                (message, retryable)
             }
         };
 
@@ -789,7 +797,7 @@ impl AcpBackend {
             .event_tx
             .send(Event {
                 id: String::new(),
-                msg: EventMsg::Error(ErrorEvent { message }),
+                msg: EventMsg::Error(ErrorEvent { message, retryable }),
             })
             .await;
     }
