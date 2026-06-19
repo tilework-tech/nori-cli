@@ -39,11 +39,28 @@ pub struct WarningInfo {
     pub message: String,
 }
 
+/// How a prompt turn failed, when it did. Carried on `PromptCompleted` so a
+/// single event determines both how the failure is surfaced and whether an
+/// unattended loop should keep going.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnFailure {
+    /// A transient failure (e.g. a momentary API overload or rate limit) that
+    /// a retry can recover from.
+    Retryable,
+    /// A persistent failure that a retry cannot fix.
+    Fatal,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct PromptCompleted {
     pub stop_reason: acp::StopReason,
     pub last_agent_message: Option<String>,
+    /// `Some` when the turn ended in a failure; `None` for a clean completion
+    /// (success or a user-requested cancellation).
+    #[serde(default)]
+    pub failure: Option<TurnFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

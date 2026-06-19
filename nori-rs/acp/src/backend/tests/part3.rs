@@ -199,6 +199,38 @@ fn test_categorize_acp_error_api_server_error() {
     );
 }
 
+/// The transient errors a real overloaded/rate-limited run surfaces (a bare
+/// `529` or `rate_limit_error`) must land in retryable buckets so an unattended
+/// loop survives them instead of falling through to `Unknown`.
+#[test]
+fn test_categorize_acp_error_transient_loop_strings() {
+    assert_eq!(
+        categorize_acp_error("529"),
+        AcpErrorCategory::ApiServerError
+    );
+    assert_eq!(
+        categorize_acp_error("HTTP 529: Overloaded"),
+        AcpErrorCategory::ApiServerError
+    );
+    assert_eq!(
+        categorize_acp_error("rate_limit_error"),
+        AcpErrorCategory::QuotaExceeded
+    );
+}
+
+/// Only transient API failures (server errors and rate/quota limits) are
+/// retryable; every other category must stop an unattended loop.
+#[test]
+fn test_acp_error_category_is_retryable() {
+    assert!(AcpErrorCategory::ApiServerError.is_retryable());
+    assert!(AcpErrorCategory::QuotaExceeded.is_retryable());
+    assert!(!AcpErrorCategory::Authentication.is_retryable());
+    assert!(!AcpErrorCategory::ExecutableNotFound.is_retryable());
+    assert!(!AcpErrorCategory::Initialization.is_retryable());
+    assert!(!AcpErrorCategory::PromptTooLong.is_retryable());
+    assert!(!AcpErrorCategory::Unknown.is_retryable());
+}
+
 /// Test that errors containing both auth and server error patterns still categorize as auth
 /// (auth check comes first in the chain)
 #[test]

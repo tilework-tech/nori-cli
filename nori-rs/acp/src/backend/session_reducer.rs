@@ -28,7 +28,11 @@ pub enum InboundEvent {
     /// The response to an active `session/prompt` request.
     PromptResponse { stop_reason: acp::StopReason },
     /// A transport/protocol failure for the active `session/prompt` request.
-    PromptFailed,
+    /// `failure` describes the disposition carried onto the completion (`None`
+    /// for a clean forced-cancel/timeout).
+    PromptFailed {
+        failure: Option<nori_protocol::TurnFailure>,
+    },
     /// The response to an active `session/load` request.
     LoadResponse,
     /// A `session/request_permission` from the agent.
@@ -45,7 +49,7 @@ pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
     match event {
         InboundEvent::Notification(update) => crate::connection::session_update_kind(update),
         InboundEvent::PromptResponse { .. } => "prompt_response",
-        InboundEvent::PromptFailed => "prompt_failed",
+        InboundEvent::PromptFailed { .. } => "prompt_failed",
         InboundEvent::LoadResponse => "load_response",
         InboundEvent::PermissionRequest { .. } => "permission_request",
         InboundEvent::PromptSubmit(_) => "prompt_submit",
@@ -115,8 +119,8 @@ pub fn reduce(
         InboundEvent::PromptResponse { stop_reason } => {
             reduce_prompt_response(runtime, stop_reason, &mut out);
         }
-        InboundEvent::PromptFailed => {
-            reduce_prompt_failed(runtime, &mut out);
+        InboundEvent::PromptFailed { failure } => {
+            reduce_prompt_failed(runtime, failure, &mut out);
         }
         InboundEvent::LoadResponse => {
             reduce_load_response(runtime, &mut out);
@@ -314,6 +318,7 @@ fn reduce_prompt_response(
         .push(ClientEvent::PromptCompleted(PromptCompleted {
             stop_reason,
             last_agent_message,
+            failure: None,
         }));
 
     if should_drain_queue && let Some(next_prompt) = runtime.queue.pop_front() {
@@ -324,7 +329,11 @@ fn reduce_prompt_response(
     }
 }
 
-fn reduce_prompt_failed(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
+fn reduce_prompt_failed(
+    runtime: &mut SessionRuntime,
+    failure: Option<nori_protocol::TurnFailure>,
+    out: &mut ReduceOutput,
+) {
     let active_request_id = runtime
         .active
         .as_ref()
@@ -352,6 +361,7 @@ fn reduce_prompt_failed(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
         .push(ClientEvent::PromptCompleted(PromptCompleted {
             stop_reason: acp::StopReason::Cancelled,
             last_agent_message,
+            failure,
         }));
 }
 

@@ -323,7 +323,9 @@ impl AcpBackend {
                                     abort.abort();
                                     let _ = backend
                                         .prompt_result_tx
-                                        .send(session_reducer::InboundEvent::PromptFailed)
+                                        .send(session_reducer::InboundEvent::PromptFailed {
+                                            failure: Some(nori_protocol::TurnFailure::Fatal),
+                                        })
                                         .await;
                                 }
                             }

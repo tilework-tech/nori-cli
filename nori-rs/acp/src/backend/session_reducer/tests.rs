@@ -943,7 +943,11 @@ fn prompt_failed_while_cancelling_transitions_to_idle_with_cancelled_stop_reason
     reduce(&mut rt, InboundEvent::CancelSubmit, &mut norm);
     assert_eq!(rt.phase_view(), SessionPhaseView::Cancelling);
 
-    let out = reduce(&mut rt, InboundEvent::PromptFailed, &mut norm);
+    let out = reduce(
+        &mut rt,
+        InboundEvent::PromptFailed { failure: None },
+        &mut norm,
+    );
 
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
     assert!(rt.active.is_none());
@@ -951,6 +955,32 @@ fn prompt_failed_while_cancelling_transitions_to_idle_with_cancelled_stop_reason
         e,
         ClientEvent::PromptCompleted(completed)
             if completed.stop_reason == acp::StopReason::Cancelled
+    )));
+}
+
+#[test]
+fn prompt_failed_carries_failure_disposition_onto_completion() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+
+    let out = reduce(
+        &mut rt,
+        InboundEvent::PromptFailed {
+            failure: Some(nori_protocol::TurnFailure::Fatal),
+        },
+        &mut norm,
+    );
+
+    assert!(has_event(&out.events, |e| matches!(
+        e,
+        ClientEvent::PromptCompleted(completed)
+            if completed.failure == Some(nori_protocol::TurnFailure::Fatal)
     )));
 }
 

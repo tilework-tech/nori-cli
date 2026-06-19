@@ -346,6 +346,7 @@ pub(crate) fn make_chatwidget_manual_with_sender() -> (
 
 mod mod_tests;
 mod part1;
+mod part10;
 mod part2;
 mod part3;
 mod part4;

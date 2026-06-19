@@ -99,6 +99,7 @@ fn acp_prompt_completed_with_final_message_counts_assistant_once() {
         nori_protocol::PromptCompleted {
             stop_reason: nori_protocol::StopReason::EndTurn,
             last_agent_message: Some("Done".to_string()),
+            failure: None,
         },
     ));
 
@@ -119,6 +120,7 @@ fn acp_streamed_answer_counts_assistant_once_when_prompt_completes() {
         nori_protocol::PromptCompleted {
             stop_reason: nori_protocol::StopReason::EndTurn,
             last_agent_message: None,
+            failure: None,
         },
     ));
 
@@ -169,6 +171,7 @@ fn noop_tool_updates_do_not_fragment_streaming_answer() {
         nori_protocol::PromptCompleted {
             stop_reason: nori_protocol::StopReason::EndTurn,
             last_agent_message: None,
+            failure: None,
         },
     ));
 

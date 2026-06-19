@@ -68,6 +68,7 @@ fn cancelling_phase_keeps_task_running_until_prompt_completed() {
         nori_protocol::PromptCompleted {
             stop_reason: nori_protocol::StopReason::Cancelled,
             last_agent_message: None,
+            failure: None,
         },
     ));
     drain_insert_history(&mut rx);
