@@ -332,20 +332,11 @@ impl ChatWidget {
         self.stream_controller = None;
     }
 
-    pub(super) fn on_error(&mut self, message: String, retryable: bool) {
+    pub(super) fn on_error(&mut self, message: String) {
+        // Display only. Loop lifecycle is owned by the prompt completion
+        // (`handle_client_prompt_completed`), which carries the failure
+        // disposition; deciding it here too would race across channels.
         self.finalize_turn();
-        // A transient/retryable error (e.g. a momentary API overload) must not
-        // tear down an armed loop: the turn still completes and the next
-        // iteration retries. Only fatal errors cancel the loop.
-        if retryable {
-            tracing::info!(
-                retryable,
-                loop_remaining = ?self.loop_remaining,
-                "error during turn; preserving loop state for retry"
-            );
-        } else {
-            self.cancel_loop();
-        }
         self.add_to_history(history_cell::new_error_event(message));
         self.request_redraw();
     }
@@ -1269,7 +1260,17 @@ impl ChatWidget {
     }
 
     fn handle_client_prompt_completed(&mut self, completed: nori_protocol::PromptCompleted) {
-        let interrupted = completed.stop_reason == nori_protocol::StopReason::Cancelled;
+        // The completion owns the loop lifecycle: a fatal failure disarms the
+        // loop *before* on_task_complete can re-fire it, while a retryable
+        // failure leaves it armed so the next iteration retries. Deciding this
+        // here (rather than in on_error) keeps it on a single ordered event.
+        if completed.failure == Some(nori_protocol::TurnFailure::Fatal) {
+            self.cancel_loop();
+        }
+        // A failure already surfaces its own error cell; only a clean user
+        // cancellation shows the generic "interrupted" notice.
+        let interrupted = completed.stop_reason == nori_protocol::StopReason::Cancelled
+            && completed.failure.is_none();
         let has_final_message = completed
             .last_agent_message
             .as_ref()

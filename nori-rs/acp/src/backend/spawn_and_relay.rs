@@ -312,10 +312,7 @@ impl AcpBackend {
                                     .event_tx
                                     .send(Event {
                                         id: String::new(),
-                                        msg: EventMsg::Error(ErrorEvent {
-                                            message,
-                                            retryable: false,
-                                        }),
+                                        msg: EventMsg::Error(ErrorEvent { message }),
                                     })
                                     .await;
                                 // Fail any in-flight prompt loudly instead of
@@ -326,7 +323,9 @@ impl AcpBackend {
                                     abort.abort();
                                     let _ = backend
                                         .prompt_result_tx
-                                        .send(session_reducer::InboundEvent::PromptFailed)
+                                        .send(session_reducer::InboundEvent::PromptFailed {
+                                            failure: Some(nori_protocol::TurnFailure::Fatal),
+                                        })
                                         .await;
                                 }
                             }

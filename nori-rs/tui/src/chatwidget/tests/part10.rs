@@ -1,5 +1,22 @@
 use super::*;
-use codex_core::protocol::ErrorEvent;
+
+/// Deliver a prompt completion through the real client-event entry point.
+fn deliver_completion(chat: &mut ChatWidget, failure: Option<nori_protocol::TurnFailure>) {
+    chat.handle_client_event(nori_protocol::ClientEvent::PromptCompleted(
+        nori_protocol::PromptCompleted {
+            stop_reason: nori_protocol::StopReason::Cancelled,
+            last_agent_message: None,
+            failure,
+        },
+    ));
+}
+
+fn history_text(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>) -> String {
+    drain_insert_history(rx)
+        .iter()
+        .map(|cell| lines_to_single_string(cell))
+        .collect()
+}
 
 /// Scan the app-event stream for the next loop re-fire, if any.
 #[cfg(feature = "nori-config")]
@@ -17,54 +34,59 @@ fn next_loop_iteration(
     None
 }
 
-/// Deliver an error to the widget through the real event-dispatch entry point,
-/// exercising the same path the ACP backend uses.
-#[cfg(feature = "nori-config")]
-fn deliver_error(chat: &mut ChatWidget, message: &str, retryable: bool) {
-    chat.handle_codex_event(Event {
-        id: String::new(),
-        msg: EventMsg::Error(ErrorEvent {
-            message: message.to_string(),
-            retryable,
-        }),
-    });
-}
-
-/// A transient (retryable) error during a loop iteration must not disarm the
-/// loop: when the turn completes, the next iteration still fires.
+/// A transient (retryable) turn failure must leave the loop armed: the next
+/// iteration fires when the turn completes.
 #[cfg(feature = "nori-config")]
 #[test]
-fn loop_survives_retryable_error() {
+fn loop_survives_retryable_failure() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     chat.first_prompt_text = Some("hi".to_string());
     chat.loop_remaining = Some(5);
     chat.loop_total = Some(10);
 
-    // The message text is display-only; `retryable` is what drives the loop.
-    deliver_error(&mut chat, "server overloaded", true);
-
-    assert_eq!(chat.loop_remaining, Some(5));
-
-    chat.on_task_complete(None);
+    deliver_completion(&mut chat, Some(nori_protocol::TurnFailure::Retryable));
 
     assert_eq!(next_loop_iteration(&mut rx), Some((4, 10)));
 }
 
-/// A fatal (non-retryable) error stops the loop entirely: it is disarmed and no
-/// further iterations fire.
+/// A fatal turn failure disarms the loop before it can re-fire.
 #[cfg(feature = "nori-config")]
 #[test]
-fn loop_stops_on_fatal_error() {
+fn loop_stops_on_fatal_failure() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     chat.first_prompt_text = Some("hi".to_string());
     chat.loop_remaining = Some(5);
     chat.loop_total = Some(10);
 
-    deliver_error(&mut chat, "Authentication error: invalid API key.", false);
+    deliver_completion(&mut chat, Some(nori_protocol::TurnFailure::Fatal));
 
     assert_eq!(chat.loop_remaining, None);
-
-    chat.on_task_complete(None);
-
     assert_eq!(next_loop_iteration(&mut rx), None);
+}
+
+/// A turn that ended in a failure must not also render the generic
+/// "Conversation interrupted" cell — the surfaced error already explains it.
+#[test]
+fn failure_completion_does_not_add_interrupted_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    deliver_completion(&mut chat, Some(nori_protocol::TurnFailure::Fatal));
+
+    assert!(
+        !history_text(&mut rx).contains("Conversation interrupted"),
+        "a failure completion should not add the interrupted cell"
+    );
+}
+
+/// A genuine user cancellation (no failure) still renders the interrupted cell.
+#[test]
+fn user_cancellation_adds_interrupted_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    deliver_completion(&mut chat, None);
+
+    assert!(
+        history_text(&mut rx).contains("Conversation interrupted"),
+        "a clean user cancellation should add the interrupted cell"
+    );
 }

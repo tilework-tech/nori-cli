@@ -72,7 +72,7 @@ impl SessionDriver {
     pub(crate) fn apply(&mut self, event: InboundEvent) -> ReducerActions {
         let completed_prompt = matches!(
             event,
-            InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed
+            InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed { .. }
         )
         .then(|| {
             self.runtime
@@ -157,7 +157,7 @@ impl AcpBackend {
     pub(super) async fn apply_session_event(&self, event: InboundEvent) {
         let is_prompt_terminal = matches!(
             event,
-            InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed
+            InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed { .. }
         );
         if is_prompt_terminal {
             if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
@@ -695,8 +695,12 @@ impl AcpBackend {
                                 error = %err,
                                 "Prompt task failed before reducer observed a prompt response"
                             );
-                            backend.send_prompt_error(prompt_kind, &err).await;
-                            let _ = prompt_result_tx.send(InboundEvent::PromptFailed).await;
+                            let failure = backend.send_prompt_error(prompt_kind, &err).await;
+                            let _ = prompt_result_tx
+                                .send(InboundEvent::PromptFailed {
+                                    failure: Some(failure),
+                                })
+                                .await;
                         }
                     }
                 });
@@ -738,7 +742,9 @@ impl AcpBackend {
                     if let Some(abort) = prompt_task_abort.lock().await.take() {
                         warn!("Force-cancelling prompt task after {CANCEL_FORCE_SECS}s timeout");
                         abort.abort();
-                        let _ = prompt_result_tx.send(InboundEvent::PromptFailed).await;
+                        let _ = prompt_result_tx
+                            .send(InboundEvent::PromptFailed { failure: None })
+                            .await;
                     }
                 });
                 *self.cancel_timeout_abort.lock().await = Some(watchdog.abort_handle());
@@ -749,7 +755,13 @@ impl AcpBackend {
         }
     }
 
-    async fn send_prompt_error(&self, prompt_kind: QueuedPromptKind, err: &anyhow::Error) {
+    /// Surface a failed prompt as an `EventMsg::Error` (for display) and report
+    /// its disposition so the caller can attach it to the prompt completion.
+    async fn send_prompt_error(
+        &self,
+        prompt_kind: QueuedPromptKind,
+        err: &anyhow::Error,
+    ) -> nori_protocol::TurnFailure {
         let (message, retryable) = match prompt_kind {
             QueuedPromptKind::Compact => (format!("Compact failed: {err}"), false),
             QueuedPromptKind::GoalContinuation => {
@@ -797,9 +809,14 @@ impl AcpBackend {
             .event_tx
             .send(Event {
                 id: String::new(),
-                msg: EventMsg::Error(ErrorEvent { message, retryable }),
+                msg: EventMsg::Error(ErrorEvent { message }),
             })
             .await;
+        if retryable {
+            nori_protocol::TurnFailure::Retryable
+        } else {
+            nori_protocol::TurnFailure::Fatal
+        }
     }
 
     async fn resolve_cancelled_permission(&self, request_id: &str) {
