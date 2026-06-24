@@ -5,8 +5,6 @@ use codex_core::config::Config;
 use codex_core::protocol::Op;
 use nori_acp::AcpBackend;
 use nori_acp::AcpBackendConfig;
-#[cfg(feature = "unstable")]
-use nori_acp::AcpModelState;
 use nori_acp::HistoryPersistence;
 use nori_acp::SessionConfigOption;
 use nori_acp::find_nori_home;
@@ -55,17 +53,6 @@ async fn spawn_timeout_sequence(app_event_tx: &AppEventSender) {
 
 /// Command for controlling ACP session state exposed by the agent.
 pub(crate) enum AcpAgentCommand {
-    /// Get the current model state (available models and current selection)
-    #[cfg(feature = "unstable")]
-    GetModelState {
-        response_tx: oneshot::Sender<AcpModelState>,
-    },
-    /// Set the active model
-    #[cfg(feature = "unstable")]
-    SetModel {
-        model_id: String,
-        response_tx: oneshot::Sender<anyhow::Result<()>>,
-    },
     /// Get the current ACP session config snapshot.
     GetSessionConfig {
         response_tx: oneshot::Sender<Vec<SessionConfigOption>>,
@@ -91,35 +78,6 @@ impl AcpAgentHandle {
     #[cfg(test)]
     pub(crate) fn from_command_tx(command_tx: mpsc::UnboundedSender<AcpAgentCommand>) -> Self {
         Self { command_tx }
-    }
-
-    /// Get the current model state from the ACP agent.
-    #[cfg(feature = "unstable")]
-    pub async fn get_model_state(&self) -> Option<AcpModelState> {
-        let (response_tx, response_rx) = oneshot::channel();
-        if self
-            .command_tx
-            .send(AcpAgentCommand::GetModelState { response_tx })
-            .is_err()
-        {
-            return None;
-        }
-        response_rx.await.ok()
-    }
-
-    /// Set the active model in the ACP agent.
-    #[cfg(feature = "unstable")]
-    pub async fn set_model(&self, model_id: String) -> anyhow::Result<()> {
-        let (response_tx, response_rx) = oneshot::channel();
-        self.command_tx
-            .send(AcpAgentCommand::SetModel {
-                model_id,
-                response_tx,
-            })
-            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
-        response_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
     }
 
     /// Get the current ACP session config snapshot from the agent.
@@ -355,20 +313,6 @@ fn spawn_acp_agent(
         tokio::spawn(async move {
             while let Some(cmd) = agent_cmd_rx.recv().await {
                 match cmd {
-                    #[cfg(feature = "unstable")]
-                    AcpAgentCommand::GetModelState { response_tx } => {
-                        let state = backend_for_agent.model_state();
-                        let _ = response_tx.send(state);
-                    }
-                    #[cfg(feature = "unstable")]
-                    AcpAgentCommand::SetModel {
-                        model_id,
-                        response_tx,
-                    } => {
-                        let model_id = nori_acp::ModelId::from(model_id);
-                        let result = backend_for_agent.set_model(&model_id).await;
-                        let _ = response_tx.send(result);
-                    }
                     AcpAgentCommand::GetSessionConfig { response_tx } => {
                         let state = backend_for_agent.config_options();
                         let _ = response_tx.send(state);
@@ -546,20 +490,6 @@ pub(crate) fn spawn_acp_agent_resume(
         tokio::spawn(async move {
             while let Some(cmd) = agent_cmd_rx.recv().await {
                 match cmd {
-                    #[cfg(feature = "unstable")]
-                    AcpAgentCommand::GetModelState { response_tx } => {
-                        let state = backend_for_agent.model_state();
-                        let _ = response_tx.send(state);
-                    }
-                    #[cfg(feature = "unstable")]
-                    AcpAgentCommand::SetModel {
-                        model_id,
-                        response_tx,
-                    } => {
-                        let model_id = nori_acp::ModelId::from(model_id);
-                        let result = backend_for_agent.set_model(&model_id).await;
-                        let _ = response_tx.send(result);
-                    }
                     AcpAgentCommand::GetSessionConfig { response_tx } => {
                         let state = backend_for_agent.config_options();
                         let _ = response_tx.send(state);

@@ -4,7 +4,7 @@
 //! mutates [`SessionRuntime`] and produces [`ClientEvent`]s. The caller
 //! executes any [`SideEffect`]s after reduction.
 
-use agent_client_protocol_schema as acp;
+use agent_client_protocol_schema::v1 as acp;
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use nori_protocol::PromptCompleted;

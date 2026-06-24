@@ -28,7 +28,7 @@ impl AcpBackend {
         let agent_config = get_agent_config(&config.agent)?;
         debug!("Spawning ACP backend for agent: {}", config.agent);
         let mut connection =
-            match SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
+            match AcpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
                 Ok(conn) => conn,
                 Err(e) => return Err(enhance_agent_error(e, &agent_config)),
             };
@@ -38,7 +38,7 @@ impl AcpBackend {
         let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let goal_mcp_http_server = Arc::new(Mutex::new(None));
 
-        let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+        let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
             &config.mcp_servers,
             config.mcp_oauth_credentials_store_mode,
         );

@@ -1,4 +1,4 @@
-use agent_client_protocol_schema as acp;
+use agent_client_protocol_schema::v1 as acp;
 use nori_protocol::ClientEvent;
 use nori_protocol::ClientEventNormalizer;
 use nori_protocol::session_runtime::ActiveRequestKind;

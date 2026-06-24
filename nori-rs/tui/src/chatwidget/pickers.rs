@@ -609,10 +609,9 @@ impl ChatWidget {
 
     /// Open the ACP model picker popup.
     ///
-    /// Prefers the stable `config_options` mechanism (Model-category config
-    /// option) over the unstable `SessionModelState`.  Falls back to the
-    /// unstable model state when no Model-category config option exists,
-    /// and to a static "not supported" message when neither is available.
+    /// Uses the stable `config_options` mechanism: if the agent advertises a
+    /// Model-category config option, open the value picker for it. Otherwise
+    /// show a static "not supported" message.
     pub(crate) fn open_model_popup(&mut self) {
         // An agent switch is pending: the new session hasn't started, so the new
         // agent's (session-scoped) models aren't available yet. Querying the live
@@ -627,7 +626,6 @@ impl ChatWidget {
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
-                // First try the stable config_options path.
                 if let Some(config_options) = handle.get_session_config().await {
                     let model_option = config_options.into_iter().find(|opt| {
                         opt.category == Some(nori_acp::SessionConfigOptionCategory::Model)
@@ -638,45 +636,17 @@ impl ChatWidget {
                     }
                 }
 
-                // Fall back to the unstable SessionModelState.
-                #[cfg(feature = "unstable")]
-                {
-                    if let Some(model_state) = handle.get_model_state().await {
-                        let models: Vec<crate::app_event::AcpModelInfo> = model_state
-                            .available_models
-                            .iter()
-                            .map(|m| {
-                                let display_name = if m.name.is_empty() {
-                                    m.model_id.to_string()
-                                } else {
-                                    m.name.clone()
-                                };
-                                crate::app_event::AcpModelInfo {
-                                    model_id: m.model_id.to_string(),
-                                    display_name,
-                                    description: m.description.clone(),
-                                }
-                            })
-                            .collect();
-                        let current_model_id =
-                            model_state.current_model_id.map(|id| id.to_string());
-                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                            models,
-                            current_model_id,
-                        });
-                        return;
-                    }
-                }
-
-                // Neither mechanism provided models.
-                app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                    models: vec![],
-                    current_model_id: None,
-                });
+                // The agent does not advertise a Model-category config option,
+                // so model selection is not supported.
+                app_event_tx.send(AppEvent::OpenAcpModelPickerUnsupported);
             });
             return;
         }
-        // No ACP handle - show disabled model picker
+        self.open_model_unsupported_popup();
+    }
+
+    /// Show the static "model switching not supported" picker.
+    pub(crate) fn open_model_unsupported_popup(&mut self) {
         let params = crate::nori::agent_picker::acp_model_picker_params();
         self.bottom_pane.show_selection_view(params);
     }
@@ -693,20 +663,6 @@ impl ChatWidget {
         }
 
         let params = crate::nori::session_config_picker::acp_session_config_picker_params(&[]);
-        self.bottom_pane.show_selection_view(params);
-    }
-
-    /// Open the ACP model picker with fetched models.
-    #[cfg(feature = "unstable")]
-    pub(crate) fn open_acp_model_picker(
-        &mut self,
-        models: Vec<crate::app_event::AcpModelInfo>,
-        current_model_id: Option<String>,
-    ) {
-        let params = crate::nori::agent_picker::acp_model_picker_params_with_models(
-            &models,
-            current_model_id.as_deref(),
-        );
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -728,45 +684,6 @@ impl ChatWidget {
         let params =
             crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
         self.bottom_pane.show_selection_view(params);
-    }
-
-    /// Set the ACP model via the agent handle.
-    #[cfg(feature = "unstable")]
-    pub(crate) fn set_acp_model(&mut self, model_id: String, display_name: String) {
-        if let Some(handle) = self.acp_handle.clone() {
-            let app_event_tx = self.app_event_tx.clone();
-            let agent = self.config.model.clone();
-            let model_id_for_result = model_id.clone();
-            let display_name_for_result = display_name.clone();
-            tokio::spawn(async move {
-                match handle.set_model(model_id).await {
-                    Ok(()) => {
-                        app_event_tx.send(AppEvent::AcpModelSetResult {
-                            success: true,
-                            agent,
-                            model_id: model_id_for_result,
-                            display_name: display_name_for_result,
-                            error: None,
-                        });
-                    }
-                    Err(e) => {
-                        app_event_tx.send(AppEvent::AcpModelSetResult {
-                            success: false,
-                            agent,
-                            model_id: model_id_for_result,
-                            display_name: display_name_for_result,
-                            error: Some(e.to_string()),
-                        });
-                    }
-                }
-            });
-            self.add_info_message(format!("Switching to model: {display_name}..."), None);
-        } else {
-            self.add_info_message(
-                "No ACP agent handle available for model switching".to_string(),
-                None,
-            );
-        }
     }
 
     /// Set an ACP session config option via the agent handle.

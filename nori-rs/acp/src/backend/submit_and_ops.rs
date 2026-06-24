@@ -308,14 +308,6 @@ impl AcpBackend {
             .await;
     }
 
-    /// Get the current model state from the ACP connection.
-    ///
-    /// Returns information about the current model and available models.
-    /// This state is updated when a session is created or when the model is switched.
-    pub fn model_state(&self) -> AcpModelState {
-        self.connection.model_state()
-    }
-
     /// Get the current ACP session config snapshot from the connection.
     pub fn config_options(&self) -> Vec<acp::SessionConfigOption> {
         self.connection.config_options()
@@ -331,7 +323,7 @@ impl AcpBackend {
     /// Get a reference to the underlying ACP connection.
     ///
     /// This provides access to low-level ACP operations like session controls.
-    pub fn connection(&self) -> &Arc<SacpConnection> {
+    pub fn connection(&self) -> &Arc<AcpConnection> {
         &self.connection
     }
 
@@ -345,23 +337,5 @@ impl AcpBackend {
         self.connection
             .set_config_option(&session_id, config_id, value)
             .await
-    }
-
-    /// Switch to a different model for the current session.
-    ///
-    /// This sends a `session/set_model` request to the ACP agent and updates
-    /// the internal model state. The model_id must be one of the available
-    /// models returned by `model_state().available_models`.
-    ///
-    /// # Arguments
-    /// * `model_id` - The ID of the model to switch to
-    ///
-    /// # Errors
-    /// Returns an error if the model switch fails (e.g., invalid model ID,
-    /// agent doesn't support model switching, or connection error).
-    #[cfg(feature = "unstable")]
-    pub async fn set_model(&self, model_id: &acp::ModelId) -> Result<()> {
-        let session_id = self.session_id.read().await;
-        self.connection.set_model(&session_id, model_id).await
     }
 }
