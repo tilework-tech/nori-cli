@@ -33,7 +33,7 @@ The ACP crate serves as a bridge between:
 Key files:
 
 - `registry.rs` - Agent configuration and npm package detection
-- `connection/` - SACP v11-based agent communication over the stdio of a spawned subprocess, including child lifecycle ownership (see `@/nori-rs/acp/src/connection/docs.md`)
+- `connection/` - ACP SDK (`agent-client-protocol`) based agent communication over the stdio of a spawned subprocess, including child lifecycle ownership (see `@/nori-rs/acp/src/connection/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
 - `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage checkpoint updates
@@ -204,9 +204,9 @@ Nori can optionally wrap ACP subprocess transports with an append-only wire logg
 enabled = true
 ```
 
-When enabled, the resolved `AcpProxyConfig` stores logs under `$NORI_HOME/acp-wire`. The config layer intentionally owns this path resolution so every ACP entry point uses the same home directory semantics. The TUI passes the resolved proxy config into `AcpBackendConfig`; the backend passes it to each `SacpConnection::spawn()` call, including prompt-summary subprocesses, so every ACP child process gets its own log file.
+When enabled, the resolved `AcpProxyConfig` stores logs under `$NORI_HOME/acp-wire`. The config layer intentionally owns this path resolution so every ACP entry point uses the same home directory semantics. The TUI passes the resolved proxy config into `AcpBackendConfig`; the backend passes it to each `AcpConnection::spawn()` call, including prompt-summary subprocesses, so every ACP child process gets its own log file.
 
-The connection layer uses `sacp::Lines` to observe raw newline-delimited JSON-RPC messages at the transport boundary before or after SACP parsing. Each child process gets a distinct JSONL file named from the launch timestamp, child PID, and sanitized agent slug. Records include the timestamp, direction (`client_to_agent` or `agent_to_client`), agent slug, child PID, and the parsed JSON message. If a line cannot be parsed as JSON, the logger preserves the raw line and parse error instead of disrupting the live session.
+The connection layer uses `agent_client_protocol::Lines` to observe raw newline-delimited JSON-RPC messages at the transport boundary before or after the SDK parses them. Each child process gets a distinct JSONL file named from the launch timestamp, child PID, and sanitized agent slug. Records include the timestamp, direction (`client_to_agent` or `agent_to_client`), agent slug, child PID, and the parsed JSON message. If a line cannot be parsed as JSON, the logger preserves the raw line and parse error instead of disrupting the live session.
 
 The TUI's `/agent` picker can persistently toggle this setting with `Shift-Tab`. Because the proxy wraps subprocess transports at spawn time, the toggle is intentionally a future-process setting: newly spawned ACP child subprocesses observe the updated config, while already-running subprocesses continue with the proxy state they started with.
 
@@ -354,24 +354,21 @@ The config flow is:
 3. `AcpBackendConfig.default_model` receives `Option<String>` via lookup by agent slug in `chatwidget/agent.rs`
 4. After session creation, `AcpBackend::spawn()` delegates to `backend/session_defaults.rs` to apply the model to the new session
 
-`session_defaults.rs` prefers the stable mechanism: when the agent advertises a select-style config option with the `Model` category, the default is applied exclusively through `session/set_config_option` -- the unstable `session/set_model` is never sent for that agent, even when the stable application is skipped or fails. Only when no Model-category option exists does it fall back to the unstable `session/set_model` API, which is gated behind `#[cfg(feature = "unstable")]` (`unstable` is a default feature of `nori-acp` and `nori-tui`).
+`session_defaults.rs` applies the default through the stable mechanism only: when the agent advertises a select-style config option with the `Model` category, the persisted default is applied through `session/set_config_option`. When no Model-category option exists, the default is simply not applied. There is no unstable `session/set_model` fallback -- that API was removed along with the `nori-acp`/`nori-tui` `unstable` feature.
 
-Both paths validate before sending anything on the wire and skip with a debug log when validation fails:
+The path validates before sending anything on the wire and skips with a debug log when validation fails: the option must be a select, the persisted value must appear among the option's advertised values (ungrouped or grouped), and application is skipped when the persisted value is already the current value.
 
-- Stable path: the option must be a select, the persisted value must appear among the option's advertised values (ungrouped or grouped), and application is skipped when the persisted value is already the current value
-- Unstable fallback: the persisted value must be listed in the agent's `available_models` (checked against `model_state`)
+Application is best-effort: wire errors produce warnings but never block session startup. The `[default_models]` entries are written by the TUI whenever the user selects a model through the stable Model-category config option (`/model` or `/config`) by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md` and `@/nori-rs/tui/docs.md`).
 
-Application is best-effort: wire errors produce warnings but never block session startup. The `[default_models]` entries are written by the TUI whenever the user selects a model -- through the stable Model-category config option (`/model` or `/config`) or through the unstable model picker fallback -- by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md` and `@/nori-rs/tui/docs.md`).
+**Live Session Configuration** (`connection/acp_connection.rs`, `backend/submit_and_ops.rs`):
 
-**Live Session Configuration** (`connection/sacp_connection.rs`, `backend/submit_and_ops.rs`):
-
-ACP agents can expose runtime session configuration through `NewSessionResponse.config_options`, `LoadSessionResponse.config_options`, idle `SessionUpdate::ConfigOptionUpdate` notifications, and the `session/set_config_option` RPC. `SacpConnection` owns the latest live config snapshot in `AcpSessionConfigState`, updates it when a session is created/loaded or when config-option notifications arrive, and replaces it with the full response snapshot after `set_config_option()`.
+ACP agents can expose runtime session configuration through `NewSessionResponse.config_options`, `LoadSessionResponse.config_options`, idle `SessionUpdate::ConfigOptionUpdate` notifications, and the `session/set_config_option` RPC. `AcpConnection` owns the latest live config snapshot in `AcpSessionConfigState`, updates it when a session is created/loaded or when config-option notifications arrive, and replaces it with the full response snapshot after `set_config_option()`.
 
 Config option state is session-owned and, with one exception, live-session only:
 
 - `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
 - `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
-- Config options use `SessionConfigOptionCategory` to tag their purpose. The `Mode` category drives the footer mode indicator and `Shift-Tab` cycling. The `Model` category is the stable mechanism for model selection -- the TUI's `/model` command checks for a Model-category config option first (see `@/nori-rs/tui/docs.md`) before falling back to the unstable `SessionModelState`. Real ACP agents like Claude Code provide model selection through this stable config_options path.
+- Config options use `SessionConfigOptionCategory` to tag their purpose. The `Mode` category drives the footer mode indicator and `Shift-Tab` cycling. The `Model` category is the only mechanism for model selection -- the TUI's `/model` command opens the value picker on a Model-category config option when the agent advertises one, otherwise it shows a "not supported" fallback (see `@/nori-rs/tui/docs.md`). The `Model` variant of `SessionConfigOptionCategory` is exposed by the schema's own `unstable` feature, which `nori-acp` enables unconditionally (`agent-client-protocol-schema = { features = ["unstable"] }` in `Cargo.toml`); there is no longer a `nori-acp`/`nori-tui` `unstable` feature. Real ACP agents like Claude Code provide model selection through this config_options path.
 - No config form is shown during `/agent` switching yet.
 - The `Model` category is the exception to live-session-only behavior: the TUI persists Model-category selections to `[default_models]` in `config.toml` (see `@/nori-rs/tui/docs.md`), and `backend/session_defaults.rs` re-applies the persisted value through this same `session/set_config_option` mechanism at session start. Selections in other categories (mode, thought level) are never persisted.
 
@@ -662,21 +659,21 @@ Footer renders "Tokens: 45K in / 78K out (32K cached)"
 `subagents_used` is consumed by `nori-tui` during system-info refresh and merged into the goodbye-card session stats. It does not affect footer token rendering.
 **Connection Management** (`connection/`):
 
-The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with ACP agents via JSON-RPC. The central type is `SacpConnection` (in `connection/sacp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread. The only construction path is `spawn()`, which launches the agent subprocess and wires its stdio into a `sacp::Lines` transport. The old WebSocket path (`connect_remote()`/`ws_transport.rs`) was removed when `nori cloud` moved to spawning `nori-handroll cloud-acp` as an ordinary local child; remote transport now lives in the nori-sessions repo.
+The ACP connection layer uses the official `agent-client-protocol` SDK (0.15.1, which pins `agent-client-protocol-schema` 0.14.0) to communicate with ACP agents via JSON-RPC. The central type is `AcpConnection` (in `connection/acp_connection.rs`), which is `Send + Sync` and runs directly on the main tokio runtime without a dedicated worker thread. The only construction path is `spawn()`, which launches the agent subprocess and wires its stdio into an `agent_client_protocol::Lines` transport. The old WebSocket path (`connect_remote()`/`ws_transport.rs`) was removed when `nori cloud` moved to spawning `nori-handroll cloud-acp` as an ordinary local child; remote transport now lives in the nori-sessions repo.
 
 ```
 ┌─────────────────────────┐
-│  SacpConnection          │
+│  AcpConnection           │
 │  - create_session()      │
 │  - load_session()        │
 │  - prompt()              │
 │  - cancel()              │
-│  - set_model() [unstable]│
+│  - set_config_option()   │
 └────────┬────────────────┘
          │ spawn()
          ▼
-  sacp::Lines over the
-  child's stdin/stdout
+  agent_client_protocol::Lines
+  over the child's stdin/stdout
          │
          ▼
   Local ACP Agent Process
@@ -684,44 +681,44 @@ The ACP connection layer uses SACP v11 (`sacp` crate) to communicate with ACP ag
    process group)
 ```
 
-`spawn()` delegates SACP setup to an `establish_connection()` free function that accepts any `sacp::ConnectTo<Client>` transport plus the caller's event channel. This function encapsulates all SACP builder setup -- notification handlers, permission request handlers, file read/write handlers, and the initialization handshake. The caller supplies the `ConnectionEvent` channel so additional producers (the child exit watcher) can report through the same ordered stream.
+`spawn()` delegates SDK setup to an `establish_connection()` free function that accepts any `agent_client_protocol::ConnectTo<Client>` transport plus the caller's event channel. This function encapsulates all SDK builder setup -- notification handlers, permission request handlers, file read/write handlers, and the initialization handshake. The caller supplies the `ConnectionEvent` channel so additional producers (the child exit watcher) can report through the same ordered stream.
 
-**Child lifecycle ownership:** An exit-watcher task owns the `Child` -- it `wait()`s and reaps it, publishes the exit status on a `watch` channel, and emits `ConnectionEvent::ChildExited { status, stderr_tail }` into the ordered event stream when the child dies. The connection itself only holds a `ChildHandle` (pid, exit watcher receiver, and a kill `Notify`). Without the watcher, a dead child would be a silent EOF that the SACP layer treats as non-terminal, and pending requests would hang forever. The stderr logging task keeps a bounded tail of recent lines so child failures can surface their real cause (e.g. an auth hint) to the user, not just to the log file. `spawn()` races the initialization handshake against child death: an agent that exits immediately (e.g. an unauthenticated `nori-handroll` printing "run: nori-handroll login") fails fast with its stderr tail in the error text, which lets `categorize_acp_error` classify it (e.g. as Authentication) instead of reporting a generic incompatibility.
+**Child lifecycle ownership:** An exit-watcher task owns the `Child` -- it `wait()`s and reaps it, publishes the exit status on a `watch` channel, and emits `ConnectionEvent::ChildExited { status, stderr_tail }` into the ordered event stream when the child dies. The connection itself only holds a `ChildHandle` (pid, exit watcher receiver, and a kill `Notify`). Without the watcher, a dead child would be a silent EOF that the ACP SDK layer treats as non-terminal, and pending requests would hang forever. The stderr logging task keeps a bounded tail of recent lines so child failures can surface their real cause (e.g. an auth hint) to the user, not just to the log file. `spawn()` races the initialization handshake against child death: an agent that exits immediately (e.g. an unauthenticated `nori-handroll` printing "run: nori-handroll login") fails fast with its stderr tail in the error text, which lets `categorize_acp_error` classify it (e.g. as Authentication) instead of reporting a generic incompatibility.
 
-**Graceful teardown:** `SacpConnection::shutdown()` delegates to `shutdown_with_grace()` with a generous default grace period. Aborting the connection task drops the transport and with it the child's stdin writer -- stdin EOF is the agent's shutdown signal. The connection then waits up to the grace period for the child to exit on its own before killing the process group. This is what lets `nori-handroll cloud-acp` run its stdin-EOF-then-release-broker-session path; the previous immediate-SIGKILL shutdown leaked every cloud session. `Drop` is only a backstop for paths that never ran `shutdown()`: it kills via the recorded pid, guarded against pid reuse by only signaling while the child is unreaped.
+**Graceful teardown:** `AcpConnection::shutdown()` delegates to `shutdown_with_grace()` with a generous default grace period. Aborting the connection task drops the transport and with it the child's stdin writer -- stdin EOF is the agent's shutdown signal. The connection then waits up to the grace period for the child to exit on its own before killing the process group. This is what lets `nori-handroll cloud-acp` run its stdin-EOF-then-release-broker-session path; the previous immediate-SIGKILL shutdown leaked every cloud session. `Drop` is only a backstop for paths that never ran `shutdown()`: it kills via the recorded pid, guarded against pid reuse by only signaling while the child is unreaped.
 
-**Builder-based handler registration:** The `establish_connection()` function uses `Client.builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `connect_with()` is called.
+**Builder-based handler registration:** The `establish_connection()` function uses the SDK's `Client.builder()` with chained `.on_receive_request()` calls to register handlers for `RequestPermissionRequest` (approval flow), `WriteTextFileRequest` (workspace-bounded file writes), and `ReadTextFileRequest` (unrestricted file reads), plus `.on_receive_notification()` for `SessionNotification`. All handlers are registered before `connect_with()` is called.
 
-**Connection initialization:** Inside `connect_with()`, the connection sends `InitializeRequest` to the agent, validates the protocol version (minimum V1), and clones the `ConnectionTo<Agent>` plus agent capabilities out of the callback via a oneshot channel. The background task then awaits `futures::future::pending()` to keep the connection alive until the task is aborted on drop.
+**Connection initialization:** Inside `connect_with()`, the connection sends `InitializeRequest` (with `ProtocolVersion::LATEST`) to the agent, validates the protocol version against `MINIMUM_SUPPORTED_VERSION` (`ProtocolVersion::V1`), and clones the `ConnectionTo<Agent>` plus agent capabilities out of the callback via a oneshot channel. The background task then awaits `futures::future::pending()` to keep the connection alive until the task is aborted on drop.
 
 **Ordered transport inbox:** Session notifications, permission requests, and synthetic file-operation updates are all forwarded into one ordered `ConnectionEvent` stream. The backend consumes that single inbox and feeds it through the serialized reducer/runtime path, which avoids ordering ambiguity between notification and approval channels.
 
-**Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the ordered inbox, and uses the SACP responder plus `ConnectionTo<Agent>` to send the eventual review decision back without blocking the dispatch loop while the UI collects user input.
+**Approval flow:** The `RequestPermissionRequest` handler translates the request to a Codex `ApprovalRequest`, sends it through the ordered inbox, and uses the SDK responder plus `ConnectionTo<Agent>` to send the eventual review decision back without blocking the dispatch loop while the UI collects user input.
 
 **MCP Server Forwarding and the Backend-Owned `nori-client` MCP Server** (`connection/mcp.rs`, `backend/nori_client_mcp.rs`):
 
-CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_sacp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to ACP `McpServer` values inside the transport adapter:
+CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_acp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to ACP `McpServer` values inside the transport adapter:
 
-| Transport        | SACP Type          | Key Fields                                                                                                          |
+| Transport        | ACP Type           | Key Fields                                                                                                          |
 | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | `Stdio`          | `McpServer::Stdio` | command, args, env (explicit key-value pairs + env vars resolved from process environment)                          |
 | `StreamableHttp` | `McpServer::Http`  | url, headers (static headers + env-resolved headers + bearer token + OAuth token as `Authorization: Bearer` header) |
 
 Disabled servers (`enabled == false`) are filtered out before conversion. The configured server name `nori-client` is reserved for the backend-owned loopback server and is rejected during config loading, so user MCP config cannot shadow or duplicate Nori's harness-side channel. Environment variable references (`bearer_token_env_var`, `env_http_headers`, `env_vars`) are resolved eagerly from the current process environment at conversion time. Missing variables are logged as warnings and skipped -- they do not cause errors. The `client_id` and `client_secret_env_var` fields on `StreamableHttp` are not forwarded to the agent -- they are only used by the TUI/rmcp-client layer for OAuth login flows (see `@/nori-rs/rmcp-client/docs.md`). Results are sorted by server name for deterministic ordering.
 
-**OAuth token injection for HTTP servers:** For `StreamableHttp` servers, `to_sacp_mcp_servers()` resolves authentication headers using a priority chain:
+**OAuth token injection for HTTP servers:** For `StreamableHttp` servers, `to_acp_mcp_servers()` resolves authentication headers using a priority chain:
 
 1. `bearer_token_env_var` -- if present and the env var resolves, used as `Authorization: Bearer` header
 2. Stored OAuth tokens -- if no bearer token env var was resolved, `load_oauth_tokens()` from `@/nori-rs/rmcp-client/src/oauth.rs` is called to load credentials from the system keyring or `CODEX_HOME/.credentials.json` fallback file
 3. No auth -- if neither source produces a token, the server is forwarded without an `Authorization` header
 
-This means `to_sacp_mcp_servers()` has side effects (reads from keyring/file system) rather than being a pure config transformation. The `acp` crate depends on `codex-rmcp-client`'s `load_oauth_tokens` for this purpose.
+This means `to_acp_mcp_servers()` has side effects (reads from keyring/file system) rather than being a pure config transformation. The `acp` crate depends on `codex-rmcp-client`'s `load_oauth_tokens` for this purpose.
 
 `nori_client_mcp.rs` is the backend-owned MCP channel for harness-side tooling (currently the goal tools). It serves rmcp's spec-compliant `StreamableHttpService` (streamable-HTTP, stateless mode) over a loopback `axum` listener bound on `127.0.0.1`, and `register_for_session` appends an HTTP ACP MCP server entry named `nori-client` to the same `mcp_servers` list used for configured servers. Each advertised entry carries a generated bearer `Authorization` header, and the loopback router checks that header before forwarding requests into rmcp. The transport handles all MCP framing (initialize, tool listing, tool calls); there is no hand-rolled HTTP or JSON-RPC parsing in process. The `NoriClientServer` handle lives on `AcpBackend`, aborts its serving task on drop, and is dropped with the backend.
 
 The server uses a normal `http://127.0.0.1:<port>/mcp` URL because current Codex and Claude ACP adapters forward ACP MCP server entries into their underlying clients as ordinary HTTP MCP config. Avoiding `acp:` keeps startup compatible with those adapters while still keeping the tool implementation in process.
 
-ACP session setup paths build the MCP server list in two phases: first convert configured MCP servers with `to_sacp_mcp_servers()`, then let backend-owned features append local MCP servers when their own eligibility checks pass. The `nori-client` server requires HTTP MCP support. This setup applies to resumed, fresh, fallback, and compaction-created sessions. New backend construction commits the server before `session/new` or `session/load` so agents that eagerly initialize MCP during session setup can reach it. Compaction-created replacement sessions re-advertise the backend's existing `nori-client` server because the tools are backend-owned rather than ACP-session-owned; if the replacement `session/new` fails, the backend restores the previous initialized flag and keeps the existing endpoint alive. After compact replacement succeeds, the backend re-emits `SessionCapabilitiesChanged`, deriving `nori_client.advertised` from the actual MCP server list passed to that replacement session. Hook-only ACP sessions pass an empty list because hooks do not need user-configured or backend-owned MCP servers.
+ACP session setup paths build the MCP server list in two phases: first convert configured MCP servers with `to_acp_mcp_servers()`, then let backend-owned features append local MCP servers when their own eligibility checks pass. The `nori-client` server requires HTTP MCP support. This setup applies to resumed, fresh, fallback, and compaction-created sessions. New backend construction commits the server before `session/new` or `session/load` so agents that eagerly initialize MCP during session setup can reach it. Compaction-created replacement sessions re-advertise the backend's existing `nori-client` server because the tools are backend-owned rather than ACP-session-owned; if the replacement `session/new` fails, the backend restores the previous initialized flag and keeps the existing endpoint alive. After compact replacement succeeds, the backend re-emits `SessionCapabilitiesChanged`, deriving `nori_client.advertised` from the actual MCP server list passed to that replacement session. Hook-only ACP sessions pass an empty list because hooks do not need user-configured or backend-owned MCP servers.
 
 The local `nori-client` MCP server is intentionally additive. User-configured MCP servers are still forwarded normally, and ineligible agents simply do not receive the loopback endpoint. `SessionCapabilitiesChanged` exposes both endpoint advertisement and initialization so clients do not need to infer either state from raw HTTP MCP support. Continuation chaining depends on the local MCP server actually being initialized for the current advertised endpoint, not just on HTTP MCP support or endpoint advertisement. Durable follow-up work for this surface lives in `@/docs/followups/nori-client-mcp.md`.
 
@@ -880,7 +877,7 @@ Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
 
 ### Stderr Capture Implementation
 
-- A background task in `connection/sacp_connection.rs` reads the child's stderr line by line until EOF, logging each line via tracing
+- A background task in `connection/acp_connection.rs` reads the child's stderr line by line until EOF, logging each line via tracing
 - It also keeps a bounded FIFO tail of the most recent lines; that tail is attached to startup-failure errors and to `ConnectionEvent::ChildExited` so the real cause of a child death reaches the user
 
 ### File-Based Tracing
@@ -906,14 +903,14 @@ Multi-layer cleanup strategy for robust process termination:
 
 1. **Process Group Isolation (Unix)**: Agent spawns in own process group via `setpgid(0, 0)`. Enables killing entire process tree with `killpg()`.
 2. **Kernel-Level Parent Death Signal (Linux)**: `PR_SET_PDEATHSIG` set to `SIGTERM`. Guarantees agent receives signal if parent crashes.
-3. **Graceful Shutdown**: `SacpConnection::shutdown()` closes the child's stdin (by aborting the connection task, which drops the transport), then waits up to a grace period for the child to exit on its own before sending `SIGKILL` to the process group. Agents that need network cleanup on exit (e.g. `nori-handroll cloud-acp` releasing its broker session) rely on this stdin-EOF-first contract.
-4. **Drop Backstop**: `SacpConnection::drop()` aborts the connection and stderr tasks and requests an immediate kill via the recorded pid. A pid-reuse guard only signals while the child is unreaped (the exit-watcher task owns and reaps the `Child`).
+3. **Graceful Shutdown**: `AcpConnection::shutdown()` closes the child's stdin (by aborting the connection task, which drops the transport), then waits up to a grace period for the child to exit on its own before sending `SIGKILL` to the process group. Agents that need network cleanup on exit (e.g. `nori-handroll cloud-acp` releasing its broker session) rely on this stdin-EOF-first contract.
+4. **Drop Backstop**: `AcpConnection::drop()` aborts the connection and stderr tasks and requests an immediate kill via the recorded pid. A pid-reuse guard only signals while the child is unreaped (the exit-watcher task owns and reaps the `Child`).
 
-**Environment Isolation** (`sacp_connection.rs`):
+**Environment Isolation** (`acp_connection.rs`):
 
-`CODEX_HOME` is explicitly stripped from the subprocess environment via `.env_remove("CODEX_HOME")` in `SacpConnection::spawn()`. Nori sets `CODEX_HOME=~/.nori/cli` in its own process so its config loader finds the right directory. Third-party ACP agents inherit the parent environment and use the upstream Codex config parser, which cannot parse Nori-specific TOML fields like `[[agents]]` -- causing a parse error on startup. Stripping `CODEX_HOME` before spawn causes those agents to fall back to their own default config paths. Custom agents defined under `[[agents]]` in Nori's config are unaffected because they communicate via the ACP protocol, not by reading Nori's config files.
+`CODEX_HOME` is explicitly stripped from the subprocess environment via `.env_remove("CODEX_HOME")` in `AcpConnection::spawn()`. Nori sets `CODEX_HOME=~/.nori/cli` in its own process so its config loader finds the right directory. Third-party ACP agents inherit the parent environment and use the upstream Codex config parser, which cannot parse Nori-specific TOML fields like `[[agents]]` -- causing a parse error on startup. Stripping `CODEX_HOME` before spawn causes those agents to fall back to their own default config paths. Custom agents defined under `[[agents]]` in Nori's config are unaffected because they communicate via the ACP protocol, not by reading Nori's config files.
 
-**File Operation Security Boundaries** (`sacp_connection.rs`):
+**File Operation Security Boundaries** (`acp_connection.rs`):
 
 File operation handlers are registered as `.on_receive_request()` handlers during connection setup:
 
@@ -966,14 +963,14 @@ That means update-only provider flows, including Gemini-style shell calls that s
 
 Out-of-phase request-owned updates are treated the same way: the reducer still emits a warning when no request is active, but it forwards the raw ACP update to the normalizer so the user sees both the malformed session state and the underlying tool snapshot.
 
-**Transport Event Flow** (`connection/sacp_connection.rs`, `backend/spawn_and_relay.rs`, `backend/session.rs`):
+**Transport Event Flow** (`connection/acp_connection.rs`, `backend/spawn_and_relay.rs`, `backend/session.rs`):
 
 The connection layer now exposes exactly one ordered `mpsc::Receiver<ConnectionEvent>`. `SessionNotification` updates, permission requests, and synthetic file-operation updates all flow through that inbox in source order. The backend takes ownership of the receiver once, then either:
 
 - hands it to `run_connection_event_relay()` for live sessions, where it is merged with reducer prompt results and fed into the serialized runtime, or
 - temporarily hands it to the `session/load` collector during resume, buffering replay `ClientEvent`s before returning the receiver to the live backend.
 
-This keeps the SACP-specific routing logic inside `connection/` and removes the old split between notification and approval channels.
+This keeps the ACP SDK routing logic inside `connection/` and removes the old split between notification and approval channels.
 
 **Unexpected child death:** When the agent subprocess exits on its own, the connection's exit-watcher task emits `ConnectionEvent::ChildExited { status, stderr_tail }` through the ordered event stream. Unless the backend is shutting down (`is_shutting_down`), `run_connection_event_relay()` in `@/nori-rs/acp/src/backend/spawn_and_relay.rs` surfaces it as a visible `EventMsg::Error` carrying the exit code and the child's recent stderr, then aborts any in-flight prompt task and sends `PromptFailed { failure: Some(TurnFailure::Fatal) }` to the reducer (a dead child cannot recover on retry). This replaces the old behavior where a dead child was a silent transport EOF and pending prompt requests hung forever.
 
@@ -993,7 +990,7 @@ When `Op::Interrupt` fires, the ACP backend now only submits `InboundEvent::Canc
 
 The watchdog is tracked via `cancel_timeout_abort: Arc<Mutex<Option<AbortHandle>>>` on `AcpBackend`. If the agent responds cooperatively before the timeout fires, `apply_session_event()` aborts the watchdog and clears both the watchdog and prompt abort handles on any terminal prompt event (`PromptResponse` or `PromptFailed`). The prompt task itself is tracked via `prompt_task_abort: Arc<Mutex<Option<AbortHandle>>>`, which is stored when the `SendPrompt` side effect spawns the prompt task. Both handles are initialized to `None` in `spawn()` and `resume_session()`.
 
-`SacpConnection::prompt()` also carries a small amount of session-local transport state so cancellation tails can be absorbed without widening the public phase model. If the previous prompt ended with `Cancelled`, the next prompt request may receive one or more immediate empty `end_turn` responses before the agent starts working on the user's real follow-up prompt. The connection layer now treats those empty terminal responses as stale cancel-tail cleanup and retries the same ACP prompt request until either streamed updates arrive or a non-stale stop reason is observed. That keeps the reducer contract unchanged: it still only sees the final logical completion for the user-facing prompt turn.
+`AcpConnection::prompt()` also carries a small amount of session-local transport state so cancellation tails can be absorbed without widening the public phase model. If the previous prompt ended with `Cancelled`, the next prompt request may receive one or more immediate empty `end_turn` responses before the agent starts working on the user's real follow-up prompt. The connection layer now treats those empty terminal responses as stale cancel-tail cleanup and retries the same ACP prompt request until either streamed updates arrive or a non-stale stop reason is observed. That keeps the reducer contract unchanged: it still only sees the final logical completion for the user-facing prompt turn.
 
 This removes the old synthetic interrupt-abort fast-path that treated cancel as immediate idle. The TUI now renders ACP interrupt state from reducer-owned phase/completion projections instead of inferring prompt ownership from interrupt timing.
 
@@ -1035,13 +1032,13 @@ The `ContextCompactedEvent.summary` field is the coupling point between the ACP 
 
 `AcpBackend::resume_session()` allows reconnecting to a previous ACP session. It takes `acp_session_id: Option<&str>`, `transcript: Option<&Transcript>`, and a single `backend_event_tx`, then selects between two resume strategies based on agent capabilities. The resulting `BackendEvent` stream carries both normalized ACP session events and shared control-plane events.
 
-`resume_session()` always spawns the agent via `SacpConnection::spawn()` -- like every other code path in this crate, it only knows about local subprocess agents.
+`resume_session()` always spawns the agent via `AcpConnection::spawn()` -- like every other code path in this crate, it only knows about local subprocess agents.
 
 ```
 AcpBackend::resume_session(config, acp_session_id, transcript, backend_event_tx)
     |
     v
-SacpConnection::spawn()
+AcpConnection::spawn()
     |
     v
 check capabilities().load_session
@@ -1049,7 +1046,7 @@ check capabilities().load_session
     ├── Agent supports session/load AND acp_session_id is Some:
     │       |
     │       v
-    │   SacpConnection::load_session(session_id, cwd, update_tx)
+    │   AcpConnection::load_session(session_id, cwd, update_tx)
     │       |
     │       ├── Success:
     │       │   Agent streams SessionUpdate notifications (history replay)
@@ -1064,7 +1061,7 @@ check capabilities().load_session
     └── Otherwise (client-side replay fallback):
             |
             v
-        SacpConnection::create_session() (normal session/new)
+        AcpConnection::create_session() (normal session/new)
             |
             v
         transcript_to_summary()       -> pending_compact_summary (for agent context)
@@ -1079,7 +1076,7 @@ SessionConfigured event sent to TUI
 Deferred replay relay spawned (sends buffered events, then optional goal resume notice)
 ```
 
-**Server-side path:** A collect task runs concurrently during `load_session()`, taking ownership of the ordered `ConnectionEvent` receiver and buffering the normalized `ClientEvent` stream into a `Vec`. `SacpConnection::load_session()` reuses that same ordered inbox for the agent's replay notifications, so the collector can observe session updates in source order without a special side channel. On `#[cfg(feature = "unstable")]` builds, model state is also extracted from the `LoadSessionResponse` if available. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only _after_ all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.
+**Server-side path:** A collect task runs concurrently during `load_session()`, taking ownership of the ordered `ConnectionEvent` receiver and buffering the normalized `ClientEvent` stream into a `Vec`. `AcpConnection::load_session()` reuses that same ordered inbox for the agent's replay notifications, so the collector can observe session updates in source order without a special side channel. The buffered events are returned as `deferred_replay_events` and a relay task is spawned only _after_ all setup events (`SessionConfigured`, `Warning`, etc.) have been sent to the outbound backend-event channel. This deferred-relay pattern prevents a deadlock: the outbound channel is bounded, and the TUI consumer only starts after `resume_session()` returns, so sending replay events before setup events would fill the channel and block `resume_session()` from making progress. If `load_session()` fails at runtime (e.g., the agent advertises the capability but the call itself errors), the collect task is aborted and the method falls back to a fresh session. A `WarningEvent` is emitted to inform the user that the restored session will not have server-side replay.
 
 **Client-side path:** When the agent does not support `session/load` (e.g., Claude Code's ACP adapter returns `method_not_found`), or when the server-side `load_session()` call fails at runtime, a fresh session is created via `session/new`. The previous conversation is replayed through normalized `ClientEvent::ReplayEntry` items derived from the transcript rather than through `SessionConfigured.initial_messages`. The transcript summary path remains available for context management and `/compact`-style behavior. A `TRANSCRIPT_SUMMARY_WARN_CHARS` threshold (200K chars) logs a warning when summaries are very large; the actual safety net is the agent-side "prompt too long" rejection, which the caller handles gracefully.
 
@@ -1091,7 +1088,7 @@ On the first user prompt of a session, the ACP backend conditionally spawns a fi
 
 The background session is gated on configuration: it only spawns when the `prompt_summary` footer segment is enabled (via `NoriConfig::load()`) or `auto_worktree.is_enabled()`. Since `prompt_summary` defaults to `false` in the lean footer defaults and `auto_worktree` defaults to `Off`, the background ACP session does not spawn by default, keeping the wire protocol clean for debugging.
 
-The summarization uses a completely separate ACP connection (`SacpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/hooks.rs` handles this:
+The summarization uses a completely separate ACP connection (`AcpConnection::spawn` + `create_session`) so it does not interfere with the main agent conversation. The `run_prompt_summary()` free function in `backend/hooks.rs` handles this:
 
 1. Spawns a new agent subprocess via `get_agent_config()` with the same agent name
 2. Sends a "summarize in 5 words or fewer" prompt to the separate session
@@ -1160,11 +1157,11 @@ The path: `send_prompt_error` in `backend/session_runtime_driver.rs` emits the `
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `sacp_connection.rs`, `mcp.rs`, `sacp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `backend/` (with `session.rs`, `user_input.rs`, `hooks.rs`, `helpers.rs`, `tool_display.rs`, `transcript.rs`, `spawn_and_relay.rs`, `submit_and_ops.rs`), `connection/` (with `acp_connection.rs`, `mcp.rs`, `acp_connection_tests.rs`), and `config/types/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites.
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
-- The minimum supported ACP protocol version is V1
-- The `unstable` feature (a default feature) gates the unstable ACP model-selection API surface (`session/set_model`, `SessionModelState`, and related re-exports); the stable Model-category config option path is not feature-gated
+- The minimum supported ACP protocol version is V1 (`MINIMUM_SUPPORTED_VERSION`); initialize is sent with `ProtocolVersion::LATEST`
+- `nori-acp` no longer has an `unstable` feature. Model selection rides the `SessionConfigOptionCategory::Model` variant, which the schema exposes only behind its own `unstable` feature; `nori-acp` turns that on unconditionally (`agent-client-protocol-schema = { features = ["unstable"] }` in `Cargo.toml`). The removed `unstable` feature previously gated only the deleted `session/set_model`/`SessionModelState` model-selection API
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
