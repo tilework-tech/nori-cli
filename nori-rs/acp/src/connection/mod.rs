@@ -1,21 +1,21 @@
 //! ACP Connection management
 //!
-//! Provides `SacpConnection` for communicating with ACP agents using the
-//! SACP v11 protocol over stdin/stdout (local subprocess via `spawn()`).
+//! Provides `AcpConnection` for communicating with ACP agents over the
+//! Agent Client Protocol via stdin/stdout (local subprocess via `spawn()`).
 
+use agent_client_protocol_schema::v1 as acp;
 use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
 use codex_protocol::approvals::ExecApprovalRequestEvent;
 use codex_protocol::protocol::ReviewDecision;
-use sacp::schema as acp;
 use tokio::sync::oneshot;
 
+pub mod acp_connection;
 mod child_lifecycle;
 pub mod mcp;
-pub mod sacp_connection;
 mod wire_log;
 
 #[cfg(test)]
-mod sacp_connection_tests;
+mod acp_connection_tests;
 
 /// Raw events emitted by the ACP transport adapter in source order.
 #[derive(Debug)]
@@ -90,18 +90,6 @@ pub struct ApprovalRequest {
     pub response_tx: oneshot::Sender<ReviewDecision>,
 }
 
-/// Model state captured from the ACP session.
-///
-/// This is populated when a session is created (from `NewSessionResponse`)
-/// and can be updated when the model is changed.
-#[derive(Debug, Clone, Default)]
-pub struct AcpModelState {
-    /// The ID of the currently active model
-    pub current_model_id: Option<acp::ModelId>,
-    /// List of available models from the agent
-    pub available_models: Vec<acp::ModelInfo>,
-}
-
 /// Session config state captured from ACP session setup and updates.
 ///
 /// This stores the complete current `configOptions` snapshot for the active
@@ -114,22 +102,6 @@ pub struct AcpSessionConfigState {
 impl AcpSessionConfigState {
     pub fn new() -> Self {
         Self::default()
-    }
-}
-
-impl AcpModelState {
-    /// Create a new empty model state
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Update from an ACP SessionModelState
-    #[cfg(feature = "unstable")]
-    pub fn from_session_model_state(state: &acp::SessionModelState) -> Self {
-        Self {
-            current_model_id: Some(state.current_model_id.clone()),
-            available_models: state.available_models.clone(),
-        }
     }
 }
 

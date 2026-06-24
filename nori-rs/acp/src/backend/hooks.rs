@@ -16,7 +16,7 @@ pub(super) async fn run_prompt_summary(
     use tokio::time::timeout;
 
     let agent_config = get_agent_config(agent_name)?;
-    let mut connection = SacpConnection::spawn(&agent_config, cwd, acp_proxy).await?;
+    let mut connection = AcpConnection::spawn(&agent_config, cwd, acp_proxy).await?;
     let session_id = connection.create_session(cwd, vec![]).await?;
 
     let summarization_prompt = format!(

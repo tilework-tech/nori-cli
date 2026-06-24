@@ -1,21 +1,21 @@
-//! Conversion from CLI MCP server config to SACP protocol types.
+//! Conversion from CLI MCP server config to ACP protocol types.
 //!
 //! The CLI stores MCP server configuration in `codex_core::config::types::McpServerConfig`.
-//! The SACP protocol expects `sacp::schema::McpServer` in `NewSessionRequest`.
+//! The ACP protocol expects `McpServer` in `NewSessionRequest`.
 //! This module bridges the two so that CLI-configured MCP servers are forwarded
 //! to ACP agents at session creation time.
 
 use std::collections::HashMap;
 
+use agent_client_protocol_schema::v1 as acp;
 use codex_core::config::types::McpServerConfig;
 use codex_core::config::types::McpServerTransportConfig;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
 use codex_rmcp_client::load_oauth_tokens;
 use oauth2::TokenResponse;
-use sacp::schema as acp;
 use tracing::warn;
 
-/// Convert CLI MCP server configs into SACP protocol `McpServer` values
+/// Convert CLI MCP server configs into ACP protocol `McpServer` values
 /// suitable for inclusion in a `NewSessionRequest`.
 ///
 /// Disabled servers (`enabled == false`) are excluded.
@@ -27,7 +27,7 @@ use tracing::warn;
 /// For HTTP servers without a `bearer_token_env_var`, stored OAuth tokens
 /// (from keyring or credential file) are loaded and injected as an
 /// `Authorization: Bearer` header.
-pub fn to_sacp_mcp_servers(
+pub fn to_acp_mcp_servers(
     servers: &HashMap<String, McpServerConfig>,
     oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 ) -> Vec<acp::McpServer> {
@@ -222,14 +222,14 @@ mod tests {
         }
     }
 
-    fn to_sacp_mcp_servers(servers: &HashMap<String, McpServerConfig>) -> Vec<acp::McpServer> {
-        super::to_sacp_mcp_servers(servers, OAuthCredentialsStoreMode::Auto)
+    fn to_acp_mcp_servers(servers: &HashMap<String, McpServerConfig>) -> Vec<acp::McpServer> {
+        super::to_acp_mcp_servers(servers, OAuthCredentialsStoreMode::Auto)
     }
 
     #[test]
     fn empty_input_produces_empty_output() {
         let servers = HashMap::new();
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert!(result.is_empty());
     }
 
@@ -244,7 +244,7 @@ mod tests {
             stdio_config("npx", vec!["@mcp/server", "/tmp"], Some(env), vec![]),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert_eq!(result.len(), 1);
 
         match &result[0] {
@@ -276,7 +276,7 @@ mod tests {
             ),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert_eq!(result.len(), 1);
 
         match &result[0] {
@@ -314,7 +314,7 @@ mod tests {
             ),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert_eq!(result.len(), 1);
 
         match &result[0] {
@@ -346,7 +346,7 @@ mod tests {
             ),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert_eq!(result.len(), 1);
 
         match &result[0] {
@@ -382,7 +382,7 @@ mod tests {
             stdio_config("echo", vec![], None, vec![]),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert_eq!(result.len(), 1);
         match &result[0] {
             acp::McpServer::Stdio(s) => {
@@ -436,7 +436,7 @@ mod tests {
             http_config(server_url, None, None, None),
         );
 
-        let result = super::to_sacp_mcp_servers(&servers, OAuthCredentialsStoreMode::File);
+        let result = super::to_acp_mcp_servers(&servers, OAuthCredentialsStoreMode::File);
         assert_eq!(result.len(), 1);
 
         match &result[0] {
@@ -507,7 +507,7 @@ mod tests {
             ),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert_eq!(result.len(), 1);
 
         match &result[0] {
@@ -547,7 +547,7 @@ mod tests {
             ),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         match &result[0] {
             acp::McpServer::Stdio(s) => {
                 assert_eq!(s.env.len(), 1);
@@ -570,7 +570,7 @@ mod tests {
             http_config("https://m.example.com", None, None, None),
         );
 
-        let result = to_sacp_mcp_servers(&servers);
+        let result = to_acp_mcp_servers(&servers);
         assert_eq!(result.len(), 3);
 
         let names: Vec<&str> = result

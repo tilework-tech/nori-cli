@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use super::ApprovalRequest;
 use super::ConnectionEvent;
-use super::sacp_connection::SacpConnection;
-use agent_client_protocol_schema as acp;
+use super::acp_connection::AcpConnection;
+use agent_client_protocol_schema::v1 as acp;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serial_test::serial;
@@ -42,7 +42,7 @@ async fn drive_logged_prompt(
     cwd: &std::path::Path,
     proxy: crate::config::AcpProxyConfig,
 ) {
-    let conn = SacpConnection::spawn(config, cwd, proxy)
+    let conn = AcpConnection::spawn(config, cwd, proxy)
         .await
         .expect("spawn logged connection");
     let session_id = conn
@@ -66,7 +66,7 @@ fn read_wire_log(path: &std::path::Path) -> Vec<Value> {
         .collect()
 }
 
-/// Test that SacpConnection can spawn a mock agent, perform the initialization
+/// Test that AcpConnection can spawn a mock agent, perform the initialization
 /// handshake, and return a working connection. After spawn, the connection
 /// should be able to create a session (proving the transport is alive).
 #[tokio::test]
@@ -77,13 +77,13 @@ async fn test_spawn_and_create_session() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(
+    let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
     )
     .await
-    .expect("Failed to spawn SacpConnection");
+    .expect("Failed to spawn AcpConnection");
 
     // Verify the connection is functional by creating a session.
     let session_id = conn
@@ -162,7 +162,7 @@ async fn test_prompt_receives_text_updates() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -212,7 +212,7 @@ async fn test_event_receiver_forwards_session_updates() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -259,7 +259,7 @@ async fn test_tool_call_prompt_delivers_final_text_update() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -307,48 +307,6 @@ async fn test_tool_call_prompt_delivers_final_text_update() {
     );
 }
 
-/// Test that model state is populated after session creation.
-/// The mock agent always returns 3 models in its NewSessionResponse.
-#[tokio::test]
-#[serial]
-async fn test_model_state_after_session_creation() {
-    let Some(config) = mock_agent_config() else {
-        return;
-    };
-    let temp_dir = tempdir().expect("temp dir");
-
-    let conn = SacpConnection::spawn(
-        &config,
-        temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
-    )
-    .await
-    .expect("spawn");
-
-    let _session_id = conn
-        .create_session(temp_dir.path(), vec![])
-        .await
-        .expect("create session");
-
-    let state = conn.model_state();
-
-    // The mock agent always sends 3 models: mock-model-default, mock-model-fast,
-    // mock-model-powerful, with mock-model-default as current.
-    assert_eq!(
-        state
-            .current_model_id
-            .as_ref()
-            .map(std::string::ToString::to_string),
-        Some("mock-model-default".to_string()),
-        "Current model should be mock-model-default"
-    );
-    assert_eq!(
-        state.available_models.len(),
-        3,
-        "Should have 3 available models"
-    );
-}
-
 #[tokio::test]
 #[serial]
 async fn test_session_config_options_after_session_creation() {
@@ -357,7 +315,7 @@ async fn test_session_config_options_after_session_creation() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(
+    let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -387,7 +345,7 @@ async fn test_set_session_config_option_replaces_connection_state() {
     };
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(
+    let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -429,7 +387,7 @@ async fn test_approval_receiver_forwards_requests() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -493,7 +451,7 @@ async fn test_event_receiver_preserves_update_then_approval_order() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -591,7 +549,7 @@ async fn test_codex_home_not_inherited() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -626,7 +584,7 @@ async fn test_codex_home_not_inherited() {
     );
 }
 
-/// Test that dropping SacpConnection kills the agent subprocess.
+/// Test that dropping AcpConnection kills the agent subprocess.
 /// We verify this by spawning with MOCK_AGENT_STREAM_UNTIL_CANCEL (which
 /// streams indefinitely), starting a prompt, then dropping the connection.
 /// The test has a timeout — if drop doesn't kill the subprocess, we'd hang.
@@ -645,7 +603,7 @@ async fn test_drop_kills_subprocess() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(
+    let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -698,7 +656,7 @@ async fn test_cancel_during_prompt() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let conn = SacpConnection::spawn(
+    let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -758,7 +716,7 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -876,7 +834,7 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
 
     let temp_dir = tempdir().expect("temp dir");
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -1016,7 +974,7 @@ async fn test_shutdown_closes_stdin_and_waits_for_child_exit() {
         ),
     );
 
-    let conn = SacpConnection::spawn(
+    let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -1062,7 +1020,7 @@ async fn test_shutdown_kills_child_that_outlives_grace() {
         ),
     );
 
-    let conn = SacpConnection::spawn(
+    let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -1124,7 +1082,7 @@ async fn test_child_exit_emits_event_with_stderr_tail() {
         ),
     );
 
-    let mut conn = SacpConnection::spawn(
+    let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
         crate::config::AcpProxyConfig::disabled(),
@@ -1176,7 +1134,7 @@ async fn test_spawn_failure_surfaces_child_stderr() {
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        SacpConnection::spawn(
+        AcpConnection::spawn(
             &config,
             temp_dir.path(),
             crate::config::AcpProxyConfig::disabled(),

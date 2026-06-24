@@ -448,7 +448,7 @@ async fn require_bearer_token(
 }
 
 pub(super) fn capabilities_update_for_session(
-    connection: &SacpConnection,
+    connection: &AcpConnection,
     connected: &AtomicBool,
 ) -> nori_protocol::SessionCapabilitiesView {
     capabilities_update_for_nori_client(
@@ -459,7 +459,7 @@ pub(super) fn capabilities_update_for_session(
 }
 
 pub(super) fn capabilities_update_for_nori_client(
-    connection: &SacpConnection,
+    connection: &AcpConnection,
     nori_client_advertised: bool,
     nori_client_initialized: bool,
 ) -> nori_protocol::SessionCapabilitiesView {
@@ -495,7 +495,7 @@ fn capabilities_update(
 }
 
 pub(super) async fn register_for_session(
-    connection: &SacpConnection,
+    connection: &AcpConnection,
     mcp_servers: &mut Vec<acp::McpServer>,
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     backend_event_tx: mpsc::Sender<BackendEvent>,

@@ -25,7 +25,7 @@ impl AcpBackend {
         );
 
         let agent_config = get_agent_config(&config.agent)?;
-        let mut connection = SacpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
+        let mut connection = AcpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
             .await
             .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
@@ -126,7 +126,7 @@ impl AcpBackend {
                 (session_driver, event_rx, buffered_events)
             });
 
-            let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+            let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );
@@ -177,7 +177,7 @@ impl AcpBackend {
                         anyhow::anyhow!("load session collector task panicked: {err}")
                     })?;
 
-                    let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                    let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
                         &config.mcp_servers,
                         config.mcp_oauth_credentials_store_mode,
                     );
@@ -234,7 +234,7 @@ impl AcpBackend {
         } else {
             debug!("Agent does not support session/load — using client-side replay");
 
-            let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+            let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
                 &config.mcp_servers,
                 config.mcp_oauth_credentials_store_mode,
             );

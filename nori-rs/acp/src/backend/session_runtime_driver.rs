@@ -20,7 +20,7 @@ pub(crate) struct SessionDriver {
 
 pub(crate) struct CompletedTurn {
     pub prompt: QueuedPrompt,
-    pub stop_reason: agent_client_protocol_schema::StopReason,
+    pub stop_reason: agent_client_protocol_schema::v1::StopReason,
     pub last_agent_message: Option<String>,
 }
 
@@ -487,7 +487,7 @@ impl AcpBackend {
                 *self.pending_compact_summary.lock().await = Some(summary.clone());
 
                 let cwd = self.cwd.clone();
-                let mut mcp_servers = crate::connection::mcp::to_sacp_mcp_servers(
+                let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
                     &self.mcp_servers,
                     self.mcp_oauth_credentials_store_mode,
                 );
@@ -578,7 +578,7 @@ impl AcpBackend {
     }
 
     async fn maybe_submit_goal_continuation(&self, completed_turn: &CompletedTurn) {
-        if completed_turn.stop_reason != agent_client_protocol_schema::StopReason::EndTurn {
+        if completed_turn.stop_reason != agent_client_protocol_schema::v1::StopReason::EndTurn {
             return;
         }
 

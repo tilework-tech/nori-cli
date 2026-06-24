@@ -16,18 +16,6 @@ use codex_core::protocol::AskForApproval;
 use codex_core::protocol::SandboxPolicy;
 use codex_core::protocol_config_types::ReasoningEffort;
 
-/// Information about an available ACP model.
-#[cfg(feature = "unstable")]
-#[derive(Debug, Clone)]
-pub(crate) struct AcpModelInfo {
-    /// The model ID (used for switching)
-    pub model_id: String,
-    /// Human-readable display name
-    pub display_name: String,
-    /// Optional description
-    pub description: Option<String>,
-}
-
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
@@ -205,41 +193,9 @@ pub(crate) enum AppEvent {
         display_name: String,
     },
 
-    /// Open the ACP model picker popup with available models from the agent.
-    #[cfg(feature = "unstable")]
-    OpenAcpModelPicker {
-        /// Available models from the ACP agent
-        models: Vec<AcpModelInfo>,
-        /// Currently selected model ID
-        current_model_id: Option<String>,
-    },
-
-    /// Set the active model in the ACP agent.
-    #[cfg(feature = "unstable")]
-    SetAcpModel {
-        /// The model ID to switch to
-        model_id: String,
-        /// The display name for UI feedback
-        display_name: String,
-    },
-
-    /// Result of setting the ACP model.
-    #[cfg(feature = "unstable")]
-    AcpModelSetResult {
-        /// Whether the model was set successfully
-        success: bool,
-        /// Agent slug active when the model was set; the selection is
-        /// persisted under this key even if the user switches agents
-        /// mid-flight.
-        agent: String,
-        /// The model that was set (on success) or attempted (on failure).
-        /// Used for persisting the model selection to config.toml.
-        model_id: String,
-        /// The display name for UI feedback
-        display_name: String,
-        /// Error message on failure
-        error: Option<String>,
-    },
+    /// Open the model picker placeholder shown when the active agent does not
+    /// expose a Model session config option.
+    OpenAcpModelPickerUnsupported,
 
     /// Open the generic ACP session config picker.
     OpenAcpSessionConfigPicker {

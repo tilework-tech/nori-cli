@@ -666,55 +666,8 @@ impl App {
                 );
                 self.chat_widget.show_connecting_status(&display_name);
             }
-            #[cfg(feature = "unstable")]
-            AppEvent::OpenAcpModelPicker {
-                models,
-                current_model_id,
-            } => {
-                self.chat_widget
-                    .open_acp_model_picker(models, current_model_id);
-            }
-            #[cfg(feature = "unstable")]
-            AppEvent::SetAcpModel {
-                model_id,
-                display_name,
-            } => {
-                self.chat_widget.set_acp_model(model_id, display_name);
-            }
-            #[cfg(feature = "unstable")]
-            AppEvent::AcpModelSetResult {
-                success,
-                agent,
-                model_id,
-                display_name,
-                error,
-            } => {
-                if success {
-                    // Update the approval dialog display name to reflect the new model
-                    self.chat_widget
-                        .update_agent_display_name(display_name.clone());
-
-                    // Persist the model selection to [default_models] in config.toml
-                    let message = match ConfigEditsBuilder::new(&self.config.codex_home)
-                        .set_default_model(&agent, &model_id)
-                        .apply()
-                        .await
-                    {
-                        Ok(()) => format!("Model switched to: {display_name} (saved as default)"),
-                        Err(err) => {
-                            tracing::error!(
-                                error = %err,
-                                "failed to persist default model selection"
-                            );
-                            format!("Model switched to: {display_name}")
-                        }
-                    };
-                    self.chat_widget.add_info_message(message, None);
-                } else {
-                    let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
-                    self.chat_widget
-                        .add_info_message(format!("Failed to switch model: {error_msg}"), None);
-                }
+            AppEvent::OpenAcpModelPickerUnsupported => {
+                self.chat_widget.open_model_unsupported_popup();
             }
             AppEvent::OpenAcpSessionConfigPicker { config_options } => {
                 self.chat_widget

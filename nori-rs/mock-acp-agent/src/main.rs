@@ -3,51 +3,72 @@
 mod browser_modify;
 mod runaway_search;
 
-use std::cell::Cell;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
+use std::task::Context;
+use std::task::Poll;
 
-use agent_client_protocol::Client as _;
-use agent_client_protocol::{self as acp};
+use agent_client_protocol::Agent;
+use agent_client_protocol::ByteStreams;
+use agent_client_protocol::Client;
+use agent_client_protocol::ConnectionTo;
+use agent_client_protocol::Responder;
+use agent_client_protocol::schema::v1 as acp;
+use futures::io::AsyncRead;
 use serde_json::json;
-use tokio::sync::mpsc;
-use tokio::sync::oneshot;
 use tokio::time::Duration;
 use tokio::time::sleep;
-use tokio_util::compat::TokioAsyncReadCompatExt as _;
-use tokio_util::compat::TokioAsyncWriteCompatExt as _;
+use tokio_util::compat::TokioAsyncReadCompatExt;
+use tokio_util::compat::TokioAsyncWriteCompatExt;
 
-#[allow(clippy::large_enum_variant)]
-enum MockClientRequest {
-    ReadFile {
-        session_id: acp::SessionId,
-        path: PathBuf,
-        responder: oneshot::Sender<Result<String, acp::Error>>,
-    },
-    WriteFile {
-        session_id: acp::SessionId,
-        path: PathBuf,
-        content: String,
-        responder: oneshot::Sender<Result<(), acp::Error>>,
-    },
-    RequestPermission {
-        session_id: acp::SessionId,
-        tool_call: acp::ToolCallUpdate,
-        options: Vec<acp::PermissionOption>,
-        responder: oneshot::Sender<Result<acp::RequestPermissionResponse, acp::Error>>,
-    },
+/// Incoming byte stream that exits the process when the peer closes stdin.
+///
+/// The SDK's connection future never resolves on a clean stdin EOF: its
+/// background work is a `try_join!` of four actors, and EOF only ends the
+/// incoming one while the others stay alive as long as connection handles
+/// exist. Without this, the mock would hang after the client disconnects and
+/// its parent would have to SIGKILL it instead of letting it exit cleanly.
+struct ExitOnEof<R> {
+    inner: R,
 }
 
-struct MockAgent {
-    session_update_tx: mpsc::UnboundedSender<(acp::SessionNotification, oneshot::Sender<()>)>,
-    client_request_tx: mpsc::UnboundedSender<MockClientRequest>,
-    next_session_id: Cell<u64>,
-    cancel_requested: Cell<bool>,
-    pending_cancel_tail_empty_end_turns: Cell<usize>,
-    follow_up_after_cancel_tail: Cell<bool>,
-    session_configs: RefCell<HashMap<String, MockSessionConfig>>,
+impl<R> ExitOnEof<R> {
+    fn new(inner: R) -> Self {
+        Self { inner }
+    }
+}
+
+impl<R: AsyncRead + Unpin> AsyncRead for ExitOnEof<R> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<std::io::Result<usize>> {
+        match Pin::new(&mut self.inner).poll_read(cx, buf) {
+            Poll::Ready(Ok(0)) if !buf.is_empty() => std::process::exit(0),
+            other => other,
+        }
+    }
+}
+
+/// Shared, thread-safe mock agent state.
+///
+/// The `agent-client-protocol` SDK requires `Send` handlers, so state is held
+/// behind atomics and a `std::sync::Mutex` and shared across handler closures
+/// via `Arc`.
+#[derive(Default)]
+struct MockState {
+    next_session_id: AtomicI64,
+    cancel_requested: AtomicBool,
+    pending_cancel_tail_empty_end_turns: AtomicI64,
+    follow_up_after_cancel_tail: AtomicBool,
+    session_configs: Mutex<HashMap<String, MockSessionConfig>>,
 }
 
 #[derive(Clone)]
@@ -57,100 +78,79 @@ struct MockSessionConfig {
     speed: Option<String>,
 }
 
-impl MockAgent {
-    fn new(
-        session_update_tx: mpsc::UnboundedSender<(acp::SessionNotification, oneshot::Sender<()>)>,
-        client_request_tx: mpsc::UnboundedSender<MockClientRequest>,
-    ) -> Self {
-        Self {
-            session_update_tx,
-            next_session_id: Cell::new(0),
-            client_request_tx,
-            cancel_requested: Cell::new(false),
-            pending_cancel_tail_empty_end_turns: Cell::new(0),
-            follow_up_after_cancel_tail: Cell::new(false),
-            session_configs: RefCell::new(HashMap::new()),
-        }
+fn default_session_config() -> MockSessionConfig {
+    MockSessionConfig {
+        model_id: "mock-model-default".to_string(),
+        thought_level: Some("medium".to_string()),
+        speed: None,
     }
+}
 
-    fn default_session_config() -> MockSessionConfig {
-        MockSessionConfig {
-            model_id: "mock-model-default".to_string(),
-            thought_level: Some("medium".to_string()),
-            speed: None,
-        }
-    }
-
-    fn session_model_state() -> acp::SessionModelState {
-        acp::SessionModelState::new(
-            acp::ModelId::new("mock-model-default"),
+fn config_options_for_state(config: &MockSessionConfig) -> Vec<acp::SessionConfigOption> {
+    let mut options = vec![
+        acp::SessionConfigOption::select(
+            "model",
+            "Model",
+            config.model_id.clone(),
             vec![
-                acp::ModelInfo::new(
-                    acp::ModelId::new("mock-model-default"),
-                    "Mock Default Model",
-                )
-                .description("The default mock model"),
-                acp::ModelInfo::new(acp::ModelId::new("mock-model-fast"), "Mock Fast Model")
+                acp::SessionConfigSelectOption::new("mock-model-default", "Mock Default Model")
+                    .description("The default mock model"),
+                acp::SessionConfigSelectOption::new("mock-model-fast", "Mock Fast Model")
                     .description("A faster mock model variant"),
-                acp::ModelInfo::new(
-                    acp::ModelId::new("mock-model-powerful"),
-                    "Mock Powerful Model",
-                )
-                .description("A more powerful mock model variant"),
             ],
         )
-    }
+        .category(acp::SessionConfigOptionCategory::Model),
+    ];
 
-    fn config_options_for_state(config: &MockSessionConfig) -> Vec<acp::SessionConfigOption> {
-        let mut options = vec![
+    if config.model_id == "mock-model-fast" {
+        options.push(
             acp::SessionConfigOption::select(
-                "model",
-                "Model",
-                config.model_id.clone(),
+                "speed",
+                "Speed",
+                config.speed.clone().unwrap_or_else(|| "fast".to_string()),
                 vec![
-                    acp::SessionConfigSelectOption::new("mock-model-default", "Mock Default Model")
-                        .description("The default mock model"),
-                    acp::SessionConfigSelectOption::new("mock-model-fast", "Mock Fast Model")
-                        .description("A faster mock model variant"),
+                    acp::SessionConfigSelectOption::new("fast", "Fast"),
+                    acp::SessionConfigSelectOption::new("balanced", "Balanced"),
                 ],
             )
-            .category(acp::SessionConfigOptionCategory::Model),
-        ];
+            .description("Latency profile for the active model"),
+        );
+    } else {
+        options.push(
+            acp::SessionConfigOption::select(
+                "thought_level",
+                "Thought Level",
+                config
+                    .thought_level
+                    .clone()
+                    .unwrap_or_else(|| "medium".to_string()),
+                vec![
+                    acp::SessionConfigSelectOption::new("low", "Low"),
+                    acp::SessionConfigSelectOption::new("medium", "Medium"),
+                    acp::SessionConfigSelectOption::new("high", "High"),
+                ],
+            )
+            .description("Reasoning depth for the active model")
+            .category(acp::SessionConfigOptionCategory::ThoughtLevel),
+        );
+    }
 
-        if config.model_id == "mock-model-fast" {
-            options.push(
-                acp::SessionConfigOption::select(
-                    "speed",
-                    "Speed",
-                    config.speed.clone().unwrap_or_else(|| "fast".to_string()),
-                    vec![
-                        acp::SessionConfigSelectOption::new("fast", "Fast"),
-                        acp::SessionConfigSelectOption::new("balanced", "Balanced"),
-                    ],
-                )
-                .description("Latency profile for the active model"),
-            );
-        } else {
-            options.push(
-                acp::SessionConfigOption::select(
-                    "thought_level",
-                    "Thought Level",
-                    config
-                        .thought_level
-                        .clone()
-                        .unwrap_or_else(|| "medium".to_string()),
-                    vec![
-                        acp::SessionConfigSelectOption::new("low", "Low"),
-                        acp::SessionConfigSelectOption::new("medium", "Medium"),
-                        acp::SessionConfigSelectOption::new("high", "High"),
-                    ],
-                )
-                .description("Reasoning depth for the active model")
-                .category(acp::SessionConfigOptionCategory::ThoughtLevel),
-            );
-        }
+    options
+}
 
-        options
+/// Per-request context bundling the connection to the client with shared state.
+///
+/// Constructed inside request handlers from the `ConnectionTo<Client>` supplied
+/// by the SDK. The agent reaches the client through `cx` (notifications and
+/// requests) and tracks cross-handler state through `state`.
+struct MockAgent {
+    cx: ConnectionTo<Client>,
+    state: Arc<MockState>,
+}
+
+impl MockAgent {
+    fn cancel_requested(&self) -> bool {
+        self.state.cancel_requested.load(Ordering::SeqCst)
     }
 
     async fn send_update(
@@ -158,12 +158,8 @@ impl MockAgent {
         session_id: acp::SessionId,
         update: acp::SessionUpdate,
     ) -> Result<(), acp::Error> {
-        let (tx, rx) = oneshot::channel();
-        self.session_update_tx
-            .send((acp::SessionNotification::new(session_id, update), tx))
-            .map_err(|_| acp::Error::internal_error())?;
-        rx.await.map_err(|_| acp::Error::internal_error())?;
-        Ok(())
+        self.cx
+            .send_notification(acp::SessionNotification::new(session_id, update))
     }
 
     async fn send_text_chunk(
@@ -205,15 +201,12 @@ impl MockAgent {
         session_id: acp::SessionId,
         path: PathBuf,
     ) -> Result<String, acp::Error> {
-        let (tx, rx) = oneshot::channel();
-        self.client_request_tx
-            .send(MockClientRequest::ReadFile {
-                session_id,
-                path,
-                responder: tx,
-            })
-            .map_err(|_| acp::Error::internal_error())?;
-        rx.await.map_err(|_| acp::Error::internal_error())?
+        let response = self
+            .cx
+            .send_request(acp::ReadTextFileRequest::new(session_id, path))
+            .block_task()
+            .await?;
+        Ok(response.content)
     }
 
     /// Write a file via the client's fs/write_text_file method
@@ -223,16 +216,11 @@ impl MockAgent {
         path: PathBuf,
         content: String,
     ) -> Result<(), acp::Error> {
-        let (tx, rx) = oneshot::channel();
-        self.client_request_tx
-            .send(MockClientRequest::WriteFile {
-                session_id,
-                path,
-                content,
-                responder: tx,
-            })
-            .map_err(|_| acp::Error::internal_error())?;
-        rx.await.map_err(|_| acp::Error::internal_error())?
+        self.cx
+            .send_request(acp::WriteTextFileRequest::new(session_id, path, content))
+            .block_task()
+            .await?;
+        Ok(())
     }
 
     /// Request permission from the client for a tool call
@@ -242,187 +230,43 @@ impl MockAgent {
         tool_call: acp::ToolCallUpdate,
         options: Vec<acp::PermissionOption>,
     ) -> Result<acp::RequestPermissionResponse, acp::Error> {
-        let (tx, rx) = oneshot::channel();
-        self.client_request_tx
-            .send(MockClientRequest::RequestPermission {
-                session_id,
-                tool_call,
-                options,
-                responder: tx,
-            })
-            .map_err(|_| acp::Error::internal_error())?;
-        rx.await.map_err(|_| acp::Error::internal_error())?
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-impl acp::Agent for MockAgent {
-    async fn initialize(
-        &self,
-        _arguments: acp::InitializeRequest,
-    ) -> Result<acp::InitializeResponse, acp::Error> {
-        if std::env::var("MOCK_AGENT_HANG").is_ok() {
-            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-        }
-
-        // Support configurable startup delay for testing "Connecting" status
-        // Check for model-specific delay first (e.g., MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT),
-        // then fall back to generic MOCK_AGENT_STARTUP_DELAY_MS
-        let model_name = std::env::var("MOCK_AGENT_MODEL_NAME").unwrap_or_default();
-        let model_specific_var = format!(
-            "MOCK_AGENT_STARTUP_DELAY_MS_{}",
-            model_name.replace("-", "_").to_uppercase()
-        );
-        let delay_ms = std::env::var(&model_specific_var)
-            .or_else(|_| std::env::var("MOCK_AGENT_STARTUP_DELAY_MS"))
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok());
-
-        if let Some(delay) = delay_ms {
-            eprintln!(
-                "Mock agent ({}): sleeping for {}ms during startup",
-                model_name, delay
-            );
-            tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
-        }
-
-        // Simulate authentication failure if requested
-        if std::env::var("MOCK_AGENT_REQUIRE_AUTH").is_ok() {
-            eprintln!("Mock agent: simulating authentication failure");
-            return Err(acp::Error::new(-32000, "Authentication required"));
-        }
-
-        eprintln!("Mock agent: initialize");
-        let mut response = acp::InitializeResponse::new(acp::ProtocolVersion::LATEST)
-            .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent"));
-
-        let mut capabilities = acp::AgentCapabilities::new();
-        let mut has_capabilities = false;
-
-        if std::env::var("MOCK_AGENT_SUPPORT_LOAD_SESSION").is_ok() {
-            eprintln!("Mock agent: advertising load_session capability");
-            capabilities = capabilities.load_session(true);
-            has_capabilities = true;
-        }
-
-        if std::env::var("MOCK_AGENT_MCP_HTTP").is_ok() {
-            eprintln!("Mock agent: advertising HTTP MCP capability");
-            capabilities = capabilities.mcp_capabilities(acp::McpCapabilities::new().http(true));
-            has_capabilities = true;
-        }
-
-        if has_capabilities {
-            response = response.agent_capabilities(capabilities);
-        }
-
-        Ok(response)
+        self.cx
+            .send_request(acp::RequestPermissionRequest::new(
+                session_id, tool_call, options,
+            ))
+            .block_task()
+            .await
     }
 
-    async fn authenticate(
-        &self,
-        _arguments: acp::AuthenticateRequest,
-    ) -> Result<acp::AuthenticateResponse, acp::Error> {
-        Ok(acp::AuthenticateResponse::default())
-    }
-
-    async fn new_session(
-        &self,
-        arguments: acp::NewSessionRequest,
-    ) -> Result<acp::NewSessionResponse, acp::Error> {
-        let session_id = self.next_session_id.get();
-        self.next_session_id.set(session_id + 1);
-        if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
-            && let Ok(fail_from) = fail_from.parse::<i64>()
-            && i64::try_from(session_id).unwrap_or(i64::MAX) >= fail_from
-        {
-            eprintln!("Mock agent: simulating new_session failure at id={session_id}");
-            return Err(acp::Error::new(
-                -32002,
-                "Mock new_session failure for testing",
-            ));
-        }
-        eprintln!("Mock agent: new_session id={}", session_id);
-
-        let session_key = session_id.to_string();
-        let session_config = Self::default_session_config();
-        self.session_configs
-            .borrow_mut()
-            .insert(session_key.clone(), session_config.clone());
-        if std::env::var("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION").is_ok()
-            && let Err(error) = initialize_advertised_nori_client(&arguments.mcp_servers).await
-        {
-            eprintln!(
-                "Mock agent: failed to initialize advertised nori-client MCP server: {error}"
-            );
-        }
-
-        Ok(
-            acp::NewSessionResponse::new(acp::SessionId::new(session_key))
-                .models(Self::session_model_state())
-                .config_options(Self::config_options_for_state(&session_config)),
-        )
-    }
-
-    async fn load_session(
-        &self,
-        arguments: acp::LoadSessionRequest,
-    ) -> Result<acp::LoadSessionResponse, acp::Error> {
-        if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
-            eprintln!("Mock agent: simulating load_session failure");
-            return Err(acp::Error::new(
-                -32001,
-                "Mock load_session failure for testing",
-            ));
-        }
-
-        let session_config = self
-            .session_configs
-            .borrow_mut()
-            .entry(arguments.session_id.to_string())
-            .or_insert_with(Self::default_session_config)
-            .clone();
-
-        // Send configurable number of notifications during load_session
-        // to simulate history replay. Uses the session_id from the request
-        // so notifications are routed to the correct update channel.
-        if let Ok(count_str) = std::env::var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT")
-            && let Ok(count) = count_str.parse::<usize>()
-        {
-            let session_id = arguments.session_id.clone();
-            eprintln!("Mock agent: sending {count} notifications during load_session");
-            for i in 0..count {
-                self.send_text_chunk(session_id.clone(), &format!("replay chunk {i}"))
-                    .await?;
-            }
-        }
-
-        Ok(acp::LoadSessionResponse::new()
-            .models(Self::session_model_state())
-            .config_options(Self::config_options_for_state(&session_config)))
-    }
-
-    async fn prompt(
-        &self,
+    async fn run_prompt(
+        self,
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
-        self.cancel_requested.set(false);
+        self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
-        let pending_cancel_tail_empty_end_turns = self.pending_cancel_tail_empty_end_turns.get();
+        let pending_cancel_tail_empty_end_turns = self
+            .state
+            .pending_cancel_tail_empty_end_turns
+            .load(Ordering::SeqCst);
         if pending_cancel_tail_empty_end_turns > 0 {
-            self.pending_cancel_tail_empty_end_turns
-                .set(pending_cancel_tail_empty_end_turns - 1);
+            self.state
+                .pending_cancel_tail_empty_end_turns
+                .store(pending_cancel_tail_empty_end_turns - 1, Ordering::SeqCst);
             eprintln!("Mock agent: emitting empty end_turn from cancel tail");
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
-        let complete_after_default_response = self.follow_up_after_cancel_tail.replace(false);
+        let complete_after_default_response = self
+            .state
+            .follow_up_after_cancel_tail
+            .swap(false, Ordering::SeqCst);
 
         // Support configurable stderr output for testing stderr capture
         if let Ok(count_str) = std::env::var("MOCK_AGENT_STDERR_COUNT")
             && let Ok(count) = count_str.parse::<usize>()
         {
             for i in 0..count {
-                eprintln!("MOCK_AGENT_STDERR_LINE:{}", i);
+                eprintln!("MOCK_AGENT_STDERR_LINE:{i}");
             }
         }
 
@@ -465,7 +309,7 @@ impl acp::Agent for MockAgent {
         }
 
         if std::env::var("MOCK_AGENT_RUNAWAY_SEARCH").is_ok() {
-            return runaway_search::run(self, session_id).await;
+            return runaway_search::run(&self, session_id).await;
         }
 
         // Reproduce the orphan tool cell bug caused by cascade deferral.
@@ -1052,7 +896,7 @@ impl acp::Agent for MockAgent {
                     }
                 }
                 Err(err) => {
-                    eprintln!("Mock agent: permission request failed: {}", err);
+                    eprintln!("Mock agent: permission request failed: {err}");
                     self.send_text_chunk(session_id.clone(), "Permission request failed")
                         .await?;
                 }
@@ -1165,7 +1009,7 @@ impl acp::Agent for MockAgent {
         }
 
         if let Ok(file_path) = std::env::var("MOCK_AGENT_REQUEST_FILE") {
-            eprintln!("Mock agent: requesting file read: {}", file_path);
+            eprintln!("Mock agent: requesting file read: {file_path}");
             match self
                 .read_file_via_client(session_id.clone(), PathBuf::from(&file_path))
                 .await
@@ -1207,12 +1051,12 @@ impl acp::Agent for MockAgent {
                         .read_file_via_client(session_id.clone(), PathBuf::from(&file_path))
                         .await
                     {
-                        let msg = format!("\nVerified content:\n{}\n", read_content);
+                        let msg = format!("\nVerified content:\n{read_content}\n");
                         self.send_text_chunk(session_id.clone(), &msg).await?;
                     }
                 }
                 Err(err) => {
-                    let msg = format!("\nFailed to write file: {}\n", err);
+                    let msg = format!("\nFailed to write file: {err}\n");
                     self.send_text_chunk(session_id.clone(), &msg).await?;
                 }
             }
@@ -1220,7 +1064,7 @@ impl acp::Agent for MockAgent {
 
         if std::env::var("MOCK_AGENT_STREAM_UNTIL_CANCEL").is_ok() {
             let mut iterations = 0usize;
-            while !self.cancel_requested.get() && iterations < 10_000 {
+            while !self.cancel_requested() && iterations < 10_000 {
                 self.send_text_chunk(session_id.clone(), "Streaming...")
                     .await?;
                 iterations += 1;
@@ -1230,19 +1074,21 @@ impl acp::Agent for MockAgent {
             let cancel_tail_empty_end_turns =
                 std::env::var("MOCK_AGENT_CANCEL_TAIL_EMPTY_END_TURNS")
                     .ok()
-                    .and_then(|count| count.parse::<usize>().ok())
+                    .and_then(|count| count.parse::<i64>().ok())
                     .unwrap_or(0);
-            if self.cancel_requested.get() && cancel_tail_empty_end_turns > 0 {
-                self.pending_cancel_tail_empty_end_turns
-                    .set(cancel_tail_empty_end_turns);
-                self.follow_up_after_cancel_tail.set(true);
+            if self.cancel_requested() && cancel_tail_empty_end_turns > 0 {
+                self.state
+                    .pending_cancel_tail_empty_end_turns
+                    .store(cancel_tail_empty_end_turns, Ordering::SeqCst);
+                self.state
+                    .follow_up_after_cancel_tail
+                    .store(true, Ordering::SeqCst);
                 eprintln!(
-                    "Mock agent: queued {} empty end_turn responses after cancel",
-                    cancel_tail_empty_end_turns
+                    "Mock agent: queued {cancel_tail_empty_end_turns} empty end_turn responses after cancel"
                 );
             }
 
-            return Ok(acp::PromptResponse::new(if self.cancel_requested.get() {
+            return Ok(acp::PromptResponse::new(if self.cancel_requested() {
                 acp::StopReason::Cancelled
             } else {
                 acp::StopReason::EndTurn
@@ -1373,81 +1219,6 @@ impl acp::Agent for MockAgent {
 
         Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
     }
-
-    async fn cancel(&self, _args: acp::CancelNotification) -> Result<(), acp::Error> {
-        eprintln!("Mock agent: cancel");
-        if std::env::var("MOCK_AGENT_IGNORE_CANCEL").is_err() {
-            self.cancel_requested.set(true);
-        } else {
-            eprintln!("Mock agent: ignoring cancel (MOCK_AGENT_IGNORE_CANCEL is set)");
-        }
-        Ok(())
-    }
-
-    async fn set_session_mode(
-        &self,
-        _args: acp::SetSessionModeRequest,
-    ) -> Result<acp::SetSessionModeResponse, acp::Error> {
-        Ok(acp::SetSessionModeResponse::default())
-    }
-
-    async fn set_session_model(
-        &self,
-        args: acp::SetSessionModelRequest,
-    ) -> Result<acp::SetSessionModelResponse, acp::Error> {
-        eprintln!("Mock agent: set_session_model to {:?}", args.model_id);
-        // Accept any model switch request - in a real agent, this would
-        // validate the model_id against available models.
-        Ok(acp::SetSessionModelResponse::default())
-    }
-
-    async fn set_session_config_option(
-        &self,
-        args: acp::SetSessionConfigOptionRequest,
-    ) -> Result<acp::SetSessionConfigOptionResponse, acp::Error> {
-        let response_options = {
-            let mut sessions = self.session_configs.borrow_mut();
-            let state = sessions
-                .entry(args.session_id.to_string())
-                .or_insert_with(Self::default_session_config);
-
-            match args.config_id.to_string().as_str() {
-                "model" => {
-                    state.model_id = args.value.to_string();
-                    if state.model_id == "mock-model-fast" {
-                        state.thought_level = None;
-                        state.speed = Some("fast".to_string());
-                    } else {
-                        state.speed = None;
-                        if state.thought_level.is_none() {
-                            state.thought_level = Some("medium".to_string());
-                        }
-                    }
-                }
-                "thought_level" => {
-                    state.thought_level = Some(args.value.to_string());
-                }
-                "speed" => {
-                    state.speed = Some(args.value.to_string());
-                }
-                _ => return Err(acp::Error::invalid_params()),
-            }
-
-            Self::config_options_for_state(state)
-        };
-
-        Ok(acp::SetSessionConfigOptionResponse::new(response_options))
-    }
-
-    async fn ext_method(&self, _args: acp::ExtRequest) -> Result<acp::ExtResponse, acp::Error> {
-        Ok(acp::ExtResponse::new(Arc::from(
-            serde_json::value::to_raw_value(&json!({}))?,
-        )))
-    }
-
-    async fn ext_notification(&self, _args: acp::ExtNotification) -> Result<(), acp::Error> {
-        Ok(())
-    }
 }
 
 async fn initialize_advertised_nori_client(
@@ -1507,89 +1278,276 @@ Connection: close\r\n\r\n\
     Ok(())
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> acp::Result<()> {
     env_logger::init();
 
-    let outgoing = tokio::io::stdout().compat_write();
-    let incoming = tokio::io::stdin().compat();
+    let state = Arc::new(MockState::default());
 
-    let local_set = tokio::task::LocalSet::new();
-    local_set
-        .run_until(async move {
-            let (update_tx, mut update_rx) = tokio::sync::mpsc::unbounded_channel();
-            let (client_request_tx, mut client_request_rx) = tokio::sync::mpsc::unbounded_channel();
+    Agent
+        .builder()
+        .name("mock-agent")
+        .on_receive_request(
+            async move |arguments: acp::InitializeRequest,
+                        responder: Responder<acp::InitializeResponse>,
+                        _cx: ConnectionTo<Client>| {
+                if std::env::var("MOCK_AGENT_HANG").is_ok() {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                }
 
-            let agent = MockAgent::new(update_tx, client_request_tx);
-            let (conn, handle_io) =
-                acp::AgentSideConnection::new(agent, outgoing, incoming, |fut| {
-                    tokio::task::spawn_local(fut);
-                });
+                // Support configurable startup delay for testing "Connecting" status.
+                // Check for model-specific delay first (e.g.
+                // MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT), then fall back to
+                // generic MOCK_AGENT_STARTUP_DELAY_MS.
+                let model_name = std::env::var("MOCK_AGENT_MODEL_NAME").unwrap_or_default();
+                let model_specific_var = format!(
+                    "MOCK_AGENT_STARTUP_DELAY_MS_{}",
+                    model_name.replace('-', "_").to_uppercase()
+                );
+                let delay_ms = std::env::var(&model_specific_var)
+                    .or_else(|_| std::env::var("MOCK_AGENT_STARTUP_DELAY_MS"))
+                    .ok()
+                    .and_then(|s| s.parse::<u64>().ok());
 
-            let conn = std::rc::Rc::new(conn);
+                if let Some(delay) = delay_ms {
+                    eprintln!("Mock agent ({model_name}): sleeping for {delay}ms during startup");
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+                }
 
+                // Simulate authentication failure if requested
+                if std::env::var("MOCK_AGENT_REQUIRE_AUTH").is_ok() {
+                    eprintln!("Mock agent: simulating authentication failure");
+                    return responder
+                        .respond_with_error(acp::Error::new(-32000, "Authentication required"));
+                }
+
+                eprintln!("Mock agent: initialize");
+                let mut response = acp::InitializeResponse::new(arguments.protocol_version)
+                    .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent"));
+
+                let mut capabilities = acp::AgentCapabilities::new();
+                let mut has_capabilities = false;
+
+                if std::env::var("MOCK_AGENT_SUPPORT_LOAD_SESSION").is_ok() {
+                    eprintln!("Mock agent: advertising load_session capability");
+                    capabilities = capabilities.load_session(true);
+                    has_capabilities = true;
+                }
+
+                if std::env::var("MOCK_AGENT_MCP_HTTP").is_ok() {
+                    eprintln!("Mock agent: advertising HTTP MCP capability");
+                    capabilities =
+                        capabilities.mcp_capabilities(acp::McpCapabilities::new().http(true));
+                    has_capabilities = true;
+                }
+
+                if has_capabilities {
+                    response = response.agent_capabilities(capabilities);
+                }
+
+                responder.respond(response)
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |_arguments: acp::AuthenticateRequest,
+                        responder: Responder<acp::AuthenticateResponse>,
+                        _cx: ConnectionTo<Client>| {
+                responder.respond(acp::AuthenticateResponse::default())
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
             {
-                let conn = std::rc::Rc::clone(&conn);
-                tokio::task::spawn_local(async move {
-                    while let Some((session_notification, tx)) = update_rx.recv().await {
-                        if let Err(e) = conn.session_notification(session_notification).await {
-                            eprintln!("Mock agent error: {e}");
-                            break;
-                        }
-                        tx.send(()).ok();
+                let state = state.clone();
+                async move |arguments: acp::NewSessionRequest,
+                            responder: Responder<acp::NewSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    let session_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
+                    if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
+                        && let Ok(fail_from) = fail_from.parse::<i64>()
+                        && session_id >= fail_from
+                    {
+                        eprintln!("Mock agent: simulating new_session failure at id={session_id}");
+                        return responder.respond_with_error(acp::Error::new(
+                            -32002,
+                            "Mock new_session failure for testing",
+                        ));
                     }
-                });
-            }
+                    eprintln!("Mock agent: new_session id={session_id}");
 
+                    let session_key = session_id.to_string();
+                    let session_config = default_session_config();
+                    state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .insert(session_key.clone(), session_config.clone());
+                    if std::env::var("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION").is_ok()
+                        && let Err(error) =
+                            initialize_advertised_nori_client(&arguments.mcp_servers).await
+                    {
+                        eprintln!(
+                            "Mock agent: failed to initialize advertised nori-client MCP server: {error}"
+                        );
+                    }
+
+                    responder.respond(
+                        acp::NewSessionResponse::new(acp::SessionId::new(session_key))
+                            .config_options(config_options_for_state(&session_config)),
+                    )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
             {
-                let conn = std::rc::Rc::clone(&conn);
-                tokio::task::spawn_local(async move {
-                    while let Some(request) = client_request_rx.recv().await {
-                        match request {
-                            MockClientRequest::ReadFile {
-                                session_id,
-                                path,
-                                responder,
-                            } => {
-                                let result = conn
-                                    .read_text_file(acp::ReadTextFileRequest::new(session_id, path))
-                                    .await
-                                    .map(|response| response.content);
-                                let _ = responder.send(result);
-                            }
-                            MockClientRequest::WriteFile {
-                                session_id,
-                                path,
-                                content,
-                                responder,
-                            } => {
-                                let result = conn
-                                    .write_text_file(acp::WriteTextFileRequest::new(
-                                        session_id, path, content,
-                                    ))
-                                    .await
-                                    .map(|_response| ());
-                                let _ = responder.send(result);
-                            }
-                            MockClientRequest::RequestPermission {
-                                session_id,
-                                tool_call,
-                                options,
-                                responder,
-                            } => {
-                                let result = conn
-                                    .request_permission(acp::RequestPermissionRequest::new(
-                                        session_id, tool_call, options,
-                                    ))
-                                    .await;
-                                let _ = responder.send(result);
-                            }
+                let state = state.clone();
+                async move |arguments: acp::LoadSessionRequest,
+                            responder: Responder<acp::LoadSessionResponse>,
+                            cx: ConnectionTo<Client>| {
+                    if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating load_session failure");
+                        return responder.respond_with_error(acp::Error::new(
+                            -32001,
+                            "Mock load_session failure for testing",
+                        ));
+                    }
+
+                    let session_config = state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .entry(arguments.session_id.to_string())
+                        .or_insert_with(default_session_config)
+                        .clone();
+
+                    // Send configurable number of notifications during load_session
+                    // to simulate history replay. Uses the session_id from the request
+                    // so notifications are routed to the correct update channel.
+                    if let Ok(count_str) = std::env::var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT")
+                        && let Ok(count) = count_str.parse::<i64>()
+                    {
+                        let agent = MockAgent {
+                            cx: cx.clone(),
+                            state: state.clone(),
+                        };
+                        let session_id = arguments.session_id.clone();
+                        eprintln!("Mock agent: sending {count} notifications during load_session");
+                        for i in 0..count {
+                            agent
+                                .send_text_chunk(session_id.clone(), &format!("replay chunk {i}"))
+                                .await?;
                         }
                     }
-                });
-            }
 
-            handle_io.await
-        })
+                    responder.respond(
+                        acp::LoadSessionResponse::new()
+                            .config_options(config_options_for_state(&session_config)),
+                    )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |arguments: acp::PromptRequest,
+                            responder: Responder<acp::PromptResponse>,
+                            cx: ConnectionTo<Client>| {
+                    // Run the prompt work in a spawned task so the dispatch loop
+                    // stays free to deliver cancel notifications and client
+                    // request responses while the agent streams.
+                    let agent = MockAgent {
+                        cx: cx.clone(),
+                        state: state.clone(),
+                    };
+                    cx.spawn(async move {
+                        let result = agent.run_prompt(arguments).await;
+                        responder.respond_with_result(result)
+                    })?;
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |_arguments: acp::SetSessionModeRequest,
+                        responder: Responder<acp::SetSessionModeResponse>,
+                        _cx: ConnectionTo<Client>| {
+                responder.respond(acp::SetSessionModeResponse::new())
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |arguments: acp::SetSessionConfigOptionRequest,
+                            responder: Responder<acp::SetSessionConfigOptionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    let Some(value) = arguments.value.as_value_id().map(ToString::to_string) else {
+                        return responder.respond_with_error(acp::Error::invalid_params());
+                    };
+
+                    let result = {
+                        let mut sessions = state.session_configs.lock().unwrap();
+                        let cfg = sessions
+                            .entry(arguments.session_id.to_string())
+                            .or_insert_with(default_session_config);
+
+                        match arguments.config_id.to_string().as_str() {
+                            "model" => {
+                                cfg.model_id = value;
+                                if cfg.model_id == "mock-model-fast" {
+                                    cfg.thought_level = None;
+                                    cfg.speed = Some("fast".to_string());
+                                } else {
+                                    cfg.speed = None;
+                                    if cfg.thought_level.is_none() {
+                                        cfg.thought_level = Some("medium".to_string());
+                                    }
+                                }
+                                Ok(config_options_for_state(cfg))
+                            }
+                            "thought_level" => {
+                                cfg.thought_level = Some(value);
+                                Ok(config_options_for_state(cfg))
+                            }
+                            "speed" => {
+                                cfg.speed = Some(value);
+                                Ok(config_options_for_state(cfg))
+                            }
+                            _ => Err(acp::Error::invalid_params()),
+                        }
+                    };
+
+                    match result {
+                        Ok(options) => responder
+                            .respond(acp::SetSessionConfigOptionResponse::new(options)),
+                        Err(error) => responder.respond_with_error(error),
+                    }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_notification(
+            {
+                let state = state.clone();
+                async move |_notification: acp::CancelNotification, _cx: ConnectionTo<Client>| {
+                    eprintln!("Mock agent: cancel");
+                    if std::env::var("MOCK_AGENT_IGNORE_CANCEL").is_err() {
+                        state.cancel_requested.store(true, Ordering::SeqCst);
+                    } else {
+                        eprintln!("Mock agent: ignoring cancel (MOCK_AGENT_IGNORE_CANCEL is set)");
+                    }
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .connect_to(ByteStreams::new(
+            tokio::io::stdout().compat_write(),
+            ExitOnEof::new(tokio::io::stdin().compat()),
+        ))
         .await
 }

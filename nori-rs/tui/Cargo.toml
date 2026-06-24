@@ -13,7 +13,7 @@ name = "nori_tui"
 path = "src/lib.rs"
 
 [features]
-default = ["unstable", "nori-config", "login"]
+default = ["nori-config", "login"]
 
 # OpenTelemetry tracing export (disabled by default)
 otel = ["dep:opentelemetry-appender-tracing"]
@@ -22,8 +22,6 @@ otel = ["dep:opentelemetry-appender-tracing"]
 vt100-tests = []
 # Gate verbose debug logging inside the TUI implementation.
 debug-logs = []
-# Enable unstable ACP features like model switching.
-unstable = ["nori-acp/unstable"]
 
 # Use Nori's simplified ACP-only config (~/.nori/cli/config.toml)
 # When enabled, uses minimal config from nori-acp instead of codex-core

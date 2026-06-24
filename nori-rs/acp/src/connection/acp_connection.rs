@@ -1,25 +1,25 @@
-//! SACP v11-based ACP connection layer.
+//! ACP connection layer built on the `agent-client-protocol` SDK.
 //!
-//! This replaces the old `AcpConnection` which required a dedicated worker thread
-//! due to the `!Send` futures in `agent-client-protocol` v0.9. SACP v11's
-//! `ConnectionTo<Agent>` is `Send + Sync`, allowing direct async usage from the main
-//! tokio runtime without a dedicated thread or `LocalSet`.
+//! The SDK's `ConnectionTo<Agent>` is `Send + Sync`, so all operations run
+//! directly on the main tokio runtime without a dedicated worker thread or
+//! `LocalSet`.
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 
-use agent_client_protocol_schema as acp;
+use agent_client_protocol::Agent;
+use agent_client_protocol::Client;
+use agent_client_protocol::ConnectionTo;
+use agent_client_protocol::Lines;
+use agent_client_protocol_schema::ProtocolVersion;
+use agent_client_protocol_schema::v1 as acp;
 use anyhow::Context;
 use anyhow::Result;
 use futures::AsyncBufReadExt;
 use futures::AsyncWriteExt;
 use futures::StreamExt;
 use futures::io::BufReader;
-use sacp::Agent;
-use sacp::Client;
-use sacp::ConnectionTo;
-use sacp::Lines;
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -29,7 +29,6 @@ use tokio_util::compat::TokioAsyncWriteCompatExt;
 use tracing::debug;
 use tracing::warn;
 
-use super::AcpModelState;
 use super::AcpSessionConfigState;
 use super::ApprovalEventType;
 use super::ApprovalRequest;
@@ -44,11 +43,8 @@ use crate::config::AcpProxyConfig;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
 
-#[cfg(feature = "unstable")]
-use sacp::UntypedMessage;
-
 /// Minimum supported ACP protocol version.
-const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
+const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
 
 #[derive(Debug, Default)]
 struct SessionPromptState {
@@ -56,18 +52,18 @@ struct SessionPromptState {
     draining_cancel_tail: bool,
 }
 
-/// A thread-safe connection to an ACP agent subprocess using SACP v11.
+/// A thread-safe connection to an ACP agent subprocess.
 ///
-/// Unlike the old `AcpConnection`, this does NOT require a dedicated worker thread.
-/// SACP v11's `ConnectionTo<Agent>` is `Send + Sync`, allowing all operations to run
-/// directly on the main tokio runtime.
+/// The `ConnectionTo<Agent>` from the `agent-client-protocol` SDK is
+/// `Send + Sync`, so all operations run directly on the main tokio runtime
+/// without a dedicated worker thread.
 ///
 /// Internal architecture:
-/// - A background tokio task runs the SACP connection via `connect_with`.
+/// - A background tokio task runs the ACP connection via `connect_with`.
 /// - The `ConnectionTo<Agent>` is cloned out and used for all subsequent requests.
 /// - Session notifications and approval requests are forwarded via channels.
 /// - All session-domain traffic flows through a single ordered inbox.
-pub struct SacpConnection {
+pub struct AcpConnection {
     /// Connection context for sending requests to the agent.
     cx: ConnectionTo<Agent>,
 
@@ -81,13 +77,10 @@ pub struct SacpConnection {
     /// responses after cancellation without widening the public phase model.
     prompt_state: std::sync::Arc<Mutex<HashMap<String, SessionPromptState>>>,
 
-    /// Thread-safe model state, updated on session creation and model switch.
-    model_state: std::sync::Arc<std::sync::RwLock<AcpModelState>>,
-
     /// Thread-safe session config state, updated from complete ACP snapshots.
     session_config_state: std::sync::Arc<std::sync::RwLock<AcpSessionConfigState>>,
 
-    /// Handle to the background task driving the SACP connection.
+    /// Handle to the background task driving the ACP connection.
     connection_task: tokio::task::JoinHandle<()>,
 
     /// Handles to the child process for teardown (None for remote connections).
@@ -97,19 +90,19 @@ pub struct SacpConnection {
     stderr_task: Option<tokio::task::JoinHandle<()>>,
 }
 
-/// Shared SACP connection setup: registers notification/request handlers,
-/// performs the initialization handshake, and returns a `SacpConnection` with
+/// Shared ACP connection setup: registers notification/request handlers,
+/// performs the initialization handshake, and returns a `AcpConnection` with
 /// no process handles (`child`/`stderr_task` are `None`). `spawn()` fills in the
 /// subprocess handles afterward.
 ///
 /// The caller supplies the connection event channel so it can hold extra
 /// senders (e.g. the child exit watcher reports through the same stream).
 async fn establish_connection(
-    transport: impl sacp::ConnectTo<Client> + 'static,
+    transport: impl agent_client_protocol::ConnectTo<Client> + 'static,
     cwd: &Path,
     event_tx: mpsc::Sender<ConnectionEvent>,
     event_rx: mpsc::Receiver<ConnectionEvent>,
-) -> Result<SacpConnection> {
+) -> Result<AcpConnection> {
     let event_tx_for_notifications = event_tx.clone();
     let event_tx_for_write = event_tx.clone();
     let event_tx_for_read = event_tx.clone();
@@ -164,14 +157,16 @@ async fn establish_connection(
                         Ok(())
                     }
                 },
-                sacp::on_receive_notification!(),
+                agent_client_protocol::on_receive_notification!(),
             )
             .on_receive_request(
                 {
                     let event_tx = event_tx.clone();
                     let cwd = approval_cwd;
                     async move |request: acp::RequestPermissionRequest,
-                                responder: sacp::Responder<acp::RequestPermissionResponse>,
+                                responder: agent_client_protocol::Responder<
+                        acp::RequestPermissionResponse,
+                    >,
                                 connection: ConnectionTo<Agent>| {
                         let event = if let Some(patch_event) =
                             translator::permission_request_to_patch_approval_event(&request, &cwd)
@@ -239,14 +234,16 @@ async fn establish_connection(
                         Ok(())
                     }
                 },
-                sacp::on_receive_request!(),
+                agent_client_protocol::on_receive_request!(),
             )
             .on_receive_request(
                 {
                     let event_tx = event_tx_for_write;
                     let cwd = write_cwd;
                     async move |request: acp::WriteTextFileRequest,
-                                responder: sacp::Responder<acp::WriteTextFileResponse>,
+                                responder: agent_client_protocol::Responder<
+                        acp::WriteTextFileResponse,
+                    >,
                                 _connection: ConnectionTo<Agent>| {
                         let tool_call_id = acp::ToolCallId::from(format!(
                             "write_text_file-{}",
@@ -290,13 +287,13 @@ async fn establish_connection(
                         };
 
                         if !allowed {
-                            responder.respond_with_error(sacp::Error::invalid_params().data(
-                                format!(
+                            responder.respond_with_error(
+                                agent_client_protocol::Error::invalid_params().data(format!(
                                     "Write restricted to working directory ({}) or /tmp. Path: {}",
                                     cwd.display(),
                                     resolved_path.display()
-                                ),
-                            ))?;
+                                )),
+                            )?;
                             return Ok(());
                         }
 
@@ -304,8 +301,9 @@ async fn establish_connection(
                             && !parent.exists()
                             && let Err(e) = std::fs::create_dir_all(parent)
                         {
-                            responder
-                                .respond_with_error(sacp::util::internal_error(e.to_string()))?;
+                            responder.respond_with_error(
+                                agent_client_protocol::util::internal_error(e.to_string()),
+                            )?;
                             return Ok(());
                         }
 
@@ -314,22 +312,24 @@ async fn establish_connection(
                                 responder.respond(acp::WriteTextFileResponse::new())?;
                             }
                             Err(e) => {
-                                responder.respond_with_error(sacp::util::internal_error(
-                                    e.to_string(),
-                                ))?;
+                                responder.respond_with_error(
+                                    agent_client_protocol::util::internal_error(e.to_string()),
+                                )?;
                             }
                         }
                         Ok(())
                     }
                 },
-                sacp::on_receive_request!(),
+                agent_client_protocol::on_receive_request!(),
             )
             .on_receive_request(
                 {
                     let event_tx = event_tx_for_read;
                     let cwd = read_cwd;
                     async move |request: acp::ReadTextFileRequest,
-                                responder: sacp::Responder<acp::ReadTextFileResponse>,
+                                responder: agent_client_protocol::Responder<
+                        acp::ReadTextFileResponse,
+                    >,
                                 _connection: ConnectionTo<Agent>| {
                         let tool_call_id = acp::ToolCallId::from(format!(
                             "read_text_file-{}",
@@ -354,20 +354,20 @@ async fn establish_connection(
                                 responder.respond(acp::ReadTextFileResponse::new(content))?;
                             }
                             Err(e) => {
-                                responder.respond_with_error(sacp::util::internal_error(
-                                    e.to_string(),
-                                ))?;
+                                responder.respond_with_error(
+                                    agent_client_protocol::util::internal_error(e.to_string()),
+                                )?;
                             }
                         }
                         Ok(())
                     }
                 },
-                sacp::on_receive_request!(),
+                agent_client_protocol::on_receive_request!(),
             )
             .connect_with(transport, |connection: ConnectionTo<Agent>| async move {
                 let response = connection
                     .send_request(
-                        acp::InitializeRequest::new(acp::ProtocolVersion::LATEST)
+                        acp::InitializeRequest::new(ProtocolVersion::LATEST)
                             .client_capabilities(
                                 acp::ClientCapabilities::new().fs(
                                     acp::FileSystemCapabilities::new()
@@ -391,15 +391,14 @@ async fn establish_connection(
                                 resp.protocol_version,
                                 MINIMUM_SUPPORTED_VERSION
                             )));
-                            return Err(sacp::util::internal_error("Protocol version too old"));
+                            return Err(agent_client_protocol::util::internal_error(
+                                "Protocol version too old",
+                            ));
                         }
-                        debug!(
-                            "ACP connection established (SACP v11), agent: {:?}",
-                            resp.agent_info
-                        );
+                        debug!("ACP connection established, agent: {:?}", resp.agent_info);
                         let _ = init_tx.send(Ok((connection.clone(), resp.agent_capabilities)));
 
-                        futures::future::pending::<Result<(), sacp::Error>>().await
+                        futures::future::pending::<Result<(), agent_client_protocol::Error>>().await
                     }
                     Err(e) => {
                         let _ =
@@ -411,20 +410,19 @@ async fn establish_connection(
             .await;
 
         if let Err(e) = result {
-            debug!("SACP connection task ended: {e}");
+            debug!("ACP connection task ended: {e}");
         }
     });
 
     let (cx, capabilities) = init_rx
         .await
-        .context("SACP connection task died during initialization")??;
+        .context("ACP connection task died during initialization")??;
 
-    Ok(SacpConnection {
+    Ok(AcpConnection {
         cx,
         agent_capabilities: capabilities,
         event_rx,
         prompt_state,
-        model_state: std::sync::Arc::new(std::sync::RwLock::new(AcpModelState::new())),
         session_config_state,
         connection_task,
         child: None,
@@ -432,15 +430,15 @@ async fn establish_connection(
     })
 }
 
-impl SacpConnection {
-    /// Spawn a new ACP agent subprocess and establish a SACP v11 connection.
+impl AcpConnection {
+    /// Spawn a new ACP agent subprocess and establish a connection.
     pub async fn spawn(
         config: &AcpAgentConfig,
         cwd: &Path,
         proxy_config: AcpProxyConfig,
     ) -> Result<Self> {
         debug!(
-            "Spawning ACP agent (SACP v11): {} {:?} in {}",
+            "Spawning ACP agent: {} {:?} in {}",
             config.command,
             config.args,
             cwd.display()
@@ -661,18 +659,6 @@ impl SacpConnection {
             .await
             .context("Failed to create ACP session")?;
 
-        #[cfg(feature = "unstable")]
-        if let Some(ref models) = response.models
-            && let Ok(mut state) = self.model_state.write()
-        {
-            *state = AcpModelState::from_session_model_state(models);
-            debug!(
-                "Model state updated: current={:?}, available={}",
-                state.current_model_id,
-                state.available_models.len()
-            );
-        }
-
         if let Some(config_options) = response.config_options
             && let Ok(mut state) = self.session_config_state.write()
         {
@@ -701,13 +687,6 @@ impl SacpConnection {
             .block_task()
             .await
             .context("Failed to load ACP session")?;
-
-        #[cfg(feature = "unstable")]
-        if let Some(ref models) = response.models
-            && let Ok(mut state) = self.model_state.write()
-        {
-            *state = AcpModelState::from_session_model_state(models);
-        }
 
         if let Some(config_options) = response.config_options
             && let Ok(mut state) = self.session_config_state.write()
@@ -823,18 +802,6 @@ impl SacpConnection {
         std::mem::replace(&mut self.event_rx, mpsc::channel(1).1)
     }
 
-    /// Get the current model state.
-    pub fn model_state(&self) -> AcpModelState {
-        #[expect(
-            clippy::expect_used,
-            reason = "RwLock poisoning indicates a bug elsewhere"
-        )]
-        self.model_state
-            .read()
-            .expect("Model state lock poisoned")
-            .clone()
-    }
-
     /// Get the current ACP session config snapshot.
     pub fn config_options(&self) -> Vec<acp::SessionConfigOption> {
         #[expect(
@@ -913,36 +880,9 @@ impl SacpConnection {
             stderr_task.abort();
         }
     }
-
-    /// Switch to a different model for the given session.
-    #[cfg(feature = "unstable")]
-    pub async fn set_model(
-        &self,
-        session_id: &acp::SessionId,
-        model_id: &acp::ModelId,
-    ) -> Result<()> {
-        let request = acp::SetSessionModelRequest::new(session_id.clone(), model_id.clone());
-        let untyped = UntypedMessage::new("session/set_model", &request)
-            .context("Failed to serialize SetSessionModelRequest")?;
-        self.cx
-            .send_request(untyped)
-            .block_task()
-            .await
-            .context("Failed to set ACP model")?;
-
-        if let Ok(mut state) = self.model_state.write() {
-            state.current_model_id = Some(model_id.clone());
-            debug!(
-                "Model state updated after switch: current={:?}",
-                state.current_model_id
-            );
-        }
-
-        Ok(())
-    }
 }
 
-impl Drop for SacpConnection {
+impl Drop for AcpConnection {
     fn drop(&mut self) {
         self.connection_task.abort();
         if let Some(ref stderr_task) = self.stderr_task {

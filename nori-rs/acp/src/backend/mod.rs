@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use agent_client_protocol_schema as acp;
+use agent_client_protocol_schema::v1 as acp;
 use anyhow::Result;
 use codex_core::config::types::McpServerConfig;
 use codex_protocol::ConversationId;
@@ -40,10 +40,9 @@ use tokio::sync::watch;
 use tracing::debug;
 use tracing::warn;
 
-use crate::connection::AcpModelState;
 use crate::connection::ApprovalEventType;
 use crate::connection::ApprovalRequest;
-use crate::connection::sacp_connection::SacpConnection;
+use crate::connection::acp_connection::AcpConnection;
 use crate::registry::get_agent_config;
 use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
@@ -284,7 +283,7 @@ pub struct AcpBackendConfig {
 
 /// Backend adapter that provides a TUI-compatible interface for ACP agents.
 ///
-/// This struct wraps a `SacpConnection` and translates between:
+/// This struct wraps a `AcpConnection` and translates between:
 /// - Codex `Op` submissions → ACP protocol calls
 /// - ACP control-plane output → `codex_protocol::Event`
 /// - ACP session-domain output → `nori_protocol::ClientEvent`
@@ -301,7 +300,7 @@ pub(crate) struct PendingApprovalRequest {
 
 #[derive(Clone)]
 pub struct AcpBackend {
-    connection: Arc<SacpConnection>,
+    connection: Arc<AcpConnection>,
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
     session_id: Arc<RwLock<acp::SessionId>>,
     event_tx: mpsc::Sender<Event>,
@@ -390,7 +389,7 @@ pub struct AcpBackend {
 
 fn fallback_session_context_for_connection(
     config: &AcpBackendConfig,
-    connection: &SacpConnection,
+    connection: &AcpConnection,
 ) -> Option<String> {
     if connection.capabilities().mcp_capabilities.http {
         None

@@ -43,13 +43,6 @@ impl ChatWidget {
         self.plan_drawer_mode
     }
 
-    /// Update the agent display name shown in approval dialogs.
-    /// Used when ACP agent switch completes successfully.
-    #[cfg(feature = "unstable")]
-    pub(crate) fn update_agent_display_name(&mut self, display_name: String) {
-        self.bottom_pane.set_agent_display_name(display_name);
-    }
-
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {
         self.add_to_history(history_cell::new_info_event(message, hint));
         self.request_redraw();

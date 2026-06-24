@@ -40,10 +40,9 @@ pub use message_history::search_entries;
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
 pub use backend::BackendEvent;
-pub use connection::AcpModelState;
 pub use connection::AcpSessionConfigState;
 pub use connection::ApprovalRequest;
-pub use connection::sacp_connection::SacpConnection;
+pub use connection::acp_connection::AcpConnection;
 pub use registry::AcpAgentConfig;
 pub use registry::AcpAgentInfo;
 pub use registry::AcpProviderInfo;
@@ -81,33 +80,21 @@ pub use transcript::TranscriptLoader;
 pub use transcript::TranscriptRecorder;
 
 // Re-export commonly used types from the ACP schema
-pub use agent_client_protocol_schema::InitializeRequest;
-pub use agent_client_protocol_schema::InitializeResponse;
-pub use agent_client_protocol_schema::NewSessionRequest;
-pub use agent_client_protocol_schema::NewSessionResponse;
-pub use agent_client_protocol_schema::PromptRequest;
-pub use agent_client_protocol_schema::PromptResponse;
-pub use agent_client_protocol_schema::SessionConfigKind;
-pub use agent_client_protocol_schema::SessionConfigOption;
-pub use agent_client_protocol_schema::SessionConfigOptionCategory;
-pub use agent_client_protocol_schema::SessionConfigOptionValue;
-pub use agent_client_protocol_schema::SessionConfigSelectGroup;
-pub use agent_client_protocol_schema::SessionConfigSelectOption;
-pub use agent_client_protocol_schema::SessionConfigSelectOptions;
-pub use agent_client_protocol_schema::SessionConfigValueId;
-pub use agent_client_protocol_schema::SessionNotification;
-pub use agent_client_protocol_schema::SessionUpdate;
-pub use agent_client_protocol_schema::SetSessionConfigOptionRequest;
-pub use agent_client_protocol_schema::SetSessionConfigOptionResponse;
-
-// Re-export model-related types (unstable feature)
-#[cfg(feature = "unstable")]
-pub use agent_client_protocol_schema::ModelId;
-#[cfg(feature = "unstable")]
-pub use agent_client_protocol_schema::ModelInfo;
-#[cfg(feature = "unstable")]
-pub use agent_client_protocol_schema::SessionModelState;
-#[cfg(feature = "unstable")]
-pub use agent_client_protocol_schema::SetSessionModelRequest;
-#[cfg(feature = "unstable")]
-pub use agent_client_protocol_schema::SetSessionModelResponse;
+pub use agent_client_protocol_schema::v1::InitializeRequest;
+pub use agent_client_protocol_schema::v1::InitializeResponse;
+pub use agent_client_protocol_schema::v1::NewSessionRequest;
+pub use agent_client_protocol_schema::v1::NewSessionResponse;
+pub use agent_client_protocol_schema::v1::PromptRequest;
+pub use agent_client_protocol_schema::v1::PromptResponse;
+pub use agent_client_protocol_schema::v1::SessionConfigKind;
+pub use agent_client_protocol_schema::v1::SessionConfigOption;
+pub use agent_client_protocol_schema::v1::SessionConfigOptionCategory;
+pub use agent_client_protocol_schema::v1::SessionConfigOptionValue;
+pub use agent_client_protocol_schema::v1::SessionConfigSelectGroup;
+pub use agent_client_protocol_schema::v1::SessionConfigSelectOption;
+pub use agent_client_protocol_schema::v1::SessionConfigSelectOptions;
+pub use agent_client_protocol_schema::v1::SessionConfigValueId;
+pub use agent_client_protocol_schema::v1::SessionNotification;
+pub use agent_client_protocol_schema::v1::SessionUpdate;
+pub use agent_client_protocol_schema::v1::SetSessionConfigOptionRequest;
+pub use agent_client_protocol_schema::v1::SetSessionConfigOptionResponse;
