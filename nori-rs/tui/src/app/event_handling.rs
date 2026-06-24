@@ -1054,6 +1054,9 @@ impl App {
                 self.chat_widget
                     .show_resume_session_picker(params, generation);
             }
+            AppEvent::ShowAcpResumeSessionPicker { sessions } => {
+                self.chat_widget.show_acp_resume_session_picker(sessions);
+            }
             AppEvent::ResumeSessionSummaryReady {
                 generation,
                 session_id,
@@ -1094,7 +1097,7 @@ impl App {
                             None,
                         );
                         self.chat_widget =
-                            ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
+                            ChatWidget::new_resumed_acp(init, acp_session_id, Some(transcript));
                         self.configure_new_chat_widget();
 
                         self.chat_widget.add_info_message(
@@ -1108,6 +1111,28 @@ impl App {
                             .add_error_message(format!("Failed to load session transcript: {e}"));
                     }
                 }
+            }
+            AppEvent::ResumeAcpSession { acp_session_id } => {
+                let display_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| self.config.model.clone());
+
+                self.shutdown_current_conversation();
+
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    None,
+                    Vec::new(),
+                    None,
+                    false,
+                    None,
+                );
+                self.chat_widget = ChatWidget::new_resumed_acp(init, Some(acp_session_id), None);
+                self.configure_new_chat_widget();
+
+                self.chat_widget
+                    .add_info_message(format!("Resuming session with {display_name}..."), None);
+                tui.frame_requester().schedule_frame();
             }
             #[cfg(unix)]
             AppEvent::BrowserLaunched { ws_url, cdp_port } => {

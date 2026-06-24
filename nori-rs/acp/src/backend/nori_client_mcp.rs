@@ -466,6 +466,11 @@ pub(super) fn capabilities_update_for_nori_client(
     let agent = nori_protocol::AgentCapabilitiesView {
         http_mcp: connection.capabilities().mcp_capabilities.http,
         load_session: connection.capabilities().load_session,
+        session_list: connection
+            .capabilities()
+            .session_capabilities
+            .list
+            .is_some(),
     };
     capabilities_update(agent, nori_client_advertised, nori_client_initialized)
 }
@@ -514,6 +519,11 @@ pub(super) async fn register_for_session(
         nori_protocol::AgentCapabilitiesView {
             http_mcp: connection.capabilities().mcp_capabilities.http,
             load_session: connection.capabilities().load_session,
+            session_list: connection
+                .capabilities()
+                .session_capabilities
+                .list
+                .is_some(),
         },
         true,
     ))
@@ -541,6 +551,7 @@ mod tests {
         nori_protocol::AgentCapabilitiesView {
             http_mcp: true,
             load_session: false,
+            session_list: false,
         }
     }
 

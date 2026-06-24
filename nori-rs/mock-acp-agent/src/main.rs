@@ -1341,6 +1341,14 @@ async fn main() -> acp::Result<()> {
                     has_capabilities = true;
                 }
 
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_LIST").is_ok() {
+                    eprintln!("Mock agent: advertising session/list capability");
+                    capabilities = capabilities.session_capabilities(
+                        acp::SessionCapabilities::new().list(acp::SessionListCapabilities::new()),
+                    );
+                    has_capabilities = true;
+                }
+
                 if has_capabilities {
                     response = response.agent_capabilities(capabilities);
                 }
@@ -1446,6 +1454,24 @@ async fn main() -> acp::Result<()> {
                             .config_options(config_options_for_state(&session_config)),
                     )
                 }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |arguments: acp::ListSessionsRequest,
+                        responder: Responder<acp::ListSessionsResponse>,
+                        _cx: ConnectionTo<Client>| {
+                eprintln!("Mock agent: session/list");
+                let cwd = arguments
+                    .cwd
+                    .unwrap_or_else(|| PathBuf::from("/mock/session/cwd"));
+                let sessions = vec![
+                    acp::SessionInfo::new("mock-session-1", cwd.clone())
+                        .title("First mock session")
+                        .updated_at("2026-01-02T03:04:05Z"),
+                    acp::SessionInfo::new("mock-session-2", cwd),
+                ];
+                responder.respond(acp::ListSessionsResponse::new(sessions))
             },
             agent_client_protocol::on_receive_request!(),
         )

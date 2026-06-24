@@ -90,6 +90,22 @@ pub struct ApprovalRequest {
     pub response_tx: oneshot::Sender<ReviewDecision>,
 }
 
+/// Owned summary of one session returned by ACP `session/list`.
+///
+/// This decouples consumers (e.g. the TUI resume picker) from the raw ACP
+/// schema types, exposing only the fields the picker renders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcpSessionSummary {
+    /// The agent's session identifier, used to resume via `session/load`.
+    pub session_id: String,
+    /// The working directory the session was created in (absolute path).
+    pub cwd: std::path::PathBuf,
+    /// Human-readable session title, when the agent provides one.
+    pub title: Option<String>,
+    /// ISO 8601 timestamp of last activity, when the agent provides one.
+    pub updated_at: Option<String>,
+}
+
 /// Session config state captured from ACP session setup and updates.
 ///
 /// This stores the complete current `configOptions` snapshot for the active

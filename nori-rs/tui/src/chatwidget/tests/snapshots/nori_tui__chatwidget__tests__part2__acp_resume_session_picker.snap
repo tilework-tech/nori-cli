@@ -1,0 +1,12 @@
+---
+source: tui/src/chatwidget/tests/part2.rs
+expression: popup
+---
+  Resume previous session
+  Select a session to resume
+
+  Type to search sessions
+› Refactor the parser  2020-01-15 10:30 · /home/user/project
+  session-def          /home/user/other
+
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

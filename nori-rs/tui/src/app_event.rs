@@ -481,6 +481,20 @@ pub(crate) enum AppEvent {
         session_id: String,
     },
 
+    /// Show the resume session picker sourced from the live agent's ACP
+    /// `session/list` rather than the local transcript store.
+    ShowAcpResumeSessionPicker {
+        /// Session summaries reported by the agent.
+        sessions: Vec<nori_acp::AcpSessionSummary>,
+    },
+
+    /// Resume a session reported by the agent's `session/list`, via
+    /// `session/load` with no local transcript (the agent replays history).
+    ResumeAcpSession {
+        /// The agent's session identifier to load.
+        acp_session_id: String,
+    },
+
     /// Launch a terminal file manager to browse and optionally edit files.
     #[cfg(feature = "nori-config")]
     BrowseFiles(nori_acp::config::FileManager),

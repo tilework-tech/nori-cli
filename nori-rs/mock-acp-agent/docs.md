@@ -12,7 +12,7 @@ Used by `@/nori-rs/tui-pty-e2e/` for end-to-end integration testing. The mock ag
 
 ### Core Implementation
 
-**Agent wiring**: The mock is assembled in `main()` from the SDK's `Agent.builder()` with typed `on_receive_request`/`on_receive_notification` handler closures -- one per method (`initialize`, `authenticate`, `session/new`, `session/load`, `session/prompt`, `session/set_mode`, `session/set_config_option`, plus the `session/cancel` notification) -- then connected over `ByteStreams` to the wrapped stdin/stdout. Each closure receives the typed request/notification, a `Responder`, and a `ConnectionTo<Client>`; the closures share state through an `Arc<MockState>`. Handled concerns include:
+**Agent wiring**: The mock is assembled in `main()` from the SDK's `Agent.builder()` with typed `on_receive_request`/`on_receive_notification` handler closures -- one per method (`initialize`, `authenticate`, `session/new`, `session/load`, `session/list`, `session/prompt`, `session/set_mode`, `session/set_config_option`, plus the `session/cancel` notification) -- then connected over `ByteStreams` to the wrapped stdin/stdout. Each closure receives the typed request/notification, a `Responder`, and a `ConnectionTo<Client>`; the closures share state through an `Arc<MockState>`. Handled concerns include:
 - Session creation, load (history replay), and config-option/mode mutation
 - Prompt processing with simulated responses, streaming, and tool calls
 - Permission request/response flow
@@ -22,6 +22,7 @@ Used by `@/nori-rs/tui-pty-e2e/` for end-to-end integration testing. The mock ag
 
 **Session Lifecycle Testing**: Several env vars control `session/load` behavior for testing the resume path in `@/nori-rs/acp/src/backend/session.rs`:
 - `MOCK_AGENT_SUPPORT_LOAD_SESSION` -- when set, the agent advertises `load_session: true` in its capabilities during `initialize()`
+- `MOCK_AGENT_SUPPORT_SESSION_LIST` -- when set, the agent advertises the ACP `session/list` capability during `initialize()` and its `session/list` handler returns two canned `SessionInfo` rows; exercises the agent-sourced `/resume` picker wire path (`AcpConnection::list_sessions()` in `@/nori-rs/acp/src/connection/`, surfaced as `agent.session_list`)
 - `MOCK_AGENT_MCP_HTTP` -- when set, the agent advertises HTTP MCP capability so the backend-owned `nori-client` MCP server in `@/nori-rs/acp/src/backend/nori_client_mcp.rs` can be tested through the normal `session/new` MCP server advertisement path
 - `MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION` -- when set, `new_session()` eagerly sends an MCP `initialize` request to the advertised `nori-client` server before returning, mirroring agents that initialize advertised MCP servers during session setup
 - `MOCK_AGENT_FAIL_NEW_SESSION_FROM` -- when set to an integer N, `new_session()` returns an error once the generated session id is at least N, allowing tests to exercise replacement-session failures without breaking the initial backend startup

@@ -8,6 +8,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use nori_acp::AcpSessionSummary;
 use nori_acp::transcript::TranscriptLoader;
 
 use crate::app_event::AppEvent;
@@ -63,6 +64,77 @@ pub fn resume_session_picker_params(
                     nori_home: nori_home.clone(),
                     project_id: project_id.clone(),
                     session_id: session_id.clone(),
+                });
+            })];
+
+            SelectionItem {
+                name,
+                description,
+                search_value: Some(search_value),
+                is_current: false,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Resume previous session".to_string()),
+        subtitle: Some("Select a session to resume".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        is_searchable: true,
+        search_placeholder: Some("Type to search sessions".to_string()),
+        ..Default::default()
+    }
+}
+
+/// Build the resume picker from sessions reported by the live agent's ACP
+/// `session/list`.
+///
+/// Unlike [`resume_session_picker_params`], rows come from the agent rather
+/// than the local transcript store, and selecting one resumes via
+/// `session/load` using the agent's own session id (no local transcript).
+/// Columns map as: `title` → row name (falling back to the session id when the
+/// agent omits a title), `updated_at` → relative time, and `cwd` → the row
+/// description.
+pub fn acp_resume_session_picker_params(
+    sessions: Vec<AcpSessionSummary>,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    if sessions.is_empty() {
+        return SelectionViewParams {
+            title: Some("Resume previous session".to_string()),
+            subtitle: Some("The agent reported no resumable sessions".to_string()),
+            footer_hint: Some(standard_popup_hint_line()),
+            items: vec![],
+            ..Default::default()
+        };
+    }
+
+    let items: Vec<SelectionItem> = sessions
+        .into_iter()
+        .map(|session| {
+            let cwd_display = session.cwd.display().to_string();
+            let name = session
+                .title
+                .clone()
+                .filter(|title| !title.is_empty())
+                .unwrap_or_else(|| session.session_id.clone());
+            let description = match session.updated_at.as_deref() {
+                Some(updated_at) => Some(format!(
+                    "{} · {cwd_display}",
+                    format_relative_time(updated_at)
+                )),
+                None => Some(cwd_display.clone()),
+            };
+            let search_value = format!("{} {name} {cwd_display}", session.session_id);
+
+            let acp_session_id = session.session_id;
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx: &AppEventSender| {
+                tx.send(AppEvent::ResumeAcpSession {
+                    acp_session_id: acp_session_id.clone(),
                 });
             })];
 
@@ -263,6 +335,58 @@ mod tests {
         );
         assert!(params.items[1].description.is_none());
         assert!(params.is_searchable);
+    }
+
+    #[test]
+    fn acp_resume_picker_maps_agent_session_summaries() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let app_event_tx = AppEventSender::new(tx);
+
+        let sessions = vec![
+            AcpSessionSummary {
+                session_id: "agent-sess-1".to_string(),
+                cwd: PathBuf::from("/repo/one"),
+                title: Some("Fix the parser".to_string()),
+                updated_at: Some("2020-01-15T10:30:00Z".to_string()),
+            },
+            AcpSessionSummary {
+                session_id: "agent-sess-2".to_string(),
+                cwd: PathBuf::from("/repo/two"),
+                title: None,
+                updated_at: None,
+            },
+        ];
+
+        let params = acp_resume_session_picker_params(sessions, app_event_tx);
+
+        assert_eq!(params.items.len(), 2);
+        // Title becomes the row name; missing title falls back to session id.
+        assert_eq!(params.items[0].name, "Fix the parser");
+        assert_eq!(params.items[1].name, "agent-sess-2");
+        // cwd shows up in the description for both rows.
+        assert!(
+            params.items[0]
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("/repo/one")
+        );
+        assert_eq!(params.items[1].description.as_deref(), Some("/repo/two"));
+        assert!(params.is_searchable);
+    }
+
+    #[test]
+    fn acp_resume_picker_handles_empty_session_list() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let app_event_tx = AppEventSender::new(tx);
+
+        let params = acp_resume_session_picker_params(vec![], app_event_tx);
+
+        assert!(params.items.is_empty());
+        assert_eq!(
+            params.subtitle.as_deref(),
+            Some("The agent reported no resumable sessions")
+        );
     }
 
     #[test]

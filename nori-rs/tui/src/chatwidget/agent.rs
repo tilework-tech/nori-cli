@@ -5,6 +5,7 @@ use codex_core::config::Config;
 use codex_core::protocol::Op;
 use nori_acp::AcpBackend;
 use nori_acp::AcpBackendConfig;
+use nori_acp::AcpSessionSummary;
 use nori_acp::HistoryPersistence;
 use nori_acp::SessionConfigOption;
 use nori_acp::find_nori_home;
@@ -63,6 +64,11 @@ pub(crate) enum AcpAgentCommand {
         value: String,
         response_tx: oneshot::Sender<anyhow::Result<Vec<SessionConfigOption>>>,
     },
+    /// List the agent's known sessions via ACP `session/list`.
+    ListSessions {
+        cwd: std::path::PathBuf,
+        response_tx: oneshot::Sender<anyhow::Result<Vec<AcpSessionSummary>>>,
+    },
 }
 
 /// Handle for communicating with an ACP agent.
@@ -106,6 +112,20 @@ impl AcpAgentHandle {
                 value,
                 response_tx,
             })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+    }
+
+    /// List the agent's known sessions via ACP `session/list`.
+    pub async fn list_sessions(
+        &self,
+        cwd: std::path::PathBuf,
+    ) -> anyhow::Result<Vec<AcpSessionSummary>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpAgentCommand::ListSessions { cwd, response_tx })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
         response_rx
             .await
@@ -328,6 +348,10 @@ fn spawn_acp_agent(
                             .map(|()| backend_for_agent.config_options());
                         let _ = response_tx.send(result);
                     }
+                    AcpAgentCommand::ListSessions { cwd, response_tx } => {
+                        let result = backend_for_agent.connection().list_sessions(&cwd).await;
+                        let _ = response_tx.send(result);
+                    }
                 }
             }
         });
@@ -364,7 +388,7 @@ fn spawn_acp_agent(
 pub(crate) fn spawn_acp_agent_resume(
     config: Config,
     acp_session_id: Option<String>,
-    transcript: nori_acp::transcript::Transcript,
+    transcript: Option<nori_acp::transcript::Transcript>,
     app_event_tx: AppEventSender,
 ) -> SpawnAgentResult {
     let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
@@ -444,7 +468,7 @@ pub(crate) fn spawn_acp_agent_resume(
             result = AcpBackend::resume_session(
                 &acp_config,
                 acp_session_id.as_deref(),
-                Some(&transcript),
+                transcript.as_ref(),
                 backend_event_tx,
             ) => {
                 match result {
@@ -503,6 +527,10 @@ pub(crate) fn spawn_acp_agent_resume(
                             .set_config_option(config_id, value)
                             .await
                             .map(|()| backend_for_agent.config_options());
+                        let _ = response_tx.send(result);
+                    }
+                    AcpAgentCommand::ListSessions { cwd, response_tx } => {
+                        let result = backend_for_agent.connection().list_sessions(&cwd).await;
                         let _ = response_tx.send(result);
                     }
                 }
