@@ -859,7 +859,9 @@ Resume hints use the shared `RESUME_HINT_LEAD` and `resume_command_for_conversat
 
 The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and otherwise falls back to a fresh ACP session plus normalized replay derived from the saved transcript (see `@/nori-rs/acp/docs.md`).
 
-The flow involves three layers:
+The picker list itself comes from one of two sources. `ChatWidget::open_resume_session_picker()` has a capability-gated branch: when the agent advertises *both* `session/list` and `load_session` (`self.session_agent_capabilities.session_list && self.session_agent_capabilities.load_session`) and an `acp_handle` exists, it spawns an async task that calls `handle.list_sessions(cwd)` on the live agent (via the `ListSessions { cwd, response_tx }` `AcpAgentCommand`) and emits `AppEvent::ShowAcpResumeSessionPicker { sessions }` with the agent's own `AcpSessionSummary` rows. An empty result inserts a "no resumable sessions" error cell and a list failure inserts an error cell instead of opening a picker. Otherwise it falls back to the existing local-transcript picker (`AppEvent::ShowResumeSessionPicker`) described below. `load_session` is required in addition to `session_list` because resuming an agent-sourced row passes `transcript: None` and depends entirely on server-side `session/load` replay; without `load_session` an agent would silently start a blank session, so such agents fall through to the transcript-backed picker. The `session_list` capability is the raw agent-capability projection sourced from `@/nori-rs/acp`; this is generic to any agent that advertises ACP `session/list`, not Nori/Codex-specific. Selecting an agent-sourced row emits `AppEvent::ResumeAcpSession { acp_session_id }`, whose handler shuts down the current conversation and starts a new resumed ACP chat widget via `new_resumed_acp(init, Some(acp_session_id), None)` -- there is no local transcript, so server-side `session/load` replay rehydrates history. `show_acp_resume_session_picker()` builds the modal via `acp_resume_session_picker_params()` in `@/nori-rs/tui/src/nori/resume_session_picker.rs`, mapping each summary to a row (name = title falling back to session_id, description = relative time plus cwd, action = `ResumeAcpSession`).
+
+The transcript-backed flow involves three layers:
 
 ```
 SlashCommand::Resume
@@ -894,7 +896,7 @@ Lazy picker summaries: after `ShowResumeSessionPicker` is sent, `ChatWidget::ope
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/nori-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing the optional `acp_session_id` and the full `Transcript`. Both spawn paths receive a single `BackendEvent` stream from `nori-acp`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
+`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing the optional `acp_session_id` and an `Option<Transcript>` (the transcript-backed `/resume` and `nori resume` paths supply `Some`; the agent-sourced `session/list` path supplies `None` and relies on server-side replay). Both spawn paths receive a single `BackendEvent` stream from `nori-acp`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
 
 **Agent Connection Lifecycle & Failure Recovery:**
 

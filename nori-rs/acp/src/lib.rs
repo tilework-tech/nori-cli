@@ -41,6 +41,7 @@ pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
 pub use backend::BackendEvent;
 pub use connection::AcpSessionConfigState;
+pub use connection::AcpSessionSummary;
 pub use connection::ApprovalRequest;
 pub use connection::acp_connection::AcpConnection;
 pub use registry::AcpAgentConfig;

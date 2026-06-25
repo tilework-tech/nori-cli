@@ -88,6 +88,43 @@ impl ChatWidget {
     }
 
     pub(crate) fn open_resume_session_picker(&mut self) {
+        // When the live agent advertises ACP `session/list`, source the picker
+        // from the agent itself (and resume over ACP) instead of the local
+        // transcript store. Resuming a listed session loads it over ACP via
+        // `session/load`, so the agent must also advertise `load_session`;
+        // without it, fall back to the local-transcript picker.
+        if self.session_agent_capabilities.session_list
+            && self.session_agent_capabilities.load_session
+            && let Some(handle) = self.acp_handle.clone()
+        {
+            let cwd = self.config.cwd.clone();
+            let tx = self.app_event_tx.clone();
+            tokio::spawn(async move {
+                match handle.list_sessions(cwd).await {
+                    Ok(sessions) if sessions.is_empty() => {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(
+                                "The agent reported no resumable sessions.".to_string(),
+                            ),
+                        )));
+                    }
+                    Ok(sessions) => {
+                        tx.send(crate::app_event::AppEvent::ShowAcpResumeSessionPicker {
+                            sessions,
+                        });
+                    }
+                    Err(e) => {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(format!(
+                                "Failed to list sessions from the agent: {e}"
+                            )),
+                        )));
+                    }
+                }
+            });
+            return;
+        }
+
         let started = std::time::Instant::now();
         let cwd = self.config.cwd.clone();
         let tx = self.app_event_tx.clone();
@@ -196,6 +233,15 @@ impl ChatWidget {
         generation: u64,
     ) {
         self.active_resume_picker_generation = Some(generation);
+        self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Show the resume picker populated from the agent's ACP `session/list`.
+    pub(crate) fn show_acp_resume_session_picker(
+        &mut self,
+        sessions: Vec<nori_acp::AcpSessionSummary>,
+    ) {
+        let params = crate::nori::resume_session_picker::acp_resume_session_picker_params(sessions);
         self.bottom_pane.show_selection_view(params);
     }
 

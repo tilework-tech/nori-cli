@@ -1155,3 +1155,60 @@ async fn test_spawn_failure_surfaces_child_stderr() {
         "the surfaced stderr must drive categorization (auth, not init failure)"
     );
 }
+
+/// `list_sessions` drains the agent's `session/list` pages and maps each
+/// `SessionInfo` into an owned `AcpSessionSummary`, preserving the optional
+/// `title`/`updated_at` fields (including their absence).
+#[tokio::test]
+#[serial]
+async fn test_list_sessions_maps_agent_session_info() {
+    let Some(config) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+
+    // SAFETY: serialized test; the variable is removed before any assertion
+    // that could unwind, and `#[serial]` keeps env mutation isolated.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
+    }
+
+    let conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        crate::config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("Failed to spawn AcpConnection");
+
+    assert!(
+        conn.capabilities().session_capabilities.list.is_some(),
+        "mock should advertise session/list when env-gated on"
+    );
+
+    let summaries = conn
+        .list_sessions(temp_dir.path())
+        .await
+        .expect("list_sessions should succeed against a live agent");
+
+    // SAFETY: cleaning up the env var we set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_SUPPORT_SESSION_LIST");
+    }
+
+    let expected = vec![
+        super::AcpSessionSummary {
+            session_id: "mock-session-1".to_string(),
+            cwd: temp_dir.path().to_path_buf(),
+            title: Some("First mock session".to_string()),
+            updated_at: Some("2026-01-02T03:04:05Z".to_string()),
+        },
+        super::AcpSessionSummary {
+            session_id: "mock-session-2".to_string(),
+            cwd: temp_dir.path().to_path_buf(),
+            title: None,
+            updated_at: None,
+        },
+    ];
+    assert_eq!(summaries, expected);
+}

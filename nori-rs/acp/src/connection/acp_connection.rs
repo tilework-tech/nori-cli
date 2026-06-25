@@ -699,6 +699,53 @@ impl AcpConnection {
         Ok(acp::SessionId::from(session_id.to_string()))
     }
 
+    /// List the agent's known sessions via ACP `session/list`.
+    ///
+    /// `cwd` is forwarded as the spec's working-directory filter. Cursor-based
+    /// pagination is drained internally, so the returned vector contains every
+    /// page concatenated in agent order.
+    pub async fn list_sessions(
+        &self,
+        cwd: &Path,
+    ) -> Result<Vec<crate::connection::AcpSessionSummary>> {
+        // Bound pagination so a misbehaving agent that keeps returning a
+        // `next_cursor` cannot pin the picker in an unbounded loop.
+        const MAX_SESSION_LIST_PAGES: usize = 1000;
+
+        let mut summaries = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        for _ in 0..MAX_SESSION_LIST_PAGES {
+            let mut request = acp::ListSessionsRequest::new().cwd(cwd.to_path_buf());
+            if let Some(cursor) = cursor.take() {
+                request = request.cursor(cursor);
+            }
+
+            let response = self
+                .cx
+                .send_request(request)
+                .block_task()
+                .await
+                .context("Failed to list ACP sessions")?;
+
+            summaries.extend(response.sessions.into_iter().map(|session| {
+                crate::connection::AcpSessionSummary {
+                    session_id: session.session_id.to_string(),
+                    cwd: session.cwd,
+                    title: session.title,
+                    updated_at: session.updated_at,
+                }
+            }));
+
+            match response.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => break,
+            }
+        }
+
+        Ok(summaries)
+    }
+
     /// Send a prompt to an existing session and receive streaming updates.
     ///
     /// Updates flow through the ordered event inbox.

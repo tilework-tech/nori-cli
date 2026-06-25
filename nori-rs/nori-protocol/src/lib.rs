@@ -108,6 +108,9 @@ pub struct SessionCapabilitiesView {
 pub struct AgentCapabilitiesView {
     pub http_mcp: bool,
     pub load_session: bool,
+    /// Whether the agent advertises the ACP `session/list` capability.
+    #[serde(default)]
+    pub session_list: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1856,6 +1859,7 @@ mod tests {
             agent: AgentCapabilitiesView {
                 http_mcp: false,
                 load_session: true,
+                session_list: false,
             },
             nori_client: NoriClientCapabilitiesView {
                 advertised: false,
