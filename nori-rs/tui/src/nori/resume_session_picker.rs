@@ -99,10 +99,7 @@ pub fn resume_session_picker_params(
 /// Columns map as: `title` → row name (falling back to the session id when the
 /// agent omits a title), `updated_at` → relative time, and `cwd` → the row
 /// description.
-pub fn acp_resume_session_picker_params(
-    sessions: Vec<AcpSessionSummary>,
-    _app_event_tx: AppEventSender,
-) -> SelectionViewParams {
+pub fn acp_resume_session_picker_params(sessions: Vec<AcpSessionSummary>) -> SelectionViewParams {
     if sessions.is_empty() {
         return SelectionViewParams {
             title: Some("Resume previous session".to_string()),
@@ -339,9 +336,6 @@ mod tests {
 
     #[test]
     fn acp_resume_picker_maps_agent_session_summaries() {
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let app_event_tx = AppEventSender::new(tx);
-
         let sessions = vec![
             AcpSessionSummary {
                 session_id: "agent-sess-1".to_string(),
@@ -357,7 +351,7 @@ mod tests {
             },
         ];
 
-        let params = acp_resume_session_picker_params(sessions, app_event_tx);
+        let params = acp_resume_session_picker_params(sessions);
 
         assert_eq!(params.items.len(), 2);
         // Title becomes the row name; missing title falls back to session id.
@@ -377,10 +371,7 @@ mod tests {
 
     #[test]
     fn acp_resume_picker_handles_empty_session_list() {
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let app_event_tx = AppEventSender::new(tx);
-
-        let params = acp_resume_session_picker_params(vec![], app_event_tx);
+        let params = acp_resume_session_picker_params(vec![]);
 
         assert!(params.items.is_empty());
         assert_eq!(

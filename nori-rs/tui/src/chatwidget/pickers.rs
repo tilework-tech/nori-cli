@@ -241,10 +241,7 @@ impl ChatWidget {
         &mut self,
         sessions: Vec<nori_acp::AcpSessionSummary>,
     ) {
-        let params = crate::nori::resume_session_picker::acp_resume_session_picker_params(
-            sessions,
-            self.app_event_tx.clone(),
-        );
+        let params = crate::nori::resume_session_picker::acp_resume_session_picker_params(sessions);
         self.bottom_pane.show_selection_view(params);
     }
 
