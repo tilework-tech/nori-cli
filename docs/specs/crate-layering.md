@@ -1,6 +1,6 @@
 # Crate Layering & Workspace Cleanup
 
-Status: **draft — target layout agreed, gated on the `nori-acp` → `codex-core` import audit (§5)**
+Status: **draft — target layout agreed; import audit complete (§7), slices ready for PR planning**
 Created: 2026-07-03
 
 This document tracks the target crate layout for `nori-rs` and the sequence of
@@ -71,8 +71,14 @@ Layer 0 — leaves (independently useful, publishable to crates.io)
 ├── nori-acp-host     ACP host-side library: agent registry, subprocess spawn,
 │                     JSON-RPC/stdio connection, session lifecycle, permission
 │                     plumbing. No TUI, no ~/.nori, no codex-* deps.
-├── nori-protocol     THE protocol crate, built on agent-client-protocol-schema.
-│                     Minimal deps, no business logic.
+├── nori-protocol     The internal types crate: session-runtime types plus the
+│                     adopted internal event vocabulary (today's codex-protocol
+│                     Event/EventMsg/Op), built on agent-client-protocol-schema.
+│                     Minimal deps, no business logic. Two vocabularies remain
+│                     deliberate: ACP wire types at the boundary, internal event
+│                     types as the harness's control plane (the same split
+│                     upstream keeps between codex-protocol and its app-server
+│                     protocol).
 └── mock-acp-agent    Conformance-test agent for ACP hosts and agent authors.
 
 Layer 1 — headless runtime (the harness product)
@@ -129,45 +135,66 @@ may depend upward.
   languages, mirroring pi's rpc-mode and codex's exec mode.
 - **A documented transcript/session format** (like pi's `session-format.md`).
 
-## 5. Open question gating the plan: the codex-core audit
+## 5. The codex-core question — answered
 
-`nori-acp` depends on `codex-core`, `codex-protocol`, and `codex-rmcp-client`;
-`translator.rs` bridges the Codex event model into ACP. Before slicing PRs we
-need to know, import by import, what is actually used:
+The import-level audit (findings in §7) settled the questions that gated
+phases 3–5:
 
-- [ ] What does `nori-acp` import from `codex-core`? (config? auth? exec/
-      sandbox? MCP client? rollout?)
-- [ ] What does `nori-tui` import from `codex-core` / `codex-protocol` that
-      isn't already mediated by `nori-acp`?
-- [ ] Which `codex-protocol` types leak into `nori-protocol` or the TUI via
-      the translator?
-- [ ] Is upstream Codex sync dead? (The squash-rename already made merges
-      coarse. If dead, `codex-*` crates are owned code, eligible for deletion
-      and renaming. If alive, surviving crates stay byte-stable under a
-      clearly-marked vendored subtree.)
+- **codex-core is not an engine anymore.** The agent loop, model client, and
+  conversation manager were already stripped (#196, #230, #438). What remains
+  is a 22.5k-LOC utility/config grab-bag; roughly a third to half of it is
+  unreferenced by the `nori` binary.
+- **codex-protocol is load-bearing and agent-agnostic.** It is the internal
+  event vocabulary (`Event`/`EventMsg`/`Op`) for *all* agents, and
+  `translator.rs` is the generic ACP-wire ↔ internal-event bridge on every
+  agent's hot path. Verdict: adopt and rename as Nori-owned, don't remove.
+- **Upstream sync is dead.** No `upstream` remote exists and there have been
+  zero merges from openai/codex since the squash-rename (#443). Deleting and
+  renaming inherited crates carries no merge cost. Convention going forward:
+  rename `codex-*` crates as they are adopted/touched, not in churn-only PRs.
 
-Audit findings land in §7 of this doc and convert §6's phases 3–5 into
-concrete PR plans.
+## 6. Sequencing — PR-sized slices
 
-## 6. Sequencing
+Each slice is an independent PR (or small PR train), ordered so every one
+lands green and net-negative or neutral. Detailed per-slice implementation
+plans go in `docs/plans/` as each is picked up.
 
-Each phase lands as one or more independent, net-negative PRs. Later phases
-depend on earlier ones; the audit (§5) gates phases 3–5.
+| # | Slice | Contents | Risk | Est. LOC |
+|---|-------|----------|------|---------:|
+| A | Repo hygiene | Delete repo-root debris and stale `.worktrees` entries; rewrite `nori-rs/README.md` for Nori; fix stale naming claims in `docs.md` | none | −large |
+| B | Dead-weight purge in codex-core | Delete `rollout` (2.1k — nori-acp has its own transcript recorder), `turn_diff_tracker`, `command_safety`, and other unreferenced modules; confirm transitive deps with a dead-code pass | low | −8–10k |
+| C | Kill the `nori-config` feature | Delete the `not(nori-config)` cfg branches (~120 sites, 18 files — the dead legacy codex-config path), then remove the feature so nori config is the only path | low | −1–2k |
+| D | Un-detour protocol imports | Rewire `codex_core::protocol::*` (178+ refs in tui, plus cli) to import `codex_protocol` directly; drop the re-exports from core's lib.rs | low | ~0 |
+| E | Sever nori-acp → codex-core | Extract the six leaf helpers (`user_notification`, `custom_prompts::discover_prompts_in`, `parse_command`, `util::create_patch_with_context`, `compact` constants) plus `config::types::McpServerConfig` into their target crates; acp's only remaining codex deps are protocol + rmcp OAuth store | medium | ~0 |
+| F | Extract config/auth | Pull codex-core's `config` subtree (6.2k, the biggest live consumer) and `auth` into `nori-config` / auth home; whatever codex-core still holds after B+E+F gets dissolved or renamed | medium | ~0 |
+| G | Split nori-acp | `nori-acp-host` (registry, connection, subprocess, wire) + `nori-harness` (backend reducer, transcript, undo, worktrees, hooks) + config move; adopt/rename `codex-protocol` into `nori-protocol` | medium | ~0 |
+| H | Invert the TUI | Move orchestration out of `tui/src/nori/` and `chatwidget/` into the harness; TUI consumes harness events only (dependency rule 2 becomes enforceable) | high | −net |
+| I | Ecosystem surfaces | Publish `nori-acp-host` + `mock-acp-agent` to crates.io; document transcript/session format; add headless exec/RPC mode | low | +small |
 
-| Phase | Slice | Risk |
-|-------|-------|------|
-| 1 | Hygiene: delete repo-root debris and stale worktrees; rewrite `nori-rs/README.md` for Nori; fix stale naming claims in `docs.md`; remove crates/bins not on the `nori` binary path | none |
-| 2 | Dissolve `codex-common` into its consumers; consolidate `utils/*` micro-crates into one or two | low |
-| 3 | Sever `nori-acp` → `codex-core`: extract the genuinely-needed pieces (per audit), make the ACP schema the single protocol, retire `translator.rs` from the hot path | high |
-| 4 | Split `nori-acp` into `nori-acp-host` (Layer 0) + `nori-harness` (Layer 1) + `nori-config`; delete the `nori-config` cargo feature | medium |
-| 5 | Invert the TUI: move orchestration out of `tui/src/` into the harness; TUI consumes harness events only | high |
-| 6 | Ecosystem: publish `nori-acp-host` + `mock-acp-agent`; document transcript format; add headless exec/RPC mode | low |
+Also folded in along the way: dissolve `codex-common` into its consumers and
+consolidate the `utils/*` micro-crates (opportunistically, in whichever slice
+touches them last).
 
 Ground rules for every slice: net-negative or neutral diff preferred; no
 behavior change without a snapshot/e2e test proving it; `cargo build --bin
 nori && cargo test -p tui-pty-e2e` green before merge; docs updated in the
 same PR.
 
-## 7. Audit findings
+## 7. Audit findings (2026-07-03)
 
-*(pending — populated by the §5 audit before phase 3 planning begins)*
+Import-level audit of Nori-owned crates → inherited Codex crates. Verdict per
+dependency edge:
+
+| Edge | Verdict | Evidence |
+|------|---------|----------|
+| nori-acp → codex-core | **EXTRACT** | Six leaf helpers only: `user_notification` (`UserNotifier`, `AwaitingApproval`/`Idle`), `custom_prompts::discover_prompts_in`, `parse_command`, `util::create_patch_with_context`, two `compact` string constants, and `config::types::{McpServerConfig, McpServerTransportConfig}` (shared with tui — belongs in the config crate). No engine usage anywhere. |
+| nori-acp → codex-protocol | **KEEP / ADOPT** | The backend deliberately keeps `codex_protocol::{Event, EventMsg, Op}` as the internal control-plane representation for all agents (documented in `acp/src/backend/mod.rs`). `translator.rs` (1.6k LOC) bridges ACP wire ↔ these types on every agent's hot path — Claude, codex, cloud, and custom agents alike. Rename/merge into `nori-protocol`. |
+| nori-acp → codex-rmcp-client | **KEEP** (or extract OAuth store) | Only the MCP OAuth token persistence (`load_oauth_tokens`/`save_oauth_tokens` etc.) in `connection/mcp.rs`; self-contained. |
+| nori-acp → mcp-types | **DELETE** | Zero usage; not even in acp's Cargo.toml. |
+| nori-tui → `codex_core::protocol::*` | **DELETE detour** | 178+ refs are re-exports of `codex_protocol`; rewire directly (slice D). |
+| nori-tui `not(nori-config)` branches | **DELETE** | ~120 cfg sites across 18 files gate a legacy codex-core config path that is dead in the shipped bin (feature is default-on) (slice C). |
+| nori-tui → codex-core config/auth/sandbox/git_info | **KEEP → extract later** | Real functionality with no ACP equivalent: `config` subtree (6.2k LOC), `AuthManager`/`CodexAuth`, `get_platform_sandbox`, `git_info`, `otel_init`, `project_doc`, `model_family` (slice F). |
+| nori-tui → codex-common | **KEEP** | Small presentation helpers genuinely used (approval/model presets, fuzzy_match, elapsed). Dissolve opportunistically. |
+| nori-cli → codex-core | **KEEP, isolated** | No legacy engine path exists in the bin — every subcommand ends in `nori_tui::run_main` driving the ACP backend. codex-core supplies config, auth (`login` feature), and the `nori sandbox` debug helpers (confined to `cli/src/debug_sandbox.rs`). `codex-arg0` stays as the multi-call entry shim. |
+| codex-core dead weight | **DELETE** | `rollout` (2.1k — superseded by `acp/src/transcript/recorder.rs`), `turn_diff_tracker` (896), `command_safety` (839), `exec` (1.1k), `truncate`, `text_encoding`, `shell`, `bash`, `model_provider_info`, `openai_model_info`, more — ~8–10k LOC (~40%) unreferenced by acp/tui/cli, pending a transitive-dep check (slice B). |
+| Upstream sync | **DEAD** | Only remote is `origin` (tilework-tech/nori-cli); no merges from openai/codex since squash-rename #443. Renames and deletions are free. |
