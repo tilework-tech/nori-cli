@@ -734,8 +734,19 @@ async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
         entries.push(parsed);
     }
 
-    let meta =
+    let mut meta =
         meta.ok_or_else(|| io::Error::other("transcript does not contain session metadata"))?;
+
+    // A branch (`session/fork`) swaps the live agent session after the
+    // metadata line was written; the last recorded SessionBranched event
+    // supersedes the spawn-time id so resume targets the forked session.
+    for parsed in &entries {
+        if let TranscriptEntry::ClientEvent(entry) = &parsed.entry
+            && let nori_protocol::ClientEvent::SessionBranched(branched) = &entry.event
+        {
+            meta.acp_session_id = Some(branched.new_session_id.clone());
+        }
+    }
 
     tracing::info!(
         target: "nori_resume",
@@ -762,6 +773,44 @@ mod tests {
     use crate::transcript::recorder::TranscriptRecorder;
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
+
+    /// After a `/fork` branch, the transcript's effective ACP session id must
+    /// be the forked session (recorded as a SessionBranched client event), not
+    /// the id captured in the session metadata at spawn time — otherwise
+    /// resuming the transcript reopens the pre-branch session and silently
+    /// drops post-branch context.
+    #[tokio::test]
+    async fn load_transcript_prefers_last_session_branched_id() {
+        let temp_dir = TempDir::new().unwrap();
+        let recorder = TranscriptRecorder::new(
+            temp_dir.path(),
+            temp_dir.path(),
+            None,
+            "0.1.0",
+            Some("0".to_string()),
+        )
+        .await
+        .unwrap();
+        recorder
+            .record_client_event(&nori_protocol::ClientEvent::SessionBranched(
+                nori_protocol::SessionBranched {
+                    new_session_id: "1".to_string(),
+                },
+            ))
+            .await
+            .unwrap();
+        recorder.flush().await.unwrap();
+        recorder.shutdown().await.unwrap();
+
+        let transcript = load_transcript_from_path(recorder.transcript_path())
+            .await
+            .unwrap();
+        assert_eq!(
+            transcript.meta.acp_session_id.as_deref(),
+            Some("1"),
+            "resuming a branched transcript must target the forked session"
+        );
+    }
 
     #[tokio::test]
     async fn test_list_projects_empty() {

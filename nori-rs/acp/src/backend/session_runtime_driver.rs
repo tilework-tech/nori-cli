@@ -491,6 +491,14 @@ impl AcpBackend {
                 self.maybe_submit_goal_continuation(completed_turn).await;
             }
             QueuedPromptKind::Compact => {
+                // A cancelled compaction did not compact: don't capture the
+                // truncated summary or replace the session (same invariant as
+                // the NativeCompact arm below).
+                if completed_turn.stop_reason
+                    != agent_client_protocol_schema::v1::StopReason::EndTurn
+                {
+                    return;
+                }
                 let Some(summary) = completed_turn.last_agent_message.clone() else {
                     return;
                 };

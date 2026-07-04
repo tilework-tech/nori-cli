@@ -1149,18 +1149,15 @@ impl App {
                     .add_error_message(format!("Failed to launch browser: {err}"));
             }
             AppEvent::OpenForkPicker => {
+                // With no user messages the picker still offers branching at
+                // the current point (e.g. an empty-but-resumed session).
                 let messages =
                     crate::app_backtrack::collect_all_user_messages(&self.transcript_cells);
-                if messages.is_empty() {
-                    self.chat_widget
-                        .add_info_message("No messages to fork from.".to_string(), None);
-                } else {
-                    let params = crate::nori::fork_picker::fork_picker_params(
-                        messages,
-                        self.app_event_tx.clone(),
-                    );
-                    self.chat_widget.show_selection_view(params);
-                }
+                let params = crate::nori::fork_picker::fork_picker_params(
+                    messages,
+                    self.app_event_tx.clone(),
+                );
+                self.chat_widget.show_selection_view(params);
                 tui.frame_requester().schedule_frame();
             }
             AppEvent::ForkToMessage {

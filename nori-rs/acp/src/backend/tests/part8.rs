@@ -432,3 +432,95 @@ async fn test_branch_session_applies_forked_config_options() {
         "the fork response's config_options must replace the live snapshot"
     );
 }
+
+/// A cancelled client-side (fallback) compaction must not be recorded as a
+/// compaction either: no ContextCompacted, no session swap.
+#[tokio::test]
+#[serial]
+async fn test_fallback_compact_cancelled_records_no_compaction() {
+    use std::time::Duration;
+
+    if !mock_agent_available() {
+        return;
+    }
+    // No MOCK_AGENT_AVAILABLE_COMMANDS: /compact takes the client-side path.
+    let _no_commands = EnvGuard::remove("MOCK_AGENT_AVAILABLE_COMMANDS");
+    let _stream = EnvGuard::set("MOCK_AGENT_STREAM_UNTIL_CANCEL", "1");
+    let _echo_session = EnvGuard::set("MOCK_AGENT_ECHO_SESSION_ID", "1");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend, _event_rx, mut client_event_rx) = spawn_backend_for_test(&temp_dir).await;
+
+    backend
+        .submit(Op::Compact)
+        .await
+        .expect("Failed to submit Op::Compact");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "compact turn never started streaming"
+        );
+        if let Ok(Some(nori_protocol::ClientEvent::MessageDelta(_))) =
+            tokio::time::timeout(Duration::from_secs(1), client_event_rx.recv()).await
+        {
+            break;
+        }
+    }
+    backend
+        .submit(Op::Interrupt)
+        .await
+        .expect("Failed to submit Op::Interrupt");
+    let cancelled_turn = capture_turn(&mut client_event_rx).await;
+
+    assert_eq!(
+        cancelled_turn.prompt_completed.stop_reason,
+        nori_protocol::StopReason::Cancelled
+    );
+    assert_eq!(
+        cancelled_turn.context_compacted,
+        Vec::new(),
+        "a cancelled fallback compaction must not be recorded as a compaction"
+    );
+
+    // The original session is still the live one (no replacement session).
+    backend
+        .submit(Op::UserInput {
+            items: vec![codex_protocol::user_input::UserInput::Text {
+                text: "still here?".to_string(),
+            }],
+        })
+        .await
+        .expect("Failed to submit follow-up prompt");
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut follow_up_text = String::new();
+    loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "follow-up turn never started streaming; got: {follow_up_text:?}"
+        );
+        if let Ok(Some(nori_protocol::ClientEvent::MessageDelta(delta))) =
+            tokio::time::timeout(Duration::from_secs(1), client_event_rx.recv()).await
+            && delta.stream == nori_protocol::MessageStream::Answer
+        {
+            follow_up_text.push_str(&delta.delta);
+            if follow_up_text.contains("SESSION:") {
+                break;
+            }
+        }
+    }
+    assert!(
+        follow_up_text.contains("SESSION:0"),
+        "a cancelled fallback compact must not swap sessions, got: {follow_up_text:?}"
+    );
+    backend
+        .submit(Op::Interrupt)
+        .await
+        .expect("Failed to submit follow-up interrupt");
+    let follow_up_turn = capture_turn(&mut client_event_rx).await;
+    assert_eq!(
+        follow_up_turn.prompt_completed.stop_reason,
+        nori_protocol::StopReason::Cancelled
+    );
+}

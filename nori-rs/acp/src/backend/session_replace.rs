@@ -116,8 +116,11 @@ impl AcpBackend {
                 .await;
             return;
         }
+        // Rejects prompts and loads alike; prompts still queued after a
+        // cancelled turn are intentionally allowed through — they follow the
+        // user to the forked session.
         if !self.session_driver.lock().await.is_idle() {
-            self.send_error("Cannot branch while a turn is in progress.")
+            self.send_error("Cannot branch while the session is busy.")
                 .await;
             return;
         }
