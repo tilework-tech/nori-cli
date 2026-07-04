@@ -1,0 +1,17 @@
+---
+source: tui/src/nori/fork_picker.rs
+assertion_line: 128
+expression: rendered
+---
+                                                                
+  Fork Conversation                                             
+  Branch from the current point, or select a message to rewind  
+                                                                
+› 1. ⎇ Branch from current point  duplicate this conversation   
+                                  and continue; the original    
+                                  session is preserved          
+                                  (requires agent support)      
+  2. now add tests                                              
+  3. refactor the parser                                        
+                                                                
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

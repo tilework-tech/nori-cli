@@ -699,6 +699,42 @@ impl AcpConnection {
         Ok(acp::SessionId::from(session_id.to_string()))
     }
 
+    /// Fork (branch) an existing session at its current state via
+    /// `session/fork` (unstable ACP extension, gated on the agent advertising
+    /// the `fork` session capability).
+    ///
+    /// The returned ID identifies the new session; the source session stays
+    /// valid on the agent side. Like `create_session`, the response's live
+    /// config options replace the current snapshot before this returns.
+    pub async fn fork_session(
+        &self,
+        session_id: &acp::SessionId,
+        cwd: &Path,
+        mcp_servers: Vec<acp::McpServer>,
+    ) -> Result<acp::SessionId> {
+        let response = self
+            .cx
+            .send_request(
+                acp::ForkSessionRequest::new(session_id.clone(), cwd).mcp_servers(mcp_servers),
+            )
+            .block_task()
+            .await
+            .context("Failed to fork ACP session")?;
+
+        if let Some(config_options) = response.config_options
+            && let Ok(mut state) = self.session_config_state.write()
+        {
+            state.config_options = config_options;
+        }
+
+        Ok(response.session_id)
+    }
+
+    /// Whether the connected agent advertises the `session/fork` capability.
+    pub fn supports_fork(&self) -> bool {
+        self.agent_capabilities.session_capabilities.fork.is_some()
+    }
+
     /// List the agent's known sessions via ACP `session/list`.
     ///
     /// `cwd` is forwarded as the spec's working-directory filter. Cursor-based

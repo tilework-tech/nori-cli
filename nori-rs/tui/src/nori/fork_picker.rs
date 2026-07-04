@@ -1,7 +1,8 @@
-//! Fork picker component for rewinding conversations.
+//! Fork picker component for branching and rewinding conversations.
 //!
-//! This module provides the UI for selecting a previous user message
-//! to rewind the conversation to.
+//! This module provides the UI for either branching the conversation at its
+//! current point (native ACP `session/fork`) or selecting a previous user
+//! message to rewind to (local summary-based fork).
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -37,31 +38,43 @@ pub fn fork_picker_params(
     messages: Vec<(usize, String)>,
     _app_event_tx: AppEventSender,
 ) -> SelectionViewParams {
-    let items: Vec<SelectionItem> = messages
-        .into_iter()
-        .rev()
-        .map(|(cell_index, message)| {
-            let preview = truncate_preview(&message);
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::ForkToMessage {
-                    cell_index,
-                    prefill: message.clone(),
-                });
-            })];
-            SelectionItem {
-                name: preview,
-                description: None,
-                is_current: false,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            }
-        })
-        .collect();
+    // First entry: branch at the current point via the agent's native
+    // `session/fork` (no rewind). Earlier messages rewind locally instead.
+    let branch_actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+        tx.send(AppEvent::CodexOp(codex_core::protocol::Op::BranchSession));
+    })];
+    let mut items = vec![SelectionItem {
+        name: "⎇ Branch from current point".to_string(),
+        description: Some("duplicate this conversation and continue; the original session is preserved (requires agent support)".to_string()),
+        is_current: false,
+        actions: branch_actions,
+        dismiss_on_select: true,
+        ..Default::default()
+    }];
+
+    items.extend(messages.into_iter().rev().map(|(cell_index, message)| {
+        let preview = truncate_preview(&message);
+        let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+            tx.send(AppEvent::ForkToMessage {
+                cell_index,
+                prefill: message.clone(),
+            });
+        })];
+        SelectionItem {
+            name: preview,
+            description: None,
+            is_current: false,
+            actions,
+            dismiss_on_select: true,
+            ..Default::default()
+        }
+    }));
 
     SelectionViewParams {
         title: Some("Fork Conversation".to_string()),
-        subtitle: Some("Select a message to rewind to".to_string()),
+        subtitle: Some(
+            "Branch from the current point, or select a message to rewind to".to_string(),
+        ),
         footer_hint: Some(standard_popup_hint_line()),
         items,
         is_searchable: false,
@@ -84,10 +97,62 @@ mod tests {
     }
 
     #[test]
-    fn fork_picker_with_no_messages_returns_empty_items() {
+    fn fork_picker_renders_branch_entry_and_messages() {
+        use crate::render::renderable::Renderable;
+        use ratatui::buffer::Buffer;
+        use ratatui::layout::Rect;
+
+        let (tx, _rx) = make_tx();
+        let params = fork_picker_params(
+            vec![
+                (0, "refactor the parser".to_string()),
+                (1, "now add tests".to_string()),
+            ],
+            tx.clone(),
+        );
+        let view = crate::bottom_pane::ListSelectionView::new(params, tx);
+
+        let width = 64;
+        let height = view.desired_height(width);
+        let area = Rect::new(0, 0, width, height);
+        let mut buf = Buffer::empty(area);
+        view.render(area, &mut buf);
+        let rendered = (0..area.height)
+            .map(|row| {
+                (0..area.width)
+                    .map(|col| {
+                        let symbol = buf[(col, row)].symbol();
+                        if symbol.is_empty() { " " } else { symbol }
+                    })
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!("fork_picker_with_branch_entry", rendered);
+    }
+
+    #[test]
+    fn fork_picker_with_no_messages_offers_only_branch_entry() {
         let (tx, _rx) = make_tx();
         let params = fork_picker_params(vec![], tx);
-        assert!(params.items.is_empty());
+        assert_eq!(params.items.len(), 1);
+        assert_eq!(params.items[0].name, "⎇ Branch from current point");
+    }
+
+    #[test]
+    fn fork_picker_branch_entry_fires_branch_session_op() {
+        let (tx, _rx) = make_tx();
+        let params = fork_picker_params(vec![(0, "hello".to_string())], tx);
+
+        let (verify_tx, mut verify_rx) = unbounded_channel::<AppEvent>();
+        let verify_sender = AppEventSender::new(verify_tx);
+        (params.items[0].actions[0])(&verify_sender);
+
+        let event = verify_rx.try_recv().expect("should have received event");
+        match event {
+            AppEvent::CodexOp(codex_core::protocol::Op::BranchSession) => {}
+            other => panic!("expected CodexOp(BranchSession), got {other:?}"),
+        }
     }
 
     #[test]
@@ -110,10 +175,11 @@ mod tests {
         ];
         let params = fork_picker_params(messages, tx);
 
-        assert_eq!(params.items.len(), 3);
-        assert_eq!(params.items[0].name, "third message");
-        assert_eq!(params.items[1].name, "second message");
-        assert_eq!(params.items[2].name, "first message");
+        assert_eq!(params.items.len(), 4);
+        assert_eq!(params.items[0].name, "⎇ Branch from current point");
+        assert_eq!(params.items[1].name, "third message");
+        assert_eq!(params.items[2].name, "second message");
+        assert_eq!(params.items[3].name, "first message");
     }
 
     #[test]
@@ -123,9 +189,9 @@ mod tests {
         let messages = vec![(0, long_msg.clone())];
         let params = fork_picker_params(messages, tx);
 
-        assert_eq!(params.items.len(), 1);
-        assert!(params.items[0].name.len() < long_msg.len());
-        assert!(params.items[0].name.ends_with('…'));
+        assert_eq!(params.items.len(), 2);
+        assert!(params.items[1].name.len() < long_msg.len());
+        assert!(params.items[1].name.ends_with('…'));
     }
 
     #[test]
@@ -134,8 +200,8 @@ mod tests {
         let messages = vec![(0, "first line\nsecond line\nthird line".to_string())];
         let params = fork_picker_params(messages, tx);
 
-        assert_eq!(params.items.len(), 1);
-        assert_eq!(params.items[0].name, "first line…");
+        assert_eq!(params.items.len(), 2);
+        assert_eq!(params.items[1].name, "first line…");
     }
 
     #[test]
@@ -144,11 +210,12 @@ mod tests {
         let messages = vec![(0, "first".to_string()), (1, "second".to_string())];
         let params = fork_picker_params(messages, tx);
 
-        // Execute the action for the first item (newest-first, so index 0 = message 1)
-        assert!(!params.items[0].actions.is_empty());
+        // Execute the action for the first message item (item 0 is the branch
+        // entry; messages are newest-first, so index 1 = message 1)
+        assert!(!params.items[1].actions.is_empty());
         let (verify_tx, mut verify_rx) = unbounded_channel::<AppEvent>();
         let verify_sender = AppEventSender::new(verify_tx);
-        (params.items[0].actions[0])(&verify_sender);
+        (params.items[1].actions[0])(&verify_sender);
 
         let event = verify_rx.try_recv().expect("should have received event");
         match event {
@@ -172,7 +239,7 @@ mod tests {
         // Last item in picker = oldest message (index 0)
         let (verify_tx, mut verify_rx) = unbounded_channel::<AppEvent>();
         let verify_sender = AppEventSender::new(verify_tx);
-        (params.items[1].actions[0])(&verify_sender);
+        (params.items[2].actions[0])(&verify_sender);
 
         let event = verify_rx.try_recv().expect("should have received event");
         match event {

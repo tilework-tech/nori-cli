@@ -239,6 +239,11 @@ pub enum Op {
     /// to generate a summary which will be returned as an AgentMessage event.
     Compact,
 
+    /// Branch the ACP session from its current state via `session/fork`.
+    /// The runtime swaps to the forked session; the original session is
+    /// preserved on the agent side and remains resumable.
+    BranchSession,
+
     /// Request Codex to undo a turn (turn are stacked so it is the same effect as CMD + Z).
     Undo,
 

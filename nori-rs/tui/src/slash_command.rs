@@ -67,7 +67,7 @@ impl SlashCommand {
             SlashCommand::Login => "log in to the current agent",
             SlashCommand::Logout => "show logout instructions",
             SlashCommand::SwitchSkillset => "switch between available skillsets",
-            SlashCommand::Fork => "rewind conversation to a previous message",
+            SlashCommand::Fork => "branch from the current point or rewind to a previous message",
             SlashCommand::Browser => "open a Chrome browser the agent can control via CDP",
         }
     }

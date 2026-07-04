@@ -709,6 +709,15 @@ impl MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
+        // Echo the session id a prompt arrived on, so tests can observe which
+        // session subsequent prompts target (e.g. after a session/fork swap).
+        // Composes with MOCK_AGENT_ECHO_PROMPT: this chunk is sent first, then
+        // the prompt echo (or the default canned response) follows.
+        if std::env::var("MOCK_AGENT_ECHO_SESSION_ID").is_ok() {
+            self.send_text_chunk(session_id.clone(), &format!("SESSION:{session_id}\n"))
+                .await?;
+        }
+
         // Echo back the full prompt text for verifying context injection.
         if std::env::var("MOCK_AGENT_ECHO_PROMPT").is_ok() {
             let user_text = arguments
@@ -1341,11 +1350,25 @@ async fn main() -> acp::Result<()> {
                     has_capabilities = true;
                 }
 
+                let mut session_capabilities = acp::SessionCapabilities::new();
+                let mut has_session_capabilities = false;
+
                 if std::env::var("MOCK_AGENT_SUPPORT_SESSION_LIST").is_ok() {
                     eprintln!("Mock agent: advertising session/list capability");
-                    capabilities = capabilities.session_capabilities(
-                        acp::SessionCapabilities::new().list(acp::SessionListCapabilities::new()),
-                    );
+                    session_capabilities =
+                        session_capabilities.list(acp::SessionListCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_FORK").is_ok() {
+                    eprintln!("Mock agent: advertising session/fork capability");
+                    session_capabilities =
+                        session_capabilities.fork(acp::SessionForkCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if has_session_capabilities {
+                    capabilities = capabilities.session_capabilities(session_capabilities);
                     has_capabilities = true;
                 }
 
@@ -1370,7 +1393,7 @@ async fn main() -> acp::Result<()> {
                 let state = state.clone();
                 async move |arguments: acp::NewSessionRequest,
                             responder: Responder<acp::NewSessionResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     let session_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
                     if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
                         && let Ok(fail_from) = fail_from.parse::<i64>()
@@ -1398,6 +1421,40 @@ async fn main() -> acp::Result<()> {
                         eprintln!(
                             "Mock agent: failed to initialize advertised nori-client MCP server: {error}"
                         );
+                    }
+
+                    // Advertise slash commands shortly after the response so the
+                    // client has registered the session before the update arrives,
+                    // mirroring how real adapters (e.g. claude-agent-acp) push
+                    // available_commands_update right after session/new.
+                    if let Ok(commands) = std::env::var("MOCK_AGENT_AVAILABLE_COMMANDS") {
+                        let agent = MockAgent {
+                            cx: cx.clone(),
+                            state: state.clone(),
+                        };
+                        let session_id = acp::SessionId::new(session_key.clone());
+                        let commands: Vec<acp::AvailableCommand> = commands
+                            .split(',')
+                            .filter(|name| !name.is_empty())
+                            .map(|name| {
+                                acp::AvailableCommand::new(name, format!("mock {name} command"))
+                            })
+                            .collect();
+                        eprintln!(
+                            "Mock agent: advertising {} available command(s)",
+                            commands.len()
+                        );
+                        cx.spawn(async move {
+                            sleep(Duration::from_millis(20)).await;
+                            agent
+                                .send_update(
+                                    session_id,
+                                    acp::SessionUpdate::AvailableCommandsUpdate(
+                                        acp::AvailableCommandsUpdate::new(commands),
+                                    ),
+                                )
+                                .await
+                        })?;
                     }
 
                     responder.respond(
@@ -1472,6 +1529,41 @@ async fn main() -> acp::Result<()> {
                     acp::SessionInfo::new("mock-session-2", cwd),
                 ];
                 responder.respond(acp::ListSessionsResponse::new(sessions))
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |arguments: acp::ForkSessionRequest,
+                            responder: Responder<acp::ForkSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    let new_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
+                    eprintln!(
+                        "Mock agent: session/fork from {} to {new_id}",
+                        arguments.session_id
+                    );
+                    let session_key = new_id.to_string();
+                    let session_config = {
+                        let mut configs = state.session_configs.lock().unwrap();
+                        let mut config = configs
+                            .get(&arguments.session_id.to_string())
+                            .cloned()
+                            .unwrap_or_else(default_session_config);
+                        // Forked sessions come back with thought_level "high" so
+                        // tests can verify the client applied the fork response's
+                        // config_options rather than keeping its old snapshot.
+                        if config.thought_level.is_some() {
+                            config.thought_level = Some("high".to_string());
+                        }
+                        configs.insert(session_key.clone(), config.clone());
+                        config
+                    };
+                    responder.respond(
+                        acp::ForkSessionResponse::new(acp::SessionId::new(session_key))
+                            .config_options(config_options_for_state(&session_config)),
+                    )
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )

@@ -182,6 +182,12 @@ impl AcpBackend {
             Op::Compact => {
                 self.handle_compact(&id).await?;
             }
+            Op::BranchSession => {
+                let _ = self
+                    .session_event_tx
+                    .send(session_runtime_driver::SessionRuntimeInput::BranchSession)
+                    .await;
+            }
             Op::ListCustomPrompts => {
                 let dir = commands_dir(&self.nori_home);
                 let event_tx = self.event_tx.clone();

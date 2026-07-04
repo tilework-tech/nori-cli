@@ -92,6 +92,7 @@ impl ThreadGoalState {
                 | ClientEvent::LoadCompleted
                 | ClientEvent::QueueChanged(_)
                 | ClientEvent::ContextCompacted(_)
+                | ClientEvent::SessionBranched(_)
                 | ClientEvent::ReplayEntry(_)
                 | ClientEvent::AgentCommandsUpdate(_)
                 | ClientEvent::SessionCapabilitiesChanged(_)

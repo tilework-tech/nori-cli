@@ -22,6 +22,7 @@ pub enum ClientEvent {
     LoadCompleted,
     QueueChanged(QueueChanged),
     ContextCompacted(ContextCompacted),
+    SessionBranched(SessionBranched),
     ReplayEntry(ReplayEntry),
     AgentCommandsUpdate(AgentCommandsUpdate),
     SessionCapabilitiesChanged(SessionCapabilitiesView),
@@ -74,6 +75,15 @@ pub struct QueueChanged {
 #[serde(rename_all = "snake_case")]
 pub struct ContextCompacted {
     pub summary: Option<String>,
+}
+
+/// The ACP session was branched (forked at its current state via
+/// `session/fork`). The runtime now targets the new session; the original
+/// session is preserved on the agent side and remains resumable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SessionBranched {
+    pub new_session_id: String,
 }
 
 /// A set of commands advertised by the ACP agent.

@@ -406,6 +406,7 @@ mod nori_client_mcp;
 mod session;
 mod session_defaults;
 pub(crate) mod session_reducer;
+mod session_replace;
 mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;

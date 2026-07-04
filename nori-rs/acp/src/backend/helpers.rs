@@ -18,6 +18,7 @@ pub(crate) fn get_op_name(op: &Op) -> &'static str {
         Op::SearchHistoryRequest { .. } => "SearchHistoryRequest",
         Op::ListCustomPrompts => "ListCustomPrompts",
         Op::Compact => "Compact",
+        Op::BranchSession => "BranchSession",
         Op::Undo => "Undo",
         Op::UndoList => "UndoList",
         Op::UndoTo { .. } => "UndoTo",

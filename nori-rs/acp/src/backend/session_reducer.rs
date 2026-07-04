@@ -162,7 +162,21 @@ fn reduce_prompt_submit(
     start_prompt(runtime, prompt, out);
 }
 
-fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut ReduceOutput) {
+fn start_prompt(runtime: &mut SessionRuntime, mut prompt: QueuedPrompt, out: &mut ReduceOutput) {
+    // When the agent advertises a native `compact` slash command, forward that
+    // command instead of the client-side summarization prompt: the agent then
+    // compacts inside the current session and no replacement session is needed.
+    if prompt.kind == nori_protocol::session_runtime::QueuedPromptKind::Compact
+        && runtime
+            .persisted
+            .available_commands
+            .iter()
+            .any(|command| command.name == "compact")
+    {
+        prompt.kind = nori_protocol::session_runtime::QueuedPromptKind::NativeCompact;
+        prompt.text = "/compact".to_string();
+    }
+
     let phase_before = session_phase_label(&runtime.phase);
     let request_id = new_request_id();
 

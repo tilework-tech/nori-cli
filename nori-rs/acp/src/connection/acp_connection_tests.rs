@@ -936,17 +936,15 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
 fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::AcpAgentConfig {
     let script = dir.join("script-agent.sh");
     std::fs::write(&script, body).expect("write script agent");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
-            .expect("chmod script agent");
-    }
     crate::registry::AcpAgentConfig {
         agent: crate::registry::AgentKind::ClaudeCode, // placeholder, like custom agents
         provider_slug: "script-agent".to_string(),
-        command: script.to_string_lossy().to_string(),
-        args: vec![],
+        // Run the script through `sh` so the file is opened as data rather
+        // than exec'd directly: exec'ing a just-written file intermittently
+        // fails with ETXTBSY when a concurrently forking test process still
+        // holds the write fd (seen under full-workspace test load).
+        command: "sh".to_string(),
+        args: vec![script.to_string_lossy().to_string()],
         env: std::collections::HashMap::new(),
         provider_info: crate::registry::AcpProviderInfo::default(),
         auth_hint: "run: script-agent login".to_string(),

@@ -197,7 +197,12 @@ pub enum TranscriptRole {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueuedPromptKind {
     User,
+    /// Client-side compaction: send a summarization prompt, then replace the
+    /// session and inject the summary into the next prompt.
     Compact,
+    /// Agent-native compaction: forward the agent's advertised `/compact`
+    /// command and stay in the current session.
+    NativeCompact,
     GoalContinuation,
 }
 

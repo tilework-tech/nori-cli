@@ -1147,6 +1147,14 @@ impl ChatWidget {
                     summary: context_compacted.summary,
                 });
             }
+            nori_protocol::ClientEvent::SessionBranched(_) => {
+                self.add_info_message(
+                    "Branched conversation — the original session is preserved and can be \
+                     reopened with /resume"
+                        .to_owned(),
+                    None,
+                );
+            }
             nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
                 self.handle_client_replay_entry(replay_entry);
             }

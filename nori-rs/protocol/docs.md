@@ -19,7 +19,7 @@ Path: @/nori-rs/protocol
 
 **Core Types:** `@/nori-rs/protocol/src/protocol/mod.rs` defines `Submission`, `Op`, `Event`, and `EventMsg`, which form the shared SQ/EQ contract between the UI and whichever backend owns the active session.
 
-**Operations** (`@/nori-rs/protocol/src/protocol/mod.rs`) group backend commands into user-input, lifecycle, approval, history, undo, custom-prompt, and session-control surfaces. The `/goal` feature belongs to that typed command surface through `ThreadGoalGet`, `ThreadGoalSet`, and `ThreadGoalClear`, rather than being smuggled through a normal user prompt.
+**Operations** (`@/nori-rs/protocol/src/protocol/mod.rs`) group backend commands into user-input, lifecycle, approval, history, undo, custom-prompt, and session-control surfaces. The `/goal` feature belongs to that typed command surface through `ThreadGoalGet`, `ThreadGoalSet`, and `ThreadGoalClear`, rather than being smuggled through a normal user prompt. Session-control ops include `Compact` and `BranchSession` (branch the ACP session at its current state via `session/fork`, handled in `@/nori-rs/acp/src/backend/session_replace.rs`).
 
 **Events** (`@/nori-rs/protocol/src/protocol/mod.rs`) carry shared control-plane updates back to TUI-facing code. Examples include turn lifecycle events, approval prompts, compact-summary notifications, undo results, prompt summaries, hook output, and history lookup results. ACP session-domain rendering uses `@/nori-rs/nori-protocol` instead.
 
@@ -80,7 +80,7 @@ Path: @/nori-rs/protocol
 
 | Type | Purpose |
 |------|---------|
-| `ContextCompactedEvent` | Carries an optional `summary: Option<String>` field. When emitted by the ACP backend (`@/nori-rs/acp/`), the summary contains the compact summary text so the TUI can render a session boundary and reprint it. When emitted by the core backend (`@/nori-rs/core/`), the summary is `None` and the TUI shows only an info message. |
+| `ContextCompactedEvent` | Carries an optional `summary: Option<String>` field. The ACP backend (`@/nori-rs/acp/`) fills the summary only on its client-side compaction fallback, where the TUI renders a session boundary and reprints the summary. Agent-native ACP compaction (the agent compacts inside the same session) and the core backend (`@/nori-rs/core/`) emit `None`, and the TUI shows only an info message. |
 
 **Thread Goal Invariants:**
 

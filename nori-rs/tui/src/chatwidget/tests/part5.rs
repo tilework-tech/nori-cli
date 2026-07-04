@@ -935,3 +935,27 @@ fn repeated_agent_messages_after_tool_use_share_one_separator() {
 
     assert_eq!(rendered.matches("Worked for").count(), 1, "{rendered}");
 }
+
+/// A SessionBranched client event renders the branched-conversation info cell
+/// (the runtime swapped to a fork; the original session stays resumable).
+#[test]
+fn session_branched_shows_info_message() {
+    let (mut chat, mut rx, _ops) = make_chatwidget_manual();
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionBranched(
+        nori_protocol::SessionBranched {
+            new_session_id: "42".to_string(),
+        },
+    ));
+
+    let cells = drain_insert_history(&mut rx);
+    let combined = cells
+        .iter()
+        .map(|c| lines_to_single_string(c))
+        .collect::<Vec<_>>()
+        .join("");
+    assert!(
+        combined.contains("Branched conversation"),
+        "expected branched-conversation info message: {combined:?}"
+    );
+}

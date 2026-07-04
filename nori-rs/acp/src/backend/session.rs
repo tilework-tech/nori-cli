@@ -392,6 +392,9 @@ impl AcpBackend {
                             .handle_permission_request(pending_request, current_policy)
                             .await;
                     }
+                    session_runtime_driver::SessionRuntimeInput::BranchSession => {
+                        runtime_backend.handle_branch_session().await;
+                    }
                 }
             }
         });
