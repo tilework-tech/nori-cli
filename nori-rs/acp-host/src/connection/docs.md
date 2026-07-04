@@ -1,6 +1,6 @@
 # Noridoc: connection
 
-Path: @/nori-rs/acp/src/connection
+Path: @/nori-rs/acp-host/src/connection
 
 ### Overview
 
@@ -23,7 +23,8 @@ agent_client_protocol::Lines over child stdin/stdout
 Local ACP Agent (subprocess, own process group)
 ```
 
-- `AcpBackend` in `@/nori-rs/acp/src/backend/` is the sole consumer of `AcpConnection` -- both `AcpBackend::spawn()` and `AcpBackend::resume_session()` call `AcpConnection::spawn()` with an `AcpAgentConfig` resolved from the registry in `@/nori-rs/acp/src/registry.rs`
+- This module is part of the `nori-acp-host` crate (`@/nori-rs/acp-host/`), the agent-agnostic Layer-0 leaf; `nori-acp` re-exports it as `nori_acp::connection`
+- `AcpBackend` in `@/nori-rs/acp/src/backend/` is the sole consumer of `AcpConnection` -- both `AcpBackend::spawn()` and `AcpBackend::resume_session()` call `AcpConnection::spawn()` with an `AcpAgentConfig` resolved from the registry in `@/nori-rs/acp-host/src/registry.rs`
 - `nori cloud` rides this exact path: `@/nori-rs/cli/src/cloud.rs` pins a registry entry that runs `nori-handroll cloud-acp`, and that child is spawned here like any other local agent. There is no remote/WebSocket transport in this crate; it lives in the nori-sessions repo
 - MCP server configuration from `config.toml` is converted to ACP schema types via `mcp.rs` and passed at session creation time
 - All transport events (session updates, permission requests, synthetic file-operation updates, and child exits) flow into a single ordered `mpsc::Receiver<ConnectionEvent>` consumed by the backend's relay loop in `@/nori-rs/acp/src/backend/spawn_and_relay.rs`

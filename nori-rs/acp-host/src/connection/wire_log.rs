@@ -13,8 +13,8 @@ use serde_json::Value;
 use serde_json::json;
 use tracing::warn;
 
-use crate::config::AcpProxyConfig;
 use crate::registry::AcpAgentConfig;
+use nori_config::AcpProxyConfig;
 
 #[derive(Clone)]
 pub(super) struct WireLogger {

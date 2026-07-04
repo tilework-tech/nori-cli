@@ -39,9 +39,9 @@ use super::child_lifecycle::STDERR_TAIL_LINES;
 use super::child_lifecycle::collect_stderr_tail;
 use super::wire_log::WireDirection;
 use super::wire_log::WireLogger;
-use crate::config::AcpProxyConfig;
 use crate::registry::AcpAgentConfig;
 use crate::translator;
+use nori_config::AcpProxyConfig;
 
 /// Minimum supported ACP protocol version.
 const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;

@@ -9,7 +9,7 @@ The rmcp-client crate provides a high-level MCP client for connecting to remote 
 ### How it fits into the larger codebase
 
 - Used by `@/nori-rs/core/` (`mcp_connection_manager.rs`) to establish connections to configured MCP servers that provide additional tools to the AI model
-- Used by `@/nori-rs/acp/src/connection/mcp.rs` to load stored OAuth tokens at session creation time, so the ACP agent receives credentials for MCP servers that were authenticated via the OAuth browser flow
+- Used by `@/nori-rs/acp-host/src/connection/mcp.rs` to load stored OAuth tokens at session creation time, so the ACP agent receives credentials for MCP servers that were authenticated via the OAuth browser flow
 
 ### Core Implementation
 
@@ -48,7 +48,7 @@ The pre-configured path uses `discover_oauth_metadata()` to fetch the server's `
 **Credential Storage** (`oauth.rs`):
 - `OAuthCredentialsStoreMode` - Keyring vs file storage (`Auto`, `File`, `Keyring`)
 - `save_oauth_tokens()` / `load_oauth_tokens()` / `delete_oauth_tokens()` - Credential management
-- `load_oauth_tokens` is public and used by `@/codex-rs/acp/src/connection/mcp.rs` to inject stored OAuth tokens when forwarding MCP server configs to ACP agents
+- `load_oauth_tokens` is public and used by `@/nori-rs/acp-host/src/connection/mcp.rs` to inject stored OAuth tokens when forwarding MCP server configs to ACP agents
 - Keyring service name: `"Nori TUI MCP Credentials"`. Credentials stored under the previous service name are not migrated
 - Fallback file: `CODEX_HOME/.credentials.json` (used when keyring is unavailable or fails)
 

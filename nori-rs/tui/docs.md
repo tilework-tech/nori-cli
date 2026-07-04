@@ -597,9 +597,9 @@ Active skillset display in the footer is driven entirely by `SystemInfo.active_s
 
 Three notification settings are toggled via `/settings` and persisted to the `[tui]` section of `config.toml`:
 
-- **Terminal Notifications** (`TerminalNotifications` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget/user_input.rs::notify()` gates on that bool.
-- **OS Notifications** (`OsNotifications` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend/mod.rs` to set the `use_native` flag on `UserNotifier`.
-- **Notify After Idle** (`NotifyAfterIdle` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
+- **Terminal Notifications** (`TerminalNotifications` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget/user_input.rs::notify()` gates on that bool.
+- **OS Notifications** (`OsNotifications` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend/mod.rs` to set the `use_native` flag on `UserNotifier`.
+- **Notify After Idle** (`NotifyAfterIdle` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
 
 Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app/config_persistence.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
 
@@ -629,7 +629,7 @@ The script timeout is configurable via `/settings` -> "Script Timeout" which ope
 
 Keyboard shortcuts are configurable through the `/settings` panel ("Hotkeys" item) and persisted under `[tui.hotkeys]` in `config.toml`. The implementation is split across two layers:
 
-- **Config layer** (`@/nori-rs/acp/src/config/types/mod.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
+- **Config layer** (`@/nori-rs/nori-config/src/types/mod.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
 - **TUI layer** (`@/nori-rs/tui/src/nori/hotkey_match.rs`): Converts `HotkeyBinding` strings to crossterm `KeyEvent` matches via `parse_binding()` and `matches_binding()`. Also provides `key_event_to_binding()` for the reverse direction (capturing a key press as a binding string).
 
 The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()` (`app/event_handling.rs`), configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` (`app/config_persistence.rs`) which uses `ConfigEditsBuilder` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
@@ -657,7 +657,7 @@ The textarea supports an optional vim-style navigation mode, configured via `/se
 vim_mode = "newline"  # or "submit" or "off"
 ```
 
-The `VimEnterBehavior` enum (from `@/nori-rs/acp/src/config/types/mod.rs`) controls both whether vim mode is enabled and how the Enter key behaves:
+The `VimEnterBehavior` enum (from `@/nori-rs/nori-config/src/types/mod.rs`) controls both whether vim mode is enabled and how the Enter key behaves:
 
 | Variant   | Enter in INSERT    | Enter in NORMAL | Vim Enabled |
 | --------- | ------------------ | --------------- | ----------- |
@@ -762,7 +762,7 @@ git_stats = true
 vim_mode = true
 ```
 
-`FooterSegmentConfig::default()` (in `@/nori-rs/acp/src/config/types/mod.rs`) ships a lean subset enabled by default: `context`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, and `mode_indicator`. The remaining segments -- `prompt_summary`, `vim_mode`, `git_stats`, `nori_profile`, and `nori_version` -- are off by default and require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible.
+`FooterSegmentConfig::default()` (in `@/nori-rs/nori-config/src/types/mod.rs`) ships a lean subset enabled by default: `context`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, and `mode_indicator`. The remaining segments -- `prompt_summary`, `vim_mode`, `git_stats`, `nori_profile`, and `nori_version` -- are off by default and require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible.
 
 Segment placement is configurable through `[tui.footer_layout]`. Missing layout fields use defaults: legacy status segments render on `footer_left`, and `mode_indicator` renders on `footer_right`. A field that is present replaces that placement; listed segments are moved out of other default placements so a partial override can move one segment without duplicating it. The layout supports `footer_left`, `footer_right`, `textarea_top_left`, `textarea_top_right`, `textarea_bottom_left`, and `textarea_bottom_right`.
 
@@ -799,7 +799,7 @@ The `/browse` slash command launches a configurable terminal file manager in cho
 
 1. Creates a temp file (`nori-browse-*.txt`) for the file manager to write the chosen path into
 2. Suspends the TUI via `tui::restore()`
-3. Spawns the file manager with chooser-mode arguments (from `FileManager::chooser_args()` in `@/nori-rs/acp/src/config/types/mod.rs`)
+3. Spawns the file manager with chooser-mode arguments (from `FileManager::chooser_args()` in `@/nori-rs/nori-config/src/types/mod.rs`)
 4. On success, reads the first line of the temp file as the selected path
 5. If the selected path is a file, opens it in the user's editor using the same `editor::resolve_editor()` / `editor::spawn_editor()` as Ctrl-G
 6. Re-enables the TUI via `tui::set_modes()`
@@ -948,7 +948,7 @@ Every error/timeout/shutdown arm in the `tokio::select!` explicitly calls `drop(
 
 **Loop Mode (Prompt Repetition):**
 
-Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/settings` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/nori-rs/acp/src/config/types/mod.rs`).
+Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/settings` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/nori-rs/nori-config/src/types/mod.rs`).
 
 The loop is orchestrated entirely within the TUI layer -- `codex-core` has no awareness of loop semantics:
 
@@ -1045,7 +1045,7 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 | `vt100-tests` | -                                | No      | vt100-based emulator tests                 |
 | `debug-logs`  | -                                | No      | Verbose debug logging                      |
 
-The old `nori-config` feature (which switched config sourcing between `nori-acp` and `codex-core` at compile time) was removed in the crate-layering cleanup (`@/docs/specs/crate-layering.md`); the Nori config path (`~/.nori/cli/config.toml` via `@/nori-rs/acp/src/config/`) is now the only path.
+The old `nori-config` feature (which switched config sourcing between `nori-acp` and `codex-core` at compile time) was removed in the crate-layering cleanup (`@/docs/specs/crate-layering.md`); the Nori config path (`~/.nori/cli/config.toml` via `@/nori-rs/nori-config/src/`) is now the only path.
 
 **--yolo Flag:**
 
