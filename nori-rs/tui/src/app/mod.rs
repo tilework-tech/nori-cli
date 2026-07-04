@@ -249,7 +249,6 @@ pub(crate) struct App {
 
     /// Ephemeral per-session loop count override (set via /settings menu).
     /// Outer Option: whether overridden; inner Option<i32>: the value.
-    #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,
 
     /// Configurable hotkey bindings loaded from NoriConfig.
@@ -272,7 +271,6 @@ pub(crate) struct App {
     /// True when the initial agent spawn was deferred (waiting for a skillset
     /// switch). Cleared on the first successful skillset switch or picker
     /// dismissal. Guards against re-spawning the agent on later switches.
-    #[cfg(feature = "nori-config")]
     deferred_spawn_pending: bool,
 
     /// Cancel sender for an in-progress MCP OAuth login flow.
@@ -321,13 +319,10 @@ impl App {
         // after the user picks a skillset and the switch writes
         // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
         // agent spawns without a skillset.
-        #[cfg(feature = "nori-config")]
         let needs_deferred_spawn = {
             let nori_cfg = nori_acp::config::NoriConfig::load().unwrap_or_default();
             nori_cfg.skillset_per_session
         };
-        #[cfg(not(feature = "nori-config"))]
-        let needs_deferred_spawn = false;
 
         let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
         let mut chat_widget = {
@@ -388,7 +383,6 @@ impl App {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
             hotkey_config: nori_acp::config::HotkeyConfig::default(),
             vim_mode: nori_acp::config::VimEnterBehavior::Off,
@@ -397,7 +391,6 @@ impl App {
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
-            #[cfg(feature = "nori-config")]
             deferred_spawn_pending: needs_deferred_spawn,
             mcp_oauth_cancel_tx: None,
         };
@@ -427,7 +420,6 @@ impl App {
         // `spawn_deferred_agent()`. If the user dismisses the picker, the
         // `SkillsetPickerDismissed` event triggers the deferred spawn without a
         // skillset.
-        #[cfg(feature = "nori-config")]
         if nori_config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
         }
@@ -541,7 +533,6 @@ impl App {
             .set_hotkey_config(self.hotkey_config.clone());
         self.chat_widget.set_vim_mode(self.vim_mode);
         self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
-        #[cfg(feature = "nori-config")]
         self.chat_widget
             .set_loop_count_override(self.loop_count_override);
     }

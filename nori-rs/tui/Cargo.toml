@@ -13,7 +13,7 @@ name = "nori_tui"
 path = "src/lib.rs"
 
 [features]
-default = ["nori-config", "login"]
+default = ["login"]
 
 # OpenTelemetry tracing export (disabled by default)
 otel = ["dep:opentelemetry-appender-tracing"]
@@ -25,7 +25,6 @@ debug-logs = []
 
 # Use Nori's simplified ACP-only config (~/.nori/cli/config.toml)
 # When enabled, uses minimal config from nori-acp instead of codex-core
-nori-config = []
 
 # ChatGPT/API login functionality
 login = ["dep:codex-login", "dep:codex-utils-pty"]

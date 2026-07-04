@@ -242,7 +242,6 @@ impl ChatWidget {
         });
 
         // Loop mode: if iterations remain, fire the next iteration.
-        #[cfg(feature = "nori-config")]
         if let Some(remaining) = self.loop_remaining
             && remaining > 0
             && let Some(prompt) = self.first_prompt_text.clone()

@@ -128,7 +128,6 @@ impl App {
 
     /// Launch a terminal file manager in chooser mode, then open the selected
     /// file in the user's editor.
-    #[cfg(feature = "nori-config")]
     pub(super) fn browse_files(&mut self, fm: nori_acp::config::FileManager, tui: &mut tui::Tui) {
         use crate::editor;
 
