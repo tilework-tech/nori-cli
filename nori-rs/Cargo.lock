@@ -3627,6 +3627,7 @@ dependencies = [
  "filetime",
  "futures",
  "libc",
+ "nori-config",
  "nori-protocol",
  "notify-rust",
  "oauth2",
@@ -3688,6 +3689,20 @@ dependencies = [
  "toml",
  "tracing",
  "which",
+]
+
+[[package]]
+name = "nori-config"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "codex-protocol",
+ "dirs",
+ "pretty_assertions",
+ "serde",
+ "serial_test",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

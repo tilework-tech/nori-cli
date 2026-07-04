@@ -10,7 +10,7 @@ pub mod auto_worktree;
 pub mod backend;
 pub mod bash;
 pub mod compact;
-pub mod config;
+pub use nori_config as config;
 pub mod custom_prompts;
 pub mod parse_command;
 pub mod patch;

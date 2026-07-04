@@ -1140,6 +1140,6 @@ vim_mode = true
         let config = NoriConfig::load_from_path(&config_path).unwrap();
         assert_eq!(config.agent, "gemini");
         assert_eq!(config.default_models.get("claude-code").unwrap(), "haiku");
-        assert_eq!(config.vim_mode, crate::config::VimEnterBehavior::Submit);
+        assert_eq!(config.vim_mode, crate::VimEnterBehavior::Submit);
     }
 }
