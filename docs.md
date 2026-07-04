@@ -12,7 +12,7 @@ This is the root repository containing the Nori CLI project:
 
 - **`nori-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
 - **`nori-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
-- **`docs/`**: Durable specs, implementation plans, and follow-up backlogs
+- **`docs/`**: Durable specs (`docs/specs/`), implementation plans, and follow-up backlogs — the single home for design material
 - **`.github/`**: Build and CI configuration
 - **`.claude/`**: Skills and configuration for Claude-based development
 - **`scripts/`**: Development scripts
@@ -95,7 +95,7 @@ Nori acts as an MCP client:
 
 ### Things to Know
 
-- The crate naming uses a `codex-` prefix (legacy from the OpenAI Codex fork), except for `nori-tui` and `nori-installed`
+- Nori-authored crates use a `nori-` prefix (`nori-cli`, `nori-tui`, `nori-acp`, `nori-protocol`, `nori-installed`); inherited crates keep the legacy `codex-` prefix from the OpenAI Codex fork and are progressively adopted or removed per `docs/specs/crate-layering.md`
 - The `nori-config` feature flag enables Nori-specific configuration paths (`~/.nori/cli/`) instead of the legacy Codex paths (`~/.codex/`)
 - The `unstable` feature flag gates experimental ACP features like model switching
 - Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
