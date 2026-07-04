@@ -8,7 +8,7 @@ The windows-sandbox crate implements process sandboxing on Windows using restric
 
 ### How it fits into the larger codebase
 
-Used by `@/nori-rs/core/` (`exec.rs`) as the sandbox executor on Windows. Provides `run_windows_sandbox_capture()` which is called to execute commands in a restricted environment.
+Used by `@/nori-rs/sandbox/` (the `codex-sandbox` exec engine) as the sandbox executor on Windows. Provides `run_windows_sandbox_capture()` which is called to execute commands in a restricted environment.
 
 ### Core Implementation
 

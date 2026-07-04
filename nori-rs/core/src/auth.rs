@@ -24,14 +24,14 @@ use crate::auth::storage::AuthStorageBackend;
 use crate::auth::storage::create_auth_storage;
 use crate::config::Config;
 use crate::default_client::CodexHttpClient;
-use crate::error::RefreshTokenFailedError;
-use crate::error::RefreshTokenFailedReason;
 use crate::token_data::KnownPlan as InternalKnownPlan;
 use crate::token_data::PlanType as InternalPlanType;
 use crate::token_data::TokenData;
 use crate::token_data::parse_id_token;
 use crate::util::try_parse_error_message;
 use codex_protocol::account::PlanType as AccountPlanType;
+use codex_sandbox::error::RefreshTokenFailedError;
+use codex_sandbox::error::RefreshTokenFailedReason;
 use serde_json::Value;
 use thiserror::Error;
 

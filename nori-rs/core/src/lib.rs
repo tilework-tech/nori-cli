@@ -8,38 +8,26 @@
 pub mod auth;
 pub mod config;
 pub mod config_loader;
-pub mod error;
-pub mod exec_env;
 pub mod features;
 pub mod git_info;
-pub mod landlock;
 pub mod mcp;
 mod model_provider_info;
 pub use model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
 pub use model_provider_info::ModelProviderInfo;
 pub use model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 pub use model_provider_info::built_in_model_providers;
-pub mod exec;
 mod openai_model_info;
-pub mod sandboxing;
 pub mod terminal;
-mod text_encoding;
 pub mod token_data;
 pub(crate) mod tool_types;
-mod truncate;
 // Re-export common auth types for workspace consumers
 pub use auth::AuthManager;
 pub use auth::CodexAuth;
 pub mod default_client;
 pub mod model_family;
 pub mod project_doc;
-pub(crate) mod safety;
-pub mod seatbelt;
-pub mod spawn;
 pub mod util;
 
-pub use safety::get_platform_sandbox;
-pub use safety::set_windows_sandbox_enabled;
 pub use tool_types::CODEX_APPLY_PATCH_ARG1;
 
 pub mod otel_init;

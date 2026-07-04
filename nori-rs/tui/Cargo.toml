@@ -48,6 +48,7 @@ codex-common = { workspace = true, features = [
     "sandbox_summary",
 ] }
 codex-core = { workspace = true }
+codex-sandbox = { workspace = true }
 codex-git = { workspace = true }
 codex-rmcp-client = { workspace = true }
 nori-installed = { workspace = true }

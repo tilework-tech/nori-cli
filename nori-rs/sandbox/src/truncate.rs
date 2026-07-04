@@ -2,8 +2,6 @@
 //! and suffix on UTF-8 boundaries, and helpers for line/token‑based truncation
 //! used across the core crate.
 
-use crate::config::Config;
-
 const APPROX_BYTES_PER_TOKEN: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -13,39 +11,6 @@ pub enum TruncationPolicy {
 }
 
 impl TruncationPolicy {
-    /// Scale the underlying budget by `multiplier`, rounding up to avoid under-budgeting.
-    pub fn mul(self, multiplier: f64) -> Self {
-        match self {
-            TruncationPolicy::Bytes(bytes) => {
-                TruncationPolicy::Bytes((bytes as f64 * multiplier).ceil() as usize)
-            }
-            TruncationPolicy::Tokens(tokens) => {
-                TruncationPolicy::Tokens((tokens as f64 * multiplier).ceil() as usize)
-            }
-        }
-    }
-
-    pub fn new(config: &Config) -> Self {
-        let config_token_limit = config.tool_output_token_limit;
-
-        match config.model_family.truncation_policy {
-            TruncationPolicy::Bytes(family_bytes) => {
-                if let Some(token_limit) = config_token_limit {
-                    Self::Bytes(approx_bytes_for_tokens(token_limit))
-                } else {
-                    Self::Bytes(family_bytes)
-                }
-            }
-            TruncationPolicy::Tokens(family_tokens) => {
-                if let Some(token_limit) = config_token_limit {
-                    Self::Tokens(token_limit)
-                } else {
-                    Self::Tokens(family_tokens)
-                }
-            }
-        }
-    }
-
     /// Returns a token budget derived from this policy.
     ///
     /// - For `Tokens`, this is the explicit token limit.
