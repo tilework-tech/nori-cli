@@ -20,7 +20,7 @@ pub(crate) async fn run_user_shell_command(
     command: String,
 ) {
     let argv = shell_command_argv(&command);
-    let parsed_cmd = codex_core::parse_command::parse_command(&argv);
+    let parsed_cmd = crate::parse_command::parse_command(&argv);
     let call_id = format!("user-shell-{id}");
     let started = Instant::now();
 

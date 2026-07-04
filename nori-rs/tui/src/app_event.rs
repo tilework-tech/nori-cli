@@ -488,7 +488,9 @@ pub(crate) enum AppEvent {
     OpenFileManagerPicker,
 
     /// Persist the full MCP servers map to config.toml.
-    SaveMcpServers(std::collections::BTreeMap<String, codex_core::config::types::McpServerConfig>),
+    SaveMcpServers(
+        std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
+    ),
 
     /// Trigger an MCP OAuth login flow for a server.
     McpOAuthLogin {

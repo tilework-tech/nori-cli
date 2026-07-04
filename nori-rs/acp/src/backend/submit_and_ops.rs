@@ -187,8 +187,7 @@ impl AcpBackend {
                 let event_tx = self.event_tx.clone();
                 let id_clone = id.clone();
                 tokio::spawn(async move {
-                    let custom_prompts =
-                        codex_core::custom_prompts::discover_prompts_in(&dir).await;
+                    let custom_prompts = crate::custom_prompts::discover_prompts_in(&dir).await;
                     let _ = event_tx
                         .send(Event {
                             id: id_clone,
@@ -275,7 +274,7 @@ impl AcpBackend {
     /// 3. Store it in pending_compact_summary
     /// 4. Emit ContextCompacted and Warning events
     pub(super) async fn handle_compact(&self, id: &str) -> Result<()> {
-        use codex_core::compact::SUMMARIZATION_PROMPT;
+        use crate::compact::SUMMARIZATION_PROMPT;
 
         let _ = self
             .session_event_tx

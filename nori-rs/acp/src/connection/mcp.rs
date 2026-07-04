@@ -1,6 +1,6 @@
 //! Conversion from CLI MCP server config to ACP protocol types.
 //!
-//! The CLI stores MCP server configuration in `codex_core::config::types::McpServerConfig`.
+//! The CLI stores MCP server configuration in `codex_protocol::config_types::McpServerConfig`.
 //! The ACP protocol expects `McpServer` in `NewSessionRequest`.
 //! This module bridges the two so that CLI-configured MCP servers are forwarded
 //! to ACP agents at session creation time.
@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 
 use agent_client_protocol_schema::v1 as acp;
-use codex_core::config::types::McpServerConfig;
-use codex_core::config::types::McpServerTransportConfig;
+use codex_protocol::config_types::McpServerConfig;
+use codex_protocol::config_types::McpServerTransportConfig;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
 use codex_rmcp_client::load_oauth_tokens;
 use oauth2::TokenResponse;

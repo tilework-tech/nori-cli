@@ -1,6 +1,6 @@
 use super::*;
-use codex_core::config::types::McpServerConfig;
-use codex_core::config::types::McpServerTransportConfig;
+use codex_protocol::config_types::McpServerConfig;
+use codex_protocol::config_types::McpServerTransportConfig;
 
 #[test]
 fn set_mcp_servers_updates_config_ref() {

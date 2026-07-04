@@ -105,7 +105,7 @@ fn spawn_test_approval_handler(
     event_tx: mpsc::Sender<Event>,
     client_event_tx: Option<mpsc::Sender<nori_protocol::ClientEvent>>,
     pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
-    user_notifier: Arc<codex_core::UserNotifier>,
+    user_notifier: Arc<crate::UserNotifier>,
     approval_policy_rx: watch::Receiver<AskForApproval>,
 ) {
     let (backend_event_tx, backend_event_rx) = mpsc::channel(64);

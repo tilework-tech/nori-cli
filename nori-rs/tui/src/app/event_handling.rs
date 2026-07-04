@@ -954,7 +954,7 @@ impl App {
                     .add_info_message(format!("Running script '{name}'..."), None);
                 tokio::spawn(async move {
                     let result =
-                        codex_core::custom_prompts::execute_script(&prompt, &args, timeout).await;
+                        nori_acp::custom_prompts::execute_script(&prompt, &args, timeout).await;
                     tx.send(AppEvent::ScriptExecutionComplete {
                         name: prompt.name.clone(),
                         result,
