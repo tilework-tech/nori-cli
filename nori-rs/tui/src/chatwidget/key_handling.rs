@@ -133,7 +133,7 @@ impl ChatWidget {
                 // Load NoriConfig from the default path and open the settings popup.
                 // Apply ephemeral session overrides so the picker shows the
                 // current in-session value rather than the persisted one.
-                match nori_acp::config::NoriConfig::load() {
+                match nori_config::NoriConfig::load() {
                     Ok(mut nori_config) => {
                         if let Some(overridden) = self.loop_count_override {
                             nori_config.loop_count = overridden;
@@ -166,7 +166,7 @@ impl ChatWidget {
             SlashCommand::Undo => {
                 self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
             }
-            SlashCommand::Browse => match nori_acp::config::NoriConfig::load() {
+            SlashCommand::Browse => match nori_config::NoriConfig::load() {
                 Ok(nori_config) => match nori_config.file_manager {
                     Some(fm) => {
                         self.app_event_tx.send(AppEvent::BrowseFiles(fm));

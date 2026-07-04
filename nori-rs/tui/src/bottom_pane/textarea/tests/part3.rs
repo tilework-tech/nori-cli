@@ -275,7 +275,7 @@ fn fuzz_textarea_randomized() {
 
 #[test]
 fn test_configurable_ctrl_a_moves_to_line_start() {
-    use nori_acp::config::HotkeyConfig;
+    use nori_config::HotkeyConfig;
     let mut t = ta_with("hello");
     t.set_hotkey_config(HotkeyConfig::default());
     // Cursor is at end (5) after insert
@@ -287,7 +287,7 @@ fn test_configurable_ctrl_a_moves_to_line_start() {
 
 #[test]
 fn test_configurable_ctrl_e_moves_to_line_end() {
-    use nori_acp::config::HotkeyConfig;
+    use nori_config::HotkeyConfig;
     let mut t = ta_with("hello");
     t.set_hotkey_config(HotkeyConfig::default());
     t.set_cursor(0);
@@ -298,8 +298,8 @@ fn test_configurable_ctrl_e_moves_to_line_end() {
 
 #[test]
 fn test_rebound_move_backward_char() {
-    use nori_acp::config::HotkeyBinding;
-    use nori_acp::config::HotkeyConfig;
+    use nori_config::HotkeyBinding;
+    use nori_config::HotkeyConfig;
     let config = HotkeyConfig {
         move_backward_char: HotkeyBinding::from_str("alt+x"),
         ..HotkeyConfig::default()
@@ -320,8 +320,8 @@ fn test_rebound_move_backward_char() {
 
 #[test]
 fn test_unbound_editing_action_falls_through() {
-    use nori_acp::config::HotkeyBinding;
-    use nori_acp::config::HotkeyConfig;
+    use nori_config::HotkeyBinding;
+    use nori_config::HotkeyConfig;
     let config = HotkeyConfig {
         kill_to_end_of_line: HotkeyBinding::none(),
         ..HotkeyConfig::default()
@@ -337,7 +337,7 @@ fn test_unbound_editing_action_falls_through() {
 
 #[test]
 fn test_configurable_kill_and_yank() {
-    use nori_acp::config::HotkeyConfig;
+    use nori_config::HotkeyConfig;
     let mut t = ta_with("hello world");
     t.set_hotkey_config(HotkeyConfig::default());
     t.set_cursor(5);
@@ -353,7 +353,7 @@ fn test_configurable_kill_and_yank() {
 
 #[test]
 fn test_configurable_word_movement() {
-    use nori_acp::config::HotkeyConfig;
+    use nori_config::HotkeyConfig;
     let mut t = ta_with("foo bar baz");
     t.set_hotkey_config(HotkeyConfig::default());
     t.set_cursor(0);

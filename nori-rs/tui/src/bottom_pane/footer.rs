@@ -5,9 +5,9 @@ use crate::system_info::NoriVersionSource;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use codex_protocol::num_format::format_si_suffix;
 use crossterm::event::KeyCode;
-use nori_acp::config::FooterLayoutConfig;
-use nori_acp::config::FooterSegment;
-use nori_acp::config::FooterSegmentConfig;
+use nori_config::FooterLayoutConfig;
+use nori_config::FooterSegment;
+use nori_config::FooterSegmentConfig;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -819,7 +819,7 @@ mod tests {
             prompt_summary: None,
             worktree_name: None,
             footer_segment_config: fully_enabled_segments(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             acp_mode_label: None,
         }
     }

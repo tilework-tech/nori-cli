@@ -8,7 +8,7 @@ Path: @/nori-rs/acp
 - It owns ACP backend session state that is not provided by agents, including per-session thread goals used by the `/goal` TUI command and prompt-context injection.
 - `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 - Since the crate-layering cleanup (`@/docs/specs/crate-layering.md`), the crate has **no dependency on `codex-core`**. Its only inherited-Codex dependencies are the `codex-protocol` type vocabulary and `codex-rmcp-client`'s OAuth token store. Formerly-core leaf helpers now live here: user notifications (`user_notification.rs`), custom prompt discovery (`custom_prompts.rs`), shell/command parsing (`shell.rs`, `bash.rs`, `powershell.rs`, `parse_command/`), and compact summarization constants and templates (`compact.rs`, `templates/compact/`).
-- Two Layer-0/Layer-1 pieces have been extracted into their own crates and are re-exported from `nori_acp` so consumer paths are unchanged: the agent-agnostic ACP hosting machinery -- `connection/`, `registry.rs`, `translator.rs`, `patch.rs`, and error categorization -- lives in `nori-acp-host` (`@/nori-rs/acp-host/`), and the Nori config layer lives in `nori-config` (`@/nori-rs/nori-config/`, aliased as `nori_acp::config`). `nori-acp` itself is converging on being the Layer-1 session harness.
+- Two Layer-0/Layer-1 pieces have been extracted into their own crates: the agent-agnostic ACP hosting machinery -- `connection/`, `registry.rs`, `translator.rs`, `patch.rs`, and error categorization -- lives in `nori-acp-host` (`@/nori-rs/acp-host/`) and is still re-exported from `nori_acp` so consumer paths are unchanged; the Nori config layer lives in `nori-config` (`@/nori-rs/nori-config/`) and is **not** re-exported -- the frontends (`@/nori-rs/tui/`, `@/nori-rs/cli/`) depend on `nori-config` directly, and this crate only uses it internally (crate-private `config` alias). `nori-acp` itself is converging on being the Layer-1 session harness.
 
 ### How it fits into the larger codebase
 
@@ -176,9 +176,9 @@ args = ["acp"]
 
 `resolve()` returns `ResolvedDistribution` enum or errors if zero or multiple variants are set.
 
-**Nori Config Path Resolution** (`config`, i.e. the `nori-config` crate at `@/nori-rs/nori-config/`, aliased as `nori_acp::config`):
+**Nori Config Path Resolution** (the `nori-config` crate at `@/nori-rs/nori-config/`, used here via a crate-private `config` alias):
 
-The config module provides the **canonical source of truth** for Nori home path resolution:
+The config crate provides the **canonical source of truth** for Nori home path resolution:
 
 - `find_nori_home()`: Returns `~/.nori/cli` or `$NORI_HOME` if set
 - `NORI_HOME_ENV`: Environment variable name (`"NORI_HOME"`)
@@ -320,7 +320,7 @@ The `FileManager` enum (`types/mod.rs`) represents supported terminal file manag
 - `chooser_args(output_path)` -- CLI arguments that put the file manager into chooser mode, writing the selected file path to a temp file. Each file manager uses a different flag convention (e.g. vifm uses `--choose-files`, ranger uses `--choosefile=`, lf uses `-selection-path`, nnn uses `-p`)
 - `display_name()` -- human-friendly label for the config picker
 
-The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The `FileManager` type is re-exported from `nori_acp` for use by the TUI.
+The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The TUI imports the `FileManager` type directly from `nori-config`.
 
 Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) checks eligibility via `can_create_worktree()` before branching on the `AutoWorktree` variant in `lib.rs`: if eligible, `Automatic` calls `setup_auto_worktree()` immediately and `Ask` defers to a TUI popup (`worktree_ask.rs`); if ineligible, the TUI shows a `WorktreeBlockedScreen` popup explaining the reason before continuing without a worktree. `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
 

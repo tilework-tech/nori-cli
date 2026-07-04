@@ -317,8 +317,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) enhanced_keys_supported: bool,
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) vertical_footer: bool,
-    pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
-    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
+    pub(crate) footer_segment_config: nori_config::FooterSegmentConfig,
+    pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
     /// Expected agent name for this widget. When set, events from other agents
     /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
     /// with a matching agent. This prevents race conditions when switching agents.
@@ -488,7 +488,7 @@ fn create_initial_user_message(text: String, image_paths: Vec<PathBuf>) -> Optio
 
 impl ChatWidget {
     #[cfg(test)]
-    pub(crate) fn footer_segment_config(&self) -> nori_acp::config::FooterSegmentConfig {
+    pub(crate) fn footer_segment_config(&self) -> nori_config::FooterSegmentConfig {
         self.bottom_pane.footer_segment_config()
     }
 }

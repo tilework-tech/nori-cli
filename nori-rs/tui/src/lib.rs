@@ -89,7 +89,7 @@ mod viewonly_transcript;
 
 /// Default agent for ACP-only mode when no agent is specified via CLI or config.
 /// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
-/// This constant MUST match nori_acp::config::DEFAULT_AGENT to ensure consistency.
+/// This constant MUST match nori_config::DEFAULT_AGENT to ensure consistency.
 const DEFAULT_ACP_AGENT: &str = "claude-code";
 
 // Nori-specific update modules
@@ -150,7 +150,7 @@ pub async fn run_main(
 
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
-    if let Ok(nori_home) = nori_acp::config::find_nori_home() {
+    if let Ok(nori_home) = nori_config::find_nori_home() {
         nori_installed::track_launch(&nori_home);
     }
 
@@ -227,7 +227,7 @@ pub async fn run_main(
     }
 
     let (pending_worktree_ask, worktree_blocked_reason) = {
-        use nori_acp::config::AutoWorktree;
+        use nori_config::AutoWorktree;
         let auto_worktree = nori_config
             .as_ref()
             .map(|c| c.auto_worktree)
@@ -877,10 +877,10 @@ mod tests {
         // to ensure consistency between the two modules.
         assert_eq!(
             DEFAULT_ACP_AGENT,
-            nori_acp::config::DEFAULT_AGENT,
+            nori_config::DEFAULT_AGENT,
             "TUI default agent '{}' does not match ACP module default '{}'",
             DEFAULT_ACP_AGENT,
-            nori_acp::config::DEFAULT_AGENT
+            nori_config::DEFAULT_AGENT
         );
     }
 }

@@ -260,8 +260,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         custom_working_messages: cfg.custom_working_messages,
         custom_working_message_list: cfg.custom_working_message_list.clone(),
         vertical_footer: false,
-        footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+        footer_segment_config: nori_config::FooterSegmentConfig::default(),
+        footer_layout_config: nori_config::FooterLayoutConfig::default(),
         agent_display_name: String::new(),
         agent_slug: String::new(),
     });

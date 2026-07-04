@@ -101,8 +101,8 @@ pub(crate) struct BottomPaneParams {
     pub(crate) custom_working_messages: bool,
     pub(crate) custom_working_message_list: Vec<String>,
     pub(crate) vertical_footer: bool,
-    pub(crate) footer_segment_config: nori_acp::config::FooterSegmentConfig,
-    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
+    pub(crate) footer_segment_config: nori_config::FooterSegmentConfig,
+    pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
     pub(crate) agent_display_name: String,
     pub(crate) agent_slug: String,
 }
@@ -149,7 +149,7 @@ impl BottomPane {
         let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 
-        let acp_wire_recording_enabled = nori_acp::config::NoriConfig::load()
+        let acp_wire_recording_enabled = nori_config::NoriConfig::load()
             .map(|config| config.acp_proxy.enabled)
             .unwrap_or(false);
 
@@ -481,11 +481,11 @@ impl BottomPane {
     }
 
     /// Update the hotkey configuration used by the textarea for editing bindings.
-    pub(crate) fn set_hotkey_config(&mut self, config: nori_acp::config::HotkeyConfig) {
+    pub(crate) fn set_hotkey_config(&mut self, config: nori_config::HotkeyConfig) {
         self.composer.set_hotkey_config(config);
     }
 
-    pub(crate) fn set_vim_mode(&mut self, value: nori_acp::config::VimEnterBehavior) {
+    pub(crate) fn set_vim_mode(&mut self, value: nori_config::VimEnterBehavior) {
         self.vim_mode_enabled = value.is_enabled();
         self.composer.set_vim_mode(value);
     }
@@ -493,14 +493,14 @@ impl BottomPane {
     /// Set a footer segment's enabled state.
     pub(crate) fn set_footer_segment_enabled(
         &mut self,
-        segment: nori_acp::config::FooterSegment,
+        segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
         self.composer.set_footer_segment_enabled(segment, enabled);
     }
 
     #[cfg(test)]
-    pub(crate) fn footer_segment_config(&self) -> nori_acp::config::FooterSegmentConfig {
+    pub(crate) fn footer_segment_config(&self) -> nori_config::FooterSegmentConfig {
         self.composer.footer_segment_config()
     }
 
@@ -892,8 +892,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         })
@@ -925,8 +925,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -953,8 +953,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -989,8 +989,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: "ElizACP".to_string(),
             agent_slug: "elizacp".to_string(),
         });
@@ -1033,8 +1033,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1110,8 +1110,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1145,8 +1145,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1183,8 +1183,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1217,8 +1217,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });
@@ -1251,8 +1251,8 @@ mod tests {
             custom_working_messages: true,
             custom_working_message_list: Vec::new(),
             vertical_footer: false,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             agent_display_name: String::new(),
             agent_slug: String::new(),
         });

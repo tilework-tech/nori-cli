@@ -3,14 +3,15 @@
 //! This crate provides JSON-RPC 2.0-based communication with ACP-compliant
 //! agent subprocesses over stdin/stdout (capturing stderr logs).
 //!
-//! It also provides the Nori configuration system for ACP-only mode,
-//! loading settings from `~/.nori/cli/config.toml`.
+//! Configuration lives in the `nori-config` crate; the low-level connection,
+//! registry, and translator machinery lives in `nori-acp-host`. This crate
+//! re-exports what the frontends still consume while the harness layer forms.
 
 pub mod auto_worktree;
 pub mod backend;
 pub mod bash;
 pub mod compact;
-pub use nori_config as config;
+pub(crate) use nori_config as config;
 pub mod custom_prompts;
 pub mod parse_command;
 pub use nori_acp_host::patch;
@@ -29,14 +30,6 @@ pub mod transcript;
 pub mod transcript_discovery;
 pub use nori_acp_host::translator;
 pub mod undo;
-
-// Re-export config types for convenience
-pub use config::ApprovalPolicy;
-pub use config::FileManager;
-pub use config::HistoryPersistence;
-pub use config::NoriConfig;
-pub use config::NoriConfigOverrides;
-pub use config::find_nori_home;
 
 // Re-export message history types
 pub use message_history::HistoryEntry;

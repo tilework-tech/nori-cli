@@ -23,9 +23,6 @@ vt100-tests = []
 # Gate verbose debug logging inside the TUI implementation.
 debug-logs = []
 
-# Use Nori's simplified ACP-only config (~/.nori/cli/config.toml)
-# When enabled, uses minimal config from nori-acp instead of codex-core
-
 # ChatGPT/API login functionality
 login = ["dep:codex-login", "dep:codex-utils-pty"]
 
@@ -39,6 +36,7 @@ base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
 nori-acp = { workspace = true }
+nori-config = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }

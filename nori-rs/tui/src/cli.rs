@@ -74,7 +74,7 @@ pub struct Cli {
     /// the config's `[[agents]]`. Used by `nori cloud` to pin the
     /// handroll-backed agent. Not a CLI flag.
     #[clap(skip)]
-    pub extra_agents: Vec<nori_acp::config::AgentConfigToml>,
+    pub extra_agents: Vec<nori_config::AgentConfigToml>,
 }
 
 #[cfg(test)]

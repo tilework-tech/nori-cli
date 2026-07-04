@@ -6,12 +6,12 @@ use codex_protocol::protocol::Op;
 use nori_acp::AcpBackend;
 use nori_acp::AcpBackendConfig;
 use nori_acp::AcpSessionSummary;
-use nori_acp::HistoryPersistence;
 use nori_acp::SessionConfigOption;
-use nori_acp::find_nori_home;
 use nori_acp::get_agent_config;
 use nori_acp::get_agent_display_name;
 use nori_acp::list_available_agents;
+use nori_config::HistoryPersistence;
+use nori_config::find_nori_home;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
@@ -225,7 +225,7 @@ fn spawn_acp_agent(
         // Create ACP backend config from codex config
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
         // Load NoriConfig for ACP-specific settings (os_notifications)
-        let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+        let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
         // Detect auto-worktree repo root from the cwd path.
         // When auto_worktree is enabled, cwd is {repo_root}/.worktrees/{name},
         // so we can derive repo_root by going up two directories.
@@ -244,7 +244,7 @@ fn spawn_acp_agent(
         let auto_worktree = if auto_worktree_repo_root.is_some() {
             nori_config.auto_worktree
         } else {
-            nori_acp::config::AutoWorktree::Off
+            nori_config::AutoWorktree::Off
         };
 
         let acp_config = AcpBackendConfig {
@@ -406,7 +406,7 @@ pub(crate) fn spawn_acp_agent_resume(
         let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
         let nori_home = find_nori_home().unwrap_or_else(|_| config.cwd.clone());
-        let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+        let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
         let auto_worktree_repo_root = if nori_config.auto_worktree.is_enabled() {
             config
                 .cwd
@@ -422,7 +422,7 @@ pub(crate) fn spawn_acp_agent_resume(
         let auto_worktree = if auto_worktree_repo_root.is_some() {
             nori_config.auto_worktree
         } else {
-            nori_acp::config::AutoWorktree::Off
+            nori_config::AutoWorktree::Off
         };
 
         let acp_config = AcpBackendConfig {
