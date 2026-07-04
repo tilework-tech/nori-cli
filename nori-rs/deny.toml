@@ -76,6 +76,9 @@ unmaintained = "workspace"
 ignore = [
     { id = "RUSTSEC-2026-0002", reason = "lru 0.12.5 is pinned by the ratatui patch branch in [patch.crates-io]; track removal once ratatui can move to a fixed lru release" },
     { id = "RUSTSEC-2026-0097", reason = "rand 0.8.x pinned by oauth2/zbus/secret-service; no custom logger uses ThreadRng in this codebase" },
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml quadratic attribute check: no fixed release in range (0.37.x via wayland-scanner build-time protocol XML, 0.38.x via plist/syntect bundled themes); neither path parses attacker-controlled XML. Track removal once a patched quick-xml lands and dependents move" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml NsReader memory exhaustion: same pinned versions and trusted-input paths as RUSTSEC-2026-0194" },
+    { id = "RUSTSEC-2026-0189", reason = "rmcp 0.12 pinned by codex-rmcp-client; advisory is in rmcp's Streamable HTTP *server* transport and this codebase uses rmcp as an MCP client only (the backend's loopback nori-client MCP server is axum-based). Track upgrade to rmcp >=1.4" },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
