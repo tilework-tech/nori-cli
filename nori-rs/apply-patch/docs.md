@@ -10,7 +10,7 @@ The apply-patch crate implements a custom patch format for AI-driven file modifi
 
 This crate is used by:
 - `@/nori-rs/core/` - for applying file patches requested by AI models
-- `@/nori-rs/acp/` - for patch validation and preview generation
+- `@/nori-rs/harness/` - for patch validation and preview generation
 
 The crate can also be run as a standalone executable for testing.
 

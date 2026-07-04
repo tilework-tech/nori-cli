@@ -51,7 +51,7 @@ fn default_log_level() -> &'static str {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use nori_acp::init_rolling_file_tracing;
+/// use nori_harness::init_rolling_file_tracing;
 ///
 /// let log_dir = Path::new("/home/user/.nori/cli/log");
 /// init_rolling_file_tracing(log_dir, "nori-acp").expect("Failed to initialize tracing");
@@ -119,7 +119,7 @@ pub fn init_rolling_file_tracing(log_dir: &Path, file_prefix: &str) -> Result<()
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use nori_acp::init_file_tracing;
+/// use nori_harness::init_file_tracing;
 ///
 /// let log_path = Path::new(".nori-acp.log");
 /// init_file_tracing(log_path).expect("Failed to initialize tracing");

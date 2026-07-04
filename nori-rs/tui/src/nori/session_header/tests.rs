@@ -1011,7 +1011,7 @@ fn status_card_with_task_summary_renders_summary_at_top() {
 #[test]
 fn status_card_with_tokens_renders_tokens_section() {
     // When token info is provided, a Tokens section should appear
-    use nori_acp::TranscriptTokenUsage;
+    use nori_harness::TranscriptTokenUsage;
 
     let token_breakdown = TranscriptTokenUsage {
         input_tokens: 45000,
@@ -1147,7 +1147,7 @@ fn status_card_truncates_long_task_summary() {
 #[test]
 fn status_card_with_zero_tokens_hides_tokens_section() {
     // When token breakdown has all zeros, the section should be hidden
-    use nori_acp::TranscriptTokenUsage;
+    use nori_harness::TranscriptTokenUsage;
 
     let token_breakdown = TranscriptTokenUsage {
         input_tokens: 0,
@@ -1232,7 +1232,7 @@ fn status_card_full_snapshot() {
     unsafe { std::env::set_var("NORI_MOCK_INSTRUCTION_FILES", "1") };
 
     // Snapshot test with all optional fields provided
-    use nori_acp::TranscriptTokenUsage;
+    use nori_harness::TranscriptTokenUsage;
 
     let token_breakdown = TranscriptTokenUsage {
         input_tokens: 45000,

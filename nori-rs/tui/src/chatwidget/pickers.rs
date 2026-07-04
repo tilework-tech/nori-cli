@@ -237,7 +237,7 @@ impl ChatWidget {
     /// Show the resume picker populated from the agent's ACP `session/list`.
     pub(crate) fn show_acp_resume_session_picker(
         &mut self,
-        sessions: Vec<nori_acp::AcpSessionSummary>,
+        sessions: Vec<nori_harness::AcpSessionSummary>,
     ) {
         let params = crate::nori::resume_session_picker::acp_resume_session_picker_params(sessions);
         self.bottom_pane.show_selection_view(params);
@@ -653,7 +653,7 @@ impl ChatWidget {
             tokio::spawn(async move {
                 if let Some(config_options) = handle.get_session_config().await {
                     let model_option = config_options.into_iter().find(|opt| {
-                        opt.category == Some(nori_acp::SessionConfigOptionCategory::Model)
+                        opt.category == Some(nori_harness::SessionConfigOptionCategory::Model)
                     });
                     if let Some(option) = model_option {
                         app_event_tx.send(AppEvent::OpenAcpSessionConfigValuePicker { option });
@@ -694,7 +694,7 @@ impl ChatWidget {
     /// Open the top-level ACP session-config picker with the current config snapshot.
     pub(crate) fn open_acp_session_config_picker(
         &mut self,
-        config_options: Vec<nori_acp::SessionConfigOption>,
+        config_options: Vec<nori_harness::SessionConfigOption>,
     ) {
         let params =
             crate::nori::session_config_picker::acp_session_config_picker_params(&config_options);
@@ -704,7 +704,7 @@ impl ChatWidget {
     /// Open the value picker for one ACP session config option.
     pub(crate) fn open_acp_session_config_value_picker(
         &mut self,
-        option: nori_acp::SessionConfigOption,
+        option: nori_harness::SessionConfigOption,
     ) {
         let params =
             crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
@@ -777,7 +777,7 @@ fn spawn_resume_summary_task(
     generation: u64,
 ) {
     tokio::spawn(async move {
-        let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+        let loader = nori_harness::transcript::TranscriptLoader::new(nori_home);
         let mut previews = std::collections::HashMap::new();
 
         for session in &sessions {

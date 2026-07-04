@@ -1,5 +1,5 @@
 [package]
-name = "nori-acp"
+name = "nori-harness"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }

@@ -1,5 +1,5 @@
-use nori_acp::AgentKind;
-use nori_acp::TranscriptLocation;
+use nori_harness::AgentKind;
+use nori_harness::TranscriptLocation;
 use std::env;
 use std::process::Command;
 use std::sync::OnceLock;
@@ -161,7 +161,7 @@ fn discover_transcript(
     first_message: Option<&str>,
 ) -> Option<TranscriptLocation> {
     agent_kind.and_then(|agent| {
-        nori_acp::discover_transcript_for_agent_with_message(dir, agent, first_message).ok()
+        nori_harness::discover_transcript_for_agent_with_message(dir, agent, first_message).ok()
     })
 }
 

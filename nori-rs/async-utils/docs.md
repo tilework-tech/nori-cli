@@ -8,7 +8,7 @@ The async-utils crate provides async utilities for Tokio. Currently it contains 
 
 ### How it fits into the larger codebase
 
-Used throughout the workspace where async operations need cancellation support, particularly in `@/nori-rs/core/` and `@/nori-rs/acp/`.
+Used throughout the workspace where async operations need cancellation support, particularly in `@/nori-rs/core/` and `@/nori-rs/harness/`.
 
 ### Core Implementation
 

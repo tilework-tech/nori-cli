@@ -630,7 +630,7 @@ impl BottomPane {
     }
 
     /// Get the token breakdown from transcript location (for status card display).
-    pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_acp::TranscriptTokenUsage> {
+    pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_harness::TranscriptTokenUsage> {
         self.composer.transcript_token_breakdown()
     }
 

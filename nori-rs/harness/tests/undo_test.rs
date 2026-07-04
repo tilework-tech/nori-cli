@@ -8,7 +8,7 @@ use codex_git::create_ghost_commit;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::UndoCompletedEvent;
-use nori_acp::undo::GhostSnapshotStack;
+use nori_harness::undo::GhostSnapshotStack;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::Path;
@@ -71,7 +71,7 @@ async fn undo_with_no_snapshots_reports_failure() -> Result<()> {
     let snapshots = GhostSnapshotStack::new();
     let tmp = tempfile::tempdir()?;
 
-    nori_acp::undo::handle_undo(&event_tx, "test-1", tmp.path(), &snapshots).await;
+    nori_harness::undo::handle_undo(&event_tx, "test-1", tmp.path(), &snapshots).await;
 
     let completed = collect_undo_completed(&mut event_rx).await?;
     assert!(!completed.success);
@@ -104,7 +104,7 @@ async fn undo_restores_file_after_modification() -> Result<()> {
 
     // Undo
     let (event_tx, mut event_rx) = mpsc::channel(32);
-    nori_acp::undo::handle_undo(&event_tx, "test-2", tmp.path(), &snapshots).await;
+    nori_harness::undo::handle_undo(&event_tx, "test-2", tmp.path(), &snapshots).await;
 
     let completed = collect_undo_completed(&mut event_rx).await?;
     assert!(completed.success, "undo failed: {:?}", completed.message);
@@ -148,25 +148,25 @@ async fn sequential_undos_consume_snapshots() -> Result<()> {
     let (event_tx, mut event_rx) = mpsc::channel(32);
 
     // Undo turn 3 -> back to v3
-    nori_acp::undo::handle_undo(&event_tx, "u1", tmp.path(), &snapshots).await;
+    nori_harness::undo::handle_undo(&event_tx, "u1", tmp.path(), &snapshots).await;
     let c1 = collect_undo_completed(&mut event_rx).await?;
     assert!(c1.success, "undo 1 failed: {:?}", c1.message);
     assert_eq!(fs::read_to_string(&file)?, "v3\n");
 
     // Undo turn 2 -> back to v2
-    nori_acp::undo::handle_undo(&event_tx, "u2", tmp.path(), &snapshots).await;
+    nori_harness::undo::handle_undo(&event_tx, "u2", tmp.path(), &snapshots).await;
     let c2 = collect_undo_completed(&mut event_rx).await?;
     assert!(c2.success, "undo 2 failed: {:?}", c2.message);
     assert_eq!(fs::read_to_string(&file)?, "v2\n");
 
     // Undo turn 1 -> back to v1
-    nori_acp::undo::handle_undo(&event_tx, "u3", tmp.path(), &snapshots).await;
+    nori_harness::undo::handle_undo(&event_tx, "u3", tmp.path(), &snapshots).await;
     let c3 = collect_undo_completed(&mut event_rx).await?;
     assert!(c3.success, "undo 3 failed: {:?}", c3.message);
     assert_eq!(fs::read_to_string(&file)?, "v1\n");
 
     // No more snapshots -> failure
-    nori_acp::undo::handle_undo(&event_tx, "u4", tmp.path(), &snapshots).await;
+    nori_harness::undo::handle_undo(&event_tx, "u4", tmp.path(), &snapshots).await;
     let c4 = collect_undo_completed(&mut event_rx).await?;
     assert!(!c4.success);
     assert_eq!(
@@ -439,7 +439,7 @@ async fn handle_undo_to_restores_selected_snapshot() -> Result<()> {
     let (event_tx, mut event_rx) = mpsc::channel(32);
 
     // Undo to index 1 (snap2) — should restore to v2 state
-    nori_acp::undo::handle_undo_to(&event_tx, "ut1", tmp.path(), &snapshots, 1).await;
+    nori_harness::undo::handle_undo_to(&event_tx, "ut1", tmp.path(), &snapshots, 1).await;
 
     let completed = collect_undo_completed(&mut event_rx).await?;
     assert!(completed.success, "undo_to failed: {:?}", completed.message);
@@ -477,7 +477,7 @@ async fn handle_undo_to_out_of_bounds_reports_failure() -> Result<()> {
     snapshots.push(snap1, "turn 1".to_string()).await;
 
     let (event_tx, mut event_rx) = mpsc::channel(32);
-    nori_acp::undo::handle_undo_to(&event_tx, "ut2", tmp.path(), &snapshots, 10).await;
+    nori_harness::undo::handle_undo_to(&event_tx, "ut2", tmp.path(), &snapshots, 10).await;
 
     let completed = collect_undo_completed(&mut event_rx).await?;
     assert!(!completed.success);
@@ -495,7 +495,7 @@ async fn handle_undo_to_empty_stack_reports_failure() -> Result<()> {
     let snapshots = GhostSnapshotStack::new();
 
     let (event_tx, mut event_rx) = mpsc::channel(32);
-    nori_acp::undo::handle_undo_to(&event_tx, "ut3", tmp.path(), &snapshots, 0).await;
+    nori_harness::undo::handle_undo_to(&event_tx, "ut3", tmp.path(), &snapshots, 0).await;
 
     let completed = collect_undo_completed(&mut event_rx).await?;
     assert!(!completed.success);
@@ -522,7 +522,7 @@ async fn handle_undo_to_negative_index_reports_failure() -> Result<()> {
     snapshots.push(snap1, "turn 1".to_string()).await;
 
     let (event_tx, mut event_rx) = mpsc::channel(32);
-    nori_acp::undo::handle_undo_to(&event_tx, "ut-neg", tmp.path(), &snapshots, -1).await;
+    nori_harness::undo::handle_undo_to(&event_tx, "ut-neg", tmp.path(), &snapshots, -1).await;
 
     let completed = collect_undo_completed(&mut event_rx).await?;
     assert!(!completed.success);
@@ -560,7 +560,7 @@ async fn handle_list_snapshots_sends_event_with_entries() -> Result<()> {
     snapshots.push(snap2, "add feature".to_string()).await;
 
     let (event_tx, mut event_rx) = mpsc::channel(32);
-    nori_acp::undo::handle_list_snapshots(&event_tx, "ls1", &snapshots).await;
+    nori_harness::undo::handle_list_snapshots(&event_tx, "ls1", &snapshots).await;
 
     let event = event_rx.recv().await.context("no event received")?;
     match event.msg {
@@ -582,7 +582,7 @@ async fn handle_list_snapshots_empty_sends_empty_list() -> Result<()> {
     let snapshots = GhostSnapshotStack::new();
 
     let (event_tx, mut event_rx) = mpsc::channel(32);
-    nori_acp::undo::handle_list_snapshots(&event_tx, "ls2", &snapshots).await;
+    nori_harness::undo::handle_list_snapshots(&event_tx, "ls2", &snapshots).await;
 
     let event = event_rx.recv().await.context("no event received")?;
     match event.msg {

@@ -22,7 +22,7 @@ use crate::version::CODEX_CLI_VERSION;
 use codex_core::config::Config;
 use codex_protocol::num_format::format_si_suffix;
 use codex_protocol::protocol::SessionConfiguredEvent;
-use nori_acp::TranscriptTokenUsage;
+use nori_harness::TranscriptTokenUsage;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use std::path::Path;

@@ -16,7 +16,7 @@ fn test_rolling_file_tracing_comprehensive() {
     let log_dir = temp_dir.path().join("logs");
 
     // Test 1: First initialization should succeed
-    let result1 = nori_acp::init_rolling_file_tracing(&log_dir, "nori-acp");
+    let result1 = nori_harness::init_rolling_file_tracing(&log_dir, "nori-acp");
     assert!(result1.is_ok(), "First initialization should succeed");
 
     let debug_enabled = tracing::enabled!(tracing::Level::DEBUG);
@@ -85,7 +85,7 @@ fn test_rolling_file_tracing_comprehensive() {
     );
 
     // Test 5: Second initialization should fail (global subscriber already set)
-    let result2 = nori_acp::init_rolling_file_tracing(&log_dir, "nori-acp");
+    let result2 = nori_harness::init_rolling_file_tracing(&log_dir, "nori-acp");
     assert!(
         result2.is_err(),
         "Second initialization should return error"
@@ -93,7 +93,7 @@ fn test_rolling_file_tracing_comprehensive() {
 
     // Also verify legacy function fails (same global subscriber constraint)
     let legacy_path = temp_dir.path().join("legacy.log");
-    let result3 = nori_acp::init_file_tracing(&legacy_path);
+    let result3 = nori_harness::init_file_tracing(&legacy_path);
     assert!(
         result3.is_err(),
         "Legacy initialization should also fail when subscriber already set"

@@ -2,7 +2,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use dirs::home_dir;
-use nori_acp::parse_command::extract_shell_command;
+use nori_harness::parse_command::extract_shell_command;
 use shlex::try_join;
 
 pub(crate) fn escape_command(command: &[String]) -> String {

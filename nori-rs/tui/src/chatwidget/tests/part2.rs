@@ -654,13 +654,13 @@ fn acp_resume_session_picker_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     let sessions = vec![
-        nori_acp::AcpSessionSummary {
+        nori_harness::AcpSessionSummary {
             session_id: "session-abc".to_string(),
             cwd: PathBuf::from("/home/user/project"),
             title: Some("Refactor the parser".to_string()),
             updated_at: Some("2020-01-15T10:30:00Z".to_string()),
         },
-        nori_acp::AcpSessionSummary {
+        nori_harness::AcpSessionSummary {
             session_id: "session-def".to_string(),
             cwd: PathBuf::from("/home/user/other"),
             title: None,

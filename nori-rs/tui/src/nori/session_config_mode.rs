@@ -1,4 +1,4 @@
-use nori_acp as acp;
+use nori_harness as acp;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AcpModeConfigValue {

@@ -343,7 +343,7 @@ impl App {
             };
             match resume_selection {
                 ResumeSelection::Resume(target) => {
-                    let loader = nori_acp::transcript::TranscriptLoader::new(target.nori_home);
+                    let loader = nori_harness::transcript::TranscriptLoader::new(target.nori_home);
                     let transcript = loader
                         .load_transcript(&target.project_id, &target.session_id)
                         .await?;
@@ -571,7 +571,7 @@ impl App {
                 let agent_kind = request
                     .model
                     .as_ref()
-                    .and_then(|model| nori_acp::AgentKind::from_slug(model));
+                    .and_then(|model| nori_harness::AgentKind::from_slug(model));
                 let info = crate::system_info::SystemInfo::collect_for_directory_with_message(
                     &request.dir,
                     agent_kind,
