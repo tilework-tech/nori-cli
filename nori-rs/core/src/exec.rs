@@ -20,17 +20,17 @@ use crate::error::CodexErr;
 use crate::error::Result;
 use crate::error::SandboxErr;
 use crate::get_platform_sandbox;
-use crate::protocol::Event;
-use crate::protocol::EventMsg;
-use crate::protocol::ExecCommandOutputDeltaEvent;
-use crate::protocol::ExecOutputStream;
-use crate::protocol::SandboxPolicy;
 use crate::sandboxing::CommandSpec;
 use crate::sandboxing::ExecEnv;
 use crate::sandboxing::SandboxManager;
 use crate::spawn::StdioPolicy;
 use crate::spawn::spawn_child_async;
 use crate::text_encoding::bytes_to_string_smart;
+use codex_protocol::protocol::Event;
+use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::ExecCommandOutputDeltaEvent;
+use codex_protocol::protocol::ExecOutputStream;
+use codex_protocol::protocol::SandboxPolicy;
 
 pub const DEFAULT_EXEC_COMMAND_TIMEOUT_MS: u64 = 10_000;
 

@@ -24,13 +24,13 @@ use crate::wrapping::word_wrap_lines;
 use base64::Engine;
 use codex_core::config::Config;
 use codex_core::config::types::ReasoningSummaryFormat;
-use codex_core::protocol::FileChange;
-use codex_core::protocol::McpInvocation;
-use codex_core::protocol::SessionConfiguredEvent;
-use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
+use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::plan_tool::PlanItemArg;
 use codex_protocol::plan_tool::StepStatus;
 use codex_protocol::plan_tool::UpdatePlanArgs;
+use codex_protocol::protocol::FileChange;
+use codex_protocol::protocol::McpInvocation;
+use codex_protocol::protocol::SessionConfiguredEvent;
 use image::DynamicImage;
 use image::ImageReader;
 use mcp_types::EmbeddedResourceResource;
@@ -389,9 +389,9 @@ fn exec_snippet(command: &[String]) -> String {
 
 pub fn new_approval_decision_cell(
     command: Vec<String>,
-    decision: codex_core::protocol::ReviewDecision,
+    decision: codex_protocol::protocol::ReviewDecision,
 ) -> Box<dyn HistoryCell> {
-    use codex_core::protocol::ReviewDecision::*;
+    use codex_protocol::protocol::ReviewDecision::*;
 
     let (symbol, summary): (Span<'static>, Vec<Span<'static>>) = match decision {
         Approved => {
@@ -456,9 +456,9 @@ pub fn new_approval_decision_cell(
 pub fn new_acp_approval_decision_cell(
     title: &str,
     kind: &nori_protocol::ToolKind,
-    decision: codex_core::protocol::ReviewDecision,
+    decision: codex_protocol::protocol::ReviewDecision,
 ) -> Box<dyn HistoryCell> {
-    use codex_core::protocol::ReviewDecision::*;
+    use codex_protocol::protocol::ReviewDecision::*;
 
     let kind_str = crate::client_event_format::format_tool_kind(kind);
     let tool_desc = Span::from(format!(" {kind_str}: {title}")).dim();

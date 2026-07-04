@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codex_core::config::Config;
-use codex_core::protocol::Op;
+use codex_protocol::protocol::Op;
 use nori_acp::AcpBackend;
 use nori_acp::AcpBackendConfig;
 use nori_acp::AcpSessionSummary;
@@ -40,9 +40,9 @@ pub(crate) async fn drain_until_shutdown(rx: &mut UnboundedReceiver<Op>) {
 /// additional `CONNECT_ABORT_SECS`.
 async fn spawn_timeout_sequence(app_event_tx: &AppEventSender) {
     tokio::time::sleep(Duration::from_secs(CONNECT_WARNING_SECS)).await;
-    app_event_tx.send(AppEvent::CodexEvent(codex_core::protocol::Event {
+    app_event_tx.send(AppEvent::CodexEvent(codex_protocol::protocol::Event {
         id: String::new(),
-        msg: codex_core::protocol::EventMsg::Warning(codex_core::protocol::WarningEvent {
+        msg: codex_protocol::protocol::EventMsg::Warning(codex_protocol::protocol::WarningEvent {
             message: format!(
                 "Connection is taking longer than expected. \
                  Will abort in {CONNECT_ABORT_SECS}s if still unresponsive."

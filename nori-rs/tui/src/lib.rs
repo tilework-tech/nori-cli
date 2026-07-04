@@ -16,8 +16,8 @@ use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
 use codex_core::get_platform_sandbox;
-use codex_core::protocol::AskForApproval;
 use codex_protocol::config_types::SandboxMode;
+use codex_protocol::protocol::AskForApproval;
 use nori_acp::transcript::SessionMetadata;
 use nori_acp::transcript::TranscriptLoader;
 #[cfg(feature = "otel")]
@@ -430,7 +430,7 @@ async fn run_ratatui_app(
                 UpdatePromptOutcome::RunUpdate(action) => {
                     crate::tui::restore()?;
                     return Ok(AppExitInfo {
-                        token_usage: codex_core::protocol::TokenUsage::default(),
+                        token_usage: codex_protocol::protocol::TokenUsage::default(),
                         conversation_id: None,
                         conversation_has_activity: false,
                         update_action: Some(action),
@@ -470,7 +470,7 @@ async fn run_ratatui_app(
             session_log::log_session_end();
             let _ = tui.terminal.clear();
             return Ok(AppExitInfo {
-                token_usage: codex_core::protocol::TokenUsage::default(),
+                token_usage: codex_protocol::protocol::TokenUsage::default(),
                 conversation_id: None,
                 conversation_has_activity: false,
                 update_action: None,
@@ -585,7 +585,7 @@ async fn run_ratatui_app(
                 restore();
                 session_log::log_session_end();
                 return Ok(AppExitInfo {
-                    token_usage: codex_core::protocol::TokenUsage::default(),
+                    token_usage: codex_protocol::protocol::TokenUsage::default(),
                     conversation_id: None,
                     conversation_has_activity: false,
                     update_action: None,
@@ -656,7 +656,7 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
         error!("Failed to write resume error message: {err}");
     }
     Ok(AppExitInfo {
-        token_usage: codex_core::protocol::TokenUsage::default(),
+        token_usage: codex_protocol::protocol::TokenUsage::default(),
         conversation_id: None,
         conversation_has_activity: false,
         update_action: None,

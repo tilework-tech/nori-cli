@@ -1,7 +1,7 @@
 use super::*;
 use pretty_assertions::assert_eq;
 
-use codex_core::protocol::ThreadGoalStatus;
+use codex_protocol::protocol::ThreadGoalStatus;
 
 #[test]
 fn slash_quit_sends_shutdown() {
@@ -606,7 +606,7 @@ fn interrupt_exec_marks_failed_snapshot() {
     // cause the active exec cell to be finalized as failed and flushed.
     chat.handle_codex_event(Event {
         id: "call-int".into(),
-        msg: EventMsg::TurnAborted(codex_core::protocol::TurnAbortedEvent {
+        msg: EventMsg::TurnAborted(codex_protocol::protocol::TurnAbortedEvent {
             reason: TurnAbortReason::Interrupted,
         }),
     });

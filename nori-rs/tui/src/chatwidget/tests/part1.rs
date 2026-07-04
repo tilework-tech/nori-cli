@@ -21,7 +21,7 @@ fn resumed_initial_messages_render_history() {
 
     let conversation_id = ConversationId::new();
     let rollout_file = NamedTempFile::new().unwrap();
-    let configured = codex_core::protocol::SessionConfiguredEvent {
+    let configured = codex_protocol::protocol::SessionConfiguredEvent {
         session_id: conversation_id,
         model: "test-model".to_string(),
         model_provider_id: "test-provider".to_string(),
