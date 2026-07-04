@@ -46,6 +46,7 @@ version = "0.0.0"
 # edition.
 edition = "2024"
 license = "Apache-2.0"
+repository = "https://github.com/tilework-tech/nori-cli"
 
 [workspace.dependencies]
 # Internal

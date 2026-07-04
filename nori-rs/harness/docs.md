@@ -553,7 +553,6 @@ Pick most recently modified file within 2 days
 Entry points:
 
 - `discover_transcript_for_agent_with_message()` - Required entry point using first-message matching
-- `discover_transcript_for_agent()` - Deprecated, always returns `NoSessionsFound` error
 
 **Agent Transcript Base Directories:**
 
@@ -704,7 +703,7 @@ The local `nori-client` MCP server is intentionally additive. User-configured MC
 
 ### Transcript Persistence
 
-The ACP module provides client-side transcript persistence that captures a full view of conversations (user input + assistant responses) without relying on agent-side storage. This enables viewing previous sessions without replaying agent mechanics.
+The ACP module provides client-side transcript persistence that captures a full view of conversations (user input + assistant responses) without relying on agent-side storage. This enables viewing previous sessions without replaying agent mechanics. The on-disk format is specified for external consumers in [docs/reference/transcript-format.md](../../docs/reference/transcript-format.md).
 
 **Storage Structure:**
 

@@ -1,9 +1,9 @@
 //! Project identification for transcript organization.
 //!
 //! Projects are identified by a hash-based ID computed from:
-//! 1. Git repository with remote: SHA-256 hash of the canonical remote URL
-//! 2. Git repository without remote: SHA-256 hash of the git root absolute path
-//! 3. No git: SHA-256 hash of the working directory absolute path
+//! 1. Git repository with remote: hash of the canonical remote URL
+//! 2. Git repository without remote: hash of the git root absolute path
+//! 3. No git: hash of the working directory absolute path
 
 use std::io;
 use std::path::Path;
@@ -34,9 +34,9 @@ pub struct ProjectId {
 /// Compute project ID from working directory.
 ///
 /// The project ID is computed as follows:
-/// 1. If in a git repo with a remote: SHA-256 hash of the remote URL (first 16 hex chars)
-/// 2. If in a git repo without remote: SHA-256 hash of the git root path (first 16 hex chars)
-/// 3. If not in a git repo: SHA-256 hash of the cwd path (first 16 hex chars)
+/// 1. If in a git repo with a remote: hash of the remote URL (16 hex chars)
+/// 2. If in a git repo without remote: hash of the git root path (16 hex chars)
+/// 3. If not in a git repo: hash of the cwd path (16 hex chars)
 pub async fn compute_project_id(cwd: &Path) -> io::Result<ProjectId> {
     // Canonicalize the cwd
     let cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
