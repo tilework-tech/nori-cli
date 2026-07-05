@@ -37,6 +37,6 @@ The card lists each subagent once.
 
 ## Transcript Fallback
 
-Some agents do not expose every delegated subagent launch as a visible ACP tool event. When a transcript is already discovered for token footer data, `nori-acp` also scans the discovered JSONL transcript for the same subagent fields, including JSON-encoded argument strings such as Codex `spawn_agent` calls.
+Some agents do not expose every delegated subagent launch as a visible ACP tool event. When a transcript is already discovered for token footer data, `nori-harness` also scans the discovered JSONL transcript for the same subagent fields, including JSON-encoded argument strings such as Codex `spawn_agent` calls.
 
 This fallback is opportunistic and narrow: it scans only the current discovered transcript and only contributes subagent names. Tool counts, skills, and assistant-message counts remain ACP-event driven.

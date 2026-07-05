@@ -47,7 +47,11 @@ test *args:
         cd nori-rs && cargo test -p nori-tui "$@"
         ;;
       acp)
-        cd nori-rs && cargo test -p nori-acp "$@"
+        cd nori-rs
+        cargo build -p mock-acp-agent
+        cargo test -p nori-acp-host "$@"
+        cargo test -p nori-config "$@"
+        cargo test -p nori-harness "$@"
         ;;
       core)
         cd nori-rs && cargo test -p codex-core "$@"

@@ -12,18 +12,18 @@ progressively adopted or removed (see `docs/specs/crate-layering.md`).
 
 ## Key crates
 
-| Crate | Purpose |
-|-------|---------|
-| `cli/` (`nori-cli`) | The shipped `nori` binary: dispatch and subcommands |
-| `tui/` (`nori-tui`) | Ratatui interactive terminal interface |
-| `harness/` (`nori-harness`) | Headless ACP session harness: session runtime, transcripts, hooks |
-| `acp-host/` (`nori-acp-host`) | Agent-agnostic ACP hosting: subprocess spawn, wire client, registry |
-| `nori-config/` | Nori config layer (`~/.nori/cli/config.toml`) |
-| `nori-protocol/` | Session-runtime types over the ACP schema |
-| `sandbox/` (`codex-sandbox`) | Sandboxed exec engine: Seatbelt, Landlock/seccomp, Windows restricted tokens |
-| `installed/` (`nori-installed`) | Install detection and analytics |
-| `mock-acp-agent/` | Mock ACP agent used by tests |
-| `tui-pty-e2e/` | End-to-end PTY tests driving the real binary |
+| Crate                           | Purpose                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| `cli/` (`nori-cli`)             | The shipped `nori` binary: dispatch and subcommands                          |
+| `tui/` (`nori-tui`)             | Ratatui interactive terminal interface                                       |
+| `harness/` (`nori-harness`)     | Headless ACP session harness: session runtime, transcripts, hooks            |
+| `acp-host/` (`nori-acp-host`)   | Extracted ACP hosting: subprocess spawn, wire client, registry               |
+| `nori-config/`                  | Nori config layer (`~/.nori/cli/config.toml`)                                |
+| `nori-protocol/`                | Session-runtime types over the ACP schema                                    |
+| `sandbox/` (`codex-sandbox`)    | Sandboxed exec engine: Seatbelt, Landlock/seccomp, Windows restricted tokens |
+| `installed/` (`nori-installed`) | Install detection and analytics                                              |
+| `mock-acp-agent/`               | Mock ACP agent used by tests                                                 |
+| `tui-pty-e2e/`                  | End-to-end PTY tests driving the real binary                                 |
 
 ## Working in this workspace
 

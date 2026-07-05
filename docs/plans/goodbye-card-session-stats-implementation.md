@@ -151,7 +151,7 @@ The public user-facing behavior only changes when stats exist but were previousl
 
 `SessionStats` is internal to `nori-tui`; adding private dedupe state should not affect serialized data or external APIs. If direct struct literals exist, prefer adding a custom constructor/default path rather than making new fields public.
 
-Transcript fallback data added to `TranscriptLocation` is internal between `nori-acp` and `nori-tui`. Use `#[serde(default)]` only if the type is serialized anywhere; otherwise no compatibility shim is needed.
+Transcript fallback data added to `TranscriptLocation` is internal between `nori-harness` and `nori-tui`. Use `#[serde(default)]` only if the type is serialized anywhere; otherwise no compatibility shim is needed.
 
 ## Edge Cases
 
@@ -177,18 +177,18 @@ From `/home/clifford/Documents/source/nori/cli/.worktrees/plan-goodbye-card-sess
 cargo test -p nori-tui session_stats
 cargo test -p nori-tui chatwidget::tests::part8
 cargo test -p nori-tui nori::exit_message
-cargo test -p nori-acp transcript_discovery
+cargo test -p nori-harness transcript_discovery
 cargo build --bin nori
 cargo test -p tui-pty-e2e --test exit_statistics
 just fmt
 just fix -p nori-tui
 ```
 
-If the transcript fallback touches `nori-acp`, also run:
+If the transcript fallback touches `nori-harness`, also run:
 
 ```bash
-just fix -p nori-acp
-cargo test -p nori-acp
+just fix -p nori-harness
+cargo test -p nori-harness
 ```
 
 Before finalizing, close the loop with the TUI using the repo's tmux workflow:

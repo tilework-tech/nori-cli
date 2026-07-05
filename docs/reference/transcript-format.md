@@ -82,7 +82,19 @@ first line is not valid session metadata.
 ### `session_meta` (first line)
 
 ```json
-{"ts":"2026-07-03T12:30:45.123Z","v":2,"type":"session_meta","session_id":"7f9c2f6a-1c1e-4a9b-9a3e-2f0d8b7c6d5e","project_id":"a1b2c3d4e5f60718","started_at":"2026-07-03T12:30:45.123Z","cwd":"/home/user/src/my-repo","agent":"claude-code","cli_version":"0.9.0","git":{"branch":"main","commit_hash":"1975265abc..."},"acp_session_id":"acp-sess-abc123"}
+{
+  "ts": "2026-07-03T12:30:45.123Z",
+  "v": 2,
+  "type": "session_meta",
+  "session_id": "7f9c2f6a-1c1e-4a9b-9a3e-2f0d8b7c6d5e",
+  "project_id": "a1b2c3d4e5f60718",
+  "started_at": "2026-07-03T12:30:45.123Z",
+  "cwd": "/home/user/src/my-repo",
+  "agent": "claude-code",
+  "cli_version": "0.9.0",
+  "git": { "branch": "main", "commit_hash": "1975265abc..." },
+  "acp_session_id": "acp-sess-abc123"
+}
 ```
 
 Optional fields, omitted when absent: `agent` (ACP agent slug, e.g.
@@ -93,7 +105,14 @@ resume via `session/load`).
 ### `user`
 
 ```json
-{"ts":"2026-07-03T12:31:02.001Z","v":2,"type":"user","id":"msg-001","content":"What files are in src?","attachments":[{"type":"file_path","path":"/tmp/screenshot.png"}]}
+{
+  "ts": "2026-07-03T12:31:02.001Z",
+  "v": 2,
+  "type": "user",
+  "id": "msg-001",
+  "content": "What files are in src?",
+  "attachments": [{ "type": "file_path", "path": "/tmp/screenshot.png" }]
+}
 ```
 
 `attachments` is omitted when empty. Each attachment is tagged by `type`:
@@ -102,7 +121,17 @@ resume via `session/load`).
 ### `assistant`
 
 ```json
-{"ts":"2026-07-03T12:31:10.500Z","v":2,"type":"assistant","id":"msg-002","content":[{"type":"thinking","thinking":"Let me check src."},{"type":"text","text":"src contains main.rs and lib.rs."}],"agent":"claude-code"}
+{
+  "ts": "2026-07-03T12:31:10.500Z",
+  "v": 2,
+  "type": "assistant",
+  "id": "msg-002",
+  "content": [
+    { "type": "thinking", "thinking": "Let me check src." },
+    { "type": "text", "text": "src contains main.rs and lib.rs." }
+  ],
+  "agent": "claude-code"
+}
 ```
 
 `content` is a list of blocks tagged by `type`: `text` (`text`) or `thinking`
@@ -122,7 +151,15 @@ call and result.
 ### `patch_apply`
 
 ```json
-{"ts":"2026-07-03T12:31:20.000Z","v":2,"type":"patch_apply","call_id":"call-002","operation":"edit","path":"/home/user/src/my-repo/src/main.rs","success":true}
+{
+  "ts": "2026-07-03T12:31:20.000Z",
+  "v": 2,
+  "type": "patch_apply",
+  "call_id": "call-002",
+  "operation": "edit",
+  "path": "/home/user/src/my-repo/src/main.rs",
+  "success": true
+}
 ```
 
 `operation` is `edit`, `write`, or `delete`. `error` (string) is present only
@@ -135,7 +172,23 @@ payload lives under `event` and is internally tagged by `event_type`
 (snake_case), with the variant's fields flattened alongside the tag:
 
 ```json
-{"ts":"2026-07-03T12:31:06.000Z","v":2,"type":"client_event","event":{"event_type":"tool_snapshot","call_id":"call-001","title":"Edit src/main.rs","kind":"edit","phase":"completed","locations":[],"invocation":null,"artifacts":[],"raw_input":null,"raw_output":null}}
+{
+  "ts": "2026-07-03T12:31:06.000Z",
+  "v": 2,
+  "type": "client_event",
+  "event": {
+    "event_type": "tool_snapshot",
+    "call_id": "call-001",
+    "title": "Edit src/main.rs",
+    "kind": "edit",
+    "phase": "completed",
+    "locations": [],
+    "invocation": null,
+    "artifacts": [],
+    "raw_input": null,
+    "raw_output": null
+  }
+}
 ```
 
 Variants (see `nori-rs/nori-protocol/src/lib.rs` for payload shapes):
@@ -153,7 +206,7 @@ should be prepared to skip unknown `event_type`s.
 Nori transcript entries do not carry token counts. The only usage data that
 can appear is the optional `usage` field inside `session_update_info` client
 events. The token statistics shown in the TUI footer are parsed from the
-underlying agent's *own* transcript files (`~/.claude/projects/`,
+underlying agent's _own_ transcript files (`~/.claude/projects/`,
 `~/.codex/sessions/`, `~/.gemini/tmp/`) by
 `nori-rs/harness/src/transcript_discovery.rs`; those are third-party formats
 and out of scope here.
@@ -182,7 +235,7 @@ Writer expectations for third-party producers:
 
 ## Reading transcripts programmatically
 
-If you can take a Rust dependency, use the `nori-harness` crate
+Inside this workspace, use the `nori-harness` crate
 (`nori-rs/harness`): `TranscriptLine` / `TranscriptEntry` are the canonical
 serde types, `TranscriptLoader` handles discovery, listing, and
 tolerant parsing, and `TranscriptRecorder` is the canonical writer. Anything

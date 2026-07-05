@@ -242,7 +242,7 @@ jobs:
       #   working-directory: nori-rs
       #   run: |
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package tui-pty-e2e
-      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-acp
+      #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-harness
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-tui
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package nori-cli
       #     cargo test --profile ci-test --target ${{ env.MUSL_TARGET }} --package codex-protocol

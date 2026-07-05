@@ -23,7 +23,7 @@ agent_client_protocol::Lines over child stdin/stdout
 Local ACP Agent (subprocess, own process group)
 ```
 
-- This module is part of the `nori-acp-host` crate (`@/nori-rs/acp-host/`), the agent-agnostic Layer-0 leaf; `nori-harness` re-exports it as `nori_harness::connection`
+- This module is part of the `nori-acp-host` crate (`@/nori-rs/acp-host/`), the extracted Layer-0 ACP host leaf; `nori-harness` re-exports it as `nori_harness::connection`
 - `AcpBackend` in `@/nori-rs/harness/src/backend/` is the sole consumer of `AcpConnection` -- both `AcpBackend::spawn()` and `AcpBackend::resume_session()` call `AcpConnection::spawn()` with an `AcpAgentConfig` resolved from the registry in `@/nori-rs/acp-host/src/registry.rs`
 - `nori cloud` rides this exact path: `@/nori-rs/cli/src/cloud.rs` pins a registry entry that runs `nori-handroll cloud-acp`, and that child is spawned here like any other local agent. There is no remote/WebSocket transport in this crate; it lives in the nori-sessions repo
 - MCP server configuration from `config.toml` is converted to ACP schema types via `mcp.rs` and passed at session creation time

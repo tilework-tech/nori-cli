@@ -95,7 +95,7 @@ Nori acts as an MCP client:
 
 ### Things to Know
 
-- Nori-authored crates use a `nori-` prefix (`nori-cli`, `nori-tui`, `nori-acp`, `nori-acp-host`, `nori-config`, `nori-protocol`, `nori-installed`); inherited crates keep the legacy `codex-` prefix from the OpenAI Codex fork and are progressively adopted or removed per `docs/specs/crate-layering.md`
+- Nori-authored crates use a `nori-` prefix (`nori-cli`, `nori-tui`, `nori-harness`, `nori-acp-host`, `nori-config`, `nori-protocol`, `nori-installed`); inherited crates keep the legacy `codex-` prefix from the OpenAI Codex fork and are progressively adopted or removed per `docs/specs/crate-layering.md`
 - Configuration always uses the Nori paths (`~/.nori/cli/`); the old `nori-config` and `unstable` cargo feature flags were removed during the crate-layering cleanup (no cargo feature may change which crate owns a responsibility)
 - Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
 - Snapshot testing with `insta` is used extensively for TUI regression testing
