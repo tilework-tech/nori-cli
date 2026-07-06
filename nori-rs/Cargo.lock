@@ -1402,7 +1402,7 @@ dependencies = [
  "assert_cmd",
  "codex-core",
  "codex-sandbox",
- "nori-acp",
+ "nori-harness",
  "notify",
  "regex-lite",
  "shlex",
@@ -3609,53 +3609,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nori-acp"
-version = "0.0.0"
-dependencies = [
- "agent-client-protocol",
- "agent-client-protocol-schema",
- "anyhow",
- "axum",
- "base64",
- "chrono",
- "codex-git",
- "codex-protocol",
- "codex-rmcp-client",
- "codex-utils-string",
- "diffy",
- "dirs",
- "filetime",
- "futures",
- "libc",
- "nori-acp-host",
- "nori-config",
- "nori-protocol",
- "notify-rust",
- "oauth2",
- "pretty_assertions",
- "regex",
- "rmcp",
- "serde",
- "serde_json",
- "serial_test",
- "shlex",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "tokio-test",
- "tokio-util",
- "toml",
- "toml_edit",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "tree-sitter",
- "tree-sitter-bash",
- "uuid",
- "which",
-]
-
-[[package]]
 name = "nori-acp-host"
 version = "0.0.0"
 dependencies = [
@@ -3706,8 +3659,8 @@ dependencies = [
  "codex-windows-sandbox",
  "ctor 0.5.0",
  "libc",
- "nori-acp",
  "nori-config",
+ "nori-harness",
  "nori-tui",
  "owo-colors",
  "predicates",
@@ -3737,13 +3690,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "nori-harness"
+version = "0.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent-client-protocol-schema",
+ "anyhow",
+ "axum",
+ "base64",
+ "chrono",
+ "codex-git",
+ "codex-protocol",
+ "codex-rmcp-client",
+ "codex-utils-string",
+ "diffy",
+ "dirs",
+ "filetime",
+ "futures",
+ "libc",
+ "nori-acp-host",
+ "nori-config",
+ "nori-protocol",
+ "notify-rust",
+ "oauth2",
+ "pretty_assertions",
+ "regex",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "shlex",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-test",
+ "tokio-util",
+ "toml",
+ "toml_edit",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "uuid",
+ "which",
+]
+
+[[package]]
 name = "nori-installed"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "chrono",
  "libc",
- "nori-acp",
+ "nori-harness",
  "pretty_assertions",
  "reqwest",
  "semver",
@@ -3803,8 +3803,8 @@ dependencies = [
  "lazy_static",
  "libc",
  "mcp-types",
- "nori-acp",
  "nori-config",
+ "nori-harness",
  "nori-installed",
  "nori-protocol",
  "opentelemetry-appender-tracing",

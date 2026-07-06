@@ -5,7 +5,7 @@ use codex_file_search::FileMatch;
 use codex_protocol::protocol::ConversationPathResponseEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::RateLimitSnapshot;
-use nori_acp::SessionConfigOption;
+use nori_harness::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
@@ -468,7 +468,7 @@ pub(crate) enum AppEvent {
     /// `session/list` rather than the local transcript store.
     ShowAcpResumeSessionPicker {
         /// Session summaries reported by the agent.
-        sessions: Vec<nori_acp::AcpSessionSummary>,
+        sessions: Vec<nori_harness::AcpSessionSummary>,
     },
 
     /// Resume a session reported by the agent's `session/list`, via

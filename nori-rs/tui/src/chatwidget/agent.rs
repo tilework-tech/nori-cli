@@ -2,25 +2,25 @@
 //!
 //! All session orchestration (backend config assembly, connect/shutdown/
 //! timeout race, op forwarding, session-control commands) lives in
-//! `nori_acp::runtime`; this module only builds a launch spec from the codex
+//! `nori_harness::runtime`; this module only builds a launch spec from the codex
 //! `Config` and maps [`SessionEvent`]s onto [`AppEvent`]s.
 
 use codex_core::config::Config;
 use codex_protocol::protocol::Op;
-use nori_acp::get_agent_display_name;
-use nori_acp::list_available_agents;
-use nori_acp::runtime::SessionEvent;
-use nori_acp::runtime::SessionLaunchSpec;
-use nori_acp::runtime::SessionResume;
-use nori_acp::runtime::launch_session;
+use nori_harness::get_agent_display_name;
+use nori_harness::list_available_agents;
+use nori_harness::runtime::SessionEvent;
+use nori_harness::runtime::SessionLaunchSpec;
+use nori_harness::runtime::SessionResume;
+use nori_harness::runtime::launch_session;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 
 #[cfg(test)]
-pub(crate) use nori_acp::runtime::AcpAgentCommand;
-pub(crate) use nori_acp::runtime::AcpAgentHandle;
+pub(crate) use nori_harness::runtime::AcpAgentCommand;
+pub(crate) use nori_harness::runtime::AcpAgentHandle;
 #[cfg(test)]
-pub(crate) use nori_acp::runtime::drain_until_shutdown;
+pub(crate) use nori_harness::runtime::drain_until_shutdown;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -43,7 +43,7 @@ pub(crate) fn spawn_agent(
     app_event_tx: AppEventSender,
     fork_context: Option<String>,
 ) -> SpawnAgentResult {
-    match nori_acp::get_agent_config(&config.model) {
+    match nori_harness::get_agent_config(&config.model) {
         Ok(_) => launch_acp_agent(config, app_event_tx, fork_context, None),
         Err(_) => {
             let agent_name = config.model;
@@ -72,7 +72,7 @@ pub(crate) fn spawn_agent(
 pub(crate) fn spawn_acp_agent_resume(
     config: Config,
     acp_session_id: Option<String>,
-    transcript: Option<nori_acp::transcript::Transcript>,
+    transcript: Option<nori_harness::transcript::Transcript>,
     app_event_tx: AppEventSender,
 ) -> SpawnAgentResult {
     launch_acp_agent(
@@ -143,10 +143,10 @@ fn launch_acp_agent(
         while let Some(event) = session.events.recv().await {
             match event {
                 SessionEvent::Backend(backend_event) => match *backend_event {
-                    nori_acp::BackendEvent::Control(event) => {
+                    nori_harness::BackendEvent::Control(event) => {
                         app_event_tx.send(AppEvent::CodexEvent(event));
                     }
-                    nori_acp::BackendEvent::Client(client_event) => {
+                    nori_harness::BackendEvent::Client(client_event) => {
                         app_event_tx.send(AppEvent::ClientEvent(client_event));
                     }
                 },

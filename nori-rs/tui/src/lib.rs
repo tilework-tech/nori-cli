@@ -18,8 +18,8 @@ use codex_core::config::find_codex_home;
 use codex_protocol::config_types::SandboxMode;
 use codex_protocol::protocol::AskForApproval;
 use codex_sandbox::get_platform_sandbox;
-use nori_acp::transcript::SessionMetadata;
-use nori_acp::transcript::TranscriptLoader;
+use nori_harness::transcript::SessionMetadata;
+use nori_harness::transcript::TranscriptLoader;
 #[cfg(feature = "otel")]
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use std::fs::OpenOptions;
@@ -135,7 +135,7 @@ pub async fn run_main(
     // Pre-warm the ACP agent installation cache in a background thread.
     // This runs `which` commands early so the agent picker opens quickly.
     std::thread::spawn(|| {
-        nori_acp::prewarm_installation_cache();
+        nori_harness::prewarm_installation_cache();
     });
 
     // Set up the Nori config environment
@@ -222,7 +222,7 @@ pub async fn run_main(
             .any(|extra| extra.slug == agent.slug)
     });
     registry_agents.extend(cli.extra_agents.clone());
-    if let Err(e) = nori_acp::initialize_registry(registry_agents) {
+    if let Err(e) = nori_harness::initialize_registry(registry_agents) {
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
     }
 
@@ -238,14 +238,16 @@ pub async fn run_main(
         } else {
             match cwd.clone().or_else(|| std::env::current_dir().ok()) {
                 Some(ref effective_cwd) => {
-                    match nori_acp::auto_worktree::can_create_worktree(effective_cwd) {
+                    match nori_harness::auto_worktree::can_create_worktree(effective_cwd) {
                         Err(reason) => {
                             tracing::debug!("Worktree creation blocked: {reason}");
                             (false, Some(reason.to_string()))
                         }
                         Ok(()) => match auto_worktree {
                             AutoWorktree::Automatic => {
-                                match nori_acp::auto_worktree::setup_auto_worktree(effective_cwd) {
+                                match nori_harness::auto_worktree::setup_auto_worktree(
+                                    effective_cwd,
+                                ) {
                                     Ok(worktree_path) => {
                                         tracing::info!(
                                             "Auto-worktree created at {}",
@@ -500,7 +502,7 @@ async fn run_ratatui_app(
         let effective_cwd = config.cwd.clone();
         let user_wants_worktree = nori::worktree_ask::run_worktree_ask_popup(&mut tui).await?;
         if user_wants_worktree {
-            match nori_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
+            match nori_harness::auto_worktree::setup_auto_worktree(&effective_cwd) {
                 Ok(worktree_path) => {
                     tracing::info!("Auto-worktree created at {}", worktree_path.display());
                     let mut new_overrides = overrides;

@@ -1,8 +1,8 @@
-use nori_acp::session_parser::AgentKind;
-use nori_acp::session_parser::ParseError;
-use nori_acp::session_parser::parse_claude_session;
-use nori_acp::session_parser::parse_codex_session;
-use nori_acp::session_parser::parse_gemini_session;
+use nori_harness::session_parser::AgentKind;
+use nori_harness::session_parser::ParseError;
+use nori_harness::session_parser::parse_claude_session;
+use nori_harness::session_parser::parse_codex_session;
+use nori_harness::session_parser::parse_gemini_session;
 use std::io::Write;
 use std::path::Path;
 

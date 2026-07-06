@@ -50,7 +50,7 @@ impl ChatWidget {
 
     pub(crate) fn handle_acp_session_config_update(
         &mut self,
-        config_options: &[nori_acp::SessionConfigOption],
+        config_options: &[nori_harness::SessionConfigOption],
     ) {
         let next_snapshot =
             crate::nori::session_config_history::snapshot_from_options(config_options);
@@ -87,7 +87,7 @@ impl ChatWidget {
 
     pub(crate) fn sync_acp_session_config_snapshot(
         &mut self,
-        config_options: &[nori_acp::SessionConfigOption],
+        config_options: &[nori_harness::SessionConfigOption],
     ) {
         self.acp_config_option_snapshot = Some(
             crate::nori::session_config_history::snapshot_from_options(config_options),
@@ -101,7 +101,7 @@ impl ChatWidget {
     pub(crate) fn handle_acp_session_config_snapshot(
         &mut self,
         generation: i64,
-        config_options: &[nori_acp::SessionConfigOption],
+        config_options: &[nori_harness::SessionConfigOption],
     ) {
         if generation != self.acp_mode_config_generation {
             return;

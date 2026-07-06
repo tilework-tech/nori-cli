@@ -4,8 +4,8 @@
 //! Agent selection is tracked as "pending" and the actual switch happens
 //! on the next prompt submission to avoid disrupting active prompt turns.
 
-use nori_acp::AcpAgentInfo;
-use nori_acp::list_available_agents;
+use nori_harness::AcpAgentInfo;
+use nori_harness::list_available_agents;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;

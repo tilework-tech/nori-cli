@@ -127,7 +127,9 @@ jobs:
           MOCK_ACP_AGENT_BIN: ${{ github.workspace }}/nori-rs/target/mock-acp-out/mock_acp_agent
         run: |
           cargo test --profile ci-test --target ${{ matrix.target }} --package tui-pty-e2e
-          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp
+          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-harness
+          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-acp-host
+          cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
           cargo test --profile ci-test --target ${{ matrix.target }} --package codex-protocol

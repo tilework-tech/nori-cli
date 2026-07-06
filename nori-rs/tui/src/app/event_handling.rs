@@ -954,7 +954,7 @@ impl App {
                     .add_info_message(format!("Running script '{name}'..."), None);
                 tokio::spawn(async move {
                     let result =
-                        nori_acp::custom_prompts::execute_script(&prompt, &args, timeout).await;
+                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout).await;
                     tx.send(AppEvent::ScriptExecutionComplete {
                         name: prompt.name.clone(),
                         result,
@@ -999,7 +999,7 @@ impl App {
             } => {
                 let tx = self.app_event_tx.clone();
                 tokio::spawn(async move {
-                    let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+                    let loader = nori_harness::transcript::TranscriptLoader::new(nori_home);
                     match loader.load_transcript(&project_id, &session_id).await {
                         Ok(transcript) => {
                             let entries =
@@ -1055,7 +1055,7 @@ impl App {
                 project_id,
                 session_id,
             } => {
-                let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+                let loader = nori_harness::transcript::TranscriptLoader::new(nori_home);
                 match loader.load_transcript(&project_id, &session_id).await {
                     Ok(transcript) => {
                         let acp_session_id = transcript.meta.acp_session_id.clone();
@@ -1115,7 +1115,7 @@ impl App {
             #[cfg(unix)]
             AppEvent::BrowserLaunched { ws_url, cdp_port } => {
                 let prompt =
-                    nori_acp::backend::browser_session::compose_agent_prompt(&ws_url, cdp_port);
+                    nori_harness::backend::browser_session::compose_agent_prompt(&ws_url, cdp_port);
                 self.chat_widget.add_info_message(
                     format!("Browser launched (CDP port {cdp_port}). Notifying agent..."),
                     None,

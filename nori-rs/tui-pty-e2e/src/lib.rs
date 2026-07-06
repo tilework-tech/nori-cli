@@ -378,10 +378,10 @@ name = "Mock ACP provider for tests"
         // This returns a constant list (~/.claude/CLAUDE.md) instead of discovering real files
         cmd.env("NORI_MOCK_INSTRUCTION_FILES", "1");
 
-        // Enable debug logging for nori_acp to capture timing information
+        // Enable debug logging for nori_harness to capture timing information
         cmd.env(
             "RUST_LOG",
-            "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_acp=debug",
+            "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug",
         );
 
         let _child = pair.slave.spawn_command(cmd)?;
