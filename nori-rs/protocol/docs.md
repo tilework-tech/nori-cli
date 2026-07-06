@@ -11,8 +11,9 @@ Path: @/nori-rs/protocol
 
 - `@/nori-rs/tui` consumes shared protocol types when turning user actions into backend operations.
 - `@/nori-rs/acp` implements ACP-specific behavior behind the same `Op` surface, including thread-goal handling in `@/nori-rs/acp/src/backend/thread_goal.rs`.
-- `@/nori-rs/core` provides shared infrastructure (config, auth, sandboxing) and app/control-plane types consumed by the ACP backend.
+- `@/nori-rs/core` provides shared infrastructure (config, auth, sandboxing) to the frontends and consumes this crate's types, including the MCP server config types in `config_types`.
 - `@/nori-rs/nori-protocol` carries normalized ACP client events back toward the TUI; thread-goal commands start here as `Op` values and return there as normalized goal events.
+- All consumers import this crate directly. `codex-core` used to re-export the `protocol` and `config_types` modules; those detour re-exports were removed in the crate-layering cleanup (`@/docs/specs/crate-layering.md`), and this crate is the sole home of the shared type vocabulary.
 - The crate is a pure type definition library with serde and schema support; ownership of runtime state belongs to backend crates, not this crate.
 
 ### Core Implementation
@@ -40,6 +41,8 @@ Path: @/nori-rs/protocol
 **Thread Goal Types** (`protocol/mod.rs`): The `/goal` feature uses typed operations rather than encoding commands as regular prompt text. `Op::ThreadGoalGet`, `Op::ThreadGoalSet`, and `Op::ThreadGoalClear` define the backend-facing command surface; `ThreadGoalStatus` defines the shared lifecycle labels; `validate_thread_goal_objective()` defines the cross-crate validation invariant for objective text before the TUI or backend accepts it.
 
 **Compact Number Formatting** (`num_format.rs`): Shared user-facing formatters keep ACP backend prompt context and TUI summaries consistent. Token counts use SI suffixes, and whole-second goal elapsed time is rendered compactly as seconds or minute/second text.
+
+**Config Types** (`config_types.rs`): Backend-agnostic configuration enums (`SandboxMode`, `ReasoningEffort`, `TrustLevel`, and friends) plus the MCP server configuration types `McpServerConfig` and `McpServerTransportConfig` (`Stdio` and `StreamableHttp` transports). The MCP types live here rather than in `codex-core` so that `@/nori-rs/acp/src/connection/mcp.rs` can convert configured servers to ACP schema values without a core dependency; core re-exports them via `@/nori-rs/core/src/config/types.rs` for its own config code, and `@/nori-rs/rmcp-client` OAuth flows in the TUI consume the same types. `McpServerConfig` has a custom `Deserialize` that validates transport-specific fields (e.g., OAuth client-credential fields are rejected for stdio transport).
 
 ### Things to Know
 

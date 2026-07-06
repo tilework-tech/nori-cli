@@ -14,8 +14,8 @@ use std::sync::atomic::Ordering;
 
 use agent_client_protocol_schema::v1 as acp;
 use anyhow::Result;
-use codex_core::config::types::McpServerConfig;
 use codex_protocol::ConversationId;
+use codex_protocol::config_types::McpServerConfig;
 #[cfg(test)]
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::protocol::AskForApproval;
@@ -310,7 +310,7 @@ pub struct AcpBackend {
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
     /// Notifier for OS-level notifications (approval waiting, idle)
-    user_notifier: Arc<codex_core::UserNotifier>,
+    user_notifier: Arc<crate::UserNotifier>,
     /// Abort handle for the idle detection timer (if running)
     idle_timer_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
     /// Nori home directory for history storage

@@ -774,7 +774,7 @@ fn create_contextual_patch(
     old_text: &str,
     new_text: &str,
 ) -> String {
-    codex_core::util::create_patch_with_context(path, cwd, old_text, new_text)
+    nori_acp::patch::create_patch_with_context(path, cwd, old_text, new_text)
 }
 
 impl HistoryCell for ClientToolCell {

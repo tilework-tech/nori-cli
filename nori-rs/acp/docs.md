@@ -7,6 +7,7 @@ Path: @/nori-rs/acp
 - The ACP crate implements the Agent Client Protocol integration for Nori. It manages connecting to ACP-compliant agents by spawning local subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC via stdin/stdout, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers.
 - It owns ACP backend session state that is not provided by agents, including per-session thread goals used by the `/goal` TUI command and prompt-context injection.
 - `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
+- Since the crate-layering cleanup (`@/docs/specs/crate-layering.md`), the crate has **no dependency on `codex-core`**. Its only inherited-Codex dependencies are the `codex-protocol` type vocabulary and `codex-rmcp-client`'s OAuth token store. Formerly-core leaf helpers now live here: user notifications (`user_notification.rs`), custom prompt discovery (`custom_prompts.rs`), shell/command parsing (`shell.rs`, `bash.rs`, `powershell.rs`, `parse_command/`), compact summarization constants and templates (`compact.rs`, `templates/compact/`), and patch construction (`patch.rs`, `create_patch_with_context`).
 
 ### How it fits into the larger codebase
 
@@ -35,7 +36,7 @@ Key files:
 - `registry.rs` - Agent configuration and npm package detection
 - `connection/` - ACP SDK (`agent-client-protocol`) based agent communication over the stdio of a spawned subprocess, including child lifecycle ownership (see `@/nori-rs/acp/src/connection/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
-- `backend/mod.rs` - Implements `ConversationClient` trait from codex-core and emits normalized ACP session events
+- `backend/mod.rs` - Owns `AcpBackend`, which serves the shared `Op`/`Event` contract from `@/nori-rs/protocol/` and emits normalized ACP session events
 - `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage checkpoint updates
 - `backend/nori_client_mcp.rs` - Hosts the `nori-client` MCP server: typed `#[tool]` goal handlers on `NoriClientService` (an rmcp `ServerHandler`), MCP resource/prompt handlers backed by `backend/nori_client_context.rs`, and rmcp's `StreamableHttpService` over a loopback `axum` listener (`NoriClientServer`)
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -230,6 +231,10 @@ Three config enums control notification behavior, all stored in the `[tui]` sect
 `NotifyAfterIdle` accepts serde-renamed string values: `"5s"`, `"10s"`, `"30s"`, `"60s"`, `"disabled"`. Its `as_duration()` method returns `Option<Duration>` (`None` when `Disabled`). The idle timer in `backend/mod.rs` is conditionally spawned only when `as_duration()` returns `Some` -- when `Disabled`, no timer task or abort handle is created.
 
 The `AcpBackendConfig` struct carries both `os_notifications` and `notify_after_idle` so the backend can configure the `UserNotifier` and the idle timer respectively. Terminal notifications flow separately through `codex-core`'s `Config::tui_notifications` bool to the TUI's `ChatWidget::notify()` method.
+
+**User Notifications** (`user_notification.rs`):
+
+`UserNotifier` delivers OS-level notifications for turn completion, awaiting approval, and session idle. It supports two modes: native desktop notifications via `notify-rust` (gated by `use_native`, driven by the `OsNotifications` config enum) and an external user-configured `notify_command` script that receives a JSON payload. Native sends are deliberately non-blocking -- `send_native()` spawns a background thread because `notif.show()` blocks synchronously on some platforms (notably macOS); on X11 Linux that thread also handles click-to-focus via `wmctrl`/`xdotool`. This module moved here from `codex-core` because the ACP backend is its only consumer.
 
 **TUI Display Configuration** (`config/types/mod.rs`):
 
@@ -513,11 +518,11 @@ Async hooks fire at the same lifecycle points as their synchronous counterparts,
 
 **Custom Prompts** (`backend/mod.rs`):
 
-When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers prompt files (`.md`, `.sh`, `.py`, `.js`) from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. This reuses `codex_core::custom_prompts::discover_prompts_in()` from `@/nori-rs/core/src/custom_prompts.rs` for filesystem discovery. Markdown files have their frontmatter parsed for metadata; script files are returned with empty content and a `CustomPromptKind::Script` kind. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
+When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers prompt files (`.md`, `.sh`, `.py`, `.js`) from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. Filesystem discovery lives in this crate: `discover_prompts_in()` in `@/nori-rs/acp/src/custom_prompts.rs` scans the directory, parses Markdown frontmatter for `description` and `argument_hint`, and assigns script interpreters by extension (`.sh` -> `bash`, `.py` -> `python3`, `.js` -> `node`) using the `CustomPromptKind` types from `@/nori-rs/protocol/src/custom_prompts.rs`. Script prompts are returned with empty content; `execute_script()` (called later by the TUI) runs the script via its interpreter with a configurable timeout and captures stdout. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
 
 When the TUI sends `Op::RunUserShellCommand` (from prompt-initial `!cmd`), the ACP backend starts the command locally in the session working directory using the user's shell and detaches it from the `submit()` call so the TUI can keep accepting composer edits while the command runs. This is intentionally local Nori behavior rather than an ACP agent request: the background command task emits `TaskStarted`, `ExecCommandBegin`, any stdout/stderr `ExecCommandOutputDelta` events, `ExecCommandEnd`, and finally `TaskComplete` so the shared TUI exec cell path renders the result and returns the session to prompt-ready state.
 
-Note: The ACP backend uses `{nori_home}/commands/` (e.g., `~/.nori/cli/commands/`) rather than `~/.codex/prompts/` which is used by the HTTP/codex-core backend.
+Note: The ACP backend uses `{nori_home}/commands/` (e.g., `~/.nori/cli/commands/`) rather than upstream Codex's `~/.codex/prompts/` convention.
 
 **Transcript Discovery** (`transcript_discovery.rs`):
 
@@ -697,7 +702,7 @@ The ACP connection layer uses the official `agent-client-protocol` SDK (0.15.1, 
 
 **MCP Server Forwarding and the Backend-Owned `nori-client` MCP Server** (`connection/mcp.rs`, `backend/nori_client_mcp.rs`):
 
-CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_acp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_core::config::types::McpServerConfig` to ACP `McpServer` values inside the transport adapter:
+CLI-configured MCP servers (from `config.toml`) are converted to ACP schema types and passed to the agent via `NewSessionRequest.mcp_servers` at session creation time. The `to_acp_mcp_servers()` function in `connection/mcp.rs` bridges `codex_protocol::config_types::McpServerConfig` (`@/nori-rs/protocol/src/config_types.rs`) to ACP `McpServer` values inside the transport adapter:
 
 | Transport        | ACP Type           | Key Fields                                                                                                          |
 | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
@@ -1026,6 +1031,8 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 4. The `ContextCompactedEvent` is emitted with the summary text cloned from `pending_compact_summary`, enabling the TUI to render a visual session boundary
 5. Summary is prepended to the next user message (via `SUMMARY_PREFIX` framing)
 
+The `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX` constants are crate-local, loaded from the prompt templates in `@/nori-rs/acp/templates/compact/` by `@/nori-rs/acp/src/compact.rs`.
+
 The `ContextCompactedEvent.summary` field is the coupling point between the ACP backend and the TUI's session boundary rendering. The TUI uses it to flush the streamed summary, show a "Context compacted" info message, insert a new session header, and reprint the summary as the first assistant message of the new session (see `@/nori-rs/tui/docs.md`).
 
 **Session Resume** (`backend/mod.rs`, `connection.rs`):
@@ -1165,7 +1172,7 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 - The minimum supported ACP protocol version is V1 (`MINIMUM_SUPPORTED_VERSION`); initialize is sent with `ProtocolVersion::LATEST`
 - `nori-acp` no longer has an `unstable` feature. Model selection rides the `SessionConfigOptionCategory::Model` variant, which the schema exposes only behind its own `unstable` feature; `nori-acp` turns that on unconditionally (`agent-client-protocol-schema = { features = ["unstable"] }` in `Cargo.toml`). The removed `unstable` feature previously gated only the deleted `session/set_model`/`SessionModelState` model-selection API
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
-- Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) when the `nori-config` feature is enabled in the TUI
+- Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) unconditionally; the TUI's old `nori-config` cargo feature and its legacy codex-config fallback branches were removed
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)
 - Transcript discovery for all agents requires the first user message to function correctly; without it, the discovery returns an error. This is enforced via shell-based search using `rg` or `grep`.
 

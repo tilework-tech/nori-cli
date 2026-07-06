@@ -739,8 +739,7 @@ pub fn tool_call_to_file_change(
     let new_string = input.get("new_string").and_then(|v| v.as_str())?;
 
     // Generate unified diff using diffy with file context if available
-    let unified_diff =
-        codex_core::util::create_patch_with_context(&path, cwd, old_string, new_string);
+    let unified_diff = crate::patch::create_patch_with_context(&path, cwd, old_string, new_string);
 
     Some((
         path,

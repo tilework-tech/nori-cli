@@ -8,7 +8,17 @@
 
 pub mod auto_worktree;
 pub mod backend;
+pub mod bash;
+pub mod compact;
 pub mod config;
+pub mod custom_prompts;
+pub mod parse_command;
+pub mod patch;
+pub mod powershell;
+pub mod shell;
+mod user_notification;
+pub use user_notification::UserNotification;
+pub use user_notification::UserNotifier;
 pub mod connection;
 pub mod hooks;
 pub mod message_history;
