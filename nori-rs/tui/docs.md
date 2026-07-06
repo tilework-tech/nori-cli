@@ -19,7 +19,7 @@ User Input --> nori-tui --> nori-acp (ACP backend)
 
 The TUI acts as the frontend layer. It:
 
-- Uses `nori-acp` for ACP agent communication (see `@/nori-rs/acp/`)
+- Uses `nori-acp` for ACP agent communication: sessions are launched through the harness session runtime (`nori_acp::runtime::launch_session`, see `@/nori-rs/acp/src/runtime.rs`), and the TUI maps its `SessionEvent` stream onto `AppEvent`s (see `@/nori-rs/acp/`)
 - Imports `NoriConfig` and the other Nori config types directly from `nori-config` (see `@/nori-rs/nori-config/`); they are no longer re-exported through `nori-acp`
 - Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
 - Uses `codex-sandbox` for platform sandbox availability checks (`get_platform_sandbox`) in approval flows (see `@/nori-rs/sandbox/`)
@@ -36,7 +36,7 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `nori_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
 
-`NoriConfig` is also the source of truth for ACP backend diagnostics. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
+`NoriConfig` is also the source of truth for ACP backend diagnostics. The harness session runtime (`@/nori-rs/acp/src/runtime.rs`) loads `NoriConfig` itself when launching or resuming sessions and passes the resolved ACP proxy configuration into `AcpBackendConfig`, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
 
 The auto-worktree startup flow first checks eligibility via `can_create_worktree()` (see `@/nori-rs/acp/docs.md`), then branches on the `AutoWorktree` enum:
 
@@ -482,11 +482,11 @@ The `/fork` slash command lets users rewind to a previous user message and branc
    - Trims `transcript_cells` to the fork point via `trim_transcript_cells_to_nth_user()` so the TUI preserves visual history before the fork
    - Prefills the composer with the selected message text
 
-The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
+The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `SessionLaunchSpec.initial_context` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
 
 **Caller-injected agents (`nori cloud`):** `Cli.extra_agents` (a clap-skipped field on `@/nori-rs/tui/src/cli.rs`, never a CLI flag) carries extra `AgentConfigToml` registry entries from the caller. `run_main()` in `@/nori-rs/tui/src/lib.rs` appends them after the config's `[[agents]]` when initializing the agent registry. The CLI's `nori cloud` subcommand uses this to pin a synthetic `nori-cloud` entry that runs `nori-handroll cloud-acp` (see `@/nori-rs/cli/src/cloud.rs` and `@/nori-rs/cli/docs.md`); from the TUI's perspective it is an ordinary local ACP agent and `spawn_agent()` treats it like any other registry entry. There is no cloud-specific plumbing in the TUI -- the old `cloud_connection` threading through `Cli`/`App`/`ChatWidgetInit` was removed.
 
-**Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). The ACP backend only prepends that fallback `<context>` block to the first user prompt when the active ACP connection lacks HTTP MCP support. MCP-capable agents instead receive the backend-owned `nori-client` server and discover Nori operating context through its resources and prompts (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
+**Session context injection:** The shared launch path in `chatwidget/agent.rs` (used for both fresh spawns and resumes) sets `SessionLaunchSpec.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). The ACP backend only prepends that fallback `<context>` block to the first user prompt when the active ACP connection lacks HTTP MCP support. MCP-capable agents instead receive the backend-owned `nori-client` server and discover Nori operating context through its resources and prompts (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
 
 **Browser Session (`/browser`) (`chatwidget/key_handling.rs`, `app/event_handling.rs`, `app_event.rs`):**
 
@@ -780,7 +780,7 @@ Footer context usage is sourced in priority order: ACP `SessionUpdateInfo { kind
 
 The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `segments_for()` renderer.
 
-The TUI detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree.is_enabled()` (true for both `Automatic` and `Ask` variants) and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig` (see `chatwidget/agent.rs`). The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
+The harness session runtime (`@/nori-rs/acp/src/runtime.rs`) detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree.is_enabled()` (true for both `Automatic` and `Ask` variants) and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig`. The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
 
 **External Editor Integration (`editor.rs`):**
 
@@ -844,7 +844,7 @@ ResumeSelection::Resume(ResumeTarget)
 ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
     |
     v
-spawn_acp_agent_resume() -> AcpBackend::resume_session()
+spawn_acp_agent_resume() -> launch_session(resume) -> AcpBackend::resume_session()
 ```
 
 Selection behavior:
@@ -888,7 +888,7 @@ App::shutdown_current_conversation()
 ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
     |
     v
-spawn_acp_agent_resume() -> AcpBackend::resume_session()
+spawn_acp_agent_resume() -> launch_session(resume) -> AcpBackend::resume_session()
 ```
 
 The `ResumeSession` handler loads the full transcript (not just metadata) via `TranscriptLoader::load_transcript()`. The `acp_session_id` is extracted as `Option<String>` from `transcript.meta.acp_session_id` -- sessions without an `acp_session_id` are still resumable via the normalized replay fallback.
@@ -899,22 +899,21 @@ Lazy picker summaries: after `ShowResumeSessionPicker` is sent, `ChatWidget::ope
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/nori-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing the optional `acp_session_id` and an `Option<Transcript>` (the transcript-backed `/resume` and `nori resume` paths supply `Some`; the agent-sourced `session/list` path supplies `None` and relies on server-side replay). Both spawn paths receive a single `BackendEvent` stream from `nori-acp`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
+`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` calls the same shared launch path as `spawn_agent()` but sets `SessionLaunchSpec.resume` to a `SessionResume` carrying the optional `acp_session_id` and an `Option<Transcript>` (the transcript-backed `/resume` and `nori resume` paths supply `Some`; the agent-sourced `session/list` path supplies `None` and relies on server-side replay); the harness runtime then calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`. Both spawn paths receive a single `SessionEvent` stream from `nori_acp::runtime`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
 
 **Agent Connection Lifecycle & Failure Recovery:**
 
 Agent registration validation is performed exclusively in `spawn_agent()` (`chatwidget/agent.rs`). When the configured model is not in the ACP registry, `spawn_agent()` routes to `spawn_error_agent()` which sends `AppEvent::AgentSpawnFailed` -- triggering `on_agent_spawn_failed()` to display the error and reopen the agent picker for recovery. There is no early validation in `App::run()`; this single validation point ensures that unregistered agents (including custom agents that were configured but later removed) always get graceful recovery through the agent picker rather than a fatal startup error.
 
-When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. Each spawn function (`spawn_acp_agent`, `spawn_acp_agent_resume`) uses a `tokio::select!` to race three concurrent futures during backend initialization:
+When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()` (emitted from `chatwidget/agent.rs` as `AppEvent::AgentConnecting` before launching). The connection race itself lives in the harness: `launch_session()` in `@/nori-rs/acp/src/runtime.rs` uses a `tokio::select!` to race backend initialization against shutdown requests and a two-phase timeout, and the TUI's event-forwarding task in `chatwidget/agent.rs` maps the resulting `SessionEvent`s onto `AppEvent`s:
 
-| Arm                              | Trigger                                                 | Action                                                                   |
-| -------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Backend init completes (success) | `AcpBackend::spawn()` / `resume_session()` returns `Ok` | Proceeds to op forwarding and event forwarding                           |
-| Backend init completes (failure) | Returns `Err`                                           | Sends `AppEvent::AgentSpawnFailed`, drops `codex_op_rx`                  |
-| `drain_until_shutdown()`         | User sends `Op::Shutdown` during connection             | Sends `AppEvent::ExitRequest`, drops `codex_op_rx`                       |
-| `spawn_timeout_sequence()`       | 8s warning + 30s abort elapse                           | Sends warning at 8s, then `AgentSpawnFailed` at 38s, drops `codex_op_rx` |
+| Runtime outcome                  | Trigger                                                                 | TUI action                                                        |
+| -------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `SessionEvent::Backend`          | `AcpBackend::spawn()` / `resume_session()` returns `Ok`, events flowing | Forwards as `AppEvent::CodexEvent` / `AppEvent::ClientEvent`       |
+| `SessionEvent::SpawnFailed`      | Init returns `Err`, or the 8s-warning + 30s-abort timeout elapses       | Sends `AppEvent::AgentSpawnFailed`                                 |
+| `SessionEvent::ShutdownRequested`| User sends `Op::Shutdown` during connection                             | Sends `AppEvent::ExitRequest`                                      |
 
-`drain_until_shutdown()` reads ops from the channel, discarding everything until it sees `Op::Shutdown`. This allows the user to exit (via `/exit`, Ctrl-C) even while the backend is still attempting to connect. `spawn_timeout_sequence()` provides user feedback: at 8 seconds it sends a `WarningEvent` visible in the chat, and after 30 more seconds it aborts the connection attempt entirely.
+`drain_until_shutdown()` (in `@/nori-rs/acp/src/runtime.rs`) reads ops from the channel, discarding everything until it sees `Op::Shutdown`. This allows the user to exit (via `/exit`, Ctrl-C) even while the backend is still attempting to connect. `spawn_timeout_sequence()` provides user feedback: at 8 seconds the runtime emits a `WarningEvent` visible in the chat, and after 30 more seconds it aborts the connection attempt entirely.
 
 `on_agent_spawn_failed()` in `chatwidget/helpers.rs` performs three recovery steps in order:
 
@@ -946,7 +945,7 @@ Title content is sanitized by `sanitize_terminal_title()` which strips control c
 
 **Exit Path When Backend Is Dead:**
 
-Every error/timeout/shutdown arm in the `tokio::select!` explicitly calls `drop(codex_op_rx)` before returning. This closes the receiver end of the channel so that `codex_op_tx` (held by `ChatWidget`) has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
+Every error/timeout/shutdown arm in the runtime's `tokio::select!` (`@/nori-rs/acp/src/runtime.rs`) explicitly drops the op receiver before returning. This closes the receiver end of the channel so that the op sender (held by `ChatWidget`) has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
 
 **Loop Mode (Prompt Repetition):**
 

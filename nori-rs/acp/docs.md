@@ -8,7 +8,7 @@ Path: @/nori-rs/acp
 - It owns ACP backend session state that is not provided by agents, including per-session thread goals used by the `/goal` TUI command and prompt-context injection.
 - `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 - Since the crate-layering cleanup (`@/docs/specs/crate-layering.md`), the crate has **no dependency on `codex-core`**. Its only inherited-Codex dependencies are the `codex-protocol` type vocabulary and `codex-rmcp-client`'s OAuth token store. Formerly-core leaf helpers now live here: user notifications (`user_notification.rs`), custom prompt discovery (`custom_prompts.rs`), shell/command parsing (`shell.rs`, `bash.rs`, `powershell.rs`, `parse_command/`), and compact summarization constants and templates (`compact.rs`, `templates/compact/`).
-- Two Layer-0/Layer-1 pieces have been extracted into their own crates: the agent-agnostic ACP hosting machinery -- `connection/`, `registry.rs`, `translator.rs`, `patch.rs`, and error categorization -- lives in `nori-acp-host` (`@/nori-rs/acp-host/`) and is still re-exported from `nori_acp` so consumer paths are unchanged; the Nori config layer lives in `nori-config` (`@/nori-rs/nori-config/`) and is **not** re-exported -- the frontends (`@/nori-rs/tui/`, `@/nori-rs/cli/`) depend on `nori-config` directly, and this crate only uses it internally (crate-private `config` alias). `nori-acp` itself is converging on being the Layer-1 session harness.
+- Two Layer-0/Layer-1 pieces have been extracted into their own crates: the agent-agnostic ACP hosting machinery -- `connection/`, `registry.rs`, `translator.rs`, `patch.rs`, and error categorization -- lives in `nori-acp-host` (`@/nori-rs/acp-host/`) and is still re-exported from `nori_acp` so consumer paths are unchanged; the Nori config layer lives in `nori-config` (`@/nori-rs/nori-config/`) and is **not** re-exported -- the frontends (`@/nori-rs/tui/`, `@/nori-rs/cli/`) depend on `nori-config` directly, and this crate only uses it internally (crate-private `config` alias). `nori-acp` itself is converging on being the Layer-1 session harness: the `runtime` module (`@/nori-rs/acp/src/runtime.rs`) is its frontend-facing entry point -- `launch_session(SessionLaunchSpec)` owns the session orchestration (Nori config assembly, the connect/shutdown/timeout race, op forwarding, session-control commands) that previously lived in `@/nori-rs/tui/src/chatwidget/agent.rs`, so any frontend can launch or resume sessions without reimplementing it.
 
 ### How it fits into the larger codebase
 
@@ -38,6 +38,7 @@ Key files (`registry.rs`, `connection/`, and `translator.rs` physically live in 
 - `connection/` - ACP SDK (`agent-client-protocol`) based agent communication over the stdio of a spawned subprocess, including child lifecycle ownership (see `@/nori-rs/acp-host/src/connection/docs.md`)
 - `translator.rs` - User input to ACP `ContentBlock` conversion and related parsing helpers
 - `backend/mod.rs` - Owns `AcpBackend`, which serves the shared `Op`/`Event` contract from `@/nori-rs/protocol/` and emits normalized ACP session events
+- `runtime.rs` - Frontend-facing session runtime: builds `AcpBackendConfig` from `NoriConfig` plus a frontend-supplied `SessionLaunchSpec`, spawns or resumes the backend, and returns a `LaunchedSession` (op sender, `AcpAgentHandle` for session-control commands, `SessionEvent` stream)
 - `backend/thread_goal.rs` - Owns per-session `/goal` state, prompt goal-context formatting, transcript rehydration, and usage checkpoint updates
 - `backend/nori_client_mcp.rs` - Hosts the `nori-client` MCP server: typed `#[tool]` goal handlers on `NoriClientService` (an rmcp `ServerHandler`), MCP resource/prompt handlers backed by `backend/nori_client_context.rs`, and rmcp's `StreamableHttpService` over a loopback `axum` listener (`NoriClientServer`)
 - `transcript_discovery.rs` - Discovers transcript files for external agents
@@ -206,7 +207,7 @@ Nori can optionally wrap ACP subprocess transports with an append-only wire logg
 enabled = true
 ```
 
-When enabled, the resolved `AcpProxyConfig` stores logs under `$NORI_HOME/acp-wire`. The config layer intentionally owns this path resolution so every ACP entry point uses the same home directory semantics. The TUI passes the resolved proxy config into `AcpBackendConfig`; the backend passes it to each `AcpConnection::spawn()` call, including prompt-summary subprocesses, so every ACP child process gets its own log file.
+When enabled, the resolved `AcpProxyConfig` stores logs under `$NORI_HOME/acp-wire`. The config layer intentionally owns this path resolution so every ACP entry point uses the same home directory semantics. The session runtime (`runtime.rs`) reads the resolved proxy config from `NoriConfig` into `AcpBackendConfig`; the backend passes it to each `AcpConnection::spawn()` call, including prompt-summary subprocesses, so every ACP child process gets its own log file.
 
 The connection layer uses `agent_client_protocol::Lines` to observe raw newline-delimited JSON-RPC messages at the transport boundary before or after the SDK parses them. Each child process gets a distinct JSONL file named from the launch timestamp, child PID, and sanitized agent slug. Records include the timestamp, direction (`client_to_agent` or `agent_to_client`), agent slug, child PID, and the parsed JSON message. If a line cannot be parsed as JSON, the logger preserves the raw line and parse error instead of disrupting the live session.
 
@@ -343,7 +344,7 @@ When auto-worktree is active (either via `Automatic` or the user confirming in `
 2. If `auto_worktree.is_enabled()` and `auto_worktree_repo_root` is set, `rename_auto_worktree_branch()` is called in a blocking task
 3. Only the branch is renamed via `git branch -m`; the directory stays at its original path
 
-The `AcpBackend` stores `auto_worktree: AutoWorktree` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The `is_enabled()` method returns `true` for both `Automatic` and `Ask` variants, since in both cases a worktree was actually created. The repo root is derived by the TUI layer from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
+The `AcpBackend` stores `auto_worktree: AutoWorktree` and `auto_worktree_repo_root: Option<PathBuf>` to support the rename. The `is_enabled()` method returns `true` for both `Automatic` and `Ask` variants, since in both cases a worktree was actually created. The repo root is derived by the session runtime (`runtime.rs`) from the worktree path (going up two directories from `{repo_root}/.worktrees/{name}`).
 
 **Default Models Configuration** (`@/nori-rs/nori-config/src/types/mod.rs`, `backend/session_defaults.rs`):
 
@@ -357,7 +358,7 @@ The config flow is:
 
 1. `NoriConfigToml.default_models` deserializes the `[default_models]` table from TOML (empty HashMap by default via `#[serde(default)]`)
 2. `NoriConfig.default_models` stores the resolved map after config loading
-3. `AcpBackendConfig.default_model` receives `Option<String>` via lookup by agent slug in `chatwidget/agent.rs`
+3. `AcpBackendConfig.default_model` receives `Option<String>` via lookup by agent slug in the session runtime (`runtime.rs`)
 4. After session creation, `AcpBackend::spawn()` delegates to `backend/session_defaults.rs` to apply the model to the new session
 
 `session_defaults.rs` applies the default through the stable mechanism only: when the agent advertises a select-style config option with the `Model` category, the persisted default is applied through `session/set_config_option`. When no Model-category option exists, the default is simply not applied. There is no unstable `session/set_model` fallback -- that API was removed along with the `nori-acp`/`nori-tui` `unstable` feature.
