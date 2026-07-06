@@ -232,7 +232,7 @@ impl PendingExecCellTracker {
 mod tests {
     use super::*;
     use crate::exec_cell::new_active_exec_command;
-    use codex_core::protocol::ExecCommandSource;
+    use codex_protocol::protocol::ExecCommandSource;
 
     fn make_test_exec_cell(call_id: &str) -> Box<dyn HistoryCell> {
         Box::new(new_active_exec_command(

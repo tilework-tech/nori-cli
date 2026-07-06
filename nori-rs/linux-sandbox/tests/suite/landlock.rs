@@ -5,7 +5,7 @@ use codex_core::error::SandboxErr;
 use codex_core::exec::ExecParams;
 use codex_core::exec::process_exec_tool_call;
 use codex_core::exec_env::create_env;
-use codex_core::protocol::SandboxPolicy;
+use codex_protocol::protocol::SandboxPolicy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;

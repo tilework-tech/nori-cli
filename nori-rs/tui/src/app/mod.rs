@@ -33,14 +33,14 @@ use codex_core::config::edit::toml_value;
 #[cfg(target_os = "windows")]
 use codex_core::features::Feature;
 use codex_core::model_family::find_family_for_model;
-use codex_core::protocol::AskForApproval;
-use codex_core::protocol::EventMsg;
-use codex_core::protocol::FinalOutput;
-use codex_core::protocol::Op;
-use codex_core::protocol::SandboxPolicy;
-use codex_core::protocol::TokenUsage;
-use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::ConversationId;
+use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
+use codex_protocol::protocol::AskForApproval;
+use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::FinalOutput;
+use codex_protocol::protocol::Op;
+use codex_protocol::protocol::SandboxPolicy;
+use codex_protocol::protocol::TokenUsage;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -430,8 +430,8 @@ impl App {
             let should_check = codex_core::get_platform_sandbox().is_some()
                 && matches!(
                     app.config.sandbox_policy,
-                    codex_core::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_core::protocol::SandboxPolicy::ReadOnly
+                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
+                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
                 )
                 && !app
                     .config
@@ -537,7 +537,7 @@ impl App {
             .set_loop_count_override(self.loop_count_override);
     }
 
-    pub(crate) fn token_usage(&self) -> codex_core::protocol::TokenUsage {
+    pub(crate) fn token_usage(&self) -> codex_protocol::protocol::TokenUsage {
         self.chat_widget.token_usage()
     }
 

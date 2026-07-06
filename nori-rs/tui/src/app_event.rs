@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use codex_common::approval_presets::ApprovalPreset;
-use codex_core::protocol::ConversationPathResponseEvent;
-use codex_core::protocol::Event;
-use codex_core::protocol::RateLimitSnapshot;
 use codex_file_search::FileMatch;
+use codex_protocol::protocol::ConversationPathResponseEvent;
+use codex_protocol::protocol::Event;
+use codex_protocol::protocol::RateLimitSnapshot;
 use nori_acp::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
@@ -12,9 +12,9 @@ use crate::history_cell::HistoryCell;
 use crate::nori::session_config_mode::AcpModeConfig;
 use crate::system_info::SystemInfo;
 
-use codex_core::protocol::AskForApproval;
-use codex_core::protocol::SandboxPolicy;
-use codex_core::protocol_config_types::ReasoningEffort;
+use codex_protocol::config_types::ReasoningEffort;
+use codex_protocol::protocol::AskForApproval;
+use codex_protocol::protocol::SandboxPolicy;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub(crate) enum AppEvent {
 
     /// Forward an `Op` to the Agent. Using an `AppEvent` for this avoids
     /// bubbling channels through layers of widgets.
-    CodexOp(codex_core::protocol::Op),
+    CodexOp(codex_protocol::protocol::Op),
 
     /// Kick off an asynchronous file search for the given query (text after
     /// the `@`). Previous searches may be cancelled by the app layer so there

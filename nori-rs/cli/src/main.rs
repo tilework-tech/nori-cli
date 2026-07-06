@@ -235,7 +235,7 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
     if !token_usage.is_zero() {
         lines.push(format!(
             "{}",
-            codex_core::protocol::FinalOutput::from(token_usage)
+            codex_protocol::protocol::FinalOutput::from(token_usage)
         ));
     }
 
@@ -620,8 +620,8 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_core::protocol::TokenUsage;
     use codex_protocol::ConversationId;
+    use codex_protocol::protocol::TokenUsage;
     use pretty_assertions::assert_eq;
 
     fn finalize_resume_from_args(args: &[&str]) -> TuiCli {

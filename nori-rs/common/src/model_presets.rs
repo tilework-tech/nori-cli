@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use codex_app_server_protocol::AuthMode;
-use codex_core::protocol_config_types::ReasoningEffort;
+use codex_protocol::config_types::ReasoningEffort;
 use once_cell::sync::Lazy;
 
 pub const HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG: &str = "hide_gpt5_1_migration_prompt";

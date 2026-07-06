@@ -1,6 +1,6 @@
-use crate::protocol::SandboxPolicy;
 use crate::spawn::StdioPolicy;
 use crate::spawn::spawn_child_async;
+use codex_protocol::protocol::SandboxPolicy;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
