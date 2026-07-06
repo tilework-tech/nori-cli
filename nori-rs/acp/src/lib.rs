@@ -13,21 +13,21 @@ pub mod compact;
 pub use nori_config as config;
 pub mod custom_prompts;
 pub mod parse_command;
-pub mod patch;
+pub use nori_acp_host::patch;
 pub mod powershell;
 pub mod shell;
 mod user_notification;
+pub use nori_acp_host::connection;
 pub use user_notification::UserNotification;
 pub use user_notification::UserNotifier;
-pub mod connection;
 pub mod hooks;
 pub mod message_history;
-pub mod registry;
+pub use nori_acp_host::registry;
 pub mod session_parser;
 pub mod tracing_setup;
 pub mod transcript;
 pub mod transcript_discovery;
-pub mod translator;
+pub use nori_acp_host::translator;
 pub mod undo;
 
 // Re-export config types for convenience

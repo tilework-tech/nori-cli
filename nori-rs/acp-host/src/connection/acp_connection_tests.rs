@@ -40,7 +40,7 @@ async fn recv_approval_request(
 async fn drive_logged_prompt(
     config: &crate::registry::AcpAgentConfig,
     cwd: &std::path::Path,
-    proxy: crate::config::AcpProxyConfig,
+    proxy: nori_config::AcpProxyConfig,
 ) {
     let conn = AcpConnection::spawn(config, cwd, proxy)
         .await
@@ -80,7 +80,7 @@ async fn test_spawn_and_create_session() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("Failed to spawn AcpConnection");
@@ -105,7 +105,7 @@ async fn test_proxy_logging_records_one_wire_log_per_child_subprocess() {
         return;
     };
     let temp_dir = tempdir().expect("temp dir");
-    let proxy = crate::config::AcpProxyConfig {
+    let proxy = nori_config::AcpProxyConfig {
         enabled: true,
         log_dir: temp_dir.path().join("acp-wire"),
     };
@@ -165,7 +165,7 @@ async fn test_prompt_receives_text_updates() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -215,7 +215,7 @@ async fn test_event_receiver_forwards_session_updates() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -262,7 +262,7 @@ async fn test_tool_call_prompt_delivers_final_text_update() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -318,7 +318,7 @@ async fn test_session_config_options_after_session_creation() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -348,7 +348,7 @@ async fn test_set_session_config_option_replaces_connection_state() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -390,7 +390,7 @@ async fn test_approval_receiver_forwards_requests() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -454,7 +454,7 @@ async fn test_event_receiver_preserves_update_then_approval_order() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -552,7 +552,7 @@ async fn test_codex_home_not_inherited() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -606,7 +606,7 @@ async fn test_drop_kills_subprocess() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -659,7 +659,7 @@ async fn test_cancel_during_prompt() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -719,7 +719,7 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -837,7 +837,7 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn");
@@ -977,7 +977,7 @@ async fn test_shutdown_closes_stdin_and_waits_for_child_exit() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn script agent");
@@ -1023,7 +1023,7 @@ async fn test_shutdown_kills_child_that_outlives_grace() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn script agent");
@@ -1085,7 +1085,7 @@ async fn test_child_exit_emits_event_with_stderr_tail() {
     let mut conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("spawn script agent");
@@ -1137,7 +1137,7 @@ async fn test_spawn_failure_surfaces_child_stderr() {
         AcpConnection::spawn(
             &config,
             temp_dir.path(),
-            crate::config::AcpProxyConfig::disabled(),
+            nori_config::AcpProxyConfig::disabled(),
         ),
     )
     .await
@@ -1150,8 +1150,8 @@ async fn test_spawn_failure_surfaces_child_stderr() {
         "spawn error must include the child's stderr, got: {err_text}"
     );
     assert_eq!(
-        crate::backend::categorize_acp_error(&err_text),
-        crate::backend::AcpErrorCategory::Authentication,
+        crate::categorize_acp_error(&err_text),
+        crate::AcpErrorCategory::Authentication,
         "the surfaced stderr must drive categorization (auth, not init failure)"
     );
 }
@@ -1176,7 +1176,7 @@ async fn test_list_sessions_maps_agent_session_info() {
     let conn = AcpConnection::spawn(
         &config,
         temp_dir.path(),
-        crate::config::AcpProxyConfig::disabled(),
+        nori_config::AcpProxyConfig::disabled(),
     )
     .await
     .expect("Failed to spawn AcpConnection");

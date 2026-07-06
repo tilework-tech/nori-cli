@@ -95,9 +95,8 @@ Nori acts as an MCP client:
 
 ### Things to Know
 
-- Nori-authored crates use a `nori-` prefix (`nori-cli`, `nori-tui`, `nori-acp`, `nori-protocol`, `nori-installed`); inherited crates keep the legacy `codex-` prefix from the OpenAI Codex fork and are progressively adopted or removed per `docs/specs/crate-layering.md`
-- The `nori-config` feature flag enables Nori-specific configuration paths (`~/.nori/cli/`) instead of the legacy Codex paths (`~/.codex/`)
-- The `unstable` feature flag gates experimental ACP features like model switching
+- Nori-authored crates use a `nori-` prefix (`nori-cli`, `nori-tui`, `nori-acp`, `nori-acp-host`, `nori-config`, `nori-protocol`, `nori-installed`); inherited crates keep the legacy `codex-` prefix from the OpenAI Codex fork and are progressively adopted or removed per `docs/specs/crate-layering.md`
+- Configuration always uses the Nori paths (`~/.nori/cli/`); the old `nori-config` and `unstable` cargo feature flags were removed during the crate-layering cleanup (no cargo feature may change which crate owns a responsibility)
 - Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
 - Snapshot testing with `insta` is used extensively for TUI regression testing
 - The project has two justfiles: a root `@/justfile` implementing the Shared Local Runner Layer spec (standardized `help`, `dev`, `test`, `doctor` targets) and `@/nori-rs/justfile` for Rust-specific workflows. The root justfile wraps `nori-rs` by running `cd nori-rs && cargo ...` for each target. Both coexist -- run `just` from the repo root for the standard targets, or `cd nori-rs && just` for the Rust-native recipes

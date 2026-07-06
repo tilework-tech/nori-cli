@@ -36,7 +36,7 @@ Key integrations:
 ### Core Implementation
 
 **Configuration** (`config/`, `config_loader/`): Loads and merges configuration from:
-1. Global config at `$CODEX_HOME/config.toml` (the `nori` binary points `CODEX_HOME` at `~/.nori/cli`, so core and the Nori config layer in `@/nori-rs/acp/src/config/` read the same file)
+1. Global config at `$CODEX_HOME/config.toml` (the `nori` binary points `CODEX_HOME` at `~/.nori/cli`, so core and the Nori config layer in `@/nori-rs/nori-config/src/` read the same file)
 2. Project-local config at `<cwd>/.codex/config.toml`
 3. Command-line overrides
 
