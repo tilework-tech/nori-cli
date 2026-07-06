@@ -24,6 +24,7 @@ pub use user_notification::UserNotifier;
 pub mod hooks;
 pub mod message_history;
 pub use nori_acp_host::registry;
+pub mod runtime;
 pub mod session_parser;
 pub mod tracing_setup;
 pub mod transcript;
