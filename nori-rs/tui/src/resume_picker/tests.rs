@@ -6,7 +6,6 @@ use crossterm::event::KeyModifiers;
 use insta::assert_snapshot;
 use std::future::Future;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 fn metadata(session_id: &str, project_id: &str, cwd: &str, agent: &str) -> SessionMetadata {
     SessionMetadata {
@@ -37,18 +36,14 @@ fn row(session_id: &str, cwd: Option<PathBuf>) -> Row {
 fn page(items: Vec<SessionMetadata>) -> TranscriptPage {
     TranscriptPage {
         items,
-        next_cursor: None,
         num_scanned_files: 0,
-        reached_scan_cap: false,
     }
 }
 
 fn state_with_rows(rows: Vec<Row>, show_all: bool, filter_cwd: Option<PathBuf>) -> PickerState {
-    let loader: PageLoader = Arc::new(|_| {});
     let mut state = PickerState::new(
         PathBuf::from("/tmp/nori-home"),
         FrameRequester::test_dummy(),
-        loader,
         None,
         show_all,
         filter_cwd,
