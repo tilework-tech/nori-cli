@@ -7,7 +7,7 @@ impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
-        let recording_enabled = nori_acp::config::NoriConfig::load()
+        let recording_enabled = nori_config::NoriConfig::load()
             .map(|config| config.acp_proxy.enabled)
             .unwrap_or(false);
         self.bottom_pane
@@ -279,7 +279,7 @@ impl ChatWidget {
     }
 
     /// Open the Nori CLI settings popup.
-    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
+    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_config::NoriConfig) {
         let params = crate::nori::config_picker::config_picker_params(
             nori_config,
             self.app_event_tx.clone(),
@@ -288,10 +288,7 @@ impl ChatWidget {
     }
 
     /// Open the file manager sub-picker.
-    pub(crate) fn open_file_manager_picker(
-        &mut self,
-        current: Option<nori_acp::config::FileManager>,
-    ) {
+    pub(crate) fn open_file_manager_picker(&mut self, current: Option<nori_config::FileManager>) {
         let params = crate::nori::config_picker::file_manager_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -300,14 +297,14 @@ impl ChatWidget {
     }
 
     /// Open the vim mode sub-picker.
-    pub(crate) fn open_vim_mode_picker(&mut self, current: nori_acp::config::VimEnterBehavior) {
+    pub(crate) fn open_vim_mode_picker(&mut self, current: nori_config::VimEnterBehavior) {
         let params =
             crate::nori::config_picker::vim_mode_picker_params(current, self.app_event_tx.clone());
         self.bottom_pane.show_selection_view(params);
     }
 
     /// Open the auto-worktree sub-picker.
-    pub(crate) fn open_auto_worktree_picker(&mut self, current: nori_acp::config::AutoWorktree) {
+    pub(crate) fn open_auto_worktree_picker(&mut self, current: nori_config::AutoWorktree) {
         let params = crate::nori::config_picker::auto_worktree_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -316,10 +313,7 @@ impl ChatWidget {
     }
 
     /// Open the notify-after-idle sub-picker.
-    pub(crate) fn open_notify_after_idle_picker(
-        &mut self,
-        current: nori_acp::config::NotifyAfterIdle,
-    ) {
+    pub(crate) fn open_notify_after_idle_picker(&mut self, current: nori_config::NotifyAfterIdle) {
         let params = crate::nori::config_picker::notify_after_idle_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -328,7 +322,7 @@ impl ChatWidget {
     }
 
     /// Open the script timeout sub-picker.
-    pub(crate) fn open_script_timeout_picker(&mut self, current: nori_acp::config::ScriptTimeout) {
+    pub(crate) fn open_script_timeout_picker(&mut self, current: nori_config::ScriptTimeout) {
         let params = crate::nori::config_picker::script_timeout_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -348,7 +342,7 @@ impl ChatWidget {
     /// Open the footer segments picker popup.
     pub(crate) fn open_footer_segments_picker(
         &mut self,
-        current: &nori_acp::config::FooterSegmentConfig,
+        current: &nori_config::FooterSegmentConfig,
     ) {
         let params = crate::nori::config_picker::footer_segments_picker_params(
             current,
@@ -370,7 +364,7 @@ impl ChatWidget {
     /// stacking a new view on top of the old one.
     pub(crate) fn replace_footer_segments_picker(
         &mut self,
-        current: &nori_acp::config::FooterSegmentConfig,
+        current: &nori_config::FooterSegmentConfig,
     ) {
         let params = crate::nori::config_picker::footer_segments_picker_params(
             current,
@@ -382,7 +376,7 @@ impl ChatWidget {
     /// Set a footer segment's enabled state.
     pub(crate) fn set_footer_segment_enabled(
         &mut self,
-        segment: nori_acp::config::FooterSegment,
+        segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
         self.bottom_pane
@@ -431,7 +425,7 @@ impl ChatWidget {
     }
 
     /// Open the hotkey picker sub-view.
-    pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: nori_acp::config::HotkeyConfig) {
+    pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: nori_config::HotkeyConfig) {
         let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
             &hotkey_config,
             self.app_event_tx.clone(),
@@ -440,11 +434,11 @@ impl ChatWidget {
     }
 
     /// Update the hotkey configuration used by the textarea for editing bindings.
-    pub(crate) fn set_hotkey_config(&mut self, config: nori_acp::config::HotkeyConfig) {
+    pub(crate) fn set_hotkey_config(&mut self, config: nori_config::HotkeyConfig) {
         self.bottom_pane.set_hotkey_config(config);
     }
 
-    pub(crate) fn set_vim_mode(&mut self, value: nori_acp::config::VimEnterBehavior) {
+    pub(crate) fn set_vim_mode(&mut self, value: nori_config::VimEnterBehavior) {
         self.bottom_pane.set_vim_mode(value);
     }
 
@@ -462,7 +456,7 @@ impl ChatWidget {
         // Detect if we're in a worktree or if skillset_per_session is enabled,
         // and pass cwd as the install directory
         let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
-        let skillset_per_session = nori_acp::config::NoriConfig::load()
+        let skillset_per_session = nori_config::NoriConfig::load()
             .map(|c| c.skillset_per_session)
             .unwrap_or(false);
         let install_dir = if is_in_worktree || skillset_per_session {
@@ -511,7 +505,7 @@ impl ChatWidget {
         }
 
         let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
-        let skillset_per_session = nori_acp::config::NoriConfig::load()
+        let skillset_per_session = nori_config::NoriConfig::load()
             .map(|c| c.skillset_per_session)
             .unwrap_or(false);
         let install_dir = if is_in_worktree || skillset_per_session {
@@ -540,7 +534,7 @@ impl ChatWidget {
                 // These are relevant when skillset_per_session is enabled (indicated
                 // by the on_dismiss callback being set, which only happens in the
                 // per-session startup flow).
-                let nori_cfg = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_cfg = nori_config::NoriConfig::load().unwrap_or_default();
                 let is_per_session = nori_cfg.skillset_per_session;
                 let auto_worktree_off = is_per_session && !nori_cfg.auto_worktree.is_enabled();
 

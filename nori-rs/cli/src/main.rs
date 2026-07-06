@@ -3,7 +3,6 @@ use clap::Parser;
 use codex_arg0::arg0_dispatch_or_else;
 use codex_common::CliConfigOverrides;
 use codex_execpolicy::ExecPolicyCheckCommand;
-use nori_acp::find_nori_home;
 use nori_acp::init_rolling_file_tracing;
 use nori_cli::LandlockCommand;
 use nori_cli::SeatbeltCommand;
@@ -20,6 +19,7 @@ use nori_cli::login::run_login_with_chatgpt;
 use nori_cli::login::run_login_with_device_code;
 #[cfg(feature = "login")]
 use nori_cli::login::run_logout;
+use nori_config::find_nori_home;
 
 use nori_tui::AppExitInfo;
 use nori_tui::Cli as TuiCli;
@@ -524,7 +524,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 std::env::var_os("NORI_HANDROLL_BIN"),
                 std::env::var_os("PATH"),
             )?;
-            let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+            let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
 
             merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
             prepend_config_flags(

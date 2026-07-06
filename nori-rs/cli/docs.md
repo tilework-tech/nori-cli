@@ -10,7 +10,7 @@ The `nori-cli` crate is the main binary that provides the `nori` command. It ser
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `nori-tui`, `nori-acp`, `codex-core`, `codex-sandbox`
+- **Always included:** `nori-tui`, `nori-acp`, `nori-config`, `codex-core`, `codex-sandbox`
 - **Optional via features:** `codex-login`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 - **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers

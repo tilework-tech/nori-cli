@@ -73,7 +73,7 @@ impl App {
 
     pub(super) async fn persist_notify_after_idle_setting(
         &mut self,
-        value: nori_acp::config::NotifyAfterIdle,
+        value: nori_config::NotifyAfterIdle,
     ) {
         let toml_str = value.toml_value();
 
@@ -102,7 +102,7 @@ impl App {
 
     pub(super) async fn persist_script_timeout_setting(
         &mut self,
-        value: nori_acp::config::ScriptTimeout,
+        value: nori_config::ScriptTimeout,
     ) {
         let toml_str = value.toml_value();
 
@@ -141,10 +141,7 @@ impl App {
             .add_info_message(format!("Loop count set to {display} (this session)."), None);
     }
 
-    pub(super) async fn persist_vim_mode_setting(
-        &mut self,
-        value: nori_acp::config::VimEnterBehavior,
-    ) {
+    pub(super) async fn persist_vim_mode_setting(&mut self, value: nori_config::VimEnterBehavior) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "vim_mode"], toml_value(value.toml_value()))
             .apply()
@@ -168,10 +165,7 @@ impl App {
             .add_info_message(format!("Vim mode: {display}."), None);
     }
 
-    pub(super) async fn persist_auto_worktree_setting(
-        &mut self,
-        value: nori_acp::config::AutoWorktree,
-    ) {
+    pub(super) async fn persist_auto_worktree_setting(&mut self, value: nori_config::AutoWorktree) {
         let toml_str = value.toml_value();
 
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
@@ -276,7 +270,7 @@ impl App {
 
     pub(super) async fn persist_footer_segment_setting(
         &mut self,
-        segment: nori_acp::config::FooterSegment,
+        segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
@@ -310,10 +304,7 @@ impl App {
             .replace_footer_segments_picker(&self.footer_segment_config);
     }
 
-    pub(super) async fn persist_file_manager_setting(
-        &mut self,
-        value: nori_acp::config::FileManager,
-    ) {
+    pub(super) async fn persist_file_manager_setting(&mut self, value: nori_config::FileManager) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "file_manager"], toml_value(value.command_name()))
             .apply()
@@ -357,8 +348,8 @@ impl App {
 
     pub(super) async fn persist_hotkey_setting(
         &mut self,
-        action: nori_acp::config::HotkeyAction,
-        binding: nori_acp::config::HotkeyBinding,
+        action: nori_config::HotkeyAction,
+        binding: nori_config::HotkeyBinding,
     ) {
         let toml_key = action.toml_key();
         let toml_val = binding.toml_value();

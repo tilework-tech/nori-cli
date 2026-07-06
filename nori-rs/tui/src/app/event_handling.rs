@@ -781,7 +781,7 @@ impl App {
                     .open_hotkey_picker(self.hotkey_config.clone());
             }
             AppEvent::OpenNotifyAfterIdlePicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_notify_after_idle_picker(nori_config.notify_after_idle);
             }
@@ -789,7 +789,7 @@ impl App {
                 self.persist_notify_after_idle_setting(value).await;
             }
             AppEvent::OpenScriptTimeoutPicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_script_timeout_picker(nori_config.script_timeout);
             }
@@ -800,7 +800,7 @@ impl App {
                 let current = match self.loop_count_override {
                     Some(overridden) => overridden,
                     None => {
-                        nori_acp::config::NoriConfig::load()
+                        nori_config::NoriConfig::load()
                             .unwrap_or_default()
                             .loop_count
                     }
@@ -811,11 +811,11 @@ impl App {
                 self.set_session_loop_count(value);
             }
             AppEvent::OpenVimModePicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget.open_vim_mode_picker(nori_config.vim_mode);
             }
             AppEvent::OpenAutoWorktreePicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_auto_worktree_picker(nori_config.auto_worktree);
             }
@@ -851,7 +851,7 @@ impl App {
                 self.persist_file_manager_setting(value).await;
             }
             AppEvent::OpenFileManagerPicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_file_manager_picker(nori_config.file_manager);
             }
@@ -947,7 +947,7 @@ impl App {
             }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 let timeout = nori_config.script_timeout.as_duration();
                 let name = prompt.name.clone();
                 self.chat_widget
@@ -1255,7 +1255,7 @@ impl App {
 
     pub(super) async fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) {
         use crate::nori::hotkey_match::matches_binding;
-        use nori_acp::config::HotkeyAction;
+        use nori_config::HotkeyAction;
 
         // Check configurable hotkeys first (before the structural match),
         // but only when no popup/view is active — otherwise the popup should

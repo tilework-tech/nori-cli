@@ -269,8 +269,8 @@ pub(crate) enum AppEvent {
 
     /// Set a hotkey binding for a specific action.
     SetConfigHotkey {
-        action: nori_acp::config::HotkeyAction,
-        binding: nori_acp::config::HotkeyBinding,
+        action: nori_config::HotkeyAction,
+        binding: nori_config::HotkeyBinding,
     },
 
     /// Set the TUI OS notifications config setting.
@@ -280,7 +280,7 @@ pub(crate) enum AppEvent {
     OpenVimModePicker,
 
     /// Set the TUI vim mode config setting.
-    SetConfigVimMode(nori_acp::config::VimEnterBehavior),
+    SetConfigVimMode(nori_config::VimEnterBehavior),
 
     /// Open the notify-after-idle sub-picker.
     OpenNotifyAfterIdlePicker,
@@ -292,10 +292,10 @@ pub(crate) enum AppEvent {
     OpenHotkeyPicker,
 
     /// Set the TUI notify-after-idle config setting.
-    SetConfigNotifyAfterIdle(nori_acp::config::NotifyAfterIdle),
+    SetConfigNotifyAfterIdle(nori_config::NotifyAfterIdle),
 
     /// Set the TUI script timeout config setting.
-    SetConfigScriptTimeout(nori_acp::config::ScriptTimeout),
+    SetConfigScriptTimeout(nori_config::ScriptTimeout),
 
     /// Open the loop count sub-picker.
     OpenLoopCountPicker,
@@ -307,7 +307,7 @@ pub(crate) enum AppEvent {
     OpenAutoWorktreePicker,
 
     /// Set the TUI auto worktree config setting.
-    SetConfigAutoWorktree(nori_acp::config::AutoWorktree),
+    SetConfigAutoWorktree(nori_config::AutoWorktree),
 
     /// Set the TUI skillset per session config setting.
     SetConfigSkillsetPerSession(bool),
@@ -328,7 +328,7 @@ pub(crate) enum AppEvent {
     OpenFooterSegmentsPicker,
 
     /// Toggle a footer segment's enabled state.
-    SetConfigFooterSegment(nori_acp::config::FooterSegment, bool),
+    SetConfigFooterSegment(nori_config::FooterSegment, bool),
 
     /// Start the next loop iteration with a fresh conversation.
     /// Sent by ChatWidget::on_task_complete when loop mode is active.
@@ -479,10 +479,10 @@ pub(crate) enum AppEvent {
     },
 
     /// Launch a terminal file manager to browse and optionally edit files.
-    BrowseFiles(nori_acp::config::FileManager),
+    BrowseFiles(nori_config::FileManager),
 
     /// Set the configured file manager for the `/browse` command.
-    SetConfigFileManager(nori_acp::config::FileManager),
+    SetConfigFileManager(nori_config::FileManager),
 
     /// Open the file manager sub-picker.
     OpenFileManagerPicker,

@@ -128,7 +128,7 @@ impl App {
 
     /// Launch a terminal file manager in chooser mode, then open the selected
     /// file in the user's editor.
-    pub(super) fn browse_files(&mut self, fm: nori_acp::config::FileManager, tui: &mut tui::Tui) {
+    pub(super) fn browse_files(&mut self, fm: nori_config::FileManager, tui: &mut tui::Tui) {
         use crate::editor;
 
         // Create a temp file for the file manager to write the chosen path into.

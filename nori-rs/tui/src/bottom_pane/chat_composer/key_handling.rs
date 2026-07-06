@@ -1,6 +1,6 @@
 use super::*;
 use crate::bottom_pane::textarea::VimModeState;
-use nori_acp::config::VimEnterBehavior;
+use nori_config::VimEnterBehavior;
 
 impl ChatComposer {
     /// Handle a key event coming from the main UI.
@@ -627,7 +627,7 @@ impl ChatComposer {
                     && matches_binding(
                         self.textarea
                             .hotkey_config()
-                            .binding_for(nori_acp::config::HotkeyAction::HistorySearch),
+                            .binding_for(nori_config::HotkeyAction::HistorySearch),
                         &key_event,
                     ) =>
             {
