@@ -50,7 +50,7 @@ impl ChatWidget {
             .map(str::to_string)
             .unwrap_or_else(|| current_mode_id.to_string());
 
-        let agent_display_name = nori_acp::get_agent_display_name(&self.config.model);
+        let agent_display_name = nori_harness::get_agent_display_name(&self.config.model);
         self.add_to_history(
             crate::nori::agent_mode_history::new_agent_mode_changed_cell(
                 &agent_display_name,

@@ -1,8 +1,8 @@
 use super::*;
 use insta::assert_snapshot;
-use nori_acp::SessionConfigOption;
-use nori_acp::SessionConfigOptionCategory;
-use nori_acp::SessionConfigSelectOption;
+use nori_harness::SessionConfigOption;
+use nori_harness::SessionConfigOptionCategory;
+use nori_harness::SessionConfigSelectOption;
 
 fn model_config_option() -> SessionConfigOption {
     SessionConfigOption::select(
@@ -61,8 +61,7 @@ async fn model_popup_routes_to_config_option_when_model_category_present() {
 }
 
 /// When an ACP handle is present but config_options have NO Model-category
-/// option (and unstable model state is empty), /model should show the
-/// "not supported" fallback.
+/// option, /model should show the "not supported" fallback.
 #[tokio::test]
 async fn model_popup_falls_back_when_no_model_config_option() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
@@ -73,25 +72,20 @@ async fn model_popup_falls_back_when_no_model_config_option() {
         tokio::sync::mpsc::unbounded_channel::<crate::chatwidget::agent::AcpAgentCommand>();
     tokio::spawn(async move {
         while let Some(command) = command_rx.recv().await {
-            match command {
-                crate::chatwidget::agent::AcpAgentCommand::GetSessionConfig { response_tx } => {
-                    let mode_only = SessionConfigOption::select(
-                        "mode",
-                        "Mode",
-                        "plan",
-                        vec![
-                            SessionConfigSelectOption::new("plan", "Plan"),
-                            SessionConfigSelectOption::new("build", "Build"),
-                        ],
-                    )
-                    .category(SessionConfigOptionCategory::Mode);
-                    let _ = response_tx.send(vec![mode_only]);
-                }
-                #[cfg(feature = "unstable")]
-                crate::chatwidget::agent::AcpAgentCommand::GetModelState { response_tx } => {
-                    let _ = response_tx.send(nori_acp::AcpModelState::new());
-                }
-                _ => {}
+            if let crate::chatwidget::agent::AcpAgentCommand::GetSessionConfig { response_tx } =
+                command
+            {
+                let mode_only = SessionConfigOption::select(
+                    "mode",
+                    "Mode",
+                    "plan",
+                    vec![
+                        SessionConfigSelectOption::new("plan", "Plan"),
+                        SessionConfigSelectOption::new("build", "Build"),
+                    ],
+                )
+                .category(SessionConfigOptionCategory::Mode);
+                let _ = response_tx.send(vec![mode_only]);
             }
         }
     });
@@ -101,19 +95,14 @@ async fn model_popup_falls_back_when_no_model_config_option() {
 
     chat.open_model_popup();
 
-    // Wait for the event. With no Model-category config option and empty
-    // unstable model state, it should fall back to the empty model picker.
+    // Wait for the event. With no Model-category config option it should fall
+    // back to the "not supported" model picker.
     let event = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
         .await
         .expect("timed out waiting for event")
         .expect("channel closed");
 
-    assert_matches!(
-        event,
-        AppEvent::OpenAcpModelPicker { models, .. } => {
-            assert!(models.is_empty(), "expected empty models list for fallback");
-        }
-    );
+    assert_matches!(event, AppEvent::OpenAcpModelPickerUnsupported);
 }
 
 /// Snapshot: the model value picker rendered via a Model-category config option

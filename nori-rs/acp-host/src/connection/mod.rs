@@ -1,0 +1,133 @@
+//! ACP Connection management
+//!
+//! Provides `AcpConnection` for communicating with ACP agents over the
+//! Agent Client Protocol via stdin/stdout (local subprocess via `spawn()`).
+
+use agent_client_protocol_schema::v1 as acp;
+use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
+use codex_protocol::approvals::ExecApprovalRequestEvent;
+use codex_protocol::protocol::ReviewDecision;
+use tokio::sync::oneshot;
+
+pub mod acp_connection;
+mod child_lifecycle;
+pub mod mcp;
+mod wire_log;
+
+#[cfg(test)]
+mod acp_connection_tests;
+
+/// Raw events emitted by the ACP transport adapter in source order.
+#[derive(Debug)]
+pub enum ConnectionEvent {
+    SessionUpdate(acp::SessionUpdate),
+    ApprovalRequest(ApprovalRequest),
+    /// The agent subprocess exited on its own. `status` is the exit code
+    /// (`None` when killed by a signal); `stderr_tail` carries the child's
+    /// most recent stderr output for error reporting.
+    ChildExited {
+        status: Option<i32>,
+        stderr_tail: String,
+    },
+}
+
+pub fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {
+    match update {
+        acp::SessionUpdate::AgentMessageChunk(_) => "agent_message_chunk",
+        acp::SessionUpdate::AgentThoughtChunk(_) => "agent_thought_chunk",
+        acp::SessionUpdate::UserMessageChunk(_) => "user_message_chunk",
+        acp::SessionUpdate::Plan(_) => "plan",
+        acp::SessionUpdate::ToolCall(_) => "tool_call",
+        acp::SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+        acp::SessionUpdate::AvailableCommandsUpdate(_) => "available_commands_update",
+        acp::SessionUpdate::CurrentModeUpdate(_) => "current_mode_update",
+        acp::SessionUpdate::ConfigOptionUpdate(_) => "config_option_update",
+        acp::SessionUpdate::SessionInfoUpdate(_) => "session_info_update",
+        acp::SessionUpdate::UsageUpdate(_) => "usage_update",
+        _ => "other",
+    }
+}
+
+/// The type of approval event to send to the UI.
+///
+/// This enum allows us to use the more appropriate approval UI for different
+/// operation types - exec approval for shell commands, patch approval for
+/// file edits/writes/deletes.
+#[derive(Debug)]
+pub enum ApprovalEventType {
+    /// Exec approval for shell commands and other operations
+    Exec(ExecApprovalRequestEvent),
+    /// Patch approval for file edit/write/delete operations
+    Patch(ApplyPatchApprovalRequestEvent),
+}
+
+impl ApprovalEventType {
+    /// Get the call_id from the event
+    pub fn call_id(&self) -> &str {
+        match self {
+            ApprovalEventType::Exec(e) => &e.call_id,
+            ApprovalEventType::Patch(e) => &e.call_id,
+        }
+    }
+}
+
+/// An approval request sent from the ACP layer to the UI layer.
+///
+/// When an ACP agent requests permission to perform an operation,
+/// this struct is sent to the UI layer which should display the request
+/// to the user and return their decision via the response channel.
+#[derive(Debug)]
+pub struct ApprovalRequest {
+    /// JSON-RPC request ID for the ACP permission request.
+    pub request_id: String,
+    /// The translated Codex approval event (either exec or patch)
+    pub event: ApprovalEventType,
+    /// The original ACP permission request.
+    pub acp_request: acp::RequestPermissionRequest,
+    /// The original ACP permission options for translating the response
+    pub options: Vec<acp::PermissionOption>,
+    /// Channel to send the user's decision back
+    pub response_tx: oneshot::Sender<ReviewDecision>,
+}
+
+/// Owned summary of one session returned by ACP `session/list`.
+///
+/// This decouples consumers (e.g. the TUI resume picker) from the raw ACP
+/// schema types, exposing only the fields the picker renders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcpSessionSummary {
+    /// The agent's session identifier, used to resume via `session/load`.
+    pub session_id: String,
+    /// The working directory the session was created in (absolute path).
+    pub cwd: std::path::PathBuf,
+    /// Human-readable session title, when the agent provides one.
+    pub title: Option<String>,
+    /// ISO 8601 timestamp of last activity, when the agent provides one.
+    pub updated_at: Option<String>,
+}
+
+/// Session config state captured from ACP session setup and updates.
+///
+/// This stores the complete current `configOptions` snapshot for the active
+/// session. ACP responses and notifications replace the full list.
+#[derive(Debug, Clone, Default)]
+pub struct AcpSessionConfigState {
+    pub config_options: Vec<acp::SessionConfigOption>,
+}
+
+impl AcpSessionConfigState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_update_kind_labels_usage_update() {
+        let update = acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(12, 100));
+        assert_eq!(session_update_kind(&update), "usage_update");
+    }
+}

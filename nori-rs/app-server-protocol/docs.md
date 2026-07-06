@@ -11,7 +11,7 @@ This crate defines the JSON-RPC protocol for external app server communication. 
 Used by:
 - `@/nori-rs/core/` - for auth mode definitions
 - `@/nori-rs/tui/` - for auth mode handling
-- `@/nori-rs/acp/` - for auth types
+- `@/nori-rs/harness/` - for auth types
 
 The crate supports both v1 and v2 protocol versions and exports a JSON-RPC lite implementation.
 

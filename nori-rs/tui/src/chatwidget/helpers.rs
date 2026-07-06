@@ -43,13 +43,6 @@ impl ChatWidget {
         self.plan_drawer_mode
     }
 
-    /// Update the agent display name shown in approval dialogs.
-    /// Used when ACP agent switch completes successfully.
-    #[cfg(feature = "unstable")]
-    pub(crate) fn update_agent_display_name(&mut self, display_name: String) {
-        self.bottom_pane.set_agent_display_name(display_name);
-    }
-
     pub(crate) fn add_info_message(&mut self, message: String, hint: Option<String>) {
         self.add_to_history(history_cell::new_info_event(message, hint));
         self.request_redraw();
@@ -57,7 +50,7 @@ impl ChatWidget {
 
     pub(crate) fn handle_acp_session_config_update(
         &mut self,
-        config_options: &[nori_acp::SessionConfigOption],
+        config_options: &[nori_harness::SessionConfigOption],
     ) {
         let next_snapshot =
             crate::nori::session_config_history::snapshot_from_options(config_options);
@@ -94,7 +87,7 @@ impl ChatWidget {
 
     pub(crate) fn sync_acp_session_config_snapshot(
         &mut self,
-        config_options: &[nori_acp::SessionConfigOption],
+        config_options: &[nori_harness::SessionConfigOption],
     ) {
         self.acp_config_option_snapshot = Some(
             crate::nori::session_config_history::snapshot_from_options(config_options),
@@ -108,7 +101,7 @@ impl ChatWidget {
     pub(crate) fn handle_acp_session_config_snapshot(
         &mut self,
         generation: i64,
-        config_options: &[nori_acp::SessionConfigOption],
+        config_options: &[nori_harness::SessionConfigOption],
     ) {
         if generation != self.acp_mode_config_generation {
             return;
@@ -296,7 +289,7 @@ impl ChatWidget {
     /// `config_ref().mcp_servers` reflect the latest persisted state.
     pub(crate) fn set_mcp_servers(
         &mut self,
-        servers: std::collections::HashMap<String, codex_core::config::types::McpServerConfig>,
+        servers: std::collections::HashMap<String, codex_protocol::config_types::McpServerConfig>,
     ) {
         self.config.mcp_servers = servers;
     }

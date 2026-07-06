@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
-use nori_acp::config::HotkeyBinding;
+use nori_config::HotkeyBinding;
 
 /// Parse a `HotkeyBinding` string (e.g. "ctrl+t", "alt+g", "f1") into
 /// `(KeyCode, KeyModifiers)`, or `None` if the binding is unbound.

@@ -1,32 +1,20 @@
 use std::path::PathBuf;
 
 use codex_common::approval_presets::ApprovalPreset;
-use codex_core::protocol::ConversationPathResponseEvent;
-use codex_core::protocol::Event;
-use codex_core::protocol::RateLimitSnapshot;
 use codex_file_search::FileMatch;
-use nori_acp::SessionConfigOption;
+use codex_protocol::protocol::ConversationPathResponseEvent;
+use codex_protocol::protocol::Event;
+use codex_protocol::protocol::RateLimitSnapshot;
+use nori_harness::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
 use crate::nori::session_config_mode::AcpModeConfig;
 use crate::system_info::SystemInfo;
 
-use codex_core::protocol::AskForApproval;
-use codex_core::protocol::SandboxPolicy;
-use codex_core::protocol_config_types::ReasoningEffort;
-
-/// Information about an available ACP model.
-#[cfg(feature = "unstable")]
-#[derive(Debug, Clone)]
-pub(crate) struct AcpModelInfo {
-    /// The model ID (used for switching)
-    pub model_id: String,
-    /// Human-readable display name
-    pub display_name: String,
-    /// Optional description
-    pub description: Option<String>,
-}
+use codex_protocol::config_types::ReasoningEffort;
+use codex_protocol::protocol::AskForApproval;
+use codex_protocol::protocol::SandboxPolicy;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
@@ -42,7 +30,7 @@ pub(crate) enum AppEvent {
 
     /// Forward an `Op` to the Agent. Using an `AppEvent` for this avoids
     /// bubbling channels through layers of widgets.
-    CodexOp(codex_core::protocol::Op),
+    CodexOp(codex_protocol::protocol::Op),
 
     /// Kick off an asynchronous file search for the given query (text after
     /// the `@`). Previous searches may be cancelled by the app layer so there
@@ -205,41 +193,9 @@ pub(crate) enum AppEvent {
         display_name: String,
     },
 
-    /// Open the ACP model picker popup with available models from the agent.
-    #[cfg(feature = "unstable")]
-    OpenAcpModelPicker {
-        /// Available models from the ACP agent
-        models: Vec<AcpModelInfo>,
-        /// Currently selected model ID
-        current_model_id: Option<String>,
-    },
-
-    /// Set the active model in the ACP agent.
-    #[cfg(feature = "unstable")]
-    SetAcpModel {
-        /// The model ID to switch to
-        model_id: String,
-        /// The display name for UI feedback
-        display_name: String,
-    },
-
-    /// Result of setting the ACP model.
-    #[cfg(feature = "unstable")]
-    AcpModelSetResult {
-        /// Whether the model was set successfully
-        success: bool,
-        /// Agent slug active when the model was set; the selection is
-        /// persisted under this key even if the user switches agents
-        /// mid-flight.
-        agent: String,
-        /// The model that was set (on success) or attempted (on failure).
-        /// Used for persisting the model selection to config.toml.
-        model_id: String,
-        /// The display name for UI feedback
-        display_name: String,
-        /// Error message on failure
-        error: Option<String>,
-    },
+    /// Open the model picker placeholder shown when the active agent does not
+    /// expose a Model session config option.
+    OpenAcpModelPickerUnsupported,
 
     /// Open the generic ACP session config picker.
     OpenAcpSessionConfigPicker {
@@ -313,86 +269,69 @@ pub(crate) enum AppEvent {
 
     /// Set a hotkey binding for a specific action.
     SetConfigHotkey {
-        action: nori_acp::config::HotkeyAction,
-        binding: nori_acp::config::HotkeyBinding,
+        action: nori_config::HotkeyAction,
+        binding: nori_config::HotkeyBinding,
     },
 
     /// Set the TUI OS notifications config setting.
     SetConfigOsNotifications(bool),
 
     /// Open the vim mode sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenVimModePicker,
 
     /// Set the TUI vim mode config setting.
-    SetConfigVimMode(nori_acp::config::VimEnterBehavior),
+    SetConfigVimMode(nori_config::VimEnterBehavior),
 
     /// Open the notify-after-idle sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenNotifyAfterIdlePicker,
 
     /// Open the script timeout sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenScriptTimeoutPicker,
 
     /// Open the hotkey picker sub-view.
     OpenHotkeyPicker,
 
     /// Set the TUI notify-after-idle config setting.
-    #[cfg(feature = "nori-config")]
-    SetConfigNotifyAfterIdle(nori_acp::config::NotifyAfterIdle),
+    SetConfigNotifyAfterIdle(nori_config::NotifyAfterIdle),
 
     /// Set the TUI script timeout config setting.
-    #[cfg(feature = "nori-config")]
-    SetConfigScriptTimeout(nori_acp::config::ScriptTimeout),
+    SetConfigScriptTimeout(nori_config::ScriptTimeout),
 
     /// Open the loop count sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenLoopCountPicker,
 
     /// Set the loop count config setting. `None` means disabled.
-    #[cfg(feature = "nori-config")]
     SetConfigLoopCount(Option<i32>),
 
     /// Open the auto worktree sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenAutoWorktreePicker,
 
     /// Set the TUI auto worktree config setting.
-    #[cfg(feature = "nori-config")]
-    SetConfigAutoWorktree(nori_acp::config::AutoWorktree),
+    SetConfigAutoWorktree(nori_config::AutoWorktree),
 
     /// Set the TUI skillset per session config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigSkillsetPerSession(bool),
 
     /// Set the TUI pinned plan drawer config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigPinnedPlanDrawer(bool),
 
     /// Set ACP wire JSONL recording for future ACP child subprocesses.
-    #[cfg(feature = "nori-config")]
     SetConfigAcpWireRecording(bool),
 
     /// Set the TUI custom working messages config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigCustomWorkingMessages(bool),
 
     /// Open the worktree choice modal when enabling per-session skillsets.
-    #[cfg(feature = "nori-config")]
     OpenSkillsetPerSessionWorktreeChoice,
 
     /// Open the footer segments sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenFooterSegmentsPicker,
 
     /// Toggle a footer segment's enabled state.
-    #[cfg(feature = "nori-config")]
-    SetConfigFooterSegment(nori_acp::config::FooterSegment, bool),
+    SetConfigFooterSegment(nori_config::FooterSegment, bool),
 
     /// Start the next loop iteration with a fresh conversation.
     /// Sent by ChatWidget::on_task_complete when loop mode is active.
-    #[cfg(feature = "nori-config")]
     LoopIteration {
         /// The prompt text to replay.
         prompt: String,
@@ -525,20 +464,33 @@ pub(crate) enum AppEvent {
         session_id: String,
     },
 
+    /// Show the resume session picker sourced from the live agent's ACP
+    /// `session/list` rather than the local transcript store.
+    ShowAcpResumeSessionPicker {
+        /// Session summaries reported by the agent.
+        sessions: Vec<nori_harness::AcpSessionSummary>,
+    },
+
+    /// Resume a session reported by the agent's `session/list`, via
+    /// `session/load` with no local transcript (the agent replays history).
+    ResumeAcpSession {
+        /// The agent's session identifier to load.
+        acp_session_id: String,
+    },
+
     /// Launch a terminal file manager to browse and optionally edit files.
-    #[cfg(feature = "nori-config")]
-    BrowseFiles(nori_acp::config::FileManager),
+    BrowseFiles(nori_config::FileManager),
 
     /// Set the configured file manager for the `/browse` command.
-    #[cfg(feature = "nori-config")]
-    SetConfigFileManager(nori_acp::config::FileManager),
+    SetConfigFileManager(nori_config::FileManager),
 
     /// Open the file manager sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenFileManagerPicker,
 
     /// Persist the full MCP servers map to config.toml.
-    SaveMcpServers(std::collections::BTreeMap<String, codex_core::config::types::McpServerConfig>),
+    SaveMcpServers(
+        std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
+    ),
 
     /// Trigger an MCP OAuth login flow for a server.
     McpOAuthLogin {

@@ -145,11 +145,11 @@ pub(crate) struct ChatComposer {
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
     acp_mode_label: Option<String>,
-    vim_enter_behavior: nori_acp::config::VimEnterBehavior,
+    vim_enter_behavior: nori_config::VimEnterBehavior,
     vertical_footer: bool,
     prompt_summary: Option<String>,
-    footer_segment_config: nori_acp::config::FooterSegmentConfig,
-    footer_layout_config: nori_acp::config::FooterLayoutConfig,
+    footer_segment_config: nori_config::FooterSegmentConfig,
+    footer_layout_config: nori_config::FooterLayoutConfig,
 }
 
 /// Popup state – at most one can be visible at any time.
@@ -210,11 +210,11 @@ impl ChatComposer {
             system_info: None,
             approval_mode_label: None,
             acp_mode_label: None,
-            vim_enter_behavior: nori_acp::config::VimEnterBehavior::Off,
+            vim_enter_behavior: nori_config::VimEnterBehavior::Off,
             vertical_footer: false,
             prompt_summary: None,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -236,39 +236,32 @@ impl ChatComposer {
         self.vertical_footer = vertical_footer;
     }
 
-    pub(crate) fn set_footer_segment_config(
-        &mut self,
-        config: nori_acp::config::FooterSegmentConfig,
-    ) {
+    pub(crate) fn set_footer_segment_config(&mut self, config: nori_config::FooterSegmentConfig) {
         self.footer_segment_config = config;
     }
 
-    pub(crate) fn set_footer_layout_config(
-        &mut self,
-        config: nori_acp::config::FooterLayoutConfig,
-    ) {
+    pub(crate) fn set_footer_layout_config(&mut self, config: nori_config::FooterLayoutConfig) {
         self.footer_layout_config = config;
     }
 
     #[cfg(test)]
-    pub(super) fn footer_segment_config(&self) -> nori_acp::config::FooterSegmentConfig {
+    pub(super) fn footer_segment_config(&self) -> nori_config::FooterSegmentConfig {
         self.footer_segment_config.clone()
     }
 
-    pub(crate) fn set_hotkey_config(&mut self, config: nori_acp::config::HotkeyConfig) {
+    pub(crate) fn set_hotkey_config(&mut self, config: nori_config::HotkeyConfig) {
         self.textarea.set_hotkey_config(config);
     }
 
-    pub(crate) fn set_vim_mode(&mut self, value: nori_acp::config::VimEnterBehavior) {
+    pub(crate) fn set_vim_mode(&mut self, value: nori_config::VimEnterBehavior) {
         self.vim_enter_behavior = value;
         self.textarea.set_vim_mode_enabled(value.is_enabled());
     }
 
     /// Set a footer segment's enabled state.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_footer_segment_enabled(
         &mut self,
-        segment: nori_acp::config::FooterSegment,
+        segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
         self.footer_segment_config.set_enabled(segment, enabled);
@@ -480,7 +473,7 @@ impl ChatComposer {
     }
 
     /// Get the token breakdown from transcript location (for status card display).
-    pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_acp::TranscriptTokenUsage> {
+    pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_harness::TranscriptTokenUsage> {
         self.system_info
             .as_ref()
             .and_then(|s| s.transcript_location.as_ref())

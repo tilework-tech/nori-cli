@@ -15,11 +15,11 @@ use codex_core::auth::enforce_login_restrictions;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
-use codex_core::get_platform_sandbox;
-use codex_core::protocol::AskForApproval;
 use codex_protocol::config_types::SandboxMode;
-use nori_acp::transcript::SessionMetadata;
-use nori_acp::transcript::TranscriptLoader;
+use codex_protocol::protocol::AskForApproval;
+use codex_sandbox::get_platform_sandbox;
+use nori_harness::transcript::SessionMetadata;
+use nori_harness::transcript::TranscriptLoader;
 #[cfg(feature = "otel")]
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use std::fs::OpenOptions;
@@ -89,7 +89,7 @@ mod viewonly_transcript;
 
 /// Default agent for ACP-only mode when no agent is specified via CLI or config.
 /// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
-/// This constant MUST match nori_acp::config::DEFAULT_AGENT to ensure consistency.
+/// This constant MUST match nori_config::DEFAULT_AGENT to ensure consistency.
 const DEFAULT_ACP_AGENT: &str = "claude-code";
 
 // Nori-specific update modules
@@ -135,12 +135,11 @@ pub async fn run_main(
     // Pre-warm the ACP agent installation cache in a background thread.
     // This runs `which` commands early so the agent picker opens quickly.
     std::thread::spawn(|| {
-        nori_acp::prewarm_installation_cache();
+        nori_harness::prewarm_installation_cache();
     });
 
-    // When nori-config feature is enabled, set up the Nori config environment
+    // Set up the Nori config environment
     // This redirects config loading to ~/.nori/cli instead of ~/.codex
-    #[cfg(feature = "nori-config")]
     {
         #[allow(clippy::print_stderr)]
         if let Err(e) = nori::config_adapter::setup_nori_config_environment() {
@@ -151,8 +150,7 @@ pub async fn run_main(
 
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
-    #[cfg(feature = "nori-config")]
-    if let Ok(nori_home) = nori_acp::config::find_nori_home() {
+    if let Ok(nori_home) = nori_config::find_nori_home() {
         nori_installed::track_launch(&nori_home);
     }
 
@@ -199,15 +197,7 @@ pub async fn run_main(
 
     // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_AGENT
     let agent = cli.agent.clone().or_else(|| {
-        #[cfg(feature = "nori-config")]
-        {
-            nori::config_adapter::get_persisted_agent()
-                .or_else(|| Some(DEFAULT_ACP_AGENT.to_string()))
-        }
-        #[cfg(not(feature = "nori-config"))]
-        {
-            Some(DEFAULT_ACP_AGENT.to_string())
-        }
+        nori::config_adapter::get_persisted_agent().or_else(|| Some(DEFAULT_ACP_AGENT.to_string()))
     });
 
     // canonicalize the cwd
@@ -215,10 +205,7 @@ pub async fn run_main(
     let additional_dirs = cli.add_dir.clone();
 
     // Auto-worktree: if enabled in NoriConfig, create a worktree and override cwd
-    #[cfg(feature = "nori-config")]
     let nori_config = nori::config_adapter::load_nori_config().ok();
-    #[cfg(not(feature = "nori-config"))]
-    let nori_config: Option<nori_acp::NoriConfig> = None;
 
     // Initialize the agent registry with custom agents from config plus any
     // caller-injected entries (e.g. `nori cloud`'s pinned handroll agent).
@@ -235,13 +222,12 @@ pub async fn run_main(
             .any(|extra| extra.slug == agent.slug)
     });
     registry_agents.extend(cli.extra_agents.clone());
-    if let Err(e) = nori_acp::initialize_registry(registry_agents) {
+    if let Err(e) = nori_harness::initialize_registry(registry_agents) {
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
     }
 
-    #[cfg(feature = "nori-config")]
     let (pending_worktree_ask, worktree_blocked_reason) = {
-        use nori_acp::config::AutoWorktree;
+        use nori_config::AutoWorktree;
         let auto_worktree = nori_config
             .as_ref()
             .map(|c| c.auto_worktree)
@@ -252,14 +238,16 @@ pub async fn run_main(
         } else {
             match cwd.clone().or_else(|| std::env::current_dir().ok()) {
                 Some(ref effective_cwd) => {
-                    match nori_acp::auto_worktree::can_create_worktree(effective_cwd) {
+                    match nori_harness::auto_worktree::can_create_worktree(effective_cwd) {
                         Err(reason) => {
                             tracing::debug!("Worktree creation blocked: {reason}");
                             (false, Some(reason.to_string()))
                         }
                         Ok(()) => match auto_worktree {
                             AutoWorktree::Automatic => {
-                                match nori_acp::auto_worktree::setup_auto_worktree(effective_cwd) {
+                                match nori_harness::auto_worktree::setup_auto_worktree(
+                                    effective_cwd,
+                                ) {
                                     Ok(worktree_path) => {
                                         tracing::info!(
                                             "Auto-worktree created at {}",
@@ -287,9 +275,6 @@ pub async fn run_main(
             }
         }
     };
-    #[cfg(not(feature = "nori-config"))]
-    let (pending_worktree_ask, worktree_blocked_reason): (bool, Option<String>) = (false, None);
-
     let overrides = ConfigOverrides {
         model: agent,
         approval_policy,
@@ -447,7 +432,7 @@ async fn run_ratatui_app(
                 UpdatePromptOutcome::RunUpdate(action) => {
                     crate::tui::restore()?;
                     return Ok(AppExitInfo {
-                        token_usage: codex_core::protocol::TokenUsage::default(),
+                        token_usage: codex_protocol::protocol::TokenUsage::default(),
                         conversation_id: None,
                         conversation_has_activity: false,
                         update_action: Some(action),
@@ -487,7 +472,7 @@ async fn run_ratatui_app(
             session_log::log_session_end();
             let _ = tui.terminal.clear();
             return Ok(AppExitInfo {
-                token_usage: codex_core::protocol::TokenUsage::default(),
+                token_usage: codex_protocol::protocol::TokenUsage::default(),
                 conversation_id: None,
                 conversation_has_activity: false,
                 update_action: None,
@@ -517,7 +502,7 @@ async fn run_ratatui_app(
         let effective_cwd = config.cwd.clone();
         let user_wants_worktree = nori::worktree_ask::run_worktree_ask_popup(&mut tui).await?;
         if user_wants_worktree {
-            match nori_acp::auto_worktree::setup_auto_worktree(&effective_cwd) {
+            match nori_harness::auto_worktree::setup_auto_worktree(&effective_cwd) {
                 Ok(worktree_path) => {
                     tracing::info!("Auto-worktree created at {}", worktree_path.display());
                     let mut new_overrides = overrides;
@@ -602,7 +587,7 @@ async fn run_ratatui_app(
                 restore();
                 session_log::log_session_end();
                 return Ok(AppExitInfo {
-                    token_usage: codex_core::protocol::TokenUsage::default(),
+                    token_usage: codex_protocol::protocol::TokenUsage::default(),
                     conversation_id: None,
                     conversation_has_activity: false,
                     update_action: None,
@@ -673,7 +658,7 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
         error!("Failed to write resume error message: {err}");
     }
     Ok(AppExitInfo {
-        token_usage: codex_core::protocol::TokenUsage::default(),
+        token_usage: codex_protocol::protocol::TokenUsage::default(),
         conversation_id: None,
         conversation_has_activity: false,
         update_action: None,
@@ -894,10 +879,10 @@ mod tests {
         // to ensure consistency between the two modules.
         assert_eq!(
             DEFAULT_ACP_AGENT,
-            nori_acp::config::DEFAULT_AGENT,
+            nori_config::DEFAULT_AGENT,
             "TUI default agent '{}' does not match ACP module default '{}'",
             DEFAULT_ACP_AGENT,
-            nori_acp::config::DEFAULT_AGENT
+            nori_config::DEFAULT_AGENT
         );
     }
 }

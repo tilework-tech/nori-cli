@@ -1,4 +1,4 @@
-use agent_client_protocol::{self as acp};
+use agent_client_protocol::schema::v1 as acp;
 use serde_json::json;
 use tokio::time::Duration;
 use tokio::time::sleep;
@@ -41,7 +41,7 @@ pub(crate) async fn run(
     let mut cumulative_output = String::new();
 
     for update_index in 0..updates {
-        if agent.cancel_requested.get() {
+        if agent.cancel_requested() {
             return Ok(acp::PromptResponse::new(acp::StopReason::Cancelled));
         }
 

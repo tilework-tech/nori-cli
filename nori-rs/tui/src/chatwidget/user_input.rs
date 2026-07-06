@@ -88,12 +88,11 @@ impl ChatWidget {
             // Initialize loop mode on the very first prompt.
             // Use the ephemeral per-session override if set, otherwise fall
             // back to the persisted NoriConfig value.
-            #[cfg(feature = "nori-config")]
             {
                 let effective_loop_count = match self.loop_count_override {
                     Some(overridden) => overridden,
                     None => {
-                        nori_acp::config::NoriConfig::load()
+                        nori_config::NoriConfig::load()
                             .unwrap_or_default()
                             .loop_count
                     }

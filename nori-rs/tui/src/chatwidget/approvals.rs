@@ -29,7 +29,7 @@ impl ChatWidget {
             } else if preset.id == "auto" {
                 #[cfg(target_os = "windows")]
                 {
-                    if codex_core::get_platform_sandbox().is_none() {
+                    if codex_sandbox::get_platform_sandbox().is_none() {
                         let preset_clone = preset.clone();
                         vec![Box::new(move |tx| {
                             tx.send(AppEvent::OpenWindowsSandboxEnablePrompt {
@@ -371,7 +371,7 @@ impl ChatWidget {
     #[cfg(target_os = "windows")]
     pub(crate) fn maybe_prompt_windows_sandbox_enable(&mut self) {
         if self.config.forced_auto_mode_downgraded_on_windows
-            && codex_core::get_platform_sandbox().is_none()
+            && codex_sandbox::get_platform_sandbox().is_none()
             && let Some(preset) = builtin_approval_presets()
                 .into_iter()
                 .find(|preset| preset.id == "auto")
@@ -402,7 +402,7 @@ impl ChatWidget {
     pub(crate) fn set_sandbox_policy(&mut self, policy: SandboxPolicy) {
         #[cfg(target_os = "windows")]
         let should_clear_downgrade = !matches!(policy, SandboxPolicy::ReadOnly)
-            || codex_core::get_platform_sandbox().is_some();
+            || codex_sandbox::get_platform_sandbox().is_some();
 
         self.config.sandbox_policy = policy;
 

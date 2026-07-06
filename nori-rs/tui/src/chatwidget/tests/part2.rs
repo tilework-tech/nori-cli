@@ -1,7 +1,7 @@
 use super::*;
 use pretty_assertions::assert_eq;
 
-use codex_core::protocol::ThreadGoalStatus;
+use codex_protocol::protocol::ThreadGoalStatus;
 
 #[test]
 fn slash_quit_sends_shutdown() {
@@ -92,6 +92,7 @@ fn goal_capabilities(goal_enabled: bool) -> nori_protocol::SessionCapabilitiesVi
         agent: nori_protocol::AgentCapabilitiesView {
             http_mcp: goal_enabled,
             load_session: true,
+            session_list: false,
         },
         nori_client: nori_protocol::NoriClientCapabilitiesView {
             advertised: goal_enabled,
@@ -605,7 +606,7 @@ fn interrupt_exec_marks_failed_snapshot() {
     // cause the active exec cell to be finalized as failed and flushed.
     chat.handle_codex_event(Event {
         id: "call-int".into(),
-        msg: EventMsg::TurnAborted(codex_core::protocol::TurnAbortedEvent {
+        msg: EventMsg::TurnAborted(codex_protocol::protocol::TurnAbortedEvent {
             reason: TurnAbortReason::Interrupted,
         }),
     });
@@ -646,6 +647,30 @@ fn approvals_selection_popup_snapshot() {
     });
     #[cfg(not(target_os = "windows"))]
     assert_snapshot!("approvals_selection_popup", popup);
+}
+
+#[test]
+fn acp_resume_session_picker_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    let sessions = vec![
+        nori_harness::AcpSessionSummary {
+            session_id: "session-abc".to_string(),
+            cwd: PathBuf::from("/home/user/project"),
+            title: Some("Refactor the parser".to_string()),
+            updated_at: Some("2020-01-15T10:30:00Z".to_string()),
+        },
+        nori_harness::AcpSessionSummary {
+            session_id: "session-def".to_string(),
+            cwd: PathBuf::from("/home/user/other"),
+            title: None,
+            updated_at: None,
+        },
+    ];
+    chat.show_acp_resume_session_picker(sessions);
+
+    let popup = render_bottom_popup(&chat, 80);
+    assert_snapshot!("acp_resume_session_picker", popup);
 }
 
 #[test]

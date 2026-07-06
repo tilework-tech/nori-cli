@@ -3,7 +3,7 @@ use crate::nori::hotkey_match::matches_binding;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use nori_acp::config::HotkeyConfig;
+use nori_config::HotkeyConfig;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;

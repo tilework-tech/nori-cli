@@ -1,0 +1,25 @@
+[package]
+edition = "2024"
+name = "nori-config"
+version = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+name = "nori_config"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+codex-protocol = { workspace = true }
+dirs = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+toml = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+serial_test = { workspace = true }
+tempfile = { workspace = true }

@@ -163,37 +163,11 @@ pub(super) fn render_list(
         frame.render_widget_ref(line, rect);
         y = y.saturating_add(1);
     }
-
-    if state.pagination.loading.is_pending() && y < area.y.saturating_add(area.height) {
-        let loading_line: Line = vec!["  ".into(), "Loading older sessions…".italic().dim()].into();
-        let rect = Rect::new(area.x, y, area.width, 1);
-        frame.render_widget_ref(loading_line, rect);
-    }
 }
 
 fn render_empty_state_line(state: &PickerState) -> Line<'static> {
     if !state.query.is_empty() {
-        if state.search_state.is_active()
-            || (state.pagination.loading.is_pending() && state.pagination.next_cursor.is_some())
-        {
-            return vec!["Searching…".italic().dim()].into();
-        }
-        if state.pagination.reached_scan_cap {
-            let msg = format!(
-                "Search scanned first {} sessions; more may exist",
-                state.pagination.num_scanned_files
-            );
-            return vec![Span::from(msg).italic().dim()].into();
-        }
         return vec!["No results for your search".italic().dim()].into();
-    }
-
-    if state.all_rows.is_empty() && state.pagination.num_scanned_files == 0 {
-        return vec!["No sessions yet".italic().dim()].into();
-    }
-
-    if state.pagination.loading.is_pending() {
-        return vec!["Loading older sessions…".italic().dim()].into();
     }
 
     vec!["No sessions yet".italic().dim()].into()

@@ -113,7 +113,6 @@ impl ChatWidget {
             pending_goal_edit: false,
             loop_remaining: None,
             loop_total: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
             acp_session_phase: None,
             plan_drawer_mode: PlanDrawerMode::Off,
@@ -132,7 +131,7 @@ impl ChatWidget {
     pub(crate) fn new_resumed_acp(
         common: ChatWidgetInit,
         acp_session_id: Option<String>,
-        transcript: nori_acp::transcript::Transcript,
+        transcript: Option<nori_harness::transcript::Transcript>,
     ) -> Self {
         let ChatWidgetInit {
             config,
@@ -241,7 +240,6 @@ impl ChatWidget {
             pending_goal_edit: false,
             loop_remaining: None,
             loop_total: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
             acp_session_phase: None,
             plan_drawer_mode: PlanDrawerMode::Off,

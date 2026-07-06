@@ -35,7 +35,7 @@ pub(crate) struct ClientToolCell {
     snapshot: nori_protocol::ToolSnapshot,
     exploring_snapshots: Vec<nori_protocol::ToolSnapshot>,
     cwd: PathBuf,
-    edit_changes: HashMap<PathBuf, codex_core::protocol::FileChange>,
+    edit_changes: HashMap<PathBuf, codex_protocol::protocol::FileChange>,
     animations_enabled: bool,
     start_time: Option<Instant>,
 }
@@ -656,15 +656,15 @@ fn extract_error_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> 
 pub(crate) fn diff_changes_from_artifacts(
     artifacts: &[nori_protocol::Artifact],
     cwd: &std::path::Path,
-) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
+) -> std::collections::HashMap<std::path::PathBuf, codex_protocol::protocol::FileChange> {
     let mut changes = std::collections::HashMap::new();
     for artifact in artifacts {
         if let nori_protocol::Artifact::Diff(change) = artifact {
             let file_change = match &change.old_text {
-                None => codex_core::protocol::FileChange::Add {
+                None => codex_protocol::protocol::FileChange::Add {
                     content: change.new_text.clone(),
                 },
-                Some(old_text) => codex_core::protocol::FileChange::Update {
+                Some(old_text) => codex_protocol::protocol::FileChange::Update {
                     unified_diff: create_contextual_patch(
                         &change.path,
                         cwd,
@@ -683,16 +683,16 @@ pub(crate) fn diff_changes_from_artifacts(
 pub(crate) fn changes_from_invocation(
     invocation: &Option<nori_protocol::Invocation>,
     cwd: &std::path::Path,
-) -> std::collections::HashMap<std::path::PathBuf, codex_core::protocol::FileChange> {
+) -> std::collections::HashMap<std::path::PathBuf, codex_protocol::protocol::FileChange> {
     let mut changes = std::collections::HashMap::new();
     match invocation.as_ref() {
         Some(nori_protocol::Invocation::FileChanges { changes: fc }) => {
             for change in fc {
                 let file_change = match &change.old_text {
-                    None => codex_core::protocol::FileChange::Add {
+                    None => codex_protocol::protocol::FileChange::Add {
                         content: change.new_text.clone(),
                     },
-                    Some(old_text) => codex_core::protocol::FileChange::Update {
+                    Some(old_text) => codex_protocol::protocol::FileChange::Update {
                         unified_diff: create_contextual_patch(
                             &change.path,
                             cwd,
@@ -710,7 +710,7 @@ pub(crate) fn changes_from_invocation(
                 let (path, file_change) = match op {
                     nori_protocol::FileOperation::Create { path, new_text } => (
                         path.clone(),
-                        codex_core::protocol::FileChange::Add {
+                        codex_protocol::protocol::FileChange::Add {
                             content: new_text.clone(),
                         },
                     ),
@@ -720,14 +720,14 @@ pub(crate) fn changes_from_invocation(
                         new_text,
                     } => (
                         path.clone(),
-                        codex_core::protocol::FileChange::Update {
+                        codex_protocol::protocol::FileChange::Update {
                             unified_diff: create_contextual_patch(path, cwd, old_text, new_text),
                             move_path: None,
                         },
                     ),
                     nori_protocol::FileOperation::Delete { path, old_text } => (
                         path.clone(),
-                        codex_core::protocol::FileChange::Delete {
+                        codex_protocol::protocol::FileChange::Delete {
                             content: old_text.clone().unwrap_or_default(),
                         },
                     ),
@@ -741,7 +741,7 @@ pub(crate) fn changes_from_invocation(
                         let new = new_text.clone().unwrap_or_else(|| old.clone());
                         (
                             from_path.clone(),
-                            codex_core::protocol::FileChange::Update {
+                            codex_protocol::protocol::FileChange::Update {
                                 unified_diff: create_contextual_patch(from_path, cwd, &old, &new),
                                 move_path: Some(to_path.clone()),
                             },
@@ -759,7 +759,7 @@ pub(crate) fn changes_from_invocation(
 fn changes_from_snapshot(
     snapshot: &nori_protocol::ToolSnapshot,
     cwd: &std::path::Path,
-) -> HashMap<PathBuf, codex_core::protocol::FileChange> {
+) -> HashMap<PathBuf, codex_protocol::protocol::FileChange> {
     let diff_changes = diff_changes_from_artifacts(&snapshot.artifacts, cwd);
     if diff_changes.is_empty() {
         changes_from_invocation(&snapshot.invocation, cwd)
@@ -774,7 +774,7 @@ fn create_contextual_patch(
     old_text: &str,
     new_text: &str,
 ) -> String {
-    codex_core::util::create_patch_with_context(path, cwd, old_text, new_text)
+    nori_harness::patch::create_patch_with_context(path, cwd, old_text, new_text)
 }
 
 impl HistoryCell for ClientToolCell {
@@ -2052,7 +2052,7 @@ mod tests {
         let change = changes
             .get(&PathBuf::from("src/lib.rs"))
             .expect("change should exist");
-        let codex_core::protocol::FileChange::Update { unified_diff, .. } = change else {
+        let codex_protocol::protocol::FileChange::Update { unified_diff, .. } = change else {
             panic!("expected update diff, got {change:?}");
         };
         assert!(
@@ -2081,7 +2081,7 @@ mod tests {
         let change = changes
             .get(&PathBuf::from("src/old.rs"))
             .expect("change should exist");
-        let codex_core::protocol::FileChange::Update { unified_diff, .. } = change else {
+        let codex_protocol::protocol::FileChange::Update { unified_diff, .. } = change else {
             panic!("expected update diff, got {change:?}");
         };
         assert!(

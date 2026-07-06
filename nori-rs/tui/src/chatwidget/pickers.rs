@@ -7,7 +7,7 @@ impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
         let current_model = self.config.model.clone();
-        let recording_enabled = nori_acp::config::NoriConfig::load()
+        let recording_enabled = nori_config::NoriConfig::load()
             .map(|config| config.acp_proxy.enabled)
             .unwrap_or(false);
         self.bottom_pane
@@ -20,12 +20,10 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
         self.bottom_pane.set_acp_wire_recording_enabled(enabled);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(crate) fn replace_agent_popup(&mut self, recording_enabled: bool) {
         if !self.bottom_pane.has_active_view() {
             return;
@@ -88,6 +86,43 @@ impl ChatWidget {
     }
 
     pub(crate) fn open_resume_session_picker(&mut self) {
+        // When the live agent advertises ACP `session/list`, source the picker
+        // from the agent itself (and resume over ACP) instead of the local
+        // transcript store. Resuming a listed session loads it over ACP via
+        // `session/load`, so the agent must also advertise `load_session`;
+        // without it, fall back to the local-transcript picker.
+        if self.session_agent_capabilities.session_list
+            && self.session_agent_capabilities.load_session
+            && let Some(handle) = self.acp_handle.clone()
+        {
+            let cwd = self.config.cwd.clone();
+            let tx = self.app_event_tx.clone();
+            tokio::spawn(async move {
+                match handle.list_sessions(cwd).await {
+                    Ok(sessions) if sessions.is_empty() => {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(
+                                "The agent reported no resumable sessions.".to_string(),
+                            ),
+                        )));
+                    }
+                    Ok(sessions) => {
+                        tx.send(crate::app_event::AppEvent::ShowAcpResumeSessionPicker {
+                            sessions,
+                        });
+                    }
+                    Err(e) => {
+                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
+                            crate::history_cell::new_error_event(format!(
+                                "Failed to list sessions from the agent: {e}"
+                            )),
+                        )));
+                    }
+                }
+            });
+            return;
+        }
+
         let started = std::time::Instant::now();
         let cwd = self.config.cwd.clone();
         let tx = self.app_event_tx.clone();
@@ -199,6 +234,15 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Show the resume picker populated from the agent's ACP `session/list`.
+    pub(crate) fn show_acp_resume_session_picker(
+        &mut self,
+        sessions: Vec<nori_harness::AcpSessionSummary>,
+    ) {
+        let params = crate::nori::resume_session_picker::acp_resume_session_picker_params(sessions);
+        self.bottom_pane.show_selection_view(params);
+    }
+
     pub(crate) fn update_resume_session_picker_item(
         &mut self,
         generation: u64,
@@ -235,8 +279,7 @@ impl ChatWidget {
     }
 
     /// Open the Nori CLI settings popup.
-    #[cfg(feature = "nori-config")]
-    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
+    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_config::NoriConfig) {
         let params = crate::nori::config_picker::config_picker_params(
             nori_config,
             self.app_event_tx.clone(),
@@ -245,11 +288,7 @@ impl ChatWidget {
     }
 
     /// Open the file manager sub-picker.
-    #[cfg(feature = "nori-config")]
-    pub(crate) fn open_file_manager_picker(
-        &mut self,
-        current: Option<nori_acp::config::FileManager>,
-    ) {
+    pub(crate) fn open_file_manager_picker(&mut self, current: Option<nori_config::FileManager>) {
         let params = crate::nori::config_picker::file_manager_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -258,16 +297,14 @@ impl ChatWidget {
     }
 
     /// Open the vim mode sub-picker.
-    #[cfg(feature = "nori-config")]
-    pub(crate) fn open_vim_mode_picker(&mut self, current: nori_acp::config::VimEnterBehavior) {
+    pub(crate) fn open_vim_mode_picker(&mut self, current: nori_config::VimEnterBehavior) {
         let params =
             crate::nori::config_picker::vim_mode_picker_params(current, self.app_event_tx.clone());
         self.bottom_pane.show_selection_view(params);
     }
 
     /// Open the auto-worktree sub-picker.
-    #[cfg(feature = "nori-config")]
-    pub(crate) fn open_auto_worktree_picker(&mut self, current: nori_acp::config::AutoWorktree) {
+    pub(crate) fn open_auto_worktree_picker(&mut self, current: nori_config::AutoWorktree) {
         let params = crate::nori::config_picker::auto_worktree_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -276,11 +313,7 @@ impl ChatWidget {
     }
 
     /// Open the notify-after-idle sub-picker.
-    #[cfg(feature = "nori-config")]
-    pub(crate) fn open_notify_after_idle_picker(
-        &mut self,
-        current: nori_acp::config::NotifyAfterIdle,
-    ) {
+    pub(crate) fn open_notify_after_idle_picker(&mut self, current: nori_config::NotifyAfterIdle) {
         let params = crate::nori::config_picker::notify_after_idle_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -289,8 +322,7 @@ impl ChatWidget {
     }
 
     /// Open the script timeout sub-picker.
-    #[cfg(feature = "nori-config")]
-    pub(crate) fn open_script_timeout_picker(&mut self, current: nori_acp::config::ScriptTimeout) {
+    pub(crate) fn open_script_timeout_picker(&mut self, current: nori_config::ScriptTimeout) {
         let params = crate::nori::config_picker::script_timeout_picker_params(
             current,
             self.app_event_tx.clone(),
@@ -299,7 +331,6 @@ impl ChatWidget {
     }
 
     /// Open the loop count sub-picker.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_loop_count_picker(&mut self, current: Option<i32>) {
         let view = crate::nori::loop_count_picker::LoopCountPickerView::new(
             current,
@@ -309,10 +340,9 @@ impl ChatWidget {
     }
 
     /// Open the footer segments picker popup.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_footer_segments_picker(
         &mut self,
-        current: &nori_acp::config::FooterSegmentConfig,
+        current: &nori_config::FooterSegmentConfig,
     ) {
         let params = crate::nori::config_picker::footer_segments_picker_params(
             current,
@@ -322,7 +352,6 @@ impl ChatWidget {
     }
 
     /// Open the worktree choice picker for per-session skillsets.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_skillset_worktree_choice_picker(&mut self) {
         let params =
             crate::nori::config_picker::skillset_worktree_choice_params(self.app_event_tx.clone());
@@ -333,10 +362,9 @@ impl ChatWidget {
     ///
     /// Used after toggling a segment so the picker shows updated state without
     /// stacking a new view on top of the old one.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn replace_footer_segments_picker(
         &mut self,
-        current: &nori_acp::config::FooterSegmentConfig,
+        current: &nori_config::FooterSegmentConfig,
     ) {
         let params = crate::nori::config_picker::footer_segments_picker_params(
             current,
@@ -346,10 +374,9 @@ impl ChatWidget {
     }
 
     /// Set a footer segment's enabled state.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_footer_segment_enabled(
         &mut self,
-        segment: nori_acp::config::FooterSegment,
+        segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
         self.bottom_pane
@@ -357,14 +384,12 @@ impl ChatWidget {
     }
 
     /// Set the loop state for a new iteration.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_loop_state(&mut self, remaining: i32, total: i32) {
         self.loop_remaining = Some(remaining);
         self.loop_total = Some(total);
     }
 
     /// Set the ephemeral per-session loop count override.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_loop_count_override(&mut self, value: Option<Option<i32>>) {
         self.loop_count_override = value;
     }
@@ -383,7 +408,7 @@ impl ChatWidget {
     pub(crate) fn open_mcp_servers_popup(&mut self) {
         let servers: std::collections::BTreeMap<
             String,
-            codex_core::config::types::McpServerConfig,
+            codex_protocol::config_types::McpServerConfig,
         > = self
             .config
             .mcp_servers
@@ -400,7 +425,7 @@ impl ChatWidget {
     }
 
     /// Open the hotkey picker sub-view.
-    pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: nori_acp::config::HotkeyConfig) {
+    pub(crate) fn open_hotkey_picker(&mut self, hotkey_config: nori_config::HotkeyConfig) {
         let view = crate::nori::hotkey_picker::HotkeyPickerView::new(
             &hotkey_config,
             self.app_event_tx.clone(),
@@ -409,11 +434,11 @@ impl ChatWidget {
     }
 
     /// Update the hotkey configuration used by the textarea for editing bindings.
-    pub(crate) fn set_hotkey_config(&mut self, config: nori_acp::config::HotkeyConfig) {
+    pub(crate) fn set_hotkey_config(&mut self, config: nori_config::HotkeyConfig) {
         self.bottom_pane.set_hotkey_config(config);
     }
 
-    pub(crate) fn set_vim_mode(&mut self, value: nori_acp::config::VimEnterBehavior) {
+    pub(crate) fn set_vim_mode(&mut self, value: nori_config::VimEnterBehavior) {
         self.bottom_pane.set_vim_mode(value);
     }
 
@@ -431,7 +456,7 @@ impl ChatWidget {
         // Detect if we're in a worktree or if skillset_per_session is enabled,
         // and pass cwd as the install directory
         let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
-        let skillset_per_session = nori_acp::config::NoriConfig::load()
+        let skillset_per_session = nori_config::NoriConfig::load()
             .map(|c| c.skillset_per_session)
             .unwrap_or(false);
         let install_dir = if is_in_worktree || skillset_per_session {
@@ -480,7 +505,7 @@ impl ChatWidget {
         }
 
         let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
-        let skillset_per_session = nori_acp::config::NoriConfig::load()
+        let skillset_per_session = nori_config::NoriConfig::load()
             .map(|c| c.skillset_per_session)
             .unwrap_or(false);
         let install_dir = if is_in_worktree || skillset_per_session {
@@ -509,7 +534,7 @@ impl ChatWidget {
                 // These are relevant when skillset_per_session is enabled (indicated
                 // by the on_dismiss callback being set, which only happens in the
                 // per-session startup flow).
-                let nori_cfg = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_cfg = nori_config::NoriConfig::load().unwrap_or_default();
                 let is_per_session = nori_cfg.skillset_per_session;
                 let auto_worktree_off = is_per_session && !nori_cfg.auto_worktree.is_enabled();
 
@@ -609,10 +634,9 @@ impl ChatWidget {
 
     /// Open the ACP model picker popup.
     ///
-    /// Prefers the stable `config_options` mechanism (Model-category config
-    /// option) over the unstable `SessionModelState`.  Falls back to the
-    /// unstable model state when no Model-category config option exists,
-    /// and to a static "not supported" message when neither is available.
+    /// Uses the stable `config_options` mechanism: if the agent advertises a
+    /// Model-category config option, open the value picker for it. Otherwise
+    /// show a static "not supported" message.
     pub(crate) fn open_model_popup(&mut self) {
         // An agent switch is pending: the new session hasn't started, so the new
         // agent's (session-scoped) models aren't available yet. Querying the live
@@ -627,10 +651,9 @@ impl ChatWidget {
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
-                // First try the stable config_options path.
                 if let Some(config_options) = handle.get_session_config().await {
                     let model_option = config_options.into_iter().find(|opt| {
-                        opt.category == Some(nori_acp::SessionConfigOptionCategory::Model)
+                        opt.category == Some(nori_harness::SessionConfigOptionCategory::Model)
                     });
                     if let Some(option) = model_option {
                         app_event_tx.send(AppEvent::OpenAcpSessionConfigValuePicker { option });
@@ -638,45 +661,17 @@ impl ChatWidget {
                     }
                 }
 
-                // Fall back to the unstable SessionModelState.
-                #[cfg(feature = "unstable")]
-                {
-                    if let Some(model_state) = handle.get_model_state().await {
-                        let models: Vec<crate::app_event::AcpModelInfo> = model_state
-                            .available_models
-                            .iter()
-                            .map(|m| {
-                                let display_name = if m.name.is_empty() {
-                                    m.model_id.to_string()
-                                } else {
-                                    m.name.clone()
-                                };
-                                crate::app_event::AcpModelInfo {
-                                    model_id: m.model_id.to_string(),
-                                    display_name,
-                                    description: m.description.clone(),
-                                }
-                            })
-                            .collect();
-                        let current_model_id =
-                            model_state.current_model_id.map(|id| id.to_string());
-                        app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                            models,
-                            current_model_id,
-                        });
-                        return;
-                    }
-                }
-
-                // Neither mechanism provided models.
-                app_event_tx.send(AppEvent::OpenAcpModelPicker {
-                    models: vec![],
-                    current_model_id: None,
-                });
+                // The agent does not advertise a Model-category config option,
+                // so model selection is not supported.
+                app_event_tx.send(AppEvent::OpenAcpModelPickerUnsupported);
             });
             return;
         }
-        // No ACP handle - show disabled model picker
+        self.open_model_unsupported_popup();
+    }
+
+    /// Show the static "model switching not supported" picker.
+    pub(crate) fn open_model_unsupported_popup(&mut self) {
         let params = crate::nori::agent_picker::acp_model_picker_params();
         self.bottom_pane.show_selection_view(params);
     }
@@ -696,24 +691,10 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
-    /// Open the ACP model picker with fetched models.
-    #[cfg(feature = "unstable")]
-    pub(crate) fn open_acp_model_picker(
-        &mut self,
-        models: Vec<crate::app_event::AcpModelInfo>,
-        current_model_id: Option<String>,
-    ) {
-        let params = crate::nori::agent_picker::acp_model_picker_params_with_models(
-            &models,
-            current_model_id.as_deref(),
-        );
-        self.bottom_pane.show_selection_view(params);
-    }
-
     /// Open the top-level ACP session-config picker with the current config snapshot.
     pub(crate) fn open_acp_session_config_picker(
         &mut self,
-        config_options: Vec<nori_acp::SessionConfigOption>,
+        config_options: Vec<nori_harness::SessionConfigOption>,
     ) {
         let params =
             crate::nori::session_config_picker::acp_session_config_picker_params(&config_options);
@@ -723,50 +704,11 @@ impl ChatWidget {
     /// Open the value picker for one ACP session config option.
     pub(crate) fn open_acp_session_config_value_picker(
         &mut self,
-        option: nori_acp::SessionConfigOption,
+        option: nori_harness::SessionConfigOption,
     ) {
         let params =
             crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
         self.bottom_pane.show_selection_view(params);
-    }
-
-    /// Set the ACP model via the agent handle.
-    #[cfg(feature = "unstable")]
-    pub(crate) fn set_acp_model(&mut self, model_id: String, display_name: String) {
-        if let Some(handle) = self.acp_handle.clone() {
-            let app_event_tx = self.app_event_tx.clone();
-            let agent = self.config.model.clone();
-            let model_id_for_result = model_id.clone();
-            let display_name_for_result = display_name.clone();
-            tokio::spawn(async move {
-                match handle.set_model(model_id).await {
-                    Ok(()) => {
-                        app_event_tx.send(AppEvent::AcpModelSetResult {
-                            success: true,
-                            agent,
-                            model_id: model_id_for_result,
-                            display_name: display_name_for_result,
-                            error: None,
-                        });
-                    }
-                    Err(e) => {
-                        app_event_tx.send(AppEvent::AcpModelSetResult {
-                            success: false,
-                            agent,
-                            model_id: model_id_for_result,
-                            display_name: display_name_for_result,
-                            error: Some(e.to_string()),
-                        });
-                    }
-                }
-            });
-            self.add_info_message(format!("Switching to model: {display_name}..."), None);
-        } else {
-            self.add_info_message(
-                "No ACP agent handle available for model switching".to_string(),
-                None,
-            );
-        }
     }
 
     /// Set an ACP session config option via the agent handle.
@@ -835,7 +777,7 @@ fn spawn_resume_summary_task(
     generation: u64,
 ) {
     tokio::spawn(async move {
-        let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+        let loader = nori_harness::transcript::TranscriptLoader::new(nori_home);
         let mut previews = std::collections::HashMap::new();
 
         for session in &sessions {

@@ -428,14 +428,14 @@ fn select_config_option(
     name: &'static str,
     current_value: &'static str,
     values: &[(&'static str, &'static str)],
-) -> nori_acp::SessionConfigOption {
-    nori_acp::SessionConfigOption::select(
+) -> nori_harness::SessionConfigOption {
+    nori_harness::SessionConfigOption::select(
         id,
         name,
         current_value,
         values
             .iter()
-            .map(|(value, label)| nori_acp::SessionConfigSelectOption::new(*value, *label))
+            .map(|(value, label)| nori_harness::SessionConfigSelectOption::new(*value, *label))
             .collect::<Vec<_>>(),
     )
 }
@@ -664,11 +664,11 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     chat.apply_system_info_refresh(crate::system_info::SystemInfo {
-        transcript_location: Some(nori_acp::TranscriptLocation {
-            agent_kind: nori_acp::AgentKind::Codex,
+        transcript_location: Some(nori_harness::TranscriptLocation {
+            agent_kind: nori_harness::AgentKind::Codex,
             transcript_path: PathBuf::from("/tmp/codex-transcript.jsonl"),
             session_id: "codex-session".to_string(),
-            token_breakdown: Some(nori_acp::TranscriptTokenUsage {
+            token_breakdown: Some(nori_harness::TranscriptTokenUsage {
                 input_tokens: 995_726,
                 output_tokens: 8_452,
                 cached_tokens: 500_000,
@@ -910,7 +910,7 @@ fn ui_snapshots_small_heights_task_running() {
 
 #[test]
 fn status_widget_and_approval_modal_snapshot() {
-    use codex_core::protocol::ExecApprovalRequestEvent;
+    use codex_protocol::protocol::ExecApprovalRequestEvent;
 
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     // Begin a running task so the status indicator would be active.

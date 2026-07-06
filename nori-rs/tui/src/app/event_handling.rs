@@ -53,8 +53,8 @@ impl App {
         self.config.approval_policy = approval;
         self.config.sandbox_policy = sandbox.clone();
         #[cfg(target_os = "windows")]
-        if !matches!(sandbox, codex_core::protocol::SandboxPolicy::ReadOnly)
-            || codex_core::get_platform_sandbox().is_some()
+        if !matches!(sandbox, codex_protocol::protocol::SandboxPolicy::ReadOnly)
+            || codex_sandbox::get_platform_sandbox().is_some()
         {
             self.config.forced_auto_mode_downgraded_on_windows = false;
         }
@@ -390,8 +390,8 @@ impl App {
                 #[cfg(target_os = "windows")]
                 let sandbox_is_workspace_write_or_ro = matches!(
                     sandbox,
-                    codex_core::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_core::protocol::SandboxPolicy::ReadOnly
+                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
+                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
                 );
 
                 self.apply_approval_preset(approval, sandbox);
@@ -405,7 +405,7 @@ impl App {
                         return Ok(true);
                     }
 
-                    let should_check = codex_core::get_platform_sandbox().is_some()
+                    let should_check = codex_sandbox::get_platform_sandbox().is_some()
                         && sandbox_is_workspace_write_or_ro
                         && !self.chat_widget.world_writable_warning_hidden();
                     if should_check {
@@ -666,55 +666,8 @@ impl App {
                 );
                 self.chat_widget.show_connecting_status(&display_name);
             }
-            #[cfg(feature = "unstable")]
-            AppEvent::OpenAcpModelPicker {
-                models,
-                current_model_id,
-            } => {
-                self.chat_widget
-                    .open_acp_model_picker(models, current_model_id);
-            }
-            #[cfg(feature = "unstable")]
-            AppEvent::SetAcpModel {
-                model_id,
-                display_name,
-            } => {
-                self.chat_widget.set_acp_model(model_id, display_name);
-            }
-            #[cfg(feature = "unstable")]
-            AppEvent::AcpModelSetResult {
-                success,
-                agent,
-                model_id,
-                display_name,
-                error,
-            } => {
-                if success {
-                    // Update the approval dialog display name to reflect the new model
-                    self.chat_widget
-                        .update_agent_display_name(display_name.clone());
-
-                    // Persist the model selection to [default_models] in config.toml
-                    let message = match ConfigEditsBuilder::new(&self.config.codex_home)
-                        .set_default_model(&agent, &model_id)
-                        .apply()
-                        .await
-                    {
-                        Ok(()) => format!("Model switched to: {display_name} (saved as default)"),
-                        Err(err) => {
-                            tracing::error!(
-                                error = %err,
-                                "failed to persist default model selection"
-                            );
-                            format!("Model switched to: {display_name}")
-                        }
-                    };
-                    self.chat_widget.add_info_message(message, None);
-                } else {
-                    let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());
-                    self.chat_widget
-                        .add_info_message(format!("Failed to switch model: {error_msg}"), None);
-                }
+            AppEvent::OpenAcpModelPickerUnsupported => {
+                self.chat_widget.open_model_unsupported_popup();
             }
             AppEvent::OpenAcpSessionConfigPicker { config_options } => {
                 self.chat_widget
@@ -827,101 +780,81 @@ impl App {
                 self.chat_widget
                     .open_hotkey_picker(self.hotkey_config.clone());
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenNotifyAfterIdlePicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_notify_after_idle_picker(nori_config.notify_after_idle);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigNotifyAfterIdle(value) => {
                 self.persist_notify_after_idle_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenScriptTimeoutPicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_script_timeout_picker(nori_config.script_timeout);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigScriptTimeout(value) => {
                 self.persist_script_timeout_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenLoopCountPicker => {
                 let current = match self.loop_count_override {
                     Some(overridden) => overridden,
                     None => {
-                        nori_acp::config::NoriConfig::load()
+                        nori_config::NoriConfig::load()
                             .unwrap_or_default()
                             .loop_count
                     }
                 };
                 self.chat_widget.open_loop_count_picker(current);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigLoopCount(value) => {
                 self.set_session_loop_count(value);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenVimModePicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget.open_vim_mode_picker(nori_config.vim_mode);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenAutoWorktreePicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_auto_worktree_picker(nori_config.auto_worktree);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigAutoWorktree(value) => {
                 self.persist_auto_worktree_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigSkillsetPerSession(enabled) => {
                 self.persist_skillset_per_session_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigPinnedPlanDrawer(enabled) => {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigAcpWireRecording(enabled) => {
                 self.persist_acp_wire_recording_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigCustomWorkingMessages(enabled) => {
                 self.persist_custom_working_messages_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenSkillsetPerSessionWorktreeChoice => {
                 self.chat_widget.open_skillset_worktree_choice_picker();
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenFooterSegmentsPicker => {
                 self.chat_widget
                     .open_footer_segments_picker(&self.footer_segment_config);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigFooterSegment(segment, enabled) => {
                 self.persist_footer_segment_setting(segment, enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::BrowseFiles(fm) => {
                 self.browse_files(fm, tui);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigFileManager(value) => {
                 self.persist_file_manager_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenFileManagerPicker => {
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_file_manager_picker(nori_config.file_manager);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::LoopIteration {
                 prompt,
                 remaining,
@@ -989,7 +922,6 @@ impl App {
                     .on_skillset_switch_result(&name, success, &message);
                 // If the agent spawn was deferred (waiting for skillset switch to
                 // complete), trigger it now that files are on disk.
-                #[cfg(feature = "nori-config")]
                 if success && self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
                     self.chat_widget
@@ -1007,7 +939,6 @@ impl App {
                 // The skillset picker was dismissed without selection. If the
                 // agent spawn was deferred, spawn it now without a skillset
                 // (behaves as if skillset_per_session is disabled).
-                #[cfg(feature = "nori-config")]
                 if self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
                     self.chat_widget
@@ -1016,14 +947,14 @@ impl App {
             }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();
-                let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 let timeout = nori_config.script_timeout.as_duration();
                 let name = prompt.name.clone();
                 self.chat_widget
                     .add_info_message(format!("Running script '{name}'..."), None);
                 tokio::spawn(async move {
                     let result =
-                        codex_core::custom_prompts::execute_script(&prompt, &args, timeout).await;
+                        nori_harness::custom_prompts::execute_script(&prompt, &args, timeout).await;
                     tx.send(AppEvent::ScriptExecutionComplete {
                         name: prompt.name.clone(),
                         result,
@@ -1068,7 +999,7 @@ impl App {
             } => {
                 let tx = self.app_event_tx.clone();
                 tokio::spawn(async move {
-                    let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+                    let loader = nori_harness::transcript::TranscriptLoader::new(nori_home);
                     match loader.load_transcript(&project_id, &session_id).await {
                         Ok(transcript) => {
                             let entries =
@@ -1101,6 +1032,9 @@ impl App {
                 self.chat_widget
                     .show_resume_session_picker(params, generation);
             }
+            AppEvent::ShowAcpResumeSessionPicker { sessions } => {
+                self.chat_widget.show_acp_resume_session_picker(sessions);
+            }
             AppEvent::ResumeSessionSummaryReady {
                 generation,
                 session_id,
@@ -1121,7 +1055,7 @@ impl App {
                 project_id,
                 session_id,
             } => {
-                let loader = nori_acp::transcript::TranscriptLoader::new(nori_home);
+                let loader = nori_harness::transcript::TranscriptLoader::new(nori_home);
                 match loader.load_transcript(&project_id, &session_id).await {
                     Ok(transcript) => {
                         let acp_session_id = transcript.meta.acp_session_id.clone();
@@ -1141,7 +1075,7 @@ impl App {
                             None,
                         );
                         self.chat_widget =
-                            ChatWidget::new_resumed_acp(init, acp_session_id, transcript);
+                            ChatWidget::new_resumed_acp(init, acp_session_id, Some(transcript));
                         self.configure_new_chat_widget();
 
                         self.chat_widget.add_info_message(
@@ -1156,10 +1090,32 @@ impl App {
                     }
                 }
             }
+            AppEvent::ResumeAcpSession { acp_session_id } => {
+                let display_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
+                    .map(|info| info.display_name)
+                    .unwrap_or_else(|| self.config.model.clone());
+
+                self.shutdown_current_conversation();
+
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    None,
+                    Vec::new(),
+                    None,
+                    false,
+                    None,
+                );
+                self.chat_widget = ChatWidget::new_resumed_acp(init, Some(acp_session_id), None);
+                self.configure_new_chat_widget();
+
+                self.chat_widget
+                    .add_info_message(format!("Resuming session with {display_name}..."), None);
+                tui.frame_requester().schedule_frame();
+            }
             #[cfg(unix)]
             AppEvent::BrowserLaunched { ws_url, cdp_port } => {
                 let prompt =
-                    nori_acp::backend::browser_session::compose_agent_prompt(&ws_url, cdp_port);
+                    nori_harness::backend::browser_session::compose_agent_prompt(&ws_url, cdp_port);
                 self.chat_widget.add_info_message(
                     format!("Browser launched (CDP port {cdp_port}). Notifying agent..."),
                     None,
@@ -1299,7 +1255,7 @@ impl App {
 
     pub(super) async fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) {
         use crate::nori::hotkey_match::matches_binding;
-        use nori_acp::config::HotkeyAction;
+        use nori_config::HotkeyAction;
 
         // Check configurable hotkeys first (before the structural match),
         // but only when no popup/view is active — otherwise the popup should

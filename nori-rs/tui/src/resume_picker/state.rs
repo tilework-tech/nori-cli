@@ -4,7 +4,6 @@ impl PickerState {
     pub(super) fn new(
         nori_home: PathBuf,
         requester: FrameRequester,
-        page_loader: PageLoader,
         agent_filter: Option<String>,
         show_all: bool,
         filter_cwd: Option<PathBuf>,
@@ -12,22 +11,13 @@ impl PickerState {
         Self {
             nori_home,
             requester,
-            pagination: PaginationState {
-                next_cursor: None,
-                num_scanned_files: 0,
-                reached_scan_cap: false,
-                loading: LoadingState::Idle,
-            },
+            num_scanned_files: 0,
             all_rows: Vec::new(),
             filtered_rows: Vec::new(),
             seen_paths: HashSet::new(),
             selected: 0,
             scroll_top: 0,
             query: String::new(),
-            search_state: SearchState::Idle,
-            next_request_token: 0,
-            next_search_token: 0,
-            page_loader,
             view_rows: None,
             agent_filter,
             show_all,
@@ -66,7 +56,6 @@ impl PickerState {
                     self.selected += 1;
                     self.ensure_selected_visible();
                 }
-                self.maybe_load_more_for_scroll();
                 self.request_frame();
             }
             KeyCode::PageUp => {
@@ -83,7 +72,6 @@ impl PickerState {
                     let max_index = self.filtered_rows.len().saturating_sub(1);
                     self.selected = (self.selected + step).min(max_index);
                     self.ensure_selected_visible();
-                    self.maybe_load_more_for_scroll();
                     self.request_frame();
                 }
             }
@@ -116,60 +104,19 @@ impl PickerState {
             self.agent_filter.as_deref(),
         )
         .await?;
-        self.reset_pagination();
+        self.num_scanned_files = 0;
         self.all_rows.clear();
         self.filtered_rows.clear();
         self.seen_paths.clear();
-        self.search_state = SearchState::Idle;
         self.selected = 0;
         self.ingest_page(page);
         Ok(())
     }
 
-    pub(super) fn handle_background_event(&mut self, event: BackgroundEvent) -> Result<()> {
-        match event {
-            BackgroundEvent::PageLoaded {
-                request_token,
-                search_token,
-                page,
-            } => {
-                let pending = match self.pagination.loading {
-                    LoadingState::Pending(pending) => pending,
-                    LoadingState::Idle => return Ok(()),
-                };
-                if pending.request_token != request_token {
-                    return Ok(());
-                }
-                self.pagination.loading = LoadingState::Idle;
-                let page = page.map_err(color_eyre::Report::from)?;
-                self.ingest_page(page);
-                let completed_token = pending.search_token.or(search_token);
-                self.continue_search_if_token_matches(completed_token);
-            }
-        }
-        Ok(())
-    }
-
-    pub(super) fn reset_pagination(&mut self) {
-        self.pagination.next_cursor = None;
-        self.pagination.num_scanned_files = 0;
-        self.pagination.reached_scan_cap = false;
-        self.pagination.loading = LoadingState::Idle;
-    }
-
     pub(super) fn ingest_page(&mut self, page: TranscriptPage) {
-        if let Some(cursor) = page.next_cursor.clone() {
-            self.pagination.next_cursor = Some(cursor);
-        } else {
-            self.pagination.next_cursor = None;
-        }
-        self.pagination.num_scanned_files = self
-            .pagination
+        self.num_scanned_files = self
             .num_scanned_files
             .saturating_add(page.num_scanned_files);
-        if page.reached_scan_cap {
-            self.pagination.reached_scan_cap = true;
-        }
 
         let rows = helpers::rows_from_items(page.items, self.nori_home.clone());
         for row in rows {
@@ -232,48 +179,6 @@ impl PickerState {
         self.query = new_query;
         self.selected = 0;
         self.apply_filter();
-        if self.query.is_empty() {
-            self.search_state = SearchState::Idle;
-            return;
-        }
-        if !self.filtered_rows.is_empty() {
-            self.search_state = SearchState::Idle;
-            return;
-        }
-        if self.pagination.reached_scan_cap || self.pagination.next_cursor.is_none() {
-            self.search_state = SearchState::Idle;
-            return;
-        }
-        let token = self.allocate_search_token();
-        self.search_state = SearchState::Active { token };
-        self.load_more_if_needed(LoadTrigger::Search { token });
-    }
-
-    pub(super) fn continue_search_if_needed(&mut self) {
-        let Some(token) = self.search_state.active_token() else {
-            return;
-        };
-        if !self.filtered_rows.is_empty() {
-            self.search_state = SearchState::Idle;
-            return;
-        }
-        if self.pagination.reached_scan_cap || self.pagination.next_cursor.is_none() {
-            self.search_state = SearchState::Idle;
-            return;
-        }
-        self.load_more_if_needed(LoadTrigger::Search { token });
-    }
-
-    pub(super) fn continue_search_if_token_matches(&mut self, completed_token: Option<usize>) {
-        let Some(active) = self.search_state.active_token() else {
-            return;
-        };
-        if let Some(token) = completed_token
-            && token != active
-        {
-            return;
-        }
-        self.continue_search_if_needed();
     }
 
     pub(super) fn ensure_selected_visible(&mut self) {
@@ -298,79 +203,8 @@ impl PickerState {
         }
     }
 
-    pub(super) fn ensure_minimum_rows_for_view(&mut self, minimum_rows: usize) {
-        if minimum_rows == 0 {
-            return;
-        }
-        if self.filtered_rows.len() >= minimum_rows {
-            return;
-        }
-        if self.pagination.loading.is_pending() || self.pagination.next_cursor.is_none() {
-            return;
-        }
-        if let Some(token) = self.search_state.active_token() {
-            self.load_more_if_needed(LoadTrigger::Search { token });
-        } else {
-            self.load_more_if_needed(LoadTrigger::Scroll);
-        }
-    }
-
     pub(super) fn update_view_rows(&mut self, rows: usize) {
         self.view_rows = if rows == 0 { None } else { Some(rows) };
         self.ensure_selected_visible();
-    }
-
-    pub(super) fn maybe_load_more_for_scroll(&mut self) {
-        if self.pagination.loading.is_pending() {
-            return;
-        }
-        if self.pagination.next_cursor.is_none() {
-            return;
-        }
-        if self.filtered_rows.is_empty() {
-            return;
-        }
-        let remaining = self.filtered_rows.len().saturating_sub(self.selected + 1);
-        if remaining <= LOAD_NEAR_THRESHOLD {
-            self.load_more_if_needed(LoadTrigger::Scroll);
-        }
-    }
-
-    pub(super) fn load_more_if_needed(&mut self, trigger: LoadTrigger) {
-        if self.pagination.loading.is_pending() {
-            return;
-        }
-        if self.pagination.next_cursor.is_none() {
-            return;
-        }
-        let request_token = self.allocate_request_token();
-        let search_token = match trigger {
-            LoadTrigger::Scroll => None,
-            LoadTrigger::Search { token } => Some(token),
-        };
-        self.pagination.loading = LoadingState::Pending(PendingLoad {
-            request_token,
-            search_token,
-        });
-        self.request_frame();
-
-        (self.page_loader)(PageLoadRequest {
-            nori_home: self.nori_home.clone(),
-            request_token,
-            search_token,
-            agent_filter: self.agent_filter.clone(),
-        });
-    }
-
-    pub(super) fn allocate_request_token(&mut self) -> usize {
-        let token = self.next_request_token;
-        self.next_request_token = self.next_request_token.wrapping_add(1);
-        token
-    }
-
-    pub(super) fn allocate_search_token(&mut self) -> usize {
-        let token = self.next_search_token;
-        self.next_search_token = self.next_search_token.wrapping_add(1);
-        token
     }
 }

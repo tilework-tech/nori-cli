@@ -12,37 +12,37 @@ use codex_core::CodexAuth;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::ConfigToml;
-use codex_core::protocol::AgentMessageDeltaEvent;
-use codex_core::protocol::AgentMessageEvent;
-use codex_core::protocol::AgentReasoningDeltaEvent;
-use codex_core::protocol::AgentReasoningEvent;
-use codex_core::protocol::ApplyPatchApprovalRequestEvent;
-use codex_core::protocol::BackgroundEventEvent;
-use codex_core::protocol::Event;
-use codex_core::protocol::EventMsg;
-use codex_core::protocol::ExecApprovalRequestEvent;
-use codex_core::protocol::ExecCommandBeginEvent;
-use codex_core::protocol::ExecCommandEndEvent;
-use codex_core::protocol::ExecCommandSource;
-use codex_core::protocol::FileChange;
-use codex_core::protocol::Op;
-use codex_core::protocol::PatchApplyBeginEvent;
-use codex_core::protocol::PatchApplyEndEvent;
-use codex_core::protocol::StreamErrorEvent;
-use codex_core::protocol::TaskCompleteEvent;
-use codex_core::protocol::TaskStartedEvent;
-use codex_core::protocol::TokenCountEvent;
-use codex_core::protocol::TokenUsage;
-use codex_core::protocol::TokenUsageInfo;
-use codex_core::protocol::UndoCompletedEvent;
-use codex_core::protocol::UndoStartedEvent;
-use codex_core::protocol::ViewImageToolCallEvent;
-use codex_core::protocol::WarningEvent;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::plan_tool::PlanItemArg;
 use codex_protocol::plan_tool::StepStatus;
 use codex_protocol::plan_tool::UpdatePlanArgs;
+use codex_protocol::protocol::AgentMessageDeltaEvent;
+use codex_protocol::protocol::AgentMessageEvent;
+use codex_protocol::protocol::AgentReasoningDeltaEvent;
+use codex_protocol::protocol::AgentReasoningEvent;
+use codex_protocol::protocol::ApplyPatchApprovalRequestEvent;
+use codex_protocol::protocol::BackgroundEventEvent;
+use codex_protocol::protocol::Event;
+use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::ExecApprovalRequestEvent;
+use codex_protocol::protocol::ExecCommandBeginEvent;
+use codex_protocol::protocol::ExecCommandEndEvent;
+use codex_protocol::protocol::ExecCommandSource;
+use codex_protocol::protocol::FileChange;
+use codex_protocol::protocol::Op;
+use codex_protocol::protocol::PatchApplyBeginEvent;
+use codex_protocol::protocol::PatchApplyEndEvent;
+use codex_protocol::protocol::StreamErrorEvent;
+use codex_protocol::protocol::TaskCompleteEvent;
+use codex_protocol::protocol::TaskStartedEvent;
+use codex_protocol::protocol::TokenCountEvent;
+use codex_protocol::protocol::TokenUsage;
+use codex_protocol::protocol::TokenUsageInfo;
+use codex_protocol::protocol::UndoCompletedEvent;
+use codex_protocol::protocol::UndoStartedEvent;
+use codex_protocol::protocol::ViewImageToolCallEvent;
+use codex_protocol::protocol::WarningEvent;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -56,7 +56,7 @@ use tokio::sync::mpsc::unbounded_channel;
 
 #[cfg(target_os = "windows")]
 fn set_windows_sandbox_enabled(enabled: bool) {
-    codex_core::set_windows_sandbox_enabled(enabled);
+    codex_sandbox::set_windows_sandbox_enabled(enabled);
 }
 
 fn test_config() -> Config {
@@ -120,7 +120,7 @@ fn begin_exec_with_source(
     // Build the full command vec and parse it using core's parser,
     // then convert to protocol variants for the event payload.
     let command = vec!["bash".to_string(), "-lc".to_string(), raw_cmd.to_string()];
-    let parsed_cmd: Vec<ParsedCommand> = codex_core::parse_command::parse_command(&command);
+    let parsed_cmd: Vec<ParsedCommand> = nori_harness::parse_command::parse_command(&command);
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let interaction_input = None;
     let event = ExecCommandBeginEvent {
@@ -260,8 +260,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         custom_working_messages: cfg.custom_working_messages,
         custom_working_message_list: cfg.custom_working_message_list.clone(),
         vertical_footer: false,
-        footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+        footer_segment_config: nori_config::FooterSegmentConfig::default(),
+        footer_layout_config: nori_config::FooterLayoutConfig::default(),
         agent_display_name: String::new(),
         agent_slug: String::new(),
     });
@@ -305,7 +305,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         pending_agent: None,
         expected_agent: None,
         session_configured_received: false,
-        #[cfg(feature = "unstable")]
         acp_handle: None,
         acp_config_option_snapshot: None,
         acp_mode_config: None,
@@ -322,7 +321,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         pending_goal_edit: false,
         loop_remaining: None,
         loop_total: None,
-        #[cfg(feature = "nori-config")]
         loop_count_override: None,
         acp_session_phase: None,
         plan_drawer_mode: PlanDrawerMode::Off,

@@ -13,7 +13,7 @@ name = "nori_tui"
 path = "src/lib.rs"
 
 [features]
-default = ["unstable", "nori-config", "login"]
+default = ["login"]
 
 # OpenTelemetry tracing export (disabled by default)
 otel = ["dep:opentelemetry-appender-tracing"]
@@ -22,12 +22,6 @@ otel = ["dep:opentelemetry-appender-tracing"]
 vt100-tests = []
 # Gate verbose debug logging inside the TUI implementation.
 debug-logs = []
-# Enable unstable ACP features like model switching.
-unstable = ["nori-acp/unstable"]
-
-# Use Nori's simplified ACP-only config (~/.nori/cli/config.toml)
-# When enabled, uses minimal config from nori-acp instead of codex-core
-nori-config = []
 
 # ChatGPT/API login functionality
 login = ["dep:codex-login", "dep:codex-utils-pty"]
@@ -41,7 +35,8 @@ async-stream = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
-nori-acp = { workspace = true }
+nori-harness = { workspace = true }
+nori-config = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
@@ -51,6 +46,7 @@ codex-common = { workspace = true, features = [
     "sandbox_summary",
 ] }
 codex-core = { workspace = true }
+codex-sandbox = { workspace = true }
 codex-git = { workspace = true }
 codex-rmcp-client = { workspace = true }
 nori-installed = { workspace = true }

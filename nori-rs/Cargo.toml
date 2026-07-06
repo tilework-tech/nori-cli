@@ -15,7 +15,10 @@ members = [
     "login",
     "mcp-types",
     "process-hardening",
+    "acp-host",
+    "nori-config",
     "protocol",
+    "sandbox",
     "rmcp-client",
     "stdio-to-uds",
     "otel",
@@ -27,7 +30,7 @@ members = [
     "utils/pty",
     "utils/readiness",
     "utils/string",
-    "acp",
+    "harness",
     "installed",
     "mock-acp-agent",
     "nori-protocol",
@@ -43,6 +46,7 @@ version = "0.0.0"
 # edition.
 edition = "2024"
 license = "Apache-2.0"
+repository = "https://github.com/tilework-tech/nori-cli"
 
 [workspace.dependencies]
 # Internal
@@ -58,6 +62,9 @@ codex-file-search = { path = "file-search" }
 codex-git = { path = "utils/git" }
 codex-keyring-store = { path = "keyring-store" }
 codex-linux-sandbox = { path = "linux-sandbox" }
+codex-sandbox = { path = "sandbox" }
+nori-acp-host = { path = "acp-host" }
+nori-config = { path = "nori-config" }
 codex-login = { path = "login" }
 codex-otel = { path = "otel" }
 codex-process-hardening = { path = "process-hardening" }
@@ -75,7 +82,7 @@ codex-utils-string = { path = "utils/string" }
 codex-windows-sandbox = { path = "windows-sandbox-rs" }
 core_test_support = { path = "core/tests/common" }
 mcp-types = { path = "mcp-types" }
-nori-acp = { path = "acp" }
+nori-harness = { path = "harness" }
 nori-installed = { path = "installed" }
 
 # External
@@ -88,7 +95,8 @@ assert_matches = "1.5.0"
 async-channel = "2.3.1"
 async-stream = "0.3.6"
 async-trait = "0.1.89"
-agent-client-protocol-schema = "0.11.6"
+agent-client-protocol = "0.15.1"
+agent-client-protocol-schema = "0.14.0"
 axum = { version = "0.8", default-features = false }
 base64 = "0.22.1"
 bytes = "1.10.1"
@@ -153,7 +161,6 @@ regex = "1.12.2"
 regex-lite = "0.1.7"
 reqwest = "0.12"
 rmcp = { version = "0.12.0", default-features = false }
-sacp = "11.0.0"
 schemars = "0.8.22"
 seccompiler = "0.5.0"
 sentry = "0.34.0"

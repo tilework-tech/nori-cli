@@ -128,8 +128,7 @@ impl App {
 
     /// Launch a terminal file manager in chooser mode, then open the selected
     /// file in the user's editor.
-    #[cfg(feature = "nori-config")]
-    pub(super) fn browse_files(&mut self, fm: nori_acp::config::FileManager, tui: &mut tui::Tui) {
+    pub(super) fn browse_files(&mut self, fm: nori_config::FileManager, tui: &mut tui::Tui) {
         use crate::editor;
 
         // Create a temp file for the file manager to write the chosen path into.
@@ -230,7 +229,7 @@ impl App {
         cwd: PathBuf,
         env_map: std::collections::HashMap<String, String>,
         logs_base_dir: PathBuf,
-        sandbox_policy: codex_core::protocol::SandboxPolicy,
+        sandbox_policy: codex_protocol::protocol::SandboxPolicy,
         tx: AppEventSender,
     ) {
         tokio::task::spawn_blocking(move || {

@@ -21,7 +21,7 @@ fn resumed_initial_messages_render_history() {
 
     let conversation_id = ConversationId::new();
     let rollout_file = NamedTempFile::new().unwrap();
-    let configured = codex_core::protocol::SessionConfiguredEvent {
+    let configured = codex_protocol::protocol::SessionConfiguredEvent {
         session_id: conversation_id,
         model: "test-model".to_string(),
         model_provider_id: "test-provider".to_string(),
@@ -112,8 +112,8 @@ async fn helpers_are_available_and_do_not_panic() {
         enhanced_keys_supported: false,
         auth_manager,
         vertical_footer: false,
-        footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
-        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+        footer_segment_config: nori_config::FooterSegmentConfig::default(),
+        footer_layout_config: nori_config::FooterLayoutConfig::default(),
         expected_agent: None,
         deferred_spawn: false,
         fork_context: None,

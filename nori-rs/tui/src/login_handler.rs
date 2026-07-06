@@ -5,8 +5,8 @@
 //! - External CLI passthrough (Gemini, Claude Code)
 
 use codex_login::ShutdownHandle;
-use nori_acp::AgentKind;
-use nori_acp::list_available_agents;
+use nori_harness::AgentKind;
+use nori_harness::list_available_agents;
 use tokio::task::JoinHandle;
 
 /// Method used for authentication

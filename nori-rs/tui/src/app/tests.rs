@@ -11,12 +11,12 @@ use crate::history_cell::new_session_info;
 use codex_common::approval_presets::builtin_approval_presets;
 use codex_core::AuthManager;
 use codex_core::CodexAuth;
-use codex_core::protocol::AskForApproval;
-use codex_core::protocol::Event;
-use codex_core::protocol::EventMsg;
-use codex_core::protocol::SandboxPolicy;
-use codex_core::protocol::SessionConfiguredEvent;
 use codex_protocol::ConversationId;
+use codex_protocol::protocol::AskForApproval;
+use codex_protocol::protocol::Event;
+use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::SandboxPolicy;
+use codex_protocol::protocol::SessionConfiguredEvent;
 use pretty_assertions::assert_eq;
 use ratatui::prelude::Line;
 use std::path::PathBuf;
@@ -37,7 +37,7 @@ fn make_test_app() -> App {
         auth_manager,
         config,
         vertical_footer: false,
-        footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+        footer_layout_config: nori_config::FooterLayoutConfig::default(),
         active_profile: None,
         file_search,
         transcript_cells: Vec::new(),
@@ -51,15 +51,13 @@ fn make_test_app() -> App {
         suppress_shutdown_complete: false,
         skip_world_writable_scan_once: false,
         pending_agent: None,
-        #[cfg(feature = "nori-config")]
         loop_count_override: None,
-        hotkey_config: nori_acp::config::HotkeyConfig::default(),
-        vim_mode: nori_acp::config::VimEnterBehavior::Off,
-        footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+        hotkey_config: nori_config::HotkeyConfig::default(),
+        vim_mode: nori_config::VimEnterBehavior::Off,
+        footer_segment_config: nori_config::FooterSegmentConfig::default(),
         plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
         system_info_tx,
         worktree_warning_shown: false,
-        #[cfg(feature = "nori-config")]
         deferred_spawn_pending: false,
         mcp_oauth_cancel_tx: None,
     }
@@ -83,7 +81,7 @@ fn make_test_app_with_channels() -> (
             auth_manager,
             config,
             vertical_footer: false,
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             active_profile: None,
             file_search,
             transcript_cells: Vec::new(),
@@ -97,15 +95,13 @@ fn make_test_app_with_channels() -> (
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
-            hotkey_config: nori_acp::config::HotkeyConfig::default(),
-            vim_mode: nori_acp::config::VimEnterBehavior::Off,
-            footer_segment_config: nori_acp::config::FooterSegmentConfig::default(),
+            hotkey_config: nori_config::HotkeyConfig::default(),
+            vim_mode: nori_config::VimEnterBehavior::Off,
+            footer_segment_config: nori_config::FooterSegmentConfig::default(),
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
-            #[cfg(feature = "nori-config")]
             deferred_spawn_pending: false,
             mcp_oauth_cancel_tx: None,
         },
@@ -243,13 +239,12 @@ fn backtrack_selection_with_duplicate_history_targets_unique_turn() {
     assert_eq!(prefill, "follow-up (edited)");
 }
 
-#[cfg(feature = "nori-config")]
 #[test]
 fn chat_widget_init_carries_footer_segment_config() {
     let mut app = make_test_app();
-    let mut footer_segment_config = nori_acp::config::FooterSegmentConfig::default();
-    footer_segment_config.set_enabled(nori_acp::config::FooterSegment::GitBranch, false);
-    footer_segment_config.set_enabled(nori_acp::config::FooterSegment::NoriVersion, false);
+    let mut footer_segment_config = nori_config::FooterSegmentConfig::default();
+    footer_segment_config.set_enabled(nori_config::FooterSegment::GitBranch, false);
+    footer_segment_config.set_enabled(nori_config::FooterSegment::NoriVersion, false);
     app.footer_segment_config = footer_segment_config.clone();
 
     let init = app.chat_widget_init(
@@ -261,7 +256,7 @@ fn chat_widget_init_carries_footer_segment_config() {
         None,
     );
 
-    for segment in nori_acp::config::FooterSegment::all_variants() {
+    for segment in nori_config::FooterSegment::all_variants() {
         assert_eq!(
             init.footer_segment_config.is_enabled(*segment),
             footer_segment_config.is_enabled(*segment),
@@ -270,16 +265,14 @@ fn chat_widget_init_carries_footer_segment_config() {
     }
 }
 
-#[cfg(feature = "nori-config")]
 #[test]
 fn chat_widget_init_carries_footer_layout_config() {
     let mut app = make_test_app();
-    let footer_layout_config = nori_acp::config::FooterLayoutConfig::from_toml(
-        &nori_acp::config::FooterLayoutConfigToml {
-            textarea_top_right: Some(vec![nori_acp::config::FooterSegment::ModeIndicator]),
+    let footer_layout_config =
+        nori_config::FooterLayoutConfig::from_toml(&nori_config::FooterLayoutConfigToml {
+            textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator]),
             ..Default::default()
-        },
-    );
+        });
     app.footer_layout_config = footer_layout_config.clone();
 
     let init = app.chat_widget_init(
@@ -294,13 +287,12 @@ fn chat_widget_init_carries_footer_layout_config() {
     assert_eq!(init.footer_layout_config, footer_layout_config);
 }
 
-#[cfg(feature = "nori-config")]
 #[test]
 fn rebuilding_chat_widget_preserves_footer_segment_config() {
     let mut app = make_test_app();
-    let mut footer_segment_config = nori_acp::config::FooterSegmentConfig::default();
-    footer_segment_config.set_enabled(nori_acp::config::FooterSegment::GitBranch, false);
-    footer_segment_config.set_enabled(nori_acp::config::FooterSegment::NoriVersion, false);
+    let mut footer_segment_config = nori_config::FooterSegmentConfig::default();
+    footer_segment_config.set_enabled(nori_config::FooterSegment::GitBranch, false);
+    footer_segment_config.set_enabled(nori_config::FooterSegment::NoriVersion, false);
     app.footer_segment_config = footer_segment_config.clone();
 
     let init = app.chat_widget_init(
@@ -314,7 +306,7 @@ fn rebuilding_chat_widget_preserves_footer_segment_config() {
     app.chat_widget = ChatWidget::new(init);
     app.configure_new_chat_widget();
 
-    for segment in nori_acp::config::FooterSegment::all_variants() {
+    for segment in nori_config::FooterSegment::all_variants() {
         assert_eq!(
             app.chat_widget.footer_segment_config().is_enabled(*segment),
             footer_segment_config.is_enabled(*segment),

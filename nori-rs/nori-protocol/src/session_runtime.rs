@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use agent_client_protocol_schema as acp;
+use agent_client_protocol_schema::v1 as acp;
 use serde::Deserialize;
 use serde::Serialize;
 

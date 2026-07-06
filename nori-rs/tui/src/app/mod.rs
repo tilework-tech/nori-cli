@@ -33,14 +33,14 @@ use codex_core::config::edit::toml_value;
 #[cfg(target_os = "windows")]
 use codex_core::features::Feature;
 use codex_core::model_family::find_family_for_model;
-use codex_core::protocol::AskForApproval;
-use codex_core::protocol::EventMsg;
-use codex_core::protocol::FinalOutput;
-use codex_core::protocol::Op;
-use codex_core::protocol::SandboxPolicy;
-use codex_core::protocol::TokenUsage;
-use codex_core::protocol_config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::ConversationId;
+use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
+use codex_protocol::protocol::AskForApproval;
+use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::FinalOutput;
+use codex_protocol::protocol::Op;
+use codex_protocol::protocol::SandboxPolicy;
+use codex_protocol::protocol::TokenUsage;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -214,7 +214,7 @@ pub(crate) struct App {
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: Config,
     pub(crate) vertical_footer: bool,
-    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
+    pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
     pub(crate) active_profile: Option<String>,
 
     pub(crate) file_search: FileSearchManager,
@@ -249,17 +249,16 @@ pub(crate) struct App {
 
     /// Ephemeral per-session loop count override (set via /settings menu).
     /// Outer Option: whether overridden; inner Option<i32>: the value.
-    #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,
 
     /// Configurable hotkey bindings loaded from NoriConfig.
-    pub(crate) hotkey_config: nori_acp::config::HotkeyConfig,
+    pub(crate) hotkey_config: nori_config::HotkeyConfig,
 
     /// Vim mode and Enter key behavior loaded from NoriConfig.
-    vim_mode: nori_acp::config::VimEnterBehavior,
+    vim_mode: nori_config::VimEnterBehavior,
 
     /// Current footer segment visibility loaded from NoriConfig.
-    footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    footer_segment_config: nori_config::FooterSegmentConfig,
 
     /// Plan drawer visibility mode.
     plan_drawer_mode: crate::chatwidget::PlanDrawerMode,
@@ -272,7 +271,6 @@ pub(crate) struct App {
     /// True when the initial agent spawn was deferred (waiting for a skillset
     /// switch). Cleared on the first successful skillset switch or picker
     /// dismissal. Guards against re-spawning the agent on later switches.
-    #[cfg(feature = "nori-config")]
     deferred_spawn_pending: bool,
 
     /// Cancel sender for an in-progress MCP OAuth login flow.
@@ -321,15 +319,12 @@ impl App {
         // after the user picks a skillset and the switch writes
         // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
         // agent spawns without a skillset.
-        #[cfg(feature = "nori-config")]
         let needs_deferred_spawn = {
-            let nori_cfg = nori_acp::config::NoriConfig::load().unwrap_or_default();
+            let nori_cfg = nori_config::NoriConfig::load().unwrap_or_default();
             nori_cfg.skillset_per_session
         };
-        #[cfg(not(feature = "nori-config"))]
-        let needs_deferred_spawn = false;
 
-        let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+        let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -348,12 +343,12 @@ impl App {
             };
             match resume_selection {
                 ResumeSelection::Resume(target) => {
-                    let loader = nori_acp::transcript::TranscriptLoader::new(target.nori_home);
+                    let loader = nori_harness::transcript::TranscriptLoader::new(target.nori_home);
                     let transcript = loader
                         .load_transcript(&target.project_id, &target.session_id)
                         .await?;
                     let acp_session_id = transcript.meta.acp_session_id.clone();
-                    ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
+                    ChatWidget::new_resumed_acp(init, acp_session_id, Some(transcript))
                 }
                 ResumeSelection::StartFresh | ResumeSelection::Exit => ChatWidget::new(init),
             }
@@ -388,16 +383,14 @@ impl App {
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
-            hotkey_config: nori_acp::config::HotkeyConfig::default(),
-            vim_mode: nori_acp::config::VimEnterBehavior::Off,
+            hotkey_config: nori_config::HotkeyConfig::default(),
+            vim_mode: nori_config::VimEnterBehavior::Off,
             footer_segment_config: nori_config.footer_segment_config.clone(),
             footer_layout_config: nori_config.footer_layout_config.clone(),
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
-            #[cfg(feature = "nori-config")]
             deferred_spawn_pending: needs_deferred_spawn,
             mcp_oauth_cancel_tx: None,
         };
@@ -427,7 +420,6 @@ impl App {
         // `spawn_deferred_agent()`. If the user dismisses the picker, the
         // `SkillsetPickerDismissed` event triggers the deferred spawn without a
         // skillset.
-        #[cfg(feature = "nori-config")]
         if nori_config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
         }
@@ -435,11 +427,11 @@ impl App {
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
         {
-            let should_check = codex_core::get_platform_sandbox().is_some()
+            let should_check = codex_sandbox::get_platform_sandbox().is_some()
                 && matches!(
                     app.config.sandbox_policy,
-                    codex_core::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_core::protocol::SandboxPolicy::ReadOnly
+                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
+                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
                 )
                 && !app
                     .config
@@ -541,12 +533,11 @@ impl App {
             .set_hotkey_config(self.hotkey_config.clone());
         self.chat_widget.set_vim_mode(self.vim_mode);
         self.chat_widget.set_plan_drawer_mode(self.plan_drawer_mode);
-        #[cfg(feature = "nori-config")]
         self.chat_widget
             .set_loop_count_override(self.loop_count_override);
     }
 
-    pub(crate) fn token_usage(&self) -> codex_core::protocol::TokenUsage {
+    pub(crate) fn token_usage(&self) -> codex_protocol::protocol::TokenUsage {
         self.chat_widget.token_usage()
     }
 
@@ -580,7 +571,7 @@ impl App {
                 let agent_kind = request
                     .model
                     .as_ref()
-                    .and_then(|model| nori_acp::AgentKind::from_slug(model));
+                    .and_then(|model| nori_harness::AgentKind::from_slug(model));
                 let info = crate::system_info::SystemInfo::collect_for_directory_with_message(
                     &request.dir,
                     agent_kind,

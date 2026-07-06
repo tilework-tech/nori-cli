@@ -19,7 +19,6 @@ fn history_text(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>) -> Stri
 }
 
 /// Scan the app-event stream for the next loop re-fire, if any.
-#[cfg(feature = "nori-config")]
 fn next_loop_iteration(
     rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
 ) -> Option<(i32, i32)> {
@@ -36,7 +35,6 @@ fn next_loop_iteration(
 
 /// A transient (retryable) turn failure must leave the loop armed: the next
 /// iteration fires when the turn completes.
-#[cfg(feature = "nori-config")]
 #[test]
 fn loop_survives_retryable_failure() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
@@ -50,7 +48,6 @@ fn loop_survives_retryable_failure() {
 }
 
 /// A fatal turn failure disarms the loop before it can re-fire.
-#[cfg(feature = "nori-config")]
 #[test]
 fn loop_stops_on_fatal_failure() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();

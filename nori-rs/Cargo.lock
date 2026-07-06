@@ -40,47 +40,50 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol"
-version = "0.9.4"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2659b1089101b15db31137710159421cb44785ecdb5ba784be3b4a6f8cb8a475"
+checksum = "eb5232c1162bcff4eafe378cc88a1ccaee2d49cedd9fe3d2517c5742bb748ced"
 dependencies = [
- "agent-client-protocol-schema 0.10.8",
- "anyhow",
- "async-broadcast",
- "async-trait",
- "derive_more 2.0.1",
+ "agent-client-protocol-derive",
+ "agent-client-protocol-schema",
+ "async-process",
+ "blocking",
  "futures",
- "log",
+ "futures-concurrency",
+ "rustc-hash 2.1.1",
+ "schemars 1.0.4",
  "serde",
  "serde_json",
+ "shell-words",
+ "tracing",
+ "uuid",
+ "windows-sys 0.61.1",
+]
+
+[[package]]
+name = "agent-client-protocol-derive"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cb3131da850c922c348b36a9b96684d69779c3a776e83a948ba0b10e77766bb"
+dependencies = [
+ "quote",
+ "syn 2.0.104",
 ]
 
 [[package]]
 name = "agent-client-protocol-schema"
-version = "0.10.8"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44bc1fef9c32f03bce2ab44af35b6f483bfd169bf55cc59beeb2e3b1a00ae4d1"
+checksum = "b4e7eb6f1e554741f621ae4abb046d4fbb3cb88541bc599693ae7f9aa30b72eb"
 dependencies = [
  "anyhow",
  "derive_more 2.0.1",
  "schemars 1.0.4",
  "serde",
  "serde_json",
- "strum 0.27.2",
-]
-
-[[package]]
-name = "agent-client-protocol-schema"
-version = "0.11.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebc0a5d70688e969fc0e58d74625441adddb57fe56c29dc9422dde397c8eadda"
-dependencies = [
- "anyhow",
- "derive_more 2.0.1",
- "schemars 1.0.4",
- "serde",
- "serde_json",
+ "serde_with",
  "strum 0.28.0",
+ "tracing",
 ]
 
 [[package]]
@@ -217,9 +220,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.100"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "arboard"
@@ -623,10 +626,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "boxfnonce"
-version = "0.1.1"
+name = "bs58"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5988cb1d626264ac94100be357308f29ff7cbdd3b36bda27f450a4ee3f713426"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "tinyvec",
+]
 
 [[package]]
 name = "bstr"
@@ -919,9 +925,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
- "async-channel",
  "base64",
- "chardetng",
  "chrono",
  "codex-app-server-protocol",
  "codex-apply-patch",
@@ -935,25 +939,21 @@ dependencies = [
  "codex-otel",
  "codex-protocol",
  "codex-rmcp-client",
+ "codex-sandbox",
  "codex-utils-pty",
  "codex-utils-readiness",
  "codex-utils-string",
- "codex-windows-sandbox",
  "core-foundation 0.9.4",
  "core_test_support",
  "ctor 0.5.0",
  "diffy",
  "dirs",
  "dunce",
- "encoding_rs",
  "env-flags",
  "escargot",
  "futures",
  "http",
  "keyring",
- "landlock",
- "libc",
- "maplit",
  "mcp-types",
  "notify-rust",
  "once_cell",
@@ -965,7 +965,6 @@ dependencies = [
  "regex",
  "regex-lite",
  "reqwest",
- "seccompiler",
  "serde",
  "serde_json",
  "serial_test",
@@ -978,7 +977,6 @@ dependencies = [
  "time",
  "tokio",
  "tokio-test",
- "tokio-util",
  "toml",
  "toml_edit",
  "tracing",
@@ -1051,6 +1049,8 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "codex-core",
+ "codex-protocol",
+ "codex-sandbox",
  "landlock",
  "libc",
  "seccompiler",
@@ -1136,6 +1136,7 @@ dependencies = [
  "tracing",
  "ts-rs",
  "uuid",
+ "wildmatch",
 ]
 
 [[package]]
@@ -1154,7 +1155,7 @@ dependencies = [
  "oauth2",
  "pretty_assertions",
  "reqwest",
- "rmcp 0.12.0",
+ "rmcp",
  "serde",
  "serde_json",
  "serial_test",
@@ -1166,6 +1167,29 @@ dependencies = [
  "urlencoding",
  "webbrowser",
  "which",
+]
+
+[[package]]
+name = "codex-sandbox"
+version = "0.0.0"
+dependencies = [
+ "async-channel",
+ "chardetng",
+ "codex-protocol",
+ "codex-windows-sandbox",
+ "encoding_rs",
+ "landlock",
+ "libc",
+ "maplit",
+ "pretty_assertions",
+ "seccompiler",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -1377,6 +1401,8 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "codex-core",
+ "codex-sandbox",
+ "nori-harness",
  "notify",
  "regex-lite",
  "shlex",
@@ -1516,16 +1542,6 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.21.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
-dependencies = [
- "darling_core 0.21.3",
- "darling_macro 0.21.3",
-]
-
-[[package]]
-name = "darling"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
@@ -1539,20 +1555,6 @@ name = "darling_core"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim 0.11.1",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "darling_core"
-version = "0.21.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4"
 dependencies = [
  "fnv",
  "ident_case",
@@ -1582,17 +1584,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core 0.20.11",
- "quote",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "darling_macro"
-version = "0.21.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
-dependencies = [
- "darling_core 0.21.3",
  "quote",
  "syn 2.0.104",
 ]
@@ -2257,9 +2248,9 @@ dependencies = [
 
 [[package]]
 name = "futures"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876"
+checksum = "8b147ee9d1f6d097cef9ce628cd2ee62288d963e16fb287bd9286455b241382d"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2272,9 +2263,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dff15bf788c671c1934e366d07e30c1814a8ef514e1af724a602e8a2fbe1b10"
+checksum = "07bbe89c50d7a535e539b8c17bc0b49bdb77747034daa8087407d655f3f7cc1d"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -2295,15 +2286,15 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e"
+checksum = "7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e28d1d997f585e54aebc3f97d39e72338912123a67330d723fdbb564d646c9f"
+checksum = "baf29c38818342a3b26b5b923639e7b1f4a61fc5e76102d4b1981c6dc7a7579d"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -2312,9 +2303,9 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e5c1b78ca4aae1ac06c48a526a655760685149f0d465d21f37abfe57ce075c6"
+checksum = "cecba35d7ad927e23624b22ad55235f2239cfa44fd10428eecbeba6d6a717718"
 
 [[package]]
 name = "futures-lite"
@@ -2331,9 +2322,9 @@ dependencies = [
 
 [[package]]
 name = "futures-macro"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
+checksum = "e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2342,21 +2333,21 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e575fab7d1e0dcb8d0c7bcf9a63ee213816ab51902e6d244a95819acacf1d4f7"
+checksum = "c39754e157331b013978ec91992bde1ac089843443c49cbc7f46150b0fad0893"
 
 [[package]]
 name = "futures-task"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f90f7dce0722e95104fcb095585910c0977252f286e354b5e3bd38902cd99988"
+checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
 
 [[package]]
 name = "futures-util"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
+checksum = "389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2366,7 +2357,6 @@ dependencies = [
  "futures-task",
  "memchr",
  "pin-project-lite",
- "pin-utils",
  "slab",
 ]
 
@@ -3153,16 +3143,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpcmsg"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d833a15225c779251e13929203518c2ff26e2fe0f322d584b213f4f4dad37bd"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "keyring"
 version = "3.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3500,8 +3480,8 @@ name = "mock-acp-agent"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
- "async-trait",
  "env_logger",
+ "futures",
  "serde_json",
  "tokio",
  "tokio-util",
@@ -3629,43 +3609,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "nori-acp"
+name = "nori-acp-host"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol-schema 0.11.6",
+ "agent-client-protocol",
+ "agent-client-protocol-schema",
  "anyhow",
- "axum",
  "base64",
- "chrono",
- "codex-core",
- "codex-git",
  "codex-protocol",
  "codex-rmcp-client",
  "codex-utils-string",
  "diffy",
- "dirs",
- "filetime",
  "futures",
  "libc",
- "nori-protocol",
+ "nori-config",
  "oauth2",
  "pretty_assertions",
- "rmcp 0.12.0",
- "sacp",
+ "regex",
+ "rmcp",
  "serde",
  "serde_json",
  "serial_test",
  "tempfile",
- "thiserror 2.0.17",
  "tokio",
- "tokio-test",
  "tokio-util",
- "toml",
- "toml_edit",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "uuid",
  "which",
 ]
 
@@ -3686,11 +3654,13 @@ dependencies = [
  "codex-login",
  "codex-process-hardening",
  "codex-protocol",
+ "codex-sandbox",
  "codex-stdio-to-uds",
  "codex-windows-sandbox",
  "ctor 0.5.0",
  "libc",
- "nori-acp",
+ "nori-config",
+ "nori-harness",
  "nori-tui",
  "owo-colors",
  "predicates",
@@ -3706,13 +3676,74 @@ dependencies = [
 ]
 
 [[package]]
+name = "nori-config"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "codex-protocol",
+ "dirs",
+ "pretty_assertions",
+ "serde",
+ "serial_test",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "nori-harness"
+version = "0.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent-client-protocol-schema",
+ "anyhow",
+ "axum",
+ "base64",
+ "chrono",
+ "codex-git",
+ "codex-protocol",
+ "codex-rmcp-client",
+ "codex-utils-string",
+ "diffy",
+ "dirs",
+ "filetime",
+ "futures",
+ "libc",
+ "nori-acp-host",
+ "nori-config",
+ "nori-protocol",
+ "notify-rust",
+ "oauth2",
+ "pretty_assertions",
+ "regex",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "shlex",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-test",
+ "tokio-util",
+ "toml",
+ "toml_edit",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "uuid",
+ "which",
+]
+
+[[package]]
 name = "nori-installed"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "chrono",
  "libc",
- "nori-acp",
+ "nori-harness",
  "pretty_assertions",
  "reqwest",
  "semver",
@@ -3730,7 +3761,7 @@ dependencies = [
 name = "nori-protocol"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol-schema 0.11.6",
+ "agent-client-protocol-schema",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -3757,6 +3788,7 @@ dependencies = [
  "codex-login",
  "codex-protocol",
  "codex-rmcp-client",
+ "codex-sandbox",
  "codex-utils-pty",
  "codex-windows-sandbox",
  "color-eyre",
@@ -3771,7 +3803,8 @@ dependencies = [
  "lazy_static",
  "libc",
  "mcp-types",
- "nori-acp",
+ "nori-config",
+ "nori-harness",
  "nori-installed",
  "nori-protocol",
  "opentelemetry-appender-tracing",
@@ -5043,7 +5076,7 @@ dependencies = [
  "process-wrap",
  "rand 0.9.4",
  "reqwest",
- "rmcp-macros 0.12.0",
+ "rmcp-macros",
  "schemars 1.0.4",
  "serde",
  "serde_json",
@@ -5059,45 +5092,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmcp"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f542f74cf247da16f19bbc87e298cd201e912314f4083e88cdd671f44f5fcb53"
-dependencies = [
- "async-trait",
- "base64",
- "chrono",
- "futures",
- "pastey",
- "pin-project-lite",
- "rmcp-macros 1.4.0",
- "schemars 1.0.4",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
 name = "rmcp-macros"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3f81daaa494eb8e985c9462f7d6ce1ab05e5299f48aafd76cdd3d8b060e6f59"
-dependencies = [
- "darling 0.23.0",
- "proc-macro2",
- "quote",
- "serde_json",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "rmcp-macros"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2391e4ae47f314e70eaafb6c7bd82e495e770b935448864446302143019151f"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -5231,42 +5229,6 @@ name = "ryu"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
-
-[[package]]
-name = "sacp"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c55e83008bb3aec4bc1348bf1a58dc5d42381ee704697dccb5c59553dce0fc"
-dependencies = [
- "agent-client-protocol-schema 0.11.6",
- "anyhow",
- "boxfnonce",
- "futures",
- "futures-concurrency",
- "jsonrpcmsg",
- "rmcp 1.4.0",
- "rustc-hash 2.1.1",
- "sacp-derive",
- "schemars 1.0.4",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tokio-util",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "sacp-derive"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab42f7ccff8ab957cb7eaee9727cfca1ba38ea390178cb3d1cdfc1ddbce1ddd8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
 
 [[package]]
 name = "same-file"
@@ -5581,11 +5543,12 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.16.1"
+version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa237f2807440d238e0364a218270b98f767a00d3dada77b1c53ae88940e2e7"
+checksum = "76a5c54c7310e7b8b9577c286d7e399ddd876c3e12b3ed917a8aabc4b96e9e8c"
 dependencies = [
  "base64",
+ "bs58",
  "chrono",
  "hex",
  "indexmap 1.9.3",
@@ -5600,11 +5563,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.16.1"
+version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52a8e3ca0ca629121f70ab50f95249e5a6f925cc0f6ffe8256c45b728875706c"
+checksum = "84d57bc0c8b9a17920c178daa6bb924850d54a9c97ab45194bb8c17ad66bb660"
 dependencies = [
- "darling 0.21.3",
+ "darling 0.23.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -5998,9 +5961,6 @@ name = "strum"
 version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
-dependencies = [
- "strum_macros 0.27.2",
-]
 
 [[package]]
 name = "strum"

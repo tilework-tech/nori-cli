@@ -18,11 +18,11 @@ pub(super) async fn persist_default_model_selection(
     agent: &str,
     config_id: &str,
     value: &str,
-    config_options: &[nori_acp::SessionConfigOption],
+    config_options: &[nori_harness::SessionConfigOption],
 ) -> anyhow::Result<bool> {
     let is_model_option = config_options.iter().any(|option| {
         option.id.to_string() == config_id
-            && option.category == Some(nori_acp::SessionConfigOptionCategory::Model)
+            && option.category == Some(nori_harness::SessionConfigOptionCategory::Model)
     });
     if !is_model_option {
         return Ok(false);
@@ -71,10 +71,9 @@ impl App {
             .add_info_message(format!("{setting_name} {status}"), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_notify_after_idle_setting(
         &mut self,
-        value: nori_acp::config::NotifyAfterIdle,
+        value: nori_config::NotifyAfterIdle,
     ) {
         let toml_str = value.toml_value();
 
@@ -101,10 +100,9 @@ impl App {
         );
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_script_timeout_setting(
         &mut self,
-        value: nori_acp::config::ScriptTimeout,
+        value: nori_config::ScriptTimeout,
     ) {
         let toml_str = value.toml_value();
 
@@ -131,7 +129,6 @@ impl App {
     /// Store the loop count as an ephemeral per-session override (not persisted
     /// to the TOML config). The user can still edit the home TOML directly for
     /// a persistent change.
-    #[cfg(feature = "nori-config")]
     pub(super) fn set_session_loop_count(&mut self, value: Option<i32>) {
         self.loop_count_override = Some(value);
         self.chat_widget.set_loop_count_override(Some(value));
@@ -144,10 +141,7 @@ impl App {
             .add_info_message(format!("Loop count set to {display} (this session)."), None);
     }
 
-    pub(super) async fn persist_vim_mode_setting(
-        &mut self,
-        value: nori_acp::config::VimEnterBehavior,
-    ) {
+    pub(super) async fn persist_vim_mode_setting(&mut self, value: nori_config::VimEnterBehavior) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "vim_mode"], toml_value(value.toml_value()))
             .apply()
@@ -171,11 +165,7 @@ impl App {
             .add_info_message(format!("Vim mode: {display}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
-    pub(super) async fn persist_auto_worktree_setting(
-        &mut self,
-        value: nori_acp::config::AutoWorktree,
-    ) {
+    pub(super) async fn persist_auto_worktree_setting(&mut self, value: nori_config::AutoWorktree) {
         let toml_str = value.toml_value();
 
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
@@ -201,7 +191,6 @@ impl App {
         );
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_pinned_plan_drawer_setting(&mut self, enabled: bool) {
         let mode = if enabled {
             crate::chatwidget::PlanDrawerMode::Expanded
@@ -226,7 +215,6 @@ impl App {
             .add_info_message(format!("Pinned plan drawer {status}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
         if let Err(err) = persist_acp_wire_recording_config(&self.config.codex_home, enabled).await
         {
@@ -243,7 +231,6 @@ impl App {
             .add_info_message(format!("ACP wire recording {status}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_custom_working_messages_setting(&mut self, enabled: bool) {
         self.config.custom_working_messages = enabled;
         self.chat_widget.set_custom_working_messages(enabled);
@@ -264,7 +251,6 @@ impl App {
             .add_info_message(format!("Custom working messages {status}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
         let builder = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "skillset_per_session"], toml_value(enabled));
@@ -282,10 +268,9 @@ impl App {
         );
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_footer_segment_setting(
         &mut self,
-        segment: nori_acp::config::FooterSegment,
+        segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
@@ -319,11 +304,7 @@ impl App {
             .replace_footer_segments_picker(&self.footer_segment_config);
     }
 
-    #[cfg(feature = "nori-config")]
-    pub(super) async fn persist_file_manager_setting(
-        &mut self,
-        value: nori_acp::config::FileManager,
-    ) {
+    pub(super) async fn persist_file_manager_setting(&mut self, value: nori_config::FileManager) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "file_manager"], toml_value(value.command_name()))
             .apply()
@@ -367,8 +348,8 @@ impl App {
 
     pub(super) async fn persist_hotkey_setting(
         &mut self,
-        action: nori_acp::config::HotkeyAction,
-        binding: nori_acp::config::HotkeyBinding,
+        action: nori_config::HotkeyAction,
+        binding: nori_config::HotkeyBinding,
     ) {
         let toml_key = action.toml_key();
         let toml_val = binding.toml_value();
@@ -405,7 +386,7 @@ impl App {
 
     pub(super) async fn persist_mcp_servers(
         &mut self,
-        servers: std::collections::BTreeMap<String, codex_core::config::types::McpServerConfig>,
+        servers: std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
     ) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
             .replace_mcp_servers(&servers)
@@ -553,28 +534,28 @@ mod tests {
         );
     }
 
-    fn session_config_options_with_model() -> Vec<nori_acp::SessionConfigOption> {
+    fn session_config_options_with_model() -> Vec<nori_harness::SessionConfigOption> {
         vec![
-            nori_acp::SessionConfigOption::select(
+            nori_harness::SessionConfigOption::select(
                 "model",
                 "Model",
                 "sonnet",
                 vec![
-                    nori_acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-                    nori_acp::SessionConfigSelectOption::new("opus", "Opus"),
+                    nori_harness::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+                    nori_harness::SessionConfigSelectOption::new("opus", "Opus"),
                 ],
             )
-            .category(nori_acp::SessionConfigOptionCategory::Model),
-            nori_acp::SessionConfigOption::select(
+            .category(nori_harness::SessionConfigOptionCategory::Model),
+            nori_harness::SessionConfigOption::select(
                 "permission-mode",
                 "Mode",
                 "default",
                 vec![
-                    nori_acp::SessionConfigSelectOption::new("default", "Default"),
-                    nori_acp::SessionConfigSelectOption::new("acceptEdits", "Accept Edits"),
+                    nori_harness::SessionConfigSelectOption::new("default", "Default"),
+                    nori_harness::SessionConfigSelectOption::new("acceptEdits", "Accept Edits"),
                 ],
             )
-            .category(nori_acp::SessionConfigOptionCategory::Mode),
+            .category(nori_harness::SessionConfigOptionCategory::Mode),
         ]
     }
 

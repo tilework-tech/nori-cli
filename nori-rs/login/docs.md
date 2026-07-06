@@ -27,7 +27,7 @@ Used by `@/nori-rs/tui/` (via the `login` feature) to implement the `/login` sla
 
 ### Things to Know
 
-- Re-exports `AuthMode`, `CodexAuth`, `AuthManager` from codex-core
+- Re-exports `CodexAuth` and `AuthManager` from codex-core, and `AuthMode` from codex-app-server-protocol
 - Supports both API key login and OAuth flows
 - Tokens are stored in system keyring via `codex-keyring-store`
 - The `CLIENT_ID` constant identifies Nori to OAuth providers

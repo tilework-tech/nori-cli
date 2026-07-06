@@ -20,7 +20,7 @@ impl ChatWidget {
     // --- Small event handlers ---
     pub(super) fn on_session_configured(
         &mut self,
-        event: codex_core::protocol::SessionConfiguredEvent,
+        event: codex_protocol::protocol::SessionConfiguredEvent,
     ) {
         // Mark that we've received SessionConfigured - this unlocks event processing
         // when expected_agent is set (during agent switching)
@@ -99,7 +99,7 @@ impl ChatWidget {
 
     pub(super) fn on_context_compacted(
         &mut self,
-        event: codex_core::protocol::ContextCompactedEvent,
+        event: codex_protocol::protocol::ContextCompactedEvent,
     ) {
         // Step 1: Flush the streamed summary from the old session.
         self.flush_answer_stream_with_separator();
@@ -242,7 +242,6 @@ impl ChatWidget {
         });
 
         // Loop mode: if iterations remain, fire the next iteration.
-        #[cfg(feature = "nori-config")]
         if let Some(remaining) = self.loop_remaining
             && remaining > 0
             && let Some(prompt) = self.first_prompt_text.clone()
@@ -458,7 +457,7 @@ impl ChatWidget {
 
     pub(super) fn on_exec_command_output_delta(
         &mut self,
-        _ev: codex_core::protocol::ExecCommandOutputDeltaEvent,
+        _ev: codex_protocol::protocol::ExecCommandOutputDeltaEvent,
     ) {
         // TODO: Handle streaming exec output if/when implemented
     }
@@ -488,7 +487,10 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn on_patch_apply_end(&mut self, event: codex_core::protocol::PatchApplyEndEvent) {
+    pub(super) fn on_patch_apply_end(
+        &mut self,
+        event: codex_protocol::protocol::PatchApplyEndEvent,
+    ) {
         self.flush_answer_stream_with_separator();
         let ev2 = event.clone();
         self.defer_or_handle(
@@ -532,9 +534,9 @@ impl ChatWidget {
 
     pub(super) fn on_get_history_entry_response(
         &mut self,
-        event: codex_core::protocol::GetHistoryEntryResponseEvent,
+        event: codex_protocol::protocol::GetHistoryEntryResponseEvent,
     ) {
-        let codex_core::protocol::GetHistoryEntryResponseEvent {
+        let codex_protocol::protocol::GetHistoryEntryResponseEvent {
             offset,
             log_id,
             entry,
@@ -789,7 +791,7 @@ impl ChatWidget {
 
     pub(crate) fn handle_patch_apply_end_now(
         &mut self,
-        event: codex_core::protocol::PatchApplyEndEvent,
+        event: codex_protocol::protocol::PatchApplyEndEvent,
     ) {
         // Observe directories from file paths to potentially update footer git info.
         self.observe_directories_from_changes(&event.changes);
@@ -842,7 +844,7 @@ impl ChatWidget {
     /// (which can happen when creating new files in new directories).
     pub(super) fn observe_directories_from_changes(
         &mut self,
-        changes: &std::collections::HashMap<PathBuf, codex_core::protocol::FileChange>,
+        changes: &std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
     ) {
         for file_path in changes.keys() {
             // Resolve relative paths against config.cwd before extracting parent
@@ -1143,7 +1145,7 @@ impl ChatWidget {
                 self.request_redraw();
             }
             nori_protocol::ClientEvent::ContextCompacted(context_compacted) => {
-                self.on_context_compacted(codex_core::protocol::ContextCompactedEvent {
+                self.on_context_compacted(codex_protocol::protocol::ContextCompactedEvent {
                     summary: context_compacted.summary,
                 });
             }

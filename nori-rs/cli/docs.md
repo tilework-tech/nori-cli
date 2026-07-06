@@ -10,9 +10,10 @@ The `nori-cli` crate is the main binary that provides the `nori` command. It ser
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `nori-tui`, `nori-acp`, `codex-core`
+- **Always included:** `nori-tui`, `nori-harness`, `nori-config`, `codex-core`, `codex-sandbox`
 - **Optional via features:** `codex-login`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
+- **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers
 
 ### Core Implementation
 
@@ -50,8 +51,8 @@ match subcommand {
 - `resolve_handroll_bin()` resolves the `nori-handroll` binary. A `NORI_HANDROLL_BIN` env override wins when set and must point at an existing file (a dangling override is an error, not a fallback); otherwise the first `nori-handroll` on `PATH` is used. A missing binary fails with an actionable "install Nori Sessions" error before the TUI starts
 - `cloud_agent_config()` builds a synthetic registry entry (slug `nori-cloud`): a local distribution running `<handroll-bin> cloud-acp`, with the read-only `[cloud] broker_url` from `config.toml` (when present) translated to a `NORI_BROKER_URL` environment variable on the child, and an auth hint pointing at `nori-handroll login`
 - The dispatch in `main.rs` forces `interactive.agent = "nori-cloud"` AFTER flag merging, so `--agent` cannot bypass Sessions, and passes the entry via the clap-skipped `TuiCli.extra_agents` field (see `@/nori-rs/tui/src/cli.rs`)
-- From there the handroll child rides the ordinary local-agent path end to end: registry lookup, `SacpConnection::spawn()`, and unconditional local transcript recording (duplicating the broker's server-side recording is intentional)
-- Auth, broker REST, session acquisition/release, and tunnel transport all live inside `nori-handroll cloud-acp`. Clean release relies on the graceful stdin-EOF shutdown contract in `@/nori-rs/acp/src/connection/sacp_connection.rs`
+- From there the handroll child rides the ordinary local-agent path end to end: registry lookup, `AcpConnection::spawn()`, and unconditional local transcript recording (duplicating the broker's server-side recording is intentional)
+- Auth, broker REST, session acquisition/release, and tunnel transport all live inside `nori-handroll cloud-acp`. Clean release relies on the graceful stdin-EOF shutdown contract in `@/nori-rs/acp-host/src/connection/acp_connection.rs`
 - TUI flags such as `--agent`, `--profile`, `--sandbox` can still be passed after `cloud` (only `--agent` is overridden)
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.

@@ -1,16 +1,15 @@
 //! Nori configuration adapter
 //!
 //! This module provides integration between the Nori config system
-//! (from nori-acp) and the TUI. When the `nori-config` feature is enabled,
-//! the TUI loads configuration from `~/.nori/cli/config.toml` instead of
-//! `~/.codex/config.toml`.
+//! (from nori-config) and the TUI: configuration is loaded from
+//! `~/.nori/cli/config.toml`.
 
 #![allow(dead_code)]
 
-use nori_acp::config::NORI_HOME_ENV;
-use nori_acp::config::NoriConfig;
-use nori_acp::config::NoriConfigOverrides;
-use nori_acp::config::find_nori_home;
+use nori_config::NORI_HOME_ENV;
+use nori_config::NoriConfig;
+use nori_config::NoriConfigOverrides;
+use nori_config::find_nori_home;
 use std::path::PathBuf;
 
 /// Get the Nori home directory path (canonicalized).

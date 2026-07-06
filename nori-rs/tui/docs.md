@@ -9,7 +9,8 @@ The `nori-tui` crate provides the interactive terminal user interface for Nori, 
 ### How it fits into the larger codebase
 
 ```
-User Input --> nori-tui --> nori-acp (ACP backend)
+User Input --> nori-tui --> nori-harness (ACP backend)
+                       \--> nori-config (Nori config, ~/.nori/cli/config.toml)
                        \--> codex-core (config, auth)
                        \--> codex-rmcp-client (MCP OAuth login)
                        \--> nori-protocol (ACP session events)
@@ -18,10 +19,12 @@ User Input --> nori-tui --> nori-acp (ACP backend)
 
 The TUI acts as the frontend layer. It:
 
-- Uses `nori-acp` for ACP agent communication (see `@/nori-rs/acp/`)
+- Uses `nori-harness` for ACP agent communication: sessions are launched through the harness session runtime (`nori_harness::runtime::launch_session`, see `@/nori-rs/harness/src/runtime.rs`), and the TUI maps its `SessionEvent` stream onto `AppEvent`s (see `@/nori-rs/harness/`)
+- Imports `NoriConfig` and the other Nori config types directly from `nori-config` (see `@/nori-rs/nori-config/`); they are not re-exported through `nori-harness`
 - Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
+- Uses `codex-sandbox` for platform sandbox availability checks (`get_platform_sandbox`) in approval flows (see `@/nori-rs/sandbox/`)
 - Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)
-- Maps user-facing session controls such as `/goal` into typed `codex-protocol` operations, leaving ACP backend state ownership in `@/nori-rs/acp`
+- Maps user-facing session controls such as `/goal` into typed `codex-protocol` operations, leaving ACP backend state ownership in `@/nori-rs/harness`
 - Displays approval requests from the ACP layer and forwards user decisions back
 - Renders streaming AI responses with markdown and syntax highlighting
 
@@ -31,11 +34,11 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 ### Core Implementation
 
-Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `nori_acp::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/acp/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
+Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `nori_harness::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/harness/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
 
-`NoriConfig` is also the source of truth for ACP backend diagnostics. The chat widget passes the resolved ACP proxy configuration into `AcpBackendConfig` when spawning or resuming sessions, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
+`NoriConfig` is also the source of truth for ACP backend diagnostics. The harness session runtime (`@/nori-rs/harness/src/runtime.rs`) loads `NoriConfig` itself when launching or resuming sessions and passes the resolved ACP proxy configuration into `AcpBackendConfig`, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
 
-The auto-worktree startup flow first checks eligibility via `can_create_worktree()` (see `@/nori-rs/acp/docs.md`), then branches on the `AutoWorktree` enum:
+The auto-worktree startup flow first checks eligibility via `can_create_worktree()` (see `@/nori-rs/harness/docs.md`), then branches on the `AutoWorktree` enum:
 
 | State                                                  | Timing                                 | Behavior                                                                                                                                    |
 | ------------------------------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -67,7 +70,7 @@ For replayed ACP conversations, user-authored message chunks are reconstructed u
 
 **Thread Goal UI** (`chatwidget/goal.rs`, `chatwidget/event_handlers.rs`, `slash_command.rs`):
 
-The `/goal` command is a TUI command surface for ACP backend-owned goal state. `@/nori-rs/tui/src/slash_command.rs` advertises the command, while `@/nori-rs/tui/src/chatwidget/goal.rs` maps the command family (viewing, setting, status changes, clearing, and editing) into typed `codex_protocol::protocol::Op::ThreadGoal*` operations. Those operations are handled by `@/nori-rs/acp/src/backend/thread_goal.rs`; the TUI does not persist or derive goal state from prompt text. Typed `/goal ...` invocations are still persisted through the normal prompt-history path so users can recall or search the command text later without making prompt history the source of truth for goal state.
+The `/goal` command is a TUI command surface for ACP backend-owned goal state. `@/nori-rs/tui/src/slash_command.rs` advertises the command, while `@/nori-rs/tui/src/chatwidget/goal.rs` maps the command family (viewing, setting, status changes, clearing, and editing) into typed `codex_protocol::protocol::Op::ThreadGoal*` operations. Those operations are handled by `@/nori-rs/harness/src/backend/thread_goal.rs`; the TUI does not persist or derive goal state from prompt text. Typed `/goal ...` invocations are still persisted through the normal prompt-history path so users can recall or search the command text later without making prompt history the source of truth for goal state.
 
 `ClientEvent::ThreadGoalUpdated` is treated as the source of truth for the visible current goal. `ChatWidget` stores that snapshot in `current_goal`, renders a compact history summary for new goals and objective/status changes, and uses it to seed `/goal edit` back into the composer. Accounting-only updates from backend usage refresh the cached snapshot without adding history cells. The summary formats elapsed time and token counts with the shared compact formatters from `@/nori-rs/protocol/src/num_format.rs`. `ClientEvent::ThreadGoalCleared` clears the cached snapshot and writes a short info message. Goal updates are omitted from view-only transcript rendering in `@/nori-rs/tui/src/viewonly_transcript.rs` because they are state synchronization events rather than conversation messages.
 
@@ -81,7 +84,7 @@ explaining that the session is running in Nori CLI, linking to
 `https://github.com/tilework-tech/nori-cli`, and noting which MCP-backed Nori
 affordances are unavailable. MCP-capable agents receive Nori operating context
 through the backend-owned `nori-client` resources/prompts described in
-`@/nori-rs/acp/docs.md`.
+`@/nori-rs/harness/docs.md`.
 
 `/goal edit` uses the cached goal immediately when available. If no snapshot is cached, it requests one from the ACP backend and marks the edit as pending until the backend replies. A no-goal response clears that pending flag before rendering the usage hint, preventing a later unrelated goal update from unexpectedly replacing the user's composer contents.
 
@@ -115,7 +118,7 @@ For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` no
 
 The path is extracted from `locations[0].path` when available, falling back to parsing the title (stripping the kind prefix, e.g., `"Edit README.md"` -> `"README.md"`). Bullet styling: green bold for completed, red bold for failed, spinner for active. For failed edits, error text is extracted via `extract_error_text()` (checks `raw_output` for `"error"`, `"stderr"`, `"output"`, or bare string), with a `"(failed)"` fallback.
 
-Diff content is rendered from two sources in priority order: (1) `Artifact::Diff` entries via `diff_changes_from_artifacts()`, (2) invocation data via `changes_from_invocation()` which handles both `Invocation::FileChanges` and `Invocation::FileOperations` (Create, Update, Delete, Move). Both helpers convert `nori_protocol` types to `codex_core::protocol::FileChange` for `create_diff_summary` from `diff_render.rs`. Update and move diffs use the real `cwd` to preserve file-context line numbers when the edited text can be found on disk, so completed edits show inline diffs whether the diff data arrives as artifacts or as invocation-level file changes.
+Diff content is rendered from two sources in priority order: (1) `Artifact::Diff` entries via `diff_changes_from_artifacts()`, (2) invocation data via `changes_from_invocation()` which handles both `Invocation::FileChanges` and `Invocation::FileOperations` (Create, Update, Delete, Move). Both helpers convert `nori_protocol` types to `codex_protocol::protocol::FileChange` for `create_diff_summary` from `diff_render.rs`. Update and move diffs use the real `cwd` to preserve file-context line numbers when the edited text can be found on disk, so completed edits show inline diffs whether the diff data arrives as artifacts or as invocation-level file changes.
 
 The diff renderer preserves syntax-highlighter state across each update hunk before applying add/delete/context styling, then wraps styled spans by terminal display width rather than byte or character count. Move/update diffs use the destination path for syntax detection, so renamed files highlight as the language they become instead of the language implied by the old path.
 
@@ -127,7 +130,7 @@ Bullet styling is phase-aware: active tools show a spinner, failed tools (`ToolP
 
 For failed tools, error detail is extracted via a cascade: (1) text artifacts (via `format_artifacts`), (2) `extract_error_text()` which checks `raw_output` for `"error"`, `"output"`, or bare string values, (3) a `"(failed)"` fallback when no detail is available at all. For non-failed tools, the location fallback still applies: when both invocation formatting and artifact formatting produce zero detail lines, it displays the `locations` paths from the `ToolSnapshot` as dim sub-items. This prevents completed tool cells from rendering as bare headers with no context, which occurs when agents (e.g., Gemini) send tool calls with empty `content` arrays and no `rawInput`/`rawOutput`.
 
-**Edit/Delete/Move routing**: All Edit/Delete/Move snapshots (all phases including Completed) are routed to `handle_client_tool_snapshot`, the same handler used by Execute tools. In-progress snapshots create a spinner cell in `active_cell`. When the completed snapshot arrives with the same `call_id`, `apply_snapshot()` updates the cell in place, transitioning it from the spinner state to the completed state with diff content. The completed cell is then flushed to history. For completed Edit/Delete/Move snapshots, `handle_client_tool_snapshot` also calls `observe_directories_from_paths()` (using the snapshot's `locations`) and records tool call stats. `PatchHistoryCell` is no longer used in the ACP rendering path -- it remains only for the non-ACP codex backend path (via `on_patch_apply_begin`). Edit/Delete/Move approval requests route through `ApprovalRequest::AcpTool` (not `ApplyPatch`), so there are no bridge functions converting `nori_protocol` types to `codex_core::protocol::FileChange` for the approval path -- the diff extraction for approval overlays reuses the same `pub(crate)` helpers in `client_tool_cell.rs` that the completed-cell rendering uses.
+**Edit/Delete/Move routing**: All Edit/Delete/Move snapshots (all phases including Completed) are routed to `handle_client_tool_snapshot`, the same handler used by Execute tools. In-progress snapshots create a spinner cell in `active_cell`. When the completed snapshot arrives with the same `call_id`, `apply_snapshot()` updates the cell in place, transitioning it from the spinner state to the completed state with diff content. The completed cell is then flushed to history. For completed Edit/Delete/Move snapshots, `handle_client_tool_snapshot` also calls `observe_directories_from_paths()` (using the snapshot's `locations`) and records tool call stats. `PatchHistoryCell` is no longer used in the ACP rendering path -- it remains only for the non-ACP codex backend path (via `on_patch_apply_begin`). Edit/Delete/Move approval requests route through `ApprovalRequest::AcpTool` (not `ApplyPatch`), so there are no bridge functions converting `nori_protocol` types to `codex_protocol::protocol::FileChange` for the approval path -- the diff extraction for approval overlays reuses the same `pub(crate)` helpers in `client_tool_cell.rs` that the completed-cell rendering uses.
 
 **Execute Cell Completion Buffering** (`chatwidget/event_handlers.rs`, `chatwidget/mod.rs`):
 
@@ -181,7 +184,7 @@ For ACP sessions, pressing Enter while the phase is `Prompt` or `Cancelling` sti
 
 **Stale Event Suppression:**
 
-ACP cancel no longer makes the TUI idle on its own. The UI stays in `Cancelling` until the backend reduces the matching prompt response and emits `PromptCompleted`. See `@/nori-rs/acp/docs.md` for the backend-side reducer rules.
+ACP cancel no longer makes the TUI idle on its own. The UI stays in `Cancelling` until the backend reduces the matching prompt response and emits `PromptCompleted`. See `@/nori-rs/harness/docs.md` for the backend-side reducer rules.
 
 For ACP tool rendering, phase is no longer used as a visibility gate. Once the backend emits a normalized `ClientEvent::ToolSnapshot`, the chat widget renders it even if the ACP phase is already `Idle`, so late or update-only provider events remain visible instead of disappearing.
 
@@ -311,7 +314,7 @@ During background system info collection on unix, `check_worktree_cleanup()` run
 | Command                   | Description                                                                                                                                                                                                                                                                                                |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/agent`                  | Switch between available ACP agents (dynamically shows current agent name)                                                                                                                                                                                                                                 |
-| `/model`                  | Choose model -- convenience shortcut that opens the Model-category config option value picker when available, falling back to the unstable model state (dynamically shows current agent/model name)                                                                                                        |
+| `/model`                  | Choose model -- convenience shortcut that opens the Model-category config option value picker when the agent advertises one, otherwise shows a "not supported" fallback (dynamically shows current agent/model name)                                                                                                        |
 | `/config`                 | Configure live ACP session settings exposed by the current agent                                                                                                                                                                                                                                           |
 | `/approvals`              | Choose what Nori can do without approval (dynamically shows current approval mode)                                                                                                                                                                                                                         |
 | `/settings`               | Configure Nori CLI settings (pinned plan drawer, custom working messages, vertical footer, terminal notifications, OS notifications, vim mode with enter behavior sub-picker, auto worktree, per session skillsets, notify after idle, hotkeys, script timeout, loop count, footer segments, file manager) |
@@ -409,9 +412,9 @@ Claude-backed agents have an additional compatibility path in `skill_picker_item
 
 `/config` opens a two-step picker for the current ACP session. `ChatWidget::open_session_config_popup()` asks the `AcpAgentHandle` for the live `AcpBackend::config_options()` snapshot, renders supported `select` options, then opens a value picker for the selected option. Selecting a value sends `session/set_config_option` through `AcpBackend::set_config_option()` and shows a single final info or error message when the RPC finishes.
 
-The picker does not run during `/agent` switching, and unsupported ACP config kinds and future non-exhaustive select layouts are treated as unavailable rather than guessed. Selections edit the active session, with one persistence exception: when a successful `AppEvent::AcpSessionConfigSetResult` (which carries the raw `config_id` and `value` alongside the display names) names the agent's Model-category option, the `app/event_handling.rs` handler calls `persist_default_model_selection()` in `app/config_persistence.rs`, which writes the value to `[default_models]` in `config.toml` keyed by agent slug via `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md`). Non-model selections (mode, thought level) are never persisted -- the persistence helper checks the returned config_options snapshot for a matching option with the Model category before writing anything. Persist failures are logged and never block the UI; the live session change still applies, and the history line simply omits the `(saved as default)` suffix. The persisted value is re-applied at the next session start by the ACP backend (see `@/nori-rs/acp/docs.md`).
+The picker does not run during `/agent` switching, and unsupported ACP config kinds and future non-exhaustive select layouts are treated as unavailable rather than guessed. Selections edit the active session, with one persistence exception: when a successful `AppEvent::AcpSessionConfigSetResult` (which carries the raw `config_id` and `value` alongside the display names) names the agent's Model-category option, the `app/event_handling.rs` handler calls `persist_default_model_selection()` in `app/config_persistence.rs`, which writes the value to `[default_models]` in `config.toml` keyed by agent slug via `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md`). Non-model selections (mode, thought level) are never persisted -- the persistence helper checks the returned config_options snapshot for a matching option with the Model category before writing anything. Persist failures are logged and never block the UI; the live session change still applies, and the history line simply omits the `(saved as default)` suffix. The persisted value is re-applied at the next session start by the ACP backend (see `@/nori-rs/harness/docs.md`).
 
-`/model` acts as a convenience shortcut into the same config_options mechanism. `ChatWidget::open_model_popup()` in `chatwidget/pickers.rs` first fetches config_options via `AcpAgentHandle::get_session_config()`, finds a config option with `SessionConfigOptionCategory::Model`, and if present sends `AppEvent::OpenAcpSessionConfigValuePicker` to open the value picker directly (bypassing the top-level config picker). When no Model-category config option exists, it falls back to the unstable `SessionModelState` (behind `#[cfg(feature = "unstable")]`), and finally to a "not supported" empty model picker. This means real ACP agents that provide model selection through config_options (the stable mechanism) work correctly with `/model`, while agents that only provide the unstable `session/set_model` path still function via the fallback. Both paths persist the chosen model as the agent's default: the stable path through the Model-category persistence described above, and the unstable fallback in the `AppEvent::AcpModelSetResult` handler in `app/event_handling.rs`, whose info message reads `Model switched to: <name> (saved as default)` when the write succeeds and omits the suffix when it fails.
+`/model` acts as a convenience shortcut into the same config_options mechanism and is a two-tier flow. `ChatWidget::open_model_popup()` in `chatwidget/pickers.rs` fetches config_options via `AcpAgentHandle::get_session_config()` and finds a config option with `SessionConfigOptionCategory::Model`: (1) if present, it sends `AppEvent::OpenAcpSessionConfigValuePicker` to open the value picker directly (bypassing the top-level config picker); (2) otherwise it sends `AppEvent::OpenAcpModelPickerUnsupported` to show a "not supported" fallback picker. The previous middle tier (the unstable `SessionModelState` / `session/set_model` fallback) no longer exists -- that API and the harness/`nori-tui` `unstable` feature were removed. Selecting a value runs the same stable Model-category config-option path described above, so the chosen model is persisted as the agent's default and the history line carries the dim `(saved as default)` suffix when the `[default_models]` write succeeds. Note that `ConfigEditsBuilder::set_model` / `AppEvent::PersistAgentSelection` is a separate Codex config-edit that persists the chosen model as the default in `config.toml`; it is unrelated to the removed ACP `session/set_model` RPC and still exists.
 
 **Pending-agent short-circuit:** ACP models are session-scoped -- an agent's models only arrive in the `session/new` response, so they are not knowable until a session starts. Because `/agent` only records a *pending* switch in `ChatWidget.pending_agent` (the live `acp_handle` and subprocess are not swapped until the next prompt submit rebuilds the `ChatWidget`; see "Agent-Provided Commands and Skill Mentions" and `set_pending_agent`), `open_model_popup()` checks `pending_agent` *before* touching the handle. When a switch is pending, it synchronously renders an explanatory picker built by `acp_model_picker_pending_agent_params(display_name)` in `nori/agent_picker.rs` telling the user to send a message to start the new session before `/model` can show that agent's models. This avoids querying the still-live OLD agent's handle, which would otherwise display the wrong agent's models.
 
@@ -479,24 +482,24 @@ The `/fork` slash command lets users rewind to a previous user message and branc
    - Trims `transcript_cells` to the fork point via `trim_transcript_cells_to_nth_user()` so the TUI preserves visual history before the fork
    - Prefills the composer with the selected message text
 
-The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `spawn_acp_agent()` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
+The fork context flows through `ChatWidgetInit.fork_context` -> `spawn_agent()` -> `SessionLaunchSpec.initial_context` -> `AcpBackendConfig.initial_context`, which initializes the ACP backend's `pending_compact_summary`. This reuses the same mechanism as `/compact` and `/resume` -- the summary is prepended to the first user prompt in the new session, giving the agent prior conversation context without a protocol-level session fork.
 
 **Caller-injected agents (`nori cloud`):** `Cli.extra_agents` (a clap-skipped field on `@/nori-rs/tui/src/cli.rs`, never a CLI flag) carries extra `AgentConfigToml` registry entries from the caller. `run_main()` in `@/nori-rs/tui/src/lib.rs` appends them after the config's `[[agents]]` when initializing the agent registry. The CLI's `nori cloud` subcommand uses this to pin a synthetic `nori-cloud` entry that runs `nori-handroll cloud-acp` (see `@/nori-rs/cli/src/cloud.rs` and `@/nori-rs/cli/docs.md`); from the TUI's perspective it is an ordinary local ACP agent and `spawn_agent()` treats it like any other registry entry. There is no cloud-specific plumbing in the TUI -- the old `cloud_connection` threading through `Cli`/`App`/`ChatWidgetInit` was removed.
 
-**Session context injection:** Both `spawn_acp_agent()` and `spawn_acp_agent_resume()` in `chatwidget/agent.rs` set `AcpBackendConfig.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). The ACP backend only prepends that fallback `<context>` block to the first user prompt when the active ACP connection lacks HTTP MCP support. MCP-capable agents instead receive the backend-owned `nori-client` server and discover Nori operating context through its resources and prompts (see `@/nori-rs/acp/docs.md` for the hook context injection mechanism).
+**Session context injection:** The shared launch path in `chatwidget/agent.rs` (used for both fresh spawns and resumes) sets `SessionLaunchSpec.session_context` to the contents of `@/nori-rs/tui/session_context.md` (loaded at compile time via `include_str!`). The ACP backend only prepends that fallback `<context>` block to the first user prompt when the active ACP connection lacks HTTP MCP support. MCP-capable agents instead receive the backend-owned `nori-client` server and discover Nori operating context through its resources and prompts (see `@/nori-rs/harness/docs.md` for the hook context injection mechanism).
 
 **Browser Session (`/browser`) (`chatwidget/key_handling.rs`, `app/event_handling.rs`, `app_event.rs`):**
 
 The `/browser` slash command launches a headed Chrome browser with CDP (Chrome DevTools Protocol) remote debugging enabled, then injects the connection details into the conversation so the agent can script the browser via its existing shell tool. It is not available during a task (`available_during_task = false`). The flow:
 
-1. `SlashCommand::Browser` in `key_handling.rs` shows an info message ("Launching browser...") and spawns a `tokio` task calling `nori_acp::backend::browser_session::BrowserSession::launch()` (see `@/nori-rs/acp/docs.md`)
+1. `SlashCommand::Browser` in `key_handling.rs` shows an info message ("Launching browser...") and spawns a `tokio` task calling `nori_harness::backend::browser_session::BrowserSession::launch()` (see `@/nori-rs/harness/docs.md`)
 2. On success, the task posts `AppEvent::BrowserLaunched { ws_url, cdp_port }`. On failure, it posts `AppEvent::BrowserLaunchFailed(error_string)`
 3. The `BrowserLaunched` handler in `app/event_handling.rs` calls `browser_session::compose_agent_prompt()` to build a structured message containing the CDP HTTP endpoint and WebSocket URL, then submits it as a user message via `submit_user_message_text()`
 4. The agent receives the CDP connection details and can use Playwright, Puppeteer, or raw CDP commands via its shell tool to control the browser
 
 The `BrowserSession` is intentionally `std::mem::forget`'d after launch so Chrome stays alive for the duration of the nori session. The `BrowserSession::Drop` impl sends SIGTERM to the Chrome process, which fires when the nori process exits. This is distinct from `/browse` which opens a terminal file manager.
 
-The `/logout` command is only available when the `login` feature is enabled. The `/settings` command requires the `nori-config` feature.
+The `/logout` command is only available when the `login` feature is enabled.
 
 **Status Card (`/status`) (`nori/session_header/mod.rs`):**
 
@@ -596,9 +599,9 @@ Active skillset display in the footer is driven entirely by `SystemInfo.active_s
 
 Three notification settings are toggled via `/settings` and persisted to the `[tui]` section of `config.toml`:
 
-- **Terminal Notifications** (`TerminalNotifications` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget/user_input.rs::notify()` gates on that bool.
-- **OS Notifications** (`OsNotifications` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend/mod.rs` to set the `use_native` flag on `UserNotifier`.
-- **Notify After Idle** (`NotifyAfterIdle` enum from `@/nori-rs/acp/src/config/types/mod.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
+- **Terminal Notifications** (`TerminalNotifications` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget/user_input.rs::notify()` gates on that bool.
+- **OS Notifications** (`OsNotifications` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend/mod.rs` to set the `use_native` flag on `UserNotifier`.
+- **Notify After Idle** (`NotifyAfterIdle` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
 
 Config changes for terminal and OS notifications emit `AppEvent::SetConfigTerminalNotifications` or `AppEvent::SetConfigOsNotifications`, handled in `app/config_persistence.rs` via `persist_notification_setting()`. The notify-after-idle setting uses a separate flow: `AppEvent::OpenNotifyAfterIdlePicker` opens the sub-picker, and `AppEvent::SetConfigNotifyAfterIdle` persists the chosen value via `persist_notify_after_idle_setting()`. All settings are written to the `[tui]` section of `config.toml`.
 
@@ -607,7 +610,7 @@ Config changes for terminal and OS notifications emit `AppEvent::SetConfigTermin
 When a user invokes a `Script`-kind custom prompt (`.sh`, `.py`, `.js` files discovered from `~/.nori/cli/commands/`), the TUI follows an async execution pattern:
 
 ```
-ChatComposer (Enter key)           app/mod.rs                       codex_core::custom_prompts
+ChatComposer (Enter key)           app/mod.rs                       nori_harness::custom_prompts
        |                              |                                |
        |-- AppEvent::ExecuteScript -->|                                |
        |                              |-- execute_script(prompt, args, timeout) -->
@@ -620,7 +623,7 @@ ChatComposer (Enter key)           app/mod.rs                       codex_core::
 
 The composer intercepts Script-kind prompts in two places: when a command popup selection is confirmed, and when the user types a `/prompts:<name>` command directly and presses Enter. In both cases, positional arguments are extracted via `extract_positional_args_for_prompt_line()` and the `ExecuteScript` event is dispatched. The composer is cleared immediately.
 
-In `app/event_handling.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
+In `app/event_handling.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `nori_harness::custom_prompts::execute_script()` (see `@/nori-rs/harness/src/custom_prompts.rs`) with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
 
 The script timeout is configurable via `/settings` -> "Script Timeout" which opens a sub-picker (same pattern as Notify After Idle). The sub-picker is built by `script_timeout_picker_params()` in `@/nori-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenScriptTimeoutPicker` / `AppEvent::SetConfigScriptTimeout` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_script_timeout_setting()`.
 
@@ -628,7 +631,7 @@ The script timeout is configurable via `/settings` -> "Script Timeout" which ope
 
 Keyboard shortcuts are configurable through the `/settings` panel ("Hotkeys" item) and persisted under `[tui.hotkeys]` in `config.toml`. The implementation is split across two layers:
 
-- **Config layer** (`@/nori-rs/acp/src/config/types/mod.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
+- **Config layer** (`@/nori-rs/nori-config/src/types/mod.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
 - **TUI layer** (`@/nori-rs/tui/src/nori/hotkey_match.rs`): Converts `HotkeyBinding` strings to crossterm `KeyEvent` matches via `parse_binding()` and `matches_binding()`. Also provides `key_event_to_binding()` for the reverse direction (capturing a key press as a binding string).
 
 The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()` (`app/event_handling.rs`), configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` (`app/config_persistence.rs`) which uses `ConfigEditsBuilder` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
@@ -656,7 +659,7 @@ The textarea supports an optional vim-style navigation mode, configured via `/se
 vim_mode = "newline"  # or "submit" or "off"
 ```
 
-The `VimEnterBehavior` enum (from `@/nori-rs/acp/src/config/types/mod.rs`) controls both whether vim mode is enabled and how the Enter key behaves:
+The `VimEnterBehavior` enum (from `@/nori-rs/nori-config/src/types/mod.rs`) controls both whether vim mode is enabled and how the Enter key behaves:
 
 | Variant   | Enter in INSERT    | Enter in NORMAL | Vim Enabled |
 | --------- | ------------------ | --------------- | ----------- |
@@ -761,7 +764,7 @@ git_stats = true
 vim_mode = true
 ```
 
-`FooterSegmentConfig::default()` (in `@/nori-rs/acp/src/config/types/mod.rs`) ships a lean subset enabled by default: `context`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, and `mode_indicator`. The remaining segments -- `prompt_summary`, `vim_mode`, `git_stats`, `nori_profile`, and `nori_version` -- are off by default and require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible.
+`FooterSegmentConfig::default()` (in `@/nori-rs/nori-config/src/types/mod.rs`) ships a lean subset enabled by default: `context`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, and `mode_indicator`. The remaining segments -- `prompt_summary`, `vim_mode`, `git_stats`, `nori_profile`, and `nori_version` -- are off by default and require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible.
 
 Segment placement is configurable through `[tui.footer_layout]`. Missing layout fields use defaults: legacy status segments render on `footer_left`, and `mode_indicator` renders on `footer_right`. A field that is present replaces that placement; listed segments are moved out of other default placements so a partial override can move one segment without duplicating it. The layout supports `footer_left`, `footer_right`, `textarea_top_left`, `textarea_top_right`, `textarea_bottom_left`, and `textarea_bottom_right`.
 
@@ -772,12 +775,12 @@ Example config.toml to move the mode indicator into the textarea's top-right cor
 textarea_top_right = ["mode_indicator"]
 ```
 
-Token data flows from `TranscriptLocation.token_breakdown` (provided by `nori_acp::discover_transcript_for_agent_with_message()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
+Token data flows from `TranscriptLocation.token_breakdown` (provided by `nori_harness::discover_transcript_for_agent_with_message()`) through `FooterProps` to the footer renderer. The breakdown includes separate input, output, and cached token counts for accurate usage reporting.
 Footer context usage is sourced in priority order: ACP `SessionUpdateInfo { kind: Usage, usage: Some(..) }` updates drive the footer when available, while `TranscriptLocation.token_breakdown` remains the provider-specific fallback for older sessions or agents that do not emit ACP usage updates.
 
 The prompt summary flows from the ACP backend as an `EventMsg::PromptSummary` event, handled by `ChatWidget::on_prompt_summary()`, which propagates it down: `ChatWidget` -> `BottomPane::set_prompt_summary()` -> `ChatComposer::set_prompt_summary()` -> `FooterProps.prompt_summary` -> `segments_for()` renderer.
 
-The TUI detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree.is_enabled()` (true for both `Automatic` and `Ask` variants) and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig` (see `chatwidget/agent.rs`). The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
+The harness session runtime (`@/nori-rs/harness/src/runtime.rs`) detects the repo root for auto-worktree branch renaming by inspecting the cwd path structure: when `auto_worktree.is_enabled()` (true for both `Automatic` and `Ask` variants) and the cwd's parent directory is named `.worktrees`, the grandparent is treated as the repo root. This value is passed as `auto_worktree_repo_root` in `AcpBackendConfig`. The branch rename is fire-and-forget; the working directory does not change during a session, so the TUI does not need to handle directory changes.
 
 **External Editor Integration (`editor.rs`):**
 
@@ -798,7 +801,7 @@ The `/browse` slash command launches a configurable terminal file manager in cho
 
 1. Creates a temp file (`nori-browse-*.txt`) for the file manager to write the chosen path into
 2. Suspends the TUI via `tui::restore()`
-3. Spawns the file manager with chooser-mode arguments (from `FileManager::chooser_args()` in `@/nori-rs/acp/src/config/types/mod.rs`)
+3. Spawns the file manager with chooser-mode arguments (from `FileManager::chooser_args()` in `@/nori-rs/nori-config/src/types/mod.rs`)
 4. On success, reads the first line of the temp file as the selected path
 5. If the selected path is a file, opens it in the user's editor using the same `editor::resolve_editor()` / `editor::spawn_editor()` as Ctrl-G
 6. Re-enables the TUI via `tui::set_modes()`
@@ -810,7 +813,7 @@ The file manager setting is configurable via `/settings` -> "File Manager" which
 **View-Only Transcript Viewing:**
 The `/resume-viewonly` command allows viewing previous session transcripts without replaying the conversation. Implementation in `@/nori-rs/tui/src/`:
 
-- `viewonly_transcript.rs`: Converts `nori_acp::transcript::Transcript` entries to `ViewonlyEntry` enum (User, Assistant, Thinking, Info variants)
+- `viewonly_transcript.rs`: Converts `nori_harness::transcript::Transcript` entries to `ViewonlyEntry` enum (User, Assistant, Thinking, Info variants)
 - `nori/viewonly_session_picker.rs`: Session picker UI for selecting past sessions; also defines `SessionPickerInfo` (shared with `/resume` picker)
 - `app/session_setup.rs::display_viewonly_transcript()`: Renders entries in the chat history
 
@@ -841,7 +844,7 @@ ResumeSelection::Resume(ResumeTarget)
 ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
     |
     v
-spawn_acp_agent_resume() -> AcpBackend::resume_session()
+spawn_acp_agent_resume() -> launch_session(resume) -> AcpBackend::resume_session()
 ```
 
 Selection behavior:
@@ -851,15 +854,17 @@ Selection behavior:
 - `nori resume` opens `resume_picker/`, which lists metadata-only transcript rows and returns a `ResumeTarget`.
 - `--agent` is optional. When omitted, the recorded `session_meta.agent` is used. When present, it must match the recorded agent or startup fails with a clear error.
 
-The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It uses `TranscriptLoader::list_resumable_session_metadata()` and keeps rows lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery.
+The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It loads its rows in a single one-shot pass through `TranscriptLoader::list_resumable_session_metadata()` and keeps them lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery, and it has no background page-loading or load-more machinery -- that pagination scaffolding was removed as inert once the picker moved to one-shot `TranscriptLoader` loading.
 
 Resume hints use the shared `RESUME_HINT_LEAD` and `resume_command_for_conversation()` helpers from `app/` so the in-TUI new-conversation summary and the post-exit CLI output stay aligned. Both surfaces put the copyable `nori resume <session-id>` command on its own line after the `run:` lead text.
 
 **Session Resume (`/resume`):**
 
-The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and otherwise falls back to a fresh ACP session plus normalized replay derived from the saved transcript (see `@/nori-rs/acp/docs.md`).
+The `/resume` command allows reconnecting to a previous ACP session. It uses the ACP agent's `session/load` RPC when available, and otherwise falls back to a fresh ACP session plus normalized replay derived from the saved transcript (see `@/nori-rs/harness/docs.md`).
 
-The flow involves three layers:
+The picker list itself comes from one of two sources. `ChatWidget::open_resume_session_picker()` has a capability-gated branch: when the agent advertises *both* `session/list` and `load_session` (`self.session_agent_capabilities.session_list && self.session_agent_capabilities.load_session`) and an `acp_handle` exists, it spawns an async task that calls `handle.list_sessions(cwd)` on the live agent (via the `ListSessions { cwd, response_tx }` `AcpAgentCommand`) and emits `AppEvent::ShowAcpResumeSessionPicker { sessions }` with the agent's own `AcpSessionSummary` rows. An empty result inserts a "no resumable sessions" error cell and a list failure inserts an error cell instead of opening a picker. Otherwise it falls back to the existing local-transcript picker (`AppEvent::ShowResumeSessionPicker`) described below. `load_session` is required in addition to `session_list` because resuming an agent-sourced row passes `transcript: None` and depends entirely on server-side `session/load` replay; without `load_session` an agent would silently start a blank session, so such agents fall through to the transcript-backed picker. The `session_list` capability is the raw agent-capability projection sourced from `@/nori-rs/harness`; this is generic to any agent that advertises ACP `session/list`, not Nori/Codex-specific. Selecting an agent-sourced row emits `AppEvent::ResumeAcpSession { acp_session_id }`, whose handler shuts down the current conversation and starts a new resumed ACP chat widget via `new_resumed_acp(init, Some(acp_session_id), None)` -- there is no local transcript, so server-side `session/load` replay rehydrates history. `show_acp_resume_session_picker()` builds the modal via `acp_resume_session_picker_params()` in `@/nori-rs/tui/src/nori/resume_session_picker.rs`, mapping each summary to a row (name = title falling back to session_id, description = relative time plus cwd, action = `ResumeAcpSession`).
+
+The transcript-backed flow involves three layers:
 
 ```
 SlashCommand::Resume
@@ -883,7 +888,7 @@ App::shutdown_current_conversation()
 ChatWidget::new_resumed_acp(init, acp_session_id, transcript)
     |
     v
-spawn_acp_agent_resume() -> AcpBackend::resume_session()
+spawn_acp_agent_resume() -> launch_session(resume) -> AcpBackend::resume_session()
 ```
 
 The `ResumeSession` handler loads the full transcript (not just metadata) via `TranscriptLoader::load_transcript()`. The `acp_session_id` is extracted as `Option<String>` from `transcript.meta.acp_session_id` -- sessions without an `acp_session_id` are still resumable via the normalized replay fallback.
@@ -894,22 +899,21 @@ Lazy picker summaries: after `ShowResumeSessionPicker` is sent, `ChatWidget::ope
 
 The resume session picker reuses the `SessionPickerInfo` type and `format_relative_time()` utility from `@/nori-rs/tui/src/nori/viewonly_session_picker.rs`. The `format_relative_time` function was made `pub(crate)` for this reuse.
 
-`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` mirrors `spawn_acp_agent()` but calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`, passing the optional `acp_session_id` and the full `Transcript`. Both spawn paths receive a single `BackendEvent` stream from `nori-acp`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
+`spawn_acp_agent_resume()` in `@/nori-rs/tui/src/chatwidget/agent.rs` calls the same shared launch path as `spawn_agent()` but sets `SessionLaunchSpec.resume` to a `SessionResume` carrying the optional `acp_session_id` and an `Option<Transcript>` (the transcript-backed `/resume` and `nori resume` paths supply `Some`; the agent-sourced `session/list` path supplies `None` and relies on server-side replay); the harness runtime then calls `AcpBackend::resume_session()` instead of `AcpBackend::spawn()`. Both spawn paths receive a single `SessionEvent` stream from `nori_harness::runtime`: normalized `ClientEvent` items drive ACP session rendering, while `Control` events still carry shared app-level concerns such as `SessionConfigured`, warnings, and shutdown.
 
 **Agent Connection Lifecycle & Failure Recovery:**
 
 Agent registration validation is performed exclusively in `spawn_agent()` (`chatwidget/agent.rs`). When the configured model is not in the ACP registry, `spawn_agent()` routes to `spawn_error_agent()` which sends `AppEvent::AgentSpawnFailed` -- triggering `on_agent_spawn_failed()` to display the error and reopen the agent picker for recovery. There is no early validation in `App::run()`; this single validation point ensures that unregistered agents (including custom agents that were configured but later removed) always get graceful recovery through the agent picker rather than a fatal startup error.
 
-When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()`. Each spawn function (`spawn_acp_agent`, `spawn_acp_agent_resume`) uses a `tokio::select!` to race three concurrent futures during backend initialization:
+When the user selects an agent (or resumes a session), the TUI shows a "Connecting to [Agent]" status indicator via `ChatWidget::show_connecting_status()` (emitted from `chatwidget/agent.rs` as `AppEvent::AgentConnecting` before launching). The connection race itself lives in the harness: `launch_session()` in `@/nori-rs/harness/src/runtime.rs` uses a `tokio::select!` to race backend initialization against shutdown requests and a two-phase timeout, and the TUI's event-forwarding task in `chatwidget/agent.rs` maps the resulting `SessionEvent`s onto `AppEvent`s:
 
-| Arm                              | Trigger                                                 | Action                                                                   |
-| -------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Backend init completes (success) | `AcpBackend::spawn()` / `resume_session()` returns `Ok` | Proceeds to op forwarding and event forwarding                           |
-| Backend init completes (failure) | Returns `Err`                                           | Sends `AppEvent::AgentSpawnFailed`, drops `codex_op_rx`                  |
-| `drain_until_shutdown()`         | User sends `Op::Shutdown` during connection             | Sends `AppEvent::ExitRequest`, drops `codex_op_rx`                       |
-| `spawn_timeout_sequence()`       | 8s warning + 30s abort elapse                           | Sends warning at 8s, then `AgentSpawnFailed` at 38s, drops `codex_op_rx` |
+| Runtime outcome                  | Trigger                                                                 | TUI action                                                        |
+| -------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `SessionEvent::Backend`          | `AcpBackend::spawn()` / `resume_session()` returns `Ok`, events flowing | Forwards as `AppEvent::CodexEvent` / `AppEvent::ClientEvent`       |
+| `SessionEvent::SpawnFailed`      | Init returns `Err`, or the 8s-warning + 30s-abort timeout elapses       | Sends `AppEvent::AgentSpawnFailed`                                 |
+| `SessionEvent::ShutdownRequested`| User sends `Op::Shutdown` during connection                             | Sends `AppEvent::ExitRequest`                                      |
 
-`drain_until_shutdown()` reads ops from the channel, discarding everything until it sees `Op::Shutdown`. This allows the user to exit (via `/exit`, Ctrl-C) even while the backend is still attempting to connect. `spawn_timeout_sequence()` provides user feedback: at 8 seconds it sends a `WarningEvent` visible in the chat, and after 30 more seconds it aborts the connection attempt entirely.
+`drain_until_shutdown()` (in `@/nori-rs/harness/src/runtime.rs`) reads ops from the channel, discarding everything until it sees `Op::Shutdown`. This allows the user to exit (via `/exit`, Ctrl-C) even while the backend is still attempting to connect. `spawn_timeout_sequence()` provides user feedback: at 8 seconds the runtime emits a `WarningEvent` visible in the chat, and after 30 more seconds it aborts the connection attempt entirely.
 
 `on_agent_spawn_failed()` in `chatwidget/helpers.rs` performs three recovery steps in order:
 
@@ -941,11 +945,11 @@ Title content is sanitized by `sanitize_terminal_title()` which strips control c
 
 **Exit Path When Backend Is Dead:**
 
-Every error/timeout/shutdown arm in the `tokio::select!` explicitly calls `drop(codex_op_rx)` before returning. This closes the receiver end of the channel so that `codex_op_tx` (held by `ChatWidget`) has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
+Every error/timeout/shutdown arm in the runtime's `tokio::select!` (`@/nori-rs/harness/src/runtime.rs`) explicitly drops the op receiver before returning. This closes the receiver end of the channel so that the op sender (held by `ChatWidget`) has no listener. If the user then attempts to exit (via `/exit`, `/quit`, or Ctrl-C), `submit_op(Op::Shutdown)` detects the dead channel (the `send()` returns `Err`) and falls back to sending `AppEvent::ExitRequest` directly via `app_event_tx`. This ensures the TUI can always exit cleanly even when no backend is running.
 
 **Loop Mode (Prompt Repetition):**
 
-Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/settings` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/nori-rs/acp/src/config/types/mod.rs`).
+Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/settings` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/nori-rs/nori-config/src/types/mod.rs`).
 
 The loop is orchestrated entirely within the TUI layer -- `codex-core` has no awareness of loop semantics:
 
@@ -974,7 +978,7 @@ App::handle_event(LoopIteration)
 
 State fields on `ChatWidget`: `loop_remaining: Option<i32>` and `loop_total: Option<i32>`. These are initialized on the first `submit_user_message()` call and carried forward across iterations via `App`-level event handling.
 
-The loop survives transient failures and cancels only on fatal ones. The decision is owned by the prompt **completion**, not by the error event: on a prompt failure the ACP backend emits both an `EventMsg::Error` (display) and a `ClientEvent::PromptCompleted` carrying a `failure: Option<nori_protocol::TurnFailure>` (`Retryable`/`Fatal`; `None` for a clean success or user cancel — see `@/nori-rs/acp/docs.md`). `handle_client_prompt_completed()` in `@/nori-rs/tui/src/chatwidget/event_handlers.rs` calls `cancel_loop()` iff `failure == Some(Fatal)`, and it does so *before* the same completion drives `on_task_complete` to re-fire the next iteration. A `Retryable` failure leaves the loop armed so the next iteration retries; a `Fatal` failure disarms both `loop_remaining` and `loop_total` first. `on_error()` is now display-only (it appends the error cell and finalizes the turn but never touches loop state); concentrating the disposition on the single ordered `PromptCompleted` event removes the prior cross-channel race where an unconditional `Error`-driven `cancel_loop()` could disarm the loop before the completion re-fired it (e.g. on a momentary Anthropic `529`/overloaded or rate-limit blip). The completion also suppresses the generic "Conversation interrupted" notice whenever `failure.is_some()`, since the failure already surfaces its own error cell; only a clean user cancellation (`Cancelled` with `failure == None`) shows the interrupted notice. `cancel_loop()` (in `@/nori-rs/tui/src/chatwidget/pickers.rs`) is a no-op when no loop is active and logs (`tracing::info`) only when it actually cancels. The `/settings` sub-picker is a custom `BottomPaneView` implemented by `LoopCountPickerView` in `@/nori-rs/tui/src/nori/loop_count_picker.rs`. It offers preset options (Disabled, 2, 3, 5, 10) plus a "Custom..." option that enters an input mode where the user can type an arbitrary number (2-1000). Values <= 1 are treated as disabled, values > 1000 are capped. This follows the same `BottomPaneView` pattern used by `HotkeyPickerView`. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
+The loop survives transient failures and cancels only on fatal ones. The decision is owned by the prompt **completion**, not by the error event: on a prompt failure the ACP backend emits both an `EventMsg::Error` (display) and a `ClientEvent::PromptCompleted` carrying a `failure: Option<nori_protocol::TurnFailure>` (`Retryable`/`Fatal`; `None` for a clean success or user cancel — see `@/nori-rs/harness/docs.md`). `handle_client_prompt_completed()` in `@/nori-rs/tui/src/chatwidget/event_handlers.rs` calls `cancel_loop()` iff `failure == Some(Fatal)`, and it does so *before* the same completion drives `on_task_complete` to re-fire the next iteration. A `Retryable` failure leaves the loop armed so the next iteration retries; a `Fatal` failure disarms both `loop_remaining` and `loop_total` first. `on_error()` is now display-only (it appends the error cell and finalizes the turn but never touches loop state); concentrating the disposition on the single ordered `PromptCompleted` event removes the prior cross-channel race where an unconditional `Error`-driven `cancel_loop()` could disarm the loop before the completion re-fired it (e.g. on a momentary Anthropic `529`/overloaded or rate-limit blip). The completion also suppresses the generic "Conversation interrupted" notice whenever `failure.is_some()`, since the failure already surfaces its own error cell; only a clean user cancellation (`Cancelled` with `failure == None`) shows the interrupted notice. `cancel_loop()` (in `@/nori-rs/tui/src/chatwidget/pickers.rs`) is a no-op when no loop is active and logs (`tracing::info`) only when it actually cancels. The `/settings` sub-picker is a custom `BottomPaneView` implemented by `LoopCountPickerView` in `@/nori-rs/tui/src/nori/loop_count_picker.rs`. It offers preset options (Disabled, 2, 3, 5, 10) plus a "Custom..." option that enters an input mode where the user can type an arbitrary number (2-1000). Values <= 1 are treated as disabled, values > 1000 are capped. This follows the same `BottomPaneView` pattern used by `HotkeyPickerView`. The setting persists to `[tui]` in `config.toml` via `persist_loop_count_setting()`.
 
 **History Insertion and Scrollback (`insert_history.rs`, `tui.rs`):**
 
@@ -1037,12 +1041,12 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 
 | Feature       | Dependencies                     | Default | Purpose                                    |
 | ------------- | -------------------------------- | ------- | ------------------------------------------ |
-| `unstable`    | `nori-acp/unstable`              | Yes     | Unstable ACP features like agent switching |
-| `nori-config` | -                                | Yes     | Use Nori's simplified ACP-only config      |
 | `login`       | `codex-login`, `codex-utils-pty` | Yes     | ChatGPT/API login functionality            |
 | `otel`        | `opentelemetry-appender-tracing` | No      | OpenTelemetry tracing export               |
 | `vt100-tests` | -                                | No      | vt100-based emulator tests                 |
 | `debug-logs`  | -                                | No      | Verbose debug logging                      |
+
+The old `nori-config` feature (which switched config sourcing between the harness crate, then named `nori-acp`, and `codex-core` at compile time) was removed in the crate-layering cleanup (`@/docs/specs/crate-layering.md`); the Nori config path (`~/.nori/cli/config.toml` via `@/nori-rs/nori-config/src/`) is now the only path.
 
 **--yolo Flag:**
 

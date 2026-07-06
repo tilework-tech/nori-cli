@@ -7,7 +7,7 @@ use crate::bottom_pane::textarea::VimModeState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use nori_acp::config::VimEnterBehavior;
+use nori_config::VimEnterBehavior;
 use tokio::sync::mpsc::unbounded_channel;
 
 fn make_composer() -> ChatComposer {

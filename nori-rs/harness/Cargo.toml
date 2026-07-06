@@ -1,0 +1,68 @@
+[package]
+name = "nori-harness"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+agent-client-protocol-schema = { workspace = true, features = ["unstable"] }
+anyhow = { workspace = true }
+axum = { workspace = true, default-features = false, features = [
+    "http1",
+    "tokio",
+] }
+rmcp = { workspace = true, features = [
+    "macros",
+    "schemars",
+    "server",
+    "transport-streamable-http-server",
+] }
+base64 = { workspace = true }
+codex-git = { workspace = true }
+codex-rmcp-client = { workspace = true }
+codex-protocol = { workspace = true }
+codex-utils-string = { workspace = true }
+futures = { workspace = true }
+nori-protocol = { workspace = true }
+oauth2 = "5"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["compat"] }
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+dirs = { workspace = true }
+diffy = { workspace = true }
+nori-acp-host = { workspace = true }
+nori-config = { workspace = true }
+notify-rust = { workspace = true }
+regex = { workspace = true }
+shlex = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-bash = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+which = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+filetime = "0.2"
+pretty_assertions = { workspace = true }
+rmcp = { workspace = true, features = [
+    "client",
+    "transport-streamable-http-client-reqwest",
+] }
+serial_test = { workspace = true }
+tempfile = { workspace = true }
+tokio-test = { workspace = true }
+which = { workspace = true }
