@@ -15,6 +15,7 @@ members = [
     "login",
     "mcp-types",
     "process-hardening",
+    "acp-host",
     "nori-config",
     "protocol",
     "sandbox",
@@ -61,6 +62,7 @@ codex-git = { path = "utils/git" }
 codex-keyring-store = { path = "keyring-store" }
 codex-linux-sandbox = { path = "linux-sandbox" }
 codex-sandbox = { path = "sandbox" }
+nori-acp-host = { path = "acp-host" }
 nori-config = { path = "nori-config" }
 codex-login = { path = "login" }
 codex-otel = { path = "otel" }

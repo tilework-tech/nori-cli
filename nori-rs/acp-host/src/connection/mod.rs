@@ -31,7 +31,7 @@ pub enum ConnectionEvent {
     },
 }
 
-pub(crate) fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {
+pub fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {
     match update {
         acp::SessionUpdate::AgentMessageChunk(_) => "agent_message_chunk",
         acp::SessionUpdate::AgentThoughtChunk(_) => "agent_thought_chunk",

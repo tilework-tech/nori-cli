@@ -52,7 +52,7 @@ match subcommand {
 - `cloud_agent_config()` builds a synthetic registry entry (slug `nori-cloud`): a local distribution running `<handroll-bin> cloud-acp`, with the read-only `[cloud] broker_url` from `config.toml` (when present) translated to a `NORI_BROKER_URL` environment variable on the child, and an auth hint pointing at `nori-handroll login`
 - The dispatch in `main.rs` forces `interactive.agent = "nori-cloud"` AFTER flag merging, so `--agent` cannot bypass Sessions, and passes the entry via the clap-skipped `TuiCli.extra_agents` field (see `@/nori-rs/tui/src/cli.rs`)
 - From there the handroll child rides the ordinary local-agent path end to end: registry lookup, `AcpConnection::spawn()`, and unconditional local transcript recording (duplicating the broker's server-side recording is intentional)
-- Auth, broker REST, session acquisition/release, and tunnel transport all live inside `nori-handroll cloud-acp`. Clean release relies on the graceful stdin-EOF shutdown contract in `@/nori-rs/acp/src/connection/acp_connection.rs`
+- Auth, broker REST, session acquisition/release, and tunnel transport all live inside `nori-handroll cloud-acp`. Clean release relies on the graceful stdin-EOF shutdown contract in `@/nori-rs/acp-host/src/connection/acp_connection.rs`
 - TUI flags such as `--agent`, `--profile`, `--sandbox` can still be passed after `cloud` (only `--agent` is overridden)
 
 **Debug Sandbox** (`debug_sandbox.rs`): Implementation of the sandbox testing commands.

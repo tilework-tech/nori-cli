@@ -22,8 +22,8 @@ use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::Duration;
 
-use crate::config::AgentConfigToml;
-use crate::config::ResolvedDistribution;
+use nori_config::AgentConfigToml;
+use nori_config::ResolvedDistribution;
 
 /// Default idle timeout for ACP streaming (5 minutes)
 const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -1228,9 +1228,9 @@ mod tests {
 
     #[test]
     fn test_build_registry_appends_custom_agent() {
-        use crate::config::AgentConfigToml;
-        use crate::config::AgentDistributionToml;
-        use crate::config::PackageDistribution;
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::PackageDistribution;
         let custom = AgentConfigToml {
             name: "Kimi".to_string(),
             slug: "kimi".to_string(),
@@ -1254,9 +1254,9 @@ mod tests {
 
     #[test]
     fn test_build_registry_custom_overrides_builtin() {
-        use crate::config::AgentConfigToml;
-        use crate::config::AgentDistributionToml;
-        use crate::config::LocalDistribution;
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::LocalDistribution;
         let custom_claude = AgentConfigToml {
             name: "My Claude".to_string(),
             slug: "claude-code".to_string(),
@@ -1282,9 +1282,9 @@ mod tests {
 
     #[test]
     fn test_build_registry_rejects_duplicate_custom_slugs() {
-        use crate::config::AgentConfigToml;
-        use crate::config::AgentDistributionToml;
-        use crate::config::PackageDistribution;
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::PackageDistribution;
         let agents = vec![
             AgentConfigToml {
                 name: "Agent A".to_string(),
@@ -1323,9 +1323,9 @@ mod tests {
     #[serial]
     fn test_get_agent_config_resolves_custom_uvx_agent() {
         reset_registry();
-        use crate::config::AgentConfigToml;
-        use crate::config::AgentDistributionToml;
-        use crate::config::PackageDistribution;
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::PackageDistribution;
         let custom = AgentConfigToml {
             name: "Kimi".to_string(),
             slug: "kimi".to_string(),
@@ -1352,9 +1352,9 @@ mod tests {
     #[serial]
     fn test_get_agent_config_resolves_custom_local_agent() {
         reset_registry();
-        use crate::config::AgentConfigToml;
-        use crate::config::AgentDistributionToml;
-        use crate::config::LocalDistribution;
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::LocalDistribution;
         let custom = AgentConfigToml {
             name: "Local Agent".to_string(),
             slug: "local-test".to_string(),
@@ -1383,9 +1383,9 @@ mod tests {
     #[serial]
     fn test_list_available_agents_includes_custom() {
         reset_registry();
-        use crate::config::AgentConfigToml;
-        use crate::config::AgentDistributionToml;
-        use crate::config::PackageDistribution;
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::PackageDistribution;
         let custom = AgentConfigToml {
             name: "Kimi".to_string(),
             slug: "kimi".to_string(),
@@ -1413,9 +1413,9 @@ mod tests {
     #[serial]
     fn test_get_agent_display_name_custom_agent() {
         reset_registry();
-        use crate::config::AgentConfigToml;
-        use crate::config::AgentDistributionToml;
-        use crate::config::PackageDistribution;
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::PackageDistribution;
         let custom = AgentConfigToml {
             name: "My Custom Agent".to_string(),
             slug: "my-custom".to_string(),

@@ -41,6 +41,7 @@ toml = { workspace = true }
 toml_edit = { workspace = true }
 dirs = { workspace = true }
 diffy = { workspace = true }
+nori-acp-host = { workspace = true }
 nori-config = { workspace = true }
 notify-rust = { workspace = true }
 regex = { workspace = true }

@@ -3627,6 +3627,7 @@ dependencies = [
  "filetime",
  "futures",
  "libc",
+ "nori-acp-host",
  "nori-config",
  "nori-protocol",
  "notify-rust",
@@ -3651,6 +3652,35 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
  "uuid",
+ "which",
+]
+
+[[package]]
+name = "nori-acp-host"
+version = "0.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent-client-protocol-schema",
+ "anyhow",
+ "base64",
+ "codex-protocol",
+ "codex-rmcp-client",
+ "codex-utils-string",
+ "diffy",
+ "futures",
+ "libc",
+ "nori-config",
+ "oauth2",
+ "pretty_assertions",
+ "regex",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "which",
 ]
 
