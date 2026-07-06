@@ -1,0 +1,43 @@
+[package]
+edition = "2024"
+name = "codex-sandbox"
+version = { workspace = true }
+
+[lib]
+doctest = false
+name = "codex_sandbox"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+async-channel = { workspace = true }
+chardetng = { workspace = true }
+codex-protocol = { workspace = true }
+codex-windows-sandbox = { package = "codex-windows-sandbox", path = "../windows-sandbox-rs" }
+encoding_rs = { workspace = true }
+libc = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std",
+    "io-util",
+    "time",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "signal",
+] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true, features = ["log"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = { workspace = true }
+seccompiler = { workspace = true }
+
+[dev-dependencies]
+maplit = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }

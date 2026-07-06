@@ -14,7 +14,4 @@ pub static CODEX_ALIASES_TEMP_DIR: TempDir = unsafe {
 };
 
 mod auth_refresh;
-mod exec;
 mod live_cli;
-mod seatbelt;
-mod text_encoding_fix;

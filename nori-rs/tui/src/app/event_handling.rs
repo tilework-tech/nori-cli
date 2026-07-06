@@ -54,7 +54,7 @@ impl App {
         self.config.sandbox_policy = sandbox.clone();
         #[cfg(target_os = "windows")]
         if !matches!(sandbox, codex_protocol::protocol::SandboxPolicy::ReadOnly)
-            || codex_core::get_platform_sandbox().is_some()
+            || codex_sandbox::get_platform_sandbox().is_some()
         {
             self.config.forced_auto_mode_downgraded_on_windows = false;
         }
@@ -405,7 +405,7 @@ impl App {
                         return Ok(true);
                     }
 
-                    let should_check = codex_core::get_platform_sandbox().is_some()
+                    let should_check = codex_sandbox::get_platform_sandbox().is_some()
                         && sandbox_is_workspace_write_or_ro
                         && !self.chat_widget.world_writable_warning_hidden();
                     if should_check {

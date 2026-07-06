@@ -8,7 +8,7 @@ The linux-sandbox crate provides a Landlock-based sandboxing binary for Linux. I
 
 ### How it fits into the larger codebase
 
-Used by `@/nori-rs/core/` (`exec.rs`) as the sandbox executor on Linux. The crate produces a `codex-linux-sandbox` binary that is exec'd to run commands in a restricted environment.
+Used by `@/nori-rs/sandbox/` (the `codex-sandbox` exec engine) as the sandbox executor on Linux. The crate produces a `codex-linux-sandbox` binary that is exec'd to run commands in a restricted environment. Its Landlock setup builds on `codex_sandbox::error` types (`CodexErr`, `SandboxErr`).
 
 ### Core Implementation
 
@@ -42,11 +42,11 @@ Beyond Landlock filesystem restrictions, seccomp filters block dangerous syscall
 
 **Testing:**
 
-Tests in `tests/suite/landlock.rs` verify sandbox behavior:
+Tests in `tests/suite/landlock.rs` verify sandbox behavior by driving `codex_sandbox::exec::process_exec_tool_call` end-to-end:
 - File access restrictions
 - Write blocking
 - Network access control
 
-The binary is typically invoked by the core crate (`@/nori-rs/core/src/exec.rs`), not directly by users. It can also be embedded in the main `nori` executable via arg0 dispatch (`codex-arg0` crate) for single-binary distribution.
+The binary is typically invoked by the exec engine (`@/nori-rs/sandbox/src/exec.rs`), not directly by users. It can also be embedded in the main `nori` executable via arg0 dispatch (`codex-arg0` crate) for single-binary distribution.
 
 Created and maintained by Nori.

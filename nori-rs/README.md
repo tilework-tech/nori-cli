@@ -18,6 +18,7 @@ progressively adopted or removed (see `docs/specs/crate-layering.md`).
 | `tui/` (`nori-tui`) | Ratatui interactive terminal interface |
 | `acp/` (`nori-acp`) | ACP backend: agent registry, connection, session runtime |
 | `nori-protocol/` | Session-runtime types over the ACP schema |
+| `sandbox/` (`codex-sandbox`) | Sandboxed exec engine: Seatbelt, Landlock/seccomp, Windows restricted tokens |
 | `installed/` (`nori-installed`) | Install detection and analytics |
 | `mock-acp-agent/` | Mock ACP agent used by tests |
 | `tui-pty-e2e/` | End-to-end PTY tests driving the real binary |

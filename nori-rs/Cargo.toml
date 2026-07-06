@@ -16,6 +16,7 @@ members = [
     "mcp-types",
     "process-hardening",
     "protocol",
+    "sandbox",
     "rmcp-client",
     "stdio-to-uds",
     "otel",
@@ -58,6 +59,7 @@ codex-file-search = { path = "file-search" }
 codex-git = { path = "utils/git" }
 codex-keyring-store = { path = "keyring-store" }
 codex-linux-sandbox = { path = "linux-sandbox" }
+codex-sandbox = { path = "sandbox" }
 codex-login = { path = "login" }
 codex-otel = { path = "otel" }
 codex-process-hardening = { path = "process-hardening" }

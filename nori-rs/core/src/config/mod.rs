@@ -208,7 +208,7 @@ pub struct Config {
     pub file_opener: UriBasedFileOpener,
 
     /// Path to the `codex-linux-sandbox` executable. This must be set if
-    /// [`crate::exec::SandboxType::LinuxSeccomp`] is used. Note that this
+    /// [`codex_sandbox::exec::SandboxType::LinuxSeccomp`] is used. Note that this
     /// cannot be set in the config file: it must be set in code via
     /// [`ConfigOverrides`].
     ///
@@ -842,7 +842,7 @@ impl ConfigToml {
         if cfg!(target_os = "windows")
             && matches!(resolved_sandbox_mode, SandboxMode::WorkspaceWrite)
             // If the experimental Windows sandbox is enabled, do not force a downgrade.
-            && crate::safety::get_platform_sandbox().is_none()
+            && codex_sandbox::get_platform_sandbox().is_none()
         {
             sandbox_policy = SandboxPolicy::new_read_only_policy();
             forced_auto_mode_downgraded_on_windows = true;
@@ -1002,7 +1002,7 @@ impl Config {
         let features = Features::from_config(&cfg, &config_profile, feature_overrides);
         #[cfg(target_os = "windows")]
         {
-            crate::safety::set_windows_sandbox_enabled(features.enabled(Feature::WindowsSandbox));
+            codex_sandbox::set_windows_sandbox_enabled(features.enabled(Feature::WindowsSandbox));
         }
 
         let resolved_cwd = {
@@ -1335,7 +1335,7 @@ impl Config {
     }
 
     pub fn set_windows_sandbox_globally(&mut self, value: bool) {
-        crate::safety::set_windows_sandbox_enabled(value);
+        codex_sandbox::set_windows_sandbox_enabled(value);
         if value {
             self.features.enable(Feature::WindowsSandbox);
         } else {
