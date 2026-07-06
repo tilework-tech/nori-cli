@@ -4,7 +4,7 @@ use codex_protocol::config_types::Verbosity;
 use crate::config::types::ReasoningSummaryFormat;
 use crate::tool_types::ApplyPatchToolType;
 use crate::tool_types::ConfigShellToolType;
-use crate::truncate::TruncationPolicy;
+use codex_sandbox::truncate::TruncationPolicy;
 
 /// The `instructions` field in the payload sent to a model should always start
 /// with this content.

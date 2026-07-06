@@ -56,7 +56,7 @@ use tokio::sync::mpsc::unbounded_channel;
 
 #[cfg(target_os = "windows")]
 fn set_windows_sandbox_enabled(enabled: bool) {
-    codex_core::set_windows_sandbox_enabled(enabled);
+    codex_sandbox::set_windows_sandbox_enabled(enabled);
 }
 
 fn test_config() -> Config {

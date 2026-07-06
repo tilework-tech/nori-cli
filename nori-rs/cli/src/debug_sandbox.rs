@@ -8,12 +8,12 @@ use std::path::PathBuf;
 use codex_common::CliConfigOverrides;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
-use codex_core::exec_env::create_env;
-use codex_core::landlock::spawn_command_under_linux_sandbox;
-#[cfg(target_os = "macos")]
-use codex_core::seatbelt::spawn_command_under_seatbelt;
-use codex_core::spawn::StdioPolicy;
 use codex_protocol::config_types::SandboxMode;
+use codex_sandbox::exec_env::create_env;
+use codex_sandbox::landlock::spawn_command_under_linux_sandbox;
+#[cfg(target_os = "macos")]
+use codex_sandbox::seatbelt::spawn_command_under_seatbelt;
+use codex_sandbox::spawn::StdioPolicy;
 
 use crate::LandlockCommand;
 use crate::SeatbeltCommand;

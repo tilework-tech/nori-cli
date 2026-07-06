@@ -30,6 +30,7 @@ codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = ["cli"] }
 codex-core = { workspace = true }
+codex-sandbox = { workspace = true }
 codex-execpolicy = { workspace = true }
 codex-login = { workspace = true, optional = true }
 codex-process-hardening = { workspace = true }

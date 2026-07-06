@@ -427,7 +427,7 @@ impl App {
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
         #[cfg(target_os = "windows")]
         {
-            let should_check = codex_core::get_platform_sandbox().is_some()
+            let should_check = codex_sandbox::get_platform_sandbox().is_some()
                 && matches!(
                     app.config.sandbox_policy,
                     codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }

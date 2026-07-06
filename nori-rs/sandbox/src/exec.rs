@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::CodexErr;
 use crate::error::Result;
 use crate::error::SandboxErr;
-use crate::get_platform_sandbox;
+use crate::safety::get_platform_sandbox;
 use crate::sandboxing::CommandSpec;
 use crate::sandboxing::ExecEnv;
 use crate::sandboxing::SandboxManager;

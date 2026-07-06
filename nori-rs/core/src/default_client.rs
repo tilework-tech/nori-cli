@@ -1,4 +1,4 @@
-use crate::spawn::CODEX_SANDBOX_ENV_VAR;
+use codex_sandbox::spawn::CODEX_SANDBOX_ENV_VAR;
 use http::Error as HttpError;
 use reqwest::IntoUrl;
 use reqwest::Method;

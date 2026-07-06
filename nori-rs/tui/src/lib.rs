@@ -15,9 +15,9 @@ use codex_core::auth::enforce_login_restrictions;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
-use codex_core::get_platform_sandbox;
 use codex_protocol::config_types::SandboxMode;
 use codex_protocol::protocol::AskForApproval;
+use codex_sandbox::get_platform_sandbox;
 use nori_acp::transcript::SessionMetadata;
 use nori_acp::transcript::TranscriptLoader;
 #[cfg(feature = "otel")]

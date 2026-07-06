@@ -20,6 +20,7 @@ The TUI acts as the frontend layer. It:
 
 - Uses `nori-acp` for ACP agent communication (see `@/nori-rs/acp/`)
 - Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
+- Uses `codex-sandbox` for platform sandbox availability checks (`get_platform_sandbox`) in approval flows (see `@/nori-rs/sandbox/`)
 - Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)
 - Maps user-facing session controls such as `/goal` into typed `codex-protocol` operations, leaving ACP backend state ownership in `@/nori-rs/acp`
 - Displays approval requests from the ACP layer and forwards user decisions back
