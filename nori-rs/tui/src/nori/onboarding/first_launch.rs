@@ -4,7 +4,7 @@
 //! for the existence of `~/.nori/cli/config.toml`. This file is created
 //! after the first-launch onboarding flow completes.
 //!
-//! Note: The nori_home path (`~/.nori/cli`) is provided by `nori_acp::config::find_nori_home()`.
+//! Note: The nori_home path (`~/.nori/cli`) is provided by `nori_config::find_nori_home()`.
 
 use std::io;
 use std::path::Path;

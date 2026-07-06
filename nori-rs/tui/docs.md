@@ -10,6 +10,7 @@ The `nori-tui` crate provides the interactive terminal user interface for Nori, 
 
 ```
 User Input --> nori-tui --> nori-acp (ACP backend)
+                       \--> nori-config (Nori config, ~/.nori/cli/config.toml)
                        \--> codex-core (config, auth)
                        \--> codex-rmcp-client (MCP OAuth login)
                        \--> nori-protocol (ACP session events)
@@ -19,6 +20,7 @@ User Input --> nori-tui --> nori-acp (ACP backend)
 The TUI acts as the frontend layer. It:
 
 - Uses `nori-acp` for ACP agent communication (see `@/nori-rs/acp/`)
+- Imports `NoriConfig` and the other Nori config types directly from `nori-config` (see `@/nori-rs/nori-config/`); they are no longer re-exported through `nori-acp`
 - Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
 - Uses `codex-sandbox` for platform sandbox availability checks (`get_platform_sandbox`) in approval flows (see `@/nori-rs/sandbox/`)
 - Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)

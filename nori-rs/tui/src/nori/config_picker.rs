@@ -3,15 +3,15 @@
 //! This module provides the UI for modifying TUI configuration settings
 //! that are persisted to ~/.nori/cli/config.toml.
 
-use nori_acp::config::AutoWorktree;
-use nori_acp::config::FooterSegment;
-use nori_acp::config::FooterSegmentConfig;
-use nori_acp::config::NoriConfig;
-use nori_acp::config::NotifyAfterIdle;
-use nori_acp::config::OsNotifications;
-use nori_acp::config::ScriptTimeout;
-use nori_acp::config::TerminalNotifications;
-use nori_acp::config::VimEnterBehavior;
+use nori_config::AutoWorktree;
+use nori_config::FooterSegment;
+use nori_config::FooterSegmentConfig;
+use nori_config::NoriConfig;
+use nori_config::NotifyAfterIdle;
+use nori_config::OsNotifications;
+use nori_config::ScriptTimeout;
+use nori_config::TerminalNotifications;
+use nori_config::VimEnterBehavior;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -594,10 +594,10 @@ pub fn footer_segments_picker_params(
 /// * `current` - The currently selected file manager, if any
 /// * `_app_event_tx` - The app event sender for triggering config change events
 pub fn file_manager_picker_params(
-    current: Option<nori_acp::config::FileManager>,
+    current: Option<nori_config::FileManager>,
     _app_event_tx: AppEventSender,
 ) -> SelectionViewParams {
-    use nori_acp::config::FileManager;
+    use nori_config::FileManager;
 
     let variants = [
         FileManager::Vifm,
@@ -637,8 +637,8 @@ pub fn file_manager_picker_params(
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
-    use nori_acp::config::OsNotifications;
-    use nori_acp::config::TerminalNotifications;
+    use nori_config::OsNotifications;
+    use nori_config::TerminalNotifications;
     use std::path::PathBuf;
     use tokio::sync::mpsc::unbounded_channel;
 
@@ -647,21 +647,21 @@ mod tests {
             agent: "claude-code".to_string(),
             active_agent: "claude-code".to_string(),
             sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
-            approval_policy: nori_acp::config::ApprovalPolicy::OnRequest,
-            history_persistence: nori_acp::config::HistoryPersistence::SaveAll,
-            acp_proxy: nori_acp::config::AcpProxyConfig::disabled(),
+            approval_policy: nori_config::ApprovalPolicy::OnRequest,
+            history_persistence: nori_config::HistoryPersistence::SaveAll,
+            acp_proxy: nori_config::AcpProxyConfig::disabled(),
             animations: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
             vertical_footer,
-            notify_after_idle: nori_acp::config::NotifyAfterIdle::FiveSeconds,
+            notify_after_idle: nori_config::NotifyAfterIdle::FiveSeconds,
             vim_mode: VimEnterBehavior::Off,
-            hotkeys: nori_acp::config::HotkeyConfig::default(),
-            script_timeout: nori_acp::config::ScriptTimeout::default(),
+            hotkeys: nori_config::HotkeyConfig::default(),
+            script_timeout: nori_config::ScriptTimeout::default(),
             loop_count: None,
-            auto_worktree: nori_acp::config::AutoWorktree::Off,
+            auto_worktree: nori_config::AutoWorktree::Off,
             footer_segment_config: FooterSegmentConfig::default(),
-            footer_layout_config: nori_acp::config::FooterLayoutConfig::default(),
+            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             mcp_servers: std::collections::HashMap::new(),
@@ -889,8 +889,7 @@ mod tests {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params =
-            notify_after_idle_picker_params(nori_acp::config::NotifyAfterIdle::FiveSeconds, tx);
+        let params = notify_after_idle_picker_params(nori_config::NotifyAfterIdle::FiveSeconds, tx);
 
         assert_eq!(params.items.len(), 5);
         assert!(params.title.unwrap().contains("Notify After Idle"));
@@ -902,7 +901,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
 
         let params =
-            notify_after_idle_picker_params(nori_acp::config::NotifyAfterIdle::ThirtySeconds, tx);
+            notify_after_idle_picker_params(nori_config::NotifyAfterIdle::ThirtySeconds, tx);
 
         // Only the "30 seconds" item should be marked current
         for item in &params.items {
@@ -923,10 +922,8 @@ mod tests {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params = notify_after_idle_picker_params(
-            nori_acp::config::NotifyAfterIdle::FiveSeconds,
-            tx.clone(),
-        );
+        let params =
+            notify_after_idle_picker_params(nori_config::NotifyAfterIdle::FiveSeconds, tx.clone());
 
         // Select the "1 minute" option (index 3)
         let minute_item = &params.items[3];
@@ -938,7 +935,7 @@ mod tests {
         let event = rx.try_recv().expect("should receive event");
         match event {
             AppEvent::SetConfigNotifyAfterIdle(value) => {
-                assert_eq!(value, nori_acp::config::NotifyAfterIdle::SixtySeconds);
+                assert_eq!(value, nori_config::NotifyAfterIdle::SixtySeconds);
             }
             _ => panic!("expected SetConfigNotifyAfterIdle event, got: {event:?}"),
         }
@@ -1054,7 +1051,7 @@ mod tests {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params = script_timeout_picker_params(nori_acp::config::ScriptTimeout::default(), tx);
+        let params = script_timeout_picker_params(nori_config::ScriptTimeout::default(), tx);
 
         assert_eq!(params.items.len(), 5);
         assert!(params.title.unwrap().contains("Script Timeout"));
@@ -1065,8 +1062,7 @@ mod tests {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params =
-            script_timeout_picker_params(nori_acp::config::ScriptTimeout::from_str("1m"), tx);
+        let params = script_timeout_picker_params(nori_config::ScriptTimeout::from_str("1m"), tx);
 
         for item in &params.items {
             if item.name == "1m" {
@@ -1087,7 +1083,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
 
         let params =
-            script_timeout_picker_params(nori_acp::config::ScriptTimeout::default(), tx.clone());
+            script_timeout_picker_params(nori_config::ScriptTimeout::default(), tx.clone());
 
         // Select the "2m" option (index 3)
         let two_min_item = &params.items[3];
@@ -1099,7 +1095,7 @@ mod tests {
         let event = rx.try_recv().expect("should receive event");
         match event {
             AppEvent::SetConfigScriptTimeout(value) => {
-                assert_eq!(value, nori_acp::config::ScriptTimeout::from_str("2m"));
+                assert_eq!(value, nori_config::ScriptTimeout::from_str("2m"));
             }
             _ => panic!("expected SetConfigScriptTimeout event, got: {event:?}"),
         }
@@ -1194,7 +1190,7 @@ mod tests {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let mut config = make_test_config(false);
-        config.auto_worktree = nori_acp::config::AutoWorktree::Automatic;
+        config.auto_worktree = nori_config::AutoWorktree::Automatic;
 
         let params = config_picker_params(&config, tx.clone());
 
@@ -1226,7 +1222,7 @@ mod tests {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params = auto_worktree_picker_params(nori_acp::config::AutoWorktree::Off, tx.clone());
+        let params = auto_worktree_picker_params(nori_config::AutoWorktree::Off, tx.clone());
 
         // Should have 3 items: Automatic, Ask, Off
         assert_eq!(params.items.len(), 3, "should have 3 auto worktree options");
@@ -1256,7 +1252,7 @@ mod tests {
         assert!(
             matches!(
                 event,
-                AppEvent::SetConfigAutoWorktree(nori_acp::config::AutoWorktree::Automatic)
+                AppEvent::SetConfigAutoWorktree(nori_config::AutoWorktree::Automatic)
             ),
             "expected SetConfigAutoWorktree(Automatic), got: {event:?}"
         );
@@ -1342,7 +1338,7 @@ mod tests {
         assert!(
             matches!(
                 event2,
-                AppEvent::SetConfigAutoWorktree(nori_acp::config::AutoWorktree::Automatic)
+                AppEvent::SetConfigAutoWorktree(nori_config::AutoWorktree::Automatic)
             ),
             "expected SetConfigAutoWorktree(Automatic), got: {event2:?}"
         );
@@ -1400,8 +1396,7 @@ mod tests {
         let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
 
-        let params =
-            file_manager_picker_params(Some(nori_acp::config::FileManager::Vifm), tx.clone());
+        let params = file_manager_picker_params(Some(nori_config::FileManager::Vifm), tx.clone());
 
         // Should have 4 items: vifm, ranger, lf, nnn
         assert_eq!(params.items.len(), 4, "should have 4 file manager options");
@@ -1431,7 +1426,7 @@ mod tests {
         assert!(
             matches!(
                 event,
-                AppEvent::SetConfigFileManager(nori_acp::config::FileManager::Ranger)
+                AppEvent::SetConfigFileManager(nori_config::FileManager::Ranger)
             ),
             "expected SetConfigFileManager(Ranger), got: {event:?}"
         );

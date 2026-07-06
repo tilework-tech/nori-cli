@@ -214,7 +214,7 @@ pub(crate) struct App {
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: Config,
     pub(crate) vertical_footer: bool,
-    pub(crate) footer_layout_config: nori_acp::config::FooterLayoutConfig,
+    pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
     pub(crate) active_profile: Option<String>,
 
     pub(crate) file_search: FileSearchManager,
@@ -252,13 +252,13 @@ pub(crate) struct App {
     loop_count_override: Option<Option<i32>>,
 
     /// Configurable hotkey bindings loaded from NoriConfig.
-    pub(crate) hotkey_config: nori_acp::config::HotkeyConfig,
+    pub(crate) hotkey_config: nori_config::HotkeyConfig,
 
     /// Vim mode and Enter key behavior loaded from NoriConfig.
-    vim_mode: nori_acp::config::VimEnterBehavior,
+    vim_mode: nori_config::VimEnterBehavior,
 
     /// Current footer segment visibility loaded from NoriConfig.
-    footer_segment_config: nori_acp::config::FooterSegmentConfig,
+    footer_segment_config: nori_config::FooterSegmentConfig,
 
     /// Plan drawer visibility mode.
     plan_drawer_mode: crate::chatwidget::PlanDrawerMode,
@@ -320,11 +320,11 @@ impl App {
         // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
         // agent spawns without a skillset.
         let needs_deferred_spawn = {
-            let nori_cfg = nori_acp::config::NoriConfig::load().unwrap_or_default();
+            let nori_cfg = nori_config::NoriConfig::load().unwrap_or_default();
             nori_cfg.skillset_per_session
         };
 
-        let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
+        let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -384,8 +384,8 @@ impl App {
             skip_world_writable_scan_once: false,
             pending_agent: None,
             loop_count_override: None,
-            hotkey_config: nori_acp::config::HotkeyConfig::default(),
-            vim_mode: nori_acp::config::VimEnterBehavior::Off,
+            hotkey_config: nori_config::HotkeyConfig::default(),
+            vim_mode: nori_config::VimEnterBehavior::Off,
             footer_segment_config: nori_config.footer_segment_config.clone(),
             footer_layout_config: nori_config.footer_layout_config.clone(),
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,

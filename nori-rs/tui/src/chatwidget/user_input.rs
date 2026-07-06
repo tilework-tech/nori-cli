@@ -92,7 +92,7 @@ impl ChatWidget {
                 let effective_loop_count = match self.loop_count_override {
                     Some(overridden) => overridden,
                     None => {
-                        nori_acp::config::NoriConfig::load()
+                        nori_config::NoriConfig::load()
                             .unwrap_or_default()
                             .loop_count
                     }

@@ -9,7 +9,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use nori_acp::config::AgentConfigToml;
+use nori_config::AgentConfigToml;
 
 /// Registry slug for the pinned cloud agent.
 pub const CLOUD_AGENT_SLUG: &str = "nori-cloud";
@@ -75,8 +75,8 @@ pub fn cloud_agent_config(handroll_bin: &Path, broker_url: Option<&str>) -> Agen
     AgentConfigToml {
         name: "Nori Cloud".to_string(),
         slug: CLOUD_AGENT_SLUG.to_string(),
-        distribution: nori_acp::config::AgentDistributionToml {
-            local: Some(nori_acp::config::LocalDistribution {
+        distribution: nori_config::AgentDistributionToml {
+            local: Some(nori_config::LocalDistribution {
                 command: handroll_bin.to_string_lossy().into_owned(),
                 args: vec!["cloud-acp".to_string()],
                 env,
@@ -177,7 +177,7 @@ mod tests {
             .resolve()
             .expect("distribution must be valid");
         match resolved {
-            nori_acp::config::ResolvedDistribution::Local { command, args, env } => {
+            nori_config::ResolvedDistribution::Local { command, args, env } => {
                 assert_eq!(command, "/opt/bin/nori-handroll");
                 assert_eq!(args, vec!["cloud-acp".to_string()]);
                 assert!(
@@ -209,7 +209,7 @@ mod tests {
             .resolve()
             .expect("distribution must be valid");
         match resolved {
-            nori_acp::config::ResolvedDistribution::Local { env, .. } => {
+            nori_config::ResolvedDistribution::Local { env, .. } => {
                 assert_eq!(
                     env.get("NORI_BROKER_URL").map(String::as_str),
                     Some("http://broker.test:19400"),

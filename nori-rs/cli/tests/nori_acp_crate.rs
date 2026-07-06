@@ -1,4 +1,4 @@
-use nori_acp::find_nori_home;
+use nori_config::find_nori_home;
 
 #[test]
 fn nori_acp_crate_is_available_to_cli() {
