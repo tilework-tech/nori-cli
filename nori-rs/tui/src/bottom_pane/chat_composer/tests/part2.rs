@@ -118,6 +118,37 @@ fn slash_popup_model_first_for_mo_ui() {
 }
 
 #[test]
+fn slash_popup_close_visible_for_cl_ui() {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    // Type "/cl" humanlike so paste-burst doesn’t interfere.
+    type_chars_humanlike(&mut composer, &['/', 'c', 'l']);
+
+    let mut terminal = match Terminal::new(TestBackend::new(60, 5)) {
+        Ok(t) => t,
+        Err(e) => panic!("Failed to create terminal: {e}"),
+    };
+    terminal
+        .draw(|f| composer.render(f.area(), f.buffer_mut()))
+        .unwrap_or_else(|e| panic!("Failed to draw composer: {e}"));
+
+    // Visual snapshot should show the slash popup offering /close.
+    insta::assert_snapshot!("slash_popup_cl", terminal.backend());
+}
+
+#[test]
 fn slash_popup_model_first_for_mo_logic() {
     use crate::bottom_pane::command_popup::CommandItem;
     let (tx, _rx) = unbounded_channel::<AppEvent>();

@@ -91,6 +91,24 @@ impl ChatWidget {
             self.request_redraw();
             return;
         }
+        // While a /close awaits the agent, block session-switching commands:
+        // the deferred NewSession would otherwise clobber whatever session the
+        // user switched to in the meantime.
+        if self.session_close_in_flight
+            && matches!(
+                cmd,
+                SlashCommand::New
+                    | SlashCommand::Resume
+                    | SlashCommand::ResumeViewonly
+                    | SlashCommand::Agent
+                    | SlashCommand::Close
+            )
+        {
+            let message = format!("'/{}' is disabled while the session closes.", cmd.command());
+            self.add_to_history(history_cell::new_error_event(message));
+            self.request_redraw();
+            return;
+        }
         match cmd {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
@@ -100,6 +118,40 @@ impl ChatWidget {
             }
             SlashCommand::ResumeViewonly => {
                 self.open_viewonly_session_picker();
+            }
+            SlashCommand::Close => {
+                if !self.session_agent_capabilities.session_close {
+                    self.add_error_message(
+                        "The active agent does not support closing sessions \
+                         (/close needs the ACP session/close capability)."
+                            .to_string(),
+                    );
+                    return;
+                }
+                let Some(handle) = self.acp_handle.clone() else {
+                    self.add_error_message("No live agent connection to close.".to_string());
+                    return;
+                };
+                self.session_close_in_flight = true;
+                let tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    match handle.close_session().await {
+                        Ok(()) => {
+                            tx.send(AppEvent::InsertHistoryCell(Box::new(
+                                history_cell::new_info_event(
+                                    "Session closed (released).".to_string(),
+                                    None,
+                                ),
+                            )));
+                            tx.send(AppEvent::NewSession);
+                        }
+                        Err(e) => {
+                            tx.send(AppEvent::SessionCloseFailed {
+                                message: format!("{e}"),
+                            });
+                        }
+                    }
+                });
             }
             SlashCommand::Init => {
                 let init_target = self.config.cwd.join(DEFAULT_PROJECT_DOC_FILENAME);

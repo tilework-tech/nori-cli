@@ -23,7 +23,7 @@ nori-acp-host <---> ACP Agent subprocess (JSON-RPC over stdio)
 - `nori-harness` (`@/nori-rs/harness/`) is the primary consumer and re-exports every module (`pub use nori_acp_host::connection;` and friends in `@/nori-rs/harness/src/lib.rs`), so downstream consumers such as `@/nori-rs/tui/` import through `nori_harness` paths.
 - Wire/schema types come from the official `agent-client-protocol` SDK; the schema's own `unstable` feature is enabled unconditionally for the Model-category config option.
 - Depends on `codex-protocol` (`@/nori-rs/protocol/`) for the internal event vocabulary, `nori-config` (`@/nori-rs/nori-config/`) for agent/MCP/wire-proxy configuration types, and `codex-rmcp-client` (`@/nori-rs/rmcp-client/`) for OAuth token loading in `connection/mcp.rs`.
-- Error classification lives here (`AcpErrorCategory`, `categorize_acp_error`); the harness-side user-facing message composition (`enhanced_error_message`) stays in `@/nori-rs/harness/src/backend/`.
+- Error classification lives here (`AcpErrorCategory`, `AcpErrorDetails`, `categorize_acp_error`, `categorize_acp_error_chain`); the harness-side user-facing message composition (`enhanced_error_message`) stays in `@/nori-rs/harness/src/backend/`.
 
 ### Core Implementation
 
@@ -31,7 +31,7 @@ nori-acp-host <---> ACP Agent subprocess (JSON-RPC over stdio)
 - `registry.rs` — data-driven agent registry merging built-in agents (Claude Code, Codex, Gemini) with custom `[[agents]]` config entries; resolves an agent slug to a spawnable `AcpAgentConfig` across npx/bunx/pipx/uvx/local distributions. The registry is process-global state (`AGENT_REGISTRY`, a `RwLock`) initialized once via `initialize_registry()` at startup, with a built-in-defaults fallback when uninitialized.
 - `translator.rs` — converts user input into ACP `ContentBlock`s (text plus base64 image blocks) and provides local parsing/display helpers.
 - `patch.rs` — diff/patch construction (`create_patch_with_context`) used to normalize file mutations for rendering and transcripts.
-- `error_category.rs` — priority-chained substring matching (Auth > Quota > ExecutableNotFound > Initialization > PromptTooLong > ApiServerError > Unknown) over the Debug-formatted error chain; `is_retryable()` marks only server errors and quota limits as transient.
+- `error_category.rs` — two-tier categorization. `categorize_acp_error_chain()` is the preferred entry point: it walks the anyhow chain for a structured `acp::Error`, maps it by JSON-RPC code (`-32000` auth, `-32002` session not found, `-32010` agent backing service unreachable, `-32012` not resumable, `-32014` no active session, `-32015` session already active — the code table mirrors the `nori-handroll acp` agent side), and extracts the agent-supplied `error.data.detail` into `AcpErrorDetails`. Structured codes always win over message text. Without a structured error it falls back to the legacy `categorize_acp_error()` priority-chained substring matching (Auth > Quota > ExecutableNotFound > Initialization > PromptTooLong > ApiServerError > Unknown) over the Debug-formatted error chain. `is_retryable()` marks server errors, quota limits, and `AgentUnreachable` as transient; the session-lifecycle states are persistent and never retryable.
 
 ### Things to Know
 

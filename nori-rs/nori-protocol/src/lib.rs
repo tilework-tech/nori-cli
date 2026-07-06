@@ -111,6 +111,13 @@ pub struct AgentCapabilitiesView {
     /// Whether the agent advertises the ACP `session/list` capability.
     #[serde(default)]
     pub session_list: bool,
+    /// Whether the agent advertises the ACP `session/resume` capability
+    /// (live reattach without history replay — the cloud agent's resume path).
+    #[serde(default)]
+    pub session_resume: bool,
+    /// Whether the agent advertises the ACP `session/close` capability.
+    #[serde(default)]
+    pub session_close: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1860,6 +1867,8 @@ mod tests {
                 http_mcp: false,
                 load_session: true,
                 session_list: false,
+                session_resume: false,
+                session_close: false,
             },
             nori_client: NoriClientCapabilitiesView {
                 advertised: false,

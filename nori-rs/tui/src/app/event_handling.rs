@@ -106,6 +106,9 @@ impl App {
                 }
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::SessionCloseFailed { message } => {
+                self.chat_widget.on_session_close_failed(message);
+            }
             AppEvent::InsertHistoryCell(cell) => {
                 let cell: Arc<dyn HistoryCell> = cell.into();
                 if let Some(Overlay::Transcript(t)) = &mut self.overlay {

@@ -84,6 +84,10 @@ pub enum AcpAgentCommand {
         cwd: PathBuf,
         response_tx: oneshot::Sender<anyhow::Result<Vec<AcpSessionSummary>>>,
     },
+    /// Close (release) the active session via ACP `session/close`.
+    CloseSession {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
 }
 
 /// Handle for communicating with an ACP agent.
@@ -139,6 +143,17 @@ impl AcpAgentHandle {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(AcpAgentCommand::ListSessions { cwd, response_tx })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
+    }
+
+    /// Close (release) the active session via ACP `session/close`.
+    pub async fn close_session(&self) -> anyhow::Result<()> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(AcpAgentCommand::CloseSession { response_tx })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
         response_rx
             .await
@@ -366,6 +381,10 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                     }
                     AcpAgentCommand::ListSessions { cwd, response_tx } => {
                         let result = backend_for_agent.connection().list_sessions(&cwd).await;
+                        let _ = response_tx.send(result);
+                    }
+                    AcpAgentCommand::CloseSession { response_tx } => {
+                        let result = backend_for_agent.close_active_session().await;
                         let _ = response_tx.send(result);
                     }
                 }

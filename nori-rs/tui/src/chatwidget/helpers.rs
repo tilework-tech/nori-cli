@@ -48,6 +48,13 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// A `/close` failed: surface the (already enhanced) error and unblock the
+    /// session-switching commands that were held while the close was in flight.
+    pub(crate) fn on_session_close_failed(&mut self, message: String) {
+        self.session_close_in_flight = false;
+        self.add_error_message(format!("Failed to close the session: {message}"));
+    }
+
     pub(crate) fn handle_acp_session_config_update(
         &mut self,
         config_options: &[nori_harness::SessionConfigOption],

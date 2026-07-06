@@ -406,6 +406,10 @@ pub(crate) struct ChatWidget {
     session_configured_received: bool,
     // ACP agent handle for session config and model switching (only present in ACP mode)
     acp_handle: Option<AcpAgentHandle>,
+    // True while /close awaits the agent's session/close response. Blocks
+    // session-switching commands so the deferred NewSession can't clobber a
+    // conversation the user switched to mid-close.
+    session_close_in_flight: bool,
     acp_config_option_snapshot: Option<crate::nori::session_config_history::SessionConfigSnapshot>,
     acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
     acp_mode_config_generation: i64,

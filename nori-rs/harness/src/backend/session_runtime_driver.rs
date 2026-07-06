@@ -769,7 +769,7 @@ impl AcpBackend {
             }
             QueuedPromptKind::User => {
                 let error_string = format!("{err:?}");
-                let category = categorize_acp_error(&error_string);
+                let category = categorize_acp_error_chain(err).category;
                 let display_error = format!("{err:#}");
                 let retryable = category.is_retryable();
                 warn!(
@@ -799,6 +799,21 @@ impl AcpBackend {
                         "The API returned a server error. This is usually temporary — please try again."
                             .to_string()
                     }
+                    AcpErrorCategory::SessionNotFound => format!(
+                        "The session no longer exists on the agent — it may have expired or been closed elsewhere: {display_error}"
+                    ),
+                    AcpErrorCategory::SessionNotResumable => format!(
+                        "The session can't be reattached — start a new session instead: {display_error}"
+                    ),
+                    AcpErrorCategory::SessionAlreadyActive => format!(
+                        "A session is already active on the agent connection — close it before switching: {display_error}"
+                    ),
+                    AcpErrorCategory::NoActiveSession => format!(
+                        "No session is active on the agent connection — start a new chat with /new: {display_error}"
+                    ),
+                    AcpErrorCategory::AgentUnreachable => format!(
+                        "The agent's backing service is unreachable — check your network and try again: {display_error}"
+                    ),
                     AcpErrorCategory::Unknown => format!("ACP prompt failed: {display_error}"),
                 };
                 (message, retryable)

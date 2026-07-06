@@ -1212,3 +1212,148 @@ async fn test_list_sessions_maps_agent_session_info() {
     ];
     assert_eq!(summaries, expected);
 }
+
+/// `resume_session` reattaches to an agent-side session over ACP
+/// `session/resume` — the reattach path for agents (like nori cloud) that
+/// advertise `sessionCapabilities.resume` with `loadSession: false`.
+/// `MOCK_AGENT_FAIL_NEW_SESSION_FROM=0` makes any silent `session/new`
+/// fallback fail loudly.
+#[tokio::test]
+async fn test_resume_session_reattaches_over_session_resume() {
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config.env.insert(
+        "MOCK_AGENT_SUPPORT_SESSION_RESUME".to_string(),
+        "1".to_string(),
+    );
+    config.env.insert(
+        "MOCK_AGENT_FAIL_NEW_SESSION_FROM".to_string(),
+        "0".to_string(),
+    );
+
+    let temp_dir = tempdir().expect("temp dir");
+    let conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("Failed to spawn AcpConnection");
+
+    assert!(
+        conn.capabilities().session_capabilities.resume.is_some(),
+        "mock should advertise session/resume when env-gated on"
+    );
+
+    let session_id = conn
+        .resume_session("mock-session-1", temp_dir.path(), Vec::new())
+        .await
+        .expect("resume_session should succeed against a live agent");
+    assert_eq!(session_id.to_string(), "mock-session-1");
+}
+
+/// A structured `session/resume` failure must stay categorizable: the agent's
+/// error code (-32002 resource_not_found) and `data.detail` survive the real
+/// stdio transport and the anyhow chain so callers can show a precise message.
+#[tokio::test]
+async fn test_resume_session_failure_categorizes_as_session_not_found() {
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config.env.insert(
+        "MOCK_AGENT_SUPPORT_SESSION_RESUME".to_string(),
+        "1".to_string(),
+    );
+    config.env.insert(
+        "MOCK_AGENT_RESUME_SESSION_FAIL".to_string(),
+        "1".to_string(),
+    );
+
+    let temp_dir = tempdir().expect("temp dir");
+    let conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("Failed to spawn AcpConnection");
+
+    let err = conn
+        .resume_session("gone-session", temp_dir.path(), Vec::new())
+        .await
+        .expect_err("resume_session should fail when the agent rejects the id");
+    let details = crate::categorize_acp_error_chain(&err);
+    assert_eq!(
+        (details.category, details.detail.as_deref()),
+        (
+            crate::AcpErrorCategory::SessionNotFound,
+            Some("the session is no longer claimed")
+        )
+    );
+}
+
+/// `close_session` releases an agent-side session over ACP `session/close`.
+#[tokio::test]
+async fn test_close_session_round_trips() {
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config.env.insert(
+        "MOCK_AGENT_SUPPORT_SESSION_CLOSE".to_string(),
+        "1".to_string(),
+    );
+
+    let temp_dir = tempdir().expect("temp dir");
+    let conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("Failed to spawn AcpConnection");
+
+    assert!(
+        conn.capabilities().session_capabilities.close.is_some(),
+        "mock should advertise session/close when env-gated on"
+    );
+
+    conn.close_session("mock-session-1")
+        .await
+        .expect("close_session should succeed against a live agent");
+}
+
+/// A structured `session/close` failure propagates — proving the request
+/// actually crosses the process boundary (a no-op `close_session` could not
+/// observe the agent-side error).
+#[tokio::test]
+async fn test_close_session_failure_categorizes_as_session_not_found() {
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config.env.insert(
+        "MOCK_AGENT_SUPPORT_SESSION_CLOSE".to_string(),
+        "1".to_string(),
+    );
+    config
+        .env
+        .insert("MOCK_AGENT_CLOSE_SESSION_FAIL".to_string(), "1".to_string());
+
+    let temp_dir = tempdir().expect("temp dir");
+    let conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("Failed to spawn AcpConnection");
+
+    let err = conn
+        .close_session("gone-session")
+        .await
+        .expect_err("close_session should fail when the agent rejects the id");
+    assert_eq!(
+        crate::categorize_acp_error_chain(&err).category,
+        crate::AcpErrorCategory::SessionNotFound
+    );
+}
