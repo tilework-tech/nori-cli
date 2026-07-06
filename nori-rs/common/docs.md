@@ -11,7 +11,7 @@ The common crate provides shared utilities used across multiple Nori components.
 Used by:
 - `@/nori-rs/tui/` - for CLI argument parsing, model presets, fuzzy matching
 - `@/nori-rs/core/` - (indirectly via config types)
-- `@/nori-rs/acp/` - for model presets
+- `@/nori-rs/harness/` - for model presets
 
 ### Core Implementation
 

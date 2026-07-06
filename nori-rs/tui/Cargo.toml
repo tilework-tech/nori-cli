@@ -35,7 +35,7 @@ async-stream = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
-nori-acp = { workspace = true }
+nori-harness = { workspace = true }
 nori-config = { workspace = true }
 codex-ansi-escape = { workspace = true }
 codex-app-server-protocol = { workspace = true }

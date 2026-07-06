@@ -8,8 +8,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use nori_acp::AcpSessionSummary;
-use nori_acp::transcript::TranscriptLoader;
+use nori_harness::AcpSessionSummary;
+use nori_harness::transcript::TranscriptLoader;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -253,7 +253,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Mutex;
 
-    use nori_acp::TranscriptRecorder;
+    use nori_harness::TranscriptRecorder;
     use tracing_subscriber::fmt::MakeWriter;
 
     #[derive(Clone)]

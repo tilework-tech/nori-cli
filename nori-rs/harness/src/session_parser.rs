@@ -333,7 +333,7 @@ pub async fn parse_claude_session(path: &std::path::Path) -> Result<TokenUsageRe
 /// # Examples
 ///
 /// ```no_run
-/// use nori_acp::session_parser::{parse_session_transcript, AgentKind};
+/// use nori_harness::session_parser::{parse_session_transcript, AgentKind};
 /// use std::path::Path;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {

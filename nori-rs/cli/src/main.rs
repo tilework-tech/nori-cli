@@ -3,7 +3,6 @@ use clap::Parser;
 use codex_arg0::arg0_dispatch_or_else;
 use codex_common::CliConfigOverrides;
 use codex_execpolicy::ExecPolicyCheckCommand;
-use nori_acp::init_rolling_file_tracing;
 use nori_cli::LandlockCommand;
 use nori_cli::SeatbeltCommand;
 use nori_cli::WindowsCommand;
@@ -20,6 +19,7 @@ use nori_cli::login::run_login_with_device_code;
 #[cfg(feature = "login")]
 use nori_cli::login::run_logout;
 use nori_config::find_nori_home;
+use nori_harness::init_rolling_file_tracing;
 
 use nori_tui::AppExitInfo;
 use nori_tui::Cli as TuiCli;
@@ -325,7 +325,7 @@ fn run_skillsets_command(cmd: SkillsetsCommand) -> anyhow::Result<()> {
         }
     } else {
         // Fall back to npx/bunx if not in PATH
-        use nori_acp::registry::detect_preferred_package_manager;
+        use nori_harness::registry::detect_preferred_package_manager;
 
         let package_manager = detect_preferred_package_manager();
         let runner = package_manager.command(); // "npx" or "bunx"

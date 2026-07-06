@@ -131,7 +131,7 @@ impl ChatWidget {
     pub(crate) fn new_resumed_acp(
         common: ChatWidgetInit,
         acp_session_id: Option<String>,
-        transcript: Option<nori_acp::transcript::Transcript>,
+        transcript: Option<nori_harness::transcript::Transcript>,
     ) -> Self {
         let ChatWidgetInit {
             config,

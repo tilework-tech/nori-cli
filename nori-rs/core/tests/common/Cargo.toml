@@ -12,7 +12,7 @@ anyhow = { workspace = true }
 assert_cmd = { workspace = true }
 codex-core = { workspace = true }
 codex-sandbox = { workspace = true }
-nori-acp = { workspace = true }
+nori-harness = { workspace = true }
 notify = { workspace = true }
 regex-lite = { workspace = true }
 shlex = { workspace = true }

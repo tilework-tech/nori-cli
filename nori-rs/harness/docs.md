@@ -1,14 +1,14 @@
-# Noridoc: nori-acp
+# Noridoc: nori-harness
 
-Path: @/nori-rs/acp
+Path: @/nori-rs/harness
 
 ### Overview
 
-- The ACP crate implements the Agent Client Protocol integration for Nori. It manages connecting to ACP-compliant agents by spawning local subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC via stdin/stdout, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers.
+- The harness crate (`nori-harness`, formerly `nori-acp`) implements the Agent Client Protocol integration for Nori. It manages connecting to ACP-compliant agents by spawning local subprocesses (like Claude Code, Codex, or Gemini), communicating with them over JSON-RPC via stdin/stdout, and normalizing ACP session-domain data into `nori_protocol::ClientEvent` for the TUI and transcript layers.
 - It owns ACP backend session state that is not provided by agents, including per-session thread goals used by the `/goal` TUI command and prompt-context injection.
 - `codex_protocol::EventMsg` remains only for narrow control-plane concerns that are not ACP session semantics.
 - Since the crate-layering cleanup (`@/docs/specs/crate-layering.md`), the crate has **no dependency on `codex-core`**. Its only inherited-Codex dependencies are the `codex-protocol` type vocabulary and `codex-rmcp-client`'s OAuth token store. Formerly-core leaf helpers now live here: user notifications (`user_notification.rs`), custom prompt discovery (`custom_prompts.rs`), shell/command parsing (`shell.rs`, `bash.rs`, `powershell.rs`, `parse_command/`), and compact summarization constants and templates (`compact.rs`, `templates/compact/`).
-- Two Layer-0/Layer-1 pieces have been extracted into their own crates: the agent-agnostic ACP hosting machinery -- `connection/`, `registry.rs`, `translator.rs`, `patch.rs`, and error categorization -- lives in `nori-acp-host` (`@/nori-rs/acp-host/`) and is still re-exported from `nori_acp` so consumer paths are unchanged; the Nori config layer lives in `nori-config` (`@/nori-rs/nori-config/`) and is **not** re-exported -- the frontends (`@/nori-rs/tui/`, `@/nori-rs/cli/`) depend on `nori-config` directly, and this crate only uses it internally (crate-private `config` alias). `nori-acp` itself is converging on being the Layer-1 session harness: the `runtime` module (`@/nori-rs/acp/src/runtime.rs`) is its frontend-facing entry point -- `launch_session(SessionLaunchSpec)` owns the session orchestration (Nori config assembly, the connect/shutdown/timeout race, op forwarding, session-control commands) that previously lived in `@/nori-rs/tui/src/chatwidget/agent.rs`, so any frontend can launch or resume sessions without reimplementing it.
+- Two Layer-0/Layer-1 pieces have been extracted into their own crates: the agent-agnostic ACP hosting machinery -- `connection/`, `registry.rs`, `translator.rs`, `patch.rs`, and error categorization -- lives in `nori-acp-host` (`@/nori-rs/acp-host/`) and is re-exported from `nori_harness` so consumers have a single import surface; the Nori config layer lives in `nori-config` (`@/nori-rs/nori-config/`) and is **not** re-exported -- the frontends (`@/nori-rs/tui/`, `@/nori-rs/cli/`) depend on `nori-config` directly, and this crate only uses it internally (crate-private `config` alias). With those extractions done, `nori-harness` is the Layer-1 headless session harness named by the design doc: the `runtime` module (`@/nori-rs/harness/src/runtime.rs`) is its frontend-facing entry point -- `launch_session(SessionLaunchSpec)` owns the session orchestration (Nori config assembly, the connect/shutdown/timeout race, op forwarding, session-control commands) that previously lived in `@/nori-rs/tui/src/chatwidget/agent.rs`, so any frontend can launch or resume sessions without reimplementing it.
 
 ### How it fits into the larger codebase
 
@@ -16,21 +16,21 @@ Path: @/nori-rs/acp
 nori-tui
     |
     v
-nori-acp <---> ACP Agent subprocess (local, via stdin/stdout)
+nori-harness <---> ACP Agent subprocess (local, via stdin/stdout)
     |
     v
 nori-protocol (normalized ACP session events)
 ```
 
-The ACP crate serves as a bridge between:
+The harness crate serves as a bridge between:
 
 - The TUI layer (`@/nori-rs/tui/`) which displays UI and collects user input
 - External ACP agent subprocesses (installed via npm/bun/pipx/uvx or as local binaries). This includes the `nori-handroll cloud-acp` child that `nori cloud` pins via `@/nori-rs/cli/src/cloud.rs` -- the crate has no cloud-specific transport; the handroll child rides the ordinary local-agent spawn path
 - `nori-protocol`, which is the canonical ACP session event vocabulary used by live rendering and transcript recording
 - The shared `codex-protocol` event stream, which is still used for control-plane signals such as warnings, hook output, prompt summaries, shutdown, and other app-level notifications
 - `SessionRuntime` in `@/nori-rs/nori-protocol/`, which is now the ACP backend's single source of truth for prompt state, load state, queued prompts, permission ownership, and final assistant-message assembly
-- Thread-goal operations from `@/nori-rs/protocol` and normalized goal events from `@/nori-rs/nori-protocol`, with backend storage and prompt transformation in `@/nori-rs/acp/src/backend/thread_goal.rs`
-- The backend-owned `nori-client` MCP server in `@/nori-rs/acp/src/backend/nori_client_mcp.rs`, Nori's harness-side channel to the external ACP agent. It exposes live Nori-owned goal state as tools and fixed read-only operating context as MCP resources/prompts.
+- Thread-goal operations from `@/nori-rs/protocol` and normalized goal events from `@/nori-rs/nori-protocol`, with backend storage and prompt transformation in `@/nori-rs/harness/src/backend/thread_goal.rs`
+- The backend-owned `nori-client` MCP server in `@/nori-rs/harness/src/backend/nori_client_mcp.rs`, Nori's harness-side channel to the external ACP agent. It exposes live Nori-owned goal state as tools and fixed read-only operating context as MCP resources/prompts.
 
 Key files (`registry.rs`, `connection/`, and `translator.rs` physically live in `@/nori-rs/acp-host/src/` and are re-exported here):
 
@@ -46,7 +46,7 @@ Key files (`registry.rs`, `connection/`, and `translator.rs` physically live in 
 
 ### Core Implementation
 
-**Agent Registry** (`registry.rs` in `@/nori-rs/acp-host/src/`, re-exported as `nori_acp::registry`):
+**Agent Registry** (`registry.rs` in `@/nori-rs/acp-host/src/`, re-exported as `nori_harness::registry`):
 
 The registry is **data-driven** and **agent-centric**: it combines built-in agents (Claude Code, Codex, Gemini) with user-defined custom agents from `[[agents]]` entries in `config.toml`. The global registry is stored in a `RwLock<Option<Vec<RegisteredAgent>>>` (`AGENT_REGISTRY`) and initialized once at startup via `initialize_registry()`, which is called from `@/nori-rs/tui/src/lib.rs` after config loading. If not initialized, `get_registry()` falls back to built-in defaults.
 
@@ -112,19 +112,19 @@ The ACP backend owns the `/goal` feature as per-session state instead of delegat
 ```
 @/nori-rs/tui/src/chatwidget/goal.rs
     -> @/nori-rs/protocol/src/protocol/mod.rs (typed Op)
-    -> @/nori-rs/acp/src/backend/thread_goal.rs
-    -> @/nori-rs/acp/src/backend/nori_client_mcp.rs (optional model-facing MCP)
+    -> @/nori-rs/harness/src/backend/thread_goal.rs
+    -> @/nori-rs/harness/src/backend/nori_client_mcp.rs (optional model-facing MCP)
     -> @/nori-rs/nori-protocol/src/lib.rs (ClientEvent)
     -> @/nori-rs/tui/src/chatwidget/event_handlers.rs
 ```
 
 `ThreadGoalState` tracks the current objective, lifecycle status, active elapsed time, accumulated goal token usage, and the latest ACP session-usage checkpoint. ACP usage updates add only positive deltas since the last checkpoint to goal-local `tokens_used`; if context-window usage drops after compaction or session reset, the already accumulated goal usage is preserved and the lower value becomes the next checkpoint. Only the `Active` status accrues active time; paused, blocked, usage-limited, budget-limited, and complete goals keep their accumulated time until they become active again. Objective validation is shared with `@/nori-rs/protocol/src/protocol/mod.rs` so the TUI and backend enforce the same acceptance rules, and goal status text uses the shared compact elapsed-time and SI-token formatters from `@/nori-rs/protocol/src/num_format.rs`.
 
-`nori_client_mcp.rs` is a bridge, not a second store. The goal tools are typed rmcp `#[tool]` handlers on `NoriClientService`; they lock the same `ThreadGoalState` used by TUI `/goal` operations, return JSON snapshots shaped for model consumption, and emit the same `ThreadGoalUpdated` client event after mutations. The bridge records those emitted events through `@/nori-rs/acp/src/backend/transcript.rs` when a transcript recorder is available; `NoriClientShared` stores the recorder behind a shared cell because the service is built before the session id is known.
+`nori_client_mcp.rs` is a bridge, not a second store. The goal tools are typed rmcp `#[tool]` handlers on `NoriClientService`; they lock the same `ThreadGoalState` used by TUI `/goal` operations, return JSON snapshots shaped for model consumption, and emit the same `ThreadGoalUpdated` client event after mutations. The bridge records those emitted events through `@/nori-rs/harness/src/backend/transcript.rs` when a transcript recorder is available; `NoriClientShared` stores the recorder behind a shared cell because the service is built before the session id is known.
 
-The local `nori-client` server is only advertised when `register_for_session` in `@/nori-rs/acp/src/backend/nori_client_mcp.rs` sees HTTP MCP support from `@/nori-rs/acp-host/src/connection/mod.rs`. Nori advertises a real `http://127.0.0.1:<port>/mcp` endpoint rather than an ACP pseudo-URL, because Codex ACP and Claude ACP both forward ACP `mcpServers` to their underlying clients as ordinary HTTP MCP server config. Each eligible session registration gets a fresh loopback server with a generated bearer token advertised as an `Authorization` header; an `axum` middleware rejects unauthenticated requests before they reach rmcp's `StreamableHttpService` (stateless mode). The server is owned by the ACP backend (abort-on-drop) and talks directly to the same in-memory goal state as `/goal`. The server is named `nori-client` rather than `nori-goal` because it is Nori's general harness-side channel to the external ACP agent -- the single point of contact for harness-specific tooling the ACP protocol does not yet provide -- and goal tools are only its live-state surface. The backend emits a `SessionCapabilitiesChanged` projection after session setup so clients can derive built-in command availability from the same capability state. That projection separates raw agent capabilities (`agent.http_mcp`, `agent.load_session`, `agent.session_list`), `nori_client.advertised`, `nori_client.initialized`, and derived `builtin_commands` availability. `agent.session_list` is the raw projection of the agent's ACP `session/list` capability (`session_capabilities.list.is_some()`), set at both the `capabilities_update_for_nori_client` and `register_for_session` build sites in `@/nori-rs/acp/src/backend/nori_client_mcp.rs`; the TUI consumes it to decide whether the in-session `/resume` picker is sourced from the live agent (see `@/nori-rs/tui/docs.md`). Initial and post-replacement snapshots read the same connected flag flipped by MCP `initialize`, so agents that eagerly initialize the advertised server during session setup do not observe initialized state regress from true back to false.
+The local `nori-client` server is only advertised when `register_for_session` in `@/nori-rs/harness/src/backend/nori_client_mcp.rs` sees HTTP MCP support from `@/nori-rs/acp-host/src/connection/mod.rs`. Nori advertises a real `http://127.0.0.1:<port>/mcp` endpoint rather than an ACP pseudo-URL, because Codex ACP and Claude ACP both forward ACP `mcpServers` to their underlying clients as ordinary HTTP MCP server config. Each eligible session registration gets a fresh loopback server with a generated bearer token advertised as an `Authorization` header; an `axum` middleware rejects unauthenticated requests before they reach rmcp's `StreamableHttpService` (stateless mode). The server is owned by the ACP backend (abort-on-drop) and talks directly to the same in-memory goal state as `/goal`. The server is named `nori-client` rather than `nori-goal` because it is Nori's general harness-side channel to the external ACP agent -- the single point of contact for harness-specific tooling the ACP protocol does not yet provide -- and goal tools are only its live-state surface. The backend emits a `SessionCapabilitiesChanged` projection after session setup so clients can derive built-in command availability from the same capability state. That projection separates raw agent capabilities (`agent.http_mcp`, `agent.load_session`, `agent.session_list`), `nori_client.advertised`, `nori_client.initialized`, and derived `builtin_commands` availability. `agent.session_list` is the raw projection of the agent's ACP `session/list` capability (`session_capabilities.list.is_some()`), set at both the `capabilities_update_for_nori_client` and `register_for_session` build sites in `@/nori-rs/harness/src/backend/nori_client_mcp.rs`; the TUI consumes it to decide whether the in-session `/resume` picker is sourced from the live agent (see `@/nori-rs/tui/docs.md`). Initial and post-replacement snapshots read the same connected flag flipped by MCP `initialize`, so agents that eagerly initialize the advertised server during session setup do not observe initialized state regress from true back to false.
 
-`@/nori-rs/acp/src/backend/nori_client_context.rs` owns the fixed read-only catalog exposed through the same server. `nori_client_mcp.rs` advertises tools, resources, and prompts in `ServerInfo`, but delegates list/read/get operations to that sibling module so transport, initialization, connected-gate behavior, and capability registration stay separate from Nori's curated operating context. The catalog intentionally serves Nori-owned harness facts, minimal ACP debugging and custom-agent help, and a compact source map for answering Nori CLI questions; it is not an arbitrary filesystem, repo-read, or skill-workflow API. Unknown resource URIs and prompt names are rejected as MCP errors, keeping the context surface closed and predictable.
+`@/nori-rs/harness/src/backend/nori_client_context.rs` owns the fixed read-only catalog exposed through the same server. `nori_client_mcp.rs` advertises tools, resources, and prompts in `ServerInfo`, but delegates list/read/get operations to that sibling module so transport, initialization, connected-gate behavior, and capability registration stay separate from Nori's curated operating context. The catalog intentionally serves Nori-owned harness facts, minimal ACP debugging and custom-agent help, and a compact source map for answering Nori CLI questions; it is not an arbitrary filesystem, repo-read, or skill-workflow API. Unknown resource URIs and prompt names are rejected as MCP errors, keeping the context surface closed and predictable.
 
 The model-facing tool contract is intentionally narrower than the user-facing `/goal` command surface. `create_goal` creates a new active goal only when no goal exists, rejects token budgets for now, and delegates objective validation to `ThreadGoalState`. `update_goal` takes a typed `complete`/`blocked` enum, so the advertised tool schema exposes only those two Codex-compatible statuses and any other value is rejected at deserialization; pause, resume, usage-limited, and budget-limited transitions remain controlled by the user or the backend system path. Errors are returned as MCP tool errors instead of changing state.
 
@@ -132,7 +132,7 @@ Before user prompts are submitted to the ACP runtime, `user_input.rs` prepends t
 
 Agents that are not advertised the local `nori-client` server do not receive goal context through prompt transformation and do not receive hidden goal-continuation prompts. Backend `ThreadGoal*` operations from user-facing paths emit an unavailable notice instead of mutating goal state, because those agents cannot call `update_goal` to close the loop. That op-time notice is emitted directly to the client channel and deliberately **not** recorded to the transcript -- like resume notices it is a transient affordance derived from session state, so recording it would replay and accumulate a duplicate notice on every `/goal` op. If transcript replay restores any in-play goal (active, paused, blocked, or usage-limited) into a non-MCP session, resume emits the same unavailable notice after the replayed goal snapshot rather than the `/goal resume` affordance, which would mislead since `/goal` is disabled for non-MCP agents. The local MCP server is the required automation path for active goals, while transcript replay, usage accounting, and ordinary prompts continue without it. The intended degradation path is a concise first-prompt `<context>` block with Nori CLI context, the open source repo URL, and a note that MCP-backed Nori affordances are unavailable, not repeated prompt-prefix workarounds on every turn.
 
-After an active goal mutation or a visible user prompt completes with `StopReason::EndTurn`, `session_runtime_driver.rs` may submit a hidden goal-continuation prompt to the same ACP session. `thread_goal.rs` owns the continuation prompt text so it is derived from the current backend goal snapshot, not from TUI state or transcript text. The driver only starts a continuation when the goal is active, the reducer has returned to idle, and no queued user work remains. Chaining from one hidden `GoalContinuation` into another is gated on `goal_mcp_connected`, an `@/nori-rs/acp/src/backend/mod.rs` session flag that `NoriClientService::initialize` (the rmcp `ServerHandler::initialize` hook) flips only after the local MCP server receives an `initialize` request. The first successful initialize also re-emits `SessionCapabilitiesChanged` with `nori_client.initialized = true`. This is a safety invariant: until the agent has actually connected to the `nori-client` endpoint it has no way to mark the goal complete, so unbounded continuation-to-continuation chaining is not allowed. Agents without a connected goal MCP endpoint receive at most one hidden continuation per active goal mutation or visible user turn.
+After an active goal mutation or a visible user prompt completes with `StopReason::EndTurn`, `session_runtime_driver.rs` may submit a hidden goal-continuation prompt to the same ACP session. `thread_goal.rs` owns the continuation prompt text so it is derived from the current backend goal snapshot, not from TUI state or transcript text. The driver only starts a continuation when the goal is active, the reducer has returned to idle, and no queued user work remains. Chaining from one hidden `GoalContinuation` into another is gated on `goal_mcp_connected`, an `@/nori-rs/harness/src/backend/mod.rs` session flag that `NoriClientService::initialize` (the rmcp `ServerHandler::initialize` hook) flips only after the local MCP server receives an `initialize` request. The first successful initialize also re-emits `SessionCapabilitiesChanged` with `nori_client.initialized = true`. This is a safety invariant: until the agent has actually connected to the `nori-client` endpoint it has no way to mark the goal complete, so unbounded continuation-to-continuation chaining is not allowed. Agents without a connected goal MCP endpoint receive at most one hidden continuation per active goal mutation or visible user turn.
 
 Goal state is also part of the replay contract. `transcript.rs` passes Nori-owned goal update and clear events through replay, and `session.rs` seeds `ThreadGoalState` from those transcript-derived events before ACP session setup advertises local MCP tools. Server-side `session/load` can also emit ACP replay notifications while loading; those normalized client events are deferred until backend setup completes, then combined with the transcript replay events before rebuilding `ThreadGoalState`. This ordering matters because ACP agents replay their own session history, but they do not replay Nori-owned `ThreadGoalUpdated` events, so the transcript remains authoritative for goal state even when the agent emits load replay notifications.
 
@@ -323,7 +323,7 @@ The `FileManager` enum (`types/mod.rs`) represents supported terminal file manag
 
 The field defaults to `None` (no file manager configured). The TUI layer (`@/nori-rs/tui/`) checks this value when the user invokes `/browse` and shows an error if unset, directing the user to `/settings` to choose one. The TUI imports the `FileManager` type directly from `nori-config`.
 
-Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) checks eligibility via `can_create_worktree()` before branching on the `AutoWorktree` variant in `lib.rs`: if eligible, `Automatic` calls `setup_auto_worktree()` immediately and `Ask` defers to a TUI popup (`worktree_ask.rs`); if ineligible, the TUI shows a `WorktreeBlockedScreen` popup explaining the reason before continuing without a worktree. `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/acp/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
+Both `auto_worktree` and `skillset_per_session` are resolved independently in `loader.rs`. The TUI layer (`@/nori-rs/tui/`) checks eligibility via `can_create_worktree()` before branching on the `AutoWorktree` variant in `lib.rs`: if eligible, `Automatic` calls `setup_auto_worktree()` immediately and `Ask` defers to a TUI popup (`worktree_ask.rs`); if ineligible, the TUI shows a `WorktreeBlockedScreen` popup explaining the reason before continuing without a worktree. `Off` skips entirely. The config layer stores the enum value -- all orchestration lives in `@/nori-rs/harness/src/auto_worktree.rs` and `@/nori-rs/tui/src/lib.rs`.
 
 **Worktree Eligibility Check** (`auto_worktree.rs`):
 
@@ -361,7 +361,7 @@ The config flow is:
 3. `AcpBackendConfig.default_model` receives `Option<String>` via lookup by agent slug in the session runtime (`runtime.rs`)
 4. After session creation, `AcpBackend::spawn()` delegates to `backend/session_defaults.rs` to apply the model to the new session
 
-`session_defaults.rs` applies the default through the stable mechanism only: when the agent advertises a select-style config option with the `Model` category, the persisted default is applied through `session/set_config_option`. When no Model-category option exists, the default is simply not applied. There is no unstable `session/set_model` fallback -- that API was removed along with the `nori-acp`/`nori-tui` `unstable` feature.
+`session_defaults.rs` applies the default through the stable mechanism only: when the agent advertises a select-style config option with the `Model` category, the persisted default is applied through `session/set_config_option`. When no Model-category option exists, the default is simply not applied. There is no unstable `session/set_model` fallback -- that API was removed along with the harness/`nori-tui` `unstable` feature.
 
 The path validates before sending anything on the wire and skips with a debug log when validation fails: the option must be a select, the persisted value must appear among the option's advertised values (ungrouped or grouped), and application is skipped when the persisted value is already the current value.
 
@@ -375,7 +375,7 @@ Config option state is session-owned and, with one exception, live-session only:
 
 - `AcpBackend::config_options()` returns the current in-memory ACP config snapshot for TUI pickers.
 - `AcpBackend::set_config_option()` sends `session/set_config_option` for the current session and updates in-memory state from the response.
-- Config options use `SessionConfigOptionCategory` to tag their purpose. The `Mode` category drives the footer mode indicator and `Shift-Tab` cycling. The `Model` category is the only mechanism for model selection -- the TUI's `/model` command opens the value picker on a Model-category config option when the agent advertises one, otherwise it shows a "not supported" fallback (see `@/nori-rs/tui/docs.md`). The `Model` variant of `SessionConfigOptionCategory` is exposed by the schema's own `unstable` feature, which `nori-acp` enables unconditionally (`agent-client-protocol-schema = { features = ["unstable"] }` in `Cargo.toml`); there is no longer a `nori-acp`/`nori-tui` `unstable` feature. Real ACP agents like Claude Code provide model selection through this config_options path.
+- Config options use `SessionConfigOptionCategory` to tag their purpose. The `Mode` category drives the footer mode indicator and `Shift-Tab` cycling. The `Model` category is the only mechanism for model selection -- the TUI's `/model` command opens the value picker on a Model-category config option when the agent advertises one, otherwise it shows a "not supported" fallback (see `@/nori-rs/tui/docs.md`). The `Model` variant of `SessionConfigOptionCategory` is exposed by the schema's own `unstable` feature, which `nori-harness` enables unconditionally (`agent-client-protocol-schema = { features = ["unstable"] }` in `Cargo.toml`); there is no longer a harness/`nori-tui` `unstable` feature. Real ACP agents like Claude Code provide model selection through this config_options path.
 - No config form is shown during `/agent` switching yet.
 - The `Model` category is the exception to live-session-only behavior: the TUI persists Model-category selections to `[default_models]` in `config.toml` (see `@/nori-rs/tui/docs.md`), and `backend/session_defaults.rs` re-applies the persisted value through this same `session/set_config_option` mechanism at session start. Selections in other categories (mode, thought level) are never persisted.
 
@@ -520,7 +520,7 @@ Async hooks fire at the same lifecycle points as their synchronous counterparts,
 
 **Custom Prompts** (`backend/mod.rs`):
 
-When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers prompt files (`.md`, `.sh`, `.py`, `.js`) from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. Filesystem discovery lives in this crate: `discover_prompts_in()` in `@/nori-rs/acp/src/custom_prompts.rs` scans the directory, parses Markdown frontmatter for `description` and `argument_hint`, and assigns script interpreters by extension (`.sh` -> `bash`, `.py` -> `python3`, `.js` -> `node`) using the `CustomPromptKind` types from `@/nori-rs/protocol/src/custom_prompts.rs`. Script prompts are returned with empty content; `execute_script()` (called later by the TUI) runs the script via its interpreter with a configurable timeout and captures stdout. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
+When the TUI sends `Op::ListCustomPrompts`, the ACP backend discovers prompt files (`.md`, `.sh`, `.py`, `.js`) from `{nori_home}/commands/` and returns them via `ListCustomPromptsResponse`. Filesystem discovery lives in this crate: `discover_prompts_in()` in `@/nori-rs/harness/src/custom_prompts.rs` scans the directory, parses Markdown frontmatter for `description` and `argument_hint`, and assigns script interpreters by extension (`.sh` -> `bash`, `.py` -> `python3`, `.js` -> `node`) using the `CustomPromptKind` types from `@/nori-rs/protocol/src/custom_prompts.rs`. Script prompts are returned with empty content; `execute_script()` (called later by the TUI) runs the script via its interpreter with a configurable timeout and captures stdout. The handler spawns an async task and sends results through the existing `event_tx` channel. The TUI receives these prompts in `ChatWidget::on_list_custom_prompts()` and populates the slash command popup.
 
 When the TUI sends `Op::RunUserShellCommand` (from prompt-initial `!cmd`), the ACP backend starts the command locally in the session working directory using the user's shell and detaches it from the `submit()` call so the TUI can keep accepting composer edits while the command runs. This is intentionally local Nori behavior rather than an ACP agent request: the background command task emits `TaskStarted`, `ExecCommandBegin`, any stdout/stderr `ExecCommandOutputDelta` events, `ExecCommandEnd`, and finally `TaskComplete` so the shared TUI exec cell path renders the result and returns the session to prompt-ready state.
 
@@ -664,7 +664,7 @@ Footer renders "Tokens: 45K in / 78K out (32K cached)"
 ```
 
 `subagents_used` is consumed by `nori-tui` during system-info refresh and merged into the goodbye-card session stats. It does not affect footer token rendering.
-**Connection Management** (`connection/` in `@/nori-rs/acp-host/src/`, re-exported as `nori_acp::connection`):
+**Connection Management** (`connection/` in `@/nori-rs/acp-host/src/`, re-exported as `nori_harness::connection`):
 
 The ACP connection layer lives in the `nori-acp-host` crate and is documented in `@/nori-rs/acp-host/src/connection/docs.md`. The central type is `AcpConnection`; the only construction path is `spawn()`, which launches the agent subprocess and speaks JSON-RPC over its stdio via the official `agent-client-protocol` SDK. The old WebSocket path (`connect_remote()`/`ws_transport.rs`) was removed when `nori cloud` moved to spawning `nori-handroll cloud-acp` as an ordinary local child; remote transport now lives in the nori-sessions repo.
 
@@ -730,7 +730,7 @@ Project IDs are derived from the workspace to group sessions by project:
 - Non-git directories: SHA-256 hash of canonicalized path
 - Hash is truncated to 16 hex characters for compact directory names
 
-Key exports from `@/nori-rs/acp/src/transcript/project.rs`:
+Key exports from `@/nori-rs/harness/src/transcript/project.rs`:
 
 - `compute_project_id()`: Computes project ID for a working directory
 - `ProjectId`: Contains id, name, git_remote, git_root, and cwd
@@ -743,7 +743,7 @@ Each line in the transcript file is a JSON object with:
 - `v`: Schema version (currently 1)
 - `type`: Entry type discriminator
 
-Entry types (from `@/nori-rs/acp/src/transcript/types.rs`):
+Entry types (from `@/nori-rs/harness/src/transcript/types.rs`):
 
 | Type           | Description                  | Key Fields (JSON)                                                                |
 | -------------- | ---------------------------- | -------------------------------------------------------------------------------- |
@@ -764,7 +764,7 @@ Local transcript recording is unconditional: sessions started via `nori cloud` a
 
 **TranscriptRecorder:**
 
-The `TranscriptRecorder` (in `@/nori-rs/acp/src/transcript/recorder.rs`) handles async, non-blocking writes:
+The `TranscriptRecorder` (in `@/nori-rs/harness/src/transcript/recorder.rs`) handles async, non-blocking writes:
 
 ```
 ┌─────────────────────────┐   mpsc channel   ┌─────────────────────────┐
@@ -788,7 +788,7 @@ Key methods:
 
 **TranscriptLoader:**
 
-The `TranscriptLoader` (in `@/nori-rs/acp/src/transcript/loader.rs`) reads transcripts for viewing:
+The `TranscriptLoader` (in `@/nori-rs/harness/src/transcript/loader.rs`) reads transcripts for viewing:
 
 Key methods:
 
@@ -835,7 +835,7 @@ Older `tool_call`, `tool_result`, and `patch_apply` transcript entry types remai
 
 Reducer-owned transcript assembly preserves ACP session update type boundaries. When text changes from assistant to reasoning, reasoning to assistant, or user to either agent stream, the previous open message is flushed before the new stream is accumulated. Consecutive chunks with the same stream are still treated as one message because stable ACP does not provide a durable same-type message boundary.
 
-Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers across `nori-acp` and `nori-acp-host` -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
+Tool output for non-patch `tool_result` entries is truncated to 10,000 bytes when recording to transcript. All string truncation helpers across `nori-harness` and `nori-acp-host` -- `truncate_for_log()` in `tool_display.rs` (tracing previews), `truncate_str()` in `translator.rs` (tool-call display labels like "Execute: ..."), and the transcript byte truncation -- use `codex_utils_string::take_bytes_at_char_boundary()` to avoid slicing inside multi-byte UTF-8 characters.
 
 Configuration:
 
@@ -846,7 +846,7 @@ Configuration:
 
 **Re-exported Types:**
 
-Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
+Public exports from `@/nori-rs/harness/src/transcript/mod.rs`:
 
 - `TranscriptRecorder`, `TranscriptLoader`
 - `ProjectId`, `ProjectInfo`, `SessionInfo`, `SessionMetadata`, `Transcript`
@@ -857,10 +857,10 @@ Public exports from `@/nori-rs/acp/src/transcript/mod.rs`:
 
 ### File-Based Tracing
 
-The `init_rolling_file_tracing()` function in `@/nori-rs/acp/src/tracing_setup.rs` provides structured file logging:
+The `init_rolling_file_tracing()` function in `@/nori-rs/harness/src/tracing_setup.rs` provides structured file logging:
 
 - Sets global tracing subscriber that writes to rolling daily log files
-- Log files are named `nori-acp.YYYY-MM-DD` in the configured log directory
+- Log files are named `nori-acp.YYYY-MM-DD` in the configured log directory (the `nori-acp` file prefix deliberately survived the crate's rename to `nori-harness` -- it is a runtime artifact that external tooling and debugging docs search for)
 - Filters at DEBUG level (debug builds) or WARN with INFO for nori_tui/acp (release builds)
 - RUST_LOG environment variable overrides default log level
 - Uses non-blocking file appender for async-safe writes
@@ -947,7 +947,7 @@ The connection layer now exposes exactly one ordered `mpsc::Receiver<ConnectionE
 
 This keeps the ACP SDK routing logic inside `connection/` and removes the old split between notification and approval channels.
 
-**Unexpected child death:** When the agent subprocess exits on its own, the connection's exit-watcher task emits `ConnectionEvent::ChildExited { status, stderr_tail }` through the ordered event stream. Unless the backend is shutting down (`is_shutting_down`), `run_connection_event_relay()` in `@/nori-rs/acp/src/backend/spawn_and_relay.rs` surfaces it as a visible `EventMsg::Error` carrying the exit code and the child's recent stderr, then aborts any in-flight prompt task and sends `PromptFailed { failure: Some(TurnFailure::Fatal) }` to the reducer (a dead child cannot recover on retry). This replaces the old behavior where a dead child was a silent transport EOF and pending prompt requests hung forever.
+**Unexpected child death:** When the agent subprocess exits on its own, the connection's exit-watcher task emits `ConnectionEvent::ChildExited { status, stderr_tail }` through the ordered event stream. Unless the backend is shutting down (`is_shutting_down`), `run_connection_event_relay()` in `@/nori-rs/harness/src/backend/spawn_and_relay.rs` surfaces it as a visible `EventMsg::Error` carrying the exit code and the child's recent stderr, then aborts any in-flight prompt task and sends `PromptFailed { failure: Some(TurnFailure::Fatal) }` to the reducer (a dead child cannot recover on retry). This replaces the old behavior where a dead child was a silent transport EOF and pending prompt requests hung forever.
 
 **Turn Interrupt Wiring — Reducer-Owned ACP Phase** (`session_reducer.rs`, `session_runtime_driver.rs`, `submit_and_ops.rs`):
 
@@ -1001,7 +1001,7 @@ Unlike core's direct history manipulation, ACP uses a **prompt-based approach**:
 4. The `ContextCompactedEvent` is emitted with the summary text cloned from `pending_compact_summary`, enabling the TUI to render a visual session boundary
 5. Summary is prepended to the next user message (via `SUMMARY_PREFIX` framing)
 
-The `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX` constants are crate-local, loaded from the prompt templates in `@/nori-rs/acp/templates/compact/` by `@/nori-rs/acp/src/compact.rs`.
+The `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX` constants are crate-local, loaded from the prompt templates in `@/nori-rs/harness/templates/compact/` by `@/nori-rs/harness/src/compact.rs`.
 
 The `ContextCompactedEvent.summary` field is the coupling point between the ACP backend and the TUI's session boundary rendering. The TUI uses it to flush the streamed summary, show a "Context compacted" info message, insert a new session header, and reprint the summary as the first assistant message of the new session (see `@/nori-rs/tui/docs.md`).
 
@@ -1140,7 +1140,7 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 
 - Agent subprocess communication uses stdin/stdout with JSON-RPC 2.0 framing
 - The minimum supported ACP protocol version is V1 (`MINIMUM_SUPPORTED_VERSION`); initialize is sent with `ProtocolVersion::LATEST`
-- `nori-acp` no longer has an `unstable` feature. Model selection rides the `SessionConfigOptionCategory::Model` variant, which the schema exposes only behind its own `unstable` feature; `nori-acp` turns that on unconditionally (`agent-client-protocol-schema = { features = ["unstable"] }` in `Cargo.toml`). The removed `unstable` feature previously gated only the deleted `session/set_model`/`SessionModelState` model-selection API
+- `nori-harness` has no `unstable` feature. Model selection rides the `SessionConfigOptionCategory::Model` variant, which the schema exposes only behind its own `unstable` feature; `nori-harness` turns that on unconditionally (`agent-client-protocol-schema = { features = ["unstable"] }` in `Cargo.toml`). The removed `unstable` feature previously gated only the deleted `session/set_model`/`SessionModelState` model-selection API
 - Approval requests are translated to use appropriate UI (exec approval for shell commands, patch approval for file edits)
 - Config loading uses Nori-specific paths (`~/.nori/cli/config.toml`) unconditionally; the TUI's old `nori-config` cargo feature and its legacy codex-config fallback branches were removed
 - Transcript discovery is synchronous and intended for use in background threads (e.g., the TUI's `SystemInfo` collection thread)

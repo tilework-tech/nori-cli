@@ -18,11 +18,11 @@ pub(super) async fn persist_default_model_selection(
     agent: &str,
     config_id: &str,
     value: &str,
-    config_options: &[nori_acp::SessionConfigOption],
+    config_options: &[nori_harness::SessionConfigOption],
 ) -> anyhow::Result<bool> {
     let is_model_option = config_options.iter().any(|option| {
         option.id.to_string() == config_id
-            && option.category == Some(nori_acp::SessionConfigOptionCategory::Model)
+            && option.category == Some(nori_harness::SessionConfigOptionCategory::Model)
     });
     if !is_model_option {
         return Ok(false);
@@ -534,28 +534,28 @@ mod tests {
         );
     }
 
-    fn session_config_options_with_model() -> Vec<nori_acp::SessionConfigOption> {
+    fn session_config_options_with_model() -> Vec<nori_harness::SessionConfigOption> {
         vec![
-            nori_acp::SessionConfigOption::select(
+            nori_harness::SessionConfigOption::select(
                 "model",
                 "Model",
                 "sonnet",
                 vec![
-                    nori_acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-                    nori_acp::SessionConfigSelectOption::new("opus", "Opus"),
+                    nori_harness::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+                    nori_harness::SessionConfigSelectOption::new("opus", "Opus"),
                 ],
             )
-            .category(nori_acp::SessionConfigOptionCategory::Model),
-            nori_acp::SessionConfigOption::select(
+            .category(nori_harness::SessionConfigOptionCategory::Model),
+            nori_harness::SessionConfigOption::select(
                 "permission-mode",
                 "Mode",
                 "default",
                 vec![
-                    nori_acp::SessionConfigSelectOption::new("default", "Default"),
-                    nori_acp::SessionConfigSelectOption::new("acceptEdits", "Accept Edits"),
+                    nori_harness::SessionConfigSelectOption::new("default", "Default"),
+                    nori_harness::SessionConfigSelectOption::new("acceptEdits", "Accept Edits"),
                 ],
             )
-            .category(nori_acp::SessionConfigOptionCategory::Mode),
+            .category(nori_harness::SessionConfigOptionCategory::Mode),
         ]
     }
 

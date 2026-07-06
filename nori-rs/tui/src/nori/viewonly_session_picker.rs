@@ -7,9 +7,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use nori_acp::transcript::SessionInfo;
-use nori_acp::transcript::SessionMetadata;
-use nori_acp::transcript::TranscriptLoader;
+use nori_harness::transcript::SessionInfo;
+use nori_harness::transcript::SessionMetadata;
+use nori_harness::transcript::TranscriptLoader;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;

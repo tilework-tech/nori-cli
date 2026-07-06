@@ -1,8 +1,8 @@
 use super::*;
 use insta::assert_snapshot;
-use nori_acp::SessionConfigOption;
-use nori_acp::SessionConfigOptionCategory;
-use nori_acp::SessionConfigSelectOption;
+use nori_harness::SessionConfigOption;
+use nori_harness::SessionConfigOptionCategory;
+use nori_harness::SessionConfigSelectOption;
 
 fn model_config_option() -> SessionConfigOption {
     SessionConfigOption::select(

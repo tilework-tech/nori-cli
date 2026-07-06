@@ -31,7 +31,7 @@ The project was originally forked from OpenAI Codex CLI and has been adapted to 
 │                  nori-tui                       │
 │        Interactive Terminal Interface           │
 ├────────────────────────┬────────────────────────┤
-│     nori-acp (acp/)   │   codex-core (core/)   │
+│ nori-harness (harness/)│  codex-core (core/)    │
 │  ACP Agent Connection  │  Config, Auth, Tools   │
 │  Subprocess Spawning   │  Sandbox, Utilities    │
 ├────────────────────────┴────────────────────────┤

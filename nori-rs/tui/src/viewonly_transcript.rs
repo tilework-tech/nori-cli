@@ -3,9 +3,9 @@
 //! This module converts transcript entries into displayable history cells
 //! for the view-only transcript viewer.
 
-use nori_acp::transcript::ContentBlock;
-use nori_acp::transcript::Transcript;
-use nori_acp::transcript::TranscriptEntry;
+use nori_harness::transcript::ContentBlock;
+use nori_harness::transcript::Transcript;
+use nori_harness::transcript::TranscriptEntry;
 
 /// A simplified entry for display in the view-only transcript viewer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -310,16 +310,16 @@ fn format_timestamp(iso: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nori_acp::transcript::AssistantEntry;
-    use nori_acp::transcript::ClientEventEntry;
-    use nori_acp::transcript::PatchApplyEntry;
-    use nori_acp::transcript::PatchOperationType;
-    use nori_acp::transcript::SessionMetaEntry;
-    use nori_acp::transcript::ToolCallEntry;
-    use nori_acp::transcript::ToolResultEntry;
-    use nori_acp::transcript::Transcript;
-    use nori_acp::transcript::TranscriptLine;
-    use nori_acp::transcript::UserEntry;
+    use nori_harness::transcript::AssistantEntry;
+    use nori_harness::transcript::ClientEventEntry;
+    use nori_harness::transcript::PatchApplyEntry;
+    use nori_harness::transcript::PatchOperationType;
+    use nori_harness::transcript::SessionMetaEntry;
+    use nori_harness::transcript::ToolCallEntry;
+    use nori_harness::transcript::ToolResultEntry;
+    use nori_harness::transcript::Transcript;
+    use nori_harness::transcript::TranscriptLine;
+    use nori_harness::transcript::UserEntry;
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
 

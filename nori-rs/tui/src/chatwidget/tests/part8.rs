@@ -195,8 +195,8 @@ fn transcript_subagents_are_merged_into_exit_stats() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     chat.apply_system_info_refresh(crate::system_info::SystemInfo {
-        transcript_location: Some(nori_acp::TranscriptLocation {
-            agent_kind: nori_acp::AgentKind::Codex,
+        transcript_location: Some(nori_harness::TranscriptLocation {
+            agent_kind: nori_harness::AgentKind::Codex,
             transcript_path: PathBuf::from("/tmp/session.jsonl"),
             session_id: "codex-session".to_string(),
             token_breakdown: None,

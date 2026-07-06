@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use nori_acp as acp;
+use nori_harness as acp;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;

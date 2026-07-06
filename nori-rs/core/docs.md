@@ -4,7 +4,7 @@ Path: @/nori-rs/core
 
 ### Overview
 
-The core crate is shared infrastructure inherited from the Codex fork, slimmed down by the crate-layering cleanup (`@/docs/specs/crate-layering.md`) to what the `nori` binary actually uses: configuration loading and editing, authentication, MCP auth helpers, and model/provider metadata. It is no longer a business-logic hub -- session semantics live in `@/nori-rs/acp/` (which does not depend on this crate at all), and the sandboxed-execution engine now lives in `@/nori-rs/sandbox/`.
+The core crate is shared infrastructure inherited from the Codex fork, slimmed down by the crate-layering cleanup (`@/docs/specs/crate-layering.md`) to what the `nori` binary actually uses: configuration loading and editing, authentication, MCP auth helpers, and model/provider metadata. It is no longer a business-logic hub -- session semantics live in `@/nori-rs/harness/` (which does not depend on this crate at all), and the sandboxed-execution engine now lives in `@/nori-rs/sandbox/`.
 
 ### How it fits into the larger codebase
 
@@ -25,7 +25,7 @@ The core crate is depended on by:
 - `@/nori-rs/tui/` - for config loading, auth management, and git info
 - `@/nori-rs/cli/` - for config and auth
 - `@/nori-rs/login/` - for auth primitives
-- `@/nori-rs/acp/` does **not** depend on core; the ACP-facing helpers it used to import (user notifications, custom prompts, shell/command parsing, compact constants, patch construction) now live in that crate
+- `@/nori-rs/harness/` does **not** depend on core; the ACP-facing helpers it used to import (user notifications, custom prompts, shell/command parsing, compact constants, patch construction) now live in that crate
 
 Key integrations:
 - Uses `codex-protocol` for shared types (`@/nori-rs/protocol/`), including the MCP server config types and shell environment policy types defined in its `config_types` module. Core previously re-exported `codex_protocol`'s protocol modules; those re-exports were deleted, so every crate imports `codex_protocol` directly.
@@ -67,18 +67,18 @@ The builder is used by the TUI layer (`@/nori-rs/tui/`) to persist user preferen
 
 **Command Execution**: No longer lives here. The exec engine, sandbox wrappers, spawn helpers, and error types moved to the `codex-sandbox` crate -- see `@/nori-rs/sandbox/docs.md`.
 
-**MCP Auth Helpers** (`mcp/`): Provides OAuth/auth-status helpers for MCP servers defined in config (e.g. `mcp::auth::compute_auth_statuses()`, used by the TUI's MCP server picker). The `McpServerConfig` and `McpServerTransportConfig` types themselves are defined in `codex_protocol::config_types` (`@/nori-rs/protocol/src/config_types.rs`) so that `@/nori-rs/acp/` can consume them without depending on core; core re-exports them through `config/types.rs` for its own config code. The `McpServerTransportConfig::StreamableHttp` variant supports two OAuth credential modes: dynamic client registration (the default, handled by `rmcp`'s `OAuthState`) and pre-configured client credentials via optional `client_id` and `client_secret_env_var` fields for servers that do not support dynamic registration (e.g., Slack). The `client_secret_env_var` field follows the same env-var-name pattern as `bearer_token_env_var` -- the actual secret is resolved from the environment at runtime. These fields are rejected during deserialization for stdio transport.
+**MCP Auth Helpers** (`mcp/`): Provides OAuth/auth-status helpers for MCP servers defined in config (e.g. `mcp::auth::compute_auth_statuses()`, used by the TUI's MCP server picker). The `McpServerConfig` and `McpServerTransportConfig` types themselves are defined in `codex_protocol::config_types` (`@/nori-rs/protocol/src/config_types.rs`) so that `@/nori-rs/harness/` can consume them without depending on core; core re-exports them through `config/types.rs` for its own config code. The `McpServerTransportConfig::StreamableHttp` variant supports two OAuth credential modes: dynamic client registration (the default, handled by `rmcp`'s `OAuthState`) and pre-configured client credentials via optional `client_id` and `client_secret_env_var` fields for servers that do not support dynamic registration (e.g., Slack). The `client_secret_env_var` field follows the same env-var-name pattern as `bearer_token_env_var` -- the actual secret is resolved from the environment at runtime. These fields are rejected during deserialization for stdio transport.
 
 **Data Flow (ACP path):**
 
 ```
-User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/acp) -> Agent (JSON-RPC via subprocess stdio)
+User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/harness) -> Agent (JSON-RPC via subprocess stdio)
     |
     v
 Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 ```
 
-ACP (Agent Context Protocol) integration is handled in `@/nori-rs/acp`, not embedded in core. Core provides infrastructure (config, auth) to the frontends; the ACP backend itself does not import core -- it shares only the `codex-protocol` type vocabulary.
+ACP (Agent Context Protocol) integration is handled in `@/nori-rs/harness`, not embedded in core. Core provides infrastructure (config, auth) to the frontends; the ACP backend itself does not import core -- it shares only the `codex-protocol` type vocabulary.
 
 **Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/nori-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
 
@@ -96,8 +96,8 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 
 **What moved out during the crate-layering cleanup** (`@/docs/specs/crate-layering.md`):
 
-- Dead Codex-engine subsystems were deleted outright: rollout recording (superseded by the transcript recorder in `@/nori-rs/acp/src/transcript/`), command-safety auto-approval, turn diff tracking, event mapping, and user-instruction plumbing.
-- ACP-facing leaf helpers moved into `@/nori-rs/acp/src/`: user notifications, custom prompt discovery, shell/command parsing (`parse_command`, `shell`, `bash`, `powershell`), the compact summarization constants and templates, and `create_patch_with_context` (formerly in `util.rs`, which now only holds error-message parsing helpers).
+- Dead Codex-engine subsystems were deleted outright: rollout recording (superseded by the transcript recorder in `@/nori-rs/harness/src/transcript/`), command-safety auto-approval, turn diff tracking, event mapping, and user-instruction plumbing.
+- ACP-facing leaf helpers moved into `@/nori-rs/harness/src/`: user notifications, custom prompt discovery, shell/command parsing (`parse_command`, `shell`, `bash`, `powershell`), the compact summarization constants and templates, and `create_patch_with_context` (formerly in `util.rs`, which now only holds error-message parsing helpers).
 - `McpServerConfig`/`McpServerTransportConfig` and the shell environment policy types (`ShellEnvironmentPolicy` and friends) moved down into `codex_protocol::config_types`; core re-exports them for its own config code.
 - The sandboxed-execution engine moved into `codex-sandbox` (`@/nori-rs/sandbox/`): `exec`, `exec_env`, `spawn`, `safety`, `sandboxing/`, `seatbelt` (+ `.sbpl` policies), `landlock`, `text_encoding`, `truncate`, and `error` (`CodexErr`/`SandboxErr`). Its integration tests (exec, seatbelt, text encoding) moved out of `core/tests/suite/` at the same time. Frontends that need exec/sandbox functionality import `codex_sandbox` directly.
 
@@ -109,6 +109,6 @@ Other notes:
 
 **Test Suite:**
 
-The integration test suite in `@/nori-rs/core/tests/suite` covers auth refresh and live CLI behavior; the exec/seatbelt/text-encoding suites now live in `@/nori-rs/sandbox/tests/`. The `core_test_support` helper crate (`@/nori-rs/core/tests/common/`) provides config helpers, macros, and filesystem wait utilities for tests; its exec helper builds shell invocations via `nori_acp::shell` since the shell helpers moved to `@/nori-rs/acp/`, and its sandbox-skip macros use the env-var constants from `codex_sandbox::spawn`.
+The integration test suite in `@/nori-rs/core/tests/suite` covers auth refresh and live CLI behavior; the exec/seatbelt/text-encoding suites now live in `@/nori-rs/sandbox/tests/`. The `core_test_support` helper crate (`@/nori-rs/core/tests/common/`) provides config helpers, macros, and filesystem wait utilities for tests; its exec helper builds shell invocations via `nori_harness::shell` since the shell helpers moved to `@/nori-rs/harness/`, and its sandbox-skip macros use the env-var constants from `codex_sandbox::spawn`.
 
 Created and maintained by Nori.
