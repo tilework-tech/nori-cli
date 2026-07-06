@@ -10,7 +10,7 @@ use dirs::home_dir;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
-use codex_core::protocol::ExecCommandSource;
+use codex_protocol::protocol::ExecCommandSource;
 use mcp_types::CallToolResult;
 use mcp_types::ContentBlock;
 use mcp_types::TextContent;

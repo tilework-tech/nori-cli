@@ -53,7 +53,7 @@ impl App {
         self.config.approval_policy = approval;
         self.config.sandbox_policy = sandbox.clone();
         #[cfg(target_os = "windows")]
-        if !matches!(sandbox, codex_core::protocol::SandboxPolicy::ReadOnly)
+        if !matches!(sandbox, codex_protocol::protocol::SandboxPolicy::ReadOnly)
             || codex_core::get_platform_sandbox().is_some()
         {
             self.config.forced_auto_mode_downgraded_on_windows = false;
@@ -390,8 +390,8 @@ impl App {
                 #[cfg(target_os = "windows")]
                 let sandbox_is_workspace_write_or_ro = matches!(
                     sandbox,
-                    codex_core::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_core::protocol::SandboxPolicy::ReadOnly
+                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
+                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
                 );
 
                 self.apply_approval_preset(approval, sandbox);

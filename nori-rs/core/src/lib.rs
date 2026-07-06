@@ -32,7 +32,6 @@ mod text_encoding;
 pub mod token_data;
 pub(crate) mod tool_types;
 mod truncate;
-pub use codex_protocol::protocol::InitialHistory;
 // Re-export common auth types for workspace consumers
 pub use auth::AuthManager;
 pub use auth::CodexAuth;
@@ -50,17 +49,6 @@ pub mod util;
 pub use safety::get_platform_sandbox;
 pub use safety::set_windows_sandbox_enabled;
 pub use tool_types::CODEX_APPLY_PATCH_ARG1;
-// Re-export the protocol types from the standalone `codex-protocol` crate so existing
-// `codex_core::protocol::...` references continue to work across the workspace.
-pub use codex_protocol::protocol;
-// Re-export protocol config enums to ensure call sites can use the same types
-// as those in the protocol crate when constructing protocol messages.
-pub use codex_protocol::config_types as protocol_config_types;
 
-pub use codex_protocol::models::ContentItem;
-pub use codex_protocol::models::LocalShellAction;
-pub use codex_protocol::models::LocalShellExecAction;
-pub use codex_protocol::models::LocalShellStatus;
-pub use codex_protocol::models::ResponseItem;
 pub mod compact;
 pub mod otel_init;

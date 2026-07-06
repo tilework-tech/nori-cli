@@ -25,13 +25,13 @@ impl ChatWidget {
             "pause" => {
                 self.submit_op(Op::ThreadGoalSet {
                     objective: None,
-                    status: Some(codex_core::protocol::ThreadGoalStatus::Paused),
+                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Paused),
                 });
             }
             "resume" => {
                 self.submit_op(Op::ThreadGoalSet {
                     objective: None,
-                    status: Some(codex_core::protocol::ThreadGoalStatus::Active),
+                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
                 });
             }
             "clear" => {
@@ -41,7 +41,8 @@ impl ChatWidget {
                 self.open_goal_editor_or_request_snapshot();
             }
             _ => {
-                if let Err(message) = codex_core::protocol::validate_thread_goal_objective(rest) {
+                if let Err(message) = codex_protocol::protocol::validate_thread_goal_objective(rest)
+                {
                     self.add_error_message(message);
                     return true;
                 }
@@ -51,7 +52,7 @@ impl ChatWidget {
                 }
                 self.submit_op(Op::ThreadGoalSet {
                     objective: Some(rest.to_string()),
-                    status: Some(codex_core::protocol::ThreadGoalStatus::Active),
+                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
                 });
             }
         }
@@ -208,7 +209,7 @@ impl ChatWidget {
                 actions: vec![Box::new(move |tx| {
                     tx.send(AppEvent::CodexOp(Op::ThreadGoalSet {
                         objective: Some(replacement.clone()),
-                        status: Some(codex_core::protocol::ThreadGoalStatus::Active),
+                        status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
                     }));
                 })],
                 dismiss_on_select: true,

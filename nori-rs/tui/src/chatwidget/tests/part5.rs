@@ -700,7 +700,7 @@ fn exec_end_flushes_stream_and_handles_immediately() {
 /// assistant message of the new session.
 #[test]
 fn compact_shows_session_header_and_reprints_summary() {
-    use codex_core::protocol::ContextCompactedEvent;
+    use codex_protocol::protocol::ContextCompactedEvent;
 
     let (mut chat, mut rx, _ops) = make_chatwidget_manual();
 
@@ -795,7 +795,7 @@ fn compact_shows_session_header_and_reprints_summary() {
 /// with no session header or reprint.
 #[test]
 fn compact_without_summary_shows_only_compacted_message() {
-    use codex_core::protocol::ContextCompactedEvent;
+    use codex_protocol::protocol::ContextCompactedEvent;
 
     let (mut chat, mut rx, _ops) = make_chatwidget_manual();
 
