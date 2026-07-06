@@ -265,7 +265,6 @@ impl ChatComposer {
     }
 
     /// Set a footer segment's enabled state.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_footer_segment_enabled(
         &mut self,
         segment: nori_acp::config::FooterSegment,

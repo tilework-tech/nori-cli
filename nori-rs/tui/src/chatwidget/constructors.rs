@@ -113,7 +113,6 @@ impl ChatWidget {
             pending_goal_edit: false,
             loop_remaining: None,
             loop_total: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
             acp_session_phase: None,
             plan_drawer_mode: PlanDrawerMode::Off,
@@ -241,7 +240,6 @@ impl ChatWidget {
             pending_goal_edit: false,
             loop_remaining: None,
             loop_total: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
             acp_session_phase: None,
             plan_drawer_mode: PlanDrawerMode::Off,

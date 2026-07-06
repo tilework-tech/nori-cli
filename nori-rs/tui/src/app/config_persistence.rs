@@ -71,7 +71,6 @@ impl App {
             .add_info_message(format!("{setting_name} {status}"), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_notify_after_idle_setting(
         &mut self,
         value: nori_acp::config::NotifyAfterIdle,
@@ -101,7 +100,6 @@ impl App {
         );
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_script_timeout_setting(
         &mut self,
         value: nori_acp::config::ScriptTimeout,
@@ -131,7 +129,6 @@ impl App {
     /// Store the loop count as an ephemeral per-session override (not persisted
     /// to the TOML config). The user can still edit the home TOML directly for
     /// a persistent change.
-    #[cfg(feature = "nori-config")]
     pub(super) fn set_session_loop_count(&mut self, value: Option<i32>) {
         self.loop_count_override = Some(value);
         self.chat_widget.set_loop_count_override(Some(value));
@@ -171,7 +168,6 @@ impl App {
             .add_info_message(format!("Vim mode: {display}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_auto_worktree_setting(
         &mut self,
         value: nori_acp::config::AutoWorktree,
@@ -201,7 +197,6 @@ impl App {
         );
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_pinned_plan_drawer_setting(&mut self, enabled: bool) {
         let mode = if enabled {
             crate::chatwidget::PlanDrawerMode::Expanded
@@ -226,7 +221,6 @@ impl App {
             .add_info_message(format!("Pinned plan drawer {status}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
         if let Err(err) = persist_acp_wire_recording_config(&self.config.codex_home, enabled).await
         {
@@ -243,7 +237,6 @@ impl App {
             .add_info_message(format!("ACP wire recording {status}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_custom_working_messages_setting(&mut self, enabled: bool) {
         self.config.custom_working_messages = enabled;
         self.chat_widget.set_custom_working_messages(enabled);
@@ -264,7 +257,6 @@ impl App {
             .add_info_message(format!("Custom working messages {status}."), None);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
         let builder = ConfigEditsBuilder::new(&self.config.codex_home)
             .set_path(&["tui", "skillset_per_session"], toml_value(enabled));
@@ -282,7 +274,6 @@ impl App {
         );
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_footer_segment_setting(
         &mut self,
         segment: nori_acp::config::FooterSegment,
@@ -319,7 +310,6 @@ impl App {
             .replace_footer_segments_picker(&self.footer_segment_config);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(super) async fn persist_file_manager_setting(
         &mut self,
         value: nori_acp::config::FileManager,
