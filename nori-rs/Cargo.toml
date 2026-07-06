@@ -15,6 +15,7 @@ members = [
     "login",
     "mcp-types",
     "process-hardening",
+    "nori-config",
     "protocol",
     "sandbox",
     "rmcp-client",
@@ -60,6 +61,7 @@ codex-git = { path = "utils/git" }
 codex-keyring-store = { path = "keyring-store" }
 codex-linux-sandbox = { path = "linux-sandbox" }
 codex-sandbox = { path = "sandbox" }
+nori-config = { path = "nori-config" }
 codex-login = { path = "login" }
 codex-otel = { path = "otel" }
 codex-process-hardening = { path = "process-hardening" }
