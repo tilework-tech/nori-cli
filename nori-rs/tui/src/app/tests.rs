@@ -51,7 +51,6 @@ fn make_test_app() -> App {
         suppress_shutdown_complete: false,
         skip_world_writable_scan_once: false,
         pending_agent: None,
-        #[cfg(feature = "nori-config")]
         loop_count_override: None,
         hotkey_config: nori_acp::config::HotkeyConfig::default(),
         vim_mode: nori_acp::config::VimEnterBehavior::Off,
@@ -59,7 +58,6 @@ fn make_test_app() -> App {
         plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
         system_info_tx,
         worktree_warning_shown: false,
-        #[cfg(feature = "nori-config")]
         deferred_spawn_pending: false,
         mcp_oauth_cancel_tx: None,
     }
@@ -97,7 +95,6 @@ fn make_test_app_with_channels() -> (
             suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
-            #[cfg(feature = "nori-config")]
             loop_count_override: None,
             hotkey_config: nori_acp::config::HotkeyConfig::default(),
             vim_mode: nori_acp::config::VimEnterBehavior::Off,
@@ -105,7 +102,6 @@ fn make_test_app_with_channels() -> (
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
-            #[cfg(feature = "nori-config")]
             deferred_spawn_pending: false,
             mcp_oauth_cancel_tx: None,
         },
@@ -243,7 +239,6 @@ fn backtrack_selection_with_duplicate_history_targets_unique_turn() {
     assert_eq!(prefill, "follow-up (edited)");
 }
 
-#[cfg(feature = "nori-config")]
 #[test]
 fn chat_widget_init_carries_footer_segment_config() {
     let mut app = make_test_app();
@@ -270,7 +265,6 @@ fn chat_widget_init_carries_footer_segment_config() {
     }
 }
 
-#[cfg(feature = "nori-config")]
 #[test]
 fn chat_widget_init_carries_footer_layout_config() {
     let mut app = make_test_app();
@@ -294,7 +288,6 @@ fn chat_widget_init_carries_footer_layout_config() {
     assert_eq!(init.footer_layout_config, footer_layout_config);
 }
 
-#[cfg(feature = "nori-config")]
 #[test]
 fn rebuilding_chat_widget_preserves_footer_segment_config() {
     let mut app = make_test_app();

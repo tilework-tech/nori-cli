@@ -1,9 +1,8 @@
 //! Nori configuration adapter
 //!
 //! This module provides integration between the Nori config system
-//! (from nori-acp) and the TUI. When the `nori-config` feature is enabled,
-//! the TUI loads configuration from `~/.nori/cli/config.toml` instead of
-//! `~/.codex/config.toml`.
+//! (from nori-acp) and the TUI: configuration is loaded from
+//! `~/.nori/cli/config.toml`.
 
 #![allow(dead_code)]
 

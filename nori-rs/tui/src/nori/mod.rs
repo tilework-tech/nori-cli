@@ -17,21 +17,17 @@ pub(crate) mod skillset_picker;
 pub(crate) mod token_count;
 pub(crate) mod viewonly_session_picker;
 
-#[cfg(feature = "nori-config")]
 pub(crate) mod config_adapter;
 
-#[cfg(feature = "nori-config")]
 pub(crate) mod config_picker;
 
 pub(crate) mod hotkey_match;
 pub(crate) mod hotkey_picker;
 
-#[cfg(feature = "nori-config")]
 pub(crate) mod loop_count_picker;
 
 pub(crate) mod mcp_server_picker;
 
-#[cfg(feature = "nori-config")]
 pub(crate) mod worktree_ask;
 
 // update_action is available in all builds for the UpdateAction type

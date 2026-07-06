@@ -20,12 +20,10 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
         self.bottom_pane.set_acp_wire_recording_enabled(enabled);
     }
 
-    #[cfg(feature = "nori-config")]
     pub(crate) fn replace_agent_popup(&mut self, recording_enabled: bool) {
         if !self.bottom_pane.has_active_view() {
             return;
@@ -281,7 +279,6 @@ impl ChatWidget {
     }
 
     /// Open the Nori CLI settings popup.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_acp::config::NoriConfig) {
         let params = crate::nori::config_picker::config_picker_params(
             nori_config,
@@ -291,7 +288,6 @@ impl ChatWidget {
     }
 
     /// Open the file manager sub-picker.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_file_manager_picker(
         &mut self,
         current: Option<nori_acp::config::FileManager>,
@@ -304,7 +300,6 @@ impl ChatWidget {
     }
 
     /// Open the vim mode sub-picker.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_vim_mode_picker(&mut self, current: nori_acp::config::VimEnterBehavior) {
         let params =
             crate::nori::config_picker::vim_mode_picker_params(current, self.app_event_tx.clone());
@@ -312,7 +307,6 @@ impl ChatWidget {
     }
 
     /// Open the auto-worktree sub-picker.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_auto_worktree_picker(&mut self, current: nori_acp::config::AutoWorktree) {
         let params = crate::nori::config_picker::auto_worktree_picker_params(
             current,
@@ -322,7 +316,6 @@ impl ChatWidget {
     }
 
     /// Open the notify-after-idle sub-picker.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_notify_after_idle_picker(
         &mut self,
         current: nori_acp::config::NotifyAfterIdle,
@@ -335,7 +328,6 @@ impl ChatWidget {
     }
 
     /// Open the script timeout sub-picker.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_script_timeout_picker(&mut self, current: nori_acp::config::ScriptTimeout) {
         let params = crate::nori::config_picker::script_timeout_picker_params(
             current,
@@ -345,7 +337,6 @@ impl ChatWidget {
     }
 
     /// Open the loop count sub-picker.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_loop_count_picker(&mut self, current: Option<i32>) {
         let view = crate::nori::loop_count_picker::LoopCountPickerView::new(
             current,
@@ -355,7 +346,6 @@ impl ChatWidget {
     }
 
     /// Open the footer segments picker popup.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_footer_segments_picker(
         &mut self,
         current: &nori_acp::config::FooterSegmentConfig,
@@ -368,7 +358,6 @@ impl ChatWidget {
     }
 
     /// Open the worktree choice picker for per-session skillsets.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn open_skillset_worktree_choice_picker(&mut self) {
         let params =
             crate::nori::config_picker::skillset_worktree_choice_params(self.app_event_tx.clone());
@@ -379,7 +368,6 @@ impl ChatWidget {
     ///
     /// Used after toggling a segment so the picker shows updated state without
     /// stacking a new view on top of the old one.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn replace_footer_segments_picker(
         &mut self,
         current: &nori_acp::config::FooterSegmentConfig,
@@ -392,7 +380,6 @@ impl ChatWidget {
     }
 
     /// Set a footer segment's enabled state.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_footer_segment_enabled(
         &mut self,
         segment: nori_acp::config::FooterSegment,
@@ -403,14 +390,12 @@ impl ChatWidget {
     }
 
     /// Set the loop state for a new iteration.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_loop_state(&mut self, remaining: i32, total: i32) {
         self.loop_remaining = Some(remaining);
         self.loop_total = Some(total);
     }
 
     /// Set the ephemeral per-session loop count override.
-    #[cfg(feature = "nori-config")]
     pub(crate) fn set_loop_count_override(&mut self, value: Option<Option<i32>>) {
         self.loop_count_override = value;
     }

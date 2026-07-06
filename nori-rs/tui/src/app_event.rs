@@ -277,78 +277,61 @@ pub(crate) enum AppEvent {
     SetConfigOsNotifications(bool),
 
     /// Open the vim mode sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenVimModePicker,
 
     /// Set the TUI vim mode config setting.
     SetConfigVimMode(nori_acp::config::VimEnterBehavior),
 
     /// Open the notify-after-idle sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenNotifyAfterIdlePicker,
 
     /// Open the script timeout sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenScriptTimeoutPicker,
 
     /// Open the hotkey picker sub-view.
     OpenHotkeyPicker,
 
     /// Set the TUI notify-after-idle config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigNotifyAfterIdle(nori_acp::config::NotifyAfterIdle),
 
     /// Set the TUI script timeout config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigScriptTimeout(nori_acp::config::ScriptTimeout),
 
     /// Open the loop count sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenLoopCountPicker,
 
     /// Set the loop count config setting. `None` means disabled.
-    #[cfg(feature = "nori-config")]
     SetConfigLoopCount(Option<i32>),
 
     /// Open the auto worktree sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenAutoWorktreePicker,
 
     /// Set the TUI auto worktree config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigAutoWorktree(nori_acp::config::AutoWorktree),
 
     /// Set the TUI skillset per session config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigSkillsetPerSession(bool),
 
     /// Set the TUI pinned plan drawer config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigPinnedPlanDrawer(bool),
 
     /// Set ACP wire JSONL recording for future ACP child subprocesses.
-    #[cfg(feature = "nori-config")]
     SetConfigAcpWireRecording(bool),
 
     /// Set the TUI custom working messages config setting.
-    #[cfg(feature = "nori-config")]
     SetConfigCustomWorkingMessages(bool),
 
     /// Open the worktree choice modal when enabling per-session skillsets.
-    #[cfg(feature = "nori-config")]
     OpenSkillsetPerSessionWorktreeChoice,
 
     /// Open the footer segments sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenFooterSegmentsPicker,
 
     /// Toggle a footer segment's enabled state.
-    #[cfg(feature = "nori-config")]
     SetConfigFooterSegment(nori_acp::config::FooterSegment, bool),
 
     /// Start the next loop iteration with a fresh conversation.
     /// Sent by ChatWidget::on_task_complete when loop mode is active.
-    #[cfg(feature = "nori-config")]
     LoopIteration {
         /// The prompt text to replay.
         prompt: String,
@@ -496,15 +479,12 @@ pub(crate) enum AppEvent {
     },
 
     /// Launch a terminal file manager to browse and optionally edit files.
-    #[cfg(feature = "nori-config")]
     BrowseFiles(nori_acp::config::FileManager),
 
     /// Set the configured file manager for the `/browse` command.
-    #[cfg(feature = "nori-config")]
     SetConfigFileManager(nori_acp::config::FileManager),
 
     /// Open the file manager sub-picker.
-    #[cfg(feature = "nori-config")]
     OpenFileManagerPicker,
 
     /// Persist the full MCP servers map to config.toml.

@@ -780,27 +780,22 @@ impl App {
                 self.chat_widget
                     .open_hotkey_picker(self.hotkey_config.clone());
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenNotifyAfterIdlePicker => {
                 let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_notify_after_idle_picker(nori_config.notify_after_idle);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigNotifyAfterIdle(value) => {
                 self.persist_notify_after_idle_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenScriptTimeoutPicker => {
                 let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_script_timeout_picker(nori_config.script_timeout);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigScriptTimeout(value) => {
                 self.persist_script_timeout_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenLoopCountPicker => {
                 let current = match self.loop_count_override {
                     Some(overridden) => overridden,
@@ -812,69 +807,54 @@ impl App {
                 };
                 self.chat_widget.open_loop_count_picker(current);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigLoopCount(value) => {
                 self.set_session_loop_count(value);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenVimModePicker => {
                 let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget.open_vim_mode_picker(nori_config.vim_mode);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenAutoWorktreePicker => {
                 let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_auto_worktree_picker(nori_config.auto_worktree);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigAutoWorktree(value) => {
                 self.persist_auto_worktree_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigSkillsetPerSession(enabled) => {
                 self.persist_skillset_per_session_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigPinnedPlanDrawer(enabled) => {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigAcpWireRecording(enabled) => {
                 self.persist_acp_wire_recording_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigCustomWorkingMessages(enabled) => {
                 self.persist_custom_working_messages_setting(enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenSkillsetPerSessionWorktreeChoice => {
                 self.chat_widget.open_skillset_worktree_choice_picker();
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenFooterSegmentsPicker => {
                 self.chat_widget
                     .open_footer_segments_picker(&self.footer_segment_config);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigFooterSegment(segment, enabled) => {
                 self.persist_footer_segment_setting(segment, enabled).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::BrowseFiles(fm) => {
                 self.browse_files(fm, tui);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::SetConfigFileManager(value) => {
                 self.persist_file_manager_setting(value).await;
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::OpenFileManagerPicker => {
                 let nori_config = nori_acp::config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
                     .open_file_manager_picker(nori_config.file_manager);
             }
-            #[cfg(feature = "nori-config")]
             AppEvent::LoopIteration {
                 prompt,
                 remaining,
@@ -942,7 +922,6 @@ impl App {
                     .on_skillset_switch_result(&name, success, &message);
                 // If the agent spawn was deferred (waiting for skillset switch to
                 // complete), trigger it now that files are on disk.
-                #[cfg(feature = "nori-config")]
                 if success && self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
                     self.chat_widget
@@ -960,7 +939,6 @@ impl App {
                 // The skillset picker was dismissed without selection. If the
                 // agent spawn was deferred, spawn it now without a skillset
                 // (behaves as if skillset_per_session is disabled).
-                #[cfg(feature = "nori-config")]
                 if self.deferred_spawn_pending {
                     self.deferred_spawn_pending = false;
                     self.chat_widget

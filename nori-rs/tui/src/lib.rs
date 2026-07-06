@@ -138,9 +138,8 @@ pub async fn run_main(
         nori_acp::prewarm_installation_cache();
     });
 
-    // When nori-config feature is enabled, set up the Nori config environment
+    // Set up the Nori config environment
     // This redirects config loading to ~/.nori/cli instead of ~/.codex
-    #[cfg(feature = "nori-config")]
     {
         #[allow(clippy::print_stderr)]
         if let Err(e) = nori::config_adapter::setup_nori_config_environment() {
@@ -151,7 +150,6 @@ pub async fn run_main(
 
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
-    #[cfg(feature = "nori-config")]
     if let Ok(nori_home) = nori_acp::config::find_nori_home() {
         nori_installed::track_launch(&nori_home);
     }
@@ -199,15 +197,7 @@ pub async fn run_main(
 
     // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_AGENT
     let agent = cli.agent.clone().or_else(|| {
-        #[cfg(feature = "nori-config")]
-        {
-            nori::config_adapter::get_persisted_agent()
-                .or_else(|| Some(DEFAULT_ACP_AGENT.to_string()))
-        }
-        #[cfg(not(feature = "nori-config"))]
-        {
-            Some(DEFAULT_ACP_AGENT.to_string())
-        }
+        nori::config_adapter::get_persisted_agent().or_else(|| Some(DEFAULT_ACP_AGENT.to_string()))
     });
 
     // canonicalize the cwd
@@ -215,10 +205,7 @@ pub async fn run_main(
     let additional_dirs = cli.add_dir.clone();
 
     // Auto-worktree: if enabled in NoriConfig, create a worktree and override cwd
-    #[cfg(feature = "nori-config")]
     let nori_config = nori::config_adapter::load_nori_config().ok();
-    #[cfg(not(feature = "nori-config"))]
-    let nori_config: Option<nori_acp::NoriConfig> = None;
 
     // Initialize the agent registry with custom agents from config plus any
     // caller-injected entries (e.g. `nori cloud`'s pinned handroll agent).
@@ -239,7 +226,6 @@ pub async fn run_main(
         tracing::warn!("Failed to initialize agent registry with custom agents: {e}");
     }
 
-    #[cfg(feature = "nori-config")]
     let (pending_worktree_ask, worktree_blocked_reason) = {
         use nori_acp::config::AutoWorktree;
         let auto_worktree = nori_config
@@ -287,9 +273,6 @@ pub async fn run_main(
             }
         }
     };
-    #[cfg(not(feature = "nori-config"))]
-    let (pending_worktree_ask, worktree_blocked_reason): (bool, Option<String>) = (false, None);
-
     let overrides = ConfigOverrides {
         model: agent,
         approval_policy,

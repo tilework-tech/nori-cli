@@ -129,7 +129,6 @@ impl ChatWidget {
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
             }
-            #[cfg(feature = "nori-config")]
             SlashCommand::Settings => {
                 // Load NoriConfig from the default path and open the settings popup.
                 // Apply ephemeral session overrides so the picker shows the
@@ -145,13 +144,6 @@ impl ChatWidget {
                         self.add_error_message(format!("Failed to load settings: {err}"));
                     }
                 }
-            }
-            #[cfg(not(feature = "nori-config"))]
-            SlashCommand::Settings => {
-                self.add_info_message(
-                    "Settings command requires the nori-config feature".to_string(),
-                    None,
-                );
             }
             SlashCommand::Goal => {
                 if self.ensure_builtin_command_enabled(SlashCommand::Goal) {
@@ -174,7 +166,6 @@ impl ChatWidget {
             SlashCommand::Undo => {
                 self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
             }
-            #[cfg(feature = "nori-config")]
             SlashCommand::Browse => match nori_acp::config::NoriConfig::load() {
                 Ok(nori_config) => match nori_config.file_manager {
                     Some(fm) => {
@@ -190,13 +181,6 @@ impl ChatWidget {
                     self.add_error_message(format!("Failed to load config: {err}"));
                 }
             },
-            #[cfg(not(feature = "nori-config"))]
-            SlashCommand::Browse => {
-                self.add_info_message(
-                    "Browse command requires the nori-config feature".to_string(),
-                    None,
-                );
-            }
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
                 let tx = self.app_event_tx.clone();

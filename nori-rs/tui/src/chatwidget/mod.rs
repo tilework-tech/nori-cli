@@ -432,7 +432,6 @@ pub(crate) struct ChatWidget {
     loop_total: Option<i32>,
     // Ephemeral per-session override for loop_count (set via /settings menu).
     // Outer Option: whether overridden; inner Option<i32>: the value.
-    #[cfg(feature = "nori-config")]
     loop_count_override: Option<Option<i32>>,
     acp_session_phase: Option<nori_protocol::session_runtime::SessionPhaseView>,
     /// Whether and how plan updates are rendered in a pinned drawer instead of
