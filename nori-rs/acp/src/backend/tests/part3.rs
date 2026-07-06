@@ -478,7 +478,7 @@ async fn test_approval_policy_dynamic_update() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
     let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
-    let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+    let user_notifier = Arc::new(crate::UserNotifier::new(None, false));
     let cwd = PathBuf::from("/tmp/test");
 
     // Create watch channel starting with OnRequest policy (requires approval)
@@ -604,7 +604,7 @@ async fn test_patch_approval_emits_normalized_client_event() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
     let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
-    let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+    let user_notifier = Arc::new(crate::UserNotifier::new(None, false));
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
 
     spawn_test_approval_handler(
@@ -712,7 +712,7 @@ async fn test_exec_approval_emits_normalized_client_event() {
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
     let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
-    let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+    let user_notifier = Arc::new(crate::UserNotifier::new(None, false));
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::OnRequest);
 
     spawn_test_approval_handler(
@@ -803,7 +803,7 @@ async fn test_exec_approval_with_never_policy_does_not_emit_normalized_client_ev
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(16);
     let (client_event_tx, mut client_event_rx) = mpsc::channel::<nori_protocol::ClientEvent>(16);
     let pending_approvals = Arc::new(Mutex::new(Vec::<PendingApprovalRequest>::new()));
-    let user_notifier = Arc::new(codex_core::UserNotifier::new(None, false));
+    let user_notifier = Arc::new(crate::UserNotifier::new(None, false));
     let (_policy_tx, policy_rx) = watch::channel(AskForApproval::Never);
 
     spawn_test_approval_handler(

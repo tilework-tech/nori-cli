@@ -414,7 +414,7 @@ impl ChatWidget {
     pub(crate) fn open_mcp_servers_popup(&mut self) {
         let servers: std::collections::BTreeMap<
             String,
-            codex_core::config::types::McpServerConfig,
+            codex_protocol::config_types::McpServerConfig,
         > = self
             .config
             .mcp_servers

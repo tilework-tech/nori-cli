@@ -8,7 +8,7 @@ The execpolicy crate provides parsing and evaluation of execution policies for c
 
 ### How it fits into the larger codebase
 
-Used by `@/nori-rs/core/` (`command_safety/`) to determine whether shell commands require user approval or can be auto-executed.
+Its only remaining consumer is the `nori execpolicycheck` debug subcommand in `@/nori-rs/cli/src/main.rs`, which checks policy files against a command. The former runtime consumer -- `codex-core`'s `command_safety/` auto-approval module -- was deleted in the crate-layering cleanup (`@/docs/specs/crate-layering.md`), so this crate is no longer on the live approval path.
 
 ### Core Implementation
 

@@ -269,7 +269,7 @@ impl AcpBackend {
 
         self.pending_approvals.lock().await.push(*pending_request);
         self.user_notifier
-            .notify(&codex_core::UserNotification::AwaitingApproval {
+            .notify(&crate::UserNotification::AwaitingApproval {
                 call_id: notification_call_id,
                 command: command_for_notification,
                 cwd: self.cwd.display().to_string(),
@@ -848,7 +848,7 @@ impl AcpBackend {
         let session_id = self.session_id.read().await.to_string();
         let idle_task = tokio::spawn(async move {
             tokio::time::sleep(duration).await;
-            user_notifier.notify(&codex_core::UserNotification::Idle {
+            user_notifier.notify(&crate::UserNotification::Idle {
                 session_id,
                 idle_duration_secs: idle_secs,
             });

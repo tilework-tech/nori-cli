@@ -163,7 +163,7 @@ impl AcpBackend {
         // Check if we have a pending compact summary to prepend
         let pending_summary = self.pending_compact_summary.lock().await.take();
         let final_prompt_text = if let Some(summary) = pending_summary {
-            use codex_core::compact::SUMMARY_PREFIX;
+            use crate::compact::SUMMARY_PREFIX;
             format!("{SUMMARY_PREFIX}\n{summary}\n\n{prompt_with_goal_context}")
         } else {
             prompt_with_goal_context

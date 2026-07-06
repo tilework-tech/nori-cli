@@ -22,7 +22,6 @@ rmcp = { workspace = true, features = [
     "transport-streamable-http-server",
 ] }
 base64 = { workspace = true }
-codex-core = { workspace = true }
 codex-git = { workspace = true }
 codex-rmcp-client = { workspace = true }
 codex-protocol = { workspace = true }
@@ -42,6 +41,11 @@ toml = { workspace = true }
 toml_edit = { workspace = true }
 dirs = { workspace = true }
 diffy = { workspace = true }
+notify-rust = { workspace = true }
+regex = { workspace = true }
+shlex = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-bash = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 which = { workspace = true }

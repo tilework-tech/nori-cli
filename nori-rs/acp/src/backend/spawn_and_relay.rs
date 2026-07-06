@@ -78,7 +78,7 @@ impl AcpBackend {
         let (prompt_result_tx, prompt_result_rx) = mpsc::channel(128);
         let use_native_notifications =
             config.os_notifications == crate::config::OsNotifications::Enabled;
-        let user_notifier = Arc::new(codex_core::UserNotifier::new(
+        let user_notifier = Arc::new(crate::UserNotifier::new(
             config.notify.clone(),
             use_native_notifications,
         ));
@@ -412,7 +412,7 @@ impl AcpBackend {
         backend: AcpBackend,
         mut approval_rx: mpsc::Receiver<ApprovalRequest>,
         _pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
-        _user_notifier: Arc<codex_core::UserNotifier>,
+        _user_notifier: Arc<crate::UserNotifier>,
         approval_policy_rx: watch::Receiver<AskForApproval>,
     ) {
         let approval_policy_rx = approval_policy_rx;

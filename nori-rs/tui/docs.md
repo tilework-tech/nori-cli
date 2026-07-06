@@ -115,7 +115,7 @@ For Codex-backed ACP sessions, this rendering path depends on `nori-protocol` no
 
 The path is extracted from `locations[0].path` when available, falling back to parsing the title (stripping the kind prefix, e.g., `"Edit README.md"` -> `"README.md"`). Bullet styling: green bold for completed, red bold for failed, spinner for active. For failed edits, error text is extracted via `extract_error_text()` (checks `raw_output` for `"error"`, `"stderr"`, `"output"`, or bare string), with a `"(failed)"` fallback.
 
-Diff content is rendered from two sources in priority order: (1) `Artifact::Diff` entries via `diff_changes_from_artifacts()`, (2) invocation data via `changes_from_invocation()` which handles both `Invocation::FileChanges` and `Invocation::FileOperations` (Create, Update, Delete, Move). Both helpers convert `nori_protocol` types to `codex_core::protocol::FileChange` for `create_diff_summary` from `diff_render.rs`. Update and move diffs use the real `cwd` to preserve file-context line numbers when the edited text can be found on disk, so completed edits show inline diffs whether the diff data arrives as artifacts or as invocation-level file changes.
+Diff content is rendered from two sources in priority order: (1) `Artifact::Diff` entries via `diff_changes_from_artifacts()`, (2) invocation data via `changes_from_invocation()` which handles both `Invocation::FileChanges` and `Invocation::FileOperations` (Create, Update, Delete, Move). Both helpers convert `nori_protocol` types to `codex_protocol::protocol::FileChange` for `create_diff_summary` from `diff_render.rs`. Update and move diffs use the real `cwd` to preserve file-context line numbers when the edited text can be found on disk, so completed edits show inline diffs whether the diff data arrives as artifacts or as invocation-level file changes.
 
 The diff renderer preserves syntax-highlighter state across each update hunk before applying add/delete/context styling, then wraps styled spans by terminal display width rather than byte or character count. Move/update diffs use the destination path for syntax detection, so renamed files highlight as the language they become instead of the language implied by the old path.
 
@@ -127,7 +127,7 @@ Bullet styling is phase-aware: active tools show a spinner, failed tools (`ToolP
 
 For failed tools, error detail is extracted via a cascade: (1) text artifacts (via `format_artifacts`), (2) `extract_error_text()` which checks `raw_output` for `"error"`, `"output"`, or bare string values, (3) a `"(failed)"` fallback when no detail is available at all. For non-failed tools, the location fallback still applies: when both invocation formatting and artifact formatting produce zero detail lines, it displays the `locations` paths from the `ToolSnapshot` as dim sub-items. This prevents completed tool cells from rendering as bare headers with no context, which occurs when agents (e.g., Gemini) send tool calls with empty `content` arrays and no `rawInput`/`rawOutput`.
 
-**Edit/Delete/Move routing**: All Edit/Delete/Move snapshots (all phases including Completed) are routed to `handle_client_tool_snapshot`, the same handler used by Execute tools. In-progress snapshots create a spinner cell in `active_cell`. When the completed snapshot arrives with the same `call_id`, `apply_snapshot()` updates the cell in place, transitioning it from the spinner state to the completed state with diff content. The completed cell is then flushed to history. For completed Edit/Delete/Move snapshots, `handle_client_tool_snapshot` also calls `observe_directories_from_paths()` (using the snapshot's `locations`) and records tool call stats. `PatchHistoryCell` is no longer used in the ACP rendering path -- it remains only for the non-ACP codex backend path (via `on_patch_apply_begin`). Edit/Delete/Move approval requests route through `ApprovalRequest::AcpTool` (not `ApplyPatch`), so there are no bridge functions converting `nori_protocol` types to `codex_core::protocol::FileChange` for the approval path -- the diff extraction for approval overlays reuses the same `pub(crate)` helpers in `client_tool_cell.rs` that the completed-cell rendering uses.
+**Edit/Delete/Move routing**: All Edit/Delete/Move snapshots (all phases including Completed) are routed to `handle_client_tool_snapshot`, the same handler used by Execute tools. In-progress snapshots create a spinner cell in `active_cell`. When the completed snapshot arrives with the same `call_id`, `apply_snapshot()` updates the cell in place, transitioning it from the spinner state to the completed state with diff content. The completed cell is then flushed to history. For completed Edit/Delete/Move snapshots, `handle_client_tool_snapshot` also calls `observe_directories_from_paths()` (using the snapshot's `locations`) and records tool call stats. `PatchHistoryCell` is no longer used in the ACP rendering path -- it remains only for the non-ACP codex backend path (via `on_patch_apply_begin`). Edit/Delete/Move approval requests route through `ApprovalRequest::AcpTool` (not `ApplyPatch`), so there are no bridge functions converting `nori_protocol` types to `codex_protocol::protocol::FileChange` for the approval path -- the diff extraction for approval overlays reuses the same `pub(crate)` helpers in `client_tool_cell.rs` that the completed-cell rendering uses.
 
 **Execute Cell Completion Buffering** (`chatwidget/event_handlers.rs`, `chatwidget/mod.rs`):
 
@@ -496,7 +496,7 @@ The `/browser` slash command launches a headed Chrome browser with CDP (Chrome D
 
 The `BrowserSession` is intentionally `std::mem::forget`'d after launch so Chrome stays alive for the duration of the nori session. The `BrowserSession::Drop` impl sends SIGTERM to the Chrome process, which fires when the nori process exits. This is distinct from `/browse` which opens a terminal file manager.
 
-The `/logout` command is only available when the `login` feature is enabled. The `/settings` command requires the `nori-config` feature.
+The `/logout` command is only available when the `login` feature is enabled.
 
 **Status Card (`/status`) (`nori/session_header/mod.rs`):**
 
@@ -607,7 +607,7 @@ Config changes for terminal and OS notifications emit `AppEvent::SetConfigTermin
 When a user invokes a `Script`-kind custom prompt (`.sh`, `.py`, `.js` files discovered from `~/.nori/cli/commands/`), the TUI follows an async execution pattern:
 
 ```
-ChatComposer (Enter key)           app/mod.rs                       codex_core::custom_prompts
+ChatComposer (Enter key)           app/mod.rs                       nori_acp::custom_prompts
        |                              |                                |
        |-- AppEvent::ExecuteScript -->|                                |
        |                              |-- execute_script(prompt, args, timeout) -->
@@ -620,7 +620,7 @@ ChatComposer (Enter key)           app/mod.rs                       codex_core::
 
 The composer intercepts Script-kind prompts in two places: when a command popup selection is confirmed, and when the user types a `/prompts:<name>` command directly and presses Enter. In both cases, positional arguments are extracted via `extract_positional_args_for_prompt_line()` and the `ExecuteScript` event is dispatched. The composer is cleared immediately.
 
-In `app/event_handling.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `codex_core::custom_prompts::execute_script()` with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
+In `app/event_handling.rs`, the `ExecuteScript` handler shows an info message ("Running script..."), spawns a tokio task that calls `nori_acp::custom_prompts::execute_script()` (see `@/nori-rs/acp/src/custom_prompts.rs`) with the configured `script_timeout` from `NoriConfig`, and on completion sends `ScriptExecutionComplete`. On success, the stdout is submitted as a user message via `queue_text_as_user_message()`. On failure, an error message is displayed and the error context is also submitted as a user message so the agent can see it.
 
 The script timeout is configurable via `/settings` -> "Script Timeout" which opens a sub-picker (same pattern as Notify After Idle). The sub-picker is built by `script_timeout_picker_params()` in `@/nori-rs/tui/src/nori/config_picker.rs` and uses `AppEvent::OpenScriptTimeoutPicker` / `AppEvent::SetConfigScriptTimeout` events for the two-step flow. The setting is persisted to `[tui]` in `config.toml` via `persist_script_timeout_setting()`.
 
@@ -851,7 +851,7 @@ Selection behavior:
 - `nori resume` opens `resume_picker/`, which lists metadata-only transcript rows and returns a `ResumeTarget`.
 - `--agent` is optional. When omitted, the recorded `session_meta.agent` is used. When present, it must match the recorded agent or startup fails with a clear error.
 
-The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It uses `TranscriptLoader::list_resumable_session_metadata()` and keeps rows lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery.
+The startup picker in `@/nori-rs/tui/src/resume_picker/` is transcript-backed. It loads its rows in a single one-shot pass through `TranscriptLoader::list_resumable_session_metadata()` and keeps them lightweight by reading only `session_meta` lines before selection. It does not perform provider-specific rollout discovery, and it has no background page-loading or load-more machinery -- that pagination scaffolding was removed as inert once the picker moved to one-shot `TranscriptLoader` loading.
 
 Resume hints use the shared `RESUME_HINT_LEAD` and `resume_command_for_conversation()` helpers from `app/` so the in-TUI new-conversation summary and the post-exit CLI output stay aligned. Both surfaces put the copyable `nori resume <session-id>` command on its own line after the `run:` lead text.
 
@@ -1039,11 +1039,12 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 
 | Feature       | Dependencies                     | Default | Purpose                                    |
 | ------------- | -------------------------------- | ------- | ------------------------------------------ |
-| `nori-config` | -                                | Yes     | Use Nori's simplified ACP-only config      |
 | `login`       | `codex-login`, `codex-utils-pty` | Yes     | ChatGPT/API login functionality            |
 | `otel`        | `opentelemetry-appender-tracing` | No      | OpenTelemetry tracing export               |
 | `vt100-tests` | -                                | No      | vt100-based emulator tests                 |
 | `debug-logs`  | -                                | No      | Verbose debug logging                      |
+
+The old `nori-config` feature (which switched config sourcing between `nori-acp` and `codex-core` at compile time) was removed in the crate-layering cleanup (`@/docs/specs/crate-layering.md`); the Nori config path (`~/.nori/cli/config.toml` via `@/nori-rs/acp/src/config/`) is now the only path.
 
 **--yolo Flag:**
 

@@ -2,17 +2,8 @@ use codex_protocol::custom_prompts::CustomPrompt;
 use codex_protocol::custom_prompts::CustomPromptKind;
 use std::collections::HashSet;
 use std::path::Path;
-use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs;
-
-/// Return the default prompts directory: `$CODEX_HOME/prompts`.
-/// If `CODEX_HOME` cannot be resolved, returns `None`.
-pub fn default_prompts_dir() -> Option<PathBuf> {
-    crate::config::find_codex_home()
-        .ok()
-        .map(|home| home.join("prompts"))
-}
 
 /// Discover prompt files in the given directory, returning entries sorted by name.
 /// Non-files are ignored. If the directory does not exist or cannot be read, returns empty.

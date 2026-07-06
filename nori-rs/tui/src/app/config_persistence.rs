@@ -395,7 +395,7 @@ impl App {
 
     pub(super) async fn persist_mcp_servers(
         &mut self,
-        servers: std::collections::BTreeMap<String, codex_core::config::types::McpServerConfig>,
+        servers: std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
     ) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
             .replace_mcp_servers(&servers)

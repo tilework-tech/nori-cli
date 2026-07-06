@@ -6,8 +6,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
-use codex_core::config::types::McpServerConfig;
-use codex_core::config::types::McpServerTransportConfig;
+use codex_protocol::config_types::McpServerConfig;
+use codex_protocol::config_types::McpServerTransportConfig;
 use codex_protocol::protocol::McpAuthStatus;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;

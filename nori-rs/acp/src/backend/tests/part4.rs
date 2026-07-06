@@ -1056,7 +1056,7 @@ async fn test_list_custom_prompts_sends_response_event() {
     let id = "test-id".to_string();
 
     tokio::spawn(async move {
-        let custom_prompts = codex_core::custom_prompts::discover_prompts_in(&dir).await;
+        let custom_prompts = crate::custom_prompts::discover_prompts_in(&dir).await;
         let _ = event_tx
             .send(Event {
                 id,

@@ -4,12 +4,12 @@ Path: @/nori-rs/core
 
 ### Overview
 
-The core crate provides foundational functionality shared across Nori components: configuration management, authentication, command execution with sandboxing, compaction utilities, and MCP (Model Context Protocol) server connections. This is the largest crate in the workspace and contains most shared business logic.
+The core crate is shared infrastructure inherited from the Codex fork, slimmed down by the crate-layering cleanup (`@/docs/specs/crate-layering.md`) to what the `nori` binary actually uses: configuration loading and editing, authentication, sandboxed command execution, MCP auth helpers, and model/provider metadata. It is no longer a business-logic hub -- session semantics live in `@/nori-rs/acp/`, and `nori-acp` does not depend on this crate at all.
 
 ### How it fits into the larger codebase
 
 ```
-nori-tui / nori-acp
+nori-tui / nori-cli / codex-login
          |
          v
     codex-core
@@ -22,20 +22,20 @@ config  auth  exec/sandboxing
 ```
 
 The core crate is depended on by:
-- `@/nori-rs/tui/` - for config loading, auth management, and shared types
-- `@/nori-rs/acp/` - for config types and auth helpers
+- `@/nori-rs/tui/` - for config loading, auth management, git info, and sandbox selection
+- `@/nori-rs/cli/` - for config, auth, and the `nori sandbox` debug helpers
 - `@/nori-rs/login/` - for auth primitives
+- `@/nori-rs/acp/` does **not** depend on core; the ACP-facing helpers it used to import (user notifications, custom prompts, shell/command parsing, compact constants, patch construction) now live in that crate
 
 Key integrations:
-- Uses `codex-protocol` for wire types (`@/nori-rs/protocol/`)
-- Uses `codex-execpolicy` for execution policy parsing (`@/nori-rs/execpolicy/`)
-- Uses `codex-apply-patch` for file patching (`@/nori-rs/apply-patch/`)
-- Uses `codex-rmcp-client` for MCP server communication (`@/nori-rs/rmcp-client/`)
+- Uses `codex-protocol` for shared types (`@/nori-rs/protocol/`), including the MCP server config types defined in its `config_types` module. Core previously re-exported `codex_protocol`'s protocol modules; those re-exports were deleted, so every crate imports `codex_protocol` directly.
+- Uses `codex-rmcp-client` for MCP OAuth flows (`@/nori-rs/rmcp-client/`)
+- Uses `codex-keyring-store` for persistent auth token storage (`@/nori-rs/keyring-store/`)
 
 ### Core Implementation
 
 **Configuration** (`config/`, `config_loader/`): Loads and merges configuration from:
-1. Global config at `~/.codex/config.toml` (or `~/.nori/cli/config.toml` with nori-config feature)
+1. Global config at `$CODEX_HOME/config.toml` (the `nori` binary points `CODEX_HOME` at `~/.nori/cli`, so core and the Nori config layer in `@/nori-rs/acp/src/config/` read the same file)
 2. Project-local config at `<cwd>/.codex/config.toml`
 3. Command-line overrides
 
@@ -69,51 +69,24 @@ The builder is used by the TUI layer (`@/nori-rs/tui/`) to persist user preferen
 - macOS: Seatbelt sandbox profiles (`seatbelt.rs`)
 - Windows: Restricted process tokens (`codex-windows-sandbox`)
 
-**Command Safety** (`command_safety/`): Determines whether shell commands are known-safe and can be auto-approved without user confirmation, based on execution policy rules from `@/nori-rs/execpolicy/`.
-
-**Custom Prompts** (`custom_prompts.rs`): Discovers and executes user-authored custom prompts from a directory. Two kinds of prompts are supported:
-
-| Kind | Extensions | Behavior |
-|------|-----------|----------|
-| Markdown | `.md` | Content is read, frontmatter parsed for `description` and `argument_hint`, body becomes the prompt template |
-| Script | `.sh`, `.py`, `.js` | File is discovered with an assigned interpreter; content is empty at discovery time; execution happens later via `execute_script()` |
-
-`discover_prompts_in()` scans a directory for supported file extensions, assigns a `CustomPromptKind` (from `@/nori-rs/protocol/src/custom_prompts.rs`), and returns sorted `CustomPrompt` structs. Scripts are assigned interpreters: `.sh` -> `bash`, `.py` -> `python3`, `.js` -> `node`.
-
-`execute_script()` runs a `Script`-kind prompt via its interpreter (e.g. `bash script.sh arg1 arg2`), captures stdout, and enforces a configurable timeout. Returns `Ok(stdout)` on zero exit or `Err(message)` on non-zero exit, I/O error, or timeout.
-
-**MCP Integration** (`mcp/`, `mcp_connection_manager.rs`): Connects to MCP servers (defined in config) to provide additional tools to the AI model. The `McpServerTransportConfig::StreamableHttp` variant supports two OAuth credential modes: dynamic client registration (the default, handled by `rmcp`'s `OAuthState`) and pre-configured client credentials via optional `client_id` and `client_secret_env_var` fields for servers that do not support dynamic registration (e.g., Slack). The `client_secret_env_var` field follows the same env-var-name pattern as `bearer_token_env_var` -- the actual secret is resolved from the environment at runtime. These fields are rejected during deserialization for stdio transport.
+**MCP Auth Helpers** (`mcp/`): Provides OAuth/auth-status helpers for MCP servers defined in config (e.g. `mcp::auth::compute_auth_statuses()`, used by the TUI's MCP server picker). The `McpServerConfig` and `McpServerTransportConfig` types themselves are defined in `codex_protocol::config_types` (`@/nori-rs/protocol/src/config_types.rs`) so that `@/nori-rs/acp/` can consume them without depending on core; core re-exports them through `config/types.rs` for its own config code. The `McpServerTransportConfig::StreamableHttp` variant supports two OAuth credential modes: dynamic client registration (the default, handled by `rmcp`'s `OAuthState`) and pre-configured client credentials via optional `client_id` and `client_secret_env_var` fields for servers that do not support dynamic registration (e.g., Slack). The `client_secret_env_var` field follows the same env-var-name pattern as `bearer_token_env_var` -- the actual secret is resolved from the environment at runtime. These fields are rejected during deserialization for stdio transport.
 
 **Data Flow (ACP path):**
 
 ```
-User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/acp) -> Agent (JSON-RPC via subprocess or WebSocket)
+User Input -> Op (UserTurn) -> AcpBackend (@/nori-rs/acp) -> Agent (JSON-RPC via subprocess stdio)
     |
     v
 Event (TurnStart/Delta/Complete) <- Response Processing <- Tool Execution
 ```
 
-ACP (Agent Context Protocol) integration is handled in `@/nori-rs/acp`, not embedded in core. The core crate provides shared infrastructure (config, auth, tool specs, sandboxing, compaction utilities) that the ACP backend consumes.
+ACP (Agent Context Protocol) integration is handled in `@/nori-rs/acp`, not embedded in core. Core provides infrastructure (config, auth, sandboxing) to the frontends; the ACP backend itself does not import core -- it shares only the `codex-protocol` type vocabulary.
 
 **Shared Types Module (`tool_types.rs`):** Types and constants needed across modules are collected in `tool_types.rs`. This includes `ApplyPatchToolType`, `ConfigShellToolType`, and `CODEX_APPLY_PATCH_ARG1`. The constant `CODEX_APPLY_PATCH_ARG1` is re-exported from `lib.rs` because `codex-arg0` (`@/nori-rs/arg0/`) imports it for argv dispatch and Windows batch scripts.
 
 **Model Provider Info (`model_provider_info.rs`):** A pure configuration type defining `ModelProviderInfo` (provider name, optional env-key reference, and retry/timeout settings). The ACP backend communicates over subprocess stdio rather than HTTP, so HTTP-specific fields (base URL, headers, query params, bearer token) have been removed. Built-in providers (OpenAI, Ollama, LMStudio) are defined in `built_in_model_providers()`. User-defined providers in `config.toml` may still include removed fields; serde silently ignores them for backwards compatibility.
 
-**Compact Utilities (`compact.rs`):** Provides shared compaction constants for conversation summarization: `SUMMARIZATION_PROMPT` and `SUMMARY_PREFIX`, which are loaded from prompt templates in `templates/compact/`.
-
-**User Notifications:**
-
-The `user_notification.rs` module provides OS-level notification support:
-
-| Notification Type | Title | Body Content |
-|-------------------|-------|--------------|
-| `AgentTurnComplete` | "Nori: Task Complete" | Last assistant message, or "Completed: {input}" fallback |
-| `AwaitingApproval` | "Nori: Approval Required" | Truncated command and cwd |
-| `Idle` | "Nori: Session Idle" | Idle duration in seconds |
-
-Notification modes:
-1. **Native notifications** (`use_native: true`): Uses `notify-rust` for desktop notifications. All calls to `send_native()` are non-blocking -- they spawn a background thread to call `notif.show()`, because some platforms (notably macOS) block synchronously on that call. On X11 Linux, the spawned thread also handles click-to-focus via `wmctrl` or `xdotool`. The `use_native` flag is controlled by `OsNotifications` in the ACP config layer (`@/nori-rs/acp/src/config/types.rs`).
-2. **External script** (`notify_command` configured): Invokes user-specified command with JSON payload.
+**TUI Display Settings:**
 
 Core's `Config::tui_notifications` is a simple `bool` that controls whether the TUI sends OSC 9 terminal escape sequence notifications. It derives its value from the ACP config's `TerminalNotifications` enum during config loading. Core also carries TUI display booleans such as `animations` and `custom_working_messages`; the latter mirrors `[tui].custom_working_messages` from Nori config so the TUI can choose between rotating custom working headers and the plain `Working` label without re-reading config. Core additionally carries `Config::custom_working_message_list: Vec<String>`, mirroring `[tui].custom_working_message_list`; when non-empty and `custom_working_messages` is `true`, the TUI samples this user list instead of the builtin whimsical messages.
 
@@ -121,17 +94,23 @@ Core's `Config::tui_notifications` is a simple `bool` that controls whether the 
 
 **Module Structure Convention:**
 
-Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `parse_command/`, `rollout/`, and `config/` (which also has a `notifications_tests.rs` alongside `tests.rs`). Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`). Integration tests like `tests/suite/compact/` and `tests/suite/client/` also use the `mod.rs` + `part*.rs` pattern.
+Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a single `foo.rs` file. This separates concerns and keeps individual files manageable. Modules using this pattern include `config/`, `sandboxing/`, and `mcp/`. Test submodules use `tests/mod.rs` + `tests/part*.rs` for large test suites (e.g., `config/tests/`).
 
-- The `deterministic_process_ids` feature is for testing only - produces predictable IDs instead of UUIDs
+**What moved out during the crate-layering cleanup** (`@/docs/specs/crate-layering.md`):
+
+- Dead Codex-engine subsystems were deleted outright: rollout recording (superseded by the transcript recorder in `@/nori-rs/acp/src/transcript/`), command-safety auto-approval, turn diff tracking, event mapping, and user-instruction plumbing.
+- ACP-facing leaf helpers moved into `@/nori-rs/acp/src/`: user notifications, custom prompt discovery, shell/command parsing (`parse_command`, `shell`, `bash`, `powershell`), the compact summarization constants and templates, and `create_patch_with_context` (formerly in `util.rs`, which now only holds error-message parsing helpers).
+- `McpServerConfig`/`McpServerTransportConfig` moved down into `codex_protocol::config_types`; core re-exports them for its own config code.
+
+Other notes:
+
 - Sandbox policies are defined in `.sbpl` files for macOS Seatbelt
 - Config uses TOML with optional environment variable expansion
 - Auth tokens are stored in the system keyring with fallback to file storage
-- The conversation history is stored in `~/.codex/conversations/` (or `~/.nori/cli/conversations/`)
 - Error types are defined in `error.rs` and use `thiserror`
 
 **Test Suite:**
 
-The integration test suite in `@/nori-rs/core/tests/suite` covers auth refresh, command execution, live CLI behavior, rollout listing, Seatbelt sandboxing, and text encoding. The `core_test_support` helper crate (`@/nori-rs/core/tests/common/`) provides config helpers, macros, and filesystem wait utilities for tests.
+The integration test suite in `@/nori-rs/core/tests/suite` covers auth refresh, command execution, live CLI behavior, Seatbelt sandboxing, and text encoding. The `core_test_support` helper crate (`@/nori-rs/core/tests/common/`) provides config helpers, macros, and filesystem wait utilities for tests; its exec helper builds shell invocations via `nori_acp::shell` since the shell helpers moved to `@/nori-rs/acp/`.
 
 Created and maintained by Nori.

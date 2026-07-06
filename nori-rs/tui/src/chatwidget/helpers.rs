@@ -289,7 +289,7 @@ impl ChatWidget {
     /// `config_ref().mcp_servers` reflect the latest persisted state.
     pub(crate) fn set_mcp_servers(
         &mut self,
-        servers: std::collections::HashMap<String, codex_core::config::types::McpServerConfig>,
+        servers: std::collections::HashMap<String, codex_protocol::config_types::McpServerConfig>,
     ) {
         self.config.mcp_servers = servers;
     }
