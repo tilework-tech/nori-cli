@@ -93,6 +93,8 @@ fn goal_capabilities(goal_enabled: bool) -> nori_protocol::SessionCapabilitiesVi
             http_mcp: goal_enabled,
             load_session: true,
             session_list: false,
+            session_resume: false,
+            session_close: false,
         },
         nori_client: nori_protocol::NoriClientCapabilitiesView {
             advertised: goal_enabled,

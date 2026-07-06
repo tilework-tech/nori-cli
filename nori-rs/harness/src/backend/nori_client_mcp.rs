@@ -463,16 +463,23 @@ pub(super) fn capabilities_update_for_nori_client(
     nori_client_advertised: bool,
     nori_client_initialized: bool,
 ) -> nori_protocol::SessionCapabilitiesView {
-    let agent = nori_protocol::AgentCapabilitiesView {
-        http_mcp: connection.capabilities().mcp_capabilities.http,
-        load_session: connection.capabilities().load_session,
-        session_list: connection
-            .capabilities()
-            .session_capabilities
-            .list
-            .is_some(),
-    };
-    capabilities_update(agent, nori_client_advertised, nori_client_initialized)
+    capabilities_update(
+        agent_capabilities_view(connection),
+        nori_client_advertised,
+        nori_client_initialized,
+    )
+}
+
+/// Project the agent's ACP capabilities into the client-facing view.
+fn agent_capabilities_view(connection: &AcpConnection) -> nori_protocol::AgentCapabilitiesView {
+    let capabilities = connection.capabilities();
+    nori_protocol::AgentCapabilitiesView {
+        http_mcp: capabilities.mcp_capabilities.http,
+        load_session: capabilities.load_session,
+        session_list: capabilities.session_capabilities.list.is_some(),
+        session_resume: capabilities.session_capabilities.resume.is_some(),
+        session_close: capabilities.session_capabilities.close.is_some(),
+    }
 }
 
 fn capabilities_update(
@@ -516,15 +523,7 @@ pub(super) async fn register_for_session(
         backend_event_tx,
         transcript_recorder,
         Arc::clone(&connected),
-        nori_protocol::AgentCapabilitiesView {
-            http_mcp: connection.capabilities().mcp_capabilities.http,
-            load_session: connection.capabilities().load_session,
-            session_list: connection
-                .capabilities()
-                .session_capabilities
-                .list
-                .is_some(),
-        },
+        agent_capabilities_view(connection),
         true,
     ))
     .await?;
@@ -552,6 +551,8 @@ mod tests {
             http_mcp: true,
             load_session: false,
             session_list: false,
+            session_resume: false,
+            session_close: false,
         }
     }
 

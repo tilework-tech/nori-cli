@@ -25,6 +25,11 @@ pub(crate) enum AppEvent {
     /// Start a new session.
     NewSession,
 
+    /// A `/close` failed: surface the error and unblock the widget.
+    SessionCloseFailed {
+        message: String,
+    },
+
     /// Request to exit the application gracefully.
     ExitRequest,
 

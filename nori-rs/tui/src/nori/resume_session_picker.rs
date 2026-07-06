@@ -1,8 +1,10 @@
 //! Resume session picker for /resume command.
 //!
 //! This module provides the UI for selecting a previous session to resume.
-//! Selected sessions are resumed via the ACP `session/load` protocol method,
-//! allowing the agent to restore its own context and stream conversation history.
+//! Selected sessions are resumed over ACP via `session/load` (history replay)
+//! or `session/resume` (live reattach, the nori cloud path), depending on
+//! which capability the agent advertises; agents with neither fall back to a
+//! fresh session plus client-side transcript replay.
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -113,20 +115,27 @@ pub fn acp_resume_session_picker_params(sessions: Vec<AcpSessionSummary>) -> Sel
     let items: Vec<SelectionItem> = sessions
         .into_iter()
         .map(|session| {
-            let cwd_display = session.cwd.display().to_string();
+            // Cloud sessions carry the sentinel cwd "/" — the broker tracks
+            // no real working directory — so treat it as "no cwd" rather
+            // than displaying or searching on it.
+            let cwd_display = Some(session.cwd.display().to_string()).filter(|cwd| cwd != "/");
             let name = session
                 .title
                 .clone()
                 .filter(|title| !title.is_empty())
                 .unwrap_or_else(|| session.session_id.clone());
-            let description = match session.updated_at.as_deref() {
-                Some(updated_at) => Some(format!(
-                    "{} · {cwd_display}",
-                    format_relative_time(updated_at)
-                )),
-                None => Some(cwd_display.clone()),
+            let description = match (session.updated_at.as_deref(), cwd_display.as_deref()) {
+                (Some(updated_at), Some(cwd)) => {
+                    Some(format!("{} · {cwd}", format_relative_time(updated_at)))
+                }
+                (Some(updated_at), None) => Some(format_relative_time(updated_at)),
+                (None, Some(cwd)) => Some(cwd.to_string()),
+                (None, None) => None,
             };
-            let search_value = format!("{} {name} {cwd_display}", session.session_id);
+            let search_value = match cwd_display.as_deref() {
+                Some(cwd) => format!("{} {name} {cwd}", session.session_id),
+                None => format!("{} {name}", session.session_id),
+            };
 
             let acp_session_id = session.session_id;
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx: &AppEventSender| {
@@ -367,6 +376,28 @@ mod tests {
         );
         assert_eq!(params.items[1].description.as_deref(), Some("/repo/two"));
         assert!(params.is_searchable);
+    }
+
+    #[test]
+    fn acp_resume_picker_hides_cloud_cwd_sentinel() {
+        // Cloud sessions carry the sentinel cwd "/" — the broker tracks no
+        // real working directory — so the picker must neither display it nor
+        // include it in the search haystack.
+        let sessions = vec![AcpSessionSummary {
+            session_id: "cloud-sess-1".to_string(),
+            cwd: PathBuf::from("/"),
+            title: Some("slack · claude".to_string()),
+            updated_at: None,
+        }];
+
+        let params = acp_resume_session_picker_params(sessions);
+
+        assert_eq!(params.items[0].name, "slack · claude");
+        assert_eq!(params.items[0].description, None);
+        assert_eq!(
+            params.items[0].search_value.as_deref(),
+            Some("cloud-sess-1 slack · claude")
+        );
     }
 
     #[test]

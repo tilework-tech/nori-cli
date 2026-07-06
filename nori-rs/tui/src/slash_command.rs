@@ -21,6 +21,7 @@ pub enum SlashCommand {
     New,
     Resume,
     ResumeViewonly,
+    Close,
     Init,
     Compact,
     Undo,
@@ -48,6 +49,7 @@ impl SlashCommand {
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::Resume => "resume a previous session",
             SlashCommand::ResumeViewonly => "view a previous session transcript (read-only)",
+            SlashCommand::Close => "close (release) the current session and start a fresh chat",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Undo => "ask Nori to undo a turn",
@@ -97,6 +99,7 @@ impl SlashCommand {
             | SlashCommand::Logout
             | SlashCommand::SwitchSkillset
             | SlashCommand::Fork
+            | SlashCommand::Close
             | SlashCommand::Browser => false,
             SlashCommand::Browse
             | SlashCommand::Diff

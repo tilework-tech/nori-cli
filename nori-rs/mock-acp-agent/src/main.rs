@@ -1341,11 +1341,32 @@ async fn main() -> acp::Result<()> {
                     has_capabilities = true;
                 }
 
+                let mut session_capabilities = acp::SessionCapabilities::new();
+                let mut has_session_capabilities = false;
+
                 if std::env::var("MOCK_AGENT_SUPPORT_SESSION_LIST").is_ok() {
                     eprintln!("Mock agent: advertising session/list capability");
-                    capabilities = capabilities.session_capabilities(
-                        acp::SessionCapabilities::new().list(acp::SessionListCapabilities::new()),
-                    );
+                    session_capabilities =
+                        session_capabilities.list(acp::SessionListCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_RESUME").is_ok() {
+                    eprintln!("Mock agent: advertising session/resume capability");
+                    session_capabilities =
+                        session_capabilities.resume(acp::SessionResumeCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_CLOSE").is_ok() {
+                    eprintln!("Mock agent: advertising session/close capability");
+                    session_capabilities =
+                        session_capabilities.close(acp::SessionCloseCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if has_session_capabilities {
+                    capabilities = capabilities.session_capabilities(session_capabilities);
                     has_capabilities = true;
                 }
 
@@ -1454,6 +1475,50 @@ async fn main() -> acp::Result<()> {
                             .config_options(config_options_for_state(&session_config)),
                     )
                 }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |arguments: acp::ResumeSessionRequest,
+                            responder: Responder<acp::ResumeSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    if std::env::var("MOCK_AGENT_RESUME_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating resume_session failure");
+                        return responder.respond_with_error(
+                            acp::Error::new(-32002, "session not found").data(serde_json::json!({
+                                "detail": "the session is no longer claimed"
+                            })),
+                        );
+                    }
+                    eprintln!("Mock agent: resume_session id={}", arguments.session_id);
+                    let session_config = state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .entry(arguments.session_id.to_string())
+                        .or_insert_with(default_session_config)
+                        .clone();
+                    responder.respond(
+                        acp::ResumeSessionResponse::new()
+                            .config_options(config_options_for_state(&session_config)),
+                    )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |arguments: acp::CloseSessionRequest,
+                        responder: Responder<acp::CloseSessionResponse>,
+                        _cx: ConnectionTo<Client>| {
+                if std::env::var("MOCK_AGENT_CLOSE_SESSION_FAIL").is_ok() {
+                    eprintln!("Mock agent: simulating close_session failure");
+                    return responder
+                        .respond_with_error(acp::Error::new(-32002, "session not found"));
+                }
+                eprintln!("Mock agent: close_session id={}", arguments.session_id);
+                responder.respond(acp::CloseSessionResponse::new())
             },
             agent_client_protocol::on_receive_request!(),
         )

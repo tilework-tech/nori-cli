@@ -1,5 +1,36 @@
 use super::*;
 
+/// Build the session's MCP server list (CLI-configured servers plus the
+/// nori-client goal server when the agent advertises HTTP MCP) and commit
+/// the registered server. Shared by every branch of `resume_session`.
+async fn session_mcp_servers(
+    config: &AcpBackendConfig,
+    connection: &AcpConnection,
+    thread_goal_state: &Arc<Mutex<thread_goal::ThreadGoalState>>,
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    transcript_recorder_cell: &Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
+    goal_mcp_connected: &Arc<std::sync::atomic::AtomicBool>,
+    goal_mcp_http_server: &Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
+) -> Result<Vec<acp::McpServer>> {
+    let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
+        &config.mcp_servers,
+        config.mcp_oauth_credentials_store_mode,
+    );
+    let nori_client_server = nori_client_mcp::register_for_session(
+        connection,
+        &mut mcp_servers,
+        Arc::clone(thread_goal_state),
+        backend_event_tx.clone(),
+        Arc::clone(transcript_recorder_cell),
+        Arc::clone(goal_mcp_connected),
+    )
+    .await?;
+    if let Some(server) = nori_client_server {
+        server.commit(goal_mcp_http_server).await;
+    }
+    Ok(mcp_servers)
+}
+
 impl AcpBackend {
     /// Resume a previous ACP session.
     ///
@@ -30,6 +61,11 @@ impl AcpBackend {
             .map_err(|e| enhance_agent_error(e, &agent_config))?;
 
         let supports_load_session = connection.capabilities().load_session;
+        let supports_session_resume = connection
+            .capabilities()
+            .session_capabilities
+            .resume
+            .is_some();
         let initial_goal_replay_events = transcript
             .map(transcript_to_replay_client_events)
             .unwrap_or_default();
@@ -126,22 +162,16 @@ impl AcpBackend {
                 (session_driver, event_rx, buffered_events)
             });
 
-            let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
-                &config.mcp_servers,
-                config.mcp_oauth_credentials_store_mode,
-            );
-            let nori_client_server = nori_client_mcp::register_for_session(
+            let mcp_servers = session_mcp_servers(
+                config,
                 &connection,
-                &mut mcp_servers,
-                Arc::clone(&thread_goal_state),
-                backend_event_tx.clone(),
-                Arc::clone(&transcript_recorder_cell),
-                Arc::clone(&goal_mcp_connected),
+                &thread_goal_state,
+                &backend_event_tx,
+                &transcript_recorder_cell,
+                &goal_mcp_connected,
+                &goal_mcp_http_server,
             )
             .await?;
-            if let Some(server) = nori_client_server {
-                server.commit(&goal_mcp_http_server).await;
-            }
 
             match connection.load_session(sid, &cwd, mcp_servers).await {
                 Ok(session_id) => {
@@ -177,22 +207,16 @@ impl AcpBackend {
                         anyhow::anyhow!("load session collector task panicked: {err}")
                     })?;
 
-                    let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
-                        &config.mcp_servers,
-                        config.mcp_oauth_credentials_store_mode,
-                    );
-                    let nori_client_server = nori_client_mcp::register_for_session(
+                    let mcp_servers = session_mcp_servers(
+                        config,
                         &connection,
-                        &mut mcp_servers,
-                        Arc::clone(&thread_goal_state),
-                        backend_event_tx.clone(),
-                        Arc::clone(&transcript_recorder_cell),
-                        Arc::clone(&goal_mcp_connected),
+                        &thread_goal_state,
+                        &backend_event_tx,
+                        &transcript_recorder_cell,
+                        &goal_mcp_connected,
+                        &goal_mcp_http_server,
                     )
                     .await?;
-                    if let Some(server) = nori_client_server {
-                        server.commit(&goal_mcp_http_server).await;
-                    }
                     let session_id = connection
                         .create_session(&cwd, mcp_servers)
                         .await
@@ -231,25 +255,57 @@ impl AcpBackend {
                     )
                 }
             }
-        } else {
-            debug!("Agent does not support session/load — using client-side replay");
+        } else if let Some(sid) = acp_session_id.filter(|_| supports_session_resume) {
+            debug!("Agent supports session/resume — using live reattach");
 
-            let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
-                &config.mcp_servers,
-                config.mcp_oauth_credentials_store_mode,
-            );
-            let nori_client_server = nori_client_mcp::register_for_session(
+            // Live reattach with no history replay (`session/resume`), for
+            // agents that advertise `sessionCapabilities.resume` with
+            // `loadSession: false` — the nori cloud contract. Failures
+            // propagate instead of falling back to `session/new`: on a cloud
+            // agent that fallback would silently claim a brand-new VM the
+            // user never asked for.
+            let mcp_servers = session_mcp_servers(
+                config,
                 &connection,
-                &mut mcp_servers,
-                Arc::clone(&thread_goal_state),
-                backend_event_tx.clone(),
-                Arc::clone(&transcript_recorder_cell),
-                Arc::clone(&goal_mcp_connected),
+                &thread_goal_state,
+                &backend_event_tx,
+                &transcript_recorder_cell,
+                &goal_mcp_connected,
+                &goal_mcp_http_server,
             )
             .await?;
-            if let Some(server) = nori_client_server {
-                server.commit(&goal_mcp_http_server).await;
-            }
+
+            let session_id = connection
+                .resume_session(sid, &cwd, mcp_servers)
+                .await
+                .map_err(|e| enhance_agent_error(e, &agent_config))?;
+            debug!("ACP session resumed via session/resume: {sid}");
+
+            let event_rx = connection.take_event_receiver();
+            (
+                session_id,
+                None,
+                false,
+                None,
+                Vec::new(),
+                event_rx,
+                session_runtime_driver::SessionDriver::new(),
+            )
+        } else {
+            debug!(
+                "Agent supports neither session/load nor session/resume — using client-side replay"
+            );
+
+            let mcp_servers = session_mcp_servers(
+                config,
+                &connection,
+                &thread_goal_state,
+                &backend_event_tx,
+                &transcript_recorder_cell,
+                &goal_mcp_connected,
+                &goal_mcp_http_server,
+            )
+            .await?;
             let session_id = connection
                 .create_session(&cwd, mcp_servers)
                 .await
@@ -487,5 +543,22 @@ impl AcpBackend {
         }
 
         Ok(backend)
+    }
+
+    /// Close (release) the active session via ACP `session/close`.
+    ///
+    /// Used by the explicit close action; callers gate on the agent
+    /// advertising `sessionCapabilities.close`. Failures carry the same
+    /// enhanced structured-code-aware message as spawn/resume errors, so the
+    /// agent's error code and `data.detail` reach the user.
+    pub async fn close_active_session(&self) -> Result<()> {
+        let session_id = self.session_id.read().await.clone();
+        self.connection
+            .close_session(&session_id.to_string())
+            .await
+            .map_err(|e| match get_agent_config(&self.agent_name) {
+                Ok(agent_config) => enhance_agent_error(e, &agent_config),
+                Err(_) => e,
+            })
     }
 }

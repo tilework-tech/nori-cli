@@ -699,6 +699,47 @@ impl AcpConnection {
         Ok(acp::SessionId::from(session_id.to_string()))
     }
 
+    /// Resume (reattach to) an existing session via ACP `session/resume`.
+    ///
+    /// Unlike `session/load`, resume is a live reattach with no history
+    /// replay — the path for agents that advertise
+    /// `sessionCapabilities.resume` with `loadSession: false` (nori cloud).
+    /// The returned `SessionId` is the input id (the response carries none).
+    pub async fn resume_session(
+        &self,
+        session_id: &str,
+        cwd: &Path,
+        mcp_servers: Vec<acp::McpServer>,
+    ) -> Result<acp::SessionId> {
+        let response = self
+            .cx
+            .send_request(
+                acp::ResumeSessionRequest::new(session_id.to_string(), cwd)
+                    .mcp_servers(mcp_servers),
+            )
+            .block_task()
+            .await
+            .context("Failed to resume ACP session")?;
+
+        if let Some(config_options) = response.config_options
+            && let Ok(mut state) = self.session_config_state.write()
+        {
+            state.config_options = config_options;
+        }
+
+        Ok(acp::SessionId::from(session_id.to_string()))
+    }
+
+    /// Close (release) a session via ACP `session/close`.
+    pub async fn close_session(&self, session_id: &str) -> Result<()> {
+        self.cx
+            .send_request(acp::CloseSessionRequest::new(session_id.to_string()))
+            .block_task()
+            .await
+            .context("Failed to close ACP session")?;
+        Ok(())
+    }
+
     /// List the agent's known sessions via ACP `session/list`.
     ///
     /// `cwd` is forwarded as the spec's working-directory filter. Cursor-based

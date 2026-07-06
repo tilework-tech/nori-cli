@@ -54,7 +54,9 @@ use crate::undo::GhostSnapshotStack;
 // =============================================================================
 
 pub use nori_acp_host::AcpErrorCategory;
+pub use nori_acp_host::AcpErrorDetails;
 pub use nori_acp_host::categorize_acp_error;
+pub use nori_acp_host::categorize_acp_error_chain;
 
 /// Generate an enhanced error message with actionable instructions.
 ///
@@ -91,6 +93,24 @@ pub fn enhanced_error_message(
             "The API returned a server error. This is usually temporary — please try again."
                 .to_string()
         }
+        AcpErrorCategory::SessionNotFound => format!(
+            "That session no longer exists on {provider_name} — it may have expired or been \
+             closed elsewhere. Pick another session from /resume or start a new one."
+        ),
+        AcpErrorCategory::SessionNotResumable => format!(
+            "That session can't be reattached on {provider_name}. Start a new session instead."
+        ),
+        AcpErrorCategory::SessionAlreadyActive => format!(
+            "A session is already active on the {provider_name} connection. Close it with /close \
+             before resuming or creating another."
+        ),
+        AcpErrorCategory::NoActiveSession => format!(
+            "No session is active on the {provider_name} connection. Start a new chat with /new."
+        ),
+        AcpErrorCategory::AgentUnreachable => format!(
+            "Could not reach the {provider_name} backing service. Check your network and try \
+             again. Original error: {original_error}"
+        ),
         AcpErrorCategory::Unknown => original_error.to_string(),
     }
 }
@@ -102,15 +122,26 @@ pub fn enhance_agent_error(
     error: anyhow::Error,
     config: &crate::registry::AcpAgentConfig,
 ) -> anyhow::Error {
-    let category = categorize_acp_error(&format!("{error:?}"));
-    anyhow::anyhow!(enhanced_error_message(
-        category,
+    let details = categorize_acp_error_chain(&error);
+    // An agent-supplied `error.data.detail` (e.g. the exact login command for
+    // this deployment) is more precise than the registry's static auth hint.
+    let auth_hint = details.detail.as_deref().unwrap_or(&config.auth_hint);
+    let mut message = enhanced_error_message(
+        details.category.clone(),
         &format!("{error}"),
         &config.provider_info.name,
-        &config.auth_hint,
+        auth_hint,
         &config.display_name,
         &config.install_hint,
-    ))
+    );
+    // For non-auth categories the detail is agent-supplied context (e.g.
+    // "the session is no longer claimed") — keep it verbatim.
+    if details.category != AcpErrorCategory::Authentication
+        && let Some(detail) = details.detail
+    {
+        message = format!("{message} ({detail})");
+    }
+    anyhow::anyhow!(message)
 }
 
 /// Configuration for spawning an ACP backend.
