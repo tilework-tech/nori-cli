@@ -68,7 +68,6 @@ pub use tracing_setup::init_rolling_file_tracing;
 pub use transcript_discovery::DiscoveryError;
 pub use transcript_discovery::TranscriptLocation;
 pub use transcript_discovery::TranscriptTokenUsage;
-pub use transcript_discovery::discover_transcript_for_agent;
 pub use transcript_discovery::discover_transcript_for_agent_with_message;
 pub use transcript_discovery::parse_transcript_tokens;
 pub use transcript_discovery::parse_transcript_total_tokens;

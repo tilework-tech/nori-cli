@@ -2,6 +2,11 @@
 edition = "2024"
 name = "nori-acp-host"
 version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "Client-side hosting for Agent Client Protocol (ACP) agents: subprocess spawning, the wire connection, agent registry, and event translation"
+keywords = ["acp", "agent", "ai", "cli"]
+categories = ["development-tools"]
 
 [lib]
 doctest = false

@@ -85,29 +85,6 @@ pub enum DiscoveryError {
     JsonError(#[from] serde_json::Error),
 }
 
-/// Discover the transcript location for a specific agent kind.
-///
-/// **Deprecated:** This function always returns an error because transcript
-/// discovery now requires a first_message to avoid returning the wrong transcript.
-/// Use `discover_transcript_for_agent_with_message` instead.
-///
-/// # Arguments
-///
-/// * `cwd` - The current working directory to find transcripts for
-/// * `agent` - The agent kind to search for transcripts
-///
-/// # Returns
-///
-/// Always returns `NoSessionsFound` error. Use `discover_transcript_for_agent_with_message`
-/// with a first_message parameter instead.
-pub fn discover_transcript_for_agent(
-    cwd: &Path,
-    _agent: AgentKind,
-) -> Result<TranscriptLocation, DiscoveryError> {
-    // No fallback - require first_message to avoid wrong transcript
-    Err(DiscoveryError::NoSessionsFound(cwd.to_path_buf()))
-}
-
 /// Discover the transcript location for a specific agent kind with first-message matching.
 ///
 /// This is the unified discovery method that searches for transcripts by matching the

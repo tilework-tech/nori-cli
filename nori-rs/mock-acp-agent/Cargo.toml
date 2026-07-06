@@ -3,6 +3,10 @@ name = "mock-acp-agent"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Scriptable mock Agent Client Protocol (ACP) agent for integration-testing ACP clients and harnesses"
+keywords = ["acp", "agent", "testing", "mock"]
+categories = ["development-tools::testing"]
 
 [[bin]]
 name = "mock_acp_agent"

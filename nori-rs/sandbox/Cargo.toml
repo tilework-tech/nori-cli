@@ -2,6 +2,7 @@
 edition = "2024"
 name = "codex-sandbox"
 version = { workspace = true }
+license = { workspace = true }
 
 [lib]
 doctest = false
