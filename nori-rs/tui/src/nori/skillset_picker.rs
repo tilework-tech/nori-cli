@@ -28,7 +28,7 @@ pub fn is_nori_skillsets_available() -> bool {
 /// - `Err(message)` with stdout/stderr on failure (non-zero exit)
 pub async fn list_skillsets() -> Result<Vec<String>, String> {
     let output = tokio::process::Command::new(NORI_SKILLSETS_CMD)
-        .arg("list")
+        .args(build_list_args())
         .output()
         .await
         .map_err(|e| format!("Failed to run {NORI_SKILLSETS_CMD}: {e}"))?;
@@ -254,6 +254,18 @@ fn build_switch_args(name: &str, install_dir: &std::path::Path) -> Vec<String> {
     ]
 }
 
+/// Build the argument list for the `nori-skillsets list` command.
+///
+/// `list` is spawned via `Command::output()`, which pipes stdout but inherits
+/// the terminal's TTY stdin. Passing `--non-interactive` (before the
+/// subcommand, for correct parsing) stops nori-skillsets from rendering a
+/// blocking update prompt into the captured stdout and hanging the TUI.
+///
+/// Extracted for testability.
+fn build_list_args() -> Vec<String> {
+    vec!["--non-interactive".to_string(), "list".to_string()]
+}
+
 /// Build the argument list for the `nori-skillsets install` command.
 ///
 /// Extracted for testability.
@@ -432,6 +444,16 @@ mod tests {
                 "/tmp/worktree",
             ]
         );
+    }
+
+    #[test]
+    fn test_list_skillset_command_includes_non_interactive() {
+        // `list` is spawned via tokio's Command::output(), which pipes stdout
+        // but inherits the terminal's TTY stdin. Without --non-interactive,
+        // nori-skillsets detects interactive mode and renders a blocking update
+        // prompt into the captured stdout, hanging the TUI forever.
+        // --non-interactive must precede the subcommand for correct parsing.
+        assert_eq!(build_list_args(), vec!["--non-interactive", "list"]);
     }
 
     #[test]
