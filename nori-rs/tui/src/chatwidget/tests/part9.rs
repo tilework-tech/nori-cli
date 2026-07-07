@@ -262,11 +262,12 @@ fn stub_close_handle(
     pending_rx
 }
 
-/// /close releases the live session over `session/close` and only then starts
-/// a fresh chat — a fire-and-forget close (or one that ignores failure) must
-/// not pass.
+/// /close releases the live session over `session/close` and, once the agent
+/// confirms, reports `SessionClosed` so the app can return to the session
+/// picker. It must NOT start a fresh chat: on a cloud agent an automatic
+/// NewSession would silently claim a brand-new VM the user never asked for.
 #[tokio::test]
-async fn close_command_waits_for_close_before_starting_new_chat() {
+async fn close_command_returns_to_the_picker_not_a_new_session() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     chat.handle_client_event(nori_protocol::ClientEvent::SessionCapabilitiesChanged(
         cloud_session_capabilities(),
@@ -280,13 +281,13 @@ async fn close_command_waits_for_close_before_starting_new_chat() {
         .expect("session/close must be requested on the agent handle")
         .expect("stub agent task closed unexpectedly");
 
-    // While the close is still in flight, no new chat may start, and
-    // session-switching commands are blocked so the deferred NewSession
-    // can't clobber a conversation the user switches to.
+    // While the close is still in flight nothing may proceed, and
+    // session-switching commands are blocked so a deferred follow-up can't
+    // clobber a conversation the user switches to.
     while let Ok(event) = rx.try_recv() {
         assert!(
-            !matches!(event, AppEvent::NewSession),
-            "NewSession must wait for the close response"
+            !matches!(event, AppEvent::NewSession | AppEvent::SessionClosed),
+            "the close outcome must wait for the agent's response"
         );
     }
     chat.dispatch_command(SlashCommand::Resume);
@@ -306,11 +307,26 @@ async fn close_command_waits_for_close_before_starting_new_chat() {
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
         let event = tokio::time::timeout(remaining, rx.recv())
             .await
-            .expect("timed out waiting for AppEvent::NewSession after /close")
+            .expect("timed out waiting for AppEvent::SessionClosed after /close")
             .expect("channel closed");
-        if matches!(event, AppEvent::NewSession) {
-            break;
+        match event {
+            AppEvent::SessionClosed => break,
+            AppEvent::NewSession => {
+                panic!("/close must return to the session picker, not auto-start a new session")
+            }
+            _ => {}
         }
+    }
+
+    // A trailing NewSession sneaking in AFTER SessionClosed would still claim
+    // a fresh VM. Give the close task a chance to run to completion, then
+    // require silence.
+    tokio::task::yield_now().await;
+    while let Ok(event) = rx.try_recv() {
+        assert!(
+            !matches!(event, AppEvent::NewSession),
+            "/close must not follow SessionClosed with a NewSession"
+        );
     }
 }
 
@@ -343,6 +359,9 @@ async fn close_command_failure_reports_error_and_keeps_session() {
         AppEvent::NewSession => panic!("a failed close must not start a new chat"),
         other => panic!("unexpected event after failed close: {other:?}"),
     };
+    // Let the close task finish before requiring silence — an immediate
+    // try_recv would only prove nothing was queued *yet*.
+    tokio::task::yield_now().await;
     assert_matches!(
         rx.try_recv(),
         Err(tokio::sync::mpsc::error::TryRecvError::Empty)

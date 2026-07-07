@@ -31,6 +31,12 @@ pub struct Cli {
     #[clap(skip)]
     pub resume_show_all: bool,
 
+    /// Internal: boot into the agent-sourced session picker before creating
+    /// any session (picker-first entry). Set by the top-level `nori cloud`
+    /// wrapper; not exposed as a public flag.
+    #[clap(skip)]
+    pub cloud_session_picker: bool,
+
     /// Agent the CLI should use (e.g., "claude-code", "gemini", "codex").
     #[arg(long, short = 'a')]
     pub agent: Option<String>,

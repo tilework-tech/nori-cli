@@ -1,0 +1,13 @@
+---
+source: tui/src/chatwidget/tests/part11.rs
+expression: popup
+---
+  Sessions
+  Resume a live session or start a new one
+
+  Type to search sessions
+› Start a new session       Begin a fresh session with this agent
+  Fix the flaky login test
+  nori-trim-anago-ff79
+
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

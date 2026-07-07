@@ -30,6 +30,28 @@ pub(crate) enum AppEvent {
         message: String,
     },
 
+    /// A `/close` succeeded: the session is released. Return to the agent
+    /// session picker instead of auto-claiming a fresh session.
+    SessionClosed,
+
+    /// The pre-session agent probe finished (picker-first entry and
+    /// post-/close). `fallback_to_spawn` says what a failure should do:
+    /// entry falls back to the plain spawn (the old `nori cloud` behavior);
+    /// post-/close must NOT — the user just released a session, so silently
+    /// claiming a fresh one is forbidden.
+    AgentSessionListProbed {
+        probe: Result<nori_harness::AgentSessionsProbe, nori_harness::ProbeError>,
+        fallback_to_spawn: bool,
+    },
+
+    /// Re-run the pre-session probe and reopen the session picker (e.g.
+    /// /resume on a deferred widget that has no live agent connection).
+    OpenAgentSessionPicker,
+
+    /// Begin the quit flow (feedback, input freeze, watchdog) on the chat
+    /// widget — used by input surfaces that don't own the widget (Ctrl+D).
+    BeginExit,
+
     /// Request to exit the application gracefully.
     ExitRequest,
 

@@ -77,6 +77,7 @@ impl App {
     ) -> Result<bool> {
         match event {
             AppEvent::NewSession => {
+                self.deferred_spawn_pending = false;
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
@@ -108,6 +109,99 @@ impl App {
             }
             AppEvent::SessionCloseFailed { message } => {
                 self.chat_widget.on_session_close_failed(message);
+            }
+            AppEvent::SessionClosed => {
+                // The session was released; land back on the session picker
+                // with a fresh deferred widget — never auto-claim a new
+                // session (on a cloud agent that would boot a new VM).
+                self.shutdown_current_conversation();
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    None,
+                    Vec::new(),
+                    None,
+                    true,
+                    None,
+                );
+                self.chat_widget = ChatWidget::new(init);
+                self.configure_new_chat_widget();
+                self.deferred_spawn_pending = true;
+                self.begin_agent_session_picker(false);
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::AgentSessionListProbed {
+                probe,
+                fallback_to_spawn,
+            } => {
+                self.agent_session_probe_in_flight = false;
+                match probe {
+                    Ok(probe) => {
+                        // Seed the deferred widget with the probed agent
+                        // capabilities so capability-gated behavior (e.g. the
+                        // detach wording on quit) is right before any session
+                        // exists.
+                        self.chat_widget.handle_client_event(
+                            nori_protocol::ClientEvent::SessionCapabilitiesChanged(
+                                nori_protocol::SessionCapabilitiesView {
+                                    agent: probe.capabilities,
+                                    ..Default::default()
+                                },
+                            ),
+                        );
+                        self.chat_widget
+                            .show_acp_resume_session_picker(probe.sessions);
+                    }
+                    Err(nori_harness::ProbeError::SessionListUnsupported(message))
+                        if fallback_to_spawn =>
+                    {
+                        // Expected for agents without the session lifecycle
+                        // (older handroll, local agents): fall through to the
+                        // plain spawn quietly.
+                        tracing::debug!("agent session probe: {message}");
+                        if self.deferred_spawn_pending {
+                            self.deferred_spawn_pending = false;
+                            self.chat_widget.spawn_deferred_agent(
+                                self.config.clone(),
+                                self.app_event_tx.clone(),
+                            );
+                        }
+                    }
+                    Err(error) if fallback_to_spawn => {
+                        // Entry-path failure: surface it, then fall back to
+                        // the plain spawn — that surface owns the full error
+                        // handling (auth hints, retry wording).
+                        self.chat_widget
+                            .add_error_message(format!("Couldn't list sessions: {error}"));
+                        if self.deferred_spawn_pending {
+                            self.deferred_spawn_pending = false;
+                            self.chat_widget.spawn_deferred_agent(
+                                self.config.clone(),
+                                self.app_event_tx.clone(),
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        // Post-/close failure: the user just released a
+                        // session — silently claiming a fresh one is
+                        // forbidden. Leave them at explicit next actions.
+                        self.deferred_spawn_pending = false;
+                        self.chat_widget
+                            .add_error_message(format!("Couldn't list sessions: {error}"));
+                        self.chat_widget.add_info_message(
+                            "No session is active — /resume retries the picker, /new starts a \
+                             fresh session."
+                                .to_string(),
+                            None,
+                        );
+                    }
+                }
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::OpenAgentSessionPicker => {
+                self.begin_agent_session_picker(false);
+            }
+            AppEvent::BeginExit => {
+                self.chat_widget.begin_exit();
             }
             AppEvent::InsertHistoryCell(cell) => {
                 let cell: Arc<dyn HistoryCell> = cell.into();
@@ -925,7 +1019,7 @@ impl App {
                     .on_skillset_switch_result(&name, success, &message);
                 // If the agent spawn was deferred (waiting for skillset switch to
                 // complete), trigger it now that files are on disk.
-                if success && self.deferred_spawn_pending {
+                if success && self.deferred_spawn_pending && !self.agent_session_probe_in_flight {
                     self.deferred_spawn_pending = false;
                     self.chat_widget
                         .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
@@ -942,7 +1036,7 @@ impl App {
                 // The skillset picker was dismissed without selection. If the
                 // agent spawn was deferred, spawn it now without a skillset
                 // (behaves as if skillset_per_session is disabled).
-                if self.deferred_spawn_pending {
+                if self.deferred_spawn_pending && !self.agent_session_probe_in_flight {
                     self.deferred_spawn_pending = false;
                     self.chat_widget
                         .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
@@ -1097,7 +1191,13 @@ impl App {
                 let display_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| self.config.model.clone());
+                // Capture the outgoing widget's capability view: the same
+                // agent is respawned, and live-reattach (session/resume,
+                // no loadSession) means no history replay — say so.
+                let agent_caps = self.chat_widget.agent_capabilities();
+                let live_reattach = agent_caps.session_resume && !agent_caps.load_session;
 
+                self.deferred_spawn_pending = false;
                 self.shutdown_current_conversation();
 
                 let init = self.chat_widget_init(
@@ -1108,11 +1208,22 @@ impl App {
                     false,
                     None,
                 );
-                self.chat_widget = ChatWidget::new_resumed_acp(init, Some(acp_session_id), None);
+                self.chat_widget =
+                    ChatWidget::new_resumed_acp(init, Some(acp_session_id.clone()), None);
                 self.configure_new_chat_widget();
 
-                self.chat_widget
-                    .add_info_message(format!("Resuming session with {display_name}..."), None);
+                if live_reattach {
+                    self.chat_widget.add_info_message(
+                        format!(
+                            "Reattaching to {acp_session_id} — earlier messages stay in the \
+                             cloud session (not replayed here)."
+                        ),
+                        None,
+                    );
+                } else {
+                    self.chat_widget
+                        .add_info_message(format!("Resuming session with {display_name}..."), None);
+                }
                 tui.frame_requester().schedule_frame();
             }
             #[cfg(unix)]

@@ -471,7 +471,9 @@ pub(super) fn capabilities_update_for_nori_client(
 }
 
 /// Project the agent's ACP capabilities into the client-facing view.
-fn agent_capabilities_view(connection: &AcpConnection) -> nori_protocol::AgentCapabilitiesView {
+pub(crate) fn agent_capabilities_view(
+    connection: &AcpConnection,
+) -> nori_protocol::AgentCapabilitiesView {
     let capabilities = connection.capabilities();
     nori_protocol::AgentCapabilitiesView {
         http_mcp: capabilities.mcp_capabilities.http,

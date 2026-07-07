@@ -54,6 +54,20 @@ impl ChatWidget {
     }
 
     pub(super) fn submit_user_message(&mut self, user_message: UserMessage) {
+        // The app is exiting: teardown has started, so a prompt submitted by
+        // a fast typist must not start another turn.
+        if self.exiting {
+            return;
+        }
+        // No live backend (deferred spawn, or the backend already shut
+        // down): the op channel has no receiver, so a submitted prompt would
+        // be echoed into history and silently dropped. Explain instead.
+        if self.codex_op_tx.is_closed() {
+            self.add_error_message(
+                "No active session — pick one with /resume or start one with /new.".to_string(),
+            );
+            return;
+        }
         let UserMessage { text, image_paths } = user_message;
         if text.is_empty() && image_paths.is_empty() {
             return;

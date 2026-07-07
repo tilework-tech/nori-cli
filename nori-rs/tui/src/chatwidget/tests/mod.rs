@@ -307,6 +307,7 @@ pub(crate) fn make_chatwidget_manual() -> (
         session_configured_received: false,
         acp_handle: None,
         session_close_in_flight: false,
+        exiting: false,
         acp_config_option_snapshot: None,
         acp_mode_config: None,
         acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(),
@@ -346,6 +347,7 @@ pub(crate) fn make_chatwidget_manual_with_sender() -> (
 mod mod_tests;
 mod part1;
 mod part10;
+mod part11;
 mod part2;
 mod part3;
 mod part4;

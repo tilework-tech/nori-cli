@@ -100,6 +100,7 @@ pub struct TuiSession {
     reader: Box<dyn Read + Send>,
     writer: Box<dyn Write + Send>,
     parser: Parser,
+    child: Box<dyn portable_pty::Child + Send>,
     _temp_dir: Option<tempfile::TempDir>,
 }
 
@@ -384,7 +385,7 @@ name = "Mock ACP provider for tests"
             "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug",
         );
 
-        let _child = pair.slave.spawn_command(cmd)?;
+        let child = pair.slave.spawn_command(cmd)?;
 
         // Set master PTY to non-blocking mode before cloning reader
         // This ensures the cloned reader FD inherits the non-blocking flag
@@ -403,8 +404,29 @@ name = "Mock ACP provider for tests"
             reader,
             writer,
             parser: Parser::new(rows, cols, 0),
+            child,
             _temp_dir: temp_dir,
         })
+    }
+
+    /// Wait for the TUI process itself to exit, polling and draining PTY
+    /// output so the child can't block on a full PTY buffer. Returns true if
+    /// the process exited within the timeout.
+    pub fn wait_for_process_exit(&mut self, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let _ = self.poll();
+            match self.child.try_wait() {
+                Ok(Some(_)) => return true,
+                Ok(None) => {}
+                // If the wait itself errors, treat the process as gone.
+                Err(_) => return true,
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     /// Read any available output and update screen state

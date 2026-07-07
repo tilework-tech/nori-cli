@@ -92,77 +92,104 @@ pub fn resume_session_picker_params(
     }
 }
 
-/// Build the resume picker from sessions reported by the live agent's ACP
-/// `session/list`.
+/// Build the session picker from sessions reported by the agent's ACP
+/// `session/list` (also the `nori cloud` entry picker).
 ///
 /// Unlike [`resume_session_picker_params`], rows come from the agent rather
-/// than the local transcript store, and selecting one resumes via
-/// `session/load` using the agent's own session id (no local transcript).
+/// than the local transcript store. The first row is always an explicit
+/// "start a new session" action; selecting a session row resumes it by the
+/// agent's own session id — over `session/load` (history replay) or
+/// `session/resume` (live reattach), whichever the agent advertises.
 /// Columns map as: `title` → row name (falling back to the session id when the
 /// agent omits a title), `updated_at` → relative time, and `cwd` → the row
 /// description.
 pub fn acp_resume_session_picker_params(sessions: Vec<AcpSessionSummary>) -> SelectionViewParams {
+    // Always offer an explicit create-new row first: entering `nori cloud`
+    // (or /resume on a cloud agent) must never claim a session implicitly —
+    // creating one is a deliberate pick.
+    let create_new = SelectionItem {
+        name: "Start a new session".to_string(),
+        description: Some("Begin a fresh session with this agent".to_string()),
+        search_value: Some("start a new session create".to_string()),
+        is_current: false,
+        actions: vec![Box::new(|tx: &AppEventSender| {
+            tx.send(AppEvent::NewSession);
+        })],
+        dismiss_on_select: true,
+        ..Default::default()
+    };
+
+    let on_dismiss: SelectionAction = Box::new(|tx: &AppEventSender| {
+        tx.send(AppEvent::InsertHistoryCell(Box::new(
+            crate::history_cell::new_info_event(
+                "No session selected — /resume reopens the picker, /new starts a fresh session."
+                    .to_string(),
+                None,
+            ),
+        )));
+    });
+
     if sessions.is_empty() {
         return SelectionViewParams {
-            title: Some("Resume previous session".to_string()),
+            title: Some("Sessions".to_string()),
             subtitle: Some("The agent reported no resumable sessions".to_string()),
             footer_hint: Some(standard_popup_hint_line()),
-            items: vec![],
+            items: vec![create_new],
+            on_dismiss: Some(on_dismiss),
             ..Default::default()
         };
     }
 
-    let items: Vec<SelectionItem> = sessions
-        .into_iter()
-        .map(|session| {
-            // Cloud sessions carry the sentinel cwd "/" — the broker tracks
-            // no real working directory — so treat it as "no cwd" rather
-            // than displaying or searching on it.
-            let cwd_display = Some(session.cwd.display().to_string()).filter(|cwd| cwd != "/");
-            let name = session
-                .title
-                .clone()
-                .filter(|title| !title.is_empty())
-                .unwrap_or_else(|| session.session_id.clone());
-            let description = match (session.updated_at.as_deref(), cwd_display.as_deref()) {
-                (Some(updated_at), Some(cwd)) => {
-                    Some(format!("{} · {cwd}", format_relative_time(updated_at)))
-                }
-                (Some(updated_at), None) => Some(format_relative_time(updated_at)),
-                (None, Some(cwd)) => Some(cwd.to_string()),
-                (None, None) => None,
-            };
-            let search_value = match cwd_display.as_deref() {
-                Some(cwd) => format!("{} {name} {cwd}", session.session_id),
-                None => format!("{} {name}", session.session_id),
-            };
-
-            let acp_session_id = session.session_id;
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx: &AppEventSender| {
-                tx.send(AppEvent::ResumeAcpSession {
-                    acp_session_id: acp_session_id.clone(),
-                });
-            })];
-
-            SelectionItem {
-                name,
-                description,
-                search_value: Some(search_value),
-                is_current: false,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
+    let session_items = sessions.into_iter().map(|session| {
+        // Cloud sessions carry the sentinel cwd "/" — the broker tracks
+        // no real working directory — so treat it as "no cwd" rather
+        // than displaying or searching on it.
+        let cwd_display = Some(session.cwd.display().to_string()).filter(|cwd| cwd != "/");
+        let name = session
+            .title
+            .clone()
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| session.session_id.clone());
+        let description = match (session.updated_at.as_deref(), cwd_display.as_deref()) {
+            (Some(updated_at), Some(cwd)) => {
+                Some(format!("{} · {cwd}", format_relative_time(updated_at)))
             }
-        })
-        .collect();
+            (Some(updated_at), None) => Some(format_relative_time(updated_at)),
+            (None, Some(cwd)) => Some(cwd.to_string()),
+            (None, None) => None,
+        };
+        let search_value = match cwd_display.as_deref() {
+            Some(cwd) => format!("{} {name} {cwd}", session.session_id),
+            None => format!("{} {name}", session.session_id),
+        };
+
+        let acp_session_id = session.session_id;
+        let actions: Vec<SelectionAction> = vec![Box::new(move |tx: &AppEventSender| {
+            tx.send(AppEvent::ResumeAcpSession {
+                acp_session_id: acp_session_id.clone(),
+            });
+        })];
+
+        SelectionItem {
+            name,
+            description,
+            search_value: Some(search_value),
+            is_current: false,
+            actions,
+            dismiss_on_select: true,
+            ..Default::default()
+        }
+    });
+    let items: Vec<SelectionItem> = std::iter::once(create_new).chain(session_items).collect();
 
     SelectionViewParams {
-        title: Some("Resume previous session".to_string()),
-        subtitle: Some("Select a session to resume".to_string()),
+        title: Some("Sessions".to_string()),
+        subtitle: Some("Resume a live session or start a new one".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
         is_searchable: true,
         search_placeholder: Some("Type to search sessions".to_string()),
+        on_dismiss: Some(on_dismiss),
         ..Default::default()
     }
 }
@@ -258,6 +285,7 @@ pub async fn load_resumable_sessions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use std::io::Write;
     use std::sync::Arc;
     use std::sync::Mutex;
@@ -362,20 +390,55 @@ mod tests {
 
         let params = acp_resume_session_picker_params(sessions);
 
-        assert_eq!(params.items.len(), 2);
+        // Row 0 is the pinned "start new" action; sessions follow.
+        assert_eq!(params.items.len(), 3);
         // Title becomes the row name; missing title falls back to session id.
-        assert_eq!(params.items[0].name, "Fix the parser");
-        assert_eq!(params.items[1].name, "agent-sess-2");
+        assert_eq!(params.items[1].name, "Fix the parser");
+        assert_eq!(params.items[2].name, "agent-sess-2");
         // cwd shows up in the description for both rows.
         assert!(
-            params.items[0]
+            params.items[1]
                 .description
                 .as_deref()
                 .unwrap()
                 .contains("/repo/one")
         );
-        assert_eq!(params.items[1].description.as_deref(), Some("/repo/two"));
+        assert_eq!(params.items[2].description.as_deref(), Some("/repo/two"));
         assert!(params.is_searchable);
+    }
+
+    /// The agent-sourced picker always puts an explicit "start a new
+    /// session" row first (first in vector order; search filtering applies
+    /// to it like any row via its search_value), so entering `nori cloud`
+    /// (or `/resume` on a cloud agent) never has to claim a VM implicitly —
+    /// creating is a deliberate pick.
+    #[test]
+    fn acp_resume_picker_pins_a_create_new_row_first() {
+        let sessions = vec![AcpSessionSummary {
+            session_id: "agent-sess-1".to_string(),
+            cwd: PathBuf::from("/"),
+            title: Some("slack · claude".to_string()),
+            updated_at: None,
+        }];
+
+        let params = acp_resume_session_picker_params(sessions);
+
+        assert_eq!(params.items.len(), 2);
+        let create_new = &params.items[0];
+        assert_eq!(create_new.name, "Start a new session");
+
+        // Selecting the row must request a fresh session (the existing
+        // new-session flow), and nothing else — a stray ResumeAcpSession
+        // here would reattach instead of create.
+        let (tx_raw, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let tx = AppEventSender::new(tx_raw);
+        (create_new.actions[0])(&tx);
+        assert_matches!(rx.try_recv(), Ok(AppEvent::NewSession));
+        assert_matches!(
+            rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        );
+        assert!(create_new.dismiss_on_select);
     }
 
     #[test]
@@ -392,19 +455,22 @@ mod tests {
 
         let params = acp_resume_session_picker_params(sessions);
 
-        assert_eq!(params.items[0].name, "slack · claude");
-        assert_eq!(params.items[0].description, None);
+        assert_eq!(params.items[1].name, "slack · claude");
+        assert_eq!(params.items[1].description, None);
         assert_eq!(
-            params.items[0].search_value.as_deref(),
+            params.items[1].search_value.as_deref(),
             Some("cloud-sess-1 slack · claude")
         );
     }
 
+    /// Even with no resumable sessions the picker offers the create-new row —
+    /// this is the whole entry point for a first-time `nori cloud` user.
     #[test]
     fn acp_resume_picker_handles_empty_session_list() {
         let params = acp_resume_session_picker_params(vec![]);
 
-        assert!(params.items.is_empty());
+        assert_eq!(params.items.len(), 1);
+        assert_eq!(params.items[0].name, "Start a new session");
         assert_eq!(
             params.subtitle.as_deref(),
             Some("The agent reported no resumable sessions")

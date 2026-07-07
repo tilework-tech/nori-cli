@@ -36,7 +36,7 @@ nori-acp-host <---> ACP Agent subprocess (JSON-RPC over stdio)
 ### Things to Know
 
 - Detailed behavior documentation for the registry, error categorization, and their harness coupling still lives in `@/nori-rs/harness/docs.md`, which documents the full `nori-harness` public API (this crate's modules are part of that API via re-export).
-- The connection layer's child-lifecycle invariants (ordered inbox, stdin-EOF-then-grace shutdown, exit-watcher ownership of the `Child`) are load-bearing for `nori cloud` session release; see `@/nori-rs/acp-host/src/connection/docs.md` before changing teardown behavior.
+- The connection layer's child-lifecycle invariants (ordered inbox, stdin-EOF-then-grace shutdown, exit-watcher ownership of the `Child`) are load-bearing for `nori cloud` detach-on-exit (stdin EOF detaches the broker session; ACP `session/close` is the only terminal verb); see `@/nori-rs/acp-host/src/connection/docs.md` before changing teardown behavior.
 - `to_acp_mcp_servers()` in `connection/mcp.rs` is not a pure transformation: it eagerly resolves environment variables and loads stored OAuth tokens from the keyring/filesystem at conversion time.
 - The dependency direction is `nori-harness -> nori-acp-host`, never the reverse. If a change here needs harness state (session runtime, transcript, goals), thread it in as a parameter or move the logic up to `@/nori-rs/harness/`.
 

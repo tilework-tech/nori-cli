@@ -82,6 +82,16 @@ impl ChatWidget {
     }
 
     pub(super) fn dispatch_command(&mut self, cmd: SlashCommand) {
+        // Once exit begins, the session is over: ignore repeated quit
+        // commands and refuse everything else instead of racing teardown.
+        if self.exiting {
+            if !matches!(cmd, SlashCommand::Quit | SlashCommand::Exit) {
+                let message = format!("'/{}' is unavailable while exiting.", cmd.command());
+                self.add_to_history(history_cell::new_error_event(message));
+                self.request_redraw();
+            }
+            return;
+        }
         if !cmd.available_during_task() && self.bottom_pane.is_task_running() {
             let message = format!(
                 "'/{}' is disabled while a task is in progress.",
@@ -143,7 +153,10 @@ impl ChatWidget {
                                     None,
                                 ),
                             )));
-                            tx.send(AppEvent::NewSession);
+                            // Return to the session picker — never auto-claim
+                            // a fresh session (on a cloud agent that would
+                            // silently boot a new VM).
+                            tx.send(AppEvent::SessionClosed);
                         }
                         Err(e) => {
                             tx.send(AppEvent::SessionCloseFailed {
@@ -203,7 +216,7 @@ impl ChatWidget {
                 }
             }
             SlashCommand::Quit | SlashCommand::Exit => {
-                self.submit_op(Op::Shutdown);
+                self.begin_exit();
             }
             SlashCommand::Login => {
                 self.handle_login_command();

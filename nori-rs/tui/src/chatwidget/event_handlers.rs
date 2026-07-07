@@ -1106,7 +1106,7 @@ impl ChatWidget {
             return;
         }
 
-        self.submit_op(Op::Shutdown);
+        self.begin_exit();
     }
 
     pub(super) fn on_list_custom_prompts(&mut self, ev: ListCustomPromptsResponseEvent) {

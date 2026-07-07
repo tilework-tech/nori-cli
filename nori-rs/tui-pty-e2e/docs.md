@@ -27,6 +27,7 @@ Tests validate rendering behavior end-to-end by checking the actual terminal scr
 - `wait_for_text()` - Block until expected text appears on screen
 - `send_keys()` - Simulate keyboard input
 - `get_screen_content()` - Capture current display state
+- `wait_for_process_exit()` - Poll for the TUI process itself to exit within a timeout, draining PTY output so the child cannot block on a full PTY buffer; used to assert the quit hard-exit deadline
 
 **Tool Call Rendering Tests** (`acp_tool_calls.rs`):
 
@@ -47,7 +48,7 @@ Tests verify the `/mcp` slash command in ACP mode:
 
 **Cloud Mode Tests** (`cloud_mode.rs`):
 
-Tests drive `nori cloud` end to end with fake `nori-handroll` shell scripts that wrap the `mock_acp_agent` binary and record their invocation and lifecycle to marker files. The harness gained `SessionConfig::with_subcommand()` so a session can run `nori <subcommand>` instead of plain `nori`, and the fake binary is injected via the `NORI_HANDROLL_BIN` env override. Scenarios cover: the prompt round-trip through the handroll child, graceful release on exit (the fake writes a `released` marker only if it sees stdin EOF rather than SIGKILL -- the same contract `nori-handroll cloud-acp` implements), mid-session child death surfacing a visible error, unconditional local transcript recording, the actionable error when no handroll binary exists, `--agent` being overridden by the pinned `nori-cloud` agent, `[cloud] broker_url` reaching the child as `NORI_BROKER_URL`, and an immediately-exiting unauthenticated child surfacing its stderr auth hint.
+Tests drive `nori cloud` end to end with fake `nori-handroll` shell scripts that wrap the `mock_acp_agent` binary and record their invocation and lifecycle to marker files. The harness gained `SessionConfig::with_subcommand()` so a session can run `nori <subcommand>` instead of plain `nori`, and the fake binary is injected via the `NORI_HANDROLL_BIN` env override. The fake appends one `eof` line to its `released` marker per child that saw stdin EOF and finished its own teardown (post-sessions-#1276 that teardown is a *detach*, not a release), and captures agent stderr to a marker file. Because picker-first entry spawns a short-lived probe child per boot, tests count `released` lines from a baseline rather than checking file existence. Scenarios cover: the prompt round-trip through the handroll child, EOF-detach on exit (a cooperative child completes its EOF path rather than being SIGKILLed), picker-first entry (boots into the session picker without claiming a session -- enforced by failing any premature `session/new` -- with plain `nori` proving the picker boot is cloud-entry-only), picking a listed session for a live reattach and picking "Start a new session" for a fresh one, `/close` returning to the picker instead of auto-claiming, quit hard-exiting within the deadline even when the child ignores EOF (`MOCK_AGENT_IGNORE_EOF`), mid-session child death surfacing a visible error, unconditional local transcript recording, the actionable error when no handroll binary exists, `--agent` being overridden by the pinned `nori-cloud` agent, `[cloud] broker_url` reaching the child as `NORI_BROKER_URL`, and an immediately-exiting unauthenticated child surfacing its stderr auth hint.
 
 **Browser Command Tests** (`browser_command.rs`):
 

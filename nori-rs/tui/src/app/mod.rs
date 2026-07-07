@@ -272,6 +272,10 @@ pub(crate) struct App {
     /// switch). Cleared on the first successful skillset switch or picker
     /// dismissal. Guards against re-spawning the agent on later switches.
     deferred_spawn_pending: bool,
+    /// True while the pre-session agent probe (session/list) is running —
+    /// guards against concurrent probes and against skillset events
+    /// resolving the deferred spawn out from under the picker flow.
+    agent_session_probe_in_flight: bool,
 
     /// Cancel sender for an in-progress MCP OAuth login flow.
     mcp_oauth_cancel_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -299,6 +303,7 @@ impl App {
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
         vertical_footer: bool,
+        cloud_session_picker: bool,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -319,7 +324,7 @@ impl App {
         // after the user picks a skillset and the switch writes
         // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
         // agent spawns without a skillset.
-        let needs_deferred_spawn = {
+        let needs_deferred_spawn = cloud_session_picker || {
             let nori_cfg = nori_config::NoriConfig::load().unwrap_or_default();
             nori_cfg.skillset_per_session
         };
@@ -392,6 +397,7 @@ impl App {
             system_info_tx,
             worktree_warning_shown: false,
             deferred_spawn_pending: needs_deferred_spawn,
+            agent_session_probe_in_flight: false,
             mcp_oauth_cancel_tx: None,
         };
 
@@ -420,7 +426,11 @@ impl App {
         // `spawn_deferred_agent()`. If the user dismisses the picker, the
         // `SkillsetPickerDismissed` event triggers the deferred spawn without a
         // skillset.
-        if nori_config.skillset_per_session {
+        if cloud_session_picker {
+            // Picker-first entry: list live sessions before anything can
+            // claim one; "start new" is an explicit row in the picker.
+            app.begin_agent_session_picker(true);
+        } else if nori_config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
         }
 

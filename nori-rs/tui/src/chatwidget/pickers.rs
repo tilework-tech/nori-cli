@@ -96,19 +96,21 @@ impl ChatWidget {
         if self.session_agent_capabilities.session_list
             && (self.session_agent_capabilities.load_session
                 || self.session_agent_capabilities.session_resume)
-            && let Some(handle) = self.acp_handle.clone()
         {
+            let Some(handle) = self.acp_handle.clone() else {
+                // Deferred widget (picker-first entry, post-/close): there is
+                // no live connection to list over — re-run the pre-session
+                // probe at the app layer instead.
+                self.app_event_tx
+                    .send(crate::app_event::AppEvent::OpenAgentSessionPicker);
+                return;
+            };
             let cwd = self.config.cwd.clone();
             let tx = self.app_event_tx.clone();
             tokio::spawn(async move {
                 match handle.list_sessions(cwd).await {
-                    Ok(sessions) if sessions.is_empty() => {
-                        tx.send(crate::app_event::AppEvent::InsertHistoryCell(Box::new(
-                            crate::history_cell::new_error_event(
-                                "The agent reported no resumable sessions.".to_string(),
-                            ),
-                        )));
-                    }
+                    // An empty list still opens the picker: the pinned
+                    // "Start a new session" row is the entry point.
                     Ok(sessions) => {
                         tx.send(crate::app_event::AppEvent::ShowAcpResumeSessionPicker {
                             sessions,
