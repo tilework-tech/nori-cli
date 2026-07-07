@@ -609,6 +609,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update the cloud session id displayed in the footer (None hides it).
+    pub(crate) fn set_cloud_session(&mut self, cloud_session: Option<String>) {
+        self.composer.set_cloud_session(cloud_session);
+        self.request_redraw();
+    }
+
     /// Update the prompt summary displayed in the footer.
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.composer.set_prompt_summary(summary);

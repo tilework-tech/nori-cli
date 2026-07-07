@@ -37,12 +37,17 @@ impl ChatWidget {
         self.conversation_id = Some(event.session_id);
         self.current_rollout_path = Some(event.rollout_path.clone());
         let initial_messages = event.initial_messages.clone();
-        let agent_for_header = event.model.clone();
-        self.session_header.set_agent(&agent_for_header);
+        // The harness is the source of truth: Some(id) only for cloud
+        // sessions, None for local agents (which also clears any stale
+        // resume-picker seed after resuming onto a local agent).
+        self.acp_session_id = event.acp_session_id.clone();
+        self.refresh_cloud_session_indicator();
+        let cloud_session = self.cloud_session_identity();
         self.add_to_history(history_cell::new_session_info(
             &self.config,
             event,
             self.show_welcome_banner,
+            cloud_session,
         ));
         if let Some(messages) = initial_messages {
             self.replay_initial_messages(messages);

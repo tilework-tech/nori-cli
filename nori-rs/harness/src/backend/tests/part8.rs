@@ -190,3 +190,82 @@ async fn capabilities_view_exposes_session_resume_and_close() {
         "the view must mirror exactly what the agent advertised"
     );
 }
+
+/// Contract: `SessionConfiguredEvent.acp_session_id` is the *cloud identity*
+/// signal. An agent without the cloud lifecycle (no `session/resume`) must
+/// get `None`, whatever session id the ACP wire used — the TUI treats id
+/// presence as "this is a cloud session".
+#[tokio::test]
+#[serial]
+async fn session_configured_omits_acp_session_id_for_non_cloud_agent() {
+    use std::time::Duration;
+
+    if !mock_agent_available() {
+        return;
+    }
+
+    let _resume_guard = EnvGuard::remove("MOCK_AGENT_SUPPORT_SESSION_RESUME");
+    let _load_guard = EnvGuard::remove("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let _backend = AcpBackend::spawn(&config, backend_event_tx)
+        .await
+        .expect("Failed to spawn ACP backend");
+
+    let event = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured within timeout");
+    match event.msg {
+        EventMsg::SessionConfigured(configured) => assert_eq!(
+            configured.acp_session_id, None,
+            "a non-cloud agent must not be named in SessionConfigured"
+        ),
+        other => panic!(
+            "Expected SessionConfigured event, got: {:?}",
+            std::mem::discriminant(&other)
+        ),
+    }
+}
+
+/// Contract: a cloud-shaped agent (`session/resume`, no `session/load`) gets
+/// its session named in `SessionConfigured` — on reattach, the exact broker
+/// id that was resumed.
+#[tokio::test]
+#[serial]
+async fn session_configured_names_the_session_for_cloud_agent() {
+    use std::time::Duration;
+
+    if !mock_agent_available() {
+        return;
+    }
+
+    let _resume_guard = EnvGuard::set("MOCK_AGENT_SUPPORT_SESSION_RESUME", "1");
+    let _fail_new_guard = EnvGuard::set("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0");
+
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let (backend_event_tx, mut backend_event_rx) = mpsc::channel(64);
+    let config = build_test_config(temp_dir.path());
+
+    let _backend =
+        AcpBackend::resume_session(&config, Some("acp-session-42"), None, backend_event_tx)
+            .await
+            .expect("resume_session should reattach via session/resume");
+
+    let event = recv_backend_control(&mut backend_event_rx, Duration::from_secs(5))
+        .await
+        .expect("Should receive SessionConfigured within timeout");
+    match event.msg {
+        EventMsg::SessionConfigured(configured) => assert_eq!(
+            configured.acp_session_id,
+            Some("acp-session-42".to_string()),
+            "a cloud reattach must name the exact resumed session id"
+        ),
+        other => panic!(
+            "Expected SessionConfigured event, got: {:?}",
+            std::mem::discriminant(&other)
+        ),
+    }
+}

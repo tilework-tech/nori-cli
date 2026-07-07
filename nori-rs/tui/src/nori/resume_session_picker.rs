@@ -109,13 +109,14 @@ pub fn acp_resume_session_picker_params(
     // Agents return rows in arbitrary order; show most-recent-first. Missing
     // or unparseable `updated_at` sorts after every dated row, and the sort
     // is stable so ties (and undated rows) keep the agent's order.
-    let recency = |session: &AcpSessionSummary| {
-        session
-            .updated_at
-            .as_deref()
-            .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
-    };
-    sessions.sort_by_key(|session| std::cmp::Reverse(recency(session)));
+    sessions.sort_by_cached_key(|session| {
+        std::cmp::Reverse(
+            session
+                .updated_at
+                .as_deref()
+                .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok()),
+        )
+    });
 
     // Always offer an explicit create-new row first: entering `nori cloud`
     // (or /resume on a cloud agent) must never claim a session implicitly —
@@ -186,9 +187,11 @@ pub fn acp_resume_session_picker_params(
         };
 
         let acp_session_id = session.session_id;
+        let title = session.title.filter(|title| !title.is_empty());
         let actions: Vec<SelectionAction> = vec![Box::new(move |tx: &AppEventSender| {
             tx.send(AppEvent::ResumeAcpSession {
                 acp_session_id: acp_session_id.clone(),
+                title: title.clone(),
             });
         })];
 

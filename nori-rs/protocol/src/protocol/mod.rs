@@ -1129,6 +1129,17 @@ pub struct SessionConfiguredEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffortConfig>,
 
+    /// The broker session id of the session that was just configured (e.g.
+    /// `nori-fast-kazunoko-aac8`). Set ONLY for cloud live-reattach sessions
+    /// (agent advertises `session/resume` without `session/load`); always
+    /// `None` for local agents — id presence is the cloud-identity signal.
+    /// This names the *current* session; it is unrelated to the
+    /// `acp_session_id` resume-target the TUI resume picker threads through
+    /// `AppEvent::ResumeAcpSession`, which names a session to load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub acp_session_id: Option<String>,
+
     /// Identifier of the history log file (inode on Unix, 0 otherwise).
     pub history_log_id: u64,
 

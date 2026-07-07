@@ -58,7 +58,6 @@ impl ChatWidget {
             active_cell: None,
             config: config.clone(),
             auth_manager,
-            session_header: SessionHeader::new(config.model),
             initial_user_message: create_initial_user_message(
                 initial_prompt.unwrap_or_default(),
                 initial_images,
@@ -110,6 +109,8 @@ impl ChatWidget {
             first_prompt_text,
             current_goal: None,
             session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+            acp_session_id: None,
+            cloud_session_title: None,
             builtin_command_availability: HashMap::new(),
             pending_goal_status: false,
             pending_goal_edit: false,
@@ -130,9 +131,11 @@ impl ChatWidget {
 
     /// Create a ChatWidget that resumes an ACP session via `session/load`
     /// or client-side replay when the agent doesn't support `session/load`.
+    /// `title` is the broker-reported session title, when known.
     pub(crate) fn new_resumed_acp(
         common: ChatWidgetInit,
         acp_session_id: Option<String>,
+        title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
     ) -> Self {
         let ChatWidgetInit {
@@ -156,7 +159,7 @@ impl ChatWidget {
         .to_string();
         let spawn_result = spawn_acp_agent_resume(
             config.clone(),
-            acp_session_id,
+            acp_session_id.clone(),
             transcript,
             app_event_tx.clone(),
         );
@@ -187,7 +190,6 @@ impl ChatWidget {
             active_cell: None,
             config: config.clone(),
             auth_manager,
-            session_header: SessionHeader::new(config.model),
             initial_user_message: create_initial_user_message(
                 initial_prompt.unwrap_or_default(),
                 initial_images,
@@ -239,6 +241,8 @@ impl ChatWidget {
             first_prompt_text,
             current_goal: None,
             session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+            acp_session_id,
+            cloud_session_title: title,
             builtin_command_availability: HashMap::new(),
             pending_goal_status: false,
             pending_goal_edit: false,

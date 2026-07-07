@@ -121,7 +121,6 @@ mod agent;
 pub(crate) use self::agent::AcpAgentHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
-mod session_header;
 
 mod approvals;
 mod constructors;
@@ -133,7 +132,7 @@ mod login;
 mod pickers;
 mod session_config_mode;
 mod user_input;
-use self::session_header::SessionHeader;
+use crate::nori::session_header::CloudSessionInfo;
 use crate::streaming::controller::StreamController;
 use chrono::Local;
 use codex_common::approval_presets::ApprovalPreset;
@@ -350,7 +349,6 @@ pub(crate) struct ChatWidget {
     active_cell: Option<Box<dyn HistoryCell>>,
     config: Config,
     auth_manager: Arc<AuthManager>,
-    session_header: SessionHeader,
     initial_user_message: Option<UserMessage>,
     token_info: Option<TokenUsageInfo>,
     rate_limit_snapshot: Option<RateLimitSnapshotDisplay>,
@@ -430,6 +428,11 @@ pub(crate) struct ChatWidget {
     current_goal: Option<nori_protocol::ThreadGoal>,
     // Latest ACP capability snapshot projected into Nori client concepts.
     session_agent_capabilities: nori_protocol::AgentCapabilitiesView,
+    /// The agent-assigned ACP session id of the active session, when known
+    /// (seeded by the resume path, refreshed by SessionConfigured).
+    acp_session_id: Option<String>,
+    /// Broker-reported title for the resumed cloud session, when known.
+    cloud_session_title: Option<String>,
     builtin_command_availability: HashMap<String, nori_protocol::CommandAvailability>,
     // Whether `/goal` is waiting for the backend to return a goal snapshot.
     pending_goal_status: bool,

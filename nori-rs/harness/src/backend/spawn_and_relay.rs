@@ -114,6 +114,15 @@ impl AcpBackend {
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
         let pending_hook_context = fallback_session_context_for_connection(config, &connection);
+        // Cloud identity contract (see resume_session): name the session only
+        // for a cloud-shaped agent — `session/resume` without `session/load`.
+        let acp_session_id = (connection
+            .capabilities()
+            .session_capabilities
+            .resume
+            .is_some()
+            && !connection.capabilities().load_session)
+            .then(|| session_id.to_string());
 
         let backend = Self {
             connection,
@@ -205,6 +214,7 @@ impl AcpBackend {
             sandbox_policy: config.sandbox_policy.clone(),
             cwd: cwd.clone(),
             reasoning_effort: None,
+            acp_session_id,
             history_log_id,
             history_entry_count,
             initial_messages: None,

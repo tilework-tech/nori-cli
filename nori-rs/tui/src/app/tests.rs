@@ -200,6 +200,7 @@ fn backtrack_selection_with_duplicate_history_targets_unique_turn() {
             sandbox_policy: SandboxPolicy::ReadOnly,
             cwd: PathBuf::from("/home/user/project"),
             reasoning_effort: None,
+            acp_session_id: None,
             history_log_id: 0,
             history_entry_count: 0,
             initial_messages: None,
@@ -209,6 +210,7 @@ fn backtrack_selection_with_duplicate_history_targets_unique_turn() {
             app.chat_widget.config_ref(),
             event,
             is_first,
+            None,
         )) as Arc<dyn HistoryCell>
     };
 
@@ -330,6 +332,7 @@ async fn new_session_requests_shutdown_for_previous_conversation() {
         sandbox_policy: SandboxPolicy::ReadOnly,
         cwd: PathBuf::from("/home/user/project"),
         reasoning_effort: None,
+        acp_session_id: None,
         history_log_id: 0,
         history_entry_count: 0,
         initial_messages: None,
@@ -543,4 +546,46 @@ fn chat_widget_can_open_agent_popup() {
 
     // The popup should now be showing (we can't easily check internal state,
     // but the call should succeed without panicking)
+}
+
+// ===========================================================================
+// Cloud reattach messaging
+// ===========================================================================
+
+#[test]
+fn reattach_message_includes_title_when_known() {
+    // On a live-reattach (cloud) session, the info cell must name the session
+    // title alongside the id so the user can tell which session they reattached
+    // to (e.g. "Reattaching to nori-x (Fix login flakes) — ...").
+    let msg = super::event_handling::reattach_info_message(
+        "nori-fast-kazunoko-aac8",
+        Some("Fix login flakes"),
+        true,
+        "Claude",
+    );
+
+    assert!(
+        msg.contains("nori-fast-kazunoko-aac8"),
+        "reattach message must name the session id, got: {msg}"
+    );
+    assert!(
+        msg.contains("Fix login flakes"),
+        "reattach message must name the broker session title when known, got: {msg}"
+    );
+}
+
+#[test]
+fn reattach_message_without_title_names_only_the_id() {
+    // Guard: with no title, the message names just the id and must not render an
+    // empty parenthetical.
+    let msg = super::event_handling::reattach_info_message("nori-x", None, true, "Claude");
+
+    assert!(
+        msg.contains("nori-x"),
+        "reattach message must name the session id, got: {msg}"
+    );
+    assert!(
+        !msg.contains("()"),
+        "reattach message must not render an empty title parenthetical, got: {msg}"
+    );
 }
