@@ -4,6 +4,19 @@ use strum_macros::EnumIter;
 use strum_macros::EnumString;
 use strum_macros::IntoStaticStr;
 
+/// Where a builtin command can run: on the local machine only, only against a
+/// cloud (remote-VM) session, or anywhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandScope {
+    /// Operates on the local machine; meaningless when the agent runs on a
+    /// remote VM (cloud session).
+    LocalOnly,
+    /// Only meaningful against a cloud session (needs `session/close`).
+    CloudOnly,
+    /// Meaningful for every session type.
+    Universal,
+}
+
 /// Commands that can be invoked by starting a message with a leading slash.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, EnumIter, AsRefStr, IntoStaticStr,
@@ -110,6 +123,41 @@ impl SlashCommand {
             | SlashCommand::Goal
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
+        }
+    }
+
+    /// Session-type scope of this command. LocalOnly commands are unavailable
+    /// on cloud sessions; CloudOnly commands are unavailable elsewhere.
+    /// `/quit` and `/exit` must stay Universal — they are never disabled.
+    pub fn scope(self) -> CommandScope {
+        match self {
+            SlashCommand::Close => CommandScope::CloudOnly,
+            SlashCommand::SwitchSkillset
+            | SlashCommand::Browse
+            | SlashCommand::Diff
+            | SlashCommand::Browser => CommandScope::LocalOnly,
+            SlashCommand::Agent
+            | SlashCommand::Model
+            | SlashCommand::Config
+            | SlashCommand::Approvals
+            | SlashCommand::Settings
+            | SlashCommand::Goal
+            | SlashCommand::New
+            | SlashCommand::Resume
+            | SlashCommand::ResumeViewonly
+            | SlashCommand::Init
+            | SlashCommand::Compact
+            | SlashCommand::Undo
+            | SlashCommand::Mention
+            | SlashCommand::Status
+            | SlashCommand::Memory
+            | SlashCommand::FirstPrompt
+            | SlashCommand::Mcp
+            | SlashCommand::Login
+            | SlashCommand::Logout
+            | SlashCommand::Quit
+            | SlashCommand::Exit
+            | SlashCommand::Fork => CommandScope::Universal,
         }
     }
 

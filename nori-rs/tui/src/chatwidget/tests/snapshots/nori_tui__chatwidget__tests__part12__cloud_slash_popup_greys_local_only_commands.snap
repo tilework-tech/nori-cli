@@ -1,0 +1,11 @@
+---
+source: tui/src/chatwidget/tests/part12.rs
+assertion_line: 214
+expression: popup
+---
+/ browse
+
+  /browse   /browse runs on the local machine and is unavailable in cloud
+            sessions.
+  /browser  /browser runs on the local machine and is unavailable in cloud
+            sessions.

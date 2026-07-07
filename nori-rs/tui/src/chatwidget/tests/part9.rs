@@ -455,7 +455,7 @@ fn close_command_is_gated_on_the_close_capability() {
     );
     let rendered = lines_to_single_string(cells.last().unwrap());
     assert!(
-        rendered.contains("does not support"),
-        "expected an unsupported-capability explanation, got: {rendered}"
+        rendered.contains("/close is unavailable") && rendered.contains("session/close"),
+        "expected the scoped unsupported-capability explanation, got: {rendered}"
     );
 }

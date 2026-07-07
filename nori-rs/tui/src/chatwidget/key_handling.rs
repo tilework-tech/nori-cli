@@ -119,6 +119,14 @@ impl ChatWidget {
             self.request_redraw();
             return;
         }
+        // Unified availability gate: server-advertised verdicts and
+        // client-side cloud/local scoping share one mechanism. /quit and
+        // /exit are exempt — they must never be disabled.
+        if !matches!(cmd, SlashCommand::Quit | SlashCommand::Exit)
+            && !self.ensure_builtin_command_enabled(cmd)
+        {
+            return;
+        }
         match cmd {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
@@ -130,14 +138,6 @@ impl ChatWidget {
                 self.open_viewonly_session_picker();
             }
             SlashCommand::Close => {
-                if !self.session_agent_capabilities.session_close {
-                    self.add_error_message(
-                        "The active agent does not support closing sessions \
-                         (/close needs the ACP session/close capability)."
-                            .to_string(),
-                    );
-                    return;
-                }
                 let Some(handle) = self.acp_handle.clone() else {
                     self.add_error_message("No live agent connection to close.".to_string());
                     return;
@@ -211,9 +211,7 @@ impl ChatWidget {
                 }
             }
             SlashCommand::Goal => {
-                if self.ensure_builtin_command_enabled(SlashCommand::Goal) {
-                    self.request_thread_goal_status();
-                }
+                self.request_thread_goal_status();
             }
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.begin_exit();
