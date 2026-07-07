@@ -2,12 +2,12 @@
 //! (`AcpBackend::send_prompt_error`). Unlike spawn/resume/close failures,
 //! which already run through `enhance_agent_error`'s clean
 //! `AcpErrorDetails { category, detail }` formatting, a failed user prompt
-//! currently formats the raw anyhow chain with `format!("{err:#}")` — which
-//! walks into `acp::Error`'s `Display` impl and appends the *entire*
-//! pretty-printed `data` JSON blob whenever the structured error carries one,
+//! previously formatted the raw anyhow chain with `format!("{err:#}")` —
+//! which walked into `acp::Error`'s `Display` impl and appended the *entire*
+//! pretty-printed `data` JSON blob whenever the structured error carried one,
 //! not just the clean `detail` string. These tests drive a real prompt
-//! failure end-to-end through the mock agent and assert the resulting
-//! `EventMsg::Error` message is clean.
+//! failure end-to-end through the mock agent and guard that the resulting
+//! `EventMsg::Error` message stays clean.
 
 use super::*;
 

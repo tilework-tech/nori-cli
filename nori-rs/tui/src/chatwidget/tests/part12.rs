@@ -10,44 +10,6 @@
 
 use super::*;
 
-/// The cloud reattach shape: `live_reattach()` is true
-/// (`session_resume && !load_session`).
-fn cloud_capabilities() -> nori_protocol::SessionCapabilitiesView {
-    nori_protocol::SessionCapabilitiesView {
-        agent: nori_protocol::AgentCapabilitiesView {
-            http_mcp: false,
-            load_session: false,
-            session_list: true,
-            session_resume: true,
-            session_close: true,
-        },
-        ..Default::default()
-    }
-}
-
-/// A local (non-cloud) agent: `load_session` true, no live reattach.
-fn local_capabilities(session_close: bool) -> nori_protocol::SessionCapabilitiesView {
-    nori_protocol::SessionCapabilitiesView {
-        agent: nori_protocol::AgentCapabilitiesView {
-            http_mcp: true,
-            load_session: true,
-            session_list: false,
-            session_resume: false,
-            session_close,
-        },
-        ..Default::default()
-    }
-}
-
-/// Render a batch of history cells to one string for containment asserts.
-fn cells_text(cells: &[Vec<ratatui::text::Line<'static>>]) -> String {
-    cells
-        .iter()
-        .map(|cell| lines_to_single_string(cell))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// Cloud session: a typed local-only command (`/diff`) must be rejected with an
 /// "unavailable" error that names the cloud reason, and no history cell beyond
 /// the error may appear. (Diff's effect is an async AppEvent, so this pins
@@ -62,7 +24,7 @@ async fn cloud_session_disables_local_only_command() {
     chat.dispatch_command(SlashCommand::Diff);
 
     let cells = drain_insert_history(&mut rx);
-    let feedback = cells_text(&cells);
+    let feedback = cells_to_text(&cells);
     assert!(
         feedback.contains("/diff is unavailable"),
         "cloud session must reject /diff with an unavailable error, got: {feedback:?}"
@@ -89,7 +51,7 @@ async fn local_session_keeps_local_only_command_available() {
 
     chat.dispatch_command(SlashCommand::Diff);
 
-    let feedback = cells_text(&drain_insert_history(&mut rx));
+    let feedback = cells_to_text(&drain_insert_history(&mut rx));
     assert!(
         !feedback.contains("unavailable"),
         "a local agent must not mark /diff unavailable, got: {feedback:?}"
@@ -118,7 +80,7 @@ async fn close_unavailable_without_session_close_capability() {
             _ => {}
         }
     }
-    let feedback = cells_text(&cells);
+    let feedback = cells_to_text(&cells);
     assert!(
         feedback.contains("/close is unavailable"),
         "/close must be rejected through the unified availability mechanism, got: {feedback:?}"
@@ -152,7 +114,7 @@ async fn scope_reacts_to_capability_changes() {
         cloud_capabilities(),
     ));
     chat.dispatch_command(SlashCommand::Diff);
-    let blocked = cells_text(&drain_insert_history(&mut rx));
+    let blocked = cells_to_text(&drain_insert_history(&mut rx));
     assert!(
         blocked.contains("/diff is unavailable"),
         "under cloud capabilities /diff must be blocked, got: {blocked:?}"
@@ -162,7 +124,7 @@ async fn scope_reacts_to_capability_changes() {
         local_capabilities(true),
     ));
     chat.dispatch_command(SlashCommand::Diff);
-    let after = cells_text(&drain_insert_history(&mut rx));
+    let after = cells_to_text(&drain_insert_history(&mut rx));
     assert!(
         !after.contains("unavailable"),
         "after non-cloud capabilities arrive /diff must be available again, got: {after:?}"
@@ -181,7 +143,7 @@ async fn quit_never_disabled_on_cloud_session() {
     chat.dispatch_command(SlashCommand::Quit);
 
     assert_matches!(op_rx.try_recv(), Ok(Op::Shutdown));
-    let feedback = cells_text(&drain_insert_history(&mut rx));
+    let feedback = cells_to_text(&drain_insert_history(&mut rx));
     assert!(
         feedback.contains("Exiting"),
         "quit on a cloud session must still begin the exit with feedback, got: {feedback:?}"
