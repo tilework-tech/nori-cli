@@ -775,6 +775,7 @@ impl AcpConnection {
                     cwd: session.cwd,
                     title: session.title,
                     updated_at: session.updated_at,
+                    meta: session.meta.map(serde_json::Value::Object),
                 }
             }));
 

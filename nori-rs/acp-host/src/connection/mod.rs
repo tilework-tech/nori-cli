@@ -94,7 +94,9 @@ pub struct ApprovalRequest {
 ///
 /// This decouples consumers (e.g. the TUI resume picker) from the raw ACP
 /// schema types, exposing only the fields the picker renders.
-#[derive(Debug, Clone, PartialEq, Eq)]
+// `Eq` is intentionally not derived: `meta` is an arbitrary `serde_json::Value`
+// (may contain floats), which is `PartialEq` but not `Eq`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct AcpSessionSummary {
     /// The agent's session identifier, used to resume via `session/load`.
     pub session_id: String,
@@ -104,6 +106,10 @@ pub struct AcpSessionSummary {
     pub title: Option<String>,
     /// ISO 8601 timestamp of last activity, when the agent provides one.
     pub updated_at: Option<String>,
+    /// The session's ACP `_meta` extension payload, when the agent attaches
+    /// one. The resume picker inspects `_meta.nori.origin == "cloud"` to
+    /// identify cloud sessions (whose `cwd` is not a real filesystem path).
+    pub meta: Option<serde_json::Value>,
 }
 
 /// Session config state captured from ACP session setup and updates.

@@ -1202,12 +1202,77 @@ async fn test_list_sessions_maps_agent_session_info() {
             cwd: temp_dir.path().to_path_buf(),
             title: Some("First mock session".to_string()),
             updated_at: Some("2026-01-02T03:04:05Z".to_string()),
+            meta: None,
         },
         super::AcpSessionSummary {
             session_id: "mock-session-2".to_string(),
             cwd: temp_dir.path().to_path_buf(),
             title: None,
             updated_at: None,
+            meta: None,
+        },
+    ];
+    assert_eq!(summaries, expected);
+}
+
+/// A session's ACP `_meta` extension payload survives the trip from the agent's
+/// `session/list` response through `list_sessions` onto
+/// `AcpSessionSummary.meta`. The env-gated mock attaches
+/// `_meta = {"nori": {"origin": "cloud"}}` to its first row only; the CLI must
+/// surface that object (and must not leak it onto other rows) so the resume
+/// picker can distinguish cloud sessions without the legacy cwd == "/"
+/// sentinel.
+#[tokio::test]
+#[serial]
+async fn test_list_sessions_preserves_session_meta() {
+    let Some(config) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+
+    // SAFETY: serialized test; both variables are removed before any assertion
+    // that could unwind, and `#[serial]` keeps env mutation isolated.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
+        std::env::set_var(
+            "MOCK_AGENT_LIST_SESSIONS_META",
+            r#"{"nori":{"origin":"cloud"}}"#,
+        );
+    }
+
+    let conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("Failed to spawn AcpConnection");
+
+    let summaries = conn
+        .list_sessions(temp_dir.path())
+        .await
+        .expect("list_sessions should succeed against a live agent");
+
+    // SAFETY: cleaning up the env vars we set above.
+    unsafe {
+        std::env::remove_var("MOCK_AGENT_SUPPORT_SESSION_LIST");
+        std::env::remove_var("MOCK_AGENT_LIST_SESSIONS_META");
+    }
+
+    let expected = vec![
+        super::AcpSessionSummary {
+            session_id: "mock-session-1".to_string(),
+            cwd: temp_dir.path().to_path_buf(),
+            title: Some("First mock session".to_string()),
+            updated_at: Some("2026-01-02T03:04:05Z".to_string()),
+            meta: Some(serde_json::json!({"nori": {"origin": "cloud"}})),
+        },
+        super::AcpSessionSummary {
+            session_id: "mock-session-2".to_string(),
+            cwd: temp_dir.path().to_path_buf(),
+            title: None,
+            updated_at: None,
+            meta: None,
         },
     ];
     assert_eq!(summaries, expected);

@@ -472,6 +472,7 @@ impl ChatWidget {
             approval_mode_label,
             token_breakdown,
             context_window_percent,
+            self.cloud_session_identity(),
         ));
     }
 

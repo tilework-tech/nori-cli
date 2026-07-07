@@ -408,6 +408,16 @@ pub(crate) enum DisplayMode {
     Full,
 }
 
+/// Identity of the cloud session the TUI is attached to, when running against
+/// a cloud (live-reattach) agent. Absent for local sessions.
+#[derive(Debug, Clone)]
+pub(crate) struct CloudSessionInfo {
+    /// The human-readable session id, e.g. `nori-fast-kazunoko-aac8`.
+    pub id: String,
+    /// The broker-reported session title, when known (e.g. "Fix login flakes").
+    pub title: Option<String>,
+}
+
 /// The Nori-branded session header cell.
 #[derive(Debug)]
 pub(crate) struct NoriSessionHeaderCell {
@@ -425,6 +435,10 @@ pub(crate) struct NoriSessionHeaderCell {
     token_breakdown: Option<TranscriptTokenUsage>,
     /// Optional context window percentage (0-100).
     context_window_percent: Option<i64>,
+    /// Cloud session identity when attached to a cloud (live-reattach) session.
+    /// When present, the card shows a `session:` line and drops the misleading
+    /// local `directory:` value (the cwd is on the remote VM, not local).
+    cloud_session: Option<CloudSessionInfo>,
 }
 
 /// Maximum length for task summary in status card.
@@ -446,11 +460,17 @@ impl NoriSessionHeaderCell {
             approval_mode_label: None,
             token_breakdown: None,
             context_window_percent: None,
+            cloud_session: None,
         }
     }
 
     pub(crate) fn with_display_mode(mut self, mode: DisplayMode) -> Self {
         self.display_mode = mode;
+        self
+    }
+
+    pub(crate) fn with_cloud_session(mut self, cloud_session: Option<CloudSessionInfo>) -> Self {
+        self.cloud_session = cloud_session;
         self
     }
 
@@ -462,6 +482,7 @@ impl NoriSessionHeaderCell {
         approval_mode_label: Option<String>,
         token_breakdown: Option<TranscriptTokenUsage>,
         context_window_percent: Option<i64>,
+        cloud_session: Option<CloudSessionInfo>,
     ) -> Self {
         let nori_profile = read_nori_profile(&directory);
         let agent_kind = detect_agent_kind(&agent);
@@ -477,6 +498,7 @@ impl NoriSessionHeaderCell {
             approval_mode_label,
             token_breakdown,
             context_window_percent,
+            cloud_session,
         }
     }
 }
@@ -508,13 +530,26 @@ impl HistoryCell for NoriSessionHeaderCell {
             lines.push(Line::from(""));
         }
 
-        // Directory line
-        let dir_max_width = inner_width.saturating_sub(11); // "directory: " is 11 chars
-        let dir = format_directory(&self.directory, Some(dir_max_width));
-        lines.push(Line::from(vec![
-            Span::from("directory: ").dim(),
-            Span::from(dir),
-        ]));
+        // Session line (cloud) or directory line (local). On a cloud session
+        // the cwd lives on the remote VM, so the local cwd would be misleading
+        // — show the cloud session identity instead.
+        if let Some(cloud) = &self.cloud_session {
+            let session_display = match &cloud.title {
+                Some(title) => format!("{} ({title})", cloud.id),
+                None => cloud.id.clone(),
+            };
+            lines.push(Line::from(vec![
+                Span::from("session:   ").dim(),
+                Span::from(session_display),
+            ]));
+        } else {
+            let dir_max_width = inner_width.saturating_sub(11); // "directory: " is 11 chars
+            let dir = format_directory(&self.directory, Some(dir_max_width));
+            lines.push(Line::from(vec![
+                Span::from("directory: ").dim(),
+                Span::from(dir),
+            ]));
+        }
 
         // Agent line
         lines.push(Line::from(vec![
@@ -700,6 +735,7 @@ pub(crate) fn new_nori_status_output(
     approval_mode_label: Option<String>,
     token_breakdown: Option<TranscriptTokenUsage>,
     context_window_percent: Option<i64>,
+    cloud_session: Option<CloudSessionInfo>,
 ) -> CompositeHistoryCell {
     let command = PlainHistoryCell::new(vec!["/status".magenta().into()]);
     let header = NoriSessionHeaderCell::new_with_status_info(
@@ -709,23 +745,29 @@ pub(crate) fn new_nori_status_output(
         approval_mode_label,
         token_breakdown,
         context_window_percent,
+        cloud_session,
     );
 
     CompositeHistoryCell::new(vec![Box::new(command), Box::new(header)])
 }
 
 /// Create the Nori session info cell to be displayed at session start.
+/// `cloud_session` carries the cloud identity when the session is a cloud
+/// (live-reattach) session; the welcome card then shows it in place of the
+/// local cwd.
 pub(crate) fn new_nori_session_info(
     config: &Config,
     event: SessionConfiguredEvent,
     is_first_event: bool,
+    cloud_session: Option<CloudSessionInfo>,
 ) -> SessionInfoCell {
     let SessionConfiguredEvent { model, .. } = event;
 
     SessionInfoCell::new(if is_first_event {
         // Header box rendered as history (so it appears at the very top)
         let header = NoriSessionHeaderCell::new(model, config.cwd.clone())
-            .with_display_mode(DisplayMode::Compact);
+            .with_display_mode(DisplayMode::Compact)
+            .with_cloud_session(cloud_session);
 
         // Help lines below the header
         let mut help_lines: Vec<Line<'static>> = vec![];

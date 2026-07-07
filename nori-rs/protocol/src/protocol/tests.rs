@@ -52,6 +52,7 @@ fn serialize_event() -> Result<()> {
             sandbox_policy: SandboxPolicy::ReadOnly,
             cwd: PathBuf::from("/home/user/project"),
             reasoning_effort: Some(ReasoningEffortConfig::default()),
+            acp_session_id: None,
             history_log_id: 0,
             history_entry_count: 0,
             initial_messages: None,

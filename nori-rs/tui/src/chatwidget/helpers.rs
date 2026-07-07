@@ -6,7 +6,6 @@ const EXIT_HARD_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1
 impl ChatWidget {
     /// Set the agent in the widget's config copy.
     pub(crate) fn set_agent(&mut self, agent: &str) {
-        self.session_header.set_agent(agent);
         self.config.model = agent.to_string();
         // Update the bottom pane's agent display name for approval dialogs
         let display_name = crate::nori::agent_picker::get_agent_info(agent)
@@ -54,6 +53,25 @@ impl ChatWidget {
     /// The agent capability view from the latest SessionCapabilitiesChanged.
     pub(crate) fn agent_capabilities(&self) -> nori_protocol::AgentCapabilitiesView {
         self.session_agent_capabilities.clone()
+    }
+
+    /// The cloud session identity. Id presence IS the cloud signal: the
+    /// harness populates `SessionConfiguredEvent.acp_session_id` only for
+    /// cloud (live-reattach) agents and sends `None` for local agents, so no
+    /// capability gate is needed here — gating on capabilities raced their
+    /// delivery against SessionConfigured and could miss the welcome card.
+    pub(crate) fn cloud_session_identity(&self) -> Option<CloudSessionInfo> {
+        self.acp_session_id.as_ref().map(|id| CloudSessionInfo {
+            id: id.clone(),
+            title: self.cloud_session_title.clone(),
+        })
+    }
+
+    /// Push the current cloud identity (or its absence) into the footer.
+    /// Called from SessionConfigured — the only event that changes the id.
+    pub(super) fn refresh_cloud_session_indicator(&mut self) {
+        let cloud_session = self.cloud_session_identity().map(|info| info.id);
+        self.bottom_pane.set_cloud_session(cloud_session);
     }
 
     /// A `/close` failed: surface the (already enhanced) error and unblock the

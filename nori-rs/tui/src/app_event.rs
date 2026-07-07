@@ -503,6 +503,9 @@ pub(crate) enum AppEvent {
     ResumeAcpSession {
         /// The agent's session identifier to load.
         acp_session_id: String,
+        /// The broker-reported session title, when known, so the reattach
+        /// message and cloud surfaces can name the session.
+        title: Option<String>,
     },
 
     /// Launch a terminal file manager to browse and optionally edit files.

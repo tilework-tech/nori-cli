@@ -865,6 +865,8 @@ fn test_footer_segment_deserialize_all_variants() {
     assert_eq!(w.segment, FooterSegment::TokenUsage);
     let w: Wrapper = toml::from_str(r#"segment = "mode_indicator""#).unwrap();
     assert_eq!(w.segment, FooterSegment::ModeIndicator);
+    let w: Wrapper = toml::from_str(r#"segment = "cloud_session""#).unwrap();
+    assert_eq!(w.segment, FooterSegment::CloudSession);
 }
 
 #[test]
@@ -905,6 +907,7 @@ fn test_footer_segment_display_name() {
         FooterSegment::ModeIndicator.display_name(),
         "Mode Indicator"
     );
+    assert_eq!(FooterSegment::CloudSession.display_name(), "Cloud Session");
 }
 
 #[test]
@@ -924,6 +927,7 @@ fn test_footer_segment_all_variants() {
             FooterSegment::NoriVersion,
             FooterSegment::TokenUsage,
             FooterSegment::ModeIndicator,
+            FooterSegment::CloudSession,
         ]
     );
 }
@@ -947,6 +951,7 @@ fn test_footer_segment_config_default_is_lean_subset() {
         FooterSegment::ModeIndicator,
         FooterSegment::WorktreeName,
         FooterSegment::TokenUsage,
+        FooterSegment::CloudSession,
     ];
     // Segments disabled by default: only meaningful after opting into the
     // related workflow (vim mode, skillsets, prompt summary, git stats).

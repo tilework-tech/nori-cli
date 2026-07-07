@@ -387,6 +387,12 @@ impl AcpBackend {
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
         let pending_hook_context = fallback_session_context_for_connection(config, &connection);
+        // Cloud identity contract: only a cloud-shaped agent (live reattach —
+        // `session/resume` without `session/load`) gets its session named in
+        // SessionConfigured. Local agents get None so the TUI never renders a
+        // local session id as a cloud badge.
+        let acp_session_id =
+            (supports_session_resume && !supports_load_session).then(|| session_id.to_string());
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -476,6 +482,7 @@ impl AcpBackend {
             sandbox_policy: config.sandbox_policy.clone(),
             cwd: cwd.clone(),
             reasoning_effort: None,
+            acp_session_id,
             history_log_id,
             history_entry_count,
             initial_messages: None,

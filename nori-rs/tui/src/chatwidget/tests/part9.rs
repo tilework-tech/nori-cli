@@ -220,6 +220,7 @@ async fn resume_picker_sources_from_agent_list_with_resume_capability() {
                     cwd: std::path::PathBuf::from("/"),
                     title: Some("slack · claude".to_string()),
                     updated_at: None,
+                    meta: None,
                 }]));
             }
         }
@@ -439,10 +440,13 @@ async fn resume_picker_ignores_agent_list_without_a_resume_path() {
     );
 }
 
-/// /close on an agent that does not advertise `session/close` must explain
-/// itself instead of sending an unsupported request.
+/// /close before any `SessionCapabilitiesChanged` has arrived (the cold-start
+/// path, using only the default capabilities) must explain itself instead of
+/// sending an unsupported request. Pins the pre-capabilities default gating
+/// that part12's close test doesn't cover, since that one first sends
+/// explicit capabilities.
 #[test]
-fn close_command_is_gated_on_the_close_capability() {
+fn close_gated_under_default_capabilities() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
     chat.dispatch_command(SlashCommand::Close);
@@ -454,7 +458,7 @@ fn close_command_is_gated_on_the_close_capability() {
     );
     let rendered = lines_to_single_string(cells.last().unwrap());
     assert!(
-        rendered.contains("does not support"),
-        "expected an unsupported-capability explanation, got: {rendered}"
+        rendered.contains("/close is unavailable") && rendered.contains("session/close"),
+        "expected the scoped unsupported-capability explanation, got: {rendered}"
     );
 }

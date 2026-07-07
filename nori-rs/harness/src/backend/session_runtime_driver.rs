@@ -769,8 +769,13 @@ impl AcpBackend {
             }
             QueuedPromptKind::User => {
                 let error_string = format!("{err:?}");
-                let category = categorize_acp_error_chain(err).category;
-                let display_error = format!("{err:#}");
+                let AcpErrorDetails { category, detail } = categorize_acp_error_chain(err);
+                // Top-level Display only: the alternate form (`{err:#}`) walks
+                // the anyhow chain into `acp::Error`'s Display, which dumps the
+                // pretty-printed `data` JSON blob. The clean agent-supplied
+                // `data.detail` is appended parenthetically below instead,
+                // mirroring `enhance_agent_error`.
+                let display_error = format!("{err}");
                 let retryable = category.is_retryable();
                 warn!(
                     ?category,
@@ -815,6 +820,12 @@ impl AcpBackend {
                         "The agent's backing service is unreachable — check your network and try again: {display_error}"
                     ),
                     AcpErrorCategory::Unknown => format!("ACP prompt failed: {display_error}"),
+                };
+                // The agent-supplied `error.data.detail` is clean, user-facing
+                // context (e.g. "connection reset by broker") — keep it verbatim.
+                let message = match detail {
+                    Some(detail) => format!("{message} ({detail})"),
+                    None => message,
                 };
                 (message, retryable)
             }

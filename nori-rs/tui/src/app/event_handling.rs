@@ -1171,8 +1171,12 @@ impl App {
                             false,
                             None,
                         );
-                        self.chat_widget =
-                            ChatWidget::new_resumed_acp(init, acp_session_id, Some(transcript));
+                        self.chat_widget = ChatWidget::new_resumed_acp(
+                            init,
+                            acp_session_id,
+                            None,
+                            Some(transcript),
+                        );
                         self.configure_new_chat_widget();
 
                         self.chat_widget.add_info_message(
@@ -1187,7 +1191,10 @@ impl App {
                     }
                 }
             }
-            AppEvent::ResumeAcpSession { acp_session_id } => {
+            AppEvent::ResumeAcpSession {
+                acp_session_id,
+                title,
+            } => {
                 let display_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
                     .map(|info| info.display_name)
                     .unwrap_or_else(|| self.config.model.clone());
@@ -1208,22 +1215,23 @@ impl App {
                     false,
                     None,
                 );
-                self.chat_widget =
-                    ChatWidget::new_resumed_acp(init, Some(acp_session_id.clone()), None);
+                self.chat_widget = ChatWidget::new_resumed_acp(
+                    init,
+                    Some(acp_session_id.clone()),
+                    title.clone(),
+                    None,
+                );
                 self.configure_new_chat_widget();
 
-                if live_reattach {
-                    self.chat_widget.add_info_message(
-                        format!(
-                            "Reattaching to {acp_session_id} — earlier messages stay in the \
-                             cloud session (not replayed here)."
-                        ),
-                        None,
-                    );
-                } else {
-                    self.chat_widget
-                        .add_info_message(format!("Resuming session with {display_name}..."), None);
-                }
+                self.chat_widget.add_info_message(
+                    reattach_info_message(
+                        &acp_session_id,
+                        title.as_deref(),
+                        live_reattach,
+                        &display_name,
+                    ),
+                    None,
+                );
                 tui.frame_requester().schedule_frame();
             }
             #[cfg(unix)]
@@ -1446,5 +1454,30 @@ impl App {
                 // Ignore Release key events.
             }
         };
+    }
+}
+
+/// Compose the info-cell message shown when resuming/reattaching to a session.
+///
+/// On a live-reattach (cloud) session the earlier transcript stays in the cloud
+/// and is not replayed locally, so the wording differs from a plain resume.
+/// When the broker title is known it names the session so the user can tell
+/// which session they reattached to.
+pub(super) fn reattach_info_message(
+    acp_session_id: &str,
+    title: Option<&str>,
+    live_reattach: bool,
+    display_name: &str,
+) -> String {
+    if live_reattach {
+        let session_label = match title {
+            Some(title) => format!("{acp_session_id} ({title})"),
+            None => acp_session_id.to_string(),
+        };
+        format!(
+            "Reattaching to {session_label} — earlier messages stay in the cloud session (not replayed here)."
+        )
+    } else {
+        format!("Resuming session with {display_name}...")
     }
 }

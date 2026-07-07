@@ -96,6 +96,44 @@ fn lines_to_single_string(lines: &[ratatui::text::Line<'static>]) -> String {
     s
 }
 
+/// Render a batch of history cells to one string for containment asserts.
+pub(crate) fn cells_to_text(cells: &[Vec<ratatui::text::Line<'static>>]) -> String {
+    cells
+        .iter()
+        .map(|cell| lines_to_single_string(cell))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The cloud reattach shape: `live_reattach()` is true
+/// (`session_resume && !load_session`).
+pub(crate) fn cloud_capabilities() -> nori_protocol::SessionCapabilitiesView {
+    nori_protocol::SessionCapabilitiesView {
+        agent: nori_protocol::AgentCapabilitiesView {
+            http_mcp: false,
+            load_session: false,
+            session_list: true,
+            session_resume: true,
+            session_close: true,
+        },
+        ..Default::default()
+    }
+}
+
+/// A local (non-cloud) agent: `load_session` true, no live reattach.
+pub(crate) fn local_capabilities(session_close: bool) -> nori_protocol::SessionCapabilitiesView {
+    nori_protocol::SessionCapabilitiesView {
+        agent: nori_protocol::AgentCapabilitiesView {
+            http_mcp: true,
+            load_session: true,
+            session_list: false,
+            session_resume: false,
+            session_close,
+        },
+        ..Default::default()
+    }
+}
+
 fn make_token_info(total_tokens: i64, context_window: i64) -> TokenUsageInfo {
     fn usage(total_tokens: i64) -> TokenUsage {
         TokenUsage {
@@ -273,7 +311,6 @@ pub(crate) fn make_chatwidget_manual() -> (
         active_cell: None,
         config: cfg.clone(),
         auth_manager,
-        session_header: SessionHeader::new(cfg.model),
         initial_user_message: None,
         token_info: None,
         rate_limit_snapshot: None,
@@ -318,6 +355,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         first_prompt_text: None,
         current_goal: None,
         session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+        acp_session_id: None,
+        cloud_session_title: None,
         builtin_command_availability: HashMap::new(),
         pending_goal_status: false,
         pending_goal_edit: false,
@@ -348,6 +387,8 @@ mod mod_tests;
 mod part1;
 mod part10;
 mod part11;
+mod part12;
+mod part13;
 mod part2;
 mod part3;
 mod part4;

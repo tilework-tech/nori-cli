@@ -1160,6 +1160,9 @@ pub enum FooterSegment {
     TokenUsage,
     /// ACP mode indicator: "[ Plan ]"
     ModeIndicator,
+    /// Cloud session identity: "☁ nori-fast-kazunoko-aac8". Only rendered when
+    /// attached to a cloud (live-reattach) session; self-hides otherwise.
+    CloudSession,
 }
 
 impl FooterSegment {
@@ -1177,6 +1180,7 @@ impl FooterSegment {
             Self::NoriVersion => "Skillset Version",
             Self::TokenUsage => "Token Usage",
             Self::ModeIndicator => "Mode Indicator",
+            Self::CloudSession => "Cloud Session",
         }
     }
 
@@ -1194,6 +1198,7 @@ impl FooterSegment {
             Self::NoriVersion => "nori_version",
             Self::TokenUsage => "token_usage",
             Self::ModeIndicator => "mode_indicator",
+            Self::CloudSession => "cloud_session",
         }
     }
 
@@ -1211,6 +1216,7 @@ impl FooterSegment {
             Self::NoriVersion,
             Self::TokenUsage,
             Self::ModeIndicator,
+            Self::CloudSession,
         ]
     }
 
@@ -1253,6 +1259,8 @@ pub struct FooterSegmentConfigToml {
     pub token_usage: Option<bool>,
     /// Enable/disable ACP mode indicator segment.
     pub mode_indicator: Option<bool>,
+    /// Enable/disable cloud session identity segment.
+    pub cloud_session: Option<bool>,
 }
 
 /// Resolved footer segment configuration with defaults applied.
@@ -1280,6 +1288,8 @@ pub struct FooterSegmentConfig {
     pub token_usage: bool,
     /// Enable/disable ACP mode indicator segment.
     pub mode_indicator: bool,
+    /// Enable/disable cloud session identity segment.
+    pub cloud_session: bool,
 }
 
 impl Default for FooterSegmentConfig {
@@ -1301,6 +1311,7 @@ impl Default for FooterSegmentConfig {
             nori_version: false,
             token_usage: true,
             mode_indicator: true,
+            cloud_session: true,
         }
     }
 }
@@ -1321,6 +1332,7 @@ impl FooterSegmentConfig {
             nori_version: toml.nori_version.unwrap_or(defaults.nori_version),
             token_usage: toml.token_usage.unwrap_or(defaults.token_usage),
             mode_indicator: toml.mode_indicator.unwrap_or(defaults.mode_indicator),
+            cloud_session: toml.cloud_session.unwrap_or(defaults.cloud_session),
         }
     }
 
@@ -1338,6 +1350,7 @@ impl FooterSegmentConfig {
             FooterSegment::NoriVersion => self.nori_version,
             FooterSegment::TokenUsage => self.token_usage,
             FooterSegment::ModeIndicator => self.mode_indicator,
+            FooterSegment::CloudSession => self.cloud_session,
         }
     }
 
@@ -1355,6 +1368,7 @@ impl FooterSegmentConfig {
             FooterSegment::NoriVersion => self.nori_version = enabled,
             FooterSegment::TokenUsage => self.token_usage = enabled,
             FooterSegment::ModeIndicator => self.mode_indicator = enabled,
+            FooterSegment::CloudSession => self.cloud_session = enabled,
         }
     }
 
@@ -1399,6 +1413,7 @@ impl Default for FooterLayoutConfig {
     fn default() -> Self {
         Self {
             footer_left: vec![
+                FooterSegment::CloudSession,
                 FooterSegment::PromptSummary,
                 FooterSegment::VimMode,
                 FooterSegment::GitBranch,

@@ -144,6 +144,7 @@ fn nori_header_renders_instruction_files() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -200,6 +201,7 @@ fn nori_profile_shows_none_when_not_set() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -224,6 +226,7 @@ fn nori_profile_shows_value_when_set() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -262,6 +265,7 @@ fn nori_header_snapshot() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -275,6 +279,7 @@ fn nori_status_output_shows_status_command_and_nori_branding() {
     let status_cell = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/tmp/project"),
+        None,
         None,
         None,
         None,
@@ -645,6 +650,7 @@ fn header_renders_instruction_files_section() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -702,6 +708,7 @@ fn header_renders_exact_token_counts_without_tilde() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -992,6 +999,7 @@ fn status_card_with_task_summary_renders_summary_at_top() {
         None,
         None,
         None,
+        None,
     );
 
     let lines = status_output.display_lines(80);
@@ -1027,6 +1035,7 @@ fn status_card_with_tokens_renders_tokens_section() {
         None,
         Some(token_breakdown),
         Some(27),
+        None,
     );
 
     let lines = status_output.display_lines(80);
@@ -1058,6 +1067,7 @@ fn status_card_with_approval_mode_renders_approval() {
         Some("Agent".to_string()),
         None,
         None,
+        None,
     );
 
     let lines = status_output.display_lines(80);
@@ -1080,6 +1090,7 @@ fn status_card_without_optional_fields_renders_base_only() {
     let status_output = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/tmp/project"),
+        None,
         None,
         None,
         None,
@@ -1119,6 +1130,7 @@ fn status_card_truncates_long_task_summary() {
         "claude-sonnet",
         PathBuf::from("/tmp/project"),
         Some(long_summary.to_string()),
+        None,
         None,
         None,
         None,
@@ -1162,6 +1174,7 @@ fn status_card_with_zero_tokens_hides_tokens_section() {
         None,
         None,
         Some(token_breakdown),
+        None,
         None,
     );
 
@@ -1209,6 +1222,7 @@ fn context_window_percent_renders_without_token_breakdown() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: Some(42),
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -1248,6 +1262,7 @@ fn status_card_full_snapshot() {
         Some("Agent".to_string()),
         Some(token_breakdown),
         Some(27),
+        None,
     );
 
     let lines = status_output.display_lines(80);
@@ -1300,6 +1315,7 @@ fn compact_mode_hides_inactive_files() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -1335,6 +1351,7 @@ fn compact_mode_hides_per_file_token_counts() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -1370,6 +1387,7 @@ fn full_mode_shows_inactive_files_and_per_file_counts() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -1425,6 +1443,7 @@ fn compact_mode_snapshot() {
         approval_mode_label: None,
         token_breakdown: None,
         context_window_percent: None,
+        cloud_session: None,
     };
 
     let lines = cell.display_lines(80);
@@ -1814,5 +1833,87 @@ fn discover_managed_policy_inactive_for_gemini() {
     assert!(
         active_policy_files.is_empty(),
         "Managed-policy CLAUDE.md must NOT be active for Gemini agent. Got: {active_policy_files:?}"
+    );
+}
+
+// =========================================================================
+// CLOUD SESSION IDENTITY TESTS
+// =========================================================================
+
+#[test]
+fn status_card_with_cloud_session_shows_session_line_not_local_cwd() {
+    // On a cloud (live-reattach) session the local cwd is on a remote VM, so
+    // presenting it as the session's `directory:` is misleading. The status
+    // card must instead show a `session:` line naming the id (and the broker
+    // title in parens when known), and must NOT print the local cwd value.
+    let status_output = new_nori_status_output(
+        "claude-sonnet",
+        PathBuf::from("/home/user/local-only-checkout"),
+        None,
+        None,
+        None,
+        None,
+        Some(CloudSessionInfo {
+            id: "nori-fast-kazunoko-aac8".to_string(),
+            title: Some("Fix login flakes".to_string()),
+        }),
+    );
+
+    let lines = status_output.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    assert!(
+        rendered.contains("session:"),
+        "cloud status card must show a 'session:' line, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("nori-fast-kazunoko-aac8"),
+        "cloud status card must name the cloud session id, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("Fix login flakes"),
+        "cloud status card must name the broker title when known, got:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("local-only-checkout"),
+        "cloud status card must not present the local cwd as the session directory, got:\n{rendered}"
+    );
+}
+
+#[test]
+fn welcome_card_with_cloud_session_shows_session_line_not_local_cwd() {
+    // The session-start welcome card (compact mode) must, on a cloud session,
+    // show the cloud session identity instead of the misleading local cwd.
+    let cell = NoriSessionHeaderCell {
+        version: "0.1.0",
+        agent: "claude-sonnet".to_string(),
+        directory: PathBuf::from("/home/user/local-only-checkout"),
+        nori_profile: Some("senior-swe".to_string()),
+        instruction_files: Vec::new(),
+        display_mode: DisplayMode::Compact,
+        prompt_summary: None,
+        approval_mode_label: None,
+        token_breakdown: None,
+        context_window_percent: None,
+        cloud_session: Some(CloudSessionInfo {
+            id: "nori-fast-kazunoko-aac8".to_string(),
+            title: Some("Fix login flakes".to_string()),
+        }),
+    };
+
+    let lines = cell.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    assert!(
+        rendered.contains("session:"),
+        "cloud welcome card must show a 'session:' line, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("nori-fast-kazunoko-aac8"),
+        "cloud welcome card must name the cloud session id, got:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("local-only-checkout"),
+        "cloud welcome card must not present the local cwd as the session directory, got:\n{rendered}"
     );
 }

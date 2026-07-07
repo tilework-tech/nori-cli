@@ -621,17 +621,10 @@ pub(crate) fn new_session_info(
     config: &Config,
     event: SessionConfiguredEvent,
     is_first_event: bool,
-) -> SessionInfoCell {
-    new_session_info_nori(config, event, is_first_event)
-}
-
-pub(crate) fn new_session_info_nori(
-    config: &Config,
-    event: SessionConfiguredEvent,
-    is_first_event: bool,
+    cloud_session: Option<crate::nori::session_header::CloudSessionInfo>,
 ) -> SessionInfoCell {
     // Use the Nori-branded session header
-    crate::nori::session_header::new_nori_session_info(config, event, is_first_event)
+    crate::nori::session_header::new_nori_session_info(config, event, is_first_event, cloud_session)
 }
 
 #[allow(dead_code)]

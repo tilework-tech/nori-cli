@@ -59,6 +59,9 @@ pub(crate) struct FooterProps {
     pub(crate) footer_layout_config: FooterLayoutConfig,
     /// ACP agent mode label to display when the agent exposes a mode option.
     pub(crate) acp_mode_label: Option<String>,
+    /// Cloud session identifier (e.g. `nori-fast-kazunoko-aac8`) when attached
+    /// to a cloud (live-reattach) session. Renders the `CloudSession` segment.
+    pub(crate) cloud_session: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -505,6 +508,10 @@ fn footer_segment(props: &FooterProps, segment: FooterSegment) -> Option<Line<'s
             };
             Line::from(span)
         }),
+        FooterSegment::CloudSession => props
+            .cloud_session
+            .as_ref()
+            .map(|id| Line::from(vec![Span::from("☁ ").cyan(), Span::from(id.clone()).cyan()])),
     }
 }
 
@@ -791,6 +798,7 @@ mod tests {
             nori_version: true,
             token_usage: true,
             mode_indicator: true,
+            cloud_session: true,
         }
     }
 
@@ -821,6 +829,7 @@ mod tests {
             footer_segment_config: fully_enabled_segments(),
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             acp_mode_label: None,
+            cloud_session: None,
         }
     }
 
@@ -1421,6 +1430,7 @@ mod tests {
             nori_version: false,
             token_usage: false,
             mode_indicator: false,
+            cloud_session: false,
         };
 
         snapshot_footer(
@@ -1439,6 +1449,49 @@ mod tests {
                 is_worktree: true,
                 worktree_name: Some("good-ash-20260205-204831".to_string()),
                 footer_segment_config: segment_config,
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_cloud_session_renders_id() {
+        // When attached to a cloud session, the footer shows the cloud session
+        // identity so the user can tell which remote VM they are driving.
+        let rendered = render_footer_text(FooterProps {
+            cloud_session: Some("nori-fast-kazunoko-aac8".to_string()),
+            ..default_props()
+        });
+
+        assert!(
+            rendered.contains("nori-fast-kazunoko-aac8"),
+            "footer with a cloud session must render the session id, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn footer_without_cloud_session_omits_badge() {
+        // Guard: a local session (no cloud identity) must not render a cloud
+        // badge. A UUID-style id from a local ACP agent must never appear.
+        let rendered = render_footer_text(FooterProps {
+            git_branch: Some("main".to_string()),
+            cloud_session: None,
+            ..default_props()
+        });
+
+        assert!(
+            !rendered.contains('☁'),
+            "footer without a cloud session must not render a cloud badge, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn footer_with_cloud_session() {
+        snapshot_footer(
+            "footer_with_cloud_session",
+            FooterProps {
+                git_branch: Some("main".to_string()),
+                cloud_session: Some("nori-fast-kazunoko-aac8".to_string()),
                 ..default_props()
             },
         );

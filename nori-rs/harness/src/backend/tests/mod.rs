@@ -376,6 +376,7 @@ async fn wait_for_logged_request(
     }
 }
 
+mod part10;
 mod part2;
 mod part3;
 mod part4;

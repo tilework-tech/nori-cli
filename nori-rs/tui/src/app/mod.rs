@@ -353,7 +353,7 @@ impl App {
                         .load_transcript(&target.project_id, &target.session_id)
                         .await?;
                     let acp_session_id = transcript.meta.acp_session_id.clone();
-                    ChatWidget::new_resumed_acp(init, acp_session_id, Some(transcript))
+                    ChatWidget::new_resumed_acp(init, acp_session_id, None, Some(transcript))
                 }
                 ResumeSelection::StartFresh | ResumeSelection::Exit => ChatWidget::new(init),
             }

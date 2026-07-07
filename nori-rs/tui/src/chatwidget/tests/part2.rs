@@ -661,12 +661,14 @@ fn acp_resume_session_picker_snapshot() {
             cwd: PathBuf::from("/home/user/project"),
             title: Some("Refactor the parser".to_string()),
             updated_at: Some("2020-01-15T10:30:00Z".to_string()),
+            meta: None,
         },
         nori_harness::AcpSessionSummary {
             session_id: "session-def".to_string(),
             cwd: PathBuf::from("/home/user/other"),
             title: None,
             updated_at: None,
+            meta: None,
         },
     ];
     chat.show_acp_resume_session_picker(sessions);
