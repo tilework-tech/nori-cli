@@ -289,6 +289,35 @@ impl MockAgent {
             return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
         }
 
+        // Support simulating a structured prompt failure (JSON-RPC code -32010,
+        // "agent unreachable") whose `data` includes both a `detail` string and
+        // unrelated noise fields — used to verify the user-facing message
+        // surfaces `detail` cleanly instead of the raw pretty-printed JSON blob.
+        if std::env::var("MOCK_AGENT_PROMPT_FAIL_JSON").is_ok() {
+            eprintln!("Mock agent: simulating structured prompt failure with detail");
+            return Err(
+                acp::Error::new(-32010, "broker unreachable").data(serde_json::json!({
+                    "detail": "connection reset by broker",
+                    "retry_after_ms": 5000,
+                    "trace_id": "mock-trace-9001"
+                })),
+            );
+        }
+
+        // Support simulating a structured prompt failure whose `data` carries
+        // no `detail` field (only unrelated noise) — the message must still
+        // avoid dumping the raw JSON blob even when there's no clean detail
+        // string to substitute.
+        if std::env::var("MOCK_AGENT_PROMPT_FAIL_JSON_NO_DETAIL").is_ok() {
+            eprintln!("Mock agent: simulating structured prompt failure without detail");
+            return Err(
+                acp::Error::new(-32010, "broker unreachable").data(serde_json::json!({
+                    "retry_after_ms": 7000,
+                    "trace_id": "mock-trace-9002"
+                })),
+            );
+        }
+
         // Support multi-turn conversations for transcript testing.
         // Extracts markers (ALPHA, BETA, etc.) from user input and echoes them back.
         if std::env::var("MOCK_AGENT_MULTI_TURN").is_ok() {
