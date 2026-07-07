@@ -538,6 +538,9 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 &handroll_bin,
                 nori_config.cloud_broker_url.as_deref(),
             )];
+            // Cloud entry is picker-first: list live sessions before
+            // anything can claim a VM; creating one is an explicit pick.
+            interactive.cloud_session_picker = true;
 
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;

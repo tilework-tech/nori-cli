@@ -347,6 +347,7 @@ pub mod browser_session;
 mod helpers;
 mod nori_client_context;
 mod nori_client_mcp;
+pub mod probe;
 mod session;
 mod session_defaults;
 pub(crate) mod session_reducer;

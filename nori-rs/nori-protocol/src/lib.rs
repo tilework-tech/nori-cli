@@ -120,6 +120,15 @@ pub struct AgentCapabilitiesView {
     pub session_close: bool,
 }
 
+impl AgentCapabilitiesView {
+    /// The cloud reattach shape: resuming reattaches live over
+    /// `session/resume` with no history replay (`loadSession: false`).
+    /// Frontends use this to word detach/reattach messaging.
+    pub fn live_reattach(&self) -> bool {
+        self.session_resume && !self.load_session
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NoriClientCapabilitiesView {

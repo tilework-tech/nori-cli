@@ -1,5 +1,8 @@
 use super::*;
 
+/// How long quit waits for a graceful backend shutdown before forcing exit.
+const EXIT_HARD_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+
 impl ChatWidget {
     /// Set the agent in the widget's config copy.
     pub(crate) fn set_agent(&mut self, agent: &str) {
@@ -48,11 +51,55 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// The agent capability view from the latest SessionCapabilitiesChanged.
+    pub(crate) fn agent_capabilities(&self) -> nori_protocol::AgentCapabilitiesView {
+        self.session_agent_capabilities.clone()
+    }
+
     /// A `/close` failed: surface the (already enhanced) error and unblock the
     /// session-switching commands that were held while the close was in flight.
     pub(crate) fn on_session_close_failed(&mut self, message: String) {
         self.session_close_in_flight = false;
         self.add_error_message(format!("Failed to close the session: {message}"));
+    }
+
+    /// Begin exiting: immediate feedback, input refused, graceful backend
+    /// shutdown requested, and a hard-exit watchdog so the old 25s child-exit
+    /// grace can never hold the user hostage. Idempotent.
+    ///
+    /// On agents with the cloud lifecycle (live reattach, no history replay),
+    /// exit is a *detach*: the connection drop is non-terminal and the session
+    /// keeps running server-side, so the feedback says exactly that.
+    pub(crate) fn begin_exit(&mut self) {
+        if self.exiting {
+            return;
+        }
+        self.exiting = true;
+
+        let is_detach = self.session_agent_capabilities.session_resume
+            && !self.session_agent_capabilities.load_session;
+        let message = if is_detach {
+            "Exiting — detaching; this session keeps running in the cloud.".to_string()
+        } else {
+            "Exiting…".to_string()
+        };
+        let hint = is_detach.then(|| "reattach later from the `nori cloud` picker".to_string());
+        self.add_to_history(history_cell::new_info_event(message, hint));
+        self.request_redraw();
+
+        self.submit_op(Op::Shutdown);
+
+        // Hard-exit watchdog: ExitRequest fires unconditionally after the
+        // deadline; a faster ShutdownComplete simply exits sooner. Skipped
+        // when no runtime exists (sync unit tests) — the real app always
+        // runs inside tokio.
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let tx = self.app_event_tx.clone();
+            runtime.spawn(async move {
+                tokio::time::sleep(EXIT_HARD_DEADLINE).await;
+                tx.send(AppEvent::ExitRequest);
+            });
+        }
     }
 
     pub(crate) fn handle_acp_session_config_update(

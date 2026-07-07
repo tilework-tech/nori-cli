@@ -1,6 +1,45 @@
 use super::*;
 
 impl App {
+    /// Kick off the pre-session agent probe (spawn → initialize →
+    /// `session/list` → teardown; never `session/new`) and report the result
+    /// as [`AppEvent::AgentSessionListProbed`]. Used by picker-first entry
+    /// (`nori cloud`), the post-`/close` return to the picker, and /resume
+    /// retries on a deferred widget. Bounded by a wall-clock timeout so a
+    /// hung broker can never wedge the boot with no way forward.
+    pub(crate) fn begin_agent_session_picker(&mut self, fallback_to_spawn: bool) {
+        if self.agent_session_probe_in_flight {
+            return;
+        }
+        self.agent_session_probe_in_flight = true;
+        let display_name = nori_harness::get_agent_display_name(&self.config.model);
+        self.chat_widget
+            .add_info_message(format!("Listing {display_name} sessions…"), None);
+
+        let agent = self.config.model.clone();
+        let cwd = self.config.cwd.clone();
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+            let probe = match tokio::time::timeout(
+                PROBE_TIMEOUT,
+                nori_harness::probe_agent_sessions_for(&agent, &cwd),
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(_) => Err(nori_harness::ProbeError::Failed(format!(
+                    "timed out listing sessions after {}s",
+                    PROBE_TIMEOUT.as_secs()
+                ))),
+            };
+            tx.send(AppEvent::AgentSessionListProbed {
+                probe,
+                fallback_to_spawn,
+            });
+        });
+    }
+
     pub(super) fn shutdown_current_conversation(&mut self) {
         if self.chat_widget.conversation_id().is_some() {
             self.suppress_shutdown_complete = true;

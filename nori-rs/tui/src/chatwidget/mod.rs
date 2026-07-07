@@ -410,6 +410,11 @@ pub(crate) struct ChatWidget {
     // session-switching commands so the deferred NewSession can't clobber a
     // conversation the user switched to mid-close.
     session_close_in_flight: bool,
+    /// True once the user asked to quit: input is refused, and a hard-exit
+    /// watchdog guarantees the process leaves within ~a second even if the
+    /// backend teardown stalls. On cloud agents this exit is a detach — the
+    /// session keeps running server-side.
+    exiting: bool,
     acp_config_option_snapshot: Option<crate::nori::session_config_history::SessionConfigSnapshot>,
     acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
     acp_mode_config_generation: i64,

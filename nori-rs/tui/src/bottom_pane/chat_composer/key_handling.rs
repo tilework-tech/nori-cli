@@ -586,7 +586,10 @@ impl ChatComposer {
                 kind: KeyEventKind::Press,
                 ..
             } if self.is_empty() => {
-                self.app_event_tx.send(AppEvent::ExitRequest);
+                // Route through the widget's quit flow so Ctrl+D gets the
+                // same detach feedback, input freeze, and hard-exit watchdog
+                // as /quit — not an abrupt silent exit.
+                self.app_event_tx.send(AppEvent::BeginExit);
                 (InputResult::None, true)
             }
             // -------------------------------------------------------------

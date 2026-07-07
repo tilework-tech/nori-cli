@@ -59,6 +59,7 @@ fn make_test_app() -> App {
         system_info_tx,
         worktree_warning_shown: false,
         deferred_spawn_pending: false,
+        agent_session_probe_in_flight: false,
         mcp_oauth_cancel_tx: None,
     }
 }
@@ -103,6 +104,7 @@ fn make_test_app_with_channels() -> (
             system_info_tx,
             worktree_warning_shown: false,
             deferred_spawn_pending: false,
+            agent_session_probe_in_flight: false,
             mcp_oauth_cancel_tx: None,
         },
         rx,
