@@ -103,7 +103,20 @@ pub fn resume_session_picker_params(
 /// Columns map as: `title` → row name (falling back to the session id when the
 /// agent omits a title), `updated_at` → relative time, and `cwd` → the row
 /// description.
-pub fn acp_resume_session_picker_params(sessions: Vec<AcpSessionSummary>) -> SelectionViewParams {
+pub fn acp_resume_session_picker_params(
+    mut sessions: Vec<AcpSessionSummary>,
+) -> SelectionViewParams {
+    // Agents return rows in arbitrary order; show most-recent-first. Missing
+    // or unparseable `updated_at` sorts after every dated row, and the sort
+    // is stable so ties (and undated rows) keep the agent's order.
+    let recency = |session: &AcpSessionSummary| {
+        session
+            .updated_at
+            .as_deref()
+            .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
+    };
+    sessions.sort_by_key(|session| std::cmp::Reverse(recency(session)));
+
     // Always offer an explicit create-new row first: entering `nori cloud`
     // (or /resume on a cloud agent) must never claim a session implicitly —
     // creating one is a deliberate pick.
@@ -540,6 +553,119 @@ mod tests {
         assert_eq!(
             params.items[2].search_value.as_deref(),
             Some("local-sess-2 Tune the linter /home/x/other")
+        );
+    }
+
+    /// Session rows are ordered most-recent-first by `updated_at` regardless
+    /// of the order the agent returned them in, with the pinned create-new
+    /// row still first.
+    #[test]
+    fn acp_resume_picker_orders_rows_most_recent_first() {
+        let sessions = vec![
+            AcpSessionSummary {
+                session_id: "sess-jan".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("January session".to_string()),
+                updated_at: Some("2026-01-01T00:00:00Z".to_string()),
+                meta: None,
+            },
+            AcpSessionSummary {
+                session_id: "sess-mar".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("March session".to_string()),
+                updated_at: Some("2026-03-01T00:00:00Z".to_string()),
+                meta: None,
+            },
+            AcpSessionSummary {
+                session_id: "sess-feb".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("February session".to_string()),
+                updated_at: Some("2026-02-01T00:00:00Z".to_string()),
+                meta: None,
+            },
+        ];
+
+        let params = acp_resume_session_picker_params(sessions);
+
+        let names: Vec<&str> = params.items.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "Start a new session",
+                "March session",
+                "February session",
+                "January session",
+            ]
+        );
+    }
+
+    /// Rows without an `updated_at` sort after every dated row, and two
+    /// undated rows keep their relative input order (the sort is stable).
+    #[test]
+    fn acp_resume_picker_orders_undated_rows_after_dated_rows_stably() {
+        let sessions = vec![
+            AcpSessionSummary {
+                session_id: "sess-undated-a".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("Undated A".to_string()),
+                updated_at: None,
+                meta: None,
+            },
+            AcpSessionSummary {
+                session_id: "sess-dated".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("Dated".to_string()),
+                updated_at: Some("2026-02-01T00:00:00Z".to_string()),
+                meta: None,
+            },
+            AcpSessionSummary {
+                session_id: "sess-undated-b".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("Undated B".to_string()),
+                updated_at: None,
+                meta: None,
+            },
+        ];
+
+        let params = acp_resume_session_picker_params(sessions);
+
+        let names: Vec<&str> = params.items.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["Start a new session", "Dated", "Undated A", "Undated B"]
+        );
+    }
+
+    /// An `updated_at` that fails RFC 3339 parsing is treated like a missing
+    /// timestamp: the row sorts after every dated row rather than wherever a
+    /// raw string comparison would land it.
+    #[test]
+    fn acp_resume_picker_treats_unparseable_updated_at_like_undated() {
+        let sessions = vec![
+            AcpSessionSummary {
+                session_id: "sess-garbage".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("Garbage timestamp".to_string()),
+                // Lexicographically after "2026-…", so a raw string sort
+                // (descending) would wrongly rank this row first.
+                updated_at: Some("not-a-timestamp".to_string()),
+                meta: None,
+            },
+            AcpSessionSummary {
+                session_id: "sess-dated".to_string(),
+                cwd: PathBuf::from("/"),
+                title: Some("Dated".to_string()),
+                updated_at: Some("2026-02-01T00:00:00Z".to_string()),
+                meta: None,
+            },
+        ];
+
+        let params = acp_resume_session_picker_params(sessions);
+
+        let names: Vec<&str> = params.items.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["Start a new session", "Dated", "Garbage timestamp"]
         );
     }
 
