@@ -153,12 +153,14 @@ fn acp_session_picker_with_create_new_row_snapshot() {
             cwd: std::path::PathBuf::from("/"),
             title: Some("Fix the flaky login test".to_string()),
             updated_at: None,
+            meta: None,
         },
         nori_harness::AcpSessionSummary {
             session_id: "nori-trim-anago-ff79".to_string(),
             cwd: std::path::PathBuf::from("/"),
             title: None,
             updated_at: None,
+            meta: None,
         },
     ]);
 

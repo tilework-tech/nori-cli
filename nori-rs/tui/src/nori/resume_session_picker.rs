@@ -141,10 +141,19 @@ pub fn acp_resume_session_picker_params(sessions: Vec<AcpSessionSummary>) -> Sel
     }
 
     let session_items = sessions.into_iter().map(|session| {
-        // Cloud sessions carry the sentinel cwd "/" — the broker tracks
-        // no real working directory — so treat it as "no cwd" rather
-        // than displaying or searching on it.
-        let cwd_display = Some(session.cwd.display().to_string()).filter(|cwd| cwd != "/");
+        // Cloud sessions have no real working directory, so hide the cwd
+        // from display and search. The agent marks them via ACP `_meta`
+        // (`_meta.nori.origin == "cloud"`), regardless of the cwd value.
+        let mut is_cloud_origin = session
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.pointer("/nori/origin"))
+            .and_then(serde_json::Value::as_str)
+            == Some("cloud");
+        // Transition shim: handroll in the wild doesn't emit `_meta` yet and
+        // reports the sentinel cwd "/" — delete this line once it does.
+        is_cloud_origin = is_cloud_origin || session.cwd == Path::new("/");
+        let cwd_display = (!is_cloud_origin).then(|| session.cwd.display().to_string());
         let name = session
             .title
             .clone()
@@ -379,12 +388,14 @@ mod tests {
                 cwd: PathBuf::from("/repo/one"),
                 title: Some("Fix the parser".to_string()),
                 updated_at: Some("2020-01-15T10:30:00Z".to_string()),
+                meta: None,
             },
             AcpSessionSummary {
                 session_id: "agent-sess-2".to_string(),
                 cwd: PathBuf::from("/repo/two"),
                 title: None,
                 updated_at: None,
+                meta: None,
             },
         ];
 
@@ -419,6 +430,7 @@ mod tests {
             cwd: PathBuf::from("/"),
             title: Some("slack · claude".to_string()),
             updated_at: None,
+            meta: None,
         }];
 
         let params = acp_resume_session_picker_params(sessions);
@@ -441,8 +453,12 @@ mod tests {
         assert!(create_new.dismiss_on_select);
     }
 
+    /// Transition shim: handroll in the wild does not yet emit `_meta`, so a
+    /// bare cwd == "/" still hides the pathname. When every agent emits the
+    /// cloud `_meta` marker this shim (and this test) can be deleted in favor
+    /// of `acp_resume_picker_hides_cwd_for_meta_marked_cloud_rows`.
     #[test]
-    fn acp_resume_picker_hides_cloud_cwd_sentinel() {
+    fn acp_resume_picker_hides_legacy_cloud_cwd_sentinel() {
         // Cloud sessions carry the sentinel cwd "/" — the broker tracks no
         // real working directory — so the picker must neither display it nor
         // include it in the search haystack.
@@ -451,6 +467,7 @@ mod tests {
             cwd: PathBuf::from("/"),
             title: Some("slack · claude".to_string()),
             updated_at: None,
+            meta: None,
         }];
 
         let params = acp_resume_session_picker_params(sessions);
@@ -460,6 +477,69 @@ mod tests {
         assert_eq!(
             params.items[1].search_value.as_deref(),
             Some("cloud-sess-1 slack · claude")
+        );
+    }
+
+    /// A cloud session's `_meta.nori.origin == "cloud"` marker hides the cwd
+    /// even when the agent reports a real-looking path, decoupling cwd-hiding
+    /// from the legacy "/" sentinel. The path must not appear in the row
+    /// description nor the search haystack.
+    #[test]
+    fn acp_resume_picker_hides_cwd_for_meta_marked_cloud_rows() {
+        let sessions = vec![AcpSessionSummary {
+            session_id: "cloud-sess-1".to_string(),
+            cwd: PathBuf::from("/home/x/proj"),
+            title: Some("slack · claude".to_string()),
+            updated_at: None,
+            meta: Some(serde_json::json!({"nori": {"origin": "cloud"}})),
+        }];
+
+        let params = acp_resume_session_picker_params(sessions);
+
+        assert_eq!(params.items[1].description, None);
+        assert_eq!(
+            params.items[1].search_value.as_deref(),
+            Some("cloud-sess-1 slack · claude")
+        );
+    }
+
+    /// Guard against over-hiding: a session with a real cwd and no cloud
+    /// `_meta` marker must still show its pathname — whether `_meta` is
+    /// absent entirely or present but not cloud-shaped. An implementation
+    /// that hides the cwd on any `Some(meta)` must fail here.
+    #[test]
+    fn acp_resume_picker_shows_cwd_for_unmarked_rows() {
+        let sessions = vec![
+            AcpSessionSummary {
+                session_id: "local-sess-1".to_string(),
+                cwd: PathBuf::from("/home/x/proj"),
+                title: Some("Fix the parser".to_string()),
+                updated_at: None,
+                meta: None,
+            },
+            AcpSessionSummary {
+                session_id: "local-sess-2".to_string(),
+                cwd: PathBuf::from("/home/x/other"),
+                title: Some("Tune the linter".to_string()),
+                updated_at: None,
+                meta: Some(serde_json::json!({"nori": {"origin": "local"}})),
+            },
+        ];
+
+        let params = acp_resume_session_picker_params(sessions);
+
+        assert_eq!(params.items[1].description.as_deref(), Some("/home/x/proj"));
+        assert_eq!(
+            params.items[1].search_value.as_deref(),
+            Some("local-sess-1 Fix the parser /home/x/proj")
+        );
+        assert_eq!(
+            params.items[2].description.as_deref(),
+            Some("/home/x/other")
+        );
+        assert_eq!(
+            params.items[2].search_value.as_deref(),
+            Some("local-sess-2 Tune the linter /home/x/other")
         );
     }
 

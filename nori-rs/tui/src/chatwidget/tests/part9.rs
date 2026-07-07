@@ -220,6 +220,7 @@ async fn resume_picker_sources_from_agent_list_with_resume_capability() {
                     cwd: std::path::PathBuf::from("/"),
                     title: Some("slack · claude".to_string()),
                     updated_at: None,
+                    meta: None,
                 }]));
             }
         }

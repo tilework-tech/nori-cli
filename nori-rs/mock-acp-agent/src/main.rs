@@ -1574,12 +1574,19 @@ async fn main() -> acp::Result<()> {
                 let cwd = arguments
                     .cwd
                     .unwrap_or_else(|| PathBuf::from("/mock/session/cwd"));
-                let sessions = vec![
-                    acp::SessionInfo::new("mock-session-1", cwd.clone())
-                        .title("First mock session")
-                        .updated_at("2026-01-02T03:04:05Z"),
-                    acp::SessionInfo::new("mock-session-2", cwd),
-                ];
+                let mut first = acp::SessionInfo::new("mock-session-1", cwd.clone())
+                    .title("First mock session")
+                    .updated_at("2026-01-02T03:04:05Z");
+                // MOCK_AGENT_LIST_SESSIONS_META, when set to a JSON object,
+                // is attached as the `_meta` extension on the first session
+                // row so tests can exercise the real `_meta` wire path.
+                if let Ok(meta_json) = std::env::var("MOCK_AGENT_LIST_SESSIONS_META")
+                    && let Ok(serde_json::Value::Object(meta)) =
+                        serde_json::from_str::<serde_json::Value>(&meta_json)
+                {
+                    first = first.meta(meta);
+                }
+                let sessions = vec![first, acp::SessionInfo::new("mock-session-2", cwd)];
                 responder.respond(acp::ListSessionsResponse::new(sessions))
             },
             agent_client_protocol::on_receive_request!(),
