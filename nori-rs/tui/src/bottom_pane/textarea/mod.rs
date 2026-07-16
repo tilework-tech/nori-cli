@@ -1,7 +1,13 @@
+mod vim;
+
+use self::vim::KillBufferKind;
+use self::vim::VimOperator;
+use self::vim::VimPending;
 use crate::key_hint::is_altgr;
 use crate::nori::hotkey_match::matches_binding;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use nori_config::HotkeyConfig;
 use ratatui::buffer::Buffer;
@@ -21,6 +27,28 @@ const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
 
 fn is_word_separator(ch: char) -> bool {
     WORD_SEPARATORS.contains(ch)
+}
+
+fn split_word_pieces(run: &str) -> Vec<(usize, &str)> {
+    let mut pieces = Vec::new();
+    for (segment_start, segment) in run.split_word_bound_indices() {
+        let mut piece_start = 0;
+        let mut chars = segment.char_indices();
+        let Some((_, first_char)) = chars.next() else {
+            continue;
+        };
+        let mut in_separator = is_word_separator(first_char);
+        for (idx, ch) in chars {
+            let is_separator = is_word_separator(ch);
+            if is_separator != in_separator {
+                pieces.push((segment_start + piece_start, &segment[piece_start..idx]));
+                piece_start = idx;
+                in_separator = is_separator;
+            }
+        }
+        pieces.push((segment_start + piece_start, &segment[piece_start..]));
+    }
+    pieces
 }
 
 #[derive(Debug, Clone)]
@@ -48,13 +76,14 @@ pub(crate) struct TextArea {
     preferred_col: Option<usize>,
     elements: Vec<TextElement>,
     kill_buffer: String,
+    kill_buffer_kind: KillBufferKind,
     hotkey_config: HotkeyConfig,
     /// Whether vim mode is enabled (user setting).
     vim_mode_enabled: bool,
     /// Current vim mode state (Insert or Normal).
     vim_mode_state: VimModeState,
-    /// Pending key for two-key vim sequences (e.g. 'g' for gg, 'd' for dd).
-    vim_pending_key: Option<char>,
+    /// Pending Vim prefix, operator, or text object.
+    vim_pending: VimPending,
     /// Undo stack: (text, cursor_pos) snapshots.
     undo_stack: Vec<(String, usize)>,
     /// Redo stack: (text, cursor_pos) snapshots.
@@ -85,10 +114,11 @@ impl TextArea {
             preferred_col: None,
             elements: Vec::new(),
             kill_buffer: String::new(),
+            kill_buffer_kind: KillBufferKind::Characterwise,
             hotkey_config: HotkeyConfig::default(),
             vim_mode_enabled: false,
             vim_mode_state: VimModeState::default(),
-            vim_pending_key: None,
+            vim_pending: VimPending::None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             in_undo_group: false,
@@ -104,7 +134,7 @@ impl TextArea {
         self.vim_mode_enabled = enabled;
         if !enabled {
             self.vim_mode_state = VimModeState::Insert;
-            self.vim_pending_key = None;
+            self.vim_pending = VimPending::None;
             self.in_undo_group = false;
         }
     }
@@ -118,6 +148,18 @@ impl TextArea {
     /// Returns true if vim mode is enabled and we're in Normal mode.
     pub fn is_in_vim_normal_mode(&self) -> bool {
         self.vim_mode_enabled && self.vim_mode_state == VimModeState::Normal
+    }
+
+    pub(crate) fn is_vim_operator_pending(&self) -> bool {
+        !matches!(self.vim_pending, VimPending::None)
+    }
+
+    pub(crate) fn should_handle_vim_insert_escape(&self, event: KeyEvent) -> bool {
+        self.vim_mode_enabled
+            && self.vim_mode_state == VimModeState::Insert
+            && event.code == KeyCode::Esc
+            && event.modifiers == KeyModifiers::NONE
+            && matches!(event.kind, KeyEventKind::Press | KeyEventKind::Repeat)
     }
 
     /// Returns the vim mode state if vim mode is enabled, None otherwise.
@@ -134,6 +176,8 @@ impl TextArea {
     pub fn enter_vim_normal_mode(&mut self) {
         if self.vim_mode_enabled {
             self.vim_mode_state = VimModeState::Normal;
+            self.vim_pending = VimPending::None;
+            self.preferred_col = None;
         }
     }
 
@@ -193,6 +237,7 @@ impl TextArea {
         self.preferred_col = None;
         self.elements.clear();
         self.kill_buffer.clear();
+        self.kill_buffer_kind = KillBufferKind::Characterwise;
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.in_undo_group = false;
@@ -352,54 +397,19 @@ impl TextArea {
         if self.vim_mode_enabled {
             match self.vim_mode_state {
                 VimModeState::Insert => {
-                    // Escape enters Normal mode
-                    if matches!(
-                        event,
-                        KeyEvent {
-                            code: KeyCode::Esc,
-                            ..
-                        }
-                    ) {
+                    if self.should_handle_vim_insert_escape(event) {
                         self.end_undo_group();
-                        self.vim_mode_state = VimModeState::Normal;
-                        // Vim moves cursor back one position when exiting insert mode,
-                        // but never past the beginning of the current line.
                         let bol = self.beginning_of_current_line();
                         if self.cursor_pos > bol {
-                            self.move_cursor_left();
+                            self.cursor_pos = self.prev_atomic_boundary(self.cursor_pos).max(bol);
                         }
+                        self.enter_vim_normal_mode();
                         return;
                     }
                     // Otherwise fall through to normal input handling
                 }
                 VimModeState::Normal => {
-                    // Handle pending two-key sequences (gg, dd).
-                    if let Some(pending) = self.vim_pending_key.take() {
-                        match (pending, &event) {
-                            (
-                                'g',
-                                KeyEvent {
-                                    code: KeyCode::Char('g'),
-                                    modifiers: KeyModifiers::NONE,
-                                    ..
-                                },
-                            ) => {
-                                self.set_cursor(0);
-                            }
-                            (
-                                'd',
-                                KeyEvent {
-                                    code: KeyCode::Char('d'),
-                                    modifiers: KeyModifiers::NONE,
-                                    ..
-                                },
-                            ) => {
-                                self.delete_current_line();
-                            }
-                            _ => {
-                                // Invalid second key: cancel pending, ignore.
-                            }
-                        }
+                    if self.handle_vim_pending(event) {
                         return;
                     }
 
@@ -521,14 +531,28 @@ impl TextArea {
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
-                            self.vim_pending_key = Some('g');
+                            self.vim_pending = VimPending::Goto;
                         }
                         KeyEvent {
                             code: KeyCode::Char('d'),
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
-                            self.vim_pending_key = Some('d');
+                            self.vim_pending = VimPending::Operator(VimOperator::Delete);
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('y'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            self.vim_pending = VimPending::Operator(VimOperator::Yank);
+                        }
+                        KeyEvent {
+                            code: KeyCode::Char('c'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => {
+                            self.vim_pending = VimPending::Operator(VimOperator::Change);
                         }
 
                         // -- Insert mode entry --
@@ -616,7 +640,7 @@ impl TextArea {
                             code: KeyCode::Char('p'),
                             modifiers: KeyModifiers::NONE,
                             ..
-                        } => self.yank(),
+                        } => self.paste_after_cursor(),
 
                         // -- Capital editing variants --
                         KeyEvent {
@@ -928,18 +952,7 @@ impl TextArea {
     }
 
     fn kill_range(&mut self, range: Range<usize>) {
-        let range = self.expand_range_to_element_boundaries(range);
-        if range.start >= range.end {
-            return;
-        }
-
-        let removed = self.text[range.clone()].to_string();
-        if removed.is_empty() {
-            return;
-        }
-
-        self.kill_buffer = removed;
-        self.replace_range_raw(range, "");
+        self.kill_range_with_kind(range, KillBufferKind::Characterwise);
     }
 
     /// Move the cursor left by a single grapheme cluster.
@@ -1156,21 +1169,6 @@ impl TextArea {
         match line.find(|c: char| !c.is_whitespace()) {
             Some(offset) => bol + offset,
             None => eol,
-        }
-    }
-
-    fn delete_current_line(&mut self) {
-        let bol = self.beginning_of_current_line();
-        let eol = self.end_of_current_line();
-        if eol < self.text.len() {
-            // Not the last line: delete from BOL through the trailing newline.
-            self.kill_range(bol..eol + 1);
-        } else if bol > 0 {
-            // Last line but not only line: delete preceding newline through EOL.
-            self.kill_range(bol - 1..eol);
-        } else {
-            // Only line: clear everything.
-            self.kill_range(0..eol);
         }
     }
 
@@ -1484,12 +1482,7 @@ impl TextArea {
 
     /// Copy the current line into the kill buffer without deleting it.
     fn yank_line(&mut self) {
-        let bol = self.beginning_of_current_line();
-        let eol = self.end_of_current_line();
-        self.kill_buffer = self.text[bol..eol].to_string();
-        if eol < self.text.len() {
-            self.kill_buffer.push('\n');
-        }
+        self.yank_current_line();
     }
 
     fn adjust_pos_out_of_elements(&self, pos: usize, prefer_start: bool) -> usize {

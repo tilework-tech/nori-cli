@@ -261,6 +261,14 @@ impl ChatComposer {
         self.textarea.set_vim_mode_enabled(value.is_enabled());
     }
 
+    pub(crate) fn should_handle_vim_insert_escape(&self, key_event: KeyEvent) -> bool {
+        self.textarea.should_handle_vim_insert_escape(key_event)
+    }
+
+    pub(crate) fn is_vim_operator_pending(&self) -> bool {
+        self.textarea.is_in_vim_normal_mode() && self.textarea.is_vim_operator_pending()
+    }
+
     /// Set a footer segment's enabled state.
     pub(crate) fn set_footer_segment_enabled(
         &mut self,

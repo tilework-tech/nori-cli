@@ -447,6 +447,10 @@ impl ChatWidget {
         self.bottom_pane.set_vim_mode(value);
     }
 
+    pub(crate) fn should_handle_vim_insert_escape(&self, key_event: KeyEvent) -> bool {
+        self.bottom_pane.should_handle_vim_insert_escape(key_event)
+    }
+
     /// Handle the /switch-skillset command.
     /// Checks if nori-skillsets is available and lists available skillsets.
     pub(crate) fn handle_switch_skillset_command(&mut self) {

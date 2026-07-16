@@ -672,38 +672,40 @@ The `ChatComposer` stores a `vim_enter_behavior: VimEnterBehavior` field alongsi
 
 When enabled, the textarea operates in two modes:
 
-| Mode   | Behavior                                                                                                                                                                                           |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Insert | Default mode. Characters are inserted as typed. Press `Escape` to enter Normal mode; the cursor moves back one position (standard vim behavior), but never past the beginning of the current line. |
-| Normal | Navigation and editing mode. Keys are interpreted as commands rather than character input.                                                                                                         |
+| Mode   | Behavior |
+| ------ | -------- |
+| Insert | Default mode. Characters are inserted as typed. Unmodified `Escape` enters Normal mode and moves the cursor back one atomic element, but never before the current line. |
+| Normal | Navigation and editing mode. Keys are interpreted as commands rather than character input. |
 
 Normal mode supports standard vim keybindings:
 
-| Category     | Keys                            | Behavior                                                                                                                                  |
-| ------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Navigation   | `h`/`j`/`k`/`l` (or arrow keys) | Move cursor left/down/up/right                                                                                                            |
-| Navigation   | `w`/`b`/`e`                     | Forward/backward/end-of-word navigation (`w` moves to start of next word, `b` to start of previous word, `e` to end of current/next word) |
-| Navigation   | `0`/`$`/`^`                     | Beginning of line / end of line / first non-whitespace on line                                                                            |
-| Navigation   | `G`/`gg`                        | End of text / beginning of text                                                                                                           |
-| Insert entry | `i`/`a`                         | Enter Insert at cursor / after cursor                                                                                                     |
-| Insert entry | `I`/`A`                         | Enter Insert at beginning of line / end of line                                                                                           |
-| Insert entry | `o`/`O`                         | Open new line below/above and enter Insert                                                                                                |
-| Editing      | `x`                             | Delete character under cursor                                                                                                             |
-| Editing      | `D`/`C`                         | Delete to end of line (`C` also enters Insert mode)                                                                                       |
-| Editing      | `dd`                            | Delete current line                                                                                                                       |
-| Editing      | `p`                             | Paste from kill buffer                                                                                                                    |
-| Undo/Redo    | `u`                             | Undo last edit or insert session                                                                                                          |
-| Undo/Redo    | `Ctrl-R`                        | Redo last undone edit or insert session                                                                                                   |
+| Category | Keys | Behavior |
+| -------- | ---- | -------- |
+| Navigation | `h`/`j`/`k`/`l` (or arrow keys) | Move cursor left/down/up/right |
+| Navigation | `w`/`b`/`e`, `W`/`B`/`E` | Word and whitespace-delimited WORD navigation |
+| Navigation | `0`/`$`/`^`, `G`/`gg` | Line and whole-buffer navigation |
+| Insert entry | `i`/`a`, `I`/`A`, `o`/`O` | Enter Insert at/after the cursor, at line boundaries, or on a new line |
+| Editing | `x`, `D`/`C`, `S`, `J` | Delete a character, edit to end of line, substitute a line, or join lines |
+| Operators | `d`/`y` + `h j k l w b e 0 $` | Delete or yank the range selected by a motion; vertical motions are linewise |
+| Operators | `dd`/`yy` | Delete or yank the current line using linewise paste semantics |
+| Text objects | `iw`/`aw`, `iW`/`aW` | Select inner/around word or WORD |
+| Text objects | `i`/`a` + `()`, `[]`, `{}` | Select the innermost matching delimiter pair |
+| Text objects | `i`/`a` + `"`, `'`, or backtick | Select quoted text on the current line, respecting escaped delimiters |
+| Change | `c` + any supported text object | Delete the object and enter Insert mode as one Nori undo group |
+| Paste | `p` | Paste after the cursor, or below the current line for linewise yanks |
+| Undo/Redo | `u` / `Ctrl-R` | Undo or redo an edit or grouped insert session |
 
-Two-key sequences (`gg`, `dd`) use a `vim_pending_key: Option<char>` field on TextArea. Pressing `g` or `d` sets the pending key; the second keypress either completes the sequence or cancels it (non-matching keys are discarded).
+Pending commands use the `VimPending` state machine in `textarea/vim.rs`. It distinguishes `gg`, delete/yank/change operators, and inner/around text-object selection; an invalid second key or `Escape` cancels the pending command without editing.
+
+`Escape` follows Codex's exact insert-mode ownership rule: only an unmodified `Escape` Press or Repeat event is claimed. It ends the current insert undo group, moves left by one grapheme or atomic placeholder without crossing the beginning of the current line, clears pending Vim state and the preferred vertical column, and enters Normal mode. The same predicate is forwarded through ChatComposer, BottomPane, ChatWidget, and App so an empty composer does not also trigger footer hints or backtracking. Modified or Release `Escape` events do not change Vim mode.
 
 **Undo/Redo with Insert-Session Grouping:**
 
 The textarea maintains undo/redo stacks of `(text, cursor_pos)` snapshots, capped at 500 entries. In vim mode, all edits made during a single insert session (from entering Insert mode to pressing Escape) are grouped into a single undo unit. This matches standard vim behavior where `u` undoes the entire insert session rather than individual keystrokes.
 
-The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: entering Insert mode (via `i`, `a`, `A`, `I`, `o`, `O`, `C`, `S`) saves a snapshot and sets `in_undo_group = true`, suppressing per-keystroke snapshots. Pressing Escape to return to Normal mode calls `end_undo_group()`. Outside of vim mode (or when `in_undo_group` is false), each mutation via `insert_str_at()` or `replace_range_raw()` saves its own snapshot. `set_text()` clears both stacks since it represents a complete replacement of the buffer content (e.g., history navigation).
+The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: entering Insert mode (via `i`, `a`, `A`, `I`, `o`, `O`, `C`, `S`, or a `c` text object) saves a snapshot and sets `in_undo_group = true`, suppressing per-keystroke snapshots. Pressing Escape to return to Normal mode calls `end_undo_group()`. Outside of vim mode (or when `in_undo_group` is false), each mutation via `insert_str_at()` or `replace_range_raw()` saves its own snapshot. `set_text()` clears both stacks since it represents a complete replacement of the buffer content (e.g., history navigation).
 
-The state machine is implemented in `textarea/mod.rs` via the `VimModeState` enum. Vim mode handling runs as "stage 0" in the `input()` method, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. When in Normal mode, `chat_composer/mod.rs` bypasses paste burst detection and sends input directly to the textarea so navigation keys work without interference.
+The mode entry points remain in `textarea/mod.rs`; operator ranges, text objects, kill-buffer kinds, and paste behavior live in the focused `textarea/vim.rs` module and its submodules. Vim handling runs as "stage 0" in `input()`, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. In Normal mode, the composer bypasses paste-burst detection; while an operator is pending it also routes the next key directly to the textarea so higher-level shortcuts cannot steal a motion or text object.
 
 Config changes use two app events: `AppEvent::OpenVimModePicker` opens the sub-picker, and `AppEvent::SetConfigVimMode(VimEnterBehavior)` applies the selection. The setting propagates down the same chain as hotkeys: App -> ChatWidget -> BottomPane -> ChatComposer via `set_vim_mode()`. The ChatComposer updates both its `vim_enter_behavior` field and calls `set_vim_mode_enabled()` on the textarea (passing `is_enabled()`). When vim mode is disabled, the textarea state resets to Insert mode. Persistence is handled by `persist_vim_mode_setting()` in `app/config_persistence.rs`, which writes the `toml_value()` string to the `[tui]` section.
 

@@ -568,6 +568,12 @@ impl ChatComposer {
             self.is_shell_mode = false;
             return (InputResult::None, true);
         }
+        if self.should_handle_vim_insert_escape(key_event) {
+            return self.handle_input_basic(key_event);
+        }
+        if self.is_vim_operator_pending() {
+            return self.handle_input_basic(key_event);
+        }
         if key_event.code == KeyCode::Esc {
             if self.is_empty() {
                 let next_mode = esc_hint_mode(self.footer_mode, self.is_task_running);
