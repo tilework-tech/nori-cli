@@ -1,3 +1,26 @@
+#[test]
+fn empty_vim_insert_escape_enters_normal_mode() {
+    use crate::bottom_pane::textarea::VimModeState;
+
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        true,
+    );
+    composer.set_vim_mode(nori_config::VimEnterBehavior::Submit);
+
+    assert_eq!(composer.vim_mode_state(), VimModeState::Insert);
+
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert_eq!(composer.vim_mode_state(), VimModeState::Normal);
+    assert!(composer.textarea.is_empty());
+}
+
 use super::snapshot_composer_state;
 use super::type_chars_humanlike;
 use crate::app_event::AppEvent;

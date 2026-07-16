@@ -112,6 +112,21 @@ fn make_test_app_with_channels() -> (
     )
 }
 
+#[test]
+fn backtrack_escape_does_not_claim_empty_vim_insert_mode() {
+    let mut app = make_test_app();
+    app.chat_widget
+        .set_vim_mode(nori_config::VimEnterBehavior::Submit);
+
+    assert!(
+        !app.should_handle_backtrack_esc(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ))
+    );
+    assert!(!app.backtrack.primed);
+}
+
 fn approval_preset(id: &str) -> codex_common::approval_presets::ApprovalPreset {
     builtin_approval_presets()
         .into_iter()

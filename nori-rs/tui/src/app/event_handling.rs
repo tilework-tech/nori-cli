@@ -1434,9 +1434,7 @@ impl App {
                 kind: KeyEventKind::Press | KeyEventKind::Repeat,
                 ..
             } => {
-                if self.chat_widget.is_normal_backtrack_mode()
-                    && self.chat_widget.composer_is_empty()
-                {
+                if self.should_handle_backtrack_esc(key_event) {
                     self.handle_backtrack_esc_key(tui);
                 } else {
                     self.chat_widget.handle_key_event(key_event);
@@ -1470,6 +1468,12 @@ impl App {
                 // Ignore Release key events.
             }
         };
+    }
+
+    pub(super) fn should_handle_backtrack_esc(&self, key_event: KeyEvent) -> bool {
+        self.chat_widget.is_normal_backtrack_mode()
+            && self.chat_widget.composer_is_empty()
+            && !self.chat_widget.should_handle_vim_insert_escape(key_event)
     }
 }
 
