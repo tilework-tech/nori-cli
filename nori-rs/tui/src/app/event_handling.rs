@@ -1,6 +1,42 @@
 use super::*;
 
 impl App {
+    /// Clear and report a due deferred agent spawn.
+    ///
+    /// Per-session startup defers the agent spawn until the chosen skillset's
+    /// files are on disk. Returns `true` (clearing the pending flag) when a
+    /// spawn is now due; `false` while an agent-session probe is still in
+    /// flight or no spawn was deferred. Shared by the skillset-applied and
+    /// picker-dismissed paths so their guard cannot drift.
+    pub(super) fn take_deferred_spawn(&mut self) -> bool {
+        if self.deferred_spawn_pending && !self.agent_session_probe_in_flight {
+            self.deferred_spawn_pending = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Resolve a deferred agent spawn and refresh system info after a skillset
+    /// install or switch completes. Both `SkillsetInstallResult` and
+    /// `SkillsetSwitchResult` route here: a per-session startup that lands on a
+    /// non-worktree cwd installs (rather than switches), so the deferred spawn
+    /// must resolve on either result or the agent never starts.
+    fn on_skillset_applied(&mut self, success: bool) {
+        if !success {
+            return;
+        }
+        if self.take_deferred_spawn() {
+            self.chat_widget
+                .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
+        }
+        self.request_system_info_refresh(
+            self.config.cwd.clone(),
+            self.config.model.clone().into(),
+            self.chat_widget.first_prompt_text(),
+        );
+    }
+
     pub(crate) async fn handle_tui_event(
         &mut self,
         tui: &mut tui::Tui,
@@ -1002,13 +1038,7 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_install_result(&name, success, &message);
-                if success {
-                    self.request_system_info_refresh(
-                        self.config.cwd.clone(),
-                        self.config.model.clone().into(),
-                        self.chat_widget.first_prompt_text(),
-                    );
-                }
+                self.on_skillset_applied(success);
             }
             AppEvent::SkillsetSwitchResult {
                 name,
@@ -1017,27 +1047,13 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_switch_result(&name, success, &message);
-                // If the agent spawn was deferred (waiting for skillset switch to
-                // complete), trigger it now that files are on disk.
-                if success && self.deferred_spawn_pending && !self.agent_session_probe_in_flight {
-                    self.deferred_spawn_pending = false;
-                    self.chat_widget
-                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
-                }
-                if success {
-                    self.request_system_info_refresh(
-                        self.config.cwd.clone(),
-                        self.config.model.clone().into(),
-                        self.chat_widget.first_prompt_text(),
-                    );
-                }
+                self.on_skillset_applied(success);
             }
             AppEvent::SkillsetPickerDismissed => {
                 // The skillset picker was dismissed without selection. If the
                 // agent spawn was deferred, spawn it now without a skillset
                 // (behaves as if skillset_per_session is disabled).
-                if self.deferred_spawn_pending && !self.agent_session_probe_in_flight {
-                    self.deferred_spawn_pending = false;
+                if self.take_deferred_spawn() {
                     self.chat_widget
                         .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
                 }

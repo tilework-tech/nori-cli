@@ -575,6 +575,39 @@ fn reattach_message_includes_title_when_known() {
 }
 
 #[test]
+fn take_deferred_spawn_fires_once_when_pending_and_not_probing() {
+    // Regression: a per-session startup that lands on a non-worktree cwd
+    // resolves via SkillsetInstallResult, not SkillsetSwitchResult. Both route
+    // through take_deferred_spawn, which must report the spawn as due exactly
+    // once (and clear the flag) so the deferred agent actually starts.
+    let mut app = make_test_app();
+    app.deferred_spawn_pending = true;
+    app.agent_session_probe_in_flight = false;
+
+    assert!(app.take_deferred_spawn(), "spawn should be due");
+    assert!(!app.deferred_spawn_pending, "pending flag must be cleared");
+    assert!(
+        !app.take_deferred_spawn(),
+        "spawn must not fire a second time"
+    );
+}
+
+#[test]
+fn take_deferred_spawn_waits_while_probe_in_flight() {
+    // While an agent-session probe is still running the spawn is not yet due
+    // and the pending flag must be preserved for a later resolution.
+    let mut app = make_test_app();
+    app.deferred_spawn_pending = true;
+    app.agent_session_probe_in_flight = true;
+
+    assert!(!app.take_deferred_spawn(), "spawn should not be due yet");
+    assert!(
+        app.deferred_spawn_pending,
+        "pending flag must be preserved while probing"
+    );
+}
+
+#[test]
 fn reattach_message_without_title_names_only_the_id() {
     // Guard: with no title, the message names just the id and must not render an
     // empty parenthetical.
