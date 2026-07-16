@@ -462,17 +462,9 @@ impl ChatWidget {
             return;
         }
 
-        // Detect if we're in a worktree or if skillset_per_session is enabled,
-        // and pass cwd as the install directory
-        let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
-        let skillset_per_session = nori_config::NoriConfig::load()
-            .map(|c| c.skillset_per_session)
-            .unwrap_or(false);
-        let install_dir = if is_in_worktree || skillset_per_session {
-            Some(self.config.cwd.clone())
-        } else {
-            None
-        };
+        // Install into the session's worktree when we're in one; otherwise
+        // fall back to the home install rather than polluting the repo root.
+        let install_dir = skillset_picker::session_skillset_install_dir(&self.config.cwd);
 
         // Spawn async task to list skillsets
         let tx = self.app_event_tx.clone();
@@ -513,15 +505,7 @@ impl ChatWidget {
             return;
         }
 
-        let is_in_worktree = crate::system_info::extract_worktree_name(&self.config.cwd).is_some();
-        let skillset_per_session = nori_config::NoriConfig::load()
-            .map(|c| c.skillset_per_session)
-            .unwrap_or(false);
-        let install_dir = if is_in_worktree || skillset_per_session {
-            Some(self.config.cwd.clone())
-        } else {
-            None
-        };
+        let install_dir = skillset_picker::session_skillset_install_dir(&self.config.cwd);
 
         if let Some(dir) = install_dir {
             self.on_switch_skillset_request(name, &dir);
