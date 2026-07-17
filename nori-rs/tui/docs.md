@@ -653,7 +653,7 @@ The hotkey picker (`@/nori-rs/tui/src/nori/hotkey_picker.rs`) implements `Bottom
 
 **Vim Mode:**
 
-The textarea supports an optional vim-style navigation mode, configured via `/settings` ("Vim Mode" item) which opens a sub-picker (like Auto Worktree) showing three options. The setting is persisted to `config.toml` under `[tui]`:
+The textarea supports an optional vim-style navigation mode, configured directly via `/vim` or via `/settings` ("Vim Mode" item). Both open the same three-option picker, and the setting is persisted to `config.toml` under `[tui]`:
 
 ```toml
 [tui]
@@ -685,14 +685,14 @@ Normal mode supports standard vim keybindings:
 | Navigation | `w`/`b`/`e`, `W`/`B`/`E` | Word and whitespace-delimited WORD navigation |
 | Navigation | `0`/`$`/`^`, `G`/`gg` | Line and whole-buffer navigation |
 | Insert entry | `i`/`a`, `I`/`A`, `o`/`O` | Enter Insert at/after the cursor, at line boundaries, or on a new line |
-| Editing | `x`, `D`/`C`, `S`, `J` | Delete a character, edit to end of line, substitute a line, or join lines |
+| Editing | `x`/`X`, `s`, `D`/`C`, `S`, `J` | Delete a character, substitute a character, edit to end of line, substitute a line, or join lines |
 | Operators | `d`/`y` + `h j k l w b e 0 $` | Delete or yank the range selected by a motion; vertical motions are linewise |
 | Operators | `dd`/`yy` | Delete or yank the current line using linewise paste semantics |
 | Text objects | `iw`/`aw`, `iW`/`aW` | Select inner/around word or WORD |
 | Text objects | `i`/`a` + `()`, `[]`, `{}` | Select the innermost matching delimiter pair |
 | Text objects | `i`/`a` + `"`, `'`, or backtick | Select quoted text on the current line, respecting escaped delimiters |
-| Change | `c` + any supported text object | Delete the object and enter Insert mode as one Nori undo group |
-| Paste | `p` | Paste after the cursor, or below the current line for linewise yanks |
+| Change | `c` + `h l w b e 0 $`, `cc`, or any supported text object | Delete the range and enter Insert mode as one Nori undo group; `cw` follows Vim's `ce` behavior |
+| Paste | `p`/`P` | Paste after/before the cursor, or below/above the current line for linewise yanks |
 | Undo/Redo | `u` / `Ctrl-R` | Undo or redo an edit or grouped insert session |
 
 Pending commands use the `VimPending` state machine in `textarea/vim.rs`. It distinguishes `gg`, delete/yank/change operators, and inner/around text-object selection; an invalid second key or `Escape` cancels the pending command without editing.
@@ -703,7 +703,9 @@ Pending commands use the `VimPending` state machine in `textarea/vim.rs`. It dis
 
 The textarea maintains undo/redo stacks of `(text, cursor_pos)` snapshots, capped at 500 entries. In vim mode, all edits made during a single insert session (from entering Insert mode to pressing Escape) are grouped into a single undo unit. This matches standard vim behavior where `u` undoes the entire insert session rather than individual keystrokes.
 
-The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: entering Insert mode (via `i`, `a`, `A`, `I`, `o`, `O`, `C`, `S`, or a `c` text object) saves a snapshot and sets `in_undo_group = true`, suppressing per-keystroke snapshots. Pressing Escape to return to Normal mode calls `end_undo_group()`. Outside of vim mode (or when `in_undo_group` is false), each mutation via `insert_str_at()` or `replace_range_raw()` saves its own snapshot. `set_text()` clears both stacks since it represents a complete replacement of the buffer content (e.g., history navigation).
+The grouping mechanism uses `begin_undo_group()` / `end_undo_group()`: enabling Vim while in its initial Insert mode, or entering Insert via `i`, `a`, `A`, `I`, `o`, `O`, `C`, `S`, `s`, `cc`, a `c` motion, or a `c` text object, saves a snapshot and sets `in_undo_group = true`, suppressing per-keystroke snapshots. Pressing Escape to return to Normal mode calls `end_undo_group()`. Outside of vim mode (or when `in_undo_group` is false), each mutation via `insert_str_at()` or `replace_range_raw()` saves its own snapshot. `set_text()` clears both stacks since it represents a complete replacement of the buffer content (e.g., history navigation), then seeds a fresh group snapshot when Vim remains in Insert mode.
+
+After a prompt or slash command is dispatched, the composer returns to Normal mode. Normal-mode cursor normalization keeps the cursor on the final character of a non-empty line, so `$`, `G`, `e`, and rightward motions never leave an ambiguous insertion-point cursor beyond the text.
 
 The mode entry points remain in `textarea/mod.rs`; operator ranges, text objects, kill-buffer kinds, and paste behavior live in the focused `textarea/vim.rs` module and its submodules. Vim handling runs as "stage 0" in `input()`, before C0 control fallbacks, configurable hotkey bindings, and hardcoded bindings. In Normal mode, the composer bypasses paste-burst detection; while an operator is pending it also routes the next key directly to the textarea so higher-level shortcuts cannot steal a motion or text object.
 
@@ -768,7 +770,7 @@ git_stats = true
 vim_mode = true
 ```
 
-`FooterSegmentConfig::default()` (in `@/nori-rs/nori-config/src/types/mod.rs`) ships a lean subset enabled by default: `context`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, `mode_indicator`, and `cloud_session`. The remaining segments -- `prompt_summary`, `vim_mode`, `git_stats`, `nori_profile`, and `nori_version` -- are off by default and require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible -- `cloud_session` is enabled by default but only ever renders on a cloud (live-reattach) session.
+`FooterSegmentConfig::default()` (in `@/nori-rs/nori-config/src/types/mod.rs`) ships a lean subset enabled by default: `context`, `vim_mode`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, `mode_indicator`, and `cloud_session`. The Vim segment self-hides when Vim is off, but is on by default so modal state is always visible when Vim is enabled. The remaining segments -- `prompt_summary`, `git_stats`, `nori_profile`, and `nori_version` -- require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible -- `cloud_session` is enabled by default but only ever renders on a cloud (live-reattach) session.
 
 **Cloud Session Identity** (`chatwidget/helpers.rs`, `chatwidget/constructors.rs`, `chatwidget/event_handlers.rs`, `nori/session_header/mod.rs`, `bottom_pane/footer.rs`): `ChatWidget` stores `acp_session_id: Option<String>` (from `SessionConfiguredEvent.acp_session_id`, which the harness populates ONLY for cloud live-reattach agents -- `None` for local agents, see `@/nori-rs/harness/docs.md`) and `cloud_session_title: Option<String>` (the broker-reported title forwarded by the resume picker through `AppEvent::ResumeAcpSession { title, .. }`). `ChatWidget::cloud_session_identity()` returns `Some(CloudSessionInfo { id, title })` whenever an id is known -- id presence IS the cloud signal (the harness never names local sessions), so no capability gate is applied; gating on capabilities would race their delivery against `SessionConfigured` and could silently drop the session line from the immutable welcome card. `refresh_cloud_session_indicator()` pushes the identity into `BottomPane::set_cloud_session()` from `SessionConfigured` (the only event that changes the id), which drives the `CloudSession` footer segment above. The same identity feeds `NoriSessionHeaderCell`: when present, the welcome banner and `/status` card render a `session: <id> (<title>)` line in place of the local `directory:` line (which would otherwise show a meaningless local cwd for a session running on a remote VM); when absent, the ordinary `directory:` line renders. The reattach info message built by `reattach_info_message()` in `app/event_handling.rs` follows the same rule: a live-reattach resume shows "Reattaching to `<id> (<title>)` -- earlier messages stay in the cloud session (not replayed here)." (title omitted when unknown), while a non-cloud resume shows the generic "Resuming session with `<agent>`...".
 

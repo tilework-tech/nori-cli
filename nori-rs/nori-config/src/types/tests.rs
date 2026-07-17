@@ -948,15 +948,15 @@ fn test_footer_segment_config_default_is_lean_subset() {
         FooterSegment::Context,
         FooterSegment::GitBranch,
         FooterSegment::ApprovalMode,
+        FooterSegment::VimMode,
         FooterSegment::ModeIndicator,
         FooterSegment::WorktreeName,
         FooterSegment::TokenUsage,
         FooterSegment::CloudSession,
     ];
     // Segments disabled by default: only meaningful after opting into the
-    // related workflow (vim mode, skillsets, prompt summary, git stats).
+    // related workflow (skillsets, prompt summary, git stats).
     let expected_disabled = [
-        FooterSegment::VimMode,
         FooterSegment::PromptSummary,
         FooterSegment::GitStats,
         FooterSegment::NoriProfile,

@@ -60,6 +60,7 @@ fn vim_enter_newline_normal_mode_submits() {
         InputResult::Submitted(text) => assert_eq!(text, "hello"),
         other => panic!("NORMAL Enter with Newline behavior should submit, got: {other:?}"),
     }
+    assert_eq!(composer.vim_mode_state(), VimModeState::Normal);
 }
 
 #[test]
@@ -75,6 +76,7 @@ fn vim_enter_submit_insert_mode_submits() {
         InputResult::Submitted(text) => assert_eq!(text, "hello"),
         other => panic!("INSERT Enter with Submit behavior should submit, got: {other:?}"),
     }
+    assert_eq!(composer.vim_mode_state(), VimModeState::Normal);
 }
 
 #[test]

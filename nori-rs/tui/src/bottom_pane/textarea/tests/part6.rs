@@ -47,6 +47,49 @@ fn vim_change_inner_word_enters_insert_and_preserves_nori_undo() {
 }
 
 #[test]
+fn vim_change_word_uses_ce_semantics_and_preserves_whitespace() {
+    let mut t = vim_normal("hello world");
+    t.set_cursor(1);
+
+    t.input(key('c'));
+    t.input(key('w'));
+
+    pretty_assertions::assert_eq!(t.text(), "h world");
+    pretty_assertions::assert_eq!(t.cursor(), 1);
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+
+    t.input(key('i'));
+    t.input(esc_key());
+    t.input(key('u'));
+    pretty_assertions::assert_eq!(t.text(), "hello world");
+}
+
+#[test]
+fn vim_change_to_line_end_enters_insert() {
+    let mut t = vim_normal("hello world");
+    t.set_cursor(5);
+
+    t.input(key('c'));
+    t.input(shift_key('$'));
+
+    pretty_assertions::assert_eq!(t.text(), "hello");
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+}
+
+#[test]
+fn vim_change_line_matches_shift_s() {
+    let mut t = vim_normal("hello\nworld\nfoo");
+    t.set_cursor(8);
+
+    t.input(key('c'));
+    t.input(key('c'));
+
+    pretty_assertions::assert_eq!(t.text(), "hello\n\nfoo");
+    pretty_assertions::assert_eq!(t.cursor(), 6);
+    pretty_assertions::assert_eq!(t.vim_mode_state(), VimModeState::Insert);
+}
+
+#[test]
 fn vim_delimiter_text_objects_select_innermost_pair() {
     let mut t = vim_normal("a(b(c)d)e");
     t.set_cursor("a(b(".len());

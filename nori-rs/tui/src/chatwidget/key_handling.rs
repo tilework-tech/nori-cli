@@ -210,6 +210,12 @@ impl ChatWidget {
                     }
                 }
             }
+            SlashCommand::Vim => match nori_config::NoriConfig::load() {
+                Ok(nori_config) => self.open_vim_mode_picker(nori_config.vim_mode),
+                Err(err) => {
+                    self.add_error_message(format!("Failed to load Vim mode setting: {err}"));
+                }
+            },
             SlashCommand::Goal => {
                 self.request_thread_goal_status();
             }
