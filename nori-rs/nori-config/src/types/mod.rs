@@ -1295,13 +1295,12 @@ pub struct FooterSegmentConfig {
 impl Default for FooterSegmentConfig {
     fn default() -> Self {
         // Lean defaults: only segments that are useful for everyone (or
-        // self-hiding when irrelevant) ship enabled. Niche segments such as
-        // vim mode, prompt summary, git stats, and skillset info are gated
-        // behind explicit opt-in so the footer stays readable on smaller
-        // terminals.
+        // self-hiding when irrelevant) ship enabled. Vim mode is self-hiding
+        // when disabled and must stay visible when enabled so modal state is
+        // never ambiguous.
         Self {
             prompt_summary: false,
-            vim_mode: false,
+            vim_mode: true,
             git_branch: true,
             worktree_name: true,
             git_stats: false,

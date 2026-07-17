@@ -114,6 +114,22 @@ fn undo_restores_cursor_position() {
 // ===== Vim insert-session grouping =====
 
 #[test]
+fn vim_undo_groups_initial_insert_session() {
+    let mut t = ta_with("");
+    t.set_vim_mode_enabled(true);
+    t.input(key('h'));
+    t.input(key('e'));
+    t.input(key('l'));
+    t.input(key('l'));
+    t.input(key('o'));
+
+    t.input(esc_key());
+    t.input(key('u'));
+
+    pretty_assertions::assert_eq!(t.text(), "");
+}
+
+#[test]
 fn vim_undo_groups_insert_session() {
     // In vim, everything typed during one insert session should be one undo group
     let mut t = vim_normal("hello");

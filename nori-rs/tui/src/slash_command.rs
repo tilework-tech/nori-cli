@@ -30,6 +30,7 @@ pub enum SlashCommand {
     Config,
     Approvals,
     Settings,
+    Vim,
     Goal,
     New,
     Resume,
@@ -77,6 +78,7 @@ impl SlashCommand {
             SlashCommand::Config => "configure ACP agent settings (if exposed by the agent)",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Settings => "configure Nori CLI settings (theme, hotkeys, layout, …)",
+            SlashCommand::Vim => "configure Vim mode and Enter key behavior",
             SlashCommand::Goal => "set or view the goal for a long-running task",
             SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
@@ -107,6 +109,7 @@ impl SlashCommand {
             | SlashCommand::Config
             | SlashCommand::Approvals
             | SlashCommand::Settings
+            | SlashCommand::Vim
             | SlashCommand::Mcp
             | SlashCommand::Login
             | SlashCommand::Logout
@@ -141,6 +144,7 @@ impl SlashCommand {
             | SlashCommand::Config
             | SlashCommand::Approvals
             | SlashCommand::Settings
+            | SlashCommand::Vim
             | SlashCommand::Goal
             | SlashCommand::New
             | SlashCommand::Resume
@@ -277,6 +281,18 @@ mod tests {
     #[test]
     fn settings_serializes_to_kebab_settings() {
         assert_eq!(SlashCommand::Settings.command(), "settings");
+    }
+
+    #[test]
+    fn vim_command_is_available_as_a_settings_shortcut() {
+        assert_eq!(SlashCommand::Vim.command(), "vim");
+        assert!(
+            built_in_slash_commands()
+                .iter()
+                .any(|(_, command)| *command == SlashCommand::Vim)
+        );
+        assert!(!SlashCommand::Vim.available_during_task());
+        assert_eq!(SlashCommand::Vim.scope(), CommandScope::Universal);
     }
 
     #[test]

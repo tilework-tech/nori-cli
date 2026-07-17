@@ -70,7 +70,7 @@ enum VimTextObject {
 impl TextArea {
     pub(super) fn handle_vim_pending(&mut self, event: KeyEvent) -> bool {
         let pending = std::mem::replace(&mut self.vim_pending, VimPending::None);
-        match pending {
+        let handled = match pending {
             VimPending::None => false,
             VimPending::Goto => {
                 if plain_char(event, 'g') {
@@ -86,7 +86,11 @@ impl TextArea {
                 self.handle_vim_text_object(operator, scope, event);
                 true
             }
+        };
+        if self.vim_mode_state == super::VimModeState::Normal {
+            self.normalize_vim_normal_cursor();
         }
+        handled
     }
 
     fn handle_vim_operator(&mut self, operator: VimOperator, event: KeyEvent) {
@@ -98,6 +102,11 @@ impl TextArea {
             self.yank_current_line();
             return;
         }
+        if operator == VimOperator::Change && plain_char(event, 'c') {
+            self.enter_vim_insert_mode();
+            self.substitute_line();
+            return;
+        }
         if event.code == KeyCode::Esc && event.modifiers == KeyModifiers::NONE {
             return;
         }
@@ -105,8 +114,9 @@ impl TextArea {
             self.vim_pending = VimPending::TextObject { operator, scope };
             return;
         }
-        if operator != VimOperator::Change
-            && let Some(motion) = motion_for_event(event)
+        if let Some(motion) = motion_for_event(event)
+            && (operator != VimOperator::Change
+                || !matches!(motion, VimMotion::Up | VimMotion::Down))
         {
             self.apply_vim_operator(operator, motion);
         }
@@ -130,13 +140,23 @@ impl TextArea {
     }
 
     fn apply_vim_operator(&mut self, operator: VimOperator, motion: VimMotion) {
+        // Vim treats `cw` like `ce`: change the current word without eating
+        // the whitespace before the next one.
+        let motion = if operator == VimOperator::Change && motion == VimMotion::WordForward {
+            VimMotion::WordEnd
+        } else {
+            motion
+        };
         let Some((range, kind)) = self.range_for_motion(motion) else {
             return;
         };
         match operator {
             VimOperator::Delete => self.kill_range_with_kind(range, kind),
             VimOperator::Yank => self.yank_range_with_kind(range, kind),
-            VimOperator::Change => {}
+            VimOperator::Change => {
+                self.enter_vim_insert_mode();
+                self.kill_range_with_kind(range, kind);
+            }
         }
     }
 
@@ -145,9 +165,8 @@ impl TextArea {
             VimOperator::Delete => self.kill_range(range),
             VimOperator::Yank => self.yank_range(range),
             VimOperator::Change => {
-                self.begin_undo_group();
+                self.enter_vim_insert_mode();
                 self.kill_range(range);
-                self.vim_mode_state = super::VimModeState::Insert;
             }
         }
     }
@@ -204,7 +223,7 @@ impl TextArea {
         let original_cursor = self.cursor_pos;
         let original_preferred = self.preferred_col;
         match motion {
-            VimMotion::Left => self.move_cursor_left(),
+            VimMotion::Left => self.move_vim_cursor_left(),
             VimMotion::Right => self.move_cursor_right(),
             VimMotion::Up => self.move_cursor_up(),
             VimMotion::Down => self.move_cursor_down(),
@@ -218,6 +237,12 @@ impl TextArea {
         self.cursor_pos = original_cursor;
         self.preferred_col = original_preferred;
         target
+    }
+
+    pub(super) fn move_vim_cursor_left(&mut self) {
+        if self.cursor_pos > self.beginning_of_current_line() {
+            self.move_cursor_left();
+        }
     }
 
     fn text_object_range(
@@ -463,6 +488,21 @@ impl TextArea {
         self.set_cursor(insert_at);
         let text = self.kill_buffer.clone();
         self.insert_str(&text);
+        self.move_cursor_left();
+    }
+
+    pub(super) fn paste_before_cursor(&mut self) {
+        if self.kill_buffer.is_empty() {
+            return;
+        }
+        if self.kill_buffer_kind == KillBufferKind::Linewise {
+            self.paste_line_before_current_line();
+            return;
+        }
+        let insert_at = self.cursor_pos;
+        let text = self.kill_buffer.clone();
+        self.insert_str_at(insert_at, &text);
+        self.move_cursor_left();
     }
 
     fn paste_line_after_current_line(&mut self) {
@@ -484,5 +524,64 @@ impl TextArea {
         };
         self.insert_str_at(insert_at, &text);
         self.set_cursor(cursor.min(self.text.len()));
+    }
+
+    fn paste_line_before_current_line(&mut self) {
+        let insert_at = self.beginning_of_current_line();
+        let text = if self.kill_buffer.ends_with('\n') {
+            self.kill_buffer.clone()
+        } else {
+            format!("{}\n", self.kill_buffer)
+        };
+        self.insert_str_at(insert_at, &text);
+        self.set_cursor(insert_at);
+    }
+
+    pub(super) fn substitute_char(&mut self) {
+        self.enter_vim_insert_mode();
+        self.delete_char_under_cursor();
+    }
+
+    pub(super) fn delete_char_under_cursor(&mut self) {
+        let eol = self.end_of_current_line();
+        if self.cursor_pos < eol {
+            let end = self.next_atomic_boundary(self.cursor_pos).min(eol);
+            self.kill_range(self.cursor_pos..end);
+        }
+    }
+
+    pub(super) fn delete_char_before_cursor(&mut self) {
+        let bol = self.beginning_of_current_line();
+        if self.cursor_pos > bol {
+            let start = self.prev_atomic_boundary(self.cursor_pos).max(bol);
+            self.kill_range(start..self.cursor_pos);
+        }
+    }
+
+    pub(super) fn vim_word_end_cursor(&self) -> usize {
+        let end = self.end_of_next_word();
+        let target = if end > self.cursor_pos {
+            self.prev_atomic_boundary(end)
+        } else {
+            end
+        };
+        let end = if target == self.cursor_pos && end < self.text.len() {
+            self.end_of_next_word_from(end)
+        } else {
+            end
+        };
+        if end > self.cursor_pos {
+            self.prev_atomic_boundary(end)
+        } else {
+            end
+        }
+    }
+
+    pub(super) fn normalize_vim_normal_cursor(&mut self) {
+        let bol = self.beginning_of_current_line();
+        let eol = self.end_of_current_line();
+        if self.cursor_pos == eol && eol > bol {
+            self.set_cursor(self.prev_atomic_boundary(eol).max(bol));
+        }
     }
 }

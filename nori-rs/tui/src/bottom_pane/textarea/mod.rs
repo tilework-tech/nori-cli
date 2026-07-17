@@ -131,11 +131,16 @@ impl TextArea {
 
     /// Enable or disable vim mode. When toggled off, resets state to Insert mode.
     pub fn set_vim_mode_enabled(&mut self, enabled: bool) {
+        let was_enabled = self.vim_mode_enabled;
         self.vim_mode_enabled = enabled;
         if !enabled {
             self.vim_mode_state = VimModeState::Insert;
             self.vim_pending = VimPending::None;
-            self.in_undo_group = false;
+            self.end_undo_group();
+        } else if !was_enabled && self.vim_mode_state == VimModeState::Insert {
+            // Vim starts in Insert mode, so the initial typing session needs the
+            // same single undo snapshot as sessions entered with i/a/o/etc.
+            self.begin_undo_group();
         }
     }
 
@@ -175,10 +180,20 @@ impl TextArea {
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn enter_vim_normal_mode(&mut self) {
         if self.vim_mode_enabled {
+            self.end_undo_group();
             self.vim_mode_state = VimModeState::Normal;
             self.vim_pending = VimPending::None;
             self.preferred_col = None;
+            self.normalize_vim_normal_cursor();
         }
+    }
+
+    /// Enter Vim Insert mode and start one undo unit for the whole session.
+    fn enter_vim_insert_mode(&mut self) {
+        self.begin_undo_group();
+        self.vim_mode_state = VimModeState::Insert;
+        self.vim_pending = VimPending::None;
+        self.preferred_col = None;
     }
 
     /// Returns a reference to the hotkey config.
@@ -199,6 +214,9 @@ impl TextArea {
     /// Begin a vim insert-session undo group.
     /// Saves a snapshot and suppresses further snapshots until the group ends.
     fn begin_undo_group(&mut self) {
+        if self.in_undo_group {
+            return;
+        }
         self.save_undo_snapshot();
         self.in_undo_group = true;
     }
@@ -241,6 +259,9 @@ impl TextArea {
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.in_undo_group = false;
+        if self.vim_mode_enabled && self.vim_mode_state == VimModeState::Insert {
+            self.begin_undo_group();
+        }
     }
 
     pub fn text(&self) -> &str {
@@ -398,7 +419,6 @@ impl TextArea {
             match self.vim_mode_state {
                 VimModeState::Insert => {
                     if self.should_handle_vim_insert_escape(event) {
-                        self.end_undo_group();
                         let bol = self.beginning_of_current_line();
                         if self.cursor_pos > bol {
                             self.cursor_pos = self.prev_atomic_boundary(self.cursor_pos).max(bol);
@@ -424,7 +444,7 @@ impl TextArea {
                         | KeyEvent {
                             code: KeyCode::Left,
                             ..
-                        } => self.move_cursor_left(),
+                        } => self.move_vim_cursor_left(),
                         KeyEvent {
                             code: KeyCode::Char('l'),
                             modifiers: KeyModifiers::NONE,
@@ -472,7 +492,7 @@ impl TextArea {
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
-                            let target = self.end_of_next_word();
+                            let target = self.vim_word_end_cursor();
                             self.set_cursor(target);
                         }
                         KeyEvent {
@@ -560,60 +580,52 @@ impl TextArea {
                             code: KeyCode::Char('i'),
                             modifiers: KeyModifiers::NONE,
                             ..
-                        } => {
-                            self.begin_undo_group();
-                            self.vim_mode_state = VimModeState::Insert;
-                        }
+                        } => self.enter_vim_insert_mode(),
                         KeyEvent {
                             code: KeyCode::Char('a'),
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
-                            self.begin_undo_group();
+                            self.enter_vim_insert_mode();
                             self.move_cursor_right();
-                            self.vim_mode_state = VimModeState::Insert;
                         }
                         KeyEvent {
                             code: KeyCode::Char('A'),
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
-                            self.begin_undo_group();
+                            self.enter_vim_insert_mode();
                             self.move_cursor_to_end_of_line(false);
-                            self.vim_mode_state = VimModeState::Insert;
                         }
                         KeyEvent {
                             code: KeyCode::Char('I'),
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
-                            self.begin_undo_group();
-                            self.move_cursor_to_beginning_of_line(false);
-                            self.vim_mode_state = VimModeState::Insert;
+                            self.enter_vim_insert_mode();
+                            self.set_cursor(self.first_non_whitespace_on_line());
                         }
                         KeyEvent {
                             code: KeyCode::Char('o'),
                             modifiers: KeyModifiers::NONE,
                             ..
                         } => {
-                            self.begin_undo_group();
+                            self.enter_vim_insert_mode();
                             let eol = self.end_of_current_line();
                             self.set_cursor(eol);
                             self.insert_str("\n");
-                            self.vim_mode_state = VimModeState::Insert;
                         }
                         KeyEvent {
                             code: KeyCode::Char('O'),
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
-                            self.begin_undo_group();
+                            self.enter_vim_insert_mode();
                             let bol = self.beginning_of_current_line();
                             self.set_cursor(bol);
                             self.insert_str("\n");
                             // insert_str moves cursor past the \n; move back to the new line.
                             self.set_cursor(bol);
-                            self.vim_mode_state = VimModeState::Insert;
                         }
 
                         // -- Editing --
@@ -621,7 +633,12 @@ impl TextArea {
                             code: KeyCode::Char('x'),
                             modifiers: KeyModifiers::NONE,
                             ..
-                        } => self.delete_forward(1),
+                        } => self.delete_char_under_cursor(),
+                        KeyEvent {
+                            code: KeyCode::Char('s'),
+                            modifiers: KeyModifiers::NONE,
+                            ..
+                        } => self.substitute_char(),
                         KeyEvent {
                             code: KeyCode::Char('D'),
                             modifiers: KeyModifiers::SHIFT,
@@ -632,9 +649,8 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
-                            self.begin_undo_group();
+                            self.enter_vim_insert_mode();
                             self.kill_to_end_of_line();
-                            self.vim_mode_state = VimModeState::Insert;
                         }
                         KeyEvent {
                             code: KeyCode::Char('p'),
@@ -647,12 +663,12 @@ impl TextArea {
                             code: KeyCode::Char('X'),
                             modifiers: KeyModifiers::SHIFT,
                             ..
-                        } => self.delete_backward(1),
+                        } => self.delete_char_before_cursor(),
                         KeyEvent {
                             code: KeyCode::Char('P'),
                             modifiers: KeyModifiers::SHIFT,
                             ..
-                        } => self.yank(),
+                        } => self.paste_before_cursor(),
                         KeyEvent {
                             code: KeyCode::Char('J'),
                             modifiers: KeyModifiers::SHIFT,
@@ -663,9 +679,8 @@ impl TextArea {
                             modifiers: KeyModifiers::SHIFT,
                             ..
                         } => {
-                            self.begin_undo_group();
+                            self.enter_vim_insert_mode();
                             self.substitute_line();
-                            self.vim_mode_state = VimModeState::Insert;
                         }
                         KeyEvent {
                             code: KeyCode::Char('Y'),
@@ -688,6 +703,9 @@ impl TextArea {
                         _ => {
                             // Ignore other keys in Normal mode.
                         }
+                    }
+                    if self.vim_mode_state == VimModeState::Normal {
+                        self.normalize_vim_normal_cursor();
                     }
                     return;
                 }
@@ -1355,11 +1373,14 @@ impl TextArea {
     }
 
     pub(crate) fn end_of_next_word(&self) -> usize {
-        let Some(first_non_ws) = self.text[self.cursor_pos..].find(|c: char| !c.is_whitespace())
-        else {
+        self.end_of_next_word_from(self.cursor_pos)
+    }
+
+    fn end_of_next_word_from(&self, cursor_pos: usize) -> usize {
+        let Some(first_non_ws) = self.text[cursor_pos..].find(|c: char| !c.is_whitespace()) else {
             return self.text.len();
         };
-        let word_start = self.cursor_pos + first_non_ws;
+        let word_start = cursor_pos + first_non_ws;
         let mut iter = self.text[word_start..].char_indices();
         let Some((_, first_ch)) = iter.next() else {
             return word_start;

@@ -13,6 +13,13 @@ impl ChatComposer {
             ActivePopup::None => self.handle_key_event_without_popup(key_event),
         };
 
+        if matches!(
+            &result.0,
+            InputResult::Submitted(_) | InputResult::Command(_)
+        ) {
+            self.textarea.enter_vim_normal_mode();
+        }
+
         self.sync_selection_popups();
 
         result
