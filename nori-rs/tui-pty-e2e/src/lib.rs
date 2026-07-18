@@ -862,12 +862,15 @@ fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<S
     let val_offset = rest.find(|c: char| !c.is_whitespace()).unwrap_or(0);
     let val_start = val_start + val_offset;
 
-    // Find value end (next whitespace) and region end (│ border or EOL)
+    // Find value end (next whitespace) and region end (footer separator, │ border, or EOL).
     let rest = &line[val_start..];
     let val_end = rest
         .find(char::is_whitespace)
         .map_or(line.len(), |pos| val_start + pos);
-    let region_end = rest.find('│').map_or(line.len(), |pos| val_start + pos);
+    let footer_separator = rest.find(" · ");
+    let region_end = footer_separator
+        .or_else(|| rest.find('│'))
+        .map_or(line.len(), |pos| val_start + pos);
 
     // Check that we have a non-empty value
     if val_start >= val_end {
@@ -876,6 +879,10 @@ fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<S
 
     // Replace value with placeholder, padding to maintain width
     let mut result = line.to_string();
+    if footer_separator.is_some() {
+        result.replace_range(val_start..region_end, replacement);
+        return Some(result);
+    }
     let region_width = region_end - val_start;
     if region_width >= replacement.len() {
         let padded = format!(
@@ -1412,6 +1419,12 @@ enhancements
             normalized.contains("╰──"),
             "Should preserve bottom border, got:\n{}",
             normalized
+        );
+
+        let footer = "  Approvals: Agent · Skillset: test-skillset · Skillsets v0.9.99".to_string();
+        assert_eq!(
+            normalize_for_snapshot(footer),
+            "  Approvals: Agent · Skillset: [SKILLSET] · Skillsets v0.9.99"
         );
     }
 }

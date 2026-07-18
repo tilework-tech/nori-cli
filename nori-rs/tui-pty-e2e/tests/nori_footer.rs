@@ -165,9 +165,7 @@ git_stats = true
 #[test]
 #[cfg(target_os = "linux")]
 fn test_footer_vertical_layout_from_config() {
-    let config_toml = r#"
-agent = "mock-model"
-
+    let extra_config_toml = r#"
 [tui]
 vertical_footer = true
 "#;
@@ -176,7 +174,7 @@ vertical_footer = true
         24,
         60,
         SessionConfig::new()
-            .with_config_toml(config_toml)
+            .with_extra_config_toml(extra_config_toml)
             .with_excluded_binary("nori-skillsets"),
     )
     .expect("Failed to spawn");
@@ -220,17 +218,18 @@ vertical_footer = true
 #[cfg(target_os = "linux")]
 fn test_footer_with_segments_disabled() {
     // Test that footer segments can be disabled via config.toml
-    let config_toml = r#"
-agent = "mock-model"
-
+    let extra_config_toml = r#"
 [tui.footer_segments]
 git_branch = false
 approval_mode = false
 "#;
 
-    let mut session =
-        TuiSession::spawn_with_config(24, 120, SessionConfig::new().with_config_toml(config_toml))
-            .expect("Failed to spawn");
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        120,
+        SessionConfig::new().with_extra_config_toml(extra_config_toml),
+    )
+    .expect("Failed to spawn");
 
     // Wait for the TUI to fully start (session header contains "Nori CLI")
     session.wait_for_text("›", TIMEOUT).unwrap();
