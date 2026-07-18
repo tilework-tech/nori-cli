@@ -554,7 +554,6 @@ mod tests {
             params: v1::NewConversationParams {
                 model: Some("gpt-5.1-codex-max".to_string()),
                 model_provider: None,
-                profile: None,
                 cwd: None,
                 approval_policy: Some(AskForApproval::OnRequest),
                 sandbox: None,
@@ -572,7 +571,6 @@ mod tests {
                 "params": {
                     "model": "gpt-5.1-codex-max",
                     "modelProvider": null,
-                    "profile": null,
                     "cwd": null,
                     "approvalPolicy": "on-request",
                     "sandbox": null,
