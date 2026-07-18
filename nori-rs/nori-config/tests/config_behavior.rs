@@ -8,32 +8,32 @@ use nori_config::NoriConfigOverrides;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
-fn git(repo: &std::path::Path, args: &[&str]) {
+fn git(repo: &std::path::Path, args: &[&str]) -> std::io::Result<()> {
     let output = std::process::Command::new("git")
         .args(args)
         .current_dir(repo)
-        .output()
-        .expect("run git");
+        .output()?;
     assert!(
         output.status.success(),
         "git {args:?} failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+    Ok(())
 }
 
-fn create_git_repository(home: &TempDir) -> std::path::PathBuf {
+fn create_git_repository(home: &TempDir) -> std::io::Result<std::path::PathBuf> {
     let repo = home.path().join("repository");
-    std::fs::create_dir(&repo).expect("create repository");
-    git(&repo, &["init"]);
+    std::fs::create_dir(&repo)?;
+    git(&repo, &["init"])?;
     git(
         &repo,
         &["config", "user.email", "config-tests@nori.invalid"],
-    );
-    git(&repo, &["config", "user.name", "Nori Config Tests"]);
-    std::fs::write(repo.join("README.md"), "test repository\n").expect("write fixture");
-    git(&repo, &["add", "README.md"]);
-    git(&repo, &["commit", "-m", "initial"]);
-    repo
+    )?;
+    git(&repo, &["config", "user.name", "Nori Config Tests"])?;
+    std::fs::write(repo.join("README.md"), "test repository\n")?;
+    git(&repo, &["add", "README.md"])?;
+    git(&repo, &["commit", "-m", "initial"])?;
+    Ok(repo)
 }
 
 #[test]
@@ -155,7 +155,7 @@ animations = false # and this inline note
 #[test]
 fn repository_trust_applies_to_nested_directories_and_linked_worktrees() {
     let home = TempDir::new().expect("create config home");
-    let repo = create_git_repository(&home);
+    let repo = create_git_repository(&home).expect("create git repository");
     let nested = repo.join("nested/directory");
     std::fs::create_dir_all(&nested).expect("create nested directory");
     let worktree = home.path().join("linked-worktree");
@@ -168,7 +168,8 @@ fn repository_trust_applies_to_nested_directories_and_linked_worktrees() {
             "-b",
             "config-test-worktree",
         ],
-    );
+    )
+    .expect("create linked worktree");
 
     let config_path = home.path().join("config.toml");
     NoriConfigEdits::new(home.path())
