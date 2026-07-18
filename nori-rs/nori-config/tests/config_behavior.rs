@@ -254,6 +254,115 @@ vertical_footer = false # preserve this note
 }
 
 #[test]
+fn generic_edits_update_values_inside_inline_tables() {
+    let home = TempDir::new().expect("create config home");
+    let config_path = home.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        "tui = { animations = true, vertical_footer = false }\n",
+    )
+    .expect("write config");
+
+    NoriConfigEdits::new(home.path())
+        .set_path(&["tui", "vertical_footer"], true)
+        .clear_path(&["tui", "animations"])
+        .apply_blocking()
+        .expect("persist inline-table edits");
+
+    let config = NoriConfig::load_from_path(&config_path).expect("reload edited config");
+    assert!(config.vertical_footer);
+    assert!(
+        config.animations,
+        "cleared animations should use its default"
+    );
+    let contents = std::fs::read_to_string(config_path).expect("read edited config");
+    assert!(!contents.contains("animations"));
+}
+
+#[cfg(unix)]
+#[test]
+fn edits_preserve_private_permissions_and_create_private_config_files() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let existing_home = TempDir::new().expect("create existing config home");
+    let existing_path = existing_home.path().join("config.toml");
+    std::fs::write(&existing_path, "agent = \"gemini\"\n").expect("write existing config");
+    std::fs::set_permissions(&existing_path, std::fs::Permissions::from_mode(0o600))
+        .expect("make existing config private");
+
+    NoriConfigEdits::new(existing_home.path())
+        .set_agent("claude-code")
+        .apply_blocking()
+        .expect("edit existing config");
+
+    let existing_mode = std::fs::metadata(existing_path)
+        .expect("stat existing config")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(existing_mode, 0o600);
+
+    let new_home = TempDir::new().expect("create new config home");
+    let new_path = new_home.path().join("config.toml");
+    NoriConfigEdits::new(new_home.path())
+        .set_agent("claude-code")
+        .apply_blocking()
+        .expect("create config");
+
+    let new_mode = std::fs::metadata(new_path)
+        .expect("stat new config")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(new_mode, 0o600);
+}
+
+#[test]
+fn workspace_write_settings_survive_resolution_and_raw_overrides() {
+    let home = TempDir::new().expect("create config home");
+    let config_path = home.path().join("config.toml");
+    let writable_root = home.path().join("shared");
+    std::fs::create_dir(&writable_root).expect("create writable root");
+    std::fs::write(
+        &config_path,
+        format!(
+            r#"sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+writable_roots = [{}]
+network_access = false
+exclude_tmpdir_env_var = true
+exclude_slash_tmp = true
+"#,
+            toml::Value::String(writable_root.to_string_lossy().into_owned())
+        ),
+    )
+    .expect("write config");
+
+    let config = NoriConfig::load_from_path_with_overrides(
+        &config_path,
+        NoriConfigOverrides {
+            raw_overrides: vec![(
+                "sandbox_workspace_write.network_access".to_string(),
+                toml::Value::Boolean(true),
+            )],
+            ..NoriConfigOverrides::default()
+        },
+    )
+    .expect("load config");
+
+    assert_eq!(
+        config.sandbox_policy,
+        SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![writable_root],
+            network_access: true,
+            exclude_tmpdir_env_var: true,
+            exclude_slash_tmp: true,
+        }
+    );
+}
+
+#[test]
 fn resolved_config_uses_protocol_mcp_types_and_keeps_the_notifier_command() {
     let home = TempDir::new().expect("create config home");
     let config_path = home.path().join("config.toml");

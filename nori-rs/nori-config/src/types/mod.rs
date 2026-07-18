@@ -196,6 +196,9 @@ pub struct NoriConfigToml {
     /// Sandbox mode for command execution
     pub sandbox_mode: Option<SandboxMode>,
 
+    /// Settings applied when the sandbox uses workspace-write mode.
+    pub sandbox_workspace_write: Option<SandboxWorkspaceWrite>,
+
     /// Approval policy for commands
     pub approval_policy: Option<AskForApproval>,
 
@@ -254,6 +257,19 @@ pub struct NoriConfigToml {
     /// Per-project trust settings, keyed by project path.
     #[serde(default)]
     pub projects: HashMap<String, ProjectConfig>,
+}
+
+/// Workspace-write sandbox settings from `config.toml`.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SandboxWorkspaceWrite {
+    #[serde(default)]
+    pub writable_roots: Vec<PathBuf>,
+    #[serde(default)]
+    pub network_access: bool,
+    #[serde(default)]
+    pub exclude_tmpdir_env_var: bool,
+    #[serde(default)]
+    pub exclude_slash_tmp: bool,
 }
 
 /// Feature switches that still affect the Nori runtime.

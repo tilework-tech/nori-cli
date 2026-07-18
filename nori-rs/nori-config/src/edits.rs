@@ -221,7 +221,13 @@ fn descend<'a>(mut table: &'a mut Table, path: &[String], create: bool) -> Optio
             child.set_implicit(true);
             table.insert(segment, Item::Table(child));
         }
-        table = table.get_mut(segment)?.as_table_mut()?;
+        let item = table.get_mut(segment)?;
+        if let Some(inline) = item.as_inline_table().cloned() {
+            let mut child = inline.into_table();
+            child.set_implicit(true);
+            *item = Item::Table(child);
+        }
+        table = item.as_table_mut()?;
     }
     Some(table)
 }
@@ -230,6 +236,15 @@ fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)
         .with_context(|| format!("Failed to create {}", parent.display()))?;
+
+    #[cfg(unix)]
+    let target_mode = {
+        use std::os::unix::fs::PermissionsExt;
+
+        std::fs::metadata(path)
+            .map(|metadata| metadata.permissions().mode())
+            .unwrap_or(0o600)
+    };
 
     let (temp_path, mut temp_file) = loop {
         let id = TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
@@ -248,6 +263,15 @@ fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
             }
         }
     };
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        temp_file
+            .set_permissions(std::fs::Permissions::from_mode(target_mode))
+            .with_context(|| format!("Failed to secure {}", temp_path.display()))?;
+    }
 
     let write_result = temp_file
         .write_all(contents)

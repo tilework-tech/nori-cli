@@ -75,12 +75,13 @@ impl NoriConfig {
     ) -> Result<Self> {
         let has_explicit_approval_or_sandbox_policy = toml.approval_policy.is_some()
             || toml.sandbox_mode.is_some()
+            || toml.sandbox_workspace_write.is_some()
             || overrides.approval_policy.is_some()
             || overrides.sandbox_mode.is_some()
-            || overrides
-                .raw_overrides
-                .iter()
-                .any(|(path, _)| matches!(path.as_str(), "approval_policy" | "sandbox_mode"));
+            || overrides.raw_overrides.iter().any(|(path, _)| {
+                matches!(path.as_str(), "approval_policy" | "sandbox_mode")
+                    || path.starts_with("sandbox_workspace_write.")
+            });
         let NoriConfigOverrides {
             agent: agent_override,
             sandbox_mode: sandbox_mode_override,
@@ -109,7 +110,16 @@ impl NoriConfig {
             .unwrap_or(SandboxMode::WorkspaceWrite);
         let mut sandbox_policy = match sandbox_mode {
             SandboxMode::ReadOnly => SandboxPolicy::new_read_only_policy(),
-            SandboxMode::WorkspaceWrite => SandboxPolicy::new_workspace_write_policy(),
+            SandboxMode::WorkspaceWrite => toml
+                .sandbox_workspace_write
+                .as_ref()
+                .map(|settings| SandboxPolicy::WorkspaceWrite {
+                    writable_roots: settings.writable_roots.clone(),
+                    network_access: settings.network_access,
+                    exclude_tmpdir_env_var: settings.exclude_tmpdir_env_var,
+                    exclude_slash_tmp: settings.exclude_slash_tmp,
+                })
+                .unwrap_or_else(SandboxPolicy::new_workspace_write_policy),
             SandboxMode::DangerFullAccess => SandboxPolicy::DangerFullAccess,
         };
         if let SandboxPolicy::WorkspaceWrite { writable_roots, .. } = &mut sandbox_policy {
