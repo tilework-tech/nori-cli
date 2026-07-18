@@ -20,7 +20,7 @@ Path: @/nori-rs/nori-config
 - Resolution precedence is typed CLI overrides, then raw `-c key=value` overrides, then the user config file. Paths and additional writable roots are resolved against the effective working directory.
 - Project trust first matches the effective cwd and then the primary git root, including linked worktrees whose trust belongs to the main repository.
 - Sandbox mode and `[sandbox_workspace_write]` settings are resolved into the concrete runtime sandbox policy, and project trust supplies the default approval policy when no explicit policy is present.
-- `NoriConfigEdits` applies focused or dotted-path mutations with same-directory atomic replacement while preserving existing TOML comments, inline-table values, formatting, and file permissions. Newly created config files are private on Unix. MCP persistence replaces the complete table using the protocol-owned config type.
+- `NoriConfigEdits` applies focused or dotted-path mutations with a same-directory temporary-file replacement while preserving existing TOML comments, inline-table values, formatting, and file permissions. Newly created config files are private on Unix. MCP persistence replaces the complete table using the protocol-owned config type.
 
 ### Things to Know
 

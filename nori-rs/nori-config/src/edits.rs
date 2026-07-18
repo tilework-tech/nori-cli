@@ -98,7 +98,7 @@ impl NoriConfigEdits {
         self.apply_blocking()
     }
 
-    /// Apply the queued edits with an atomic replacement of `config.toml`.
+    /// Apply the queued edits with a same-directory replacement of `config.toml`.
     pub fn apply_blocking(self) -> Result<()> {
         let config_path = self.nori_home.join(CONFIG_FILE);
         let content = match std::fs::read_to_string(&config_path) {
@@ -144,7 +144,7 @@ impl NoriConfigEdits {
             }
         }
 
-        write_atomic(&config_path, document.to_string().as_bytes())
+        write_config(&config_path, document.to_string().as_bytes())
     }
 }
 
@@ -232,7 +232,7 @@ fn descend<'a>(mut table: &'a mut Table, path: &[String], create: bool) -> Optio
     Some(table)
 }
 
-fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
+fn write_config(path: &Path, contents: &[u8]) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)
         .with_context(|| format!("Failed to create {}", parent.display()))?;
@@ -268,9 +268,12 @@ fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
 
-        temp_file
-            .set_permissions(std::fs::Permissions::from_mode(target_mode))
-            .with_context(|| format!("Failed to secure {}", temp_path.display()))?;
+        if let Err(error) = temp_file.set_permissions(std::fs::Permissions::from_mode(target_mode))
+        {
+            drop(temp_file);
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(error).with_context(|| format!("Failed to secure {}", temp_path.display()));
+        }
     }
 
     let write_result = temp_file
@@ -280,6 +283,15 @@ fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     if let Err(error) = write_result {
         let _ = std::fs::remove_file(&temp_path);
         return Err(error).with_context(|| format!("Failed to write {}", path.display()));
+    }
+
+    // `rename` replaces an existing file on Unix, but not on Windows.
+    #[cfg(windows)]
+    if let Err(error) = std::fs::remove_file(path)
+        && error.kind() != ErrorKind::NotFound
+    {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(error).with_context(|| format!("Failed to replace {}", path.display()));
     }
 
     if let Err(error) = std::fs::rename(&temp_path, path) {
