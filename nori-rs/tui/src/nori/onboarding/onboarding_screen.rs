@@ -82,9 +82,9 @@ impl NoriOnboardingScreen {
             config,
         } = args;
 
-        let cwd = config.cwd.clone();
+        let cwd = config.cwd;
         // Use Nori-specific home directory (~/.nori/cli) from the canonical config source
-        let nori_home = config.nori_home.clone();
+        let nori_home = config.nori_home;
 
         let mut steps: Vec<NoriStep> = Vec::new();
 

@@ -282,10 +282,9 @@ pub(crate) fn read_active_skillset(cwd: &std::path::Path) -> Option<String> {
         if config_path.exists()
             && let Ok(contents) = std::fs::read_to_string(&config_path)
             && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
+            && let Some(skillset) = json.get("activeSkillset").and_then(|value| value.as_str())
         {
-            if let Some(skillset) = json.get("activeSkillset").and_then(|value| value.as_str()) {
-                return Some(skillset.to_string());
-            }
+            return Some(skillset.to_string());
         }
 
         if !current_dir.pop() {
