@@ -1,4 +1,12 @@
 use super::*;
+
+#[test]
+fn card_inner_width_accounts_for_borders_and_caps_content() {
+    assert_eq!(card_inner_width(3, 60), None);
+    assert_eq!(card_inner_width(4, 60), Some(0));
+    assert_eq!(card_inner_width(40, 60), Some(36));
+    assert_eq!(card_inner_width(100, 60), Some(60));
+}
 use crate::exec_cell::CommandOutput;
 use crate::exec_cell::ExecCall;
 use crate::exec_cell::ExecCell;
