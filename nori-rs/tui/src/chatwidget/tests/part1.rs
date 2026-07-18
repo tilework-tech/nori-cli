@@ -28,7 +28,7 @@ fn resumed_initial_messages_render_history() {
         approval_policy: AskForApproval::Never,
         sandbox_policy: SandboxPolicy::ReadOnly,
         cwd: PathBuf::from("/home/user/project"),
-        reasoning_effort: Some(ReasoningEffortConfig::default()),
+        reasoning_effort: None,
         acp_session_id: None,
         history_log_id: 0,
         history_entry_count: 0,

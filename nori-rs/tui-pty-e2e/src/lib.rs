@@ -999,8 +999,8 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
-            // Profile: "profile:   value" -> "profile:   [PROF]"
-            if let Some(result) = replace_after_marker(&line, "profile:", "[PROF]") {
+            // Active skillset names depend on the user's local environment.
+            if let Some(result) = replace_after_marker(&line, "Skillset:", "[SKILLSET]") {
                 line = result;
             }
 
@@ -1386,19 +1386,17 @@ enhancements
     }
 
     #[test]
-    fn test_normalize_version_and_profile() {
-        // Test that version and profile are normalized correctly
+    fn test_normalize_version_and_skillset() {
         let input = r#"╭──────────────────────────────────────────────────────────────╮
 │ Nori CLI v0.1.2                                              │
-│ profile:   testuser                                          │
+│ Skillset: test-skillset                                      │
 ╰──────────────────────────────────────────────────────────────╯"#;
 
         let normalized = normalize_for_snapshot(input.to_string());
 
-        // Profile should be normalized to [PROF]
         assert!(
-            normalized.contains("[PROF]"),
-            "Profile should be normalized, got:\n{}",
+            normalized.contains("[SKILLSET]"),
+            "Skillset should be normalized, got:\n{}",
             normalized
         );
 

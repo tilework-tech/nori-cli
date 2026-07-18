@@ -1,9 +1,10 @@
 use super::*;
+use nori_config::NoriConfigEdits as ConfigEditsBuilder;
 use std::path::Path;
 
-async fn persist_acp_wire_recording_config(codex_home: &Path, enabled: bool) -> anyhow::Result<()> {
-    ConfigEditsBuilder::new(codex_home)
-        .set_path(&["acp_proxy", "enabled"], toml_value(enabled))
+async fn persist_acp_wire_recording_config(nori_home: &Path, enabled: bool) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(nori_home)
+        .set_path(&["acp_proxy", "enabled"], enabled)
         .apply()
         .await
 }
@@ -14,7 +15,7 @@ async fn persist_acp_wire_recording_config(codex_home: &Path, enabled: bool) -> 
 /// option and the selection was written to `[default_models]` in config.toml.
 /// Non-model options (mode, thought level, ...) are not persisted.
 pub(super) async fn persist_default_model_selection(
-    codex_home: &Path,
+    nori_home: &Path,
     agent: &str,
     config_id: &str,
     value: &str,
@@ -28,7 +29,7 @@ pub(super) async fn persist_default_model_selection(
         return Ok(false);
     }
 
-    ConfigEditsBuilder::new(codex_home)
+    ConfigEditsBuilder::new(nori_home)
         .set_default_model(agent, value)
         .apply()
         .await?;
@@ -51,8 +52,8 @@ impl App {
         }
 
         // Persist to config.toml
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", setting_name], toml_value(enabled))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", setting_name], enabled)
             .apply()
             .await
         {
@@ -77,8 +78,8 @@ impl App {
     ) {
         let toml_str = value.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "notify_after_idle"], toml_value(toml_str))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "notify_after_idle"], toml_str)
             .apply()
             .await
         {
@@ -106,8 +107,8 @@ impl App {
     ) {
         let toml_str = value.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "script_timeout"], toml_value(toml_str))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "script_timeout"], toml_str)
             .apply()
             .await
         {
@@ -142,8 +143,8 @@ impl App {
     }
 
     pub(super) async fn persist_vim_mode_setting(&mut self, value: nori_config::VimEnterBehavior) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "vim_mode"], toml_value(value.toml_value()))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "vim_mode"], value.toml_value())
             .apply()
             .await
         {
@@ -168,8 +169,8 @@ impl App {
     pub(super) async fn persist_auto_worktree_setting(&mut self, value: nori_config::AutoWorktree) {
         let toml_str = value.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "auto_worktree"], toml_value(toml_str))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "auto_worktree"], toml_str)
             .apply()
             .await
         {
@@ -200,8 +201,8 @@ impl App {
         self.plan_drawer_mode = mode;
         self.chat_widget.set_plan_drawer_mode(mode);
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "pinned_plan_drawer"], toml_value(enabled))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "pinned_plan_drawer"], enabled)
             .apply()
             .await
         {
@@ -216,8 +217,7 @@ impl App {
     }
 
     pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
-        if let Err(err) = persist_acp_wire_recording_config(&self.config.codex_home, enabled).await
-        {
+        if let Err(err) = persist_acp_wire_recording_config(&self.config.nori_home, enabled).await {
             tracing::error!(error = %err, "failed to persist acp wire recording setting");
             self.chat_widget
                 .add_error_message(format!("Failed to save ACP wire recording setting: {err}"));
@@ -235,8 +235,8 @@ impl App {
         self.config.custom_working_messages = enabled;
         self.chat_widget.set_custom_working_messages(enabled);
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "custom_working_messages"], toml_value(enabled))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "custom_working_messages"], enabled)
             .apply()
             .await
         {
@@ -252,8 +252,8 @@ impl App {
     }
 
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
-        let builder = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "skillset_per_session"], toml_value(enabled));
+        let builder = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "skillset_per_session"], enabled);
         if let Err(err) = builder.apply().await {
             tracing::error!(error = %err, "failed to persist skillset_per_session setting");
             self.chat_widget.add_error_message(format!(
@@ -273,11 +273,8 @@ impl App {
         segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(
-                &["tui", "footer_segments", segment.toml_key()],
-                toml_value(enabled),
-            )
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "footer_segments", segment.toml_key()], enabled)
             .apply()
             .await
         {
@@ -305,8 +302,8 @@ impl App {
     }
 
     pub(super) async fn persist_file_manager_setting(&mut self, value: nori_config::FileManager) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "file_manager"], toml_value(value.command_name()))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "file_manager"], value.command_name())
             .apply()
             .await
         {
@@ -326,8 +323,8 @@ impl App {
         let enum_value = if enabled { "enabled" } else { "disabled" };
 
         // Persist to config.toml as a string enum value
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", setting_name], toml_value(enum_value))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", setting_name], enum_value)
             .apply()
             .await
         {
@@ -354,8 +351,8 @@ impl App {
         let toml_key = action.toml_key();
         let toml_val = binding.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "hotkeys", toml_key], toml_value(&toml_val))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "hotkeys", toml_key], toml_val)
             .apply()
             .await
         {
@@ -388,7 +385,7 @@ impl App {
         &mut self,
         servers: std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
     ) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
             .replace_mcp_servers(&servers)
             .apply()
             .await

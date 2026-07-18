@@ -6,18 +6,6 @@ use codex_execpolicy::ExecPolicyCheckCommand;
 use nori_cli::LandlockCommand;
 use nori_cli::SeatbeltCommand;
 use nori_cli::WindowsCommand;
-#[cfg(feature = "login")]
-use nori_cli::login::read_api_key_from_stdin;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_status;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_with_api_key;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_with_chatgpt;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_with_device_code;
-#[cfg(feature = "login")]
-use nori_cli::login::run_logout;
 use nori_config::find_nori_home;
 use nori_harness::init_rolling_file_tracing;
 
@@ -62,14 +50,6 @@ struct MultitoolCli {
 
 #[derive(Debug, clap::Subcommand)]
 enum Subcommand {
-    /// Manage login.
-    #[cfg(feature = "login")]
-    Login(LoginCommand),
-
-    /// Remove stored authentication credentials.
-    #[cfg(feature = "login")]
-    Logout(LogoutCommand),
-
     /// Run commands within a Nori-provided sandbox.
     #[clap(visible_alias = "debug")]
     Sandbox(SandboxArgs),
@@ -156,56 +136,6 @@ enum ExecpolicySubcommand {
     /// Check execpolicy files against a command.
     #[clap(name = "check")]
     Check(ExecPolicyCheckCommand),
-}
-
-#[cfg(feature = "login")]
-#[derive(Debug, Parser)]
-struct LoginCommand {
-    #[clap(skip)]
-    config_overrides: CliConfigOverrides,
-
-    #[arg(
-        long = "with-api-key",
-        help = "Read the API key from stdin (e.g. `printenv OPENAI_API_KEY | nori login --with-api-key`)"
-    )]
-    with_api_key: bool,
-
-    #[arg(
-        long = "api-key",
-        value_name = "API_KEY",
-        help = "(deprecated) Previously accepted the API key directly; now exits with guidance to use --with-api-key",
-        hide = true
-    )]
-    api_key: Option<String>,
-
-    #[arg(long = "device-auth")]
-    use_device_code: bool,
-
-    /// EXPERIMENTAL: Use custom OAuth issuer base URL (advanced)
-    /// Override the OAuth issuer base URL (advanced)
-    #[arg(long = "experimental_issuer", value_name = "URL", hide = true)]
-    issuer_base_url: Option<String>,
-
-    /// EXPERIMENTAL: Use custom OAuth client ID (advanced)
-    #[arg(long = "experimental_client-id", value_name = "CLIENT_ID", hide = true)]
-    client_id: Option<String>,
-
-    #[command(subcommand)]
-    action: Option<LoginSubcommand>,
-}
-
-#[cfg(feature = "login")]
-#[derive(Debug, clap::Subcommand)]
-enum LoginSubcommand {
-    /// Show login status.
-    Status,
-}
-
-#[cfg(feature = "login")]
-#[derive(Debug, Parser)]
-struct LogoutCommand {
-    #[clap(skip)]
-    config_overrides: CliConfigOverrides,
 }
 
 #[derive(Debug, Parser)]
@@ -374,26 +304,6 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         subcommand,
     } = MultitoolCli::parse();
 
-    // Set up CODEX_HOME to point to NORI_HOME so all codex-core config loading
-    // uses ~/.nori/cli/ instead of ~/.codex. This must happen early, before any
-    // subcommand dispatch or config loading. Only set if not already defined,
-    // to allow tests and users to override via environment variable.
-    if std::env::var("CODEX_HOME").is_err()
-        && let Ok(nori_home) = find_nori_home()
-    {
-        // Create the directory if it doesn't exist
-        if let Err(e) = std::fs::create_dir_all(&nori_home) {
-            eprintln!(
-                "Warning: Failed to create Nori config directory '{}': {e}",
-                nori_home.display()
-            );
-        }
-        // SAFETY: Called early in main before spawning threads
-        unsafe {
-            std::env::set_var("CODEX_HOME", &nori_home);
-        }
-    }
-
     // Initialize ACP rolling file tracing in $NORI_HOME/log/ (non-critical, log warning on failure)
     // Logs are stored as daily rolling files like: ~/.nori/cli/log/nori-acp.2024-01-15.log
     if let Ok(nori_home) = find_nori_home() {
@@ -411,46 +321,6 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             );
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
-        }
-        #[cfg(feature = "login")]
-        Some(Subcommand::Login(mut login_cli)) => {
-            prepend_config_flags(
-                &mut login_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            match login_cli.action {
-                Some(LoginSubcommand::Status) => {
-                    run_login_status(login_cli.config_overrides).await;
-                }
-                None => {
-                    if login_cli.use_device_code {
-                        run_login_with_device_code(
-                            login_cli.config_overrides,
-                            login_cli.issuer_base_url,
-                            login_cli.client_id,
-                        )
-                        .await;
-                    } else if login_cli.api_key.is_some() {
-                        eprintln!(
-                            "The --api-key flag is no longer supported. Pipe the key instead, e.g. `printenv OPENAI_API_KEY | nori login --with-api-key`."
-                        );
-                        std::process::exit(1);
-                    } else if login_cli.with_api_key {
-                        let api_key = read_api_key_from_stdin();
-                        run_login_with_api_key(login_cli.config_overrides, api_key).await;
-                    } else {
-                        run_login_with_chatgpt(login_cli.config_overrides).await;
-                    }
-                }
-            }
-        }
-        #[cfg(feature = "login")]
-        Some(Subcommand::Logout(mut logout_cli)) => {
-            prepend_config_flags(
-                &mut logout_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            run_logout(logout_cli.config_overrides).await;
         }
         Some(Subcommand::Sandbox(sandbox_args)) => match sandbox_args.cmd {
             SandboxCommand::Macos(mut seatbelt_cli) => {
@@ -595,9 +465,6 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     }
     if let Some(agent) = subcommand_cli.agent {
         interactive.agent = Some(agent);
-    }
-    if let Some(profile) = subcommand_cli.config_profile {
-        interactive.config_profile = Some(profile);
     }
     if subcommand_cli.dangerously_bypass_approvals_and_sandbox {
         interactive.dangerously_bypass_approvals_and_sandbox = true;

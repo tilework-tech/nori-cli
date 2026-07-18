@@ -21,7 +21,6 @@ use crate::render::line_utils::prefix_lines;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::InsetRenderable;
 use crate::render::renderable::Renderable;
-use codex_core::git_info::get_git_repo_root;
 use codex_protocol::protocol::FileChange;
 
 // ---------------------------------------------------------------------------
@@ -521,7 +520,10 @@ fn render_change_with_ctx(
 }
 
 pub(crate) fn display_path_for(path: &Path, cwd: &Path) -> String {
-    let path_in_same_repo = match (get_git_repo_root(cwd), get_git_repo_root(path)) {
+    let path_in_same_repo = match (
+        nori_config::resolve_root_git_project_for_trust(cwd),
+        nori_config::resolve_root_git_project_for_trust(path),
+    ) {
         (Some(cwd_repo), Some(path_repo)) => cwd_repo == path_repo,
         _ => false,
     };

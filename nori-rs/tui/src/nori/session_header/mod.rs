@@ -2,7 +2,7 @@
 //!
 //! This module provides the Nori session header that appears at the start
 //! of every session, displaying the Nori title, version info,
-//! agent details, and Nori profile information.
+//! agent details, and active skillset information.
 //!
 //! The session header uses a simple "Nori" text title (the ASCII art banner
 //! is reserved for the first-launch welcome screen).
@@ -18,10 +18,11 @@ use crate::history_cell::with_border;
 use crate::nori::token_count::TokenCount;
 use crate::nori::token_count::count_tokens;
 use crate::nori::token_count::format_token_count;
+use crate::system_info::read_active_skillset;
 use crate::version::CODEX_CLI_VERSION;
-use codex_core::config::Config;
 use codex_protocol::num_format::format_si_suffix;
 use codex_protocol::protocol::SessionConfiguredEvent;
+use nori_config::NoriConfig;
 use nori_harness::TranscriptTokenUsage;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
@@ -321,52 +322,6 @@ fn discover_all_instruction_files_with_paths(
     found
 }
 
-/// Read the current Nori profile by searching for .nori-config.json in ancestors.
-///
-/// Walks from the given directory upward through parent directories, returning
-/// the profile from the nearest ancestor containing a .nori-config.json file.
-fn read_nori_profile(cwd: &Path) -> Option<String> {
-    let mut current_dir = cwd.to_path_buf();
-
-    loop {
-        let config_path = current_dir.join(".nori-config.json");
-        if config_path.exists()
-            && let Ok(contents) = std::fs::read_to_string(&config_path)
-            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
-        {
-            // Try new format: activeSkillset
-            if let Some(profile) = json.get("activeSkillset").and_then(|v| v.as_str()) {
-                return Some(profile.to_string());
-            }
-            // Fall back to: agents.claude-code.profile.baseProfile
-            if let Some(profile) = json
-                .get("agents")
-                .and_then(|a| a.get("claude-code"))
-                .and_then(|c| c.get("profile"))
-                .and_then(|p| p.get("baseProfile"))
-                .and_then(|b| b.as_str())
-            {
-                return Some(profile.to_string());
-            }
-            // Fall back to oldest format: profile.baseProfile
-            if let Some(profile) = json
-                .get("profile")
-                .and_then(|p| p.get("baseProfile"))
-                .and_then(|b| b.as_str())
-            {
-                return Some(profile.to_string());
-            }
-        }
-
-        // Move to parent directory
-        if !current_dir.pop() {
-            break;
-        }
-    }
-
-    None
-}
-
 /// Check if either nori-skillsets or nori-ai command is available in PATH.
 /// Prefers nori-skillsets (new installer) over nori-ai (legacy installer).
 fn is_nori_installed() -> bool {
@@ -424,7 +379,7 @@ pub(crate) struct NoriSessionHeaderCell {
     version: &'static str,
     agent: String,
     directory: PathBuf,
-    nori_profile: Option<String>,
+    skillset: Option<String>,
     instruction_files: Vec<InstructionFile>,
     display_mode: DisplayMode,
     /// Optional task summary (first prompt summary).
@@ -446,14 +401,14 @@ const MAX_TASK_SUMMARY_LENGTH: usize = 50;
 
 impl NoriSessionHeaderCell {
     pub(crate) fn new(agent: String, directory: PathBuf) -> Self {
-        let nori_profile = read_nori_profile(&directory);
+        let skillset = read_active_skillset(&directory);
         let agent_kind = detect_agent_kind(&agent);
         let instruction_files = discover_all_instruction_files(&directory, agent_kind);
         Self {
             version: CODEX_CLI_VERSION,
             agent,
             directory,
-            nori_profile,
+            skillset,
             instruction_files,
             display_mode: DisplayMode::Full,
             prompt_summary: None,
@@ -484,14 +439,14 @@ impl NoriSessionHeaderCell {
         context_window_percent: Option<i64>,
         cloud_session: Option<CloudSessionInfo>,
     ) -> Self {
-        let nori_profile = read_nori_profile(&directory);
+        let skillset = read_active_skillset(&directory);
         let agent_kind = detect_agent_kind(&agent);
         let instruction_files = discover_all_instruction_files(&directory, agent_kind);
         Self {
             version: CODEX_CLI_VERSION,
             agent,
             directory,
-            nori_profile,
+            skillset,
             instruction_files,
             display_mode: DisplayMode::Full,
             prompt_summary,
@@ -557,14 +512,14 @@ impl HistoryCell for NoriSessionHeaderCell {
             Span::from(self.agent.clone()),
         ]));
 
-        // Profile line
-        let profile_display = self
-            .nori_profile
+        // Skillset line
+        let skillset_display = self
+            .skillset
             .clone()
             .unwrap_or_else(|| "(none)".to_string());
         lines.push(Line::from(vec![
             Span::from("skillset:  ").dim(),
-            Span::from(profile_display),
+            Span::from(skillset_display),
         ]));
 
         // Approval mode line (if provided)
@@ -726,7 +681,7 @@ pub(crate) fn active_instruction_file_contents(agent: &str, cwd: &Path) -> Vec<(
 /// This displays a simplified version of the session header showing:
 /// - The /status command echo
 /// - Nori branding with version
-/// - Directory, agent, and profile info
+/// - Directory, agent, and skillset info
 /// - Optional: task summary, approval mode, token usage
 pub(crate) fn new_nori_status_output(
     agent: &str,
@@ -756,7 +711,7 @@ pub(crate) fn new_nori_status_output(
 /// (live-reattach) session; the welcome card then shows it in place of the
 /// local cwd.
 pub(crate) fn new_nori_session_info(
-    config: &Config,
+    config: &NoriConfig,
     event: SessionConfiguredEvent,
     is_first_event: bool,
     cloud_session: Option<CloudSessionInfo>,
@@ -786,12 +741,12 @@ pub(crate) fn new_nori_session_info(
             Box::new(header),
             Box::new(PlainHistoryCell::new(help_lines)),
         ])
-    } else if config.model == model {
+    } else if config.active_agent == model {
         CompositeHistoryCell::new(vec![])
     } else {
         let lines = vec![
             "model changed:".magenta().bold().into(),
-            format!("requested: {}", config.model).into(),
+            format!("requested: {}", config.active_agent).into(),
             format!("used: {model}").into(),
         ];
         CompositeHistoryCell::new(vec![Box::new(PlainHistoryCell::new(lines))])

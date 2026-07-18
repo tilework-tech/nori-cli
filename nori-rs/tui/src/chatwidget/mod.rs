@@ -8,8 +8,6 @@ use std::time::Instant;
 
 #[allow(unused_imports)]
 use codex_app_server_protocol::AuthMode;
-use codex_core::config::Config;
-use codex_core::project_doc::DEFAULT_PROJECT_DOC_FILENAME;
 use codex_protocol::ConversationId;
 use codex_protocol::approvals::ElicitationRequestEvent;
 use codex_protocol::parse_command::ParsedCommand;
@@ -59,6 +57,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use nori_config::NoriConfig as Config;
 use rand::Rng;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -139,16 +138,16 @@ use codex_common::approval_presets::ApprovalPreset;
 use codex_common::approval_presets::approval_mode_label;
 use codex_common::approval_presets::builtin_approval_presets;
 
-use codex_core::AuthManager;
-#[allow(unused_imports)]
-use codex_core::CodexAuth;
 use codex_file_search::FileMatch;
-use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
+use codex_login::AuthManager;
+#[allow(unused_imports)]
+use codex_login::CodexAuth;
 use codex_protocol::plan_tool::UpdatePlanArgs;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::SandboxPolicy;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
+const DEFAULT_PROJECT_DOC_FILENAME: &str = "AGENTS.md";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
 // Track information about an in-flight exec command.
 struct RunningCommand {

@@ -52,7 +52,7 @@ impl ChatWidget {
         if let Some(messages) = initial_messages {
             self.replay_initial_messages(messages);
         }
-        // Ask codex-core to enumerate custom prompts for this session.
+        // Ask the active agent to enumerate custom prompts for this session.
         self.submit_op(Op::ListCustomPrompts);
         if let Some(user_message) = self.initial_user_message.take() {
             self.submit_user_message(user_message);
@@ -121,9 +121,11 @@ impl ChatWidget {
             // but without install hints since this is not the first launch).
             use crate::nori::session_header::DisplayMode;
             use crate::nori::session_header::NoriSessionHeaderCell;
-            let header =
-                NoriSessionHeaderCell::new(self.config.model.clone(), self.config.cwd.clone())
-                    .with_display_mode(DisplayMode::Compact);
+            let header = NoriSessionHeaderCell::new(
+                self.config.active_agent.clone(),
+                self.config.cwd.clone(),
+            )
+            .with_display_mode(DisplayMode::Compact);
             self.add_to_history(history_cell::SessionInfoCell::new(
                 history_cell::CompositeHistoryCell::new(vec![Box::new(header)]),
             ));
@@ -162,10 +164,8 @@ impl ChatWidget {
         // At the end of a reasoning block, record transcript-only content.
         self.full_reasoning_buffer.push_str(&self.reasoning_buffer);
         if !self.full_reasoning_buffer.is_empty() {
-            let cell = history_cell::new_reasoning_summary_block(
-                self.full_reasoning_buffer.clone(),
-                &self.config,
-            );
+            let cell =
+                history_cell::new_reasoning_summary_block(self.full_reasoning_buffer.clone());
             self.add_boxed_history(cell);
         }
         self.reasoning_buffer.clear();
@@ -238,7 +238,7 @@ impl ChatWidget {
         self.app_event_tx
             .send(AppEvent::RefreshSystemInfoForDirectory {
                 dir: self.config.cwd.clone(),
-                agent: Some(self.config.model.clone()),
+                agent: Some(self.config.active_agent.clone()),
             });
 
         // Emit a notification when the turn completes (suppressed if focused).
@@ -278,7 +278,11 @@ impl ChatWidget {
 
     pub(super) fn context_used_percent(&self, info: &TokenUsageInfo) -> Option<i64> {
         info.model_context_window
-            .or(self.config.model_context_window)
+            .or_else(|| {
+                nori_harness::get_agent_config(&self.config.active_agent)
+                    .ok()
+                    .and_then(|agent| agent.context_window_size())
+            })
             .map(|window| {
                 let remaining = info
                     .last_token_usage
@@ -834,7 +838,7 @@ impl ChatWidget {
                     self.app_event_tx
                         .send(AppEvent::RefreshSystemInfoForDirectory {
                             dir,
-                            agent: Some(self.config.model.clone()),
+                            agent: Some(self.config.active_agent.clone()),
                         });
                 }
             }
@@ -876,7 +880,7 @@ impl ChatWidget {
                     self.app_event_tx
                         .send(AppEvent::RefreshSystemInfoForDirectory {
                             dir,
-                            agent: Some(self.config.model.clone()),
+                            agent: Some(self.config.active_agent.clone()),
                         });
                 }
             }
@@ -955,7 +959,7 @@ impl ChatWidget {
             self.app_event_tx
                 .send(AppEvent::RefreshSystemInfoForDirectory {
                     dir: ev.cwd.clone(),
-                    agent: Some(self.config.model.clone()),
+                    agent: Some(self.config.active_agent.clone()),
                 });
         }
 
@@ -1306,7 +1310,7 @@ impl ChatWidget {
                 self.flush_answer_stream_with_separator();
             }
             nori_protocol::ReplayEntry::ReasoningMessage { text } => {
-                let cell = history_cell::new_reasoning_summary_block(text, &self.config);
+                let cell = history_cell::new_reasoning_summary_block(text);
                 self.add_boxed_history(cell);
             }
             nori_protocol::ReplayEntry::PlanSnapshot { snapshot } => {

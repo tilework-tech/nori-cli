@@ -12,18 +12,19 @@ impl App {
             return;
         }
         self.agent_session_probe_in_flight = true;
-        let display_name = nori_harness::get_agent_display_name(&self.config.model);
+        let display_name = nori_harness::get_agent_display_name(&self.config.active_agent);
         self.chat_widget
             .add_info_message(format!("Listing {display_name} sessions…"), None);
 
-        let agent = self.config.model.clone();
+        let agent = self.config.active_agent.clone();
         let cwd = self.config.cwd.clone();
+        let acp_proxy = self.config.acp_proxy.clone();
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
             const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
             let probe = match tokio::time::timeout(
                 PROBE_TIMEOUT,
-                nori_harness::probe_agent_sessions_for(&agent, &cwd),
+                nori_harness::probe_agent_sessions_for(&agent, &cwd, acp_proxy),
             )
             .await
             {

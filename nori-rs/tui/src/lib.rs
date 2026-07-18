@@ -8,20 +8,15 @@ use app::App;
 pub use app::AppExitInfo;
 pub use app::RESUME_HINT_LEAD;
 pub use app::resume_command_for_conversation;
-use codex_app_server_protocol::AuthMode;
-use codex_core::AuthManager;
-use codex_core::CodexAuth;
-use codex_core::auth::enforce_login_restrictions;
-use codex_core::config::Config;
-use codex_core::config::ConfigOverrides;
-use codex_core::config::find_codex_home;
+use codex_login::AuthManager;
 use codex_protocol::config_types::SandboxMode;
 use codex_protocol::protocol::AskForApproval;
+#[cfg(target_os = "windows")]
 use codex_sandbox::get_platform_sandbox;
+use nori_config::NoriConfig;
+use nori_config::NoriConfigOverrides;
 use nori_harness::transcript::SessionMetadata;
 use nori_harness::transcript::TranscriptLoader;
-#[cfg(feature = "otel")]
-use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use tracing::error;
@@ -62,9 +57,7 @@ mod login_handler;
 mod markdown;
 mod markdown_render;
 mod markdown_stream;
-mod model_migration;
 mod nori;
-pub mod onboarding;
 mod pager_overlay;
 mod pinned_plan_drawer;
 pub mod public_widgets;
@@ -86,11 +79,6 @@ mod text_formatting;
 mod tui;
 mod ui_consts;
 mod viewonly_transcript;
-
-/// Default agent for ACP-only mode when no agent is specified via CLI or config.
-/// This overrides the upstream default (gpt-5.1-codex) to use Claude for Nori.
-/// This constant MUST match nori_config::DEFAULT_AGENT to ensure consistency.
-const DEFAULT_ACP_AGENT: &str = "claude-code";
 
 // Nori-specific update modules
 // Re-export as pub mod for external access to UpdateAction type
@@ -118,7 +106,6 @@ pub mod test_backend;
 
 use crate::nori::onboarding::NoriOnboardingScreenArgs;
 use crate::nori::onboarding::run_nori_onboarding_app;
-use crate::onboarding::TrustDirectorySelection;
 use crate::tui::Tui;
 pub use cli::Cli;
 pub use markdown_render::render_markdown_text;
@@ -130,23 +117,13 @@ use std::io::Write as _;
 
 pub async fn run_main(
     cli: Cli,
-    codex_linux_sandbox_exe: Option<PathBuf>,
+    _codex_linux_sandbox_exe: Option<PathBuf>,
 ) -> std::io::Result<AppExitInfo> {
     // Pre-warm the ACP agent installation cache in a background thread.
     // This runs `which` commands early so the agent picker opens quickly.
     std::thread::spawn(|| {
         nori_harness::prewarm_installation_cache();
     });
-
-    // Set up the Nori config environment
-    // This redirects config loading to ~/.nori/cli instead of ~/.codex
-    {
-        #[allow(clippy::print_stderr)]
-        if let Err(e) = nori::config_adapter::setup_nori_config_environment() {
-            eprintln!("Error setting up Nori config environment: {e}");
-            std::process::exit(1);
-        }
-    }
 
     // Track install/session in background (non-blocking, fire-and-forget)
     // This updates ~/.nori/cli/.nori-install.json with launch metadata
@@ -167,10 +144,7 @@ pub async fn run_main(
             (None, None)
         };
 
-    // When using `--oss`, let the bootstrapper pick the model (defaulting to
-    // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
     let raw_overrides = cli.config_overrides.raw_overrides.clone();
-    // `oss` model provider.
     let overrides_cli = codex_common::CliConfigOverrides { raw_overrides };
     let cli_kv_overrides = match overrides_cli.parse_overrides() {
         // Parse `-c` overrides from the CLI.
@@ -182,37 +156,23 @@ pub async fn run_main(
         }
     };
 
-    // we load config.toml here to determine project state.
-    #[allow(clippy::print_stderr)]
-    #[allow(unused_variables)]
-    let codex_home = match find_codex_home() {
-        Ok(codex_home) => codex_home.to_path_buf(),
-        Err(err) => {
-            eprintln!("Error finding codex home: {err}");
-            std::process::exit(1);
-        }
-    };
-
-    let model_provider_override: Option<String> = None;
-
-    // Load persisted agent preference from NoriConfig, falling back to DEFAULT_ACP_AGENT
-    let agent = cli.agent.clone().or_else(|| {
-        nori::config_adapter::get_persisted_agent().or_else(|| Some(DEFAULT_ACP_AGENT.to_string()))
-    });
-
     // canonicalize the cwd
     let mut cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
     let additional_dirs = cli.add_dir.clone();
 
-    // Auto-worktree: if enabled in NoriConfig, create a worktree and override cwd
-    let nori_config = nori::config_adapter::load_nori_config().ok();
+    let mut overrides = NoriConfigOverrides {
+        agent: cli.agent.clone(),
+        approval_policy,
+        sandbox_mode,
+        cwd: cwd.clone(),
+        additional_writable_roots: additional_dirs,
+        raw_overrides: cli_kv_overrides,
+    };
+    let mut config = load_config_or_exit(overrides.clone());
 
     // Initialize the agent registry with custom agents from config plus any
     // caller-injected entries (e.g. `nori cloud`'s pinned handroll agent).
-    let mut registry_agents = nori_config
-        .as_ref()
-        .map(|config| config.agents.clone())
-        .unwrap_or_default();
+    let mut registry_agents = config.agents.clone();
     // Caller-injected entries win slug collisions (a user-defined agent with
     // the same slug would otherwise fail registry init with a duplicate-slug
     // error and break cloud mode with a confusing "unknown agent").
@@ -228,10 +188,7 @@ pub async fn run_main(
 
     let (pending_worktree_ask, worktree_blocked_reason) = {
         use nori_config::AutoWorktree;
-        let auto_worktree = nori_config
-            .as_ref()
-            .map(|c| c.auto_worktree)
-            .unwrap_or_default();
+        let auto_worktree = config.auto_worktree;
 
         if !auto_worktree.is_enabled() {
             (false, None)
@@ -275,25 +232,16 @@ pub async fn run_main(
             }
         }
     };
-    let overrides = ConfigOverrides {
-        model: agent,
-        approval_policy,
-        sandbox_mode,
-        cwd,
-        model_provider: model_provider_override.clone(),
-        config_profile: cli.config_profile.clone(),
-        codex_linux_sandbox_exe,
-        base_instructions: None,
-        developer_instructions: None,
-        compact_prompt: None,
-        include_apply_patch_tool: None,
-        show_raw_agent_reasoning: None,
-        tools_web_search_request: None,
-        experimental_sandbox_command_assessment: None,
-        additional_writable_roots: additional_dirs,
-    };
+    if cwd != overrides.cwd {
+        overrides.cwd = cwd;
+        config = load_config_or_exit(overrides.clone());
+    }
 
-    let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;
+    #[cfg(target_os = "windows")]
+    {
+        codex_sandbox::set_windows_sandbox_enabled(config.windows_sandbox_enabled);
+        config.apply_windows_sandbox_availability(get_platform_sandbox().is_some());
+    }
 
     if let Some(warning) = add_dir_warning_message(&cli.add_dir, &config.sandbox_policy) {
         #[allow(clippy::print_stderr)]
@@ -303,14 +251,7 @@ pub async fn run_main(
         }
     }
 
-    #[allow(clippy::print_stderr)]
-    if let Err(err) = enforce_login_restrictions(&config).await {
-        eprintln!("{err}");
-        std::process::exit(1);
-    }
-
-    let active_profile = config.active_profile.clone();
-    let log_dir = codex_core::config::log_dir(&config)?;
+    let log_dir = config.nori_home.join("log");
     std::fs::create_dir_all(&log_dir)?;
     // Open (or create) your log file, appending to it.
     let mut log_file_opts = OpenOptions::new();
@@ -333,9 +274,8 @@ pub async fn run_main(
 
     // use RUST_LOG env var, default to info for codex crates.
     let env_filter = || {
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("codex_core=info,nori_tui=info,codex_rmcp_client=info")
-        })
+        EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("nori_tui=info,codex_rmcp_client=info"))
     };
 
     let file_layer = tracing_subscriber::fmt::layer()
@@ -344,51 +284,12 @@ pub async fn run_main(
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_filter(env_filter());
 
-    // Initialize tracing subscriber with optional OTEL support
-    #[cfg(feature = "otel")]
-    {
-        let otel = codex_core::otel_init::build_provider(&config, env!("CARGO_PKG_VERSION"));
-
-        #[allow(clippy::print_stderr)]
-        let otel = match otel {
-            Ok(otel) => otel,
-            Err(e) => {
-                eprintln!("Could not create otel exporter: {e}");
-                std::process::exit(1);
-            }
-        };
-
-        if let Some(provider) = otel.as_ref() {
-            let otel_layer = OpenTelemetryTracingBridge::new(&provider.logger).with_filter(
-                tracing_subscriber::filter::filter_fn(codex_core::otel_init::codex_export_filter),
-            );
-
-            let _ = tracing_subscriber::registry()
-                .with(file_layer)
-                .with(otel_layer)
-                .try_init();
-        } else {
-            let _ = tracing_subscriber::registry().with(file_layer).try_init();
-        }
-    }
-
-    #[cfg(not(feature = "otel"))]
-    {
-        let _ = tracing_subscriber::registry().with(file_layer).try_init();
-    }
-
-    let vertical_footer = nori_config
-        .as_ref()
-        .map(|c| c.vertical_footer)
-        .unwrap_or(false);
+    let _ = tracing_subscriber::registry().with(file_layer).try_init();
 
     run_ratatui_app(
         cli,
         config,
         overrides,
-        cli_kv_overrides,
-        active_profile,
-        vertical_footer,
         pending_worktree_ask,
         worktree_blocked_reason,
     )
@@ -399,11 +300,8 @@ pub async fn run_main(
 #[allow(clippy::too_many_arguments)]
 async fn run_ratatui_app(
     cli: Cli,
-    initial_config: Config,
-    overrides: ConfigOverrides,
-    cli_kv_overrides: Vec<(String, toml::Value)>,
-    active_profile: Option<String>,
-    vertical_footer: bool,
+    initial_config: NoriConfig,
+    overrides: NoriConfigOverrides,
     pending_worktree_ask: bool,
     worktree_blocked_reason: Option<String>,
 ) -> color_eyre::Result<AppExitInfo> {
@@ -446,16 +344,15 @@ async fn run_ratatui_app(
     session_log::maybe_init(&initial_config);
 
     let auth_manager = AuthManager::shared(
-        initial_config.codex_home.clone(),
+        initial_config.nori_home.clone(),
         false,
-        initial_config.cli_auth_credentials_store_mode,
+        codex_login::AuthCredentialsStoreMode::File,
     );
-    let login_status = get_login_status(&initial_config);
     let should_show_trust_screen = should_show_trust_screen(&initial_config);
-    let should_show_onboarding =
-        should_show_onboarding(login_status, &initial_config, should_show_trust_screen);
+    let should_show_onboarding = should_show_trust_screen
+        || (!cli.skip_welcome && nori::onboarding::is_first_launch(&initial_config.nori_home));
 
-    let (config, overrides, cli_kv_overrides) = if should_show_onboarding {
+    let (config, overrides) = if should_show_onboarding {
         // Use Nori-branded onboarding flow
         let onboarding_result = run_nori_onboarding_app(
             NoriOnboardingScreenArgs {
@@ -478,19 +375,16 @@ async fn run_ratatui_app(
                 update_action: None,
             });
         }
-        // if the user acknowledged windows or made an explicit decision ato trust the directory, reload the config accordingly
-        if onboarding_result
-            .directory_trust_decision
-            .map(|d| d == TrustDirectorySelection::Trust)
-            .unwrap_or(false)
-        {
-            let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;
-            (config, overrides, cli_kv_overrides)
+        // Trust decisions are persisted by onboarding; reload explicitly so
+        // the resolved policy and active project reflect that decision.
+        if onboarding_result.directory_trust_decision.is_some() {
+            let config = load_config_or_exit(overrides.clone());
+            (config, overrides)
         } else {
-            (initial_config, overrides, cli_kv_overrides)
+            (initial_config, overrides)
         }
     } else {
-        (initial_config, overrides, cli_kv_overrides)
+        (initial_config, overrides)
     };
 
     // Auto-worktree: show a popup if worktree creation is blocked, or ask the
@@ -507,7 +401,7 @@ async fn run_ratatui_app(
                     tracing::info!("Auto-worktree created at {}", worktree_path.display());
                     let mut new_overrides = overrides;
                     new_overrides.cwd = Some(worktree_path);
-                    load_config_or_exit(cli_kv_overrides, new_overrides).await
+                    load_config_or_exit(new_overrides)
                 }
                 Err(e) => {
                     tracing::warn!("Auto-worktree setup skipped: {e}");
@@ -522,7 +416,7 @@ async fn run_ratatui_app(
     };
 
     let resume_agent_filter = cli.agent.as_deref();
-    let transcript_loader = TranscriptLoader::new(config.codex_home.clone());
+    let transcript_loader = TranscriptLoader::new(config.nori_home.clone());
 
     // Determine resume behavior: explicit id, then resume last, then picker.
     let resume_selection = if let Some(id_str) = cli.resume_session_id.as_deref() {
@@ -531,7 +425,7 @@ async fn run_ratatui_app(
             .await?
         {
             Some(metadata) => match resume_target_from_metadata(
-                config.codex_home.clone(),
+                config.nori_home.clone(),
                 metadata,
                 resume_agent_filter,
             ) {
@@ -561,7 +455,7 @@ async fn run_ratatui_app(
         {
             Ok(sessions) => match sessions.into_iter().next() {
                 Some(metadata) => match resume_target_from_metadata(
-                    config.codex_home.clone(),
+                    config.nori_home.clone(),
                     metadata,
                     resume_agent_filter,
                 ) {
@@ -577,7 +471,7 @@ async fn run_ratatui_app(
     } else if cli.resume_picker {
         match resume_picker::run_resume_picker(
             &mut tui,
-            &config.codex_home,
+            &config.nori_home,
             resume_agent_filter,
             cli.resume_show_all,
         )
@@ -602,7 +496,7 @@ async fn run_ratatui_app(
     if let resume_picker::ResumeSelection::Resume(target) = &resume_selection
         && let Some(agent) = target.agent.as_ref()
     {
-        config.model = agent.clone();
+        config.active_agent = agent.clone();
     }
 
     let Cli {
@@ -611,12 +505,12 @@ async fn run_ratatui_app(
         cloud_session_picker,
         ..
     } = cli;
+    let vertical_footer = config.vertical_footer;
 
     let app_result = App::run(
         &mut tui,
         auth_manager,
         config,
-        active_profile,
         prompt,
         images,
         resume_selection,
@@ -683,36 +577,9 @@ fn restore() {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoginStatus {
-    AuthMode(AuthMode),
-    NotAuthenticated,
-}
-
-fn get_login_status(config: &Config) -> LoginStatus {
-    if config.model_provider.requires_openai_auth {
-        // Reading the OpenAI API key is an async operation because it may need
-        // to refresh the token. Block on it.
-        let codex_home = config.codex_home.clone();
-        match CodexAuth::from_auth_storage(&codex_home, config.cli_auth_credentials_store_mode) {
-            Ok(Some(auth)) => LoginStatus::AuthMode(auth.mode),
-            Ok(None) => LoginStatus::NotAuthenticated,
-            Err(err) => {
-                error!("Failed to read auth.json: {err}");
-                LoginStatus::NotAuthenticated
-            }
-        }
-    } else {
-        LoginStatus::NotAuthenticated
-    }
-}
-
-async fn load_config_or_exit(
-    cli_kv_overrides: Vec<(String, toml::Value)>,
-    overrides: ConfigOverrides,
-) -> Config {
+fn load_config_or_exit(overrides: NoriConfigOverrides) -> NoriConfig {
     #[allow(clippy::print_stderr)]
-    match Config::load_with_cli_overrides(cli_kv_overrides, overrides).await {
+    match NoriConfig::load_with_overrides(overrides) {
         Ok(config) => config,
         Err(err) => {
             eprintln!("Error loading configuration: {err}");
@@ -724,12 +591,15 @@ async fn load_config_or_exit(
 /// Determine if user has configured a sandbox / approval policy,
 /// or if the current cwd project is already trusted. If not, we need to
 /// show the trust screen.
-fn should_show_trust_screen(config: &Config) -> bool {
-    if cfg!(target_os = "windows") && get_platform_sandbox().is_none() {
-        // If the experimental sandbox is not enabled, Native Windows cannot enforce sandboxed write access; skip the trust prompt entirely.
+fn should_show_trust_screen(config: &NoriConfig) -> bool {
+    if cfg!(target_os = "windows")
+        && (!config.windows_sandbox_enabled || config.forced_auto_mode_downgraded_on_windows)
+    {
+        // Native Windows cannot enforce sandboxed write access, so skip the
+        // trust prompt when the configured sandbox is disabled or unavailable.
         return false;
     }
-    if config.did_user_set_custom_approval_policy_or_sandbox_mode {
+    if config.has_explicit_approval_or_sandbox_policy {
         // Respect explicit approval/sandbox overrides made by the user.
         return false;
     }
@@ -737,34 +607,10 @@ fn should_show_trust_screen(config: &Config) -> bool {
     config.active_project.trust_level.is_none()
 }
 
-fn should_show_onboarding(
-    login_status: LoginStatus,
-    config: &Config,
-    show_trust_screen: bool,
-) -> bool {
-    if show_trust_screen {
-        return true;
-    }
-
-    should_show_login_screen(login_status, config)
-}
-
-fn should_show_login_screen(login_status: LoginStatus, config: &Config) -> bool {
-    // Only show the login screen for providers that actually require OpenAI auth
-    // (OpenAI or equivalents). For OSS/other providers, skip login entirely.
-    if !config.model_provider.requires_openai_auth {
-        return false;
-    }
-
-    login_status == LoginStatus::NotAuthenticated
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_core::config::ConfigOverrides;
-    use codex_core::config::ConfigToml;
-    use codex_core::config::ProjectConfig;
+    use nori_config::ProjectConfig;
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -807,14 +653,13 @@ mod tests {
     #[serial]
     fn windows_skips_trust_prompt_without_sandbox() -> std::io::Result<()> {
         let temp_dir = TempDir::new()?;
-        let mut config = Config::load_from_base_config_with_overrides(
-            ConfigToml::default(),
-            ConfigOverrides::default(),
-            temp_dir.path().to_path_buf(),
-        )?;
-        config.did_user_set_custom_approval_policy_or_sandbox_mode = false;
+        let mut config = NoriConfig {
+            cwd: temp_dir.path().to_path_buf(),
+            ..NoriConfig::default()
+        };
+        config.has_explicit_approval_or_sandbox_policy = false;
         config.active_project = ProjectConfig { trust_level: None };
-        config.set_windows_sandbox_globally(false);
+        config.windows_sandbox_enabled = false;
 
         let should_show = should_show_trust_screen(&config);
         if cfg!(target_os = "windows") {
@@ -834,14 +679,13 @@ mod tests {
     #[serial]
     fn windows_shows_trust_prompt_with_sandbox() -> std::io::Result<()> {
         let temp_dir = TempDir::new()?;
-        let mut config = Config::load_from_base_config_with_overrides(
-            ConfigToml::default(),
-            ConfigOverrides::default(),
-            temp_dir.path().to_path_buf(),
-        )?;
-        config.did_user_set_custom_approval_policy_or_sandbox_mode = false;
+        let mut config = NoriConfig {
+            cwd: temp_dir.path().to_path_buf(),
+            ..NoriConfig::default()
+        };
+        config.has_explicit_approval_or_sandbox_policy = false;
         config.active_project = ProjectConfig { trust_level: None };
-        config.set_windows_sandbox_globally(true);
+        config.windows_sandbox_enabled = true;
 
         let should_show = should_show_trust_screen(&config);
         if cfg!(target_os = "windows") {
@@ -861,12 +705,11 @@ mod tests {
     fn untrusted_project_skips_trust_prompt() -> std::io::Result<()> {
         use codex_protocol::config_types::TrustLevel;
         let temp_dir = TempDir::new()?;
-        let mut config = Config::load_from_base_config_with_overrides(
-            ConfigToml::default(),
-            ConfigOverrides::default(),
-            temp_dir.path().to_path_buf(),
-        )?;
-        config.did_user_set_custom_approval_policy_or_sandbox_mode = false;
+        let mut config = NoriConfig {
+            cwd: temp_dir.path().to_path_buf(),
+            ..NoriConfig::default()
+        };
+        config.has_explicit_approval_or_sandbox_policy = false;
         config.active_project = ProjectConfig {
             trust_level: Some(TrustLevel::Untrusted),
         };
@@ -877,18 +720,5 @@ mod tests {
             "Trust prompt should not be shown for projects explicitly marked as untrusted"
         );
         Ok(())
-    }
-
-    #[test]
-    fn default_acp_agent_matches_acp_module_default() {
-        // The TUI's DEFAULT_ACP_AGENT should match the ACP module's DEFAULT_AGENT
-        // to ensure consistency between the two modules.
-        assert_eq!(
-            DEFAULT_ACP_AGENT,
-            nori_config::DEFAULT_AGENT,
-            "TUI default agent '{}' does not match ACP module default '{}'",
-            DEFAULT_ACP_AGENT,
-            nori_config::DEFAULT_AGENT
-        );
     }
 }

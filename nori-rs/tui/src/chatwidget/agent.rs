@@ -3,16 +3,17 @@
 //! All session orchestration (backend config assembly, connect/shutdown/
 //! timeout race, op forwarding, session-control commands) lives in
 //! `nori_harness::runtime`; this module only builds a launch spec from the codex
-//! `Config` and maps [`SessionEvent`]s onto [`AppEvent`]s.
+//! resolved Nori config and maps [`SessionEvent`]s onto [`AppEvent`]s.
 
-use codex_core::config::Config;
 use codex_protocol::protocol::Op;
+use nori_config::NoriConfig as Config;
 use nori_harness::get_agent_display_name;
 use nori_harness::list_available_agents;
 use nori_harness::runtime::SessionEvent;
 use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionResume;
 use nori_harness::runtime::launch_session;
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 
@@ -43,10 +44,10 @@ pub(crate) fn spawn_agent(
     app_event_tx: AppEventSender,
     fork_context: Option<String>,
 ) -> SpawnAgentResult {
-    match nori_harness::get_agent_config(&config.model) {
+    match nori_harness::get_agent_config(&config.active_agent) {
         Ok(_) => launch_acp_agent(config, app_event_tx, fork_context, None),
         Err(_) => {
-            let agent_name = config.model;
+            let agent_name = config.active_agent;
             let known: Vec<String> = list_available_agents()
                 .iter()
                 .map(|a| a.agent_name.clone())
@@ -117,23 +118,17 @@ fn launch_acp_agent(
     resume: Option<SessionResume>,
 ) -> SpawnAgentResult {
     // Emit "Connecting" status before spawning the backend
-    let display_name = get_agent_display_name(&config.model);
+    let display_name = get_agent_display_name(&config.active_agent);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     let spec = SessionLaunchSpec {
-        agent: config.model.clone(),
-        cwd: config.cwd.clone(),
-        approval_policy: config.approval_policy,
-        sandbox_policy: config.sandbox_policy.clone(),
-        notify: config.notify.clone(),
-        mcp_servers: config.mcp_servers.clone(),
-        mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+        config: Arc::new(config.clone()),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
         session_context: Some(include_str!("../../session_context.md").to_string()),
         initial_context: fork_context,
         resume,
     };
-    let agent_name = config.model;
+    let agent_name = config.active_agent;
 
     let mut session = launch_session(spec);
     let acp_handle = Some(session.handle.clone());

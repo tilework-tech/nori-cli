@@ -6,10 +6,8 @@ static RESUME_PICKER_GENERATION: std::sync::atomic::AtomicU64 =
 impl ChatWidget {
     /// Open the agent picker popup for ACP mode.
     pub(crate) fn open_agent_popup(&mut self) {
-        let current_model = self.config.model.clone();
-        let recording_enabled = nori_config::NoriConfig::load()
-            .map(|config| config.acp_proxy.enabled)
-            .unwrap_or(false);
+        let current_model = self.config.active_agent.clone();
+        let recording_enabled = self.config.acp_proxy.enabled;
         self.bottom_pane
             .set_acp_wire_recording_enabled(recording_enabled);
         let params = crate::nori::agent_picker::agent_picker_params(
@@ -29,7 +27,7 @@ impl ChatWidget {
             return;
         }
         let params = crate::nori::agent_picker::agent_picker_params(
-            &self.config.model,
+            &self.config.active_agent,
             self.app_event_tx.clone(),
             recording_enabled,
         );
@@ -47,13 +45,7 @@ impl ChatWidget {
         let tx = self.app_event_tx.clone();
 
         // Get NORI_HOME - if not available, show error
-        let nori_home = match crate::nori::config_adapter::get_nori_home() {
-            Ok(home) => home,
-            Err(e) => {
-                self.add_error_message(format!("Failed to find NORI_HOME: {e}"));
-                return;
-            }
-        };
+        let nori_home = self.config.nori_home.clone();
 
         let nori_home_for_event = nori_home.clone();
         tokio::spawn(async move {
@@ -131,7 +123,7 @@ impl ChatWidget {
         let started = std::time::Instant::now();
         let cwd = self.config.cwd.clone();
         let tx = self.app_event_tx.clone();
-        let model = self.config.model.clone();
+        let model = self.config.active_agent.clone();
         let generation =
             RESUME_PICKER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -143,20 +135,7 @@ impl ChatWidget {
             "starting /resume pre-picker session load",
         );
 
-        let nori_home = match crate::nori::config_adapter::get_nori_home() {
-            Ok(home) => home,
-            Err(e) => {
-                tracing::warn!(
-                    target: "nori_resume",
-                    phase = "open_resume_session_picker.nori_home_error",
-                    elapsed_ms = started.elapsed().as_millis(),
-                    error = %e,
-                    "failed to resolve NORI_HOME before opening /resume picker",
-                );
-                self.add_error_message(format!("Failed to find NORI_HOME: {e}"));
-                return;
-            }
-        };
+        let nori_home = self.config.nori_home.clone();
 
         tracing::info!(
             target: "nori_resume",
@@ -715,7 +694,7 @@ impl ChatWidget {
         if let Some(handle) = self.acp_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             let generation = self.acp_mode_config_generation;
-            let agent = self.config.model.clone();
+            let agent = self.config.active_agent.clone();
             let option_name_for_result = option_name;
             let value_name_for_result = value_name;
             let config_id_for_result = config_id.clone();

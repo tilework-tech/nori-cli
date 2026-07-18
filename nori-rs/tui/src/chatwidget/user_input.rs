@@ -130,7 +130,7 @@ impl ChatWidget {
         self.app_event_tx
             .send(AppEvent::RefreshSystemInfoForDirectory {
                 dir: self.config.cwd.clone(),
-                agent: Some(self.config.model.clone()),
+                agent: Some(self.config.active_agent.clone()),
             });
 
         // Check if there's a pending agent switch - if so, send the message through
@@ -419,7 +419,7 @@ impl ChatWidget {
     }
 
     pub(super) fn notify(&mut self, notification: Notification) {
-        if !self.config.tui_notifications {
+        if self.config.terminal_notifications != nori_config::TerminalNotifications::Enabled {
             return;
         }
         self.pending_notification = Some(notification);
@@ -466,7 +466,7 @@ impl ChatWidget {
             approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
 
         self.add_to_history(crate::nori::session_header::new_nori_status_output(
-            &self.config.model,
+            &self.config.active_agent,
             self.config.cwd.clone(),
             prompt_summary,
             approval_mode_label,

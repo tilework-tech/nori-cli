@@ -16,12 +16,12 @@ use crate::selection_list::selection_option_row;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
-use codex_core::config::Config;
 use color_eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use nori_config::NoriConfig;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::prelude::Widget;
@@ -38,7 +38,7 @@ pub(crate) enum UpdatePromptOutcome {
 
 pub(crate) async fn run_update_prompt_if_needed(
     tui: &mut Tui,
-    config: &Config,
+    config: &NoriConfig,
 ) -> Result<UpdatePromptOutcome> {
     let Some(latest_version) = updates::get_upgrade_version_for_popup(config) else {
         return Ok(UpdatePromptOutcome::Continue);

@@ -74,7 +74,7 @@ fn test_footer_without_git_repo() {
 #[cfg(target_os = "linux")]
 fn test_footer_full_startup_with_all_info() {
     // This test verifies the complete footer display similar to startup.rs tests
-    // It should show: git branch, nori profile, nori version, and git diff stats
+    // It should show: git branch, active skillset, Nori version, and git diff stats.
 
     use std::os::unix::fs::PermissionsExt;
 
@@ -97,7 +97,7 @@ fn test_footer_full_startup_with_all_info() {
     // at the trusted default) is preserved.
     let extra_config_toml = r#"
 [tui.footer_segments]
-nori_profile = true
+skillset = true
 nori_version = true
 git_stats = true
 "#;

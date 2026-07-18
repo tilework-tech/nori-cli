@@ -628,7 +628,7 @@ fn interrupt_exec_marks_failed_snapshot() {
 fn model_selection_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    chat.config.model = "gpt-5-codex".to_string();
+    chat.config.active_agent = "codex".to_string();
     chat.open_model_popup();
 
     let popup = render_bottom_popup(&chat, 80);

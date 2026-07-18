@@ -637,58 +637,15 @@ pub fn file_manager_picker_params(
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
-    use nori_config::OsNotifications;
-    use nori_config::TerminalNotifications;
     use std::path::PathBuf;
     use tokio::sync::mpsc::unbounded_channel;
 
     fn make_test_config(vertical_footer: bool) -> NoriConfig {
         NoriConfig {
-            agent: "claude-code".to_string(),
-            active_agent: "claude-code".to_string(),
-            sandbox_mode: codex_protocol::config_types::SandboxMode::WorkspaceWrite,
-            approval_policy: nori_config::ApprovalPolicy::OnRequest,
-            history_persistence: nori_config::HistoryPersistence::SaveAll,
-            acp_proxy: nori_config::AcpProxyConfig::disabled(),
-            animations: true,
-            terminal_notifications: TerminalNotifications::Enabled,
-            os_notifications: OsNotifications::Enabled,
             vertical_footer,
-            notify_after_idle: nori_config::NotifyAfterIdle::FiveSeconds,
-            vim_mode: VimEnterBehavior::Off,
-            hotkeys: nori_config::HotkeyConfig::default(),
-            script_timeout: nori_config::ScriptTimeout::default(),
-            loop_count: None,
-            auto_worktree: nori_config::AutoWorktree::Off,
-            footer_segment_config: FooterSegmentConfig::default(),
-            footer_layout_config: nori_config::FooterLayoutConfig::default(),
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
-            mcp_servers: std::collections::HashMap::new(),
-            session_start_hooks: vec![],
-            session_end_hooks: vec![],
-            pre_user_prompt_hooks: vec![],
-            post_user_prompt_hooks: vec![],
-            pre_tool_call_hooks: vec![],
-            post_tool_call_hooks: vec![],
-            pre_agent_response_hooks: vec![],
-            post_agent_response_hooks: vec![],
-            async_session_start_hooks: vec![],
-            async_session_end_hooks: vec![],
-            async_pre_user_prompt_hooks: vec![],
-            async_post_user_prompt_hooks: vec![],
-            async_pre_tool_call_hooks: vec![],
-            async_post_tool_call_hooks: vec![],
-            async_pre_agent_response_hooks: vec![],
-            async_post_agent_response_hooks: vec![],
-            default_models: std::collections::HashMap::new(),
-            agents: vec![],
-            skillset_per_session: false,
-            file_manager: None,
-            pinned_plan_drawer: false,
-            custom_working_messages: true,
-            custom_working_message_list: Vec::new(),
-            cloud_broker_url: None,
+            ..NoriConfig::default()
         }
     }
 

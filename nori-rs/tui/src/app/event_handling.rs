@@ -32,7 +32,7 @@ impl App {
         }
         self.request_system_info_refresh(
             self.config.cwd.clone(),
-            self.config.model.clone().into(),
+            self.config.active_agent.clone().into(),
             self.chat_widget.first_prompt_text(),
         );
     }
@@ -395,16 +395,6 @@ impl App {
             AppEvent::RateLimitSnapshotFetched(snapshot) => {
                 self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
             }
-            AppEvent::UpdateReasoningEffort(effort) => {
-                self.on_update_reasoning_effort(effort);
-            }
-            AppEvent::UpdateAgent(model) => {
-                self.chat_widget.set_agent(&model);
-                self.config.model = model.clone();
-                if let Some(family) = find_family_for_model(&model) {
-                    self.config.model_family = family;
-                }
-            }
             AppEvent::OpenFullAccessConfirmation { preset } => {
                 self.chat_widget.open_full_access_confirmation(preset);
             }
@@ -427,16 +417,15 @@ impl App {
             AppEvent::EnableWindowsSandboxForAgentMode { preset } => {
                 #[cfg(target_os = "windows")]
                 {
-                    let profile = self.active_profile.as_deref();
-                    let feature_key = Feature::WindowsSandbox.key();
-                    match ConfigEditsBuilder::new(&self.config.codex_home)
-                        .with_profile(profile)
-                        .set_feature_enabled(feature_key, true)
+                    match ConfigEditsBuilder::new(&self.config.nori_home)
+                        .set_path(&["features", "enable_experimental_windows_sandbox"], true)
                         .apply()
                         .await
                     {
                         Ok(()) => {
-                            self.config.set_windows_sandbox_globally(true);
+                            codex_sandbox::set_windows_sandbox_enabled(true);
+                            self.config.windows_sandbox_enabled = true;
+                            self.config.forced_auto_mode_downgraded_on_windows = false;
                             self.chat_widget.clear_forced_auto_mode_downgrade();
                             if let Some((sample_paths, extra_count, failed_scan)) =
                                 self.chat_widget.world_writable_warning_details()
@@ -476,49 +465,6 @@ impl App {
                     let _ = preset;
                 }
             }
-            AppEvent::PersistAgentSelection {
-                agent: model,
-                effort,
-            } => {
-                let profile = self.active_profile.as_deref();
-                match ConfigEditsBuilder::new(&self.config.codex_home)
-                    .with_profile(profile)
-                    .set_model(Some(model.as_str()), effort)
-                    .apply()
-                    .await
-                {
-                    Ok(()) => {
-                        let reasoning_label = Self::reasoning_label(effort);
-                        if let Some(profile) = profile {
-                            self.chat_widget.add_info_message(
-                                format!(
-                                    "Model changed to {model} {reasoning_label} for {profile} profile"
-                                ),
-                                None,
-                            );
-                        } else {
-                            self.chat_widget.add_info_message(
-                                format!("Model changed to {model} {reasoning_label}"),
-                                None,
-                            );
-                        }
-                    }
-                    Err(err) => {
-                        tracing::error!(
-                            error = %err,
-                            "failed to persist model selection"
-                        );
-                        if let Some(profile) = profile {
-                            self.chat_widget.add_error_message(format!(
-                                "Failed to save model for profile `{profile}`: {err}"
-                            ));
-                        } else {
-                            self.chat_widget
-                                .add_error_message(format!("Failed to save default model: {err}"));
-                        }
-                    }
-                }
-            }
             AppEvent::ApplyApprovalPreset { approval, sandbox } => {
                 #[cfg(target_os = "windows")]
                 let sandbox_is_workspace_write_or_ro = matches!(
@@ -546,7 +492,7 @@ impl App {
                         let env_map: std::collections::HashMap<String, String> =
                             std::env::vars().collect();
                         let tx = self.app_event_tx.clone();
-                        let logs_base_dir = self.config.codex_home.clone();
+                        let logs_base_dir = self.config.nori_home.clone();
                         let sandbox_policy = self.config.sandbox_policy.clone();
                         Self::spawn_world_writable_scan(
                             cwd,
@@ -569,8 +515,8 @@ impl App {
                     .set_world_writable_warning_acknowledged(ack);
             }
             AppEvent::PersistFullAccessWarningAcknowledged => {
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_hide_full_access_warning(true)
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+                    .set_path(&["notice", "hide_full_access_warning"], true)
                     .apply()
                     .await
                 {
@@ -584,8 +530,8 @@ impl App {
                 }
             }
             AppEvent::PersistWorldWritableWarningAcknowledged => {
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_hide_world_writable_warning(true)
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+                    .set_path(&["notice", "hide_world_writable_warning"], true)
                     .apply()
                     .await
                 {
@@ -595,18 +541,6 @@ impl App {
                     );
                     self.chat_widget.add_error_message(format!(
                         "Failed to save Agent mode warning preference: {err}"
-                    ));
-                }
-            }
-            AppEvent::PersistModelMigrationPromptAcknowledged { migration_config } => {
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_hide_model_migration_prompt(&migration_config, true)
-                    .apply()
-                    .await
-                {
-                    tracing::error!(error = %err, "failed to persist model migration prompt acknowledgement");
-                    self.chat_widget.add_error_message(format!(
-                        "Failed to save model migration prompt preference: {err}"
                     ));
                 }
             }
@@ -750,11 +684,12 @@ impl App {
                 self.pending_agent = None;
 
                 // Update the model in config
-                self.config.model = agent_name.clone();
+                self.config.active_agent = agent_name.clone();
+                self.config.agent = agent_name.clone();
 
                 // Persist the agent selection to config.toml for next TUI startup
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_agent(Some(&agent_name))
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+                    .set_agent(&agent_name)
                     .apply()
                     .await
                 {
@@ -836,7 +771,7 @@ impl App {
                 if success {
                     let saved_as_default =
                         match config_persistence::persist_default_model_selection(
-                            &self.config.codex_home,
+                            &self.config.nori_home,
                             &agent,
                             &config_id,
                             &value,
@@ -1173,9 +1108,9 @@ impl App {
                     Ok(transcript) => {
                         let acp_session_id = transcript.meta.acp_session_id.clone();
                         let display_name =
-                            crate::nori::agent_picker::get_agent_info(&self.config.model)
+                            crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
                                 .map(|info| info.display_name)
-                                .unwrap_or_else(|| self.config.model.clone());
+                                .unwrap_or_else(|| self.config.active_agent.clone());
 
                         self.shutdown_current_conversation();
 
@@ -1211,9 +1146,10 @@ impl App {
                 acp_session_id,
                 title,
             } => {
-                let display_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
-                    .map(|info| info.display_name)
-                    .unwrap_or_else(|| self.config.model.clone());
+                let display_name =
+                    crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
+                        .map(|info| info.display_name)
+                        .unwrap_or_else(|| self.config.active_agent.clone());
                 // Capture the outgoing widget's capability view: the same
                 // agent is respawned, and live-reattach (session/resume,
                 // no loadSession) means no history replay — say so.
@@ -1371,15 +1307,36 @@ impl App {
                 let servers = self.chat_widget.config_ref().mcp_servers.clone();
                 let tx = self.app_event_tx.clone();
                 tokio::spawn(async move {
-                    let entries = codex_core::mcp::auth::compute_auth_statuses(
-                        &servers,
-                        codex_rmcp_client::OAuthCredentialsStoreMode::Auto,
-                    )
-                    .await;
-                    let statuses = entries
-                        .into_iter()
-                        .map(|(name, entry)| (name, entry.auth_status))
-                        .collect();
+                    let mut statuses = std::collections::HashMap::new();
+                    for (name, config) in servers {
+                        let status = match config.transport {
+                            codex_protocol::config_types::McpServerTransportConfig::Stdio {
+                                ..
+                            } => codex_protocol::protocol::McpAuthStatus::Unsupported,
+                            codex_protocol::config_types::McpServerTransportConfig::StreamableHttp {
+                                url,
+                                bearer_token_env_var,
+                                http_headers,
+                                env_http_headers,
+                                ..
+                            } => codex_rmcp_client::determine_streamable_http_auth_status(
+                                &name,
+                                &url,
+                                bearer_token_env_var.as_deref(),
+                                http_headers,
+                                env_http_headers,
+                                codex_rmcp_client::OAuthCredentialsStoreMode::Auto,
+                            )
+                            .await
+                            .unwrap_or_else(|err| {
+                                tracing::warn!(
+                                    "failed to determine auth status for MCP server `{name}`: {err:?}"
+                                );
+                                codex_protocol::protocol::McpAuthStatus::Unsupported
+                            }),
+                        };
+                        statuses.insert(name, status);
+                    }
                     tx.send(AppEvent::McpAuthStatusesReady(statuses));
                 });
             }

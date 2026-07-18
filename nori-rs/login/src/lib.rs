@@ -12,6 +12,7 @@ pub use server::run_login_server;
 pub use codex_app_server_protocol::AuthMode;
 pub use codex_core::AuthManager;
 pub use codex_core::CodexAuth;
+pub use codex_core::auth::AuthCredentialsStoreMode;
 pub use codex_core::auth::AuthDotJson;
 pub use codex_core::auth::CLIENT_ID;
 pub use codex_core::auth::CODEX_API_KEY_ENV_VAR;
