@@ -67,32 +67,36 @@ Observed problems, in rough order of cost:
 ## 3. Target layout
 
 ```
-Layer 0 — leaves (independently useful, publishable to crates.io)
-├── nori-acp-host     ACP host-side library: agent registry, subprocess spawn,
-│                     JSON-RPC/stdio connection, session lifecycle, permission
-│                     plumbing. No TUI, no ~/.nori, no codex-* deps.
-├── nori-protocol     The internal types crate: session-runtime types plus the
-│                     adopted internal event vocabulary (today's codex-protocol
-│                     Event/EventMsg/Op), built on agent-client-protocol-schema.
-│                     Minimal deps, no business logic. Two vocabularies remain
-│                     deliberate: ACP wire types at the boundary, internal event
-│                     types as the harness's control plane (the same split
-│                     upstream keeps between codex-protocol and its app-server
-│                     protocol).
-└── mock-acp-agent    Conformance-test agent for ACP hosts and agent authors.
+Layer 0 — protocol substrate (independently useful, publishable to crates.io)
+└── nori-protocol     The public boundary types crate and sole ACP schema import
+                      choke point. It re-exports the ACP schema, carries raw ACP
+                      agent→client envelopes, and defines only the small set of
+                      Nori-owned events ACP does not cover. Minimal deps, no
+                      reducers, normalization, presentation, or other business
+                      logic. See docs/specs/protocol-unification.md.
 
-Layer 1 — headless runtime (the harness product)
-├── nori-harness      Session runtime over nori-acp-host: backend reducer,
-│                     transcript, undo, auto-worktree, hooks, message history.
-│                     Embeddable without a terminal.
+Layer 1 — configuration
 └── nori-config       ~/.nori loading, agent registry config, approval policy.
                       Runtime composition — no cargo features that move config.
 
-Layer 2 — frontends (thin)
+Layer 2 — ACP host
+└── nori-acp-host     ACP host-side library over nori-protocol and nori-config:
+                      agent registry, subprocess spawn, JSON-RPC/stdio
+                      connection, session lifecycle, permission plumbing.
+
+Layer 3 — headless runtime (the harness product)
+└── nori-harness      Session runtime over nori-acp-host: backend reducer,
+                      transcript, undo, auto-worktree, hooks, message history.
+                      Embeddable without a terminal UI.
+
+Layer 4 — frontends (thin)
 ├── nori-tui          Rendering and input only. Drives nori-harness through its
 │                     event interface; never imports nori-acp-host directly.
 └── nori-cli          The `nori` binary: dispatch, plus headless exec/RPC mode
                       over the same harness.
+
+Test support (outside the product dependency chain)
+└── mock-acp-agent    Conformance-test agent for ACP hosts and agent authors.
 ```
 
 Support crates keep their jobs where they are genuinely separate concerns
@@ -101,12 +105,13 @@ may depend upward.
 
 ### Dependency rules
 
-1. Arrows point down only. Layer 2 → Layer 1 → Layer 0. No sibling
-   cross-imports within a layer.
+1. Arrows point down only. Layer 4 → Layer 3 → Layer 2 → Layer 1 → Layer 0. No
+   sibling cross-imports within a layer.
 2. `nori-tui` never imports `nori-acp-host` directly — all agent interaction
    flows through `nori-harness` events (the way upstream codex-tui drives core
    via app-server-client).
-3. Nothing in Layers 0–1 may know a terminal exists (no ratatui, no ANSI).
+3. Nothing in Layers 0–3 may depend on ratatui or render terminal presentation
+   (including ANSI styling). ACP terminal operations remain a host concern.
 4. New functionality lands in a new module or crate before it grows an
    existing one ("resist adding code to core", inherited and kept).
 5. No cargo feature may change which crate owns a responsibility.
@@ -144,10 +149,13 @@ phases 3–5:
   conversation manager were already stripped (#196, #230, #438). What remains
   is a 22.5k-LOC utility/config grab-bag; roughly a third to half of it is
   unreferenced by the `nori` binary.
-- **codex-protocol is load-bearing and agent-agnostic.** It is the internal
-  event vocabulary (`Event`/`EventMsg`/`Op`) for *all* agents, and
-  `translator.rs` is the generic ACP-wire ↔ internal-event bridge on every
-  agent's hot path. Verdict: adopt and rename as Nori-owned, don't remove.
+- **The current codex-protocol path is load-bearing but not the target.** Its
+  `Event`/`EventMsg`/`Op` vocabulary and ACP translator currently sit on the hot
+  path, but they duplicate or distort the ACP boundary. The approved follow-up
+  is a hard cut: expose raw ACP aggregates through `nori-protocol`, retain only
+  Nori-owned concerns there, migrate query operations to typed harness methods,
+  and delete `codex-protocol`. See `docs/specs/protocol-unification.md` for the
+  normative ownership rule and deletion inventory.
 - **Upstream sync is dead.** No `upstream` remote exists and there have been
   zero merges from openai/codex since the squash-rename (#443). Deleting and
   renaming inherited crates carries no merge cost. Convention going forward:
@@ -167,7 +175,8 @@ plans go in `docs/plans/` as each is picked up.
 | D | Un-detour protocol imports | Rewire `codex_core::protocol::*` (178+ refs in tui, plus cli) to import `codex_protocol` directly; drop the re-exports from core's lib.rs | low | ~0 |
 | E | Sever nori-acp → codex-core | Extract the six leaf helpers (`user_notification`, `custom_prompts::discover_prompts_in`, `parse_command`, `util::create_patch_with_context`, `compact` constants) plus `config::types::McpServerConfig` into their target crates; acp's only remaining codex deps are protocol + rmcp OAuth store | medium | ~0 |
 | F | Extract config/auth | Pull codex-core's `config` subtree (6.2k, the biggest live consumer) and `auth` into `nori-config` / auth home; whatever codex-core still holds after B+E+F gets dissolved or renamed | medium | ~0 |
-| G | Split nori-acp | `nori-acp-host` (registry, connection, subprocess, wire) + `nori-harness` (backend reducer, transcript, undo, worktrees, hooks) + config move; adopt/rename `codex-protocol` into `nori-protocol` | medium | ~0 |
+| G | Split nori-acp | `nori-acp-host` (registry, connection, subprocess, wire) + `nori-harness` (backend reducer, transcript, undo, worktrees, hooks) + config move; completed crate split, with protocol unification now specified separately | medium | ~0 |
+| G2 | Unify protocol boundary | Re-export ACP schema from `nori-protocol`; emit raw ACP envelopes plus the small Nori event branch; replace the generic operation bus with typed harness methods; delete `codex-protocol` after the configuration rework and deletion review gate | high | −net |
 | H | Invert the TUI | Move orchestration out of `tui/src/nori/` and `chatwidget/` into the harness; TUI consumes harness events only (dependency rule 2 becomes enforceable) | high | −net |
 | I | Ecosystem surfaces | Publish `nori-acp-host` + `mock-acp-agent` to crates.io; document transcript/session format; add headless exec/RPC mode | low | +small |
 
@@ -188,7 +197,7 @@ dependency edge:
 | Edge | Verdict | Evidence |
 |------|---------|----------|
 | nori-acp → codex-core | **EXTRACT** | Six leaf helpers only: `user_notification` (`UserNotifier`, `AwaitingApproval`/`Idle`), `custom_prompts::discover_prompts_in`, `parse_command`, `util::create_patch_with_context`, two `compact` string constants, and `config::types::{McpServerConfig, McpServerTransportConfig}` (shared with tui — belongs in the config crate). No engine usage anywhere. |
-| nori-acp → codex-protocol | **KEEP / ADOPT** | The backend deliberately keeps `codex_protocol::{Event, EventMsg, Op}` as the internal control-plane representation for all agents (documented in `acp/src/backend/mod.rs`). `translator.rs` (1.6k LOC) bridges ACP wire ↔ these types on every agent's hot path — Claude, codex, cloud, and custom agents alike. Rename/merge into `nori-protocol`. |
+| nori-acp → codex-protocol | **CURRENTLY LIVE → DELETE** | The audit correctly found `codex_protocol::{Event, EventMsg, Op}` and the ACP translator on every agent's hot path. Subsequent protocol design rejected that second vocabulary: ACP owns agent↔client semantics, `nori-protocol` re-exports the schema and adds only Nori concerns, and the Codex crate is deleted by a hard cut. Implementation waits for the configuration rework and refreshed deletion gate. |
 | nori-acp → codex-rmcp-client | **KEEP** (or extract OAuth store) | Only the MCP OAuth token persistence (`load_oauth_tokens`/`save_oauth_tokens` etc.) in `connection/mcp.rs`; self-contained. |
 | nori-acp → mcp-types | **DELETE** | Zero usage; not even in acp's Cargo.toml. |
 | nori-tui → `codex_core::protocol::*` | **DELETE detour** | 178+ refs are re-exports of `codex_protocol`; rewire directly (slice D). |
