@@ -168,7 +168,7 @@ fn find_runaway_snapshot_stats(nori_home: &Path, expected_title: &str) -> Runawa
 fn test_runaway_search_transcript_omits_in_progress_snapshots_for_one_call() {
     let expected_title = "Search runaway-pattern in runaway-search-fixture";
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_RUNAWAY_SEARCH", "1")
         .with_agent_env("MOCK_AGENT_RUNAWAY_SEARCH_UPDATES", "24")
         .with_agent_env("MOCK_AGENT_RUNAWAY_SEARCH_LINES_PER_UPDATE", "18")

@@ -18,7 +18,7 @@ use tui_pty_e2e::TuiSession;
 #[cfg(target_os = "linux")]
 fn resume_picker_lists_agent_sessions_when_session_list_supported() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
         .with_agent_env("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
 

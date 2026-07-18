@@ -29,7 +29,7 @@ use tui_pty_e2e::TuiSession;
 fn test_acp_prompt_failure_shows_error_to_user() {
     // Configure mock agent to fail on prompt
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_PROMPT_FAIL", "1");
 
     let mut session =
@@ -102,7 +102,7 @@ fn test_acp_prompt_failure_shows_error_to_user() {
 fn test_acp_prompt_failure_tui_remains_responsive() {
     // Configure mock agent to fail on prompt
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_PROMPT_FAIL", "1");
 
     let mut session =

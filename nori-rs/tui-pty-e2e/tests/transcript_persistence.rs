@@ -84,7 +84,7 @@ fn has_project_metadata(nori_home: &Path, project_id: &str) -> bool {
 #[cfg(target_os = "linux")]
 fn test_transcript_created_on_session() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("Hello from transcript test!");
 
     let mut session =
@@ -172,7 +172,7 @@ fn test_transcript_created_on_session() {
 #[cfg(target_os = "linux")]
 fn test_transcript_contains_assistant_message() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("This is the assistant response for transcript!");
 
     let mut session =
@@ -244,7 +244,7 @@ fn test_multiple_sessions_same_project() {
 
     // First session
     let config1 = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("Response 1");
 
     let mut session1 =
@@ -281,7 +281,7 @@ fn test_multiple_sessions_same_project() {
     // Second session - we need to use a new temp dir for NORI_HOME but same project path
     // Since TuiSession creates its own temp dir, we'll verify via the project ID
     let config2 = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("Response 2");
 
     let mut session2 =
@@ -341,7 +341,7 @@ fn test_multiple_sessions_same_project() {
 #[cfg(target_os = "linux")]
 fn test_project_metadata_created() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("Response for metadata test");
 
     let mut session =
@@ -414,7 +414,7 @@ fn test_project_metadata_created() {
 #[cfg(target_os = "linux")]
 fn test_session_meta_fields() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("Response");
 
     let mut session =
@@ -497,7 +497,7 @@ fn test_session_meta_fields() {
 #[cfg(target_os = "linux")]
 fn test_resume_viewonly_shows_transcript() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_MULTI_TURN", "1");
 
     let mut session =

@@ -26,7 +26,7 @@ fn test_startup_error_for_unregistered_model() {
     let mut session = TuiSession::spawn_with_config(
         18,
         80,
-        SessionConfig::new().with_model("nonexistent".to_owned()),
+        SessionConfig::new().with_agent("nonexistent".to_owned()),
     )
     .expect("Failed to spawn");
 

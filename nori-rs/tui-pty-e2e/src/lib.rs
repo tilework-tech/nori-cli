@@ -247,7 +247,7 @@ impl TuiSession {
 
         // Use mock-acp-agent agent
         cmd.arg("--agent");
-        cmd.arg(&config.model);
+        cmd.arg(&config.agent);
 
         // Skip trust directory prompt for E2E tests (avoids interactive prompts)
         if config.skip_trust_directory {
@@ -269,8 +269,7 @@ impl TuiSession {
             // Write config.toml to CODEX_HOME (unless explicitly empty for first-launch testing)
             let config_path = codex_home.join("config.toml");
             let mut config_content = config.config_toml.clone().unwrap_or_else(|| {
-                // Generate default config with model, trusted project path,
-                // and mock_provider that doesn't require OpenAI auth.
+                // Generate default config with the selected agent and trusted project path.
                 //
                 // IMPORTANT: Canonicalize the cwd path for the projects section.
                 // On macOS, /tmp is a symlink to /private/tmp, so paths like
@@ -296,16 +295,12 @@ impl TuiSession {
                     ""
                 };
                 format!(
-                    r#"model = "{model}"
-model_provider = "mock_provider"
+                    r#"agent = "{agent}"
 
 [projects."{cwd}"]
 trust_level = "trusted"
-
-[model_providers.mock_provider]
-name = "Mock ACP provider for tests"
 {acp_section}"#,
-                    model = config.model,
+                    agent = config.agent,
                     cwd = cwd_path,
                     acp_section = acp_section
                 )
@@ -700,7 +695,7 @@ fn find_acp_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> 
 
 /// Configuration for spawning a test session
 pub struct SessionConfig {
-    pub model: String,
+    pub agent: String,
     /// Subcommand to run before the flags (e.g. "cloud" for `nori cloud`).
     pub subcommand: Option<String>,
     pub mock_agent_env: HashMap<String, String>,
@@ -721,8 +716,8 @@ pub struct SessionConfig {
     /// This prevents the "Snapshots disabled" BackgroundEvent from overwriting
     /// the "Working" status indicator during streaming tests.
     pub git_init: bool,
-    /// When true, allows falling back to HTTP providers if model is not in ACP registry.
-    /// When false (default), ACP-only mode: unregistered models produce an error.
+    /// When true, allows falling back to HTTP providers if the agent is not in the ACP registry.
+    /// When false (default), ACP-only mode: unregistered agents produce an error.
     pub allow_http_fallback: bool,
     /// Extra directories to prepend to PATH when spawning the process.
     pub extra_path: Vec<std::path::PathBuf>,
@@ -740,7 +735,7 @@ impl Default for SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
-            model: "mock-model".to_string(),
+            agent: "mock-model".to_string(),
             subcommand: None,
             mock_agent_env: HashMap::new(),
             no_color: true,
@@ -762,8 +757,8 @@ impl SessionConfig {
         self
     }
 
-    pub fn with_model(mut self, model: String) -> Self {
-        self.model = model;
+    pub fn with_agent(mut self, agent: String) -> Self {
+        self.agent = agent;
         self
     }
 

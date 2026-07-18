@@ -166,11 +166,7 @@ git_stats = true
 #[cfg(target_os = "linux")]
 fn test_footer_vertical_layout_from_config() {
     let config_toml = r#"
-model = "mock-model"
-model_provider = "mock_provider"
-
-[model_providers.mock_provider]
-name = "Mock ACP provider for tests"
+agent = "mock-model"
 
 [tui]
 vertical_footer = true
@@ -225,11 +221,7 @@ vertical_footer = true
 fn test_footer_with_segments_disabled() {
     // Test that footer segments can be disabled via config.toml
     let config_toml = r#"
-model = "mock-model"
-model_provider = "mock_provider"
-
-[model_providers.mock_provider]
-name = "Mock ACP provider for tests"
+agent = "mock-model"
 
 [tui.footer_segments]
 git_branch = false

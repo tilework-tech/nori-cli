@@ -98,7 +98,7 @@ fn process_exists(pid: u32) -> bool {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_subprocess_spawned() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -138,7 +138,7 @@ fn test_acp_agent_subprocess_spawned() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_switch_via_new_creates_new_subprocess() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -181,7 +181,7 @@ fn test_acp_agent_switch_via_new_creates_new_subprocess() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_old_subprocess_cleanup() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -227,7 +227,7 @@ fn test_acp_agent_old_subprocess_cleanup() {
 #[cfg(target_os = "linux")]
 fn test_acp_cleanup_outside_prompt_turn() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_string())
+        .with_agent("mock-model".to_string())
         .with_stream_until_cancel(); // Agent streams until cancelled
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
@@ -281,7 +281,7 @@ fn test_acp_cleanup_outside_prompt_turn() {
 #[cfg(target_os = "linux")]
 fn test_different_agents_different_subprocesses() {
     // First session with mock-model
-    let config1 = SessionConfig::new().with_model("mock-model".to_string());
+    let config1 = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session1 =
         TuiSession::spawn_with_config(24, 80, config1).expect("Failed to spawn first TUI");
@@ -297,7 +297,7 @@ fn test_different_agents_different_subprocesses() {
     let pid1 = pids1[0];
 
     // Second session with mock-model-alt (separate TUI instance)
-    let config2 = SessionConfig::new().with_model("mock-model-alt".to_string());
+    let config2 = SessionConfig::new().with_agent("mock-model-alt".to_string());
 
     let mut session2 =
         TuiSession::spawn_with_config(24, 80, config2).expect("Failed to spawn second TUI");
@@ -328,7 +328,7 @@ fn test_different_agents_different_subprocesses() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_switch_via_model_picker() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -399,7 +399,7 @@ fn test_acp_agent_switch_via_model_picker() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_agent_command_shows_available_agents() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -444,7 +444,7 @@ fn test_agent_command_shows_available_agents() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_agent_command_pending_selection() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -501,7 +501,7 @@ fn test_agent_command_pending_selection() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_agent_switch_on_prompt_submission() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -571,7 +571,7 @@ fn test_agent_switch_on_prompt_submission() {
 #[cfg(target_os = "linux")]
 fn test_agent_picker_no_switch_during_streaming() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_string())
+        .with_agent("mock-model".to_string())
         .with_stream_until_cancel(); // Agent streams until cancelled
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
@@ -627,7 +627,7 @@ fn test_agent_picker_no_switch_during_streaming() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_model_command_shows_disabled_in_acp_mode() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -672,7 +672,7 @@ fn test_model_command_shows_disabled_in_acp_mode() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_agent_cleanup_after_switch_on_prompt() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -766,7 +766,7 @@ fn extract_agent_messages_from_log(log_path: &std::path::Path) -> Vec<String> {
 #[cfg(target_os = "linux")]
 fn test_agent_switch_message_flow_mock_to_mock_alt() {
     // Use default response (Test message 1/2) - both agents will use this
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -908,7 +908,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
 #[cfg(target_os = "linux")]
 #[cfg(debug_assertions)]
 fn test_agent_picker_shows_five_agents_in_debug_build() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -988,7 +988,7 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_agent_switch_logs_correct_sequence() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -1124,7 +1124,7 @@ fn test_agent_switch_logs_correct_sequence() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_slash_popup_shows_current_agent_in_description() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -1170,7 +1170,7 @@ fn test_slash_popup_shows_current_agent_in_description() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_slash_popup_shows_current_approval_mode_in_description() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -1229,7 +1229,7 @@ fn test_connecting_status_during_slow_agent_startup() {
     // Configure mock-model-alt with a 6-second startup delay to simulate slow npx/bunx
     // mock-model has no delay so TUI starts up quickly
     let config = SessionConfig::new()
-        .with_model("mock-model".to_string())
+        .with_agent("mock-model".to_string())
         .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT", "6000");
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");

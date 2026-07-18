@@ -78,7 +78,7 @@ fn process_exists_and_not_zombie(pid: u32) -> bool {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_cleanup_on_exit_command() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -158,7 +158,7 @@ fn test_acp_agent_cleanup_on_exit_command() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_cleanup_on_ctrl_c() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -215,7 +215,7 @@ fn test_acp_agent_cleanup_on_ctrl_c() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_cleanup_on_quit_command() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
