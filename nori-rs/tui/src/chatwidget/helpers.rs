@@ -358,13 +358,9 @@ impl ChatWidget {
         &self.config
     }
 
-    /// Update the in-memory MCP server map so that subsequent reads via
-    /// `config_ref().mcp_servers` reflect the latest persisted state.
-    pub(crate) fn set_mcp_servers(
-        &mut self,
-        servers: std::collections::HashMap<String, codex_protocol::config_types::McpServerConfig>,
-    ) {
-        self.config.mcp_servers = servers;
+    /// Replace the runtime config snapshot after an in-TUI edit.
+    pub(crate) fn set_config(&mut self, config: Config) {
+        self.config = config;
     }
 
     /// Forward MCP auth statuses to the active bottom pane view.

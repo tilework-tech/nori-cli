@@ -195,27 +195,15 @@ impl ChatWidget {
                 self.open_approvals_popup();
             }
             SlashCommand::Settings => {
-                // Load NoriConfig from the default path and open the settings popup.
                 // Apply ephemeral session overrides so the picker shows the
                 // current in-session value rather than the persisted one.
-                match nori_config::NoriConfig::load() {
-                    Ok(mut nori_config) => {
-                        if let Some(overridden) = self.loop_count_override {
-                            nori_config.loop_count = overridden;
-                        }
-                        self.open_settings_popup(&nori_config);
-                    }
-                    Err(err) => {
-                        self.add_error_message(format!("Failed to load settings: {err}"));
-                    }
+                let mut config = self.config.clone();
+                if let Some(overridden) = self.loop_count_override {
+                    config.loop_count = overridden;
                 }
+                self.open_settings_popup(&config);
             }
-            SlashCommand::Vim => match nori_config::NoriConfig::load() {
-                Ok(nori_config) => self.open_vim_mode_picker(nori_config.vim_mode),
-                Err(err) => {
-                    self.add_error_message(format!("Failed to load Vim mode setting: {err}"));
-                }
-            },
+            SlashCommand::Vim => self.open_vim_mode_picker(self.config.vim_mode),
             SlashCommand::Goal => {
                 self.request_thread_goal_status();
             }
@@ -235,19 +223,14 @@ impl ChatWidget {
             SlashCommand::Undo => {
                 self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
             }
-            SlashCommand::Browse => match nori_config::NoriConfig::load() {
-                Ok(nori_config) => match nori_config.file_manager {
-                    Some(fm) => {
-                        self.app_event_tx.send(AppEvent::BrowseFiles(fm));
-                    }
-                    None => {
-                        self.add_error_message(
-                            "No file manager configured. Use /settings to set one.".to_string(),
-                        );
-                    }
-                },
-                Err(err) => {
-                    self.add_error_message(format!("Failed to load config: {err}"));
+            SlashCommand::Browse => match self.config.file_manager {
+                Some(fm) => {
+                    self.app_event_tx.send(AppEvent::BrowseFiles(fm));
+                }
+                None => {
+                    self.add_error_message(
+                        "No file manager configured. Use /settings to set one.".to_string(),
+                    );
                 }
             },
             SlashCommand::Diff => {

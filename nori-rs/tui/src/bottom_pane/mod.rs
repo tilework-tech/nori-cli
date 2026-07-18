@@ -149,10 +149,6 @@ impl BottomPane {
         let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 
-        let acp_wire_recording_enabled = nori_config::NoriConfig::load()
-            .map(|config| config.acp_proxy.enabled)
-            .unwrap_or(false);
-
         let mut pane = Self {
             composer,
             view_stack: Vec::new(),
@@ -171,7 +167,7 @@ impl BottomPane {
             agent_display_name,
             agent_slug,
             vim_mode_enabled: false,
-            acp_wire_recording_enabled,
+            acp_wire_recording_enabled: false,
         };
 
         // Set description overrides for the slash command popup so that

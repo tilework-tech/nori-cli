@@ -33,6 +33,7 @@ impl ChatWidget {
         };
 
         let first_prompt_text = initial_prompt.clone();
+        let acp_wire_recording_enabled = config.acp_proxy.enabled;
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -124,6 +125,9 @@ impl ChatWidget {
             last_terminal_title: None,
         };
 
+        widget
+            .bottom_pane
+            .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
         widget.prefetch_rate_limits();
 
         widget
@@ -165,6 +169,7 @@ impl ChatWidget {
         );
 
         let first_prompt_text = initial_prompt.clone();
+        let acp_wire_recording_enabled = config.acp_proxy.enabled;
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -256,6 +261,9 @@ impl ChatWidget {
             last_terminal_title: None,
         };
 
+        widget
+            .bottom_pane
+            .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
         widget.prefetch_rate_limits();
 
         widget

@@ -3,7 +3,7 @@ use codex_protocol::config_types::McpServerConfig;
 use codex_protocol::config_types::McpServerTransportConfig;
 
 #[test]
-fn set_mcp_servers_updates_config_ref() {
+fn set_config_updates_config_ref() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
     // Initially empty
@@ -32,17 +32,34 @@ fn set_mcp_servers_updates_config_ref() {
             disabled_tools: None,
         },
     );
-    chat.set_mcp_servers(servers.clone());
+    let mut config = chat.config_ref().clone();
+    config.mcp_servers = servers.clone();
+    chat.set_config(config);
 
     // config_ref should now reflect the updated servers
     assert_eq!(
         chat.config_ref().mcp_servers.len(),
         1,
-        "config_ref should show 1 server after set_mcp_servers"
+        "config_ref should show 1 server after replacing the runtime config"
     );
     assert!(
         chat.config_ref().mcp_servers.contains_key("test-server"),
         "config_ref should contain 'test-server'"
+    );
+}
+
+#[test]
+fn browse_command_uses_the_runtime_config_snapshot() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let mut config = chat.config_ref().clone();
+    config.file_manager = Some(nori_config::FileManager::Lf);
+    chat.set_config(config);
+
+    chat.dispatch_command(SlashCommand::Browse);
+
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::BrowseFiles(nori_config::FileManager::Lf))
     );
 }
 

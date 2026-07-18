@@ -543,3 +543,48 @@ fn reattach_message_without_title_names_only_the_id() {
         "reattach message must not render an empty title parenthetical, got: {msg}"
     );
 }
+
+#[tokio::test]
+async fn persisted_session_settings_update_the_runtime_config_snapshot() {
+    use tempfile::TempDir;
+
+    let home = TempDir::new().expect("create Nori home");
+    let mut app = make_test_app();
+    app.config.nori_home = home.path().to_path_buf();
+
+    app.persist_acp_wire_recording_setting(true).await;
+
+    assert!(app.config.acp_proxy.enabled);
+    assert!(app.chat_widget.config_ref().acp_proxy.enabled);
+
+    let model_options = vec![
+        nori_harness::SessionConfigOption::select(
+            "model",
+            "Model",
+            "sonnet",
+            vec![nori_harness::SessionConfigSelectOption::new("opus", "Opus")],
+        )
+        .category(nori_harness::SessionConfigOptionCategory::Model),
+    ];
+    let persisted = app
+        .persist_default_model_selection("claude-code", "model", "opus", &model_options)
+        .await
+        .expect("persist default model");
+
+    assert!(persisted);
+    assert_eq!(
+        app.config
+            .default_models
+            .get("claude-code")
+            .map(String::as_str),
+        Some("opus")
+    );
+    assert_eq!(
+        app.chat_widget
+            .config_ref()
+            .default_models
+            .get("claude-code")
+            .map(String::as_str),
+        Some("opus")
+    );
+}

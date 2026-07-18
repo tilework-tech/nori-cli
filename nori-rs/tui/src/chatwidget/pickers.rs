@@ -506,9 +506,8 @@ impl ChatWidget {
                 // These are relevant when skillset_per_session is enabled (indicated
                 // by the on_dismiss callback being set, which only happens in the
                 // per-session startup flow).
-                let nori_cfg = nori_config::NoriConfig::load().unwrap_or_default();
-                let is_per_session = nori_cfg.skillset_per_session;
-                let auto_worktree_off = is_per_session && !nori_cfg.auto_worktree.is_enabled();
+                let is_per_session = self.config.skillset_per_session;
+                let auto_worktree_off = is_per_session && !self.config.auto_worktree.is_enabled();
 
                 let on_dismiss: SelectionAction = Box::new(|tx| {
                     tx.send(AppEvent::SkillsetPickerDismissed);

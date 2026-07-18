@@ -37,14 +37,38 @@ pub(super) async fn persist_default_model_selection(
 }
 
 impl App {
+    fn sync_runtime_config(&mut self) {
+        self.chat_widget.set_config(self.config.clone());
+    }
+
+    pub(super) async fn persist_default_model_selection(
+        &mut self,
+        agent: &str,
+        config_id: &str,
+        value: &str,
+        config_options: &[nori_harness::SessionConfigOption],
+    ) -> anyhow::Result<bool> {
+        let persisted = persist_default_model_selection(
+            &self.config.nori_home,
+            agent,
+            config_id,
+            value,
+            config_options,
+        )
+        .await?;
+        if persisted {
+            self.config
+                .default_models
+                .insert(agent.to_string(), value.to_string());
+            self.sync_runtime_config();
+        }
+        Ok(persisted)
+    }
+
     /// Persist a TUI config setting to config.toml and apply it immediately.
     pub(super) async fn persist_config_setting(&mut self, setting_name: &str, enabled: bool) {
-        // Apply immediately to the running TUI
         match setting_name {
-            "vertical_footer" => {
-                self.vertical_footer = enabled;
-                self.chat_widget.set_vertical_footer(enabled);
-            }
+            "vertical_footer" => {}
             _ => {
                 tracing::warn!("Unknown config setting: {setting_name}");
                 return;
@@ -66,6 +90,11 @@ impl App {
                 .add_error_message(format!("Failed to save {setting_name} setting: {err}"));
             return;
         }
+
+        self.config.vertical_footer = enabled;
+        self.sync_runtime_config();
+        self.vertical_footer = enabled;
+        self.chat_widget.set_vertical_footer(enabled);
 
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
@@ -92,11 +121,10 @@ impl App {
             return;
         }
 
+        self.config.notify_after_idle = value;
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
-            format!(
-                "Notify after idle set to {}. Changes will take effect after restart.",
-                value.display_name()
-            ),
+            format!("Notify after idle set to {}.", value.display_name()),
             None,
         );
     }
@@ -121,6 +149,8 @@ impl App {
             return;
         }
 
+        self.config.script_timeout = value.clone();
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
             format!("Script timeout set to {}.", value.display_name()),
             None,
@@ -158,6 +188,8 @@ impl App {
         }
 
         // Update in-memory state and propagate to the chat widget
+        self.config.vim_mode = value;
+        self.sync_runtime_config();
         self.vim_mode = value;
         self.chat_widget.set_vim_mode(value);
 
@@ -183,6 +215,8 @@ impl App {
             return;
         }
 
+        self.config.auto_worktree = value;
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
             format!(
                 "Auto worktree set to {}. Changes will take effect on next session.",
@@ -193,14 +227,6 @@ impl App {
     }
 
     pub(super) async fn persist_pinned_plan_drawer_setting(&mut self, enabled: bool) {
-        let mode = if enabled {
-            crate::chatwidget::PlanDrawerMode::Expanded
-        } else {
-            crate::chatwidget::PlanDrawerMode::Off
-        };
-        self.plan_drawer_mode = mode;
-        self.chat_widget.set_plan_drawer_mode(mode);
-
         if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
             .set_path(&["tui", "pinned_plan_drawer"], enabled)
             .apply()
@@ -211,6 +237,15 @@ impl App {
                 .add_error_message(format!("Failed to save pinned_plan_drawer setting: {err}"));
             return;
         }
+        self.config.pinned_plan_drawer = enabled;
+        self.sync_runtime_config();
+        let mode = if enabled {
+            crate::chatwidget::PlanDrawerMode::Expanded
+        } else {
+            crate::chatwidget::PlanDrawerMode::Off
+        };
+        self.plan_drawer_mode = mode;
+        self.chat_widget.set_plan_drawer_mode(mode);
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Pinned plan drawer {status}."), None);
@@ -224,6 +259,8 @@ impl App {
             return;
         }
 
+        self.config.acp_proxy.enabled = enabled;
+        self.sync_runtime_config();
         self.chat_widget.set_acp_wire_recording_enabled(enabled);
         self.chat_widget.replace_agent_popup(enabled);
         let status = if enabled { "enabled" } else { "disabled" };
@@ -232,9 +269,6 @@ impl App {
     }
 
     pub(super) async fn persist_custom_working_messages_setting(&mut self, enabled: bool) {
-        self.config.custom_working_messages = enabled;
-        self.chat_widget.set_custom_working_messages(enabled);
-
         if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
             .set_path(&["tui", "custom_working_messages"], enabled)
             .apply()
@@ -246,6 +280,9 @@ impl App {
             ));
             return;
         }
+        self.config.custom_working_messages = enabled;
+        self.sync_runtime_config();
+        self.chat_widget.set_custom_working_messages(enabled);
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Custom working messages {status}."), None);
@@ -261,6 +298,8 @@ impl App {
             ));
             return;
         }
+        self.config.skillset_per_session = enabled;
+        self.sync_runtime_config();
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget.add_info_message(
             format!("Per Session Skillsets {status}. Changes will take effect on next session."),
@@ -289,6 +328,8 @@ impl App {
 
         // Update the local config and apply to the widget
         self.footer_segment_config.set_enabled(segment, enabled);
+        self.config.footer_segment_config = self.footer_segment_config.clone();
+        self.sync_runtime_config();
         self.chat_widget
             .set_footer_segment_enabled(segment, enabled);
 
@@ -313,6 +354,8 @@ impl App {
             return;
         }
 
+        self.config.file_manager = Some(value);
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
             format!("File manager set to {}.", value.display_name()),
             None,
@@ -320,6 +363,10 @@ impl App {
     }
 
     pub(super) async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
+        if !matches!(setting_name, "terminal_notifications" | "os_notifications") {
+            tracing::warn!("Unknown notification setting: {setting_name}");
+            return;
+        }
         let enum_value = if enabled { "enabled" } else { "disabled" };
 
         // Persist to config.toml as a string enum value
@@ -338,6 +385,24 @@ impl App {
             return;
         }
 
+        match setting_name {
+            "terminal_notifications" => {
+                self.config.terminal_notifications = if enabled {
+                    nori_config::TerminalNotifications::Enabled
+                } else {
+                    nori_config::TerminalNotifications::Disabled
+                };
+            }
+            "os_notifications" => {
+                self.config.os_notifications = if enabled {
+                    nori_config::OsNotifications::Enabled
+                } else {
+                    nori_config::OsNotifications::Disabled
+                };
+            }
+            _ => unreachable!("notification setting was validated before persistence"),
+        }
+        self.sync_runtime_config();
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("{setting_name} {status}"), None);
@@ -369,6 +434,8 @@ impl App {
         }
 
         self.hotkey_config.set_binding(action, binding.clone());
+        self.config.hotkeys = self.hotkey_config.clone();
+        self.sync_runtime_config();
         self.chat_widget
             .set_hotkey_config(self.hotkey_config.clone());
         self.chat_widget.add_info_message(
@@ -399,8 +466,7 @@ impl App {
         // Sync in-memory state so that ComputeMcpAuthStatuses (which reads
         // chat_widget.config_ref().mcp_servers) sees the newly added servers.
         self.config.mcp_servers = servers.into_iter().collect();
-        self.chat_widget
-            .set_mcp_servers(self.config.mcp_servers.clone());
+        self.sync_runtime_config();
 
         self.chat_widget.add_info_message(
             "MCP servers saved. Start a new session to use them.".to_string(),

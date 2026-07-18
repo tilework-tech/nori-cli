@@ -769,25 +769,24 @@ impl App {
                 error,
             } => {
                 if success {
-                    let saved_as_default =
-                        match config_persistence::persist_default_model_selection(
-                            &self.config.nori_home,
+                    let saved_as_default = match self
+                        .persist_default_model_selection(
                             &agent,
                             &config_id,
                             &value,
                             config_options.as_deref().unwrap_or_default(),
                         )
                         .await
-                        {
-                            Ok(persisted) => persisted,
-                            Err(err) => {
-                                tracing::error!(
-                                    error = %err,
-                                    "failed to persist default model selection"
-                                );
-                                false
-                            }
-                        };
+                    {
+                        Ok(persisted) => persisted,
+                        Err(err) => {
+                            tracing::error!(
+                                error = %err,
+                                "failed to persist default model selection"
+                            );
+                            false
+                        }
+                    };
                     self.chat_widget.add_acp_session_config_set_message(
                         &option_name,
                         &value_name,
@@ -849,17 +848,15 @@ impl App {
                     .open_hotkey_picker(self.hotkey_config.clone());
             }
             AppEvent::OpenNotifyAfterIdlePicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_notify_after_idle_picker(nori_config.notify_after_idle);
+                    .open_notify_after_idle_picker(self.config.notify_after_idle);
             }
             AppEvent::SetConfigNotifyAfterIdle(value) => {
                 self.persist_notify_after_idle_setting(value).await;
             }
             AppEvent::OpenScriptTimeoutPicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_script_timeout_picker(nori_config.script_timeout);
+                    .open_script_timeout_picker(self.config.script_timeout.clone());
             }
             AppEvent::SetConfigScriptTimeout(value) => {
                 self.persist_script_timeout_setting(value).await;
@@ -867,11 +864,7 @@ impl App {
             AppEvent::OpenLoopCountPicker => {
                 let current = match self.loop_count_override {
                     Some(overridden) => overridden,
-                    None => {
-                        nori_config::NoriConfig::load()
-                            .unwrap_or_default()
-                            .loop_count
-                    }
+                    None => self.config.loop_count,
                 };
                 self.chat_widget.open_loop_count_picker(current);
             }
@@ -879,13 +872,11 @@ impl App {
                 self.set_session_loop_count(value);
             }
             AppEvent::OpenVimModePicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
-                self.chat_widget.open_vim_mode_picker(nori_config.vim_mode);
+                self.chat_widget.open_vim_mode_picker(self.config.vim_mode);
             }
             AppEvent::OpenAutoWorktreePicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_auto_worktree_picker(nori_config.auto_worktree);
+                    .open_auto_worktree_picker(self.config.auto_worktree);
             }
             AppEvent::SetConfigAutoWorktree(value) => {
                 self.persist_auto_worktree_setting(value).await;
@@ -919,9 +910,8 @@ impl App {
                 self.persist_file_manager_setting(value).await;
             }
             AppEvent::OpenFileManagerPicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_file_manager_picker(nori_config.file_manager);
+                    .open_file_manager_picker(self.config.file_manager);
             }
             AppEvent::LoopIteration {
                 prompt,
@@ -995,8 +985,7 @@ impl App {
             }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
-                let timeout = nori_config.script_timeout.as_duration();
+                let timeout = self.config.script_timeout.as_duration();
                 let name = prompt.name.clone();
                 self.chat_widget
                     .add_info_message(format!("Running script '{name}'..."), None);
