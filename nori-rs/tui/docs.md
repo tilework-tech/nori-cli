@@ -11,7 +11,7 @@ The `nori-tui` crate provides the interactive terminal user interface for Nori, 
 ```
 User Input --> nori-tui --> nori-harness (ACP backend)
                        \--> nori-config (Nori config, ~/.nori/cli/config.toml)
-                       \--> codex-core (config, auth)
+                       \--> codex-login (in-TUI authentication)
                        \--> codex-rmcp-client (MCP OAuth login)
                        \--> nori-protocol (ACP session events)
                        \--> codex-protocol (shared control-plane events)
@@ -21,7 +21,7 @@ The TUI acts as the frontend layer. It:
 
 - Uses `nori-harness` for ACP agent communication: sessions are launched through the harness session runtime (`nori_harness::runtime::launch_session`, see `@/nori-rs/harness/src/runtime.rs`), and the TUI maps its `SessionEvent` stream onto `AppEvent`s (see `@/nori-rs/harness/`)
 - Imports `NoriConfig` and the other Nori config types directly from `nori-config` (see `@/nori-rs/nori-config/`); they are not re-exported through `nori-harness`
-- Uses `codex-core` for configuration loading and authentication (see `@/nori-rs/core/`)
+- Uses the focused `codex-login` surface for in-TUI authentication without depending directly on `codex-core`
 - Uses `codex-sandbox` for platform sandbox availability checks (`get_platform_sandbox`) in approval flows (see `@/nori-rs/sandbox/`)
 - Consumes `nori-protocol` for ACP session-domain rendering (messages, plans, tool snapshots, approvals, replay, lifecycle)
 - Maps user-facing session controls such as `/goal` into typed `codex-protocol` operations, leaving ACP backend state ownership in `@/nori-rs/harness`
@@ -34,9 +34,9 @@ Key dependencies: `ratatui` for rendering, `crossterm` for terminal events, `pul
 
 ### Core Implementation
 
-Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function loads `NoriConfig` once early and reuses it for both the auto-worktree setup and the `vertical_footer` setting (passed as a parameter to `run_ratatui_app()`). After loading config, `run_main()` initializes the agent registry via `nori_harness::initialize_registry()` with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/harness/docs.md` for registry details). Initialization failure is non-fatal (logged as a warning).
+Entry point is `main.rs` which delegates to `run_app()` in `lib.rs`. The `run_main()` function resolves `NoriConfig` through `nori-config`, reuses it across startup, and initializes the agent registry with any custom `[[agents]]` defined in `config.toml` (see `@/nori-rs/harness/docs.md` for registry details). An explicit reload occurs only after startup changes the effective cwd or persists a trust decision, so the resolved path- and trust-dependent settings stay correct.
 
-`NoriConfig` is also the source of truth for ACP backend diagnostics. The harness session runtime (`@/nori-rs/harness/src/runtime.rs`) loads `NoriConfig` itself when launching or resuming sessions and passes the resolved ACP proxy configuration into `AcpBackendConfig`, so enabling `[acp_proxy]` in config wraps every backend ACP subprocess in the wire logger without requiring the live backend to be reconfigured in place.
+The final resolved config is shared with each `SessionLaunchSpec` as an `Arc<NoriConfig>`. The harness projects all backend settings from that injected value and never loads ambient configuration during launch, resume, or probing. Enabling `[acp_proxy]` therefore wraps future backend ACP subprocesses in the wire logger without introducing a second configuration source.
 
 The auto-worktree startup flow first checks eligibility via `can_create_worktree()` (see `@/nori-rs/harness/docs.md`), then branches on the `AutoWorktree` enum:
 
@@ -362,7 +362,7 @@ The `/mcp` command opens an interactive `BottomPaneView` for managing MCP server
 
 The wizard field set matches Claude Code's `claude mcp add` command: transport type, name, command/url, args, env vars, headers, bearer token env var, plus optional OAuth client credentials for servers that do not support dynamic client registration.
 
-On finalize, the wizard builds an `McpServerConfig` with the appropriate `McpServerTransportConfig` variant (stdio or HTTP, with `bearer_token_env_var`, `client_id`, and `client_secret_env_var` populated from the wizard fields for HTTP), inserts it into the servers list, and calls `save_servers()`. When a bearer token is provided, client credential fields are left as `None` since the two auth methods are mutually exclusive. All mutations (toggle, delete, add) send `AppEvent::SaveMcpServers` with the full `BTreeMap<String, McpServerConfig>`. The `App` handles this via `persist_mcp_servers()` in `config_persistence.rs`, which uses `ConfigEditsBuilder::replace_mcp_servers()` for atomic config file writes. On success, an info message tells the user to restart since MCP connections are established at session startup.
+On finalize, the wizard builds an `McpServerConfig` with the appropriate `McpServerTransportConfig` variant (stdio or HTTP, with `bearer_token_env_var`, `client_id`, and `client_secret_env_var` populated from the wizard fields for HTTP), inserts it into the servers list, and calls `save_servers()`. When a bearer token is provided, client credential fields are left as `None` since the two auth methods are mutually exclusive. All mutations (toggle, delete, add) send `AppEvent::SaveMcpServers` with the full `BTreeMap<String, McpServerConfig>`. The `App` handles this via `persist_mcp_servers()` in `config_persistence.rs`, which uses `NoriConfigEdits::replace_mcp_servers()` for atomic, comment-preserving config writes. On success, an info message tells the user to restart since MCP connections are established at session startup.
 
 **Auto-OAuth Probe**: When an HTTP server is added without a bearer token (`wizard_bearer_token_env_var` is empty), `finish_wizard()` sets `pending_oauth_server` to the new server name and fires `AppEvent::ComputeMcpAuthStatuses`. This applies even when client credentials are provided -- the auto-probe checks server auth capability and triggers OAuth login if the server reports `NotLoggedIn`. When auth statuses arrive, `update_mcp_auth_statuses()` checks if the pending server reports `NotLoggedIn` -- if so, it emits `AppEvent::McpOAuthLogin` and transitions to `Mode::OAuthInProgress`. If the server reports `Unsupported` or any other status, the pending server is cleared and the picker stays in `List` mode. This provides a seamless setup flow where users add an HTTP server and are automatically prompted for OAuth if the server requires it.
 
@@ -377,7 +377,7 @@ Auth statuses are computed asynchronously when the picker opens:
 ```
 open_mcp_servers_popup()
     -> sends AppEvent::ComputeMcpAuthStatuses
-    -> App spawns tokio task calling codex_core::mcp::auth::compute_auth_statuses()
+    -> App checks each configured HTTP server through codex-rmcp-client
     -> results delivered via AppEvent::McpAuthStatusesReady(HashMap)
     -> ChatWidget.update_mcp_auth_statuses() -> BottomPane -> active BottomPaneView
     -> McpServerPickerView.update_mcp_auth_statuses() stores statuses
@@ -413,9 +413,9 @@ Claude-backed agents have an additional compatibility path in `skill_picker_item
 
 `/config` opens a two-step picker for the current ACP session. `ChatWidget::open_session_config_popup()` asks the `AcpAgentHandle` for the live `AcpBackend::config_options()` snapshot, renders supported `select` options, then opens a value picker for the selected option. Selecting a value sends `session/set_config_option` through `AcpBackend::set_config_option()` and shows a single final info or error message when the RPC finishes.
 
-The picker does not run during `/agent` switching, and unsupported ACP config kinds and future non-exhaustive select layouts are treated as unavailable rather than guessed. Selections edit the active session, with one persistence exception: when a successful `AppEvent::AcpSessionConfigSetResult` (which carries the raw `config_id` and `value` alongside the display names) names the agent's Model-category option, the `app/event_handling.rs` handler calls `persist_default_model_selection()` in `app/config_persistence.rs`, which writes the value to `[default_models]` in `config.toml` keyed by agent slug via `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md`). Non-model selections (mode, thought level) are never persisted -- the persistence helper checks the returned config_options snapshot for a matching option with the Model category before writing anything. Persist failures are logged and never block the UI; the live session change still applies, and the history line simply omits the `(saved as default)` suffix. The persisted value is re-applied at the next session start by the ACP backend (see `@/nori-rs/harness/docs.md`).
+The picker does not run during `/agent` switching, and unsupported ACP config kinds and future non-exhaustive select layouts are treated as unavailable rather than guessed. Selections edit the active session, with one persistence exception: when a successful `AppEvent::AcpSessionConfigSetResult` (which carries the raw `config_id` and `value` alongside the display names) names the agent's Model-category option, the `app/event_handling.rs` handler calls `persist_default_model_selection()` in `app/config_persistence.rs`, which writes the value to `[default_models]` in `config.toml` keyed by agent slug via `NoriConfigEdits::set_default_model()`. Non-model selections (mode, thought level) are never persisted -- the persistence helper checks the returned config_options snapshot for a matching option with the Model category before writing anything. Persist failures are logged and never block the UI; the live session change still applies, and the history line simply omits the `(saved as default)` suffix. The persisted value is re-applied at the next session start by the ACP backend (see `@/nori-rs/harness/docs.md`).
 
-`/model` acts as a convenience shortcut into the same config_options mechanism and is a two-tier flow. `ChatWidget::open_model_popup()` in `chatwidget/pickers.rs` fetches config_options via `AcpAgentHandle::get_session_config()` and finds a config option with `SessionConfigOptionCategory::Model`: (1) if present, it sends `AppEvent::OpenAcpSessionConfigValuePicker` to open the value picker directly (bypassing the top-level config picker); (2) otherwise it sends `AppEvent::OpenAcpModelPickerUnsupported` to show a "not supported" fallback picker. The previous middle tier (the unstable `SessionModelState` / `session/set_model` fallback) no longer exists -- that API and the harness/`nori-tui` `unstable` feature were removed. Selecting a value runs the same stable Model-category config-option path described above, so the chosen model is persisted as the agent's default and the history line carries the dim `(saved as default)` suffix when the `[default_models]` write succeeds. Note that `ConfigEditsBuilder::set_model` / `AppEvent::PersistAgentSelection` is a separate Codex config-edit that persists the chosen model as the default in `config.toml`; it is unrelated to the removed ACP `session/set_model` RPC and still exists.
+`/model` acts as a convenience shortcut into the same config_options mechanism and is a two-tier flow. `ChatWidget::open_model_popup()` in `chatwidget/pickers.rs` fetches config_options via `AcpAgentHandle::get_session_config()` and finds a config option with `SessionConfigOptionCategory::Model`: (1) if present, it sends `AppEvent::OpenAcpSessionConfigValuePicker` to open the value picker directly (bypassing the top-level config picker); (2) otherwise it sends `AppEvent::OpenAcpModelPickerUnsupported` to show a "not supported" fallback picker. The previous middle tier (the unstable `SessionModelState` / `session/set_model` fallback) no longer exists. Selecting a value runs the same stable Model-category config-option path described above, so the chosen model is persisted as the agent's default and the history line carries the dim `(saved as default)` suffix when the `[default_models]` write succeeds.
 
 **Pending-agent short-circuit:** ACP models are session-scoped -- an agent's models only arrive in the `session/new` response, so they are not knowable until a session starts. Because `/agent` only records a *pending* switch in `ChatWidget.pending_agent` (the live `acp_handle` and subprocess are not swapped until the next prompt submit rebuilds the `ChatWidget`; see "Agent-Provided Commands and Skill Mentions" and `set_pending_agent`), `open_model_popup()` checks `pending_agent` *before* touching the handle. When a switch is pending, it synchronously renders an explanatory picker built by `acp_model_picker_pending_agent_params(display_name)` in `nori/agent_picker.rs` telling the user to send a message to start the new session before `/model` can show that agent's models. This avoids querying the still-live OLD agent's handle, which would otherwise display the wrong agent's models.
 
@@ -518,7 +518,7 @@ ChatWidget::add_status_output()
 new_nori_status_output() --> NoriSessionHeaderCell::new_with_status_info()
 ```
 
-The card always shows: version, a `session:` or `directory:` line (see "Cloud Session Identity" below), agent, skillset (Nori profile). Optionally it shows:
+The card always shows: version, a `session:` or `directory:` line (see "Cloud Session Identity" below), agent, and skillset. Optionally it shows:
 
 | Section       | Condition                                                    | Example                                     |
 | ------------- | ------------------------------------------------------------ | ------------------------------------------- |
@@ -600,7 +600,7 @@ Active skillset display in the footer is driven entirely by `SystemInfo.active_s
 
 Three notification settings are toggled via `/settings` and persisted to the `[tui]` section of `config.toml`:
 
-- **Terminal Notifications** (`TerminalNotifications` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls OSC 9 escape sequences. The ACP config value flows through `codex-core`'s `Config::tui_notifications` as a `bool`, and `chatwidget/user_input.rs::notify()` gates on that bool.
+- **Terminal Notifications** (`TerminalNotifications` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls OSC 9 escape sequences. `ChatWidget` receives the resolved Nori setting directly and gates `notify()` on it.
 - **OS Notifications** (`OsNotifications` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls native desktop notifications via `notify-rust`. Passed as `os_notifications` in `AcpBackendConfig` and read in `backend/mod.rs` to set the `use_native` flag on `UserNotifier`.
 - **Notify After Idle** (`NotifyAfterIdle` enum from `@/nori-rs/nori-config/src/types/mod.rs`): Controls how long after the agent goes idle before a notification is sent. Unlike the toggle-style notification settings, this uses a sub-picker pattern (like agent picker) where selecting the config item opens a second selection view with radio-select style options (5s, 10s, 30s, 1 minute, Disabled). The selected value flows through `AcpBackendConfig` to `backend.rs` where it controls the idle timer spawn behavior.
 
@@ -635,7 +635,7 @@ Keyboard shortcuts are configurable through the `/settings` panel ("Hotkeys" ite
 - **Config layer** (`@/nori-rs/nori-config/src/types/mod.rs`): Defines `HotkeyAction`, `HotkeyBinding`, and `HotkeyConfig` as terminal-agnostic string-based types. No crossterm dependency.
 - **TUI layer** (`@/nori-rs/tui/src/nori/hotkey_match.rs`): Converts `HotkeyBinding` strings to crossterm `KeyEvent` matches via `parse_binding()` and `matches_binding()`. Also provides `key_event_to_binding()` for the reverse direction (capturing a key press as a binding string).
 
-The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()` (`app/event_handling.rs`), configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` (`app/config_persistence.rs`) which uses `ConfigEditsBuilder` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
+The `App` struct holds a `hotkey_config: HotkeyConfig` field loaded at startup. In `handle_key_event()` (`app/event_handling.rs`), configurable hotkeys are checked before the structural `match` block -- if a binding matches, the action fires and returns early. Changes are persisted via `persist_hotkey_setting()` (`app/config_persistence.rs`) which uses `NoriConfigEdits` to write to `[tui.hotkeys]` and updates the in-memory `HotkeyConfig` for immediate effect.
 
 Hotkey actions fall into two categories that are consumed at different layers:
 
@@ -755,7 +755,7 @@ The footer displays configurable segments, each of which can be enabled/disabled
 | Git Stats      | `git_stats`      | Lines added/removed in current session                                                                                                                                                        |
 | Context Window | `context`        | "Context 27% (34K)" when running within an agent environment                                                                                                                                  |
 | Approval Mode  | `approval_mode`  | "Approvals: Agent/Full Access/Read Only"                                                                                                                                                      |
-| Nori Profile   | `nori_profile`   | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
+| Skillset       | `skillset`       | "Skillset: name" for one active skillset, "Skillsets: a, b" for multiple, hidden when none are active. Uses `active_skillsets` from `SystemInfo` (populated by `nori-skillsets list-active`). |
 | Nori Version   | `nori_version`   | "Skillsets v<version>"                                                                                                                                                                        |
 | Token Usage    | `token_usage`    | "Tokens: 123K total (32K cached)" when running within an agent environment                                                                                                                    |
 | Mode Indicator | `mode_indicator` | "[ Plan ]" style ACP mode label, shown only when the active ACP agent exposes a mode config option                                                                                            |
@@ -770,7 +770,7 @@ git_stats = true
 vim_mode = true
 ```
 
-`FooterSegmentConfig::default()` (in `@/nori-rs/nori-config/src/types/mod.rs`) ships a lean subset enabled by default: `context`, `vim_mode`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, `mode_indicator`, and `cloud_session`. The Vim segment self-hides when Vim is off, but is on by default so modal state is always visible when Vim is enabled. The remaining segments -- `prompt_summary`, `git_stats`, `nori_profile`, and `nori_version` -- require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible -- `cloud_session` is enabled by default but only ever renders on a cloud (live-reattach) session.
+`FooterSegmentConfig::default()` (in `@/nori-rs/nori-config/src/types/mod.rs`) ships a lean subset enabled by default: `context`, `vim_mode`, `git_branch`, `worktree_name`, `approval_mode`, `token_usage`, `mode_indicator`, and `cloud_session`. The Vim segment self-hides when Vim is off, but is on by default so modal state is always visible when Vim is enabled. The remaining segments -- `prompt_summary`, `git_stats`, `skillset`, and `nori_version` -- require an explicit `[tui.footer_segments]` opt-in. `FooterSegmentConfig::from_toml` delegates to `Self::default()` for unspecified fields, keeping the two sources of defaults in lockstep. Individual segments still render only when their backing data exists, so an enabled segment with no data stays invisible -- `cloud_session` is enabled by default but only ever renders on a cloud (live-reattach) session.
 
 **Cloud Session Identity** (`chatwidget/helpers.rs`, `chatwidget/constructors.rs`, `chatwidget/event_handlers.rs`, `nori/session_header/mod.rs`, `bottom_pane/footer.rs`): `ChatWidget` stores `acp_session_id: Option<String>` (from `SessionConfiguredEvent.acp_session_id`, which the harness populates ONLY for cloud live-reattach agents -- `None` for local agents, see `@/nori-rs/harness/docs.md`) and `cloud_session_title: Option<String>` (the broker-reported title forwarded by the resume picker through `AppEvent::ResumeAcpSession { title, .. }`). `ChatWidget::cloud_session_identity()` returns `Some(CloudSessionInfo { id, title })` whenever an id is known -- id presence IS the cloud signal (the harness never names local sessions), so no capability gate is applied; gating on capabilities would race their delivery against `SessionConfigured` and could silently drop the session line from the immutable welcome card. `refresh_cloud_session_indicator()` pushes the identity into `BottomPane::set_cloud_session()` from `SessionConfigured` (the only event that changes the id), which drives the `CloudSession` footer segment above. The same identity feeds `NoriSessionHeaderCell`: when present, the welcome banner and `/status` card render a `session: <id> (<title>)` line in place of the local `directory:` line (which would otherwise show a meaningless local cwd for a session running on a remote VM); when absent, the ordinary `directory:` line renders. The reattach info message built by `reattach_info_message()` in `app/event_handling.rs` follows the same rule: a live-reattach resume shows "Reattaching to `<id> (<title>)` -- earlier messages stay in the cloud session (not replayed here)." (title omitted when unknown), while a non-cloud resume shows the generic "Resuming session with `<agent>`...".
 
@@ -1001,7 +1001,7 @@ Every error/timeout/shutdown arm in the runtime's `tokio::select!` (`@/nori-rs/h
 
 Loop mode allows the same first prompt to be re-run multiple times, each time in a completely fresh conversation session. This is configured via `/settings` -> "Loop Count" or by setting `loop_count` in `config.toml` (see `@/nori-rs/nori-config/src/types/mod.rs`).
 
-The loop is orchestrated entirely within the TUI layer -- `codex-core` has no awareness of loop semantics:
+The loop is orchestrated entirely within the TUI layer; `nori-config` stores only the resolved loop count:
 
 ```
 User submits first prompt
@@ -1091,12 +1091,13 @@ Large modules use a directory layout (`foo/mod.rs` + submodules) instead of a si
 
 | Feature       | Dependencies                     | Default | Purpose                                    |
 | ------------- | -------------------------------- | ------- | ------------------------------------------ |
-| `login`       | `codex-login`, `codex-utils-pty` | Yes     | ChatGPT/API login functionality            |
-| `otel`        | `opentelemetry-appender-tracing` | No      | OpenTelemetry tracing export               |
+| `login`       | `codex-utils-pty`                 | Yes     | In-TUI login, including external-agent PTY |
 | `vt100-tests` | -                                | No      | vt100-based emulator tests                 |
 | `debug-logs`  | -                                | No      | Verbose debug logging                      |
 
-The old `nori-config` feature (which switched config sourcing between the harness crate, then named `nori-acp`, and `codex-core` at compile time) was removed in the crate-layering cleanup (`@/docs/specs/crate-layering.md`); the Nori config path (`~/.nori/cli/config.toml` via `@/nori-rs/nori-config/src/`) is now the only path.
+The old `nori-config` feature (which switched config ownership at compile time) was removed in the crate-layering cleanup; `$NORI_HOME/config.toml` through `nori-config` is now the only path. The former `otel` feature and OpenTelemetry initialization were deleted rather than retained as an optional configuration path.
+
+Only the Nori-branded welcome and project-trust onboarding flow remains. The inherited Codex onboarding and model-migration prompts were deleted, and Codex configuration profiles are rejected in favor of Nori Skillsets. Authentication is available through the in-TUI `/login` command; there is no separate top-level CLI login/logout surface.
 
 **--yolo Flag:**
 

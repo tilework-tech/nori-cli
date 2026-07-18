@@ -4,14 +4,13 @@ Path: @/nori-rs/common
 
 ### Overview
 
-The common crate provides shared utilities used across multiple Nori components. It includes CLI argument types, fuzzy matching, model presets, and configuration summary generation.
+The common crate provides small shared utilities for the Nori CLI and TUI, including CLI argument types, fuzzy matching, approval presets, and sandbox summaries.
 
 ### How it fits into the larger codebase
 
 Used by:
-- `@/nori-rs/tui/` - for CLI argument parsing, model presets, fuzzy matching
-- `@/nori-rs/core/` - (indirectly via config types)
-- `@/nori-rs/harness/` - for model presets
+- `@/nori-rs/tui/` - for CLI argument parsing, approval presets, sandbox summaries, and fuzzy matching
+- `@/nori-rs/cli/` - for the shared raw `-c` override argument surface
 
 ### Core Implementation
 
@@ -22,10 +21,11 @@ Used by:
 
 **Fuzzy Matching** (`fuzzy_match.rs`): Provides fuzzy string matching utilities for TUI selection popups.
 
-**Model Presets** (`model_presets.rs`): Defines available model configurations with metadata like:
-- Model family (OpenAI, Anthropic, etc.)
-- Reasoning effort support
-- Upgrade paths between model versions
+**Model Presets** (`model_presets.rs`): Defines inherited model compatibility metadata such as:
+- Display metadata and model slugs
+- Supported and default reasoning effort
+
+These inherited presets are compatibility data; Nori's runtime agent and default-model choices come from `nori-config` and ACP session configuration rather than a migration flow in the TUI.
 
 **Approval Presets** (`approval_presets.rs`): Combines approval mode and sandbox policy into coherent presets.
 
@@ -37,7 +37,6 @@ Used by:
 
 - Most functionality is feature-gated to allow selective inclusion
 - The `cli` feature pulls in `clap` derive macros
-- Model presets define upgrade paths used by the TUI migration prompts
 - The fuzzy matcher is used for file picker and agent picker interfaces
 
 Created and maintained by Nori.
