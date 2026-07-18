@@ -305,20 +305,11 @@ fn test_trust_directory_saves_to_config() {
 
     let config_content = std::fs::read_to_string(&config_path).expect("Failed to read config.toml");
 
-    // Verify the config contains a projects section with trust_level
+    let project_key = format!("\"{}\"", nori_home.display());
     assert!(
-        config_content.contains("[projects"),
-        "config.toml should contain [projects] section, got:\n{}",
-        config_content
-    );
-    assert!(
-        config_content.contains("trust_level"),
-        "config.toml should contain trust_level entry, got:\n{}",
-        config_content
-    );
-    assert!(
-        config_content.contains("trusted"),
-        "trust_level should be 'trusted' after selecting Trust, got:\n{}",
+        config_content.contains(&project_key)
+            && config_content.contains("trust_level = \"trusted\""),
+        "config.toml should mark {project_key} as trusted, got:\n{}",
         config_content
     );
 }
