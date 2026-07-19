@@ -40,7 +40,8 @@ impl ChatWidget {
                 code: KeyCode::BackTab,
                 kind: KeyEventKind::Press,
                 ..
-            } if !self.bottom_pane.has_active_overlay_or_popup()
+            } if !self.exiting
+                && !self.bottom_pane.has_active_overlay_or_popup()
                 && self.cycle_acp_mode_config() =>
             {
                 return;

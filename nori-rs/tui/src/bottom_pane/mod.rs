@@ -204,6 +204,11 @@ impl BottomPane {
 
     /// Forward a key event to the active view or the composer.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> InputResult {
+        // Once exit is in progress every key is inert, including the
+        // task-status Esc interrupt below — teardown owns the backend.
+        if !self.composer.input_enabled() {
+            return InputResult::None;
+        }
         // If a modal/view is active, handle it here; otherwise forward to composer.
         if let Some(view) = self.view_stack.last_mut() {
             if key_event.code == KeyCode::Esc
@@ -226,6 +231,9 @@ impl BottomPane {
             // send an interrupt even while the composer has focus.
             if matches!(key_event.code, crossterm::event::KeyCode::Esc)
                 && self.is_task_running
+                && !self
+                    .composer
+                    .should_handle_vim_escape_during_task(key_event)
                 && let Some(status) = &self.status
             {
                 // Send Op::Interrupt
@@ -265,6 +273,12 @@ impl BottomPane {
             self.show_ctrl_c_quit_hint();
             CancellationEvent::Handled
         }
+    }
+
+    pub(crate) fn show_exit_in_progress(&mut self) {
+        self.view_stack.clear();
+        self.composer.show_exit_in_progress();
+        self.request_redraw();
     }
 
     pub fn handle_paste(&mut self, pasted: String) {
@@ -855,6 +869,7 @@ mod tests {
     use insta::assert_snapshot;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
+    use tokio::sync::mpsc::error::TryRecvError;
     use tokio::sync::mpsc::unbounded_channel;
 
     fn snapshot_buffer(buf: &Buffer) -> String {
@@ -884,25 +899,161 @@ mod tests {
         }
     }
 
-    fn test_bottom_pane() -> BottomPane {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    fn test_bottom_pane_with_events() -> (BottomPane, tokio::sync::mpsc::UnboundedReceiver<AppEvent>)
+    {
+        let (tx_raw, rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        BottomPane::new(BottomPaneParams {
-            app_event_tx: tx,
-            frame_requester: FrameRequester::test_dummy(),
-            has_input_focus: true,
-            enhanced_keys_supported: false,
-            placeholder_text: "Ask Nori to do anything".to_string(),
-            disable_paste_burst: true,
-            animations_enabled: true,
-            custom_working_messages: true,
-            custom_working_message_list: Vec::new(),
-            vertical_footer: false,
-            footer_segment_config: nori_config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_config::FooterLayoutConfig::default(),
-            agent_display_name: String::new(),
-            agent_slug: String::new(),
-        })
+        (
+            BottomPane::new(BottomPaneParams {
+                app_event_tx: tx,
+                frame_requester: FrameRequester::test_dummy(),
+                has_input_focus: true,
+                enhanced_keys_supported: false,
+                placeholder_text: "Ask Nori to do anything".to_string(),
+                disable_paste_burst: true,
+                animations_enabled: true,
+                custom_working_messages: true,
+                custom_working_message_list: Vec::new(),
+                vertical_footer: false,
+                footer_segment_config: nori_config::FooterSegmentConfig::default(),
+                footer_layout_config: nori_config::FooterLayoutConfig::default(),
+                agent_display_name: String::new(),
+                agent_slug: String::new(),
+            }),
+            rx,
+        )
+    }
+
+    fn test_bottom_pane() -> BottomPane {
+        test_bottom_pane_with_events().0
+    }
+
+    #[test]
+    fn active_turn_vim_escape_enters_normal_then_debounces_interrupt() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        pane.set_vim_mode(nori_config::VimEnterBehavior::Submit);
+        pane.set_task_running(true);
+
+        let escape = KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE);
+        pane.handle_key_event(escape);
+
+        assert_eq!(
+            pane.composer.vim_mode_state(),
+            textarea::VimModeState::Normal
+        );
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "Insert-mode Escape must not interrupt the active turn",
+        );
+
+        pane.handle_key_event(escape);
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "Escape must not interrupt immediately after entering Normal mode",
+        );
+
+        std::thread::sleep(Duration::from_millis(550));
+        pane.handle_key_event(KeyEvent::new_with_kind(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Repeat,
+        ));
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "holding Escape must not interrupt the active turn",
+        );
+
+        pane.handle_key_event(escape);
+
+        assert!(matches!(
+            events.try_recv(),
+            Ok(AppEvent::CodexOp(codex_protocol::protocol::Op::Interrupt))
+        ));
+    }
+
+    #[test]
+    fn active_turn_escape_cancels_pending_vim_operator_without_interrupting() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        pane.set_vim_mode(nori_config::VimEnterBehavior::Submit);
+        pane.set_task_running(true);
+        let escape = KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE);
+        pane.handle_key_event(escape);
+        std::thread::sleep(Duration::from_millis(550));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('d'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(escape);
+
+        assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('i'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(
+            pane.composer.vim_mode_state(),
+            textarea::VimModeState::Insert
+        );
+    }
+
+    #[test]
+    fn active_turn_slash_picker_owns_escape_before_interrupt() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        let always_submit = *nori_config::VimEnterBehavior::all_variants()
+            .iter()
+            .find(|behavior| behavior.toml_value() == "always_submit")
+            .expect("always-submit Vim behavior should be available");
+        pane.set_vim_mode(always_submit);
+        pane.set_task_running(true);
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('/'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        std::thread::sleep(Duration::from_millis(550));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert!(!pane.composer.popup_active());
+        assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(matches!(
+            events.try_recv(),
+            Ok(AppEvent::CodexOp(codex_protocol::protocol::Op::Interrupt))
+        ));
+    }
+
+    #[test]
+    fn active_turn_escape_interrupts_immediately_when_vim_is_disabled() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        pane.set_task_running(true);
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert!(matches!(
+            events.try_recv(),
+            Ok(AppEvent::CodexOp(codex_protocol::protocol::Op::Interrupt))
+        ));
     }
 
     #[test]

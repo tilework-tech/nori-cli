@@ -35,21 +35,13 @@ pub(crate) struct GenericDisplayRow {
     pub disabled: bool,
 }
 
-/// Compute a shared description-column start based on the widest visible name
-/// plus two spaces of padding. Ensures at least one column is left for the
-/// description.
-fn compute_desc_col(
-    rows_all: &[GenericDisplayRow],
-    start_idx: usize,
-    visible_items: usize,
-    content_width: u16,
-) -> usize {
-    let visible_range = start_idx..(start_idx + visible_items);
+/// Compute a shared description-column start based on the widest filtered name
+/// plus two spaces of padding. Measuring every row keeps columns stable as the
+/// viewport scrolls. Ensures at least one column remains for the description.
+fn compute_desc_col(rows_all: &[GenericDisplayRow], content_width: u16) -> usize {
     let max_name_width = rows_all
         .iter()
-        .enumerate()
-        .filter(|(i, _)| visible_range.contains(i))
-        .map(|(_, r)| Line::from(r.name.clone()).width())
+        .map(|row| Line::from(row.name.clone()).width())
         .max()
         .unwrap_or(0);
     let mut desc_col = max_name_width.saturating_add(2);
@@ -227,7 +219,7 @@ pub(crate) fn render_rows(
         }
     }
 
-    let desc_col = compute_desc_col(rows_all, start_idx, visible_items, area.width);
+    let desc_col = compute_desc_col(rows_all, area.width);
 
     // Render items, wrapping descriptions and aligning wrapped lines under the
     // shared description column. Stop when we run out of vertical space.
@@ -308,7 +300,7 @@ pub(crate) fn measure_rows_height(
         }
     }
 
-    let desc_col = compute_desc_col(rows_all, start_idx, visible_items, width);
+    let desc_col = compute_desc_col(rows_all, width);
 
     let mut total: u16 = 0;
     for row in rows_all
@@ -348,5 +340,78 @@ mod tests {
             .find(|x| buf[(*x, 0)].symbol() == "●")
             .expect("recording dot cell");
         assert_eq!(buf[(dot_x, 0)].fg, Color::Red);
+    }
+
+    fn marker_x(buf: &Buffer, y: u16) -> u16 {
+        (0..buf.area().width)
+            .find(|x| buf[(*x, y)].symbol() == "§")
+            .expect("description marker")
+    }
+
+    fn buffer_text(buf: &Buffer) -> String {
+        (0..buf.area().height)
+            .map(|y| {
+                (0..buf.area().width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn description_columns_stay_stable_while_scrolling() {
+        let rows = vec![
+            GenericDisplayRow {
+                name: "exceptionally-long-command".to_string(),
+                display_shortcut: None,
+                match_indices: None,
+                description: Some("§ first".to_string()),
+                styled_description: None,
+                disabled: false,
+            },
+            GenericDisplayRow {
+                name: "a".to_string(),
+                display_shortcut: None,
+                match_indices: None,
+                description: Some("§ second".to_string()),
+                styled_description: None,
+                disabled: false,
+            },
+            GenericDisplayRow {
+                name: "b".to_string(),
+                display_shortcut: None,
+                match_indices: None,
+                description: Some("§ third".to_string()),
+                styled_description: None,
+                disabled: false,
+            },
+        ];
+        let area = Rect::new(0, 0, 50, 2);
+        let mut before = Buffer::empty(area);
+        let first_state = ScrollState {
+            selected_idx: Some(1),
+            scroll_top: 0,
+        };
+        render_rows(area, &mut before, &rows, &first_state, 2, "no matches");
+
+        let mut after = Buffer::empty(area);
+        let second_state = ScrollState {
+            selected_idx: Some(2),
+            scroll_top: 1,
+        };
+        render_rows(area, &mut after, &rows, &second_state, 2, "no matches");
+
+        assert_eq!(marker_x(&before, 1), marker_x(&after, 0));
+        insta::assert_snapshot!(
+            "stable_description_columns_while_scrolling",
+            format!(
+                "before:\n{}\nafter:\n{}",
+                buffer_text(&before),
+                buffer_text(&after)
+            )
+        );
     }
 }

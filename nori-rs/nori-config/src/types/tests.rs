@@ -21,6 +21,21 @@ fn test_approval_policy_deserialize() {
 }
 
 #[test]
+fn vim_always_submit_round_trips_through_toml() {
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+    struct Wrapper {
+        vim_mode: VimEnterBehavior,
+    }
+
+    let parsed: Wrapper = toml::from_str(r#"vim_mode = "always_submit""#).unwrap();
+    assert_eq!(parsed.vim_mode.toml_value(), "always_submit");
+    assert_eq!(
+        toml::to_string(&parsed).unwrap(),
+        "vim_mode = \"always_submit\"\n"
+    );
+}
+
+#[test]
 fn test_history_persistence_deserialize() {
     #[derive(Deserialize)]
     struct Wrapper {

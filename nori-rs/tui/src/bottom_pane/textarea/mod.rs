@@ -19,6 +19,8 @@ use ratatui::widgets::WidgetRef;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::ops::Range;
+use std::time::Duration;
+use std::time::Instant;
 use textwrap::Options;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -27,6 +29,12 @@ const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
 
 fn is_word_separator(ch: char) -> bool {
     WORD_SEPARATORS.contains(ch)
+}
+
+fn is_plain_escape(event: KeyEvent) -> bool {
+    event.code == KeyCode::Esc
+        && event.modifiers == KeyModifiers::NONE
+        && matches!(event.kind, KeyEventKind::Press | KeyEventKind::Repeat)
 }
 
 fn split_word_pieces(run: &str) -> Vec<(usize, &str)> {
@@ -67,6 +75,7 @@ pub(crate) enum VimModeState {
 }
 
 const UNDO_STACK_CAP: usize = 500;
+const VIM_NORMAL_ESCAPE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 #[derive(Debug)]
 pub(crate) struct TextArea {
@@ -82,6 +91,8 @@ pub(crate) struct TextArea {
     vim_mode_enabled: bool,
     /// Current vim mode state (Insert or Normal).
     vim_mode_state: VimModeState,
+    /// When Vim most recently transitioned from Insert to Normal mode.
+    vim_normal_mode_entered_at: Option<Instant>,
     /// Pending Vim prefix, operator, or text object.
     vim_pending: VimPending,
     /// Undo stack: (text, cursor_pos) snapshots.
@@ -118,6 +129,7 @@ impl TextArea {
             hotkey_config: HotkeyConfig::default(),
             vim_mode_enabled: false,
             vim_mode_state: VimModeState::default(),
+            vim_normal_mode_entered_at: None,
             vim_pending: VimPending::None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -135,6 +147,7 @@ impl TextArea {
         self.vim_mode_enabled = enabled;
         if !enabled {
             self.vim_mode_state = VimModeState::Insert;
+            self.vim_normal_mode_entered_at = None;
             self.vim_pending = VimPending::None;
             self.end_undo_group();
         } else if !was_enabled && self.vim_mode_state == VimModeState::Insert {
@@ -162,9 +175,24 @@ impl TextArea {
     pub(crate) fn should_handle_vim_insert_escape(&self, event: KeyEvent) -> bool {
         self.vim_mode_enabled
             && self.vim_mode_state == VimModeState::Insert
-            && event.code == KeyCode::Esc
-            && event.modifiers == KeyModifiers::NONE
-            && matches!(event.kind, KeyEventKind::Press | KeyEventKind::Repeat)
+            && is_plain_escape(event)
+    }
+
+    pub(crate) fn should_handle_vim_escape_during_task(&self, event: KeyEvent) -> bool {
+        if !self.vim_mode_enabled || !is_plain_escape(event) {
+            return false;
+        }
+
+        match self.vim_mode_state {
+            VimModeState::Insert => true,
+            VimModeState::Normal => {
+                event.kind == KeyEventKind::Repeat
+                    || self.is_vim_operator_pending()
+                    || self
+                        .vim_normal_mode_entered_at
+                        .is_some_and(|entered_at| entered_at.elapsed() < VIM_NORMAL_ESCAPE_DEBOUNCE)
+            }
+        }
     }
 
     /// Returns the vim mode state if vim mode is enabled, None otherwise.
@@ -181,6 +209,9 @@ impl TextArea {
     pub fn enter_vim_normal_mode(&mut self) {
         if self.vim_mode_enabled {
             self.end_undo_group();
+            if self.vim_mode_state != VimModeState::Normal {
+                self.vim_normal_mode_entered_at = Some(Instant::now());
+            }
             self.vim_mode_state = VimModeState::Normal;
             self.vim_pending = VimPending::None;
             self.preferred_col = None;
@@ -189,9 +220,10 @@ impl TextArea {
     }
 
     /// Enter Vim Insert mode and start one undo unit for the whole session.
-    fn enter_vim_insert_mode(&mut self) {
+    pub(crate) fn enter_vim_insert_mode(&mut self) {
         self.begin_undo_group();
         self.vim_mode_state = VimModeState::Insert;
+        self.vim_normal_mode_entered_at = None;
         self.vim_pending = VimPending::None;
         self.preferred_col = None;
     }
@@ -254,8 +286,6 @@ impl TextArea {
         self.wrap_cache.replace(None);
         self.preferred_col = None;
         self.elements.clear();
-        self.kill_buffer.clear();
-        self.kill_buffer_kind = KillBufferKind::Characterwise;
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.in_undo_group = false;

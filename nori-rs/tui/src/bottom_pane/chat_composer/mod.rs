@@ -113,6 +113,7 @@ impl PromptIndicator {
 pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
+    input_enabled: bool,
     active_popup: ActivePopup,
     app_event_tx: AppEventSender,
     history: ChatComposerHistory,
@@ -121,6 +122,7 @@ pub(crate) struct ChatComposer {
     use_shift_enter_hint: bool,
     dismissed_file_popup_token: Option<String>,
     dismissed_skill_popup_token: Option<String>,
+    dismissed_command_popup_text: Option<String>,
     current_file_query: Option<String>,
     pending_pastes: Vec<(String, String)>,
     is_shell_mode: bool,
@@ -183,6 +185,7 @@ impl ChatComposer {
         let mut this = Self {
             textarea: TextArea::new(),
             textarea_state: RefCell::new(TextAreaState::default()),
+            input_enabled: true,
             active_popup: ActivePopup::None,
             app_event_tx,
             history: ChatComposerHistory::new(),
@@ -191,6 +194,7 @@ impl ChatComposer {
             use_shift_enter_hint,
             dismissed_file_popup_token: None,
             dismissed_skill_popup_token: None,
+            dismissed_command_popup_text: None,
             current_file_query: None,
             pending_pastes: Vec::new(),
             is_shell_mode: false,
@@ -265,6 +269,13 @@ impl ChatComposer {
         self.textarea.should_handle_vim_insert_escape(key_event)
     }
 
+    pub(crate) fn should_handle_vim_escape_during_task(&self, key_event: KeyEvent) -> bool {
+        self.popup_active()
+            || self
+                .textarea
+                .should_handle_vim_escape_during_task(key_event)
+    }
+
     pub(crate) fn is_vim_operator_pending(&self) -> bool {
         self.textarea.is_in_vim_normal_mode() && self.textarea.is_vim_operator_pending()
     }
@@ -296,7 +307,7 @@ impl ChatComposer {
         let Some(text) = self.history.on_entry_response(log_id, offset, entry) else {
             return false;
         };
-        self.set_text_content(text);
+        self.set_history_content(text);
         true
     }
 
@@ -316,8 +327,15 @@ impl ChatComposer {
         self.footer_hint_override = items;
     }
 
+    pub(super) fn input_enabled(&self) -> bool {
+        self.input_enabled
+    }
+
     /// Replace the entire composer content with `text` and reset cursor.
     pub(crate) fn set_text_content(&mut self, text: String) {
+        if !self.input_enabled {
+            return;
+        }
         // Clear any existing content, placeholders, and attachments first.
         self.textarea.set_text("");
         self.pending_pastes.clear();
@@ -333,8 +351,16 @@ impl ChatComposer {
         self.sync_selection_popups();
     }
 
+    fn set_history_content(&mut self, text: String) {
+        if !self.input_enabled {
+            return;
+        }
+        self.set_text_content(text);
+        self.textarea.set_cursor(self.textarea.text().len());
+    }
+
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
-        if self.is_empty() {
+        if !self.input_enabled || self.is_empty() {
             return None;
         }
         let previous = self.current_text();
@@ -355,6 +381,9 @@ impl ChatComposer {
 
     /// Attempt to start a burst by retro-capturing recent chars before the cursor.
     pub fn attach_image(&mut self, path: PathBuf, width: u32, height: u32, _format_label: &str) {
+        if !self.input_enabled {
+            return;
+        }
         let file_label = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -400,8 +429,20 @@ impl ChatComposer {
     }
 
     pub(crate) fn insert_str(&mut self, text: &str) {
+        if !self.input_enabled {
+            return;
+        }
         self.textarea.insert_str(text);
         self.sync_selection_popups();
+    }
+
+    pub(crate) fn show_exit_in_progress(&mut self) {
+        self.input_enabled = false;
+        self.active_popup = ActivePopup::None;
+        self.footer_hint_override = Some(Vec::new());
+        self.ctrl_c_quit_hint = false;
+        self.esc_backtrack_hint = false;
+        self.paste_burst.clear_after_explicit_paste();
     }
 
     fn set_has_focus(&mut self, has_focus: bool) {
@@ -498,6 +539,9 @@ impl ChatComposer {
 
 impl Renderable for ChatComposer {
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
+        if !self.input_enabled {
+            return None;
+        }
         let [_, textarea_rect, _] = self.layout_areas(area);
         let textarea_rect = Self::textarea_body_rect(textarea_rect, self.prompt_indicator());
         let state = *self.textarea_state.borrow();
@@ -505,6 +549,9 @@ impl Renderable for ChatComposer {
     }
 
     fn desired_height(&self, width: u16) -> u16 {
+        if !self.input_enabled {
+            return 3;
+        }
         let footer_props = self.footer_props();
         let footer_hint_height = self
             .custom_footer_height()
@@ -533,6 +580,24 @@ impl Renderable for ChatComposer {
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let [composer_rect, textarea_rect, popup_rect] = self.layout_areas(area);
+        if !self.input_enabled {
+            // Frozen exit state: no popups, no footer, no cursor — just a dim
+            // prompt and message over the composer block.
+            Block::default()
+                .style(user_message_style())
+                .render_ref(composer_rect, buf);
+            if !textarea_rect.is_empty() {
+                let prompt = "›".dim();
+                buf.set_span(
+                    textarea_rect.x - LIVE_PREFIX_COLS,
+                    textarea_rect.y,
+                    &prompt,
+                    textarea_rect.width,
+                );
+                Line::from("Exiting…".dim()).render_ref(textarea_rect, buf);
+            }
+            return;
+        }
         match &self.active_popup {
             ActivePopup::Command(popup) => {
                 popup.render_ref(popup_rect, buf);

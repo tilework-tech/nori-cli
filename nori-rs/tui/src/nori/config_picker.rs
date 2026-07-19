@@ -392,6 +392,9 @@ pub fn vim_mode_picker_params(
                 VimEnterBehavior::Submit => Some(
                     "Enter submits in INSERT mode, inserts a newline in NORMAL mode".to_string(),
                 ),
+                VimEnterBehavior::AlwaysSubmit => {
+                    Some("Enter submits in both INSERT and NORMAL modes".to_string())
+                }
                 VimEnterBehavior::Off => Some("Disable vim mode".to_string()),
             };
             let actions: Vec<SelectionAction> = vec![Box::new({
@@ -933,7 +936,7 @@ mod tests {
             .find(|item| item.name.contains("Vim Mode"))
             .expect("should have vim mode item");
         assert!(
-            vim_mode_item.name.contains("enter is submit"),
+            vim_mode_item.name.contains("submit in insert"),
             "vim mode should show current behavior when enabled, got: {}",
             vim_mode_item.name
         );
@@ -962,6 +965,49 @@ mod tests {
         assert!(
             matches!(event, AppEvent::OpenVimModePicker),
             "vim mode action should open picker, got: {event:?}"
+        );
+    }
+
+    #[test]
+    fn vim_mode_picker_explains_all_enter_behaviors() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let always_submit = *VimEnterBehavior::all_variants()
+            .iter()
+            .find(|behavior| behavior.toml_value() == "always_submit")
+            .expect("always-submit Vim behavior should be available");
+        let params = vim_mode_picker_params(always_submit, AppEventSender::new(tx_raw));
+
+        let choices: Vec<_> = params
+            .items
+            .iter()
+            .map(|item| {
+                (
+                    item.name.as_str(),
+                    item.description.as_deref(),
+                    item.is_current,
+                )
+            })
+            .collect();
+        assert_eq!(
+            choices,
+            vec![
+                (
+                    "Submit in NORMAL",
+                    Some("Enter inserts a newline in INSERT mode, submits in NORMAL mode"),
+                    false,
+                ),
+                (
+                    "Submit in INSERT",
+                    Some("Enter submits in INSERT mode, inserts a newline in NORMAL mode"),
+                    false,
+                ),
+                (
+                    "Always Submit",
+                    Some("Enter submits in both INSERT and NORMAL modes"),
+                    true,
+                ),
+                ("Off", Some("Disable vim mode"), false),
+            ]
         );
     }
 

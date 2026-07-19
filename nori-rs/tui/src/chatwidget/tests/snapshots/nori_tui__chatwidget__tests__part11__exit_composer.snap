@@ -1,0 +1,5 @@
+---
+source: tui/src/chatwidget/tests/part11.rs
+expression: "render_bottom_popup(&chat, 80)"
+---
+› Exiting…
