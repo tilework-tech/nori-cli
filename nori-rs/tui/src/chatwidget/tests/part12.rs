@@ -143,10 +143,11 @@ async fn quit_never_disabled_on_cloud_session() {
     chat.dispatch_command(SlashCommand::Quit);
 
     assert_matches!(op_rx.try_recv(), Ok(Op::Shutdown));
+    assert_eq!(render_bottom_popup(&chat, 80), "› Exiting…");
     let feedback = cells_to_text(&drain_insert_history(&mut rx));
     assert!(
-        feedback.contains("Exiting"),
-        "quit on a cloud session must still begin the exit with feedback, got: {feedback:?}"
+        feedback.contains("keeps running"),
+        "cloud quit history must explain the detached session keeps running, got: {feedback:?}"
     );
     assert!(
         !feedback.contains("unavailable"),

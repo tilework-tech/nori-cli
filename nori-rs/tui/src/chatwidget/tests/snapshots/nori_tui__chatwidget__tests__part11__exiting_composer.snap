@@ -1,0 +1,13 @@
+---
+source: tui/src/chatwidget/tests/part11.rs
+assertion_line: 86
+expression: terminal.backend()
+---
+"                                                                                "
+"                                                                                "
+"› Exiting…                                                                      "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "

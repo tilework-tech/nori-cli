@@ -2,6 +2,177 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn paste_normalizes_newlines_and_sanitizes_terminal_controls() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    composer.handle_paste("one\r\ntwo\rthree λ\t\u{0007}\u{001b}[31mred\u{001b}[0m".to_string());
+
+    assert_eq!(composer.current_text(), "one\ntwo\nthree λ\tred");
+}
+
+#[test]
+fn equal_length_large_pastes_submit_their_original_payloads() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    let first = "a".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
+    let second = "b".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
+
+    composer.handle_paste(first.clone());
+    composer.insert_str(" + ");
+    composer.handle_paste(second.clone());
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(
+        result,
+        InputResult::Submitted(format!("{first} + {second}"))
+    );
+}
+
+#[test]
+fn equal_length_large_pastes_expand_in_shell_mode() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    let first = "a".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
+    let second = "b".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
+
+    composer.handle_paste(format!("!{first}"));
+    composer.handle_paste(second.clone());
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Submitted(format!("!{first}{second}")));
+}
+
+#[test]
+fn deleting_one_equal_length_paste_keeps_the_other_pending() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    let first = "a".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
+    let second = "b".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
+
+    composer.handle_paste(first.clone());
+    composer.insert_str(" ");
+    composer.handle_paste(second);
+    composer.handle_key_event(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Submitted(first));
+}
+
+#[test]
+fn recalled_multiline_history_accepts_typing_at_the_end() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        true,
+    );
+    composer
+        .history
+        .record_local_submission("second\nλ history");
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('界'), KeyModifiers::NONE));
+
+    assert_eq!(composer.current_text(), "second\nλ history界");
+}
+
+#[test]
+fn recalled_history_can_navigate_down_from_the_end() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        true,
+    );
+    composer.history.record_local_submission("first message");
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    composer.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    assert_eq!(composer.current_text(), "");
+}
+
+#[test]
+fn submit_clear_preserves_ctrl_k_kill_for_ctrl_y() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        true,
+    );
+    composer.set_text_content("keep restore".to_string());
+    composer.textarea.set_cursor("keep ".len());
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL));
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Submitted("keep".to_string()));
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
+    assert_eq!(composer.current_text(), "restore");
+}
+
+#[test]
+fn slash_command_clear_preserves_ctrl_k_kill_for_ctrl_y() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        true,
+    );
+    composer.set_text_content("/diff restore".to_string());
+    composer.textarea.set_cursor("/diff ".len());
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL));
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Command(SlashCommand::Diff));
+    assert_eq!(composer.current_text(), "");
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
+    assert_eq!(composer.current_text(), "restore");
+}
+
+#[test]
 fn edit_clears_pending_paste() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;

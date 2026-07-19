@@ -114,6 +114,8 @@ pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
     active_popup: ActivePopup,
+    input_enabled: bool,
+    disabled_placeholder: Option<String>,
     app_event_tx: AppEventSender,
     history: ChatComposerHistory,
     ctrl_c_quit_hint: bool,
@@ -184,6 +186,8 @@ impl ChatComposer {
             textarea: TextArea::new(),
             textarea_state: RefCell::new(TextAreaState::default()),
             active_popup: ActivePopup::None,
+            input_enabled: true,
+            disabled_placeholder: None,
             app_event_tx,
             history: ChatComposerHistory::new(),
             ctrl_c_quit_hint: false,
@@ -227,6 +231,10 @@ impl ChatComposer {
     /// Returns true if the composer currently contains no user input.
     pub(crate) fn is_empty(&self) -> bool {
         !self.is_shell_mode && self.textarea.is_empty()
+    }
+
+    pub(super) fn input_enabled(&self) -> bool {
+        self.input_enabled
     }
 
     /// Record the history metadata advertised by `SessionConfiguredEvent` so
@@ -296,7 +304,7 @@ impl ChatComposer {
         let Some(text) = self.history.on_entry_response(log_id, offset, entry) else {
             return false;
         };
-        self.set_text_content(text);
+        self.set_history_text_content(text);
         true
     }
 
@@ -318,6 +326,9 @@ impl ChatComposer {
 
     /// Replace the entire composer content with `text` and reset cursor.
     pub(crate) fn set_text_content(&mut self, text: String) {
+        if !self.input_enabled {
+            return;
+        }
         // Clear any existing content, placeholders, and attachments first.
         self.textarea.set_text("");
         self.pending_pastes.clear();
@@ -333,8 +344,26 @@ impl ChatComposer {
         self.sync_selection_popups();
     }
 
+    fn set_history_text_content(&mut self, text: String) {
+        if !self.input_enabled {
+            return;
+        }
+        self.set_text_content(text);
+        self.textarea.set_cursor(self.textarea.text().len());
+    }
+
+    pub(crate) fn show_exit_in_progress(&mut self) {
+        self.input_enabled = false;
+        self.disabled_placeholder = Some("Exiting…".to_string());
+        self.active_popup = ActivePopup::None;
+        self.ctrl_c_quit_hint = false;
+        self.esc_backtrack_hint = false;
+        self.footer_hint_override = Some(Vec::new());
+        self.paste_burst.clear_after_explicit_paste();
+    }
+
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
-        if self.is_empty() {
+        if !self.input_enabled || self.is_empty() {
             return None;
         }
         let previous = self.current_text();
@@ -355,6 +384,9 @@ impl ChatComposer {
 
     /// Attempt to start a burst by retro-capturing recent chars before the cursor.
     pub fn attach_image(&mut self, path: PathBuf, width: u32, height: u32, _format_label: &str) {
+        if !self.input_enabled {
+            return;
+        }
         let file_label = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -400,6 +432,9 @@ impl ChatComposer {
     }
 
     pub(crate) fn insert_str(&mut self, text: &str) {
+        if !self.input_enabled {
+            return;
+        }
         self.textarea.insert_str(text);
         self.sync_selection_popups();
     }
@@ -498,6 +533,9 @@ impl ChatComposer {
 
 impl Renderable for ChatComposer {
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
+        if !self.input_enabled {
+            return None;
+        }
         let [_, textarea_rect, _] = self.layout_areas(area);
         let textarea_rect = Self::textarea_body_rect(textarea_rect, self.prompt_indicator());
         let state = *self.textarea_state.borrow();
@@ -505,6 +543,9 @@ impl Renderable for ChatComposer {
     }
 
     fn desired_height(&self, width: u16) -> u16 {
+        if !self.input_enabled {
+            return 3;
+        }
         let footer_props = self.footer_props();
         let footer_hint_height = self
             .custom_footer_height()
@@ -533,6 +574,24 @@ impl Renderable for ChatComposer {
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let [composer_rect, textarea_rect, popup_rect] = self.layout_areas(area);
+        if !self.input_enabled {
+            let style = user_message_style();
+            Block::default().style(style).render_ref(composer_rect, buf);
+            if !textarea_rect.is_empty() {
+                let prompt = Span::styled("›", Style::default().dim());
+                buf.set_span(
+                    textarea_rect.x - LIVE_PREFIX_COLS,
+                    textarea_rect.y,
+                    &prompt,
+                    textarea_rect.width,
+                );
+                let body_rect = Self::textarea_body_rect(textarea_rect, PromptIndicator::Normal);
+                let placeholder = self.disabled_placeholder.as_deref().unwrap_or_default();
+                Line::from(Span::styled(placeholder, Style::default().dim()))
+                    .render_ref(body_rect, buf);
+            }
+            return;
+        }
         match &self.active_popup {
             ActivePopup::Command(popup) => {
                 popup.render_ref(popup_rect, buf);

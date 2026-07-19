@@ -401,6 +401,20 @@ fn vim_normal_d_then_other_cancels_pending() {
 }
 
 #[test]
+fn vim_paste_survives_set_text_clear() {
+    let mut t = vim_normal("hello world");
+    t.set_cursor(5);
+    t.input(shift_key('D'));
+    pretty_assertions::assert_eq!(t.text(), "hello");
+
+    t.set_text("x");
+    t.set_cursor(0);
+    t.input(key('p'));
+
+    pretty_assertions::assert_eq!(t.text(), "x world");
+}
+
+#[test]
 fn vim_normal_p_pastes_from_kill_buffer() {
     let mut t = vim_normal("hello world");
     t.set_cursor(5); // on ' '

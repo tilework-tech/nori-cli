@@ -116,6 +116,19 @@ impl FakeHandroll {
         false
     }
 
+    fn wait_for_marker_text(&self, name: &str, expected: &str, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if std::fs::read_to_string(self.marker(name))
+                .is_ok_and(|contents| contents.trim() == expected)
+            {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        false
+    }
+
     /// Number of children that have completed their stdin-EOF path so far.
     fn released_count(&self) -> usize {
         std::fs::read_to_string(self.marker("released"))
@@ -635,14 +648,8 @@ fn test_cloud_mode_passes_broker_url_from_config() {
         .wait_for_text("›", TIMEOUT)
         .expect("nori cloud should start");
     assert!(
-        fake.wait_for_marker("broker_url", TIMEOUT),
-        "fake handroll should have dumped its NORI_BROKER_URL"
-    );
-    let broker_url = std::fs::read_to_string(fake.marker("broker_url")).expect("read broker_url");
-    assert_eq!(
-        broker_url.trim(),
-        "http://broker.test:19400",
-        "[cloud] broker_url must be passed to the child as NORI_BROKER_URL"
+        fake.wait_for_marker_text("broker_url", "http://broker.test:19400", TIMEOUT,),
+        "[cloud] broker_url must be passed to the child as NORI_BROKER_URL",
     );
 }
 

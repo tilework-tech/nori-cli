@@ -10,6 +10,11 @@ impl ChatComposer {
         mut pasted: String,
         detect_shell_mode: bool,
     ) -> bool {
+        if !self.input_enabled {
+            return false;
+        }
+        pasted = pasted.replace("\r\n", "\n").replace('\r', "\n");
+        pasted = sanitize_user_text(&pasted);
         if detect_shell_mode
             && !self.is_shell_mode
             && self.textarea.text().is_empty()
@@ -22,7 +27,7 @@ impl ChatComposer {
 
         let char_count = pasted.chars().count();
         if char_count > LARGE_PASTE_CHAR_THRESHOLD {
-            let placeholder = format!("[Pasted Content {char_count} chars]");
+            let placeholder = self.next_large_paste_placeholder(char_count);
             self.textarea.insert_element(&placeholder);
             self.pending_pastes.push((placeholder, pasted));
         } else if char_count > 1 && self.handle_paste_image_path(pasted.clone()) {
@@ -37,6 +42,9 @@ impl ChatComposer {
     }
 
     pub fn handle_paste_image_path(&mut self, pasted: String) -> bool {
+        if !self.input_enabled {
+            return false;
+        }
         let Some(path_buf) = normalize_pasted_path(&pasted) else {
             return false;
         };
@@ -76,6 +84,9 @@ impl ChatComposer {
     }
 
     pub(super) fn handle_paste_burst_flush(&mut self, now: Instant) -> bool {
+        if !self.input_enabled {
+            return false;
+        }
         match self.paste_burst.flush_if_due(now) {
             FlushResult::Paste(pasted) => {
                 self.handle_paste_with_shell_detection(pasted, false);
@@ -99,4 +110,41 @@ impl ChatComposer {
             FlushResult::None => false,
         }
     }
+
+    fn next_large_paste_placeholder(&self, char_count: usize) -> String {
+        let base = format!("[Pasted Content {char_count} chars]");
+        let prefix = format!("{base} #");
+        let mut max_suffix = 0usize;
+
+        for (placeholder, _) in &self.pending_pastes {
+            if placeholder == &base {
+                max_suffix = max_suffix.max(1);
+                continue;
+            }
+            if let Some(suffix) = placeholder.strip_prefix(&prefix)
+                && let Ok(value) = suffix.parse::<usize>()
+            {
+                max_suffix = max_suffix.max(value);
+            }
+        }
+
+        if max_suffix == 0 {
+            base
+        } else {
+            format!("{base} #{}", max_suffix + 1)
+        }
+    }
+}
+
+fn sanitize_user_text(text: &str) -> String {
+    let mut sanitized = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' && chars.next_if_eq(&'[').is_some() {
+            let _ = chars.find(|ch| ('@'..='~').contains(ch));
+        } else if matches!(ch, '\n' | '\t') || !ch.is_control() {
+            sanitized.push(ch);
+        }
+    }
+    sanitized
 }

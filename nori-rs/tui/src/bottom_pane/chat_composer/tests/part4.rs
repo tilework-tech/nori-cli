@@ -491,4 +491,6 @@ fn test_ctrl_r_history_search_enter_selects_and_closes() {
         text, "first entry",
         "Composer should contain the first (default-selected) history entry"
     );
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('界'), KeyModifiers::NONE));
+    assert_eq!(composer.current_text(), "first entry界");
 }

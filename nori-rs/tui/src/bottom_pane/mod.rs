@@ -208,6 +208,9 @@ impl BottomPane {
 
     /// Forward a key event to the active view or the composer.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> InputResult {
+        if !self.composer.input_enabled() {
+            return InputResult::None;
+        }
         // If a modal/view is active, handle it here; otherwise forward to composer.
         if let Some(view) = self.view_stack.last_mut() {
             if key_event.code == KeyCode::Esc
@@ -290,6 +293,12 @@ impl BottomPane {
 
     pub(crate) fn insert_str(&mut self, text: &str) {
         self.composer.insert_str(text);
+        self.request_redraw();
+    }
+
+    pub(crate) fn show_exit_in_progress(&mut self) {
+        self.view_stack.clear();
+        self.composer.show_exit_in_progress();
         self.request_redraw();
     }
 

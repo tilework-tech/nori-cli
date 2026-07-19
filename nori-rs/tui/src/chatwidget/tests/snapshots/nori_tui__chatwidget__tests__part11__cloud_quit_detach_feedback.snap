@@ -1,5 +1,6 @@
 ---
 source: tui/src/chatwidget/tests/part11.rs
+assertion_line: 289
 expression: rendered
 ---
-• Exiting — detaching; this session keeps running in the cloud. reattach later from the `nori cloud` picker
+• This session keeps running in the cloud. reattach later from the `nori cloud` picker

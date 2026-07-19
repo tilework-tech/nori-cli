@@ -219,6 +219,19 @@ fn delete_backward_word_respects_word_separators() {
 }
 
 #[test]
+fn set_text_preserves_the_kill_buffer() {
+    let mut t = ta_with("keep restore");
+    t.set_cursor("keep ".len());
+    t.kill_to_end_of_line();
+    assert_eq!(t.text(), "keep ");
+
+    t.set_text("");
+    t.yank();
+
+    assert_eq!(t.text(), "restore");
+}
+
+#[test]
 fn delete_forward_word_respects_word_separators() {
     let mut t = ta_with("path/to/file");
     t.set_cursor(0);

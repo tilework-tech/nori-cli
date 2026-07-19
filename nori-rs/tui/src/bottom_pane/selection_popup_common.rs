@@ -35,21 +35,13 @@ pub(crate) struct GenericDisplayRow {
     pub disabled: bool,
 }
 
-/// Compute a shared description-column start based on the widest visible name
+/// Compute a shared description-column start based on the widest filtered name
 /// plus two spaces of padding. Ensures at least one column is left for the
 /// description.
-fn compute_desc_col(
-    rows_all: &[GenericDisplayRow],
-    start_idx: usize,
-    visible_items: usize,
-    content_width: u16,
-) -> usize {
-    let visible_range = start_idx..(start_idx + visible_items);
+fn compute_desc_col(rows_all: &[GenericDisplayRow], content_width: u16) -> usize {
     let max_name_width = rows_all
         .iter()
-        .enumerate()
-        .filter(|(i, _)| visible_range.contains(i))
-        .map(|(_, r)| Line::from(r.name.clone()).width())
+        .map(|row| Line::from(row.name.clone()).width())
         .max()
         .unwrap_or(0);
     let mut desc_col = max_name_width.saturating_add(2);
@@ -227,7 +219,7 @@ pub(crate) fn render_rows(
         }
     }
 
-    let desc_col = compute_desc_col(rows_all, start_idx, visible_items, area.width);
+    let desc_col = compute_desc_col(rows_all, area.width);
 
     // Render items, wrapping descriptions and aligning wrapped lines under the
     // shared description column. Stop when we run out of vertical space.
@@ -308,7 +300,7 @@ pub(crate) fn measure_rows_height(
         }
     }
 
-    let desc_col = compute_desc_col(rows_all, start_idx, visible_items, width);
+    let desc_col = compute_desc_col(rows_all, width);
 
     let mut total: u16 = 0;
     for row in rows_all
@@ -326,6 +318,61 @@ pub(crate) fn measure_rows_height(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn description_column(buf: &Buffer, row: u16) -> u16 {
+        (0..buf.area.width)
+            .find(|x| buf[(*x, row)].symbol() == "§")
+            .expect("description marker")
+    }
+
+    #[test]
+    fn description_column_stays_stable_while_scrolling() {
+        let rows = vec![
+            GenericDisplayRow {
+                name: "a-very-long-command".to_string(),
+                display_shortcut: None,
+                match_indices: None,
+                description: Some("§ long".to_string()),
+                styled_description: None,
+                disabled: false,
+            },
+            GenericDisplayRow {
+                name: "short".to_string(),
+                display_shortcut: None,
+                match_indices: None,
+                description: Some("§ short".to_string()),
+                styled_description: None,
+                disabled: false,
+            },
+            GenericDisplayRow {
+                name: "tiny".to_string(),
+                display_shortcut: None,
+                match_indices: None,
+                description: Some("§ tiny".to_string()),
+                styled_description: None,
+                disabled: false,
+            },
+        ];
+        let area = Rect::new(0, 0, 40, 2);
+        let mut before = Buffer::empty(area);
+        let mut after = Buffer::empty(area);
+        let before_state = ScrollState {
+            selected_idx: Some(0),
+            scroll_top: 0,
+        };
+        let after_state = ScrollState {
+            selected_idx: Some(1),
+            scroll_top: 1,
+        };
+
+        render_rows(area, &mut before, &rows, &before_state, 2, "no matches");
+        render_rows(area, &mut after, &rows, &after_state, 2, "no matches");
+
+        assert_eq!(
+            description_column(&before, 1),
+            description_column(&after, 0)
+        );
+    }
 
     #[test]
     fn selected_row_preserves_red_symbol_in_styled_description() {

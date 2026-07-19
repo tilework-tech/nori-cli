@@ -87,10 +87,10 @@ impl ChatComposerHistory {
             return true;
         }
 
-        // Textarea is not empty – only navigate when cursor is at start and
-        // text matches last recalled history entry so regular editing is not
-        // hijacked.
-        if cursor != 0 {
+        // Textarea is not empty – only navigate from a text boundary when the
+        // text matches the last recalled history entry, so interior multiline
+        // cursor movement and regular editing are not hijacked.
+        if cursor != 0 && cursor != text.len() {
             return false;
         }
 
@@ -296,5 +296,19 @@ mod tests {
         assert!(history.last_history_text.is_none());
 
         assert_eq!(Some("command3".into()), history.navigate_up(&tx));
+    }
+
+    #[test]
+    fn recalled_history_only_handles_navigation_at_text_boundaries() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut history = ChatComposerHistory::new();
+        history.record_local_submission("first\nmessage");
+        let recalled = history.navigate_up(&tx).expect("history entry");
+
+        assert!(history.should_handle_navigation(&recalled, 0));
+        assert!(history.should_handle_navigation(&recalled, recalled.len()));
+        assert!(!history.should_handle_navigation(&recalled, "first".len()));
+        assert!(!history.should_handle_navigation("edited", "edited".len()));
     }
 }
