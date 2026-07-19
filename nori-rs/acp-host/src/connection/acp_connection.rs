@@ -268,13 +268,13 @@ async fn establish_connection(
                         };
 
                         if !allowed {
-                            responder.respond_with_error(
-                                agent_client_protocol::Error::invalid_params().data(format!(
+                            responder.respond_with_error(acp::Error::invalid_params().data(
+                                format!(
                                     "Write restricted to working directory ({}) or /tmp. Path: {}",
                                     cwd.display(),
                                     resolved_path.display()
-                                )),
-                            )?;
+                                ),
+                            ))?;
                             return Ok(());
                         }
 
@@ -283,7 +283,7 @@ async fn establish_connection(
                             && let Err(e) = std::fs::create_dir_all(parent)
                         {
                             responder.respond_with_error(
-                                agent_client_protocol::util::internal_error(e.to_string()),
+                                acp::Error::internal_error().data(e.to_string()),
                             )?;
                             return Ok(());
                         }
@@ -294,7 +294,7 @@ async fn establish_connection(
                             }
                             Err(e) => {
                                 responder.respond_with_error(
-                                    agent_client_protocol::util::internal_error(e.to_string()),
+                                    acp::Error::internal_error().data(e.to_string()),
                                 )?;
                             }
                         }
@@ -323,7 +323,7 @@ async fn establish_connection(
                             }
                             Err(e) => {
                                 responder.respond_with_error(
-                                    agent_client_protocol::util::internal_error(e.to_string()),
+                                    acp::Error::internal_error().data(e.to_string()),
                                 )?;
                             }
                         }
@@ -362,14 +362,14 @@ async fn establish_connection(
                                 resp.protocol_version,
                                 MINIMUM_SUPPORTED_VERSION
                             )));
-                            return Err(agent_client_protocol::util::internal_error(
-                                "Protocol version too old",
-                            ));
+                            return Err(
+                                acp::Error::internal_error().data("Protocol version too old")
+                            );
                         }
                         debug!("ACP connection established, agent: {:?}", resp.agent_info);
                         let _ = init_tx.send(Ok((connection.clone(), resp.agent_capabilities)));
 
-                        futures::future::pending::<Result<(), agent_client_protocol::Error>>().await
+                        futures::future::pending::<Result<(), acp::Error>>().await
                     }
                     Err(e) => {
                         let _ =

@@ -1,4 +1,4 @@
-use agent_client_protocol as acp;
+use nori_protocol::acp::v1 as acp;
 
 /// Categories of ACP spawn errors for providing actionable user messages.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,7 +152,6 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol as acp;
     use pretty_assertions::assert_eq;
 
     /// Wrap a structured ACP error the way connection methods surface it: as

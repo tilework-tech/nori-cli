@@ -41,10 +41,6 @@ impl ChatWidget {
                 self.open_goal_editor_or_request_snapshot();
             }
             _ => {
-                if let Err(message) = nori_protocol::validate_thread_goal_objective(rest) {
-                    self.add_error_message(message.to_string());
-                    return true;
-                }
                 if self.should_confirm_before_replacing_goal() {
                     self.show_replace_goal_confirmation(rest.to_string());
                     return true;

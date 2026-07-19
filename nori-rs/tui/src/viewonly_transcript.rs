@@ -3,9 +3,8 @@
 //! This module converts transcript entries into displayable history cells
 //! for the view-only transcript viewer.
 
-use nori_harness::transcript::ContentBlock;
 use nori_harness::transcript::Transcript;
-use nori_harness::transcript::TranscriptEntry;
+use nori_harness::transcript::TranscriptRecord;
 
 /// A simplified entry for display in the view-only transcript viewer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,43 +79,31 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
         ),
     });
 
-    // Convert each entry
-    for line in &transcript.entries {
-        match &line.entry {
-            TranscriptEntry::SessionMeta(_) => {
-                // Skip - already shown in header
-            }
-            TranscriptEntry::User(user) => {
+    // Convert each public record without depending on transcript storage details.
+    for record in transcript.records() {
+        match record {
+            TranscriptRecord::User { content } => {
                 flush_raw_message(&mut entries, &mut pending_raw_message);
                 entries.push(ViewonlyEntry::User {
-                    content: user.content.clone(),
+                    content: content.to_string(),
                 });
             }
-            TranscriptEntry::Assistant(assistant) => {
+            TranscriptRecord::Assistant { content } => {
                 flush_raw_message(&mut entries, &mut pending_raw_message);
-                // Process each content block separately to handle thinking blocks
-                for block in &assistant.content {
-                    match block {
-                        ContentBlock::Thinking { thinking } => {
-                            entries.push(ViewonlyEntry::Thinking {
-                                content: thinking.clone(),
-                            });
-                        }
-                        ContentBlock::Text { text } => {
-                            entries.push(ViewonlyEntry::Assistant {
-                                content: text.clone(),
-                            });
-                        }
-                    }
-                }
+                entries.push(ViewonlyEntry::Assistant {
+                    content: content.to_string(),
+                });
             }
-            // v2 transcripts stored an internal projection. The stable user and
-            // assistant entries above remain the compatibility rendering path.
-            TranscriptEntry::ClientEvent(_) => {}
-            TranscriptEntry::SessionEvent(entry) => {
+            TranscriptRecord::Thinking { content } => {
+                flush_raw_message(&mut entries, &mut pending_raw_message);
+                entries.push(ViewonlyEntry::Thinking {
+                    content: content.to_string(),
+                });
+            }
+            TranscriptRecord::SessionEvent(event) => {
                 if let nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
                     nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
-                )) = &entry.event
+                )) = event
                 {
                     let raw_message = match &notification.update {
                         nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(chunk) => {
@@ -145,13 +132,6 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
                 } else {
                     flush_raw_message(&mut entries, &mut pending_raw_message);
                 }
-            }
-            // Skip legacy tool calls, tool results, and patch operations.
-            // Normalized client_event entries are the preferred transcript form.
-            TranscriptEntry::ToolCall(_)
-            | TranscriptEntry::ToolResult(_)
-            | TranscriptEntry::PatchApply(_) => {
-                flush_raw_message(&mut entries, &mut pending_raw_message);
             }
         }
     }
@@ -397,47 +377,71 @@ fn format_timestamp(iso: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nori_harness::transcript::SessionEventEntry;
-    use nori_harness::transcript::SessionMetaEntry;
-    use nori_harness::transcript::TranscriptLine;
+    use nori_harness::transcript::TranscriptLoader;
 
-    fn transcript(entries: Vec<TranscriptEntry>) -> Transcript {
-        Transcript {
-            meta: SessionMetaEntry {
-                session_id: "test-session".to_string(),
-                project_id: "project".to_string(),
-                started_at: "2025-01-27T12:00:00Z".to_string(),
-                cwd: "/repo".into(),
-                agent: Some("mock".to_string()),
-                cli_version: "test".to_string(),
-                git: None,
-                acp_session_id: Some("acp-session".to_string()),
-            },
-            entries: entries.into_iter().map(TranscriptLine::new).collect(),
-        }
+    async fn transcript(events: Vec<nori_protocol::SessionEvent>) -> Transcript {
+        let nori_home = tempfile::tempdir().expect("create Nori home");
+        let session_dir = nori_home
+            .path()
+            .join("transcripts/by-project/project/sessions");
+        tokio::fs::create_dir_all(&session_dir)
+            .await
+            .expect("create transcript directory");
+
+        let mut lines = vec![serde_json::json!({
+            "ts": "2025-01-27T12:00:00Z",
+            "v": 3,
+            "type": "session_meta",
+            "session_id": "test-session",
+            "project_id": "project",
+            "started_at": "2025-01-27T12:00:00Z",
+            "cwd": "/repo",
+            "agent": "mock",
+            "cli_version": "test",
+            "acp_session_id": "acp-session"
+        })];
+        lines.extend(events.into_iter().map(|event| {
+            serde_json::json!({
+                "ts": "2025-01-27T12:00:01Z",
+                "v": 3,
+                "type": "session_event",
+                "event": event
+            })
+        }));
+        let body = lines
+            .into_iter()
+            .map(|line| serde_json::to_string(&line).expect("serialize transcript line"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        tokio::fs::write(session_dir.join("test-session.jsonl"), body)
+            .await
+            .expect("write transcript");
+
+        TranscriptLoader::new(nori_home.path().to_path_buf())
+            .load_transcript("project", "test-session")
+            .await
+            .expect("load transcript")
     }
 
-    #[test]
-    fn renders_consecutive_raw_v3_assistant_chunks_as_one_message() {
+    #[tokio::test]
+    async fn renders_consecutive_raw_v3_assistant_chunks_as_one_message() {
         let raw_chunk = |text: &str| {
-            TranscriptEntry::SessionEvent(SessionEventEntry {
-                event: nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
-                    nori_protocol::acp::v1::AgentNotification::SessionNotification(
-                        nori_protocol::acp::v1::SessionNotification::new(
-                            "acp-session",
-                            nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
-                                nori_protocol::acp::v1::ContentChunk::new(
-                                    nori_protocol::acp::v1::ContentBlock::Text(
-                                        nori_protocol::acp::v1::TextContent::new(text),
-                                    ),
+            nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                    nori_protocol::acp::v1::SessionNotification::new(
+                        "acp-session",
+                        nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
+                            nori_protocol::acp::v1::ContentChunk::new(
+                                nori_protocol::acp::v1::ContentBlock::Text(
+                                    nori_protocol::acp::v1::TextContent::new(text),
                                 ),
                             ),
                         ),
                     ),
-                )),
-            })
+                ),
+            ))
         };
-        let transcript = transcript(vec![raw_chunk("hello "), raw_chunk("world")]);
+        let transcript = transcript(vec![raw_chunk("hello "), raw_chunk("world")]).await;
 
         let entries = transcript_to_entries(&transcript);
         assert_eq!(
@@ -452,8 +456,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn renders_tool_updates_from_the_raw_v3_boundary() {
+    #[tokio::test]
+    async fn renders_tool_updates_from_the_raw_v3_boundary() {
         let update = nori_protocol::acp::v1::SessionUpdate::ToolCall(
             nori_protocol::acp::v1::ToolCall::new(
                 nori_protocol::acp::v1::ToolCallId::new("read-1"),
@@ -470,9 +474,7 @@ mod tests {
                 nori_protocol::acp::v1::SessionNotification::new("acp-session", update),
             ),
         ));
-        let transcript = transcript(vec![TranscriptEntry::SessionEvent(SessionEventEntry {
-            event,
-        })]);
+        let transcript = transcript(vec![event]).await;
 
         let entries = transcript_to_entries(&transcript);
         assert!(entries.iter().any(|entry| {

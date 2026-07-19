@@ -33,24 +33,34 @@ pub use loader::SessionInfo;
 pub use loader::SessionMetadata;
 pub use loader::Transcript;
 pub use loader::TranscriptLoader;
+pub use loader::TranscriptRecord;
 pub use project::ProjectId;
 pub use project::compute_project_id;
 pub use recorder::TranscriptRecorder;
-pub use types::AssistantEntry;
 pub use types::Attachment;
-pub use types::ClientEventEntry;
-pub use types::ContentBlock;
+pub(crate) use types::ContentBlock;
 pub use types::GitInfo;
-pub use types::PatchApplyEntry;
-pub use types::PatchOperationType;
-pub use types::SessionEventEntry;
 pub use types::SessionMetaEntry;
-pub use types::ToolCallEntry;
-pub use types::ToolResultEntry;
-pub use types::TranscriptEntry;
-pub use types::TranscriptLine;
-pub use types::UserEntry;
-pub use types::now_iso8601;
+pub(crate) use types::TranscriptEntry;
+
+#[cfg(test)]
+pub(crate) use types::AssistantEntry;
+#[cfg(test)]
+pub(crate) use types::ClientEventEntry;
+#[cfg(test)]
+pub(crate) use types::PatchApplyEntry;
+#[cfg(test)]
+pub(crate) use types::PatchOperationType;
+#[cfg(test)]
+pub(crate) use types::SessionEventEntry;
+#[cfg(test)]
+pub(crate) use types::ToolCallEntry;
+#[cfg(test)]
+pub(crate) use types::ToolResultEntry;
+#[cfg(test)]
+pub(crate) use types::TranscriptLine;
+#[cfg(test)]
+pub(crate) use types::UserEntry;
 
 #[cfg(test)]
 mod tests;

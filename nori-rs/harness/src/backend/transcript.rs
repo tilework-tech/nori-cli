@@ -11,26 +11,20 @@ const TRANSCRIPT_SUMMARY_WARN_CHARS: usize = 200_000;
 pub fn transcript_to_replay_session_events(
     transcript: &crate::transcript::Transcript,
 ) -> Vec<nori_protocol::SessionEvent> {
-    let raw_notifications: Vec<_> = transcript
-        .entries
-        .iter()
-        .filter_map(|line| match &line.entry {
+    let has_raw_notifications = transcript.entries.iter().any(|line| {
+        matches!(
+            &line.entry,
             crate::transcript::TranscriptEntry::SessionEvent(entry)
                 if matches!(
                     entry.event,
-                    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
-                        nori_protocol::acp::v1::AgentNotification::SessionNotification(_)
-                    ))
-                ) =>
-            {
-                Some(entry.event.clone())
-            }
-            _ => None,
-        })
-        .collect();
-    if !raw_notifications.is_empty() {
-        return raw_notifications;
-    }
+                    nori_protocol::SessionEvent::Acp(
+                        nori_protocol::AcpEvent::Notification(
+                            nori_protocol::acp::v1::AgentNotification::SessionNotification(_)
+                        )
+                    )
+                )
+        )
+    });
 
     let session_id = transcript
         .meta
@@ -41,6 +35,18 @@ pub fn transcript_to_replay_session_events(
         .entries
         .iter()
         .flat_map(|line| {
+            if has_raw_notifications
+                && let crate::transcript::TranscriptEntry::SessionEvent(entry) = &line.entry
+                && matches!(
+                    entry.event,
+                    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                        nori_protocol::acp::v1::AgentNotification::SessionNotification(_)
+                    ))
+                )
+            {
+                return vec![entry.event.clone()];
+            }
+
             let updates: Vec<_> = match &line.entry {
                 crate::transcript::TranscriptEntry::User(user) => {
                     vec![nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(
@@ -51,42 +57,51 @@ pub fn transcript_to_replay_session_events(
                         ),
                     )]
                 }
-                crate::transcript::TranscriptEntry::Assistant(assistant) => assistant
-                    .content
-                    .iter()
-                    .map(|block| match block {
-                        ContentBlock::Text { text } => {
-                            nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
-                                nori_protocol::acp::v1::ContentChunk::new(
-                                    nori_protocol::acp::v1::ContentBlock::Text(
-                                        nori_protocol::acp::v1::TextContent::new(text.clone()),
+                crate::transcript::TranscriptEntry::Assistant(assistant)
+                    if !has_raw_notifications =>
+                {
+                    assistant
+                        .content
+                        .iter()
+                        .map(|block| match block {
+                            ContentBlock::Text { text } => {
+                                nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
+                                    nori_protocol::acp::v1::ContentChunk::new(
+                                        nori_protocol::acp::v1::ContentBlock::Text(
+                                            nori_protocol::acp::v1::TextContent::new(text.clone()),
+                                        ),
                                     ),
-                                ),
-                            )
-                        }
-                        ContentBlock::Thinking { thinking } => {
-                            nori_protocol::acp::v1::SessionUpdate::AgentThoughtChunk(
-                                nori_protocol::acp::v1::ContentChunk::new(
-                                    nori_protocol::acp::v1::ContentBlock::Text(
-                                        nori_protocol::acp::v1::TextContent::new(thinking.clone()),
+                                )
+                            }
+                            ContentBlock::Thinking { thinking } => {
+                                nori_protocol::acp::v1::SessionUpdate::AgentThoughtChunk(
+                                    nori_protocol::acp::v1::ContentChunk::new(
+                                        nori_protocol::acp::v1::ContentBlock::Text(
+                                            nori_protocol::acp::v1::TextContent::new(
+                                                thinking.clone(),
+                                            ),
+                                        ),
                                     ),
-                                ),
-                            )
-                        }
-                    })
-                    .collect(),
+                                )
+                            }
+                        })
+                        .collect()
+                }
                 _ => Vec::new(),
             };
-            updates.into_iter().map(|update| {
-                nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
-                    nori_protocol::acp::v1::AgentNotification::SessionNotification(
-                        nori_protocol::acp::v1::SessionNotification::new(
-                            session_id.clone(),
-                            update,
+            updates
+                .into_iter()
+                .map(|update| {
+                    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                        nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                            nori_protocol::acp::v1::SessionNotification::new(
+                                session_id.clone(),
+                                update,
+                            ),
                         ),
-                    ),
-                ))
-            })
+                    ))
+                })
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -229,8 +244,26 @@ pub fn client_events_to_replay_client_events(
 pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> String {
     let mut seen_tool_calls = std::collections::HashSet::new();
     let mut summary = String::new();
+    let mut pending_raw_assistant = String::new();
 
     for line in &transcript.entries {
+        if let crate::transcript::TranscriptEntry::SessionEvent(session_event) = &line.entry
+            && let nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
+            )) = &session_event.event
+            && let nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(chunk) =
+                &notification.update
+            && let nori_protocol::acp::v1::ContentBlock::Text(text) = &chunk.content
+        {
+            pending_raw_assistant.push_str(&text.text);
+            continue;
+        }
+
+        if !pending_raw_assistant.is_empty() {
+            summary.push_str(&format!("Assistant: {pending_raw_assistant}\n"));
+            pending_raw_assistant.clear();
+        }
+
         match &line.entry {
             crate::transcript::TranscriptEntry::User(user) => {
                 summary.push_str(&format!("User: {}\n", user.content));
@@ -264,6 +297,10 @@ pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> Stri
             }
             _ => {}
         }
+    }
+
+    if !pending_raw_assistant.is_empty() {
+        summary.push_str(&format!("Assistant: {pending_raw_assistant}\n"));
     }
 
     if summary.len() > TRANSCRIPT_SUMMARY_WARN_CHARS {
@@ -335,6 +372,7 @@ mod tests {
     use crate::transcript::AssistantEntry;
     use crate::transcript::ClientEventEntry;
     use crate::transcript::ContentBlock;
+    use crate::transcript::SessionEventEntry;
     use crate::transcript::SessionMetaEntry;
     use crate::transcript::Transcript;
     use crate::transcript::TranscriptEntry;
@@ -362,6 +400,89 @@ mod tests {
             meta,
             entries: lines,
         }
+    }
+
+    #[test]
+    fn v3_replay_preserves_user_turns_between_raw_acp_notifications() {
+        let raw_assistant_event =
+            nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                    nori_protocol::acp::v1::SessionNotification::new(
+                        "recorded-session",
+                        nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
+                            nori_protocol::acp::v1::ContentChunk::new(
+                                nori_protocol::acp::v1::ContentBlock::Text(
+                                    nori_protocol::acp::v1::TextContent::new("Stored answer"),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ));
+        let transcript = make_transcript(vec![
+            TranscriptEntry::User(UserEntry {
+                id: "user-1".into(),
+                content: "Stored question".into(),
+                attachments: vec![],
+            }),
+            TranscriptEntry::SessionEvent(SessionEventEntry {
+                event: raw_assistant_event.clone(),
+            }),
+        ]);
+
+        let replay = transcript_to_replay_session_events(&transcript);
+
+        assert_eq!(replay.len(), 2);
+        assert!(matches!(
+            &replay[0],
+            nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(notification)
+            )) if matches!(
+                &notification.update,
+                nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(chunk)
+                    if matches!(
+                        &chunk.content,
+                        nori_protocol::acp::v1::ContentBlock::Text(text)
+                            if text.text == "Stored question"
+                    )
+            )
+        ));
+        assert_eq!(
+            serde_json::to_value(&replay[1]).unwrap(),
+            serde_json::to_value(raw_assistant_event).unwrap()
+        );
+    }
+
+    #[test]
+    fn v3_summary_includes_raw_acp_assistant_text() {
+        let transcript = make_transcript(vec![
+            TranscriptEntry::User(UserEntry {
+                id: "user-1".into(),
+                content: "Stored question".into(),
+                attachments: vec![],
+            }),
+            TranscriptEntry::SessionEvent(SessionEventEntry {
+                event: nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                    nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                        nori_protocol::acp::v1::SessionNotification::new(
+                            "recorded-session",
+                            nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
+                                nori_protocol::acp::v1::ContentChunk::new(
+                                    nori_protocol::acp::v1::ContentBlock::Text(
+                                        nori_protocol::acp::v1::TextContent::new("Stored answer"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                )),
+            }),
+        ]);
+
+        assert_eq!(
+            transcript_to_summary(&transcript),
+            "User: Stored question\nAssistant: Stored answer\n"
+        );
     }
 
     #[test]

@@ -2,7 +2,6 @@ use crate::normalized::ClientEvent;
 use crate::normalized::SessionUpdateInfo;
 use crate::normalized::SessionUpdateKind;
 use crate::normalized::ThreadGoalUpdated;
-use nori_protocol::validate_thread_goal_objective;
 
 use super::*;
 
@@ -244,7 +243,9 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
         status: Option<GoalStatus>,
         now: i64,
     ) -> Result<ThreadGoalSnapshot, String> {
-        validate_thread_goal_objective(&objective)?;
+        if objective.trim().is_empty() {
+            return Err("goal objective cannot be empty".to_string());
+        }
         let status = status.unwrap_or(GoalStatus::Active);
         let goal = StoredThreadGoal {
             objective,

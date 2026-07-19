@@ -152,14 +152,6 @@ pub enum ThreadGoalStatus {
     Complete,
 }
 
-/// Validates an objective before it becomes persistent goal state.
-pub fn validate_thread_goal_objective(objective: &str) -> Result<(), &'static str> {
-    if objective.trim().is_empty() {
-        return Err("goal objective cannot be empty");
-    }
-    Ok(())
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum UndoEvent {
