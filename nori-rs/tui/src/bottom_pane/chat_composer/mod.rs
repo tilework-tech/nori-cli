@@ -122,6 +122,7 @@ pub(crate) struct ChatComposer {
     use_shift_enter_hint: bool,
     dismissed_file_popup_token: Option<String>,
     dismissed_skill_popup_token: Option<String>,
+    dismissed_command_popup_text: Option<String>,
     current_file_query: Option<String>,
     pending_pastes: Vec<(String, String)>,
     is_shell_mode: bool,
@@ -193,6 +194,7 @@ impl ChatComposer {
             use_shift_enter_hint,
             dismissed_file_popup_token: None,
             dismissed_skill_popup_token: None,
+            dismissed_command_popup_text: None,
             current_file_query: None,
             pending_pastes: Vec::new(),
             is_shell_mode: false,
@@ -268,8 +270,10 @@ impl ChatComposer {
     }
 
     pub(crate) fn should_handle_vim_escape_during_task(&self, key_event: KeyEvent) -> bool {
-        self.textarea
-            .should_handle_vim_escape_during_task(key_event)
+        self.popup_active()
+            || self
+                .textarea
+                .should_handle_vim_escape_during_task(key_event)
     }
 
     pub(crate) fn is_vim_operator_pending(&self) -> bool {

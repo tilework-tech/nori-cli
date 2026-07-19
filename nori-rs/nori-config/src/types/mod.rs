@@ -462,6 +462,8 @@ pub enum VimEnterBehavior {
     Newline,
     /// Enter submits in INSERT mode, inserts a newline in NORMAL mode.
     Submit,
+    /// Enter submits in both INSERT and NORMAL mode.
+    AlwaysSubmit,
     /// Vim mode is disabled.
     #[default]
     Off,
@@ -471,8 +473,9 @@ impl VimEnterBehavior {
     /// Human-readable name for display in the TUI.
     pub fn display_name(&self) -> &'static str {
         match self {
-            Self::Newline => "Enter is Newline",
-            Self::Submit => "Enter is Submit",
+            Self::Newline => "Submit in NORMAL",
+            Self::Submit => "Submit in INSERT",
+            Self::AlwaysSubmit => "Always Submit",
             Self::Off => "Off",
         }
     }
@@ -482,13 +485,14 @@ impl VimEnterBehavior {
         match self {
             Self::Newline => "newline",
             Self::Submit => "submit",
+            Self::AlwaysSubmit => "always_submit",
             Self::Off => "off",
         }
     }
 
     /// All variants in order, for building picker UIs.
     pub fn all_variants() -> &'static [VimEnterBehavior] {
-        &[Self::Newline, Self::Submit, Self::Off]
+        &[Self::Newline, Self::Submit, Self::AlwaysSubmit, Self::Off]
     }
 
     /// Returns true if vim mode is enabled (i.e. not Off).
@@ -517,7 +521,9 @@ impl<'de> Deserialize<'de> for VimEnterBehavior {
             type Value = VimEnterBehavior;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a boolean or one of \"newline\", \"submit\", \"off\"")
+                formatter.write_str(
+                    "a boolean or one of \"newline\", \"submit\", \"always_submit\", \"off\"",
+                )
             }
 
             fn visit_bool<E>(self, value: bool) -> Result<VimEnterBehavior, E>
@@ -538,8 +544,12 @@ impl<'de> Deserialize<'de> for VimEnterBehavior {
                 match value {
                     "newline" => Ok(VimEnterBehavior::Newline),
                     "submit" => Ok(VimEnterBehavior::Submit),
+                    "always_submit" => Ok(VimEnterBehavior::AlwaysSubmit),
                     "off" => Ok(VimEnterBehavior::Off),
-                    _ => Err(E::unknown_variant(value, &["newline", "submit", "off"])),
+                    _ => Err(E::unknown_variant(
+                        value,
+                        &["newline", "submit", "always_submit", "off"],
+                    )),
                 }
             }
         }

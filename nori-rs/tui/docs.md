@@ -653,20 +653,23 @@ The hotkey picker (`@/nori-rs/tui/src/nori/hotkey_picker.rs`) implements `Bottom
 
 **Vim Mode:**
 
-The textarea supports an optional vim-style navigation mode, configured directly via `/vim` or via `/settings` ("Vim Mode" item). Both open the same three-option picker, and the setting is persisted to `config.toml` under `[tui]`:
+The textarea supports an optional vim-style navigation mode, configured directly via `/vim` or via `/settings` ("Vim Mode" item). Both open the same four-option picker, and the setting is persisted to `config.toml` under `[tui]`:
 
 ```toml
 [tui]
-vim_mode = "newline"  # or "submit" or "off"
+vim_mode = "always_submit"  # or "newline", "submit", or "off"
 ```
 
 The `VimEnterBehavior` enum (from `@/nori-rs/nori-config/src/types/mod.rs`) controls both whether vim mode is enabled and how the Enter key behaves:
 
-| Variant   | Enter in INSERT    | Enter in NORMAL | Vim Enabled |
-| --------- | ------------------ | --------------- | ----------- |
-| `Newline` | Inserts newline    | Submits prompt  | Yes         |
-| `Submit`  | Submits prompt     | Inserts newline | Yes         |
-| `Off`     | N/A (vim disabled) | N/A             | No          |
+| Variant        | Picker label       | Enter in INSERT    | Enter in NORMAL | Vim Enabled |
+| -------------- | ------------------ | ------------------ | --------------- | ----------- |
+| `Newline`      | Submit in NORMAL   | Inserts newline    | Submits prompt  | Yes         |
+| `Submit`       | Submit in INSERT   | Submits prompt     | Inserts newline | Yes         |
+| `AlwaysSubmit` | Always Submit      | Submits prompt     | Submits prompt  | Yes         |
+| `Off`          | Off                | N/A (vim disabled) | N/A             | No          |
+
+The `newline`, `submit`, and `off` values retain their existing behavior for compatibility; `always_submit` is the mode-independent submit policy. Picker labels name the mode that submits instead of relying on the historically ambiguous enum and TOML names. Plain Enter follows this configured prompt policy only after popup handling has had first ownership: Enter or Tab selects the highlighted slash-command item instead of submitting the prompt. `Shift+Enter`, `Alt+Enter`, and `Ctrl+J` are newline affordances in both Insert and Normal mode. They preserve the current Vim mode, take precedence over command/file/skill popup selection, and consume key-release events without inserting a duplicate newline. History search retains ownership of its Enter variants.
 
 The `ChatComposer` stores a `vim_enter_behavior: VimEnterBehavior` field alongside the textarea's own `vim_mode_enabled: bool`. The textarea only cares about on/off (for the vim state machine), while the composer uses the full enum to route Enter key presses at the top of its Enter handler in `key_handling.rs`.
 
@@ -700,6 +703,18 @@ Pending commands use the `VimPending` state machine in `textarea/vim.rs`. It dis
 `Escape` follows Codex's exact insert-mode ownership rule: only an unmodified `Escape` Press or Repeat event is claimed. It ends the current insert undo group, moves left by one grapheme or atomic placeholder without crossing the beginning of the current line, clears pending Vim state and the preferred vertical column, and enters Normal mode. The same predicate is forwarded through ChatComposer, BottomPane, ChatWidget, and App so an empty composer does not also trigger footer hints or backtracking. Modified or Release `Escape` events do not change Vim mode.
 
 During an active agent turn, Escape routing is mode-aware. In Insert mode, the textarea owns plain `Escape` and transitions to Normal mode without interrupting the turn. Normal mode then has a 500 ms grace period in which `Escape` remains consumed; after Normal mode has been active for at least 500 ms, only a fresh unmodified `Escape` Press is allowed to reach the active-turn interrupt handler. Repeat events from holding `Escape` remain consumed even after the grace period, so holding the key cannot cancel the turn. An `Escape` that cancels a pending Vim operator is always consumed without interrupting. When Vim mode is disabled, active-turn `Escape` keeps its immediate interrupt behavior. This staged ownership lets users reliably leave Insert mode before choosing whether to cancel the running turn.
+
+Composer popups participate in that ownership chain before the active-turn interrupt. A slash-command popup consumes Escape while open, including after the normal-mode interrupt debounce has elapsed, so closing the picker cannot accidentally cancel the running turn. Only a later Escape with no popup can reach the interrupt path.
+
+**Vim Prompt-Initial Sigils and Composer Popups:**
+
+Prompt-initial sigils are affordances rather than ordinary Normal-mode edits. At a truly empty Normal-mode prompt, `/` atomically enters Insert mode, inserts the slash, and opens the slash-command picker; `!` atomically enters shell mode and Insert mode; and `?` toggles the shortcuts overlay while remaining in Normal mode. Restricting these exceptions to an empty prompt preserves ordinary Vim meanings elsewhere in the buffer.
+
+The slash-command picker remains open and usable after Escape returns the textarea from Insert to Normal. While it is open in Normal mode, `j`/`k`, arrow keys, and `Ctrl+N`/`Ctrl+P` navigate; Enter or Tab selects the highlighted command; and `i` returns to Insert mode without closing the picker. Other printable Normal-mode keys are consumed so they cannot silently edit the slash query behind the popup. A second Escape closes the picker and leaves its slash text in the draft; the dismissed query stays closed until the first-line command text changes. This makes popup focus explicit while preserving the draft for subsequent Vim editing.
+
+Shell mode follows the same staged Escape model without becoming a popup. Escape from Insert enters Normal and retains the shell command for Vim editing. If the shell body is still empty, a second Escape exits shell mode; the shell sigil is therefore never mistaken for a prompt submission.
+
+File (`@`) and skill (`$`) pickers are deliberately Insert-only because their sigils can appear mid-prompt and `$` is also a Normal-mode motion. Entering Normal closes either token picker without deleting its token. Returning to Insert reopens the applicable picker from the retained token. Unlike `/`, neither picker accepts Normal-mode navigation or query editing.
 
 **Undo/Redo with Insert-Session Grouping:**
 
@@ -742,7 +757,7 @@ Vim mode is inherited from the composer's current vim state. When vim mode is en
 
 When the composer is empty, `ChatWidget` seeds its placeholder from concise capability hints instead of task examples: `?` for the shortcuts overlay, `/` for the slash command menu, `$` for skill listing, `!` for shell commands, and `@` for file mentions. The always-visible `? for shortcuts` footer hint is intentionally omitted; pressing `?` as the first composer character still opens the full shortcut overlay below the prompt, and typing `/` still opens the slash command popup. Prompt-initial modes replace the normal `›` prompt marker with the active sigil (`?`, `/`, or `!`) using terminal-palette colors, and the duplicated leading sigil is hidden from the editable body.
 
-The `!` shell command affordance is a prompt-initial composer mode, not a slash command or popup. Typing `!` into an empty composer stores the marker as mode state and shows the command body after the `!` prompt marker; `current_text()` reconstructs submitted command text as `!{body}`. While this mode is active, `/`, `$`, `@`, and `?` are treated as literal shell text so nested pickers and the shortcut overlay do not open. `Esc`, `Backspace`, or `Enter` with an empty shell body exits the mode without submitting, and recalling a history item that starts with `!` restores shell mode.
+The `!` shell command affordance is a prompt-initial composer mode, not a slash command or popup. Typing `!` into an empty composer stores the marker as mode state and shows the command body after the `!` prompt marker; from Vim Normal mode this transition also enters Insert mode atomically. `current_text()` reconstructs submitted command text as `!{body}`. While this mode is active, `/`, `$`, `@`, and `?` are treated as literal shell text so nested pickers and the shortcut overlay do not open. With an empty shell body, `Backspace` or `Enter` exits the mode without submitting. Escape does the same outside Vim; in Vim it first moves Insert to Normal while retaining shell mode, then a second Escape exits the empty shell mode. Recalling a history item that starts with `!` restores shell mode.
 
 Paste text is normalized and sanitized at a single chokepoint in the composer's paste handling (`@/nori-rs/tui/src/bottom_pane/chat_composer/paste_handling.rs`), shared by explicit paste events and paste-burst flushes so no insertion path can bypass it: CRLF and bare CR become a single LF, tabs and newlines are preserved, and terminal control/CSI sequences are removed. Large pastes are stored out of band behind unique placeholders; submission and shell mode share one expansion path, so two payloads with the same character count cannot alias. History recall uses a history-specific restore path that places the cursor at the end of recalled single- or multiline text, while generic programmatic prefills retain their existing cursor behavior.
 
