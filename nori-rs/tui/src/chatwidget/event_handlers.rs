@@ -5,7 +5,14 @@ use crate::ui_types::PlanUpdate;
 use crate::ui_types::StepStatus;
 
 impl ChatWidget {
-    pub(crate) fn handle_session_event(&mut self, event: nori_protocol::SessionEvent) {
+    pub(crate) fn handle_session_event(
+        &mut self,
+        generation: crate::app_event::SessionGeneration,
+        event: nori_protocol::SessionEvent,
+    ) {
+        if generation != self.session_generation {
+            return;
+        }
         match event {
             nori_protocol::SessionEvent::Acp(event) => self.handle_acp_event(event),
             nori_protocol::SessionEvent::Nori(event) => self.handle_nori_event(event),

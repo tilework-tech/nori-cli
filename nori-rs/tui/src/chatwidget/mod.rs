@@ -174,6 +174,7 @@ pub(crate) struct ChatWidget {
     initial_user_message: Option<UserMessage>,
     // Stream lifecycle controller
     stream_controller: Option<StreamController>,
+    session_generation: crate::app_event::SessionGeneration,
     completed_client_tool_calls: HashSet<String>,
     client_event_normalizer: crate::presentation::ClientEventNormalizer,
     replay_in_progress: bool,

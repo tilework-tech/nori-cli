@@ -69,12 +69,16 @@ fn replay_text_chunk(
 #[test]
 fn replayed_turns_render_as_separate_ordered_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
 
-    chat.handle_session_event(nori_protocol::SessionEvent::Nori(
-        nori_protocol::NoriEvent::ReplayStarted(nori_protocol::ReplayStarted {
-            source: nori_protocol::ReplaySource::Agent,
-        }),
-    ));
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayStarted(
+            nori_protocol::ReplayStarted {
+                source: nori_protocol::ReplaySource::Agent,
+            },
+        )),
+    );
     for event in [
         replay_text_chunk(
             crate::presentation::MessageStream::User,
@@ -102,11 +106,12 @@ fn replayed_turns_render_as_separate_ordered_history() {
             "Second answer",
         ),
     ] {
-        chat.handle_session_event(event);
+        chat.handle_session_event(generation, event);
     }
-    chat.handle_session_event(nori_protocol::SessionEvent::Nori(
-        nori_protocol::NoriEvent::ReplayFinished,
-    ));
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayFinished),
+    );
 
     let expected = [
         "First question",
@@ -158,6 +163,121 @@ fn replayed_turns_render_as_separate_ordered_history() {
 
 • Second answer
 ");
+}
+
+#[test]
+fn stale_session_events_do_not_reach_the_current_widget() {
+    let (old_chat, _old_rx, _old_op_rx) = make_chatwidget_manual();
+    let stale_generation = old_chat.session_generation;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let current_generation = chat.session_generation;
+
+    chat.handle_session_event(
+        stale_generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::Notice(
+            nori_protocol::Notice {
+                message: "stale session output".to_string(),
+            },
+        )),
+    );
+    chat.handle_session_event(
+        current_generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::Notice(
+            nori_protocol::Notice {
+                message: "current session output".to_string(),
+            },
+        )),
+    );
+
+    let rendered = history_text(&mut rx);
+    assert!(!rendered.contains("stale session output"), "{rendered}");
+    assert!(rendered.contains("current session output"), "{rendered}");
+
+    chat.handle_session_event(
+        stale_generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::Shutdown,
+                message: None,
+            },
+        )),
+    );
+
+    let stale_terminal_events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(
+        stale_terminal_events
+            .iter()
+            .all(|event| !matches!(event, AppEvent::ExitRequest)),
+        "a stale shutdown must not exit the replacement session: {stale_terminal_events:#?}"
+    );
+
+    chat.handle_session_event(
+        current_generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::Shutdown,
+                message: None,
+            },
+        )),
+    );
+    let current_terminal_events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert_eq!(
+        current_terminal_events
+            .iter()
+            .filter(|event| matches!(event, AppEvent::ExitRequest))
+            .count(),
+        1,
+        "the current shutdown must still exit: {current_terminal_events:#?}"
+    );
+}
+
+#[tokio::test]
+async fn session_shutdown_uses_live_handle_without_a_conversation_id() {
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = nori_config::NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session =
+        nori_harness::runtime::launch_session(nori_harness::runtime::SessionLaunchSpec {
+            config: std::sync::Arc::new(config),
+            cli_version: "tui-test".to_string(),
+            session_context: None,
+            initial_context: None,
+            resume: None,
+        });
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while !matches!(
+            session.events.recv().await,
+            Some(nori_protocol::SessionEvent::Nori(
+                nori_protocol::NoriEvent::SessionStarted(_)
+            ))
+        ) {}
+    })
+    .await
+    .expect("mock session should start");
+
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    assert_eq!(chat.conversation_id(), None);
+    chat.harness_handle = Some(session.handle.clone());
+
+    chat.shutdown_harness_session();
+
+    let ended = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            if let Some(nori_protocol::SessionEvent::Nori(
+                nori_protocol::NoriEvent::SessionEnded(ended),
+            )) = session.events.recv().await
+            {
+                break ended;
+            }
+        }
+    })
+    .await
+    .expect("shutdown should reach the live harness session");
+    assert_eq!(ended.reason, nori_protocol::SessionEndReason::Shutdown);
 }
 
 /// A transient (retryable) turn failure must leave the loop armed: the next

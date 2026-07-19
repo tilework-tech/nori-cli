@@ -12,6 +12,8 @@ use crate::system_info::SystemInfo;
 use nori_config::AskForApproval;
 use nori_config::SandboxPolicy;
 
+pub(crate) type SessionGeneration = i64;
+
 #[derive(Debug, Clone)]
 pub(crate) struct ConversationPathResponseEvent {
     pub(crate) conversation_id: nori_harness::ConversationId,
@@ -51,7 +53,10 @@ pub(crate) enum HarnessAction {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
-    SessionEvent(nori_protocol::SessionEvent),
+    SessionEvent {
+        generation: SessionGeneration,
+        event: nori_protocol::SessionEvent,
+    },
 
     /// Start a new session.
     NewSession,

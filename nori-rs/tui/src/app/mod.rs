@@ -111,10 +111,6 @@ pub(crate) struct App {
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
 
-    /// Ignore the next ShutdownComplete event when we're intentionally
-    /// stopping a conversation (e.g., before starting a new one).
-    suppress_shutdown_complete: bool,
-
     // One-shot suppression of the next world-writable scan after user confirmation.
     skip_world_writable_scan_once: bool,
 
@@ -246,7 +242,6 @@ impl App {
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
             pending_update_action: None,
-            suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
             loop_count_override: None,

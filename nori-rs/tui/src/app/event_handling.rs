@@ -291,19 +291,8 @@ impl App {
             AppEvent::CommitTick => {
                 self.chat_widget.on_commit_tick();
             }
-            AppEvent::SessionEvent(event) => {
-                if self.suppress_shutdown_complete
-                    && matches!(
-                        event,
-                        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
-                            _
-                        ))
-                    )
-                {
-                    self.suppress_shutdown_complete = false;
-                    return Ok(true);
-                }
-                self.chat_widget.handle_session_event(event);
+            AppEvent::SessionEvent { generation, event } => {
+                self.chat_widget.handle_session_event(generation, event);
             }
             AppEvent::ConversationHistory(ev) => {
                 self.on_conversation_history_for_backtrack(tui, ev)?;

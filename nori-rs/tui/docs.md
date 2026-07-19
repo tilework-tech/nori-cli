@@ -66,6 +66,11 @@ response observable on the stream, observes `SessionEnded(Closed)`, and then
 handles stream closure. The TUI does not render a successful close-response
 message. Explicit application shutdown uses `SessionEnded(Shutdown)`.
 
+Events entering the application are tagged with their session generation. When
+a session is replaced, events from older generations are discarded.
+Replacement shutdown is based on the live harness handle rather than transcript
+recorder or conversation-ID availability.
+
 Unexpected child or transport loss emits a request failure when work was in
 flight followed by `SessionEnded(ConnectionLost)`. The TUI stays open so the
 user can read the failure and choose the next action; connection loss is not

@@ -13,9 +13,17 @@ use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionResume;
 use nori_harness::runtime::launch_session;
 use std::sync::Arc;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
+
+static NEXT_SESSION_GENERATION: AtomicI64 = AtomicI64::new(1);
+
+pub(super) fn next_session_generation() -> crate::app_event::SessionGeneration {
+    NEXT_SESSION_GENERATION.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Result of spawning a harness session.
 pub(crate) struct SpawnAgentResult {
@@ -29,10 +37,11 @@ pub(crate) struct SpawnAgentResult {
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
     fork_context: Option<String>,
 ) -> SpawnAgentResult {
     match nori_harness::get_agent_config(&config.active_agent) {
-        Ok(_) => launch_acp_agent(config, app_event_tx, fork_context, None),
+        Ok(_) => launch_acp_agent(config, app_event_tx, generation, fork_context, None),
         Err(_) => {
             let agent_name = config.active_agent;
             let known: Vec<String> = list_available_agents()
@@ -59,10 +68,12 @@ pub(crate) fn spawn_acp_agent_resume(
     acp_session_id: Option<String>,
     transcript: Option<nori_harness::transcript::Transcript>,
     app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
 ) -> SpawnAgentResult {
     launch_acp_agent(
         config,
         app_event_tx,
+        generation,
         None,
         Some(SessionResume {
             acp_session_id,
@@ -90,6 +101,7 @@ fn spawn_error_agent(agent_name: String, error_msg: String, app_event_tx: AppEve
 fn launch_acp_agent(
     config: Config,
     app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
     fork_context: Option<String>,
     resume: Option<SessionResume>,
 ) -> SpawnAgentResult {
@@ -109,7 +121,7 @@ fn launch_acp_agent(
 
     tokio::spawn(async move {
         while let Some(event) = session.events.recv().await {
-            app_event_tx.send(AppEvent::SessionEvent(event));
+            app_event_tx.send(AppEvent::SessionEvent { generation, event });
         }
     });
 

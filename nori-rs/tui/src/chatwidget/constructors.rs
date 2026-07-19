@@ -1,4 +1,5 @@
 use super::agent::SpawnAgentResult;
+use super::agent::next_session_generation;
 use super::*;
 
 impl ChatWidget {
@@ -21,10 +22,16 @@ impl ChatWidget {
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
+        let session_generation = next_session_generation();
         let spawn_result = if deferred_spawn {
             SpawnAgentResult { handle: None }
         } else {
-            spawn_agent(config.clone(), app_event_tx.clone(), fork_context)
+            spawn_agent(
+                config.clone(),
+                app_event_tx.clone(),
+                session_generation,
+                fork_context,
+            )
         };
 
         let first_prompt_text = initial_prompt.clone();
@@ -58,6 +65,7 @@ impl ChatWidget {
                 initial_images,
             ),
             stream_controller: None,
+            session_generation,
             completed_client_tool_calls: HashSet::new(),
             client_event_normalizer: Default::default(),
             replay_in_progress: false,
@@ -141,11 +149,13 @@ impl ChatWidget {
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
+        let session_generation = next_session_generation();
         let spawn_result = spawn_acp_agent_resume(
             config.clone(),
             acp_session_id.clone(),
             transcript,
             app_event_tx.clone(),
+            session_generation,
         );
 
         let first_prompt_text = initial_prompt.clone();
@@ -179,6 +189,7 @@ impl ChatWidget {
                 initial_images,
             ),
             stream_controller: None,
+            session_generation,
             completed_client_tool_calls: HashSet::new(),
             client_event_normalizer: Default::default(),
             replay_in_progress: false,
@@ -252,7 +263,7 @@ impl ChatWidget {
     /// This should be called after pre-session setup (e.g., skillset switch)
     /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
     pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
-        let spawn_result = spawn_agent(config, app_event_tx, None);
+        let spawn_result = spawn_agent(config, app_event_tx, self.session_generation, None);
         self.harness_handle = spawn_result.handle;
     }
 }

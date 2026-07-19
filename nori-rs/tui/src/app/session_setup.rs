@@ -42,11 +42,7 @@ impl App {
     }
 
     pub(super) fn shutdown_current_conversation(&mut self) {
-        if self.chat_widget.conversation_id().is_some() {
-            self.suppress_shutdown_complete = true;
-            self.chat_widget
-                .submit_harness_action(crate::app_event::HarnessAction::Shutdown);
-        }
+        self.chat_widget.shutdown_harness_session();
     }
 
     /// Display a loaded transcript in the history view.
