@@ -1,5 +1,10 @@
 # ACP-Canonical Protocol Unification Implementation Plan
 
+**Status:** Design commit `baade242` was implemented through `919dbb39`.
+Implementation is complete. Planned test coverage is only partially complete;
+the exact checked-in coverage and gaps are recorded below. Final branch
+verification is complete; draft-PR handoff remains.
+
 **Goal:** Delete `codex-protocol`, make `nori-protocol` the single ACP schema entry point, and expose an ACP-faithful event boundary from the embeddable Nori harness.
 
 **Architecture:** `nori-protocol` re-exports the ACP schema and defines a source-nested `SessionEvent::{Acp, Nori}` boundary. Raw ACP notifications, requests, and responses cross that boundary unchanged; the small Nori branch covers only harness-owned lifecycle and product concerns, while commands and queries use typed harness methods.
@@ -8,7 +13,107 @@
 
 ---
 
-**Testing Plan**
+## Implementation result
+
+The hard cut deleted `codex-protocol`, `codex-app-server-protocol`, the generic
+`Event`/`EventMsg`/`Op` bus, and the ACP-to-Codex translator. `nori-protocol` is
+now types-only and the sole schema dependency. It re-exports
+`nori_protocol::acp` and owns `SessionEvent::{Acp, Nori}` with raw ACP
+notification/request/response envelopes and exactly fifteen Nori outer event
+variants.
+
+`nori-harness` exposes the following typed method families on `HarnessHandle`:
+
+```rust
+prompt(Vec<acp::v1::ContentBlock>) -> Result<acp::v1::RequestId>
+respond_to_agent(acp::v1::RequestId, Result<acp::v1::ClientResponse, acp::v1::Error>) -> Result<()>
+cancel() -> Result<()>
+shutdown() -> Result<()>
+
+add_history(String) -> Result<()>
+history_entry(i64, i64) -> Result<Option<HistoryEntry>>
+search_history(i64) -> Result<Vec<HistoryEntry>>
+custom_prompts() -> Result<Vec<CustomPrompt>>
+compact() -> Result<()>
+undo() -> Result<()>
+undo_snapshots() -> Result<Vec<UndoSnapshot>>
+undo_to(i64) -> Result<()>
+run_user_shell(String) -> Result<()>
+set_approval_policy(nori_config::AskForApproval) -> Result<()>
+
+goal() -> Result<Option<nori_protocol::ThreadGoal>>
+set_goal(String, Option<nori_protocol::ThreadGoalStatus>) -> Result<nori_protocol::ThreadGoal>
+set_goal_status(nori_protocol::ThreadGoalStatus) -> Result<nori_protocol::ThreadGoal>
+clear_goal() -> Result<()>
+get_session_config() -> Option<Vec<acp::v1::SessionConfigOption>>
+set_session_config_option(String, String) -> Result<Vec<acp::v1::SessionConfigOption>>
+list_sessions(PathBuf) -> Result<Vec<acp::v1::SessionInfo>>
+close_session() -> Result<()>
+```
+
+The final implementation consolidated public boundary coverage in
+`nori-rs/harness/tests/session_event_boundary.rs`. Transcript schema v3 writes
+explicit user records and exact `SessionEvent` records; v2 compatibility remains
+private to transcript storage. The TUI performs source-first dispatch and keeps
+its ACP presentation projection private.
+
+The final correlation/lifecycle commits establish these additional invariants:
+non-idle phase IDs are the exact ACP wire `RequestId`; one Harness prompt issues
+one ACP prompt request; all current setup responses precede `SessionStarted` and
+remain outside replay brackets; an empty successful `EndTurn` is terminal rather
+than a retry signal; and explicit shutdown aborts the retained reducer and relay
+tasks. Setup drains through the actual response rather than a fixed event count;
+raw bootstrap errors are not mirrored as Nori failures; `Prompting` precedes
+prompt-attributable ACP traffic; failed-load Agent and Transcript histories use
+separate replay batches; and child loss retains the active wire request ID.
+
+### Checked-in behavioral coverage
+
+- [x] Bootstrap preserves initialize and `session/new` responses before
+      `SessionStarted`, even when the consumer starts draining late.
+- [x] Bootstrap preserves raw initialize, new-session, and resume error
+      responses before `SpawnFailed` without a duplicate Nori failure event.
+- [x] Interleaved setup notifications and the default-model config response
+      precede `SessionStarted` in transport order.
+- [x] Prompt notifications and response retain correlation, and the
+      `Prompting` phase carries the same wire `RequestId` returned by `prompt()`.
+- [x] `Prompting` is observable before the first prompt notification, response,
+      or delegated permission request.
+- [x] Delegated permission success and ACP error responses round-trip through
+      the public boundary with the same request ID.
+- [x] Typed session-list and close calls return directly while their ACP
+      responses remain observable.
+- [x] Successful `session/load` emits its response before `SessionStarted`,
+      keeps that response outside replay brackets, and brackets the load-time ACP
+      notifications.
+- [x] Failed `session/load` and fallback `session/new` responses both precede
+      `SessionStarted` in that order; partial Agent replay and local Transcript
+      replay are emitted as separate source-owned batches.
+- [x] Unexpected child loss correlates the fatal Nori failure with the active
+      prompt's exact wire request ID.
+- [x] V3 persistence writes user and exact `SessionEvent` records without a
+      duplicate assistant or normalized-client record.
+- [x] V3 replay projects explicit user input and preserves its order relative
+      to stored ACP notifications.
+- [x] A public v2 compatibility test covers legacy user, assistant, and
+      thinking records without exposing the storage enum.
+- [ ] No checked-in fixture covers every v2 top-level record and all 18 legacy
+      normalized `ClientEvent` tags.
+- [ ] No public-boundary test covers every Nori event variant or every typed
+      query family listed in this plan.
+- [ ] No dedicated black-box test proves host-handled filesystem requests are
+      absent from the outward stream.
+- [ ] No dedicated test sends an empty successful `EndTurn` or counts wire
+      prompt requests to lock the one-call/one-request rule.
+- [ ] No task-lifetime test directly proves explicit shutdown aborts both the
+      retained reducer and relay tasks.
+- [ ] The full request-race matrix and a separate headless example/test were
+      not added.
+
+The task bodies below are retained as the test-first execution checklist. Their
+imperative language is historical, not a claim that every planned test landed.
+
+## Historical testing plan
 
 Add a black-box harness integration test that starts the real mock ACP agent,
 submits a prompt, and observes raw ACP notifications followed by the correlated
@@ -17,17 +122,20 @@ request identity, stop reason, and content without inspecting reducer fields or
 mocking the harness.
 
 Add a black-box delegated-request integration test in which the mock agent asks
-for permission and performs representative filesystem/terminal requests. It
-must prove that delegated requests reach the consumer as raw `AgentRequest`
-values and that a schema-native response with the same `RequestId` reaches the
-agent. A separate configuration case must prove that requests configured for
-harness handling are completed without leaking a duplicate outward request.
+for permission. It must prove that the request reaches the consumer as a raw
+`AgentRequest` and that a schema-native response with the same `RequestId`
+reaches the agent. Preserve the current host-owned filesystem behavior and
+prove it does not leak a duplicate outward request. Terminal and extension
+request families are currently unadvertised; do not invent routing
+configuration for them in this refactor.
 
-Add transcript behavior tests that load checked-in version-2 normalized event
-fixtures through the public transcript loader, replay a newly recorded session,
-and verify that equivalent user-visible content and Nori-owned state are
-restored. The test observes the loader/replay boundary, not private decoder
-types or serialized enum layout.
+Add transcript behavior tests that load a checked-in matrix covering every
+version-2 top-level record and all 18 normalized `ClientEvent` tags through the
+public transcript loader, replay a newly recorded session, and verify that
+equivalent user-visible content and Nori-owned state are restored. New-format
+tests must prove that client-to-agent user input survives independently of the
+agent-to-client event stream and that assistant output has only one canonical
+stored representation.
 
 Add harness behavior tests for queue changes, replay brackets, lifecycle phase,
 goals, undo, user shell, hook output, and transport failure. Each test should
@@ -54,16 +162,19 @@ own failing public-boundary tests before editing that behavior.
 
 ## Preconditions and constraints
 
-- Do not begin until the active CLI configuration rework has landed on `main`.
-- Create a new implementation worktree from the then-current `main`; do not
-  reuse the docs worktree or edit the protected branch.
+- The active CLI configuration rework landed in #545. Implementation baseline:
+  `45754205` on `origin/main`.
+- The implementation worktree is
+  `.worktrees/acp-protocol-unification` on
+  `refactor/acp-protocol-unification`; do not edit the protected branch.
 - Read the repository `AGENTS.md` and required skills before implementation.
 - The user has approved removal of the `codex-protocol` dependency as a hard
   cut. Do not add, upgrade, or remove any other dependency without asking.
-- Re-audit the repository after the configuration work. Current paths and
-  consumers below describe commit `500ee202`, not a substitute for that audit.
-- Before deleting anything, present the refreshed exact module/type/variant
-  list and remaining consumers for the promised sanity-check.
+- The post-configuration audit is complete: 12 direct dependency edges, all 18
+  `ClientEvent`, 20 `Op`, and 51 `EventMsg` variants, every schema/SDK import,
+  and the version-2 persistence behavior are accounted for in the spec.
+- The user approved the hard cut and instructed implementation to proceed; the
+  refreshed ledger in the spec is the deletion gate for this branch.
 - Do not add a compatibility facade, deprecated aliases, or a second normalized
   ACP vocabulary.
 - Prefer one atomic implementation PR (with reviewable commits) so `main` never
@@ -72,12 +183,12 @@ own failing public-boundary tests before editing that behavior.
 The normative design and current deletion inventory are in
 `docs/specs/protocol-unification.md`.
 
-## Task 1: Refresh the post-configuration inventory and pass the deletion gate
+## Task 1: Refresh the post-configuration inventory and pass the deletion gate — complete
 
 **Files to inspect:**
 
 - `nori-rs/Cargo.toml`
-- `Cargo.lock`
+- `nori-rs/Cargo.lock`
 - every `nori-rs/*/Cargo.toml`
 - `nori-rs/protocol/src/**/*.rs`
 - `nori-rs/nori-protocol/src/**/*.rs`
@@ -86,11 +197,11 @@ The normative design and current deletion inventory are in
 - `nori-rs/tui/src/**/*.rs`
 - configuration files and crates changed by the prerequisite rework
 
-**Step 1: Rebase and establish a clean baseline**
+**Step 1: Establish the clean baseline — complete**
 
-Rebase the implementation branch onto the configuration refactor's landed
-commit. Record `git status`, `git rev-parse HEAD`, and the baseline results of
-the repository's required checks before editing.
+The branch starts at `45754205`. `cargo build --bin nori`, the CI-profile mock
+agent build, the selected package suite, and the real PTY end-to-end suite pass
+before implementation.
 
 **Step 2: Re-run dependency and import audits**
 
@@ -130,29 +241,28 @@ shell-environment types. In particular, decide the concrete owners of
 `AskForApproval` and `SandboxPolicy` from actual runtime/API use. They must not
 move into `nori-protocol` merely to avoid a cycle.
 
-**Step 5: Resolve the two live Nori extension gaps**
+**Step 5: Resolve the two live Nori extension gaps — complete**
 
-Present the live prompt-summary and user-visible nonfatal-notice producers and
-consumers. Co-design and record the smallest truthful event additions, or an
-explicit decision to remove/relocate each behavior. Do not overload
+The smallest truthful additions are
+`PromptSummaryUpdated(PromptSummary)` and `Notice(Notice)`. Do not overload
 `RequestFailed`, `ContextCompacted`, or `HookOutput`.
 
-**Step 6: Stop at the deletion gate**
+**Step 6: Pass the deletion gate — complete**
 
-Post the refreshed exact deletion/rehoming list, including remaining consumers,
-for user sanity-check. Do not proceed with file deletion until it is approved.
+The exact refreshed deletion/rehoming list is recorded in the spec. The user
+approved the hard cut and explicitly authorized implementation after #545.
 
-## Task 2: Lock the new public boundary with failing behavioral tests
+## Task 2: Lock the new public boundary with failing behavioral tests — partially complete
 
 **Files:**
 
-- Create: `nori-rs/harness/tests/session_event_boundary_test.rs`
+- Create: `nori-rs/harness/tests/session_event_boundary.rs`
 - Modify: `nori-rs/harness/src/backend/tests/mod.rs`
 - Modify: relevant split files under `nori-rs/harness/src/backend/tests/`
 - Modify: `nori-rs/acp-host/src/connection/acp_connection_tests.rs`
 - Modify: mock-agent scenarios in the post-refactor `mock-acp-agent` crate
 
-**Step 1: Write the bootstrap buffering test**
+**Step 1: Write the bootstrap buffering test — covered**
 
 Construct the harness through its public API, then begin reading the event
 stream. Assert initialization and session-creation responses are present once,
@@ -160,7 +270,7 @@ in request order, even when the constructor awaited bootstrap before returning.
 Use a consumer that intentionally starts late to prove bootstrap neither drops
 early responses nor deadlocks on an unavailable receiver.
 
-**Step 2: Write the prompt-stream test**
+**Step 2: Write the prompt-stream test — covered**
 
 Start the real mock ACP subprocess through the public harness constructor. Send
 a prompt through the handle and collect outward events until its response. The
@@ -179,29 +289,29 @@ assert!(matches!(
 Assert at least one preceding raw session notification carries the expected
 assistant content. Do not assert private channel calls or reducer state.
 
-**Step 3: Write delegated request round-trip tests**
+**Step 3: Write delegated request round-trip tests — covered for permission**
 
-Make the mock agent issue each supported agent-to-client request family. Observe
-`AcpEvent::Request`, respond through the public handle using the same
-`RequestId`, and assert the agent proceeds. Cover permission plus representative
-filesystem and terminal requests; cover elicitation or extension requests when
-the currently selected ACP schema exposes them. Include both a
-`ClientResponse` success and a schema-native `Error` response.
+Make the mock agent issue a permission request. Observe `AcpEvent::Request`,
+respond through the public handle using the same `RequestId`, and assert the
+agent proceeds. Include both a `ClientResponse` success and a schema-native
+`Error` response. The current host auto-handles advertised filesystem requests
+and does not advertise terminal/extension capabilities; test that truth rather
+than adding a new policy surface.
 
-**Step 4: Write the load-stream test**
+**Step 4: Write the load-stream test — covered**
 
 Have the mock agent emit representative session notifications during
 `session/load` before returning its load response. Assert the public load method
 returns a distinct `RequestId`, the notifications remain in source order, and
 the final `AcpEvent::Response` carries that same ID and the ACP load response.
 
-**Step 5: Write harness-handled request tests**
+**Step 5: Write host-handled request tests — not covered at the public boundary**
 
-Configure filesystem/terminal handling inside the harness. Assert the agent
-receives a result and no corresponding outward `AcpEvent::Request` is emitted.
-This catches double dispatch and accidental leakage.
+Exercise the existing filesystem handler. Assert the agent receives a result
+and no corresponding outward `AcpEvent::Request` is emitted. This catches
+double dispatch and accidental leakage without inventing configuration.
 
-**Step 6: Write error ownership tests**
+**Step 6: Write error ownership tests — partially covered**
 
 Cover:
 
@@ -212,7 +322,7 @@ Cover:
 - orderly close versus unexpected connection loss → distinct
   `SessionEnded` reasons.
 
-**Step 7: Write Nori-event ownership tests**
+**Step 7: Write Nori-event ownership tests — partially covered**
 
 Exercise real harness operations that cause session start/phase/end, queue,
 replay, compaction, goal, capabilities, undo, user-shell, hook, prompt-summary,
@@ -220,7 +330,7 @@ and nonfatal-notice transitions. Assert their public `NoriEvent` order and
 payload meaning, and assert that no Nori tool/message/plan/usage/mode/config/
 permission mirror is emitted.
 
-**Step 8: Write direct-query result tests**
+**Step 8: Write direct-query result tests — covered only for list and close**
 
 Call history lookup/search, custom prompt discovery, undo listing, session
 listing, config mutation, and close through the public handle. Assert each
@@ -228,7 +338,7 @@ caller receives its typed result without reading the event stream. Drain the
 stream concurrently and assert no correlated Nori result event is emitted;
 ACP-backed operations may still expose their raw `AcpEvent::Response`.
 
-**Step 9: Write request-lifecycle race tests**
+**Step 9: Write request-lifecycle race tests — partially covered**
 
 Use deterministic mock-agent barriers—not sleeps—to cover:
 
@@ -248,7 +358,7 @@ Run the narrowest package/test commands. Confirm failures occur because the
 new public API/behavior is absent—not because fixtures, subprocess setup, or
 test compilation are wrong.
 
-## Task 3: Establish `nori-protocol` as the ACP schema choke point
+## Task 3: Establish `nori-protocol` as the ACP schema choke point — complete
 
 **Files:**
 
@@ -307,13 +417,13 @@ pub enum NoriEvent {
     Undo(UndoEvent),
     UserShell(UserShellEvent),
     HookOutput(HookOutput),
+    PromptSummaryUpdated(PromptSummary),
+    Notice(Notice),
     RequestFailed(RequestFailure),
 }
 ```
 
-Add only the separately user-approved resolution for the live prompt-summary
-and nonfatal-notice gaps from Task 1. Do not infer any further variant from old
-Codex vocabulary.
+Do not infer any further variant from old Codex vocabulary.
 
 Derive payload fields from audited public consumer needs. Keep the structs
 small; do not place ACP capability, content, tool, plan, mode, config-option, or
@@ -333,7 +443,7 @@ Run `cargo test -p nori-protocol` and the failing harness boundary test. The
 protocol crate should compile with minimal dependencies; behavior tests may
 remain red until the relay is rewired in the next task.
 
-## Task 4: Relay raw ACP envelopes through `nori-acp-host` and `nori-harness`
+## Task 4: Relay raw ACP envelopes through `nori-acp-host` and `nori-harness` — complete
 
 **Files:**
 
@@ -359,11 +469,11 @@ agent response, construct the matching `AcpEvent` while retaining its
 
 **Step 2: Preserve request routing policy**
 
-Keep the harness's configured choice to handle filesystem/terminal requests or
-delegate them. Delegated requests go to the public stream once. Public response
+Keep the current host-owned filesystem handling and outward permission
+delegation. Delegated requests go to the public stream once. Public response
 methods route schema-native client success or error responses back to the
 pending ACP request. Cancellation and disconnect must close pending responders
-deterministically.
+deterministically. Leave unadvertised terminal/extension families unadvertised.
 
 **Step 3: Emit the small Nori branch**
 
@@ -386,7 +496,7 @@ Run the tests from Task 2. Inspect complete output and fix the owning layer for
 ordering, request-correlation, or lifecycle failures; do not normalize away
 schema differences as a workaround.
 
-## Task 5: Version transcript persistence without preserving the old Rust API
+## Task 5: Version transcript persistence without preserving the old Rust API — implementation complete, planned matrix incomplete
 
 **Files:**
 
@@ -400,45 +510,52 @@ schema differences as a workaround.
 - Add or update: versioned JSONL fixtures under
   `nori-rs/harness/tests/fixtures/`
 
-**Step 1: Write legacy-load and new-round-trip tests**
+**Step 1: Write legacy-load and new-round-trip tests — partially covered**
 
-Load an existing version-2 record containing normalized `ClientEvent` values
-through the public loader. Before changing the loader, record an explicit
-fixture matrix for every checked-in v2 event: the ordered public message,
-plan/tool update, Nori state update, documented drop, warning, or load error it
-must produce. Lock the current public behavior for unknown fields, malformed
-JSONL records, and now-obsolete variants unless the deletion review explicitly
-approves a change.
+Load version-2 records containing every top-level record kind and all 18
+normalized `ClientEvent` tags through the public loader. The repository had no
+fixture covering that matrix, so add it before changing the loader. Record the
+ordered public message, plan/tool update, Nori state update, documented drop,
+warning, or load error each value must produce. Lock the current public behavior
+for unknown fields, malformed JSONL records, and now-obsolete variants unless
+the deletion review explicitly approves a change.
 
 Record/reload a new session and assert the exact outward sequence:
-`ReplayStarted`, the expected raw ACP notifications and Nori-owned restoration
-events in source order, then `ReplayFinished`. Assert restored goal and session
-metadata through their public query/event boundaries rather than inspecting the
-decoder's state. Before changing persistence behavior, add and observe a failing
-test proving replay cannot repeat a recorded filesystem/terminal side effect or
-complete a live request from a historical response.
+`ReplayStarted`, only ACP notifications in source order, then
+`ReplayFinished`. Explicit user records are projected to ACP user-message
+notifications at their original positions. Assert
+restored goal and session metadata through their public query/event boundaries
+rather than inspecting the decoder's state. Before changing persistence
+behavior, add and observe failing tests proving user input is not lost,
+assistant output is not stored twice, and replay cannot repeat a recorded
+filesystem side effect or complete a live request from a historical response.
 
-**Step 2: Define a persistence-owned version**
+**Step 2: Define a persistence-owned version — complete**
 
-Increment the transcript schema. Store raw ACP envelopes and Nori events in a
-persistence envelope that can redact or omit secrets and ephemeral request
-channels. Do not require the public enums themselves to become a permanent
-storage ABI. Preserve request/response IDs for a typed offline transcript reader
-without making those historical envelopes replayable.
+Increment the transcript schema. Store persistence-owned user input, raw ACP
+envelopes, and Nori events in an envelope that can redact or omit secrets,
+attachments, and ephemeral request channels. Do not require the public enums
+themselves to become a permanent storage ABI. Preserve request/response IDs for
+a typed offline transcript reader without making those historical envelopes
+replayable. Do not also store an assistant projection beside its raw ACP
+notification.
 
-**Step 3: Add a private version-2 decoder**
+**Step 3: Keep version-2 compatibility private — complete**
 
 Keep only the legacy shapes needed to decode user-owned records. Translate them
-directly into replayable ACP/Nori state. Do not export legacy types, implement a
-runtime compatibility facade, or write new version-2 records.
+into the private replay projections. Do not export storage or legacy types,
+implement a runtime compatibility facade, or write new version-2 records. The
+implementation keeps these shapes in the private transcript types/loader rather
+than adding the separately named decoder module proposed above.
 
-**Step 4: Preserve replay ordering**
+**Step 4: Preserve replay ordering — covered for v3 user/notification order and agent load notifications**
 
-Emit `ReplayStarted`, raw ACP notifications in original order, the minimum
-Nori-owned state restoration events, and `ReplayFinished`. Do not synthesize
-`ReplayEntry`, re-emit historical delegated requests, or deliver historical
-responses to live pending calls. Make the side-effect and live-completion tests
-from Step 1 pass.
+Emit `ReplayStarted`, historical ACP notifications in original order, and
+`ReplayFinished`. Project persisted user inputs to ACP user-message
+notifications. Do not place current setup responses or Nori lifecycle events
+inside the brackets, re-emit historical delegated requests, or deliver
+historical responses to live pending calls. The planned side-effect and
+live-completion cases do not have dedicated public-boundary tests.
 
 **Step 5: Run transcript and harness tests**
 
@@ -446,7 +563,7 @@ Run the transcript test module, harness package tests, and the new black-box
 boundary test. Verify fixtures contain no credentials or machine-specific
 paths before committing them.
 
-## Task 6: Migrate the TUI and headless consumer without recreating protocol mirrors
+## Task 6: Migrate the TUI and headless consumer without recreating protocol mirrors — implementation complete, planned headless test absent
 
 **Files:**
 
@@ -459,7 +576,7 @@ paths before committing them.
 - Add or update: a headless harness example/integration test in the harness or
   CLI crate
 
-**Step 1: Write failing frontend and headless boundary tests**
+**Step 1: Write failing frontend and headless boundary tests — TUI coverage exists; separate headless example/test absent**
 
 Add the smallest TUI regression cases that exercise representative raw ACP
 message, plan, tool, permission, and completion events plus Nori lifecycle and
@@ -492,7 +609,7 @@ Run focused TUI unit/snapshot tests, then the PTY end-to-end suite. Run the
 headless integration/example against the same harness API to catch accidental
 terminal dependencies.
 
-## Task 7: Rehome residual Codex types and delete `codex-protocol`
+## Task 7: Rehome residual Codex types and delete `codex-protocol` — complete
 
 **Files:**
 
@@ -501,18 +618,20 @@ terminal dependencies.
 - Modify: Cargo manifests and imports in every refreshed reverse dependency
 - Modify or delete: residual type owners identified in Task 1
 
-The baseline reverse dependencies were `codex-app-server-protocol`,
-`codex-common`, `codex-core`, `codex-linux-sandbox`, `codex-otel`,
-`codex-rmcp-client`, `codex-sandbox`, `codex-windows-sandbox`, `nori-acp-host`,
-`nori-cli`, `nori-config`, `nori-harness`, and `nori-tui`. Use the refreshed
-list, not this baseline, when editing.
+The refreshed 12 reverse dependencies are `codex-app-server-protocol`,
+`codex-common`, `codex-core`, `codex-linux-sandbox`, `codex-rmcp-client`,
+`codex-sandbox`, `codex-windows-sandbox`, `nori-acp-host`, `nori-cli`,
+`nori-config`, `nori-harness`, and `nori-tui`.
 
 **Step 1: Rehome only live non-protocol values**
 
-Move configuration/runtime policy to the post-refactor configuration owner,
-UI formatting to the frontend, private parser helpers to the harness/frontend,
-and persistence compatibility to the transcript loader. Prefer deletion over a
-new shared crate when a type has one consumer.
+Move approval, trust, MCP server, resolved sandbox, and shell-environment policy
+to `nori-config`; computed MCP authentication status to `codex-rmcp-client`;
+UI formatting to the frontend; private parser helpers to the
+harness/frontend; and persistence compatibility to the transcript loader.
+Localize residual model/login/app-server values to their real private owners or
+delete them. Prefer deletion over a new shared crate when a type has one
+consumer.
 
 **Step 2: Delete Codex/OpenAI model vocabulary**
 
@@ -556,7 +675,7 @@ only for the workspace declaration, `nori-acp-host`, and explicitly agent-side
 or conformance-test crates. The final `::schema` search must find nothing,
 because even SDK consumers import schema values through `nori_protocol::acp`.
 
-## Task 8: Update architecture and protocol documentation
+## Task 8: Update architecture and protocol documentation — complete
 
 **Files:**
 
@@ -580,8 +699,9 @@ deliberate.
 **Step 2: Document embedding and request delegation**
 
 Show a minimal Rust consumer matching the two source branches, sending a prompt,
-responding to a delegated ACP request, and awaiting a typed Nori query. Explain
-the filesystem/terminal auto-handle versus delegate configuration.
+responding to a delegated ACP permission request, and awaiting a typed Nori
+query. Explain that filesystem requests are currently host-handled and terminal
+or extension requests are not advertised.
 
 **Step 3: Run documentation consistency searches**
 
@@ -589,15 +709,36 @@ Search documentation for stale crate names, normalized `ClientEvent`, Codex
 event bus terminology, direct ACP schema imports, and transcript version claims.
 Update only statements invalidated by this implementation.
 
-## Task 9: Final verification and branch handoff
+## Task 9: Final verification complete; branch handoff next
 
-**Step 1: Run formatting and static checks**
+The implementation, focused black-box boundary coverage, documentation
+consistency audit, and repository-wide verification are complete. The final
+commands and results were:
+
+- `cargo test --workspace --all-targets --no-fail-fast --quiet` — passed with
+  no failures; 11 tests were ignored. This includes the black-box harness
+  boundary, transcript compatibility, mock-agent, TUI, and PTY targets.
+- `just fmt` — passed. Stable Rust emitted the repository's existing warning
+  that `imports_granularity = Item` is nightly-only.
+- `just fix -- -D warnings` — passed and changed no Rust source.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` —
+  passed.
+- `cargo check --workspace --all-targets --all-features` — passed.
+- `cargo build --bin nori --bin mock_acp_agent` — passed.
+- Changed Markdown files passed targeted Prettier formatting and
+  `git diff --check`.
+- Final dependency/import audits found no `codex-protocol` manifest edge, no
+  `codex_protocol` source import, one schema source import (the public
+  `nori-protocol` re-export), and direct ACP SDK source imports only in
+  `nori-acp-host` and the agent-side mock.
+
+**Step 1: Run formatting and static checks — complete**
 
 Run the repository-prescribed Rust format, lint, and dependency checks. Inspect
 all output; do not ignore unrelated failures. Root-cause and fix every CI issue
 as required by `AGENTS.md`.
 
-**Step 2: Run package and workspace tests**
+**Step 2: Run package and workspace tests — complete**
 
 At minimum, run:
 
@@ -610,7 +751,7 @@ At minimum, run:
 Use the repository's canonical commands if the configuration refactor changes
 these package names or check entry points.
 
-**Step 3: Review the diff for simplification**
+**Step 3: Review the diff for simplification — complete**
 
 Confirm the implementation is net-negative where expected, no compatibility
 facade remains, no public projection duplicates ACP, and no business logic sits
@@ -661,8 +802,8 @@ review only after the full suite is green.
 
 **Implementation Details**
 
-- Wait for and rebase onto the configuration rework.
-- Refresh and approve the exact deletion inventory before deletion.
+- Build from the landed #545 configuration baseline.
+- Use the refreshed and approved exact deletion inventory.
 - Re-export ACP schema only from `nori-protocol`.
 - Preserve raw ACP notification/request/response aggregates and request IDs.
 - Keep `NoriEvent` notification-only and outside ACP semantics.
@@ -672,6 +813,10 @@ review only after the full suite is green.
 - Remove every `codex-protocol` edge and delete the crate atomically.
 - Verify both TUI and headless embedders against the same harness API.
 
-**Question** After the configuration rework lands, the deletion gate must resolve the final owners of approval/sandbox policy, the name of Nori's persisted conversation identity, the minimal fields/derive traits of each Nori event payload, and the two explicit prompt-summary/nonfatal-notice extension gaps. No other design question currently reopens the approved ACP/Nori boundary.
+**Resolved design gate** `nori-config` owns approval/sandbox policy; the
+transcript domain owns Nori's persisted conversation identity; public payloads
+are minimized against real consumers; and `PromptSummaryUpdated` plus `Notice`
+close the two audited Nori extension gaps. No remaining design question reopens
+the approved ACP/Nori boundary.
 
 ---

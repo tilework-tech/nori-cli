@@ -8,6 +8,7 @@ and the various transitions between states.
 ### 1. `active_cell: Option<Box<dyn HistoryCell>>`
 
 The currently active cell being displayed/edited. Can be:
+
 - `None` - No active cell
 - `Some(ExecCell)` - An exec cell (tool call) in progress
 - `Some(AgentMessageCell)` - Streaming agent text
@@ -22,6 +23,7 @@ Stores incomplete ExecCells that were flushed from `active_cell` before their to
 completed. These cells are **INVISIBLE** - they are not rendered anywhere.
 
 Structure:
+
 ```
 call_id_to_primary: HashMap<String, String>  // Maps any call_id -> primary_key
 cells: HashMap<String, Box<dyn HistoryCell>> // Maps primary_key -> cell
@@ -35,6 +37,7 @@ in the scrollback area above the active cell.
 ## ExecCell Properties
 
 Each ExecCell tracks multiple tool calls:
+
 - `calls: Vec<ExecCall>` - The calls in this cell
 - `pending_call_ids()` - Returns call_ids that haven't completed yet (no output)
 - `is_active()` - True if any calls are still pending
@@ -132,10 +135,12 @@ display or debugging cell lifecycle issues.
 
 ### ACP Snapshot Behavior
 
-ACP session-domain tool activity now reaches the TUI as normalized
-`crate::presentation::ClientEvent::ToolSnapshot` values rather than as a translated
-`ExecCommandBegin/End` stream from the backend. A single tool call typically
-produces multiple snapshots for the same `call_id`:
+ACP session-domain tool activity crosses the Harness boundary as raw
+`SessionEvent::Acp` notifications. The TUI's private presentation reducer turns
+those notifications into `crate::presentation::ClientEvent::ToolSnapshot`
+values rather than asking the backend to translate them into an
+`ExecCommandBegin/End` stream. A single tool call typically produces multiple
+snapshots for the same `call_id`:
 
 ```
 Snapshot 1: phase=Pending, title="Read File", invocation=None
@@ -143,9 +148,9 @@ Snapshot 2: phase=InProgress, title="Read /home/.../file.rs", invocation=Read { 
 Snapshot 3: phase=Completed, title="Read /home/.../file.rs", artifacts=[...]
 ```
 
-The ACP backend merges intermediate `ToolCall` and `ToolCallUpdate` messages by
-`call_id` before emitting them, so the TUI sees one progressively enriched
-snapshot stream rather than raw protocol churn.
+The private TUI projection merges intermediate `ToolCall` and `ToolCallUpdate`
+messages by `call_id`, so cell rendering sees one progressively enriched
+snapshot stream while the public Harness event remains raw ACP.
 
 ### Why This Still Matters For Cell Lifecycle
 
@@ -158,19 +163,19 @@ arrive while the viewport is streaming text:
 4. If pairing breaks, the completion can create an orphan cell or leave the
    pending one stuck until `drain_failed()`
 
-The backend now owns the provider-specific normalization, but the TUI still has
-to preserve ordering and deduplicate by `call_id`.
+The TUI presentation layer owns this UI-specific projection and still has to
+preserve ordering and deduplicate by `call_id`.
 
 ### Snapshot Routing In The TUI
 
 `handle_client_tool_snapshot()` in `chatwidget/event_handlers.rs` routes
 normalized ACP snapshots into existing cell types:
 
-| Snapshot kind/phase | TUI handling |
-|---------------------|--------------|
-| `Edit` / `Delete` / `Move` completed with file operations | `PatchHistoryCell` path |
+| Snapshot kind/phase                                                                | TUI handling             |
+| ---------------------------------------------------------------------------------- | ------------------------ |
+| `Edit` / `Delete` / `Move` completed with file operations                          | `PatchHistoryCell` path  |
 | `Execute` / `Read` / `Search` / `Fetch` / `Think` / `Other` pending or in-progress | Adapt to exec-begin flow |
-| Same kinds completed or failed | Adapt to exec-end flow |
+| Same kinds completed or failed                                                     | Adapt to exec-end flow   |
 
 This preserves the existing cell presentation without requiring the backend to
 reconstruct Codex-shaped event vocabulary.
@@ -182,7 +187,7 @@ When working with ACP tool events, follow these principles:
 1. **Never trust a single snapshot** - early pending snapshots are often incomplete
 2. **Preserve `call_id` pairing** - begin and completion state must stay correlated
 3. **Route by normalized semantics** - file operations, exploring tools, and generic tools take different cell paths
-4. **Keep provider quirks out of the TUI** - the backend should normalize titles and raw input before UI rendering
+4. **Keep projection private** - title/input heuristics belong in the TUI presentation layer, never in `nori-protocol`
 5. **Log thoroughly** - Use the `acp_event_flow` tracing target to debug event issues
 
 ### Tool Display Information Extraction
@@ -190,14 +195,14 @@ When working with ACP tool events, follow these principles:
 The TUI still derives concise display text from the normalized invocation/raw
 input when adapting snapshots into exec-like cells:
 
-| Tool Type | Checked Fields | Output Format |
-|-----------|---------------|---------------|
-| Search/Grep | pattern, query, path | `{pattern} in {path}` |
-| Terminal/Shell | command, cmd | `{command}` |
-| List/LS | path, directory | `{path}` |
-| Write/Edit | path, file_path | `{path}` |
-| Read/File | path, file_path, file | `{path}` |
-| Generic | path, command, query, name | First non-null value |
+| Tool Type      | Checked Fields             | Output Format         |
+| -------------- | -------------------------- | --------------------- |
+| Search/Grep    | pattern, query, path       | `{pattern} in {path}` |
+| Terminal/Shell | command, cmd               | `{command}`           |
+| List/LS        | path, directory            | `{path}`              |
+| Write/Edit     | path, file_path            | `{path}`              |
+| Read/File      | path, file_path, file      | `{path}`              |
+| Generic        | path, command, query, name | First non-null value  |
 
 This enables the TUI to show `"Read File(src/main.rs)"` instead of just `"Read File"`.
 
@@ -205,13 +210,13 @@ This enables the TUI to show `"Read File(src/main.rs)"` instead of just `"Read F
 
 The snapshot adapter maps normalized `ToolKind` and `Invocation` data to TUI rendering modes:
 
-| ACP ToolKind | ParsedCommand | TUI Mode |
-|--------------|---------------|----------|
-| `Read` | `ParsedCommand::Read` | Exploring (compact) |
-| `Search` | `ParsedCommand::Search` | Exploring (compact) |
-| `Other` with "list"/"glob"/"ls" in title | `ParsedCommand::ListFiles` | Exploring (compact) |
-| `Execute`, `Fetch`, `Think`, generic `Other` | `ParsedCommand::Unknown` | Command (full display) |
-| `Edit`, `Delete`, `Move` | N/A | Patch history path |
+| ACP ToolKind                                 | ParsedCommand              | TUI Mode               |
+| -------------------------------------------- | -------------------------- | ---------------------- |
+| `Read`                                       | `ParsedCommand::Read`      | Exploring (compact)    |
+| `Search`                                     | `ParsedCommand::Search`    | Exploring (compact)    |
+| `Other` with "list"/"glob"/"ls" in title     | `ParsedCommand::ListFiles` | Exploring (compact)    |
+| `Execute`, `Fetch`, `Think`, generic `Other` | `ParsedCommand::Unknown`   | Command (full display) |
+| `Edit`, `Delete`, `Move`                     | N/A                        | Patch history path     |
 
 This enables the TUI to group and collapse read-only operations while showing
 mutating operations prominently.
@@ -253,12 +258,14 @@ already used by `on_exec_command_begin`.
 ## Tracing Targets
 
 ### TUI-side tracing
-- `cell_flushing` - All cell state transitions (flush_active_cell, handle_exec_*_now)
+
+- `cell_flushing` - All cell state transitions (`flush_active_cell`, `handle_exec_*_now`)
 - `pending_exec_cells` - PendingExecCellTracker operations (save_pending, retrieve, drain_failed)
 - `tui_event_flow` - Event reception in the TUI (on_agent_message_delta, on_exec_command_begin, on_exec_command_end)
 
 ### ACP-side tracing
-- `acp_event_flow` - Normalized approval/tool/lifecycle emission from the ACP backend
+
+- `acp_event_flow` - Raw ACP transport and Harness event-flow diagnostics
 
 ### Enable all event flow tracing
 

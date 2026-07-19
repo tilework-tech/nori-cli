@@ -12,7 +12,10 @@ Path: @/nori-rs/core
 
 - `@/nori-rs/login/` depends on core for OAuth tokens, credential storage, and auth lifecycle types, then exposes the smaller authentication surface used by the TUI.
 - `@/nori-rs/tui/`, `@/nori-rs/cli/`, `@/nori-rs/harness/`, `@/nori-rs/common/`, `@/nori-rs/arg0/`, and the platform sandbox crates do not depend directly on core.
-- Shared configuration vocabulary such as MCP servers and shell environment policy lives in `@/nori-rs/protocol/`, allowing Nori crates to use those types without importing core.
+- Shared configuration vocabulary such as MCP servers, approval policy,
+  sandbox policy, and shell environment policy lives in
+  `@/nori-rs/nori-config/`, allowing Nori crates to use those types without
+  importing core.
 - Core depends on `codex-sandbox` for inherited error and sandbox types; the dependency never points from sandbox back to core.
 
 ### Core Implementation

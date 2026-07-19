@@ -4,40 +4,59 @@ Path: @/nori-rs/acp-host
 
 ### Overview
 
-- Agent-agnostic, client-side ACP hosting machinery, split out of the session harness (now `nori-harness`, then named `nori-acp`) during the crate-layering cleanup (`@/docs/specs/crate-layering.md`). It owns spawning an ACP agent subprocess and speaking JSON-RPC over its stdio (`connection/`, see `@/nori-rs/acp-host/src/connection/docs.md`), the agent registry and distribution resolution (`registry.rs`), the ACP-wire to internal-event bridge (`translator.rs`), file-change/diff helpers (`patch.rs`), and ACP error categorization (`error_category.rs`).
-- This is a Layer-0 leaf of the crate layering: it must stay independent of the session harness (`nori-harness`) and any terminal UI so it remains usable and testable by other ACP-ecosystem projects.
-- Deliberately harness-free: no session runtime, transcripts, hooks, or goal state. New agent-facing wire behavior belongs here; anything that needs backend session state belongs in `@/nori-rs/harness/`.
+`nori-acp-host` is Nori's agent-agnostic, client-side ACP host. It owns the ACP
+SDK connection, subprocess and wire lifecycle, agent registry, delegated client
+requests, MCP forwarding, and ACP error categorization. It owns no TUI or
+session-product state.
 
 ### How it fits into the larger codebase
 
-```
-nori-tui
-    |
-    v
-nori-harness (session harness, re-exports this crate)
-    |
-    v
-nori-acp-host <---> ACP Agent subprocess (JSON-RPC over stdio)
+```text
+nori-harness
+      |
+      v
+nori-acp-host <----> ACP agent subprocess
+      |
+      +---- nori-protocol (schema and public envelopes)
+      +---- nori-config (agent and MCP configuration)
+      +---- codex-rmcp-client (stored MCP credentials)
 ```
 
-- `nori-harness` (`@/nori-rs/harness/`) is the primary consumer and re-exports every module (`pub use nori_acp_host::connection;` and friends in `@/nori-rs/harness/src/lib.rs`), so downstream consumers such as `@/nori-rs/tui/` import through `nori_harness` paths.
-- Wire/schema types come from the official `agent-client-protocol` SDK; the schema's own `unstable` feature is enabled unconditionally for the Model-category config option.
-- Depends on `codex-protocol` (`@/nori-rs/protocol/`) for the internal event vocabulary, `nori-config` (`@/nori-rs/nori-config/`) for agent/MCP/wire-proxy configuration types, and `codex-rmcp-client` (`@/nori-rs/rmcp-client/`) for OAuth token loading in `connection/mcp.rs`.
-- Error classification lives here (`AcpErrorCategory`, `AcpErrorDetails`, `categorize_acp_error`, `categorize_acp_error_chain`); the harness-side user-facing message composition (`enhanced_error_message`) stays in `@/nori-rs/harness/src/backend/`.
+The host is the only client-side product crate that directly uses the
+`agent-client-protocol` SDK. Schema values are still imported through
+`nori_protocol::acp`, never through the SDK or schema crate directly.
 
 ### Core Implementation
 
-- `connection/` — `AcpConnection::spawn()` launches the agent as a child subprocess, owns its full lifecycle (exit watching, stderr tail, graceful stdin-EOF shutdown), forwards configured MCP servers (`mcp.rs`), optionally wraps the transport in an append-only wire logger (`wire_log.rs`), and delivers everything through one ordered `ConnectionEvent` inbox. See `@/nori-rs/acp-host/src/connection/docs.md`.
-- `registry.rs` — data-driven agent registry merging built-in agents (Claude Code, Codex, Gemini) with custom `[[agents]]` config entries; resolves an agent slug to a spawnable `AcpAgentConfig` across npx/bunx/pipx/uvx/local distributions. The registry is process-global state (`AGENT_REGISTRY`, a `RwLock`) initialized once via `initialize_registry()` at startup, with a built-in-defaults fallback when uninitialized.
-- `translator.rs` — converts user input into ACP `ContentBlock`s (text plus base64 image blocks) and provides local parsing/display helpers.
-- `patch.rs` — diff/patch construction (`create_patch_with_context`) used to normalize file mutations for rendering and transcripts.
-- `error_category.rs` — two-tier categorization. `categorize_acp_error_chain()` is the preferred entry point: it walks the anyhow chain for a structured `acp::Error`, maps it by JSON-RPC code (`-32000` auth, `-32002` session not found, `-32010` agent backing service unreachable, `-32012` not resumable, `-32014` no active session, `-32015` session already active — the code table mirrors the `nori-handroll acp` agent side), and extracts the agent-supplied `error.data.detail` into `AcpErrorDetails`. Structured codes always win over message text. Without a structured error it falls back to the legacy `categorize_acp_error()` priority-chained substring matching (Auth > Quota > ExecutableNotFound > Initialization > PromptTooLong > ApiServerError > Unknown) over the Debug-formatted error chain. `is_retryable()` marks server errors, quota limits, and `AgentUnreachable` as transient; the session-lifecycle states are persistent and never retryable.
+- `connection/` spawns an agent, performs ACP initialization, exposes typed ACP
+  methods, and emits one source-ordered `ConnectionEvent` stream.
+- ACP notifications, delegated requests, and method responses become raw
+  `nori_protocol::AcpEvent` values with their `RequestId` intact.
+- Initialization can route its raw response to the harness independently of
+  connection construction, preserving schema errors even when construction
+  fails without duplicating successful initialize events.
+- Each prompt call issues exactly one ACP `session/prompt` request and publishes
+  its transport-assigned ID. Cancellation does not trigger a hidden resend or
+  cancel-tail absorption loop. A successful empty `EndTurn` response is a
+  terminal result.
+- Permission requests are delegated outward. Filesystem read/write requests are
+  handled by the host and are not emitted a second time as public requests.
+- A private `SessionUpdate` copy feeds the harness reducer after the matching
+  raw notification; it is implementation state, not another public protocol.
+- `registry.rs` resolves built-in and configured agents to spawnable process
+  definitions. `error_category.rs` preserves structured ACP errors before
+  falling back to message classification.
 
 ### Things to Know
 
-- Detailed behavior documentation for the registry, error categorization, and their harness coupling still lives in `@/nori-rs/harness/docs.md`, which documents the full `nori-harness` public API (this crate's modules are part of that API via re-export).
-- The connection layer's child-lifecycle invariants (ordered inbox, stdin-EOF-then-grace shutdown, exit-watcher ownership of the `Child`) are load-bearing for `nori cloud` detach-on-exit (stdin EOF detaches the broker session; ACP `session/close` is the only terminal verb); see `@/nori-rs/acp-host/src/connection/docs.md` before changing teardown behavior.
-- `to_acp_mcp_servers()` in `connection/mcp.rs` is not a pure transformation: it eagerly resolves environment variables and loads stored OAuth tokens from the keyring/filesystem at conversion time.
-- The dependency direction is `nori-harness -> nori-acp-host`, never the reverse. If a change here needs harness state (session runtime, transcript, goals), thread it in as a parameter or move the logic up to `@/nori-rs/harness/`.
+- The dependency direction is `nori-harness -> nori-acp-host`, never the
+  reverse.
+- Terminal and extension request families are not advertised by the current
+  host. Adding them requires an explicit host-policy decision, not a generic
+  protocol mirror.
+- Shutdown closes stdin, waits for a grace period, then kills the process group
+  only as a backstop. This ordering is required for cloud detach behavior.
+- The removed ACP-to-Codex translator must not be recreated. Display-friendly
+  projection belongs privately in a consumer such as the TUI.
 
 Created and maintained by Nori.
