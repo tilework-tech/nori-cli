@@ -34,6 +34,8 @@ pub enum InboundEvent {
     },
     /// The response to an active `session/load` request.
     LoadResponse,
+    /// The transport has assigned the active prompt its ACP wire request ID.
+    PromptStarted { request_id: acp::RequestId },
     /// A `session/request_permission` from the agent.
     PermissionRequest { request_id: String, call_id: String },
     /// The user submitted a prompt (may be queued if a request is in flight).
@@ -41,7 +43,7 @@ pub enum InboundEvent {
     /// The user requested cancellation of the active prompt.
     CancelSubmit,
     /// A `session/load` was initiated.
-    LoadSubmit { request_id: String },
+    LoadSubmit { request_id: acp::RequestId },
 }
 
 pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
@@ -50,6 +52,7 @@ pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
         InboundEvent::PromptResponse { .. } => "prompt_response",
         InboundEvent::PromptFailed { .. } => "prompt_failed",
         InboundEvent::LoadResponse => "load_response",
+        InboundEvent::PromptStarted { .. } => "prompt_started",
         InboundEvent::PermissionRequest { .. } => "permission_request",
         InboundEvent::PromptSubmit(_) => "prompt_submit",
         InboundEvent::CancelSubmit => "cancel_submit",
@@ -75,7 +78,7 @@ pub(super) fn session_phase_label(phase: &SessionPhase) -> &'static str {
 pub enum SideEffect {
     /// Send a `session/prompt` to the agent.
     SendPrompt {
-        request_id: String,
+        request_id: acp::RequestId,
         prompt: Vec<acp::ContentBlock>,
     },
     /// Send a `session/cancel` notification to the agent.
@@ -105,6 +108,9 @@ pub fn reduce(
     match event {
         InboundEvent::PromptSubmit(prompt) => {
             reduce_prompt_submit(runtime, prompt, &mut out);
+        }
+        InboundEvent::PromptStarted { request_id } => {
+            reduce_prompt_started(runtime, request_id, &mut out);
         }
         InboundEvent::CancelSubmit => {
             reduce_cancel_submit(runtime, &mut out);
@@ -201,12 +207,34 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
         "Reducer started prompt and emitted session/prompt side effect"
     );
 
-    out.events
-        .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
     out.side_effects.push(SideEffect::SendPrompt {
         request_id,
         prompt: content_blocks,
     });
+}
+
+fn reduce_prompt_started(
+    runtime: &mut SessionRuntime,
+    request_id: acp::RequestId,
+    out: &mut ReduceOutput,
+) {
+    let SessionPhase::Prompt {
+        request_id: phase_request_id,
+        ..
+    } = &mut runtime.phase
+    else {
+        out.events.push(ClientEvent::Warning(WarningInfo {
+            message: "Transport started a prompt while no prompt was active".to_string(),
+        }));
+        return;
+    };
+
+    *phase_request_id = request_id.clone();
+    if let Some(active) = &mut runtime.active {
+        active.request_id = request_id;
+    }
+    out.events
+        .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
 }
 
 // ---------------------------------------------------------------------------
@@ -224,11 +252,11 @@ fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
             return; // double cancel is a no-op
         }
         *cancelling = true;
-        let owner_id = request_id.clone();
+        let owner_id = request_id.to_string();
 
         // Mark non-finished tool snapshots for this request as failed.
         for snapshot in runtime.persisted.tool_calls.values_mut() {
-            if snapshot.owner_request_id.as_deref() == Some(&owner_id)
+            if snapshot.owner_request_id.as_deref() == Some(owner_id.as_str())
                 && !is_terminal_phase(&snapshot.phase)
             {
                 snapshot.phase = crate::normalized::ToolPhase::Failed;
@@ -277,7 +305,7 @@ fn reduce_prompt_response(
     let active_request_id = runtime
         .active
         .as_ref()
-        .map(|active| active.request_id.clone())
+        .map(|active| active.request_id.to_string())
         .unwrap_or_else(|| "<none>".to_string());
     let phase_before = session_phase_label(&runtime.phase);
     let queue_len_before = runtime.queue.len();
@@ -336,7 +364,7 @@ fn reduce_prompt_failed(
     let active_request_id = runtime
         .active
         .as_ref()
-        .map(|active| active.request_id.clone())
+        .map(|active| active.request_id.to_string())
         .unwrap_or_else(|| "<none>".to_string());
     debug!(
         target: "acp_event_flow",
@@ -368,7 +396,11 @@ fn reduce_prompt_failed(
 // Load submit / response
 // ---------------------------------------------------------------------------
 
-fn reduce_load_submit(runtime: &mut SessionRuntime, request_id: String, out: &mut ReduceOutput) {
+fn reduce_load_submit(
+    runtime: &mut SessionRuntime,
+    request_id: acp::RequestId,
+    out: &mut ReduceOutput,
+) {
     if runtime.phase != SessionPhase::Idle {
         out.events.push(ClientEvent::Warning(WarningInfo {
             message: "Received load request while not idle".to_string(),
@@ -417,8 +449,8 @@ fn reduce_notification(
         active_request_id = runtime
             .active
             .as_ref()
-            .map(|active| active.request_id.as_str())
-            .unwrap_or("<none>"),
+            .map(|active| active.request_id.to_string())
+            .unwrap_or_else(|| "<none>".to_string()),
         "Reducer received session/update"
     );
 
@@ -469,7 +501,10 @@ fn reduce_notification(
     let client_events = normalizer.push_session_update(&update);
 
     // Patch owner_request_id on any ToolSnapshot events.
-    let request_id = runtime.active.as_ref().map(|a| a.request_id.clone());
+    let request_id = runtime
+        .active
+        .as_ref()
+        .map(|active| active.request_id.to_string());
     let client_events = client_events
         .into_iter()
         .map(|event| match event {
@@ -762,8 +797,8 @@ fn queued_prompt_texts(runtime: &SessionRuntime) -> Vec<String> {
         .collect()
 }
 
-fn new_request_id() -> String {
-    uuid::Uuid::new_v4().to_string()
+fn new_request_id() -> acp::RequestId {
+    acp::RequestId::Str(uuid::Uuid::new_v4().to_string())
 }
 
 #[cfg(test)]

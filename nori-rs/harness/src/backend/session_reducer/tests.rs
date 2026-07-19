@@ -48,6 +48,10 @@ fn notification(update: acp::SessionUpdate) -> InboundEvent {
     InboundEvent::Notification(Box::new(update))
 }
 
+fn request_id(value: &str) -> acp::RequestId {
+    acp::RequestId::Str(value.to_string())
+}
+
 fn has_event(events: &[ClientEvent], pred: impl Fn(&ClientEvent) -> bool) -> bool {
     events.iter().any(pred)
 }
@@ -81,7 +85,7 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         }
     ));
 
-    assert!(has_event(&out.events, |e| matches!(
+    assert!(!has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
     )));
@@ -91,6 +95,22 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         e,
         SideEffect::SendPrompt { .. }
     )));
+
+    let out = reduce(
+        &mut rt,
+        InboundEvent::PromptStarted {
+            request_id: request_id("wire-1"),
+        },
+        &mut norm,
+    );
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
+    )));
+    assert!(matches!(
+        rt.phase,
+        SessionPhase::Prompt { request_id: ref wire_id, .. } if wire_id == &request_id("wire-1")
+    ));
 }
 
 #[test]
@@ -199,21 +219,21 @@ fn session_phase_label_labels_known_phases() {
     assert_eq!(session_phase_label(&SessionPhase::Idle), "idle");
     assert_eq!(
         session_phase_label(&SessionPhase::Prompt {
-            request_id: "req-1".to_string(),
+            request_id: request_id("req-1"),
             cancelling: false,
         }),
         "prompt"
     );
     assert_eq!(
         session_phase_label(&SessionPhase::Prompt {
-            request_id: "req-1".to_string(),
+            request_id: request_id("req-1"),
             cancelling: true,
         }),
         "cancelling"
     );
     assert_eq!(
         session_phase_label(&SessionPhase::Loading {
-            request_id: "req-2".to_string(),
+            request_id: request_id("req-2"),
         }),
         "loading"
     );
@@ -442,7 +462,7 @@ fn end_turn_drains_queue() {
     // Should have transitioned directly to a new Prompt phase
     assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
 
-    assert!(has_event(&out.events, |e| matches!(
+    assert!(!has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
     )));
@@ -524,7 +544,7 @@ fn tool_call_gets_owner_request_id() {
         .expect("tool should exist");
     assert_eq!(
         snapshot.owner_request_id.as_deref(),
-        Some(request_id.as_str())
+        Some(request_id.to_string().as_str())
     );
 }
 
@@ -749,7 +769,7 @@ fn load_transitions_idle_to_loading_and_back() {
     reduce(
         &mut rt,
         InboundEvent::LoadSubmit {
-            request_id: "load-1".to_string(),
+            request_id: request_id("load-1"),
         },
         &mut norm,
     );
@@ -777,7 +797,7 @@ fn load_does_not_drain_queue() {
     reduce(
         &mut rt,
         InboundEvent::LoadSubmit {
-            request_id: "load-1".to_string(),
+            request_id: request_id("load-1"),
         },
         &mut norm,
     );

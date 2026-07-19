@@ -42,6 +42,51 @@ fn retarget_replay_event(
     event
 }
 
+fn drain_setup_session_events(
+    event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
+) -> Result<Vec<nori_protocol::SessionEvent>> {
+    let mut events = Vec::new();
+    while let Ok(event) = event_rx.try_recv() {
+        match event {
+            crate::connection::ConnectionEvent::Acp(event) => {
+                events.push(nori_protocol::SessionEvent::Acp(*event));
+            }
+            // The exact notification is the preceding ACP event. The private
+            // reducer projection starts after setup completes.
+            crate::connection::ConnectionEvent::SessionUpdate(_) => {}
+            crate::connection::ConnectionEvent::DelegatedRequest(request) => {
+                let _ =
+                    request
+                        .response_tx
+                        .send(Ok(acp::ClientResponse::RequestPermissionResponse(
+                            acp::RequestPermissionResponse::new(
+                                acp::RequestPermissionOutcome::Cancelled,
+                            ),
+                        )));
+            }
+            crate::connection::ConnectionEvent::SessionClosed => {
+                anyhow::bail!("ACP session closed during setup");
+            }
+            crate::connection::ConnectionEvent::ChildExited {
+                status,
+                stderr_tail,
+            } => {
+                anyhow::bail!("ACP agent exited during setup (status: {status:?}): {stderr_tail}");
+            }
+        }
+    }
+    Ok(events)
+}
+
+fn response_request_id(events: &[nori_protocol::SessionEvent]) -> Option<acp::RequestId> {
+    events.iter().find_map(|event| match event {
+        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            request_id, ..
+        }) => Some(request_id.clone()),
+        nori_protocol::SessionEvent::Acp(_) | nori_protocol::SessionEvent::Nori(_) => None,
+    })
+}
+
 impl AcpBackend {
     /// Resume a previous ACP session.
     ///
@@ -119,6 +164,7 @@ impl AcpBackend {
             pending_summary,
             is_first_prompt_val,
             used_fallback,
+            deferred_setup_session_events,
             deferred_replay_client_events,
             deferred_replay_session_events,
             replay_source,
@@ -130,11 +176,14 @@ impl AcpBackend {
             // Collect replay events into a buffer. The collector runs until
             // load_session() finishes and signals completion via the oneshot.
             let (load_done_tx, load_done_rx) = tokio::sync::oneshot::channel::<()>();
-            let load_request_id = uuid::Uuid::new_v4().to_string();
+            let (load_started_tx, load_started_rx) = tokio::sync::oneshot::channel();
             let collect_handle = tokio::spawn(async move {
                 let mut event_rx = event_rx;
                 let mut session_driver = session_runtime_driver::SessionDriver::new();
                 let mut buffered_session_events = Vec::new();
+                let load_request_id = load_started_rx.await.map_err(|_| {
+                    anyhow::anyhow!("session/load did not expose its wire request ID")
+                })?;
                 let mut buffered_events = client_events_to_replay_client_events(
                     session_driver
                         .apply(session_reducer::InboundEvent::LoadSubmit {
@@ -161,11 +210,19 @@ impl AcpBackend {
                                     ));
                                 }
                                 Some(crate::connection::ConnectionEvent::SessionClosed) => break,
-                                Some(crate::connection::ConnectionEvent::DelegatedRequest(_)) => {}
-                                // A child death mid-load is reported by the
-                                // main relay once it takes over this receiver;
-                                // the collector only buffers replay updates.
-                                Some(crate::connection::ConnectionEvent::ChildExited { .. }) => {}
+                                Some(crate::connection::ConnectionEvent::DelegatedRequest(request)) => {
+                                    let _ = request.response_tx.send(Ok(
+                                        acp::ClientResponse::RequestPermissionResponse(
+                                            acp::RequestPermissionResponse::new(
+                                                acp::RequestPermissionOutcome::Cancelled,
+                                            ),
+                                        ),
+                                    ));
+                                }
+                                Some(crate::connection::ConnectionEvent::ChildExited { status, stderr_tail }) => {
+                                    warn!(?status, %stderr_tail, "ACP agent exited during session/load");
+                                    break;
+                                }
                                 None => break,
                             }
                         }
@@ -186,8 +243,18 @@ impl AcpBackend {
                                         ));
                                     }
                                     crate::connection::ConnectionEvent::SessionClosed => {}
-                                    crate::connection::ConnectionEvent::DelegatedRequest(_) => {}
-                                    crate::connection::ConnectionEvent::ChildExited { .. } => {}
+                                    crate::connection::ConnectionEvent::DelegatedRequest(request) => {
+                                        let _ = request.response_tx.send(Ok(
+                                            acp::ClientResponse::RequestPermissionResponse(
+                                                acp::RequestPermissionResponse::new(
+                                                    acp::RequestPermissionOutcome::Cancelled,
+                                                ),
+                                            ),
+                                        ));
+                                    }
+                                    crate::connection::ConnectionEvent::ChildExited { status, stderr_tail } => {
+                                        warn!(?status, %stderr_tail, "ACP agent exited during session/load drain");
+                                    }
                                 }
                             }
                             buffered_events.extend(client_events_to_replay_client_events(
@@ -199,12 +266,12 @@ impl AcpBackend {
                         }
                     }
                 }
-                (
+                Ok::<_, anyhow::Error>((
                     session_driver,
                     event_rx,
                     buffered_events,
                     buffered_session_events,
-                )
+                ))
             });
 
             let mcp_servers = session_mcp_servers(
@@ -217,7 +284,10 @@ impl AcpBackend {
             )
             .await?;
 
-            match connection.load_session(sid, &cwd, mcp_servers).await {
+            match connection
+                .load_session(sid, &cwd, mcp_servers, Some(load_started_tx))
+                .await
+            {
                 Ok(session_id) => {
                     // Signal the collector that load is done, then collect results.
                     let _ = load_done_tx.send(());
@@ -228,21 +298,46 @@ impl AcpBackend {
                         buffered_session_events,
                     ) = collect_handle.await.map_err(|err| {
                         anyhow::anyhow!("load session collector task panicked: {err}")
-                    })?;
+                    })??;
                     if !buffered_client_events.is_empty() {
                         debug!(
                             "ACP session/load produced {} replay client events (deferred until after setup)",
                             buffered_client_events.len()
                         );
                     }
+                    let load_request_id = response_request_id(&buffered_session_events)
+                        .ok_or_else(|| anyhow::anyhow!("session/load produced no raw response"))?;
+                    let mut setup_session_events = vec![nori_protocol::SessionEvent::Nori(
+                        nori_protocol::NoriEvent::SessionPhaseChanged(
+                            nori_protocol::SessionPhase::Loading {
+                                request_id: load_request_id,
+                            },
+                        ),
+                    )];
+                    let (replay_session_events, current_session_events): (Vec<_>, Vec<_>) =
+                        buffered_session_events.into_iter().partition(|event| {
+                            matches!(
+                                event,
+                                nori_protocol::SessionEvent::Acp(
+                                    nori_protocol::AcpEvent::Notification(_)
+                                )
+                            )
+                        });
+                    setup_session_events.extend(current_session_events);
+                    setup_session_events.push(nori_protocol::SessionEvent::Nori(
+                        nori_protocol::NoriEvent::SessionPhaseChanged(
+                            nori_protocol::SessionPhase::Idle,
+                        ),
+                    ));
                     debug!("ACP session resumed via session/load: {sid}");
                     (
                         session_id,
                         None,
                         false,
                         None,
+                        setup_session_events,
                         buffered_client_events,
-                        buffered_session_events,
+                        replay_session_events,
                         Some(nori_protocol::ReplaySource::Agent),
                         recovered_rx,
                         session_driver,
@@ -253,9 +348,27 @@ impl AcpBackend {
                         "Server-side session/load failed, falling back to client-side replay: {e}"
                     );
                     let _ = load_done_tx.send(());
-                    let (_, recovered_rx, _, _) = collect_handle.await.map_err(|err| {
-                        anyhow::anyhow!("load session collector task panicked: {err}")
-                    })?;
+                    let (_failed_driver, mut recovered_rx, _, buffered_session_events) =
+                        collect_handle.await.map_err(|err| {
+                            anyhow::anyhow!("load session collector task panicked: {err}")
+                        })??;
+                    let load_request_id = response_request_id(&buffered_session_events)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("failed session/load produced no raw response")
+                        })?;
+                    let mut setup_session_events = vec![nori_protocol::SessionEvent::Nori(
+                        nori_protocol::NoriEvent::SessionPhaseChanged(
+                            nori_protocol::SessionPhase::Loading {
+                                request_id: load_request_id,
+                            },
+                        ),
+                    )];
+                    setup_session_events.extend(buffered_session_events);
+                    setup_session_events.push(nori_protocol::SessionEvent::Nori(
+                        nori_protocol::NoriEvent::SessionPhaseChanged(
+                            nori_protocol::SessionPhase::Idle,
+                        ),
+                    ));
 
                     let mcp_servers = session_mcp_servers(
                         config,
@@ -279,6 +392,7 @@ impl AcpBackend {
                         )
                         .await;
                     }
+                    setup_session_events.extend(drain_setup_session_events(&mut recovered_rx)?);
 
                     let (replay_events, replay_session_events, summary) =
                         if let Some(t) = transcript {
@@ -300,6 +414,7 @@ impl AcpBackend {
                         summary,
                         true,
                         Some(e.to_string()),
+                        setup_session_events,
                         replay_events,
                         replay_session_events,
                         Some(nori_protocol::ReplaySource::Transcript),
@@ -332,12 +447,14 @@ impl AcpBackend {
                 .await
                 .map_err(|e| enhance_agent_error(e, &agent_config))?;
             debug!("ACP session resumed via session/resume: {sid}");
+            let setup_session_events = drain_setup_session_events(&mut event_rx)?;
 
             (
                 session_id,
                 None,
                 false,
                 None,
+                setup_session_events,
                 Vec::new(),
                 Vec::new(),
                 None,
@@ -367,6 +484,7 @@ impl AcpBackend {
                 session_defaults::apply_default_model(&connection, &session_id, default_model)
                     .await;
             }
+            let setup_session_events = drain_setup_session_events(&mut event_rx)?;
 
             let (replay_events, replay_session_events, summary) = if let Some(t) = transcript {
                 let client_events = transcript_to_replay_client_events(t);
@@ -387,6 +505,7 @@ impl AcpBackend {
                 summary,
                 true,
                 None,
+                setup_session_events,
                 replay_events,
                 replay_session_events,
                 Some(nori_protocol::ReplaySource::Transcript),
@@ -400,6 +519,13 @@ impl AcpBackend {
             replay_events_for_goal_state.extend(deferred_replay_client_events.iter().cloned());
             *thread_goal_state.lock().await =
                 thread_goal::ThreadGoalState::from_replay_events(&replay_events_for_goal_state);
+        }
+
+        for event in deferred_setup_session_events {
+            backend_event_tx
+                .send(BackendEvent::Public(event))
+                .await
+                .map_err(|_| anyhow::anyhow!("session event receiver closed during setup"))?;
         }
 
         let capabilities_update =
@@ -494,10 +620,12 @@ impl AcpBackend {
             is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),
+            runtime_task_abort: Arc::new(Mutex::new(None)),
+            relay_task_abort: Arc::new(Mutex::new(None)),
         };
 
         let runtime_backend = backend.clone();
-        tokio::spawn(async move {
+        let runtime_task = tokio::spawn(async move {
             while let Some(input) = session_event_rx.recv().await {
                 match input {
                     session_runtime_driver::SessionRuntimeInput::Reducer(event) => {
@@ -514,6 +642,7 @@ impl AcpBackend {
                 }
             }
         });
+        *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
 
         // Execute session_start hooks
         run_session_start_hooks(
@@ -578,7 +707,7 @@ impl AcpBackend {
 
         let replay_session_id = backend.session_id().await;
         let relay_backend = backend.clone();
-        tokio::spawn(async move {
+        let relay_task = tokio::spawn(async move {
             if !deferred_replay_session_events.is_empty() {
                 let _ = relay_backend
                     .backend_event_tx
@@ -626,6 +755,7 @@ impl AcpBackend {
             )
             .await;
         });
+        *backend.relay_task_abort.lock().await = Some(relay_task.abort_handle());
 
         Ok(backend)
     }

@@ -173,10 +173,12 @@ impl AcpBackend {
             is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),
+            runtime_task_abort: Arc::new(Mutex::new(None)),
+            relay_task_abort: Arc::new(Mutex::new(None)),
         };
 
         let runtime_backend = backend.clone();
-        tokio::spawn(async move {
+        let runtime_task = tokio::spawn(async move {
             while let Some(input) = session_event_rx.recv().await {
                 match input {
                     session_runtime_driver::SessionRuntimeInput::Reducer(event) => {
@@ -193,6 +195,7 @@ impl AcpBackend {
                 }
             }
         });
+        *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
 
         // Execute session_start hooks
         run_session_start_hooks(
@@ -234,12 +237,13 @@ impl AcpBackend {
 
         // Spawn reducer loop: processes all transport events and prompt
         // results through the serialized reducer/runtime pipeline.
-        tokio::spawn(Self::run_connection_event_relay(
+        let relay_task = tokio::spawn(Self::run_connection_event_relay(
             backend.clone(),
             event_rx,
             prompt_result_rx,
             approval_policy_rx,
         ));
+        *backend.relay_task_abort.lock().await = Some(relay_task.abort_handle());
 
         Ok(backend)
     }

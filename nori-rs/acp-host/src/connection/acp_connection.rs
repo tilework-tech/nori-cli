@@ -4,7 +4,6 @@
 //! directly on the main tokio runtime without a dedicated worker thread or
 //! `LocalSet`.
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 
@@ -19,7 +18,6 @@ use futures::AsyncWriteExt;
 use futures::StreamExt;
 use futures::io::BufReader;
 use tokio::process::Command;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -58,12 +56,6 @@ fn schema_request_id(id: serde_json::Value) -> RequestId {
     }
 }
 
-#[derive(Debug, Default)]
-struct SessionPromptState {
-    update_seq: i64,
-    draining_cancel_tail: bool,
-}
-
 /// A thread-safe connection to an ACP agent subprocess.
 ///
 /// The `ConnectionTo<Agent>` from the `agent-client-protocol` SDK is
@@ -87,10 +79,6 @@ pub struct AcpConnection {
 
     /// Sender retained so outgoing request completions join the ordered inbox.
     event_tx: mpsc::Sender<ConnectionEvent>,
-
-    /// Per-session prompt boundary state used to absorb stale terminal stop
-    /// responses after cancellation without widening the public phase model.
-    prompt_state: std::sync::Arc<Mutex<HashMap<String, SessionPromptState>>>,
 
     /// Thread-safe session config state, updated from complete ACP snapshots.
     session_config_state: std::sync::Arc<std::sync::RwLock<AcpSessionConfigState>>,
@@ -121,9 +109,6 @@ async fn establish_connection(
     let connection_event_tx = event_tx.clone();
     let event_tx_for_notifications = event_tx.clone();
     let event_tx_for_initialize = event_tx.clone();
-    let prompt_state =
-        std::sync::Arc::new(Mutex::new(HashMap::<String, SessionPromptState>::new()));
-    let prompt_state_for_notifications = prompt_state.clone();
     let session_config_state =
         std::sync::Arc::new(std::sync::RwLock::new(AcpSessionConfigState::new()));
     let session_config_state_for_notifications = session_config_state.clone();
@@ -139,17 +124,9 @@ async fn establish_connection(
             .on_receive_notification(
                 {
                     let event_tx = event_tx_for_notifications;
-                    let prompt_state = prompt_state_for_notifications;
                     let session_config_state = session_config_state_for_notifications;
                     async move |notification: acp::SessionNotification, _connection| {
                         let session_id = notification.session_id.to_string();
-                        {
-                            let mut prompt_state = prompt_state.lock().await;
-                            prompt_state
-                                .entry(session_id.clone())
-                                .or_default()
-                                .update_seq += 1;
-                        }
                         debug!(
                             target: "acp_event_flow",
                             session_id,
@@ -394,7 +371,6 @@ async fn establish_connection(
         agent_capabilities: capabilities,
         event_rx,
         event_tx: connection_event_tx,
-        prompt_state,
         session_config_state,
         connection_task,
         child: None,
@@ -657,11 +633,15 @@ impl AcpConnection {
         session_id: &str,
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
+        request_started: Option<oneshot::Sender<RequestId>>,
     ) -> Result<acp::SessionId> {
         let request = self.cx.send_request(
             acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
         );
         let request_id = schema_request_id(request.id());
+        if let Some(request_started) = request_started {
+            let _ = request_started.send(request_id.clone());
+        }
         let response = request.block_task().await;
         let _ = self
             .event_tx
@@ -806,93 +786,35 @@ impl AcpConnection {
         prompt: Vec<acp::ContentBlock>,
         request_started: Option<oneshot::Sender<Result<RequestId>>>,
     ) -> Result<acp::StopReason> {
-        let session_key = session_id.to_string();
-        let mut attempt = 0_i64;
-        let mut request_started = request_started;
-
-        loop {
-            attempt += 1;
-            let (update_seq_before, draining_cancel_tail) = {
-                let mut prompt_state = self.prompt_state.lock().await;
-                let state = prompt_state.entry(session_key.clone()).or_default();
-                (state.update_seq, state.draining_cancel_tail)
-            };
-
-            debug!(
-                target: "acp_event_flow",
-                session_id = %session_id,
-                content_blocks = prompt.len(),
-                attempt,
-                draining_cancel_tail,
-                update_seq_before,
-                "Transport sending ACP session/prompt request"
-            );
-            let request = self
-                .cx
-                .send_request(acp::PromptRequest::new(session_id.clone(), prompt.clone()));
-            let request_id = schema_request_id(request.id());
-            if let Some(request_started) = request_started.take() {
-                let _ = request_started.send(Ok(request_id.clone()));
-            }
-            let response = request.block_task().await;
-            let _ = self
-                .event_tx
-                .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
-                    request_id,
-                    response: response.clone().map(acp::AgentResponse::PromptResponse),
-                })))
-                .await;
-            let response = response.context("ACP prompt failed");
-
-            match response {
-                Ok(response) => {
-                    let absorb_cancel_tail_end_turn = {
-                        let mut prompt_state = self.prompt_state.lock().await;
-                        let state = prompt_state.entry(session_key.clone()).or_default();
-                        let saw_updates = state.update_seq > update_seq_before;
-                        let absorb = state.draining_cancel_tail
-                            && !saw_updates
-                            && response.stop_reason == acp::StopReason::EndTurn;
-
-                        if response.stop_reason == acp::StopReason::Cancelled {
-                            state.draining_cancel_tail = true;
-                        } else if !absorb {
-                            state.draining_cancel_tail = false;
-                        }
-
-                        debug!(
-                            target: "acp_event_flow",
-                            session_id = %session_id,
-                            attempt,
-                            stop_reason = ?response.stop_reason,
-                            saw_updates,
-                            absorb_cancel_tail_end_turn = absorb,
-                            draining_cancel_tail_after = state.draining_cancel_tail,
-                            update_seq_after = state.update_seq,
-                            "Transport received ACP session/prompt response"
-                        );
-
-                        absorb
-                    };
-
-                    if absorb_cancel_tail_end_turn {
-                        continue;
-                    }
-
-                    return Ok(response.stop_reason);
-                }
-                Err(err) => {
-                    warn!(
-                        target: "acp_event_flow",
-                        error = %err,
-                        session_id = %session_id,
-                        attempt,
-                        "Transport session/prompt request failed"
-                    );
-                    return Err(err);
-                }
-            }
+        debug!(
+            target: "acp_event_flow",
+            session_id = %session_id,
+            content_blocks = prompt.len(),
+            "Transport sending ACP session/prompt request"
+        );
+        let request = self
+            .cx
+            .send_request(acp::PromptRequest::new(session_id.clone(), prompt));
+        let request_id = schema_request_id(request.id());
+        if let Some(request_started) = request_started {
+            let _ = request_started.send(Ok(request_id.clone()));
         }
+        let response = request.block_task().await;
+        let _ = self
+            .event_tx
+            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
+                request_id,
+                response: response.clone().map(acp::AgentResponse::PromptResponse),
+            })))
+            .await;
+        let response = response.context("ACP prompt failed")?;
+        debug!(
+            target: "acp_event_flow",
+            session_id = %session_id,
+            stop_reason = ?response.stop_reason,
+            "Transport received ACP session/prompt response"
+        );
+        Ok(response.stop_reason)
     }
 
     /// Cancel an ongoing prompt.

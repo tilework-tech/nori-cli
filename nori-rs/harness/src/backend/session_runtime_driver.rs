@@ -103,7 +103,7 @@ impl SessionDriver {
         self.runtime
             .active
             .as_ref()
-            .map(|active| active.request_id.clone())
+            .map(|active| active.request_id.to_string())
     }
 
     pub(crate) fn phase_label(&self) -> &'static str {
@@ -118,19 +118,19 @@ impl SessionDriver {
         match &self.runtime.phase {
             SessionPhase::Idle => nori_protocol::SessionPhase::Idle,
             SessionPhase::Loading { request_id } => nori_protocol::SessionPhase::Loading {
-                request_id: nori_protocol::acp::v1::RequestId::Str(request_id.clone()),
+                request_id: request_id.clone(),
             },
             SessionPhase::Prompt {
                 request_id,
                 cancelling: false,
             } => nori_protocol::SessionPhase::Prompting {
-                request_id: nori_protocol::acp::v1::RequestId::Str(request_id.clone()),
+                request_id: request_id.clone(),
             },
             SessionPhase::Prompt {
                 request_id,
                 cancelling: true,
             } => nori_protocol::SessionPhase::Cancelling {
-                request_id: nori_protocol::acp::v1::RequestId::Str(request_id.clone()),
+                request_id: request_id.clone(),
             },
         }
     }
@@ -670,13 +670,14 @@ impl AcpBackend {
                         .as_ref()
                         .and_then(|active| active.prompt.as_ref())
                         .map(|prompt| (prompt.kind, prompt.event_id.clone()))
-                        .unwrap_or((QueuedPromptKind::User, request_id.clone()))
+                        .unwrap_or((QueuedPromptKind::User, request_id.to_string()))
                 };
-                let request_started = self
+                let client_request_started = self
                     .pending_prompt_submissions
                     .lock()
                     .await
                     .remove(&prompt_event_id);
+                let (transport_started_tx, transport_started_rx) = oneshot::channel();
                 let backend = (*self).clone();
                 let prompt_result_tx = self.prompt_result_tx.clone();
                 let request_id_for_task = request_id.clone();
@@ -692,7 +693,7 @@ impl AcpBackend {
                     );
                     let result = backend
                         .connection
-                        .prompt_with_request_id(session_id, prompt, request_started)
+                        .prompt_with_request_id(session_id, prompt, Some(transport_started_tx))
                         .await;
                     match result {
                         Ok(stop_reason) => {
@@ -723,6 +724,36 @@ impl AcpBackend {
                     }
                 });
                 *self.prompt_task_abort.lock().await = Some(prompt_task.abort_handle());
+
+                match transport_started_rx.await {
+                    Ok(Ok(wire_request_id)) => {
+                        let actions =
+                            self.session_driver
+                                .lock()
+                                .await
+                                .apply(InboundEvent::PromptStarted {
+                                    request_id: wire_request_id.clone(),
+                                });
+                        debug_assert!(actions.side_effects.is_empty());
+                        debug_assert!(actions.completed_turn.is_none());
+                        self.forward_client_events(&actions.events).await;
+                        if let Some(request_started) = client_request_started {
+                            let _ = request_started.send(Ok(wire_request_id));
+                        }
+                    }
+                    Ok(Err(error)) => {
+                        if let Some(request_started) = client_request_started {
+                            let _ = request_started.send(Err(error));
+                        }
+                    }
+                    Err(_) => {
+                        if let Some(request_started) = client_request_started {
+                            let _ = request_started.send(Err(anyhow::anyhow!(
+                                "ACP transport did not assign a prompt request ID"
+                            )));
+                        }
+                    }
+                }
             }
             SideEffect::SendCancel => {
                 let session_id = self.session_id.read().await.clone();

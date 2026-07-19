@@ -21,12 +21,12 @@ pub enum SessionPhase {
     /// No ACP request currently owns streamed content.
     Idle,
     /// `session/load` owns replay content until its response arrives.
-    Loading { request_id: String },
+    Loading { request_id: acp::RequestId },
     /// `session/prompt` owns turn content until its response arrives.
     /// `cancelling` means `session/cancel` has been sent but the response
     /// has not yet arrived.
     Prompt {
-        request_id: String,
+        request_id: acp::RequestId,
         cancelling: bool,
     },
 }
@@ -64,7 +64,7 @@ impl From<&SessionPhase> for SessionPhaseView {
 /// `session/load` is active. Cleared when the response arrives.
 #[derive(Debug, Clone)]
 pub struct ActiveRequestState {
-    pub request_id: String,
+    pub request_id: acp::RequestId,
     pub prompt: Option<QueuedPrompt>,
     pub open_agent_message: Option<OpenMessage>,
     pub open_thought_message: Option<OpenMessage>,
@@ -77,7 +77,7 @@ pub struct ActiveRequestState {
 }
 
 impl ActiveRequestState {
-    pub fn new_loading(request_id: String) -> Self {
+    pub fn new_loading(request_id: acp::RequestId) -> Self {
         Self {
             request_id,
             prompt: None,
@@ -90,7 +90,7 @@ impl ActiveRequestState {
         }
     }
 
-    pub fn new_prompt(request_id: String, prompt: QueuedPrompt) -> Self {
+    pub fn new_prompt(request_id: acp::RequestId, prompt: QueuedPrompt) -> Self {
         Self {
             prompt: Some(prompt),
             ..Self::new_loading(request_id)

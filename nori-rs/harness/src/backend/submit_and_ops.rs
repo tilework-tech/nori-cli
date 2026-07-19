@@ -33,6 +33,9 @@ impl AcpBackend {
         if let Some(abort) = self.prompt_task_abort.lock().await.take() {
             abort.abort();
         }
+        if let Some(abort) = self.runtime_task_abort.lock().await.take() {
+            abort.abort();
+        }
         if cancel_session {
             let _ = self.connection.cancel(&*self.session_id.read().await).await;
         }
@@ -51,6 +54,9 @@ impl AcpBackend {
             warn!("Async session_end hook task panicked: {error}");
         }
         self.connection.shutdown().await;
+        if cancel_session && let Some(abort) = self.relay_task_abort.lock().await.take() {
+            abort.abort();
+        }
     }
 
     pub(crate) async fn add_history(&self, text: String) -> Result<()> {

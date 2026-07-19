@@ -161,8 +161,10 @@ async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
         .await
         .expect("submit prompt");
 
-    let (chunks, stop_reason) = tokio::time::timeout(Duration::from_secs(10), async {
+    let (chunks, stop_reason, prompting_request_id) =
+        tokio::time::timeout(Duration::from_secs(10), async {
         let mut chunks = Vec::new();
+        let mut prompting_request_id = None;
         loop {
             match session
                 .events
@@ -184,8 +186,11 @@ async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
                     request_id,
                     response: Ok(acp::v1::AgentResponse::PromptResponse(response)),
                 }) if request_id == prompt_request_id => {
-                    return (chunks, response.stop_reason);
+                    return (chunks, response.stop_reason, prompting_request_id);
                 }
+                SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
+                    nori_protocol::SessionPhase::Prompting { request_id },
+                )) => prompting_request_id = Some(request_id),
                 SessionEvent::Acp(AcpEvent::Response {
                     request_id,
                     response: Err(error),
@@ -216,6 +221,7 @@ async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
 
     assert_eq!(chunks, vec!["Test message 1", "Test message 2"]);
     assert_eq!(stop_reason, acp::v1::StopReason::EndTurn);
+    assert_eq!(prompting_request_id, Some(prompt_request_id));
 
     tokio::time::timeout(Duration::from_secs(10), session.handle.shutdown())
         .await
@@ -718,6 +724,29 @@ async fn resumed_load_preserves_bootstrap_response_and_brackets_raw_replay() {
         .iter()
         .position(|event| matches!(event, SessionEvent::Nori(NoriEvent::ReplayFinished)))
         .expect("replay should finish");
+    let (load_response_index, load_request_id) = events
+        .iter()
+        .enumerate()
+        .find_map(|(index, event)| match event {
+            SessionEvent::Acp(AcpEvent::Response {
+                request_id,
+                response: Ok(acp::v1::AgentResponse::LoadSessionResponse(_)),
+            }) => Some((index, request_id.clone())),
+            SessionEvent::Acp(_) | SessionEvent::Nori(_) => None,
+        })
+        .expect("load response should remain observable");
+    let loading_request_id = events.iter().find_map(|event| match event {
+        SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
+            nori_protocol::SessionPhase::Loading { request_id },
+        )) => Some(request_id.clone()),
+        SessionEvent::Acp(_) | SessionEvent::Nori(_) => None,
+    });
+    assert_eq!(loading_request_id, Some(load_request_id));
+    assert!(load_response_index < started_index);
+    assert!(
+        load_response_index < replay_started_index || load_response_index > replay_finished_index,
+        "the current load response must not be labeled as historical replay"
+    );
     let replay_notifications = events
         .iter()
         .enumerate()
@@ -737,6 +766,86 @@ async fn resumed_load_preserves_bootstrap_response_and_brackets_raw_replay() {
             .iter()
             .all(|index| replay_started_index < *index && *index < replay_finished_index)
     );
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn failed_load_response_precedes_fallback_session_start() {
+    // SAFETY: this test is serialized with every other environment-mutating test.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        std::env::set_var("MOCK_AGENT_LOAD_SESSION_FAIL", "1");
+    }
+    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let _fail_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_FAIL");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: Some(SessionResume {
+            acp_session_id: Some("missing-session".to_string()),
+            transcript: None,
+        }),
+    });
+
+    let events = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("fallback event stream closed");
+            let started = matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)));
+            events.push(event);
+            if started {
+                return events;
+            }
+        }
+    })
+    .await
+    .expect("fallback session should start");
+
+    let failed_load_index = events
+        .iter()
+        .position(|event| {
+            matches!(
+                event,
+                SessionEvent::Acp(AcpEvent::Response {
+                    response: Err(_),
+                    ..
+                })
+            )
+        })
+        .expect("failed load must remain a raw ACP response");
+    let fallback_new_index = events
+        .iter()
+        .position(|event| {
+            matches!(
+                event,
+                SessionEvent::Acp(AcpEvent::Response {
+                    response: Ok(acp::v1::AgentResponse::NewSessionResponse(_)),
+                    ..
+                })
+            )
+        })
+        .expect("fallback session/new response must remain observable");
+    let started_index = events
+        .iter()
+        .position(|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_))))
+        .expect("fallback session should start");
+    assert!(failed_load_index < fallback_new_index);
+    assert!(fallback_new_index < started_index);
 
     session.handle.shutdown().await.expect("shutdown session");
 }

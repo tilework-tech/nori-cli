@@ -308,6 +308,10 @@ pub struct AcpBackend {
     prompt_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
     /// Abort handle for the cancel timeout watchdog (if any)
     cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the serialized reducer task.
+    runtime_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the connection event relay task.
+    relay_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
 impl AcpBackend {
