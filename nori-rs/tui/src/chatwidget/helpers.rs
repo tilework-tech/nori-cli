@@ -5,8 +5,9 @@ const EXIT_HARD_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1
 
 impl ChatWidget {
     /// Set the agent in the widget's config copy.
+    #[cfg(test)]
     pub(crate) fn set_agent(&mut self, agent: &str) {
-        self.config.model = agent.to_string();
+        self.config.active_agent = agent.to_string();
         // Update the bottom pane's agent display name for approval dialogs
         let display_name = crate::nori::agent_picker::get_agent_info(agent)
             .map(|info| info.display_name)
@@ -241,7 +242,7 @@ impl ChatWidget {
 
     pub(crate) fn add_memory_output(&mut self) {
         let files = crate::nori::session_header::active_instruction_file_contents(
-            &self.config.model,
+            &self.config.active_agent,
             &self.config.cwd,
         );
 
@@ -357,13 +358,9 @@ impl ChatWidget {
         &self.config
     }
 
-    /// Update the in-memory MCP server map so that subsequent reads via
-    /// `config_ref().mcp_servers` reflect the latest persisted state.
-    pub(crate) fn set_mcp_servers(
-        &mut self,
-        servers: std::collections::HashMap<String, codex_protocol::config_types::McpServerConfig>,
-    ) {
-        self.config.mcp_servers = servers;
+    /// Replace the runtime config snapshot after an in-TUI edit.
+    pub(crate) fn set_config(&mut self, config: Config) {
+        self.config = config;
     }
 
     /// Forward MCP auth statuses to the active bottom pane view.

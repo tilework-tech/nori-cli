@@ -9,7 +9,7 @@ impl ChatWidget {
             .pending_agent
             .as_ref()
             .map(|p| p.agent_name.as_str())
-            .unwrap_or(&self.config.model);
+            .unwrap_or(&self.config.active_agent);
 
         match LoginHandler::check_agent_support(agent_name) {
             AgentLoginSupport::Supported {
@@ -169,15 +169,15 @@ impl ChatWidget {
 
     /// Start the OAuth login flow
     pub(super) fn start_oauth_login_flow(&mut self, mut handler: LoginHandler) {
-        use codex_core::auth::CLIENT_ID;
+        use codex_login::CLIENT_ID;
         use codex_login::ServerOptions;
         use codex_login::run_login_server;
 
         let opts = ServerOptions::new(
-            self.config.codex_home.clone(),
+            self.config.nori_home.clone(),
             CLIENT_ID.to_string(),
             None, // No forced workspace ID
-            self.config.cli_auth_credentials_store_mode,
+            codex_login::AuthCredentialsStoreMode::File,
         );
 
         match run_login_server(opts) {

@@ -26,17 +26,13 @@ The project was originally forked from OpenAI Codex CLI and has been adapted to 
 ```
 ┌─────────────────────────────────────────────────┐
 │                   nori CLI                      │
-│         (nori-rs/tui - main binary)            │
-├─────────────────────────────────────────────────┤
-│                  nori-tui                       │
-│        Interactive Terminal Interface           │
+│          nori-cli + nori-tui frontends          │
 ├────────────────────────┬────────────────────────┤
-│ nori-harness (harness/)│  codex-core (core/)    │
-│  ACP Agent Connection  │  Config, Auth, Tools   │
-│  Subprocess Spawning   │  Sandbox, Utilities    │
+│ nori-config            │ nori-harness           │
+│ Resolve and edit the   │ ACP session runtime    │
+│ single Nori config     │ and subprocess hosting │
 ├────────────────────────┴────────────────────────┤
-│           codex-protocol (protocol/)            │
-│         Events, Operations, Types               │
+│ nori-protocol + codex-protocol shared types     │
 └─────────────────────────────────────────────────┘
                     │
                     ▼
@@ -51,8 +47,6 @@ The project was originally forked from OpenAI Codex CLI and has been adapted to 
 | Command            | Description              | Implementation                          |
 | ------------------ | ------------------------ | --------------------------------------- |
 | `nori`             | Interactive TUI          | `nori-rs/tui`                           |
-| `nori login`       | Authentication           | `nori-rs/cli` + `nori-rs/login`         |
-| `nori logout`      | Clear saved credentials  | `nori-rs/cli` + `nori-rs/login`         |
 | `nori sandbox ...` | Sandbox command runner   | `nori-rs/cli` + platform sandbox crates |
 | `nori skillsets`   | Skillset management shim | `nori-rs/cli`                           |
 
@@ -70,7 +64,7 @@ npm i -g nori-ai-cli
 
 **Configuration:**
 
-Stored in `~/.nori/cli/`:
+Resolved by `nori-config` from `$NORI_HOME`, which defaults to `~/.nori/cli/`:
 
 - `config.toml`: Main configuration
 - `sessions/`: Saved conversations
@@ -96,7 +90,7 @@ Nori acts as an MCP client:
 ### Things to Know
 
 - Nori-authored crates use a `nori-` prefix (`nori-cli`, `nori-tui`, `nori-acp`, `nori-acp-host`, `nori-config`, `nori-protocol`, `nori-installed`); inherited crates keep the legacy `codex-` prefix from the OpenAI Codex fork and are progressively adopted or removed per `docs/specs/crate-layering.md`
-- Configuration always uses the Nori paths (`~/.nori/cli/`); the old `nori-config` and `unstable` cargo feature flags were removed during the crate-layering cleanup (no cargo feature may change which crate owns a responsibility)
+- Configuration always uses the Nori path (`$NORI_HOME/config.toml`, default `~/.nori/cli/config.toml`). Frontends resolve it before each session and inject the result into the harness, which never reloads ambient configuration. Codex configuration profiles and managed-preference layers are not part of Nori; reusable behavior belongs to Nori Skillsets.
 - Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
 - Snapshot testing with `insta` is used extensively for TUI regression testing
 - The project has two justfiles: a root `@/justfile` implementing the Shared Local Runner Layer spec (standardized `help`, `dev`, `test`, `doctor` targets) and `@/nori-rs/justfile` for Rust-specific workflows. The root justfile wraps `nori-rs` by running `cd nori-rs && cargo ...` for each target. Both coexist -- run `just` from the repo root for the standard targets, or `cd nori-rs && just` for the Rust-native recipes

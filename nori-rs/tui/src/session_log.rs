@@ -6,8 +6,8 @@ use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-use codex_core::config::Config;
 use codex_protocol::protocol::Op;
+use nori_config::NoriConfig;
 use serde::Serialize;
 use serde_json::json;
 
@@ -77,7 +77,7 @@ fn now_ts() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
-pub(crate) fn maybe_init(config: &Config) {
+pub(crate) fn maybe_init(config: &NoriConfig) {
     let enabled = std::env::var("CODEX_TUI_RECORD_SESSION")
         .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false);
@@ -88,10 +88,7 @@ pub(crate) fn maybe_init(config: &Config) {
     let path = if let Ok(path) = std::env::var("CODEX_TUI_SESSION_LOG_PATH") {
         PathBuf::from(path)
     } else {
-        let mut p = match codex_core::config::log_dir(config) {
-            Ok(dir) => dir,
-            Err(_) => std::env::temp_dir(),
-        };
+        let mut p = config.nori_home.join("log");
         let filename = format!(
             "session-{}.jsonl",
             chrono::Utc::now().format("%Y%m%dT%H%M%SZ")
@@ -111,9 +108,8 @@ pub(crate) fn maybe_init(config: &Config) {
         "dir": "meta",
         "kind": "session_start",
         "cwd": config.cwd,
-        "model": config.model,
-        "model_provider_id": config.model_provider_id,
-        "model_provider_name": config.model_provider.name,
+        "agent": config.active_agent,
+        "provider": "acp",
     });
     LOGGER.write_json_line(header);
 }

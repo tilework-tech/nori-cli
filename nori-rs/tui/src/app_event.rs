@@ -12,7 +12,6 @@ use crate::history_cell::HistoryCell;
 use crate::nori::session_config_mode::AcpModeConfig;
 use crate::system_info::SystemInfo;
 
-use codex_protocol::config_types::ReasoningEffort;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::SandboxPolicy;
 
@@ -99,18 +98,6 @@ pub(crate) enum AppEvent {
     StopCommitAnimation,
     CommitTick,
 
-    /// Update the current reasoning effort in the running app and widget.
-    UpdateReasoningEffort(Option<ReasoningEffort>),
-
-    /// Update the current agent slug in the running app and widget.
-    UpdateAgent(String),
-
-    /// Persist the selected agent and reasoning effort to the appropriate config.
-    PersistAgentSelection {
-        agent: String,
-        effort: Option<ReasoningEffort>,
-    },
-
     /// Open the confirmation prompt before enabling full access mode.
     OpenFullAccessConfirmation {
         preset: ApprovalPreset,
@@ -163,11 +150,6 @@ pub(crate) enum AppEvent {
     /// Persist the acknowledgement flag for the world-writable directories warning.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     PersistWorldWritableWarningAcknowledged,
-
-    /// Persist the acknowledgement flag for the model migration prompt.
-    PersistModelMigrationPromptAcknowledged {
-        migration_config: String,
-    },
 
     /// Skip the next world-writable scan (one-shot) after a user-confirmed continue.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]

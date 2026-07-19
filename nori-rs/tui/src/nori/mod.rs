@@ -17,8 +17,6 @@ pub(crate) mod skillset_picker;
 pub(crate) mod token_count;
 pub(crate) mod viewonly_session_picker;
 
-pub(crate) mod config_adapter;
-
 pub(crate) mod config_picker;
 
 pub(crate) mod hotkey_match;

@@ -41,10 +41,6 @@ pub struct Cli {
     #[arg(long, short = 'a')]
     pub agent: Option<String>,
 
-    /// Configuration profile from config.toml to specify default options.
-    #[arg(long = "profile", short = 'p')]
-    pub config_profile: Option<String>,
-
     /// Skip all confirmation prompts and execute commands without sandboxing.
     /// EXTREMELY DANGEROUS. Intended solely for running in environments that are externally sandboxed.
     #[arg(
@@ -117,5 +113,12 @@ mod tests {
             !cli.dangerously_bypass_approvals_and_sandbox,
             "dangerously_bypass_approvals_and_sandbox should default to false"
         );
+    }
+
+    #[test]
+    fn legacy_profile_flags_are_rejected() {
+        for args in [["nori", "--profile", "focused"], ["nori", "-p", "focused"]] {
+            assert!(Cli::try_parse_from(args).is_err());
+        }
     }
 }

@@ -7,12 +7,12 @@
 //! The flow is designed to be used instead of the default Codex onboarding
 //! screen when building with Nori branding.
 
-use codex_core::config::Config;
-use codex_core::git_info::get_git_repo_root;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_config::NoriConfig;
+use nori_config::resolve_root_git_project_for_trust;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::prelude::Widget;
@@ -21,10 +21,10 @@ use ratatui::widgets::Clear;
 use ratatui::widgets::WidgetRef;
 use std::path::PathBuf;
 
-use crate::onboarding::TrustDirectorySelection;
-use crate::onboarding::onboarding_screen::KeyboardHandler;
-use crate::onboarding::onboarding_screen::StepState;
-use crate::onboarding::onboarding_screen::StepStateProvider;
+use super::KeyboardHandler;
+use super::StepState;
+use super::StepStateProvider;
+use super::TrustDirectorySelection;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
@@ -33,7 +33,6 @@ use super::NoriTrustDirectoryWidget;
 use super::NoriWelcomeWidget;
 use super::is_first_launch;
 use super::mark_first_launch_complete;
-use crate::nori::config_adapter::get_nori_home;
 
 /// Steps in the Nori onboarding flow.
 #[allow(clippy::large_enum_variant)]
@@ -53,7 +52,7 @@ pub(crate) struct NoriOnboardingScreenArgs {
     /// Whether to skip the trust directory prompt (--skip-trust-directory flag).
     pub skip_trust_directory: bool,
     /// Application configuration.
-    pub config: Config,
+    pub config: NoriConfig,
 }
 
 /// Result of running the Nori onboarding screen.
@@ -83,9 +82,9 @@ impl NoriOnboardingScreen {
             config,
         } = args;
 
-        let cwd = config.cwd.clone();
+        let cwd = config.cwd;
         // Use Nori-specific home directory (~/.nori/cli) from the canonical config source
-        let nori_home = get_nori_home().unwrap_or_else(|_| config.codex_home.clone());
+        let nori_home = config.nori_home;
 
         let mut steps: Vec<NoriStep> = Vec::new();
 
@@ -96,7 +95,7 @@ impl NoriOnboardingScreen {
 
         // Add directory trust screen if needed (unless --skip-trust-directory is set)
         if show_trust_screen && !skip_trust_directory {
-            let is_git_repo = get_git_repo_root(&cwd).is_some();
+            let is_git_repo = resolve_root_git_project_for_trust(&cwd).is_some();
             let highlighted = if is_git_repo {
                 TrustDirectorySelection::Trust
             } else {
@@ -105,8 +104,6 @@ impl NoriOnboardingScreen {
 
             steps.push(NoriStep::TrustDirectory(NoriTrustDirectoryWidget {
                 cwd,
-                // TODO: This should use Nori-specific config for trust levels
-                // For now we delegate to codex_home
                 nori_home: nori_home.clone(),
                 is_git_repo,
                 selection: None,
@@ -129,7 +126,6 @@ impl NoriOnboardingScreen {
         let mut out: Vec<&NoriStep> = Vec::new();
         for step in self.steps.iter() {
             match step.get_step_state() {
-                StepState::Hidden => continue,
                 StepState::Complete => out.push(step),
                 StepState::InProgress => {
                     out.push(step);
@@ -145,7 +141,6 @@ impl NoriOnboardingScreen {
         let mut out: Vec<&mut NoriStep> = Vec::new();
         for step in self.steps.iter_mut() {
             match step.get_step_state() {
-                StepState::Hidden => continue,
                 StepState::Complete => out.push(step),
                 StepState::InProgress => {
                     out.push(step);
@@ -363,9 +358,6 @@ pub(crate) async fn run_nori_onboarding_app(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_core::config::Config;
-    use codex_core::config::ConfigOverrides;
-    use codex_core::config::ConfigToml;
 
     #[test]
     fn nori_step_implements_required_traits() {
@@ -380,11 +372,10 @@ mod tests {
             show_trust_screen: true,
             skip_welcome: false,
             skip_trust_directory: false,
-            config: Config::load_from_base_config_with_overrides(
-                ConfigToml::default(),
-                ConfigOverrides::default(),
-                std::env::temp_dir(),
-            )?,
+            config: NoriConfig {
+                cwd: std::env::temp_dir(),
+                ..NoriConfig::default()
+            },
         };
 
         Ok(())

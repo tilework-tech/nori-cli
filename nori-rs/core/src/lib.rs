@@ -29,5 +29,3 @@ pub mod project_doc;
 pub mod util;
 
 pub use tool_types::CODEX_APPLY_PATCH_ARG1;
-
-pub mod otel_init;

@@ -478,7 +478,7 @@ fn footer_segment(props: &FooterProps, segment: FooterSegment) -> Option<Line<'s
                 Span::from(label.clone()).magenta(),
             ])
         }),
-        FooterSegment::NoriProfile => nori_profile_segment(props),
+        FooterSegment::Skillset => skillset_segment(props),
         FooterSegment::NoriVersion => props.nori_version.as_ref().map(|version| {
             let label = props
                 .nori_version_source
@@ -561,7 +561,7 @@ fn context_segment(props: &FooterProps) -> Option<Line<'static>> {
     context_text.map(Line::from)
 }
 
-fn nori_profile_segment(props: &FooterProps) -> Option<Line<'static>> {
+fn skillset_segment(props: &FooterProps) -> Option<Line<'static>> {
     if props.active_skillsets.is_empty() {
         return None;
     }
@@ -794,7 +794,7 @@ mod tests {
             git_stats: true,
             context: true,
             approval_mode: true,
-            nori_profile: true,
+            skillset: true,
             nori_version: true,
             token_usage: true,
             mode_indicator: true,
@@ -1190,7 +1190,7 @@ mod tests {
         snapshot_footer(
             "footer_with_large_token_usage",
             FooterProps {
-                nori_version_source: Some(NoriVersionSource::Profiles),
+                nori_version_source: Some(NoriVersionSource::LegacySkillsets),
                 context_tokens: Some(1_234_567),
                 input_tokens: Some(500_000),
                 output_tokens: Some(734_567),
@@ -1206,7 +1206,7 @@ mod tests {
         snapshot_footer(
             "footer_with_zero_token_usage",
             FooterProps {
-                nori_version_source: Some(NoriVersionSource::Profiles),
+                nori_version_source: Some(NoriVersionSource::LegacySkillsets),
                 input_tokens: Some(0),
                 output_tokens: Some(0),
                 cached_tokens: Some(0),
@@ -1426,7 +1426,7 @@ mod tests {
             git_stats: false,
             context: false,
             approval_mode: false,
-            nori_profile: false,
+            skillset: false,
             nori_version: false,
             token_usage: false,
             mode_indicator: false,
@@ -1500,7 +1500,7 @@ mod tests {
     #[test]
     fn footer_vertical_with_segments_disabled() {
         let segment_config = FooterSegmentConfig {
-            nori_profile: false,
+            skillset: false,
             nori_version: false,
             ..fully_enabled_segments()
         };

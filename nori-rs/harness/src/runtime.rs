@@ -8,15 +8,11 @@
 //! [`launch_session`], and consume [`SessionEvent`]s; no terminal or UI
 //! concepts appear here (crate-layering dependency rule 2).
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use codex_protocol::config_types::McpServerConfig;
-use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::Op;
-use codex_protocol::protocol::SandboxPolicy;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
 use futures::future::BoxFuture;
 use tokio::sync::mpsc;
@@ -170,24 +166,10 @@ pub struct SessionResume {
     pub transcript: Option<Transcript>,
 }
 
-/// Everything a frontend must supply to launch a session. All remaining
-/// backend configuration (hooks, notifications, worktrees, proxy logging,
-/// history) is read from the Nori config by the runtime itself.
+/// Everything a frontend must supply to launch a session.
 pub struct SessionLaunchSpec {
-    /// Agent name used to look up the agent in the registry.
-    pub agent: String,
-    /// Working directory for the session.
-    pub cwd: PathBuf,
-    /// Approval policy for command execution.
-    pub approval_policy: AskForApproval,
-    /// Sandbox policy for command execution.
-    pub sandbox_policy: SandboxPolicy,
-    /// Optional external notifier command for OS-level notifications.
-    pub notify: Option<Vec<String>>,
-    /// MCP server configuration for listing via /mcp command.
-    pub mcp_servers: HashMap<String, McpServerConfig>,
-    /// OAuth credentials store mode for MCP auth status computation.
-    pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+    /// Fully resolved process configuration supplied by the frontend.
+    pub config: Arc<crate::config::NoriConfig>,
     /// Frontend version recorded in transcript metadata.
     pub cli_version: String,
     /// Product-level context injected into the first prompt.
@@ -237,17 +219,24 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
     };
 
     tokio::spawn(async move {
+        let SessionLaunchSpec {
+            config,
+            cli_version,
+            session_context,
+            initial_context,
+            resume,
+        } = spec;
+
         // Single ACP backend channel for both control-plane and normalized
         // session-domain events.
         let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
-        let nori_home = crate::config::find_nori_home().unwrap_or_else(|_| spec.cwd.clone());
-        let nori_config = crate::config::NoriConfig::load().unwrap_or_default();
         // Detect auto-worktree repo root from the cwd path.
         // When auto_worktree is enabled, cwd is {repo_root}/.worktrees/{name},
         // so we can derive repo_root by going up two directories.
-        let auto_worktree_repo_root = if nori_config.auto_worktree.is_enabled() {
-            spec.cwd
+        let auto_worktree_repo_root = if config.auto_worktree.is_enabled() {
+            config
+                .cwd
                 .parent()
                 .filter(|p| p.file_name().is_some_and(|n| n == ".worktrees"))
                 .and_then(|p| p.parent())
@@ -258,51 +247,53 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
         // Resolve to Off if no worktree actually exists (e.g. "ask" mode
         // where the user declined).
         let auto_worktree = if auto_worktree_repo_root.is_some() {
-            nori_config.auto_worktree
+            config.auto_worktree
         } else {
             crate::config::AutoWorktree::Off
         };
+        let agent = config.active_agent.clone();
 
         let acp_config = AcpBackendConfig {
-            agent: spec.agent.clone(),
-            cwd: spec.cwd.clone(),
-            approval_policy: spec.approval_policy,
-            sandbox_policy: spec.sandbox_policy.clone(),
-            notify: spec.notify.clone(),
-            os_notifications: nori_config.os_notifications,
-            notify_after_idle: nori_config.notify_after_idle,
-            nori_home,
-            history_persistence: crate::config::HistoryPersistence::SaveAll,
-            acp_proxy: nori_config.acp_proxy.clone(),
-            cli_version: spec.cli_version.clone(),
+            agent: agent.clone(),
+            cwd: config.cwd.clone(),
+            approval_policy: config.approval_policy,
+            sandbox_policy: config.sandbox_policy.clone(),
+            notify: config.notify.clone(),
+            os_notifications: config.os_notifications,
+            notify_after_idle: config.notify_after_idle,
+            nori_home: config.nori_home.clone(),
+            history_persistence: config.history_persistence,
+            acp_proxy: config.acp_proxy.clone(),
+            cli_version,
             auto_worktree,
             auto_worktree_repo_root,
-            session_start_hooks: nori_config.session_start_hooks.clone(),
-            session_end_hooks: nori_config.session_end_hooks.clone(),
-            pre_user_prompt_hooks: nori_config.pre_user_prompt_hooks.clone(),
-            post_user_prompt_hooks: nori_config.post_user_prompt_hooks.clone(),
-            pre_tool_call_hooks: nori_config.pre_tool_call_hooks.clone(),
-            post_tool_call_hooks: nori_config.post_tool_call_hooks.clone(),
-            pre_agent_response_hooks: nori_config.pre_agent_response_hooks.clone(),
-            post_agent_response_hooks: nori_config.post_agent_response_hooks.clone(),
-            async_session_start_hooks: nori_config.async_session_start_hooks.clone(),
-            async_session_end_hooks: nori_config.async_session_end_hooks.clone(),
-            async_pre_user_prompt_hooks: nori_config.async_pre_user_prompt_hooks.clone(),
-            async_post_user_prompt_hooks: nori_config.async_post_user_prompt_hooks.clone(),
-            async_pre_tool_call_hooks: nori_config.async_pre_tool_call_hooks.clone(),
-            async_post_tool_call_hooks: nori_config.async_post_tool_call_hooks.clone(),
-            async_pre_agent_response_hooks: nori_config.async_pre_agent_response_hooks.clone(),
-            async_post_agent_response_hooks: nori_config.async_post_agent_response_hooks.clone(),
-            script_timeout: nori_config.script_timeout.as_duration(),
-            default_model: nori_config.default_models.get(&spec.agent).cloned(),
-            initial_context: spec.initial_context,
-            session_context: spec.session_context,
-            mcp_servers: spec.mcp_servers,
-            mcp_oauth_credentials_store_mode: spec.mcp_oauth_credentials_store_mode,
+            prompt_summary_enabled: config.footer_segment_config.prompt_summary,
+            session_start_hooks: config.session_start_hooks.clone(),
+            session_end_hooks: config.session_end_hooks.clone(),
+            pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
+            post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
+            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
+            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
+            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
+            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
+            async_session_start_hooks: config.async_session_start_hooks.clone(),
+            async_session_end_hooks: config.async_session_end_hooks.clone(),
+            async_pre_user_prompt_hooks: config.async_pre_user_prompt_hooks.clone(),
+            async_post_user_prompt_hooks: config.async_post_user_prompt_hooks.clone(),
+            async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
+            async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
+            async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
+            async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
+            script_timeout: config.script_timeout.as_duration(),
+            default_model: config.default_models.get(&agent).cloned(),
+            initial_context,
+            session_context,
+            mcp_servers: config.mcp_servers.clone(),
+            mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode::default(),
         };
 
         let (connect, failure_label): (BoxFuture<'_, anyhow::Result<AcpBackend>>, &str) =
-            match &spec.resume {
+            match &resume {
                 None => (
                     Box::pin(AcpBackend::spawn(&acp_config, backend_event_tx)),
                     "Failed to spawn ACP agent",
@@ -418,7 +409,11 @@ mod tests {
     use super::*;
     use agent_client_protocol_schema::v1::SessionConfigOptionCategory;
     use agent_client_protocol_schema::v1::SessionConfigSelectOption;
+    use codex_protocol::protocol::AskForApproval;
+    use codex_protocol::protocol::EventMsg;
+    use codex_protocol::protocol::SandboxPolicy;
     use pretty_assertions::assert_eq;
+    use std::time::Duration;
 
     fn mode_option(current_value: &str) -> SessionConfigOption {
         SessionConfigOption::select(
@@ -456,5 +451,69 @@ mod tests {
             .unwrap();
 
         assert_eq!(config_options, vec![mode_option("build")]);
+    }
+
+    #[tokio::test]
+    async fn launch_session_uses_the_injected_resolved_config() {
+        let temp = tempfile::tempdir().expect("create session directory");
+        let marker = temp.path().join("hook-ran");
+        let hook = temp.path().join("session-start.sh");
+        std::fs::write(&hook, format!("printf injected > {}\n", marker.display()))
+            .expect("write hook");
+
+        let config = crate::config::NoriConfig {
+            active_agent: "mock-model".to_string(),
+            cwd: temp.path().to_path_buf(),
+            nori_home: temp.path().to_path_buf(),
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::ReadOnly,
+            session_start_hooks: vec![hook],
+            ..Default::default()
+        };
+
+        let spec = SessionLaunchSpec {
+            config: Arc::new(config),
+            cli_version: "test".to_string(),
+            session_context: None,
+            initial_context: None,
+            resume: None,
+        };
+        let LaunchedSession {
+            op_tx,
+            handle,
+            mut events,
+        } = launch_session(spec);
+
+        let configured = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                match events.recv().await.expect("session event stream closed") {
+                    SessionEvent::Backend(event) => {
+                        if let BackendEvent::Control(event) = *event
+                            && let EventMsg::SessionConfigured(configured) = event.msg
+                        {
+                            break configured;
+                        }
+                    }
+                    SessionEvent::SpawnFailed { error } => panic!("session spawn failed: {error}"),
+                    SessionEvent::ShutdownRequested => {
+                        panic!("session shut down before configuration")
+                    }
+                }
+            }
+        })
+        .await
+        .expect("session should configure from injected config");
+
+        assert_eq!(configured.model, "mock-model");
+        assert_eq!(configured.cwd, temp.path());
+        assert_eq!(configured.approval_policy, AskForApproval::Never);
+        assert_eq!(configured.sandbox_policy, SandboxPolicy::ReadOnly);
+        assert_eq!(
+            std::fs::read_to_string(marker).expect("read hook marker"),
+            "injected"
+        );
+        op_tx.send(Op::Shutdown).expect("request shutdown");
+        drop(op_tx);
+        drop(handle);
     }
 }

@@ -11,8 +11,8 @@ pub(crate) enum NoriVersionSource {
     /// Version from `nori-skillsets` command (new installer) - displays as "Skillsets"
     #[default]
     Skillsets,
-    /// Version from `nori-ai` command (legacy installer) - displays as "Profiles"
-    Profiles,
+    /// Version from the legacy `nori-ai` skillset installer.
+    LegacySkillsets,
 }
 
 impl NoriVersionSource {
@@ -20,7 +20,7 @@ impl NoriVersionSource {
     pub(crate) fn label(self) -> &'static str {
         match self {
             NoriVersionSource::Skillsets => "Skillsets",
-            NoriVersionSource::Profiles => "Profiles",
+            NoriVersionSource::LegacySkillsets => "Legacy Skillsets",
         }
     }
 }
@@ -195,7 +195,7 @@ fn detect_nori_version() -> (Option<String>, Option<NoriVersionSource>) {
             .ok()
             .and_then(|s| parse_nori_version(&s))
     {
-        return (Some(version), Some(NoriVersionSource::Profiles));
+        return (Some(version), Some(NoriVersionSource::LegacySkillsets));
     }
 
     (None, None)
@@ -255,7 +255,11 @@ fn get_active_skillsets(dir: Option<&std::path::Path>) -> Vec<String> {
             if has_stderr {
                 // Likely an old version that doesn't support list-active.
                 // Fall back to reading .nori-config.json directly.
-                get_nori_profile().into_iter().collect()
+                dir.map(std::path::Path::to_path_buf)
+                    .or_else(|| env::current_dir().ok())
+                    .and_then(|cwd| read_active_skillset(&cwd))
+                    .into_iter()
+                    .collect()
             } else {
                 // Known command, just no active skillsets.
                 Vec::new()
@@ -270,37 +274,17 @@ fn get_active_skillsets(dir: Option<&std::path::Path>) -> Vec<String> {
 ///
 /// This is the legacy fallback for older versions of nori-skillsets that don't
 /// support the `list-active` subcommand.
-fn get_nori_profile() -> Option<String> {
-    let mut current_dir = env::current_dir().ok()?;
+pub(crate) fn read_active_skillset(cwd: &std::path::Path) -> Option<String> {
+    let mut current_dir = cwd.to_path_buf();
 
     loop {
         let config_path = current_dir.join(".nori-config.json");
         if config_path.exists()
             && let Ok(contents) = std::fs::read_to_string(&config_path)
             && let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents)
+            && let Some(skillset) = json.get("activeSkillset").and_then(|value| value.as_str())
         {
-            // Try new format: activeSkillset
-            if let Some(profile) = json.get("activeSkillset").and_then(|v| v.as_str()) {
-                return Some(profile.to_string());
-            }
-            // Fall back to old format: agents.claude-code.profile.baseProfile
-            if let Some(profile) = json
-                .get("agents")
-                .and_then(|a| a.get("claude-code"))
-                .and_then(|c| c.get("profile"))
-                .and_then(|p| p.get("baseProfile"))
-                .and_then(|b| b.as_str())
-            {
-                return Some(profile.to_string());
-            }
-            // Fall back to oldest format: profile.baseProfile
-            if let Some(profile) = json
-                .get("profile")
-                .and_then(|p| p.get("baseProfile"))
-                .and_then(|b| b.as_str())
-            {
-                return Some(profile.to_string());
-            }
+            return Some(skillset.to_string());
         }
 
         if !current_dir.pop() {
@@ -632,17 +616,14 @@ mod tests {
     }
 
     #[test]
-    fn test_nori_version_source_enum_exists() {
-        // Test that NoriVersionSource enum exists and has the expected variants
+    fn nori_version_sources_use_skillset_terminology() {
         let skillsets = NoriVersionSource::Skillsets;
-        let profiles = NoriVersionSource::Profiles;
+        let legacy_skillsets = NoriVersionSource::LegacySkillsets;
 
-        // Verify they are different
-        assert_ne!(skillsets, profiles);
+        assert_ne!(skillsets, legacy_skillsets);
 
-        // Verify display format
         assert_eq!(skillsets.label(), "Skillsets");
-        assert_eq!(profiles.label(), "Profiles");
+        assert_eq!(legacy_skillsets.label(), "Legacy Skillsets");
     }
 
     #[test]

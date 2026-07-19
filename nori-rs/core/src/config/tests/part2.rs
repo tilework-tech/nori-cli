@@ -24,44 +24,6 @@ fn config_honors_explicit_file_oauth_store_mode() -> std::io::Result<()> {
 }
 
 #[tokio::test]
-async fn managed_config_overrides_oauth_store_mode() -> anyhow::Result<()> {
-    let codex_home = TempDir::new()?;
-    let managed_path = codex_home.path().join("managed_config.toml");
-    let config_path = codex_home.path().join(CONFIG_TOML_FILE);
-
-    std::fs::write(&config_path, "mcp_oauth_credentials_store = \"file\"\n")?;
-    std::fs::write(&managed_path, "mcp_oauth_credentials_store = \"keyring\"\n")?;
-
-    let overrides = crate::config_loader::LoaderOverrides {
-        managed_config_path: Some(managed_path.clone()),
-        #[cfg(target_os = "macos")]
-        managed_preferences_base64: None,
-    };
-
-    let root_value = load_resolved_config(codex_home.path(), Vec::new(), overrides).await?;
-    let cfg: ConfigToml = root_value.try_into().map_err(|e| {
-        tracing::error!("Failed to deserialize overridden config: {e}");
-        std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-    })?;
-    assert_eq!(
-        cfg.mcp_oauth_credentials_store,
-        Some(OAuthCredentialsStoreMode::Keyring),
-    );
-
-    let final_config = Config::load_from_base_config_with_overrides(
-        cfg,
-        ConfigOverrides::default(),
-        codex_home.path().to_path_buf(),
-    )?;
-    assert_eq!(
-        final_config.mcp_oauth_credentials_store_mode,
-        OAuthCredentialsStoreMode::Keyring,
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn load_global_mcp_servers_returns_empty_if_missing() -> anyhow::Result<()> {
     let codex_home = TempDir::new()?;
 
@@ -95,7 +57,6 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -123,7 +84,6 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
     let empty = BTreeMap::new();
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(empty.clone())],
     )?;
     let loaded = load_global_mcp_servers(codex_home.path()).await?;
@@ -133,26 +93,17 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn managed_config_wins_over_cli_overrides() -> anyhow::Result<()> {
+async fn cli_overrides_win_over_user_config() -> anyhow::Result<()> {
     let codex_home = TempDir::new()?;
-    let managed_path = codex_home.path().join("managed_config.toml");
 
     std::fs::write(
         codex_home.path().join(CONFIG_TOML_FILE),
         "model = \"base\"\n",
     )?;
-    std::fs::write(&managed_path, "model = \"managed_config\"\n")?;
-
-    let overrides = crate::config_loader::LoaderOverrides {
-        managed_config_path: Some(managed_path),
-        #[cfg(target_os = "macos")]
-        managed_preferences_base64: None,
-    };
 
     let root_value = load_resolved_config(
         codex_home.path(),
         vec![("model".to_string(), TomlValue::String("cli".to_string()))],
-        overrides,
     )
     .await?;
 
@@ -161,7 +112,7 @@ async fn managed_config_wins_over_cli_overrides() -> anyhow::Result<()> {
         std::io::Error::new(std::io::ErrorKind::InvalidData, e)
     })?;
 
-    assert_eq!(cfg.model.as_deref(), Some("managed_config"));
+    assert_eq!(cfg.model.as_deref(), Some("cli"));
     Ok(())
 }
 
@@ -238,7 +189,6 @@ async fn replace_mcp_servers_serializes_env_sorted() -> anyhow::Result<()> {
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -303,7 +253,6 @@ async fn replace_mcp_servers_serializes_env_vars() -> anyhow::Result<()> {
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -351,7 +300,6 @@ async fn replace_mcp_servers_streamable_http_serializes_bearer_token() -> anyhow
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -415,7 +363,6 @@ async fn replace_mcp_servers_streamable_http_serializes_custom_headers() -> anyh
     )]);
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 

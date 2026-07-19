@@ -176,6 +176,8 @@ pub struct AcpBackendConfig {
     pub auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming the worktree
     pub auto_worktree_repo_root: Option<PathBuf>,
+    /// Whether the first prompt should be summarized for the footer.
+    pub prompt_summary_enabled: bool,
     /// Scripts to run when a session starts
     pub session_start_hooks: Vec<PathBuf>,
     /// Scripts to run when a session ends
@@ -293,6 +295,8 @@ pub struct AcpBackend {
     ghost_snapshots: Arc<GhostSnapshotStack>,
     /// Whether the first user prompt has been sent (for prompt summary)
     is_first_prompt: Arc<Mutex<bool>>,
+    /// Whether the first prompt should be summarized for the footer.
+    prompt_summary_enabled: bool,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
     /// Auto-worktree mode (whether a worktree was created at startup)

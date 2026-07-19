@@ -1,6 +1,12 @@
 //! Type definitions for Nori configuration
 
+use codex_protocol::config_types::McpServerConfig;
 use codex_protocol::config_types::SandboxMode;
+use codex_protocol::config_types::ShellEnvironmentPolicy;
+use codex_protocol::config_types::ShellEnvironmentPolicyToml;
+use codex_protocol::config_types::TrustLevel;
+use codex_protocol::protocol::AskForApproval;
+use codex_protocol::protocol::SandboxPolicy;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -184,20 +190,27 @@ pub enum ResolvedDistribution {
 #[serde(rename_all = "snake_case")]
 pub struct NoriConfigToml {
     /// The ACP agent to use (e.g., "claude-code", "codex", "gemini")
-    /// This is persisted separately from model to track user's agent preference
+    /// This is persisted to track the user's agent preference.
     pub agent: Option<String>,
-
-    /// Legacy field: the ACP agent to use. Prefer `agent` field.
-    pub model: Option<String>,
 
     /// Sandbox mode for command execution
     pub sandbox_mode: Option<SandboxMode>,
 
+    /// Settings applied when the sandbox uses workspace-write mode.
+    pub sandbox_workspace_write: Option<SandboxWorkspaceWrite>,
+
     /// Approval policy for commands
-    pub approval_policy: Option<ApprovalPolicy>,
+    pub approval_policy: Option<AskForApproval>,
+
+    /// Environment inherited by sandboxed commands.
+    #[serde(default)]
+    pub shell_environment_policy: ShellEnvironmentPolicyToml,
 
     /// History persistence policy
     pub history_persistence: Option<HistoryPersistence>,
+
+    /// External notifier command and arguments.
+    pub notify: Option<Vec<String>>,
 
     /// ACP wire proxy logging settings
     #[serde(default)]
@@ -209,7 +222,7 @@ pub struct NoriConfigToml {
 
     /// MCP server configurations (optional)
     #[serde(default)]
-    pub mcp_servers: HashMap<String, McpServerConfigToml>,
+    pub mcp_servers: HashMap<String, McpServerConfig>,
 
     /// Session lifecycle hooks
     #[serde(default)]
@@ -226,6 +239,50 @@ pub struct NoriConfigToml {
     /// Cloud session settings
     #[serde(default)]
     pub cloud: CloudConfigToml,
+
+    /// Whether to check for Nori updates at startup.
+    pub check_for_update_on_startup: Option<bool>,
+
+    /// Disable burst-paste detection in the prompt composer.
+    pub disable_paste_burst: Option<bool>,
+
+    /// Nori-owned feature switches.
+    #[serde(default)]
+    pub features: FeaturesToml,
+
+    /// User acknowledgement state for safety notices.
+    #[serde(default)]
+    pub notice: Notice,
+
+    /// Per-project trust settings, keyed by project path.
+    #[serde(default)]
+    pub projects: HashMap<String, ProjectConfig>,
+}
+
+/// Workspace-write sandbox settings from `config.toml`.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SandboxWorkspaceWrite {
+    #[serde(default)]
+    pub writable_roots: Vec<PathBuf>,
+    #[serde(default)]
+    pub network_access: bool,
+    #[serde(default)]
+    pub exclude_tmpdir_env_var: bool,
+    #[serde(default)]
+    pub exclude_slash_tmp: bool,
+}
+
+/// Feature switches that still affect the Nori runtime.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FeaturesToml {
+    pub enable_experimental_windows_sandbox: Option<bool>,
+}
+
+/// Persisted safety notice acknowledgements.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct Notice {
+    pub hide_full_access_warning: Option<bool>,
+    pub hide_world_writable_warning: Option<bool>,
 }
 
 /// TOML settings for cloud session integration.
@@ -1162,8 +1219,8 @@ pub enum FooterSegment {
     Context,
     /// Approval mode: "Approvals: Agent"
     ApprovalMode,
-    /// Nori profile: "Skillset: name"
-    NoriProfile,
+    /// Active skillset: "Skillset: name"
+    Skillset,
     /// Nori version: "Skillsets v19.1.1"
     NoriVersion,
     /// Token usage: "Tokens: 77K total (32K cached)"
@@ -1186,7 +1243,7 @@ impl FooterSegment {
             Self::GitStats => "Git Stats",
             Self::Context => "Context Window",
             Self::ApprovalMode => "Approvals",
-            Self::NoriProfile => "Skillset",
+            Self::Skillset => "Skillset",
             Self::NoriVersion => "Skillset Version",
             Self::TokenUsage => "Token Usage",
             Self::ModeIndicator => "Mode Indicator",
@@ -1204,7 +1261,7 @@ impl FooterSegment {
             Self::GitStats => "git_stats",
             Self::Context => "context",
             Self::ApprovalMode => "approval_mode",
-            Self::NoriProfile => "nori_profile",
+            Self::Skillset => "skillset",
             Self::NoriVersion => "nori_version",
             Self::TokenUsage => "token_usage",
             Self::ModeIndicator => "mode_indicator",
@@ -1222,7 +1279,7 @@ impl FooterSegment {
             Self::GitStats,
             Self::Context,
             Self::ApprovalMode,
-            Self::NoriProfile,
+            Self::Skillset,
             Self::NoriVersion,
             Self::TokenUsage,
             Self::ModeIndicator,
@@ -1261,8 +1318,8 @@ pub struct FooterSegmentConfigToml {
     pub context: Option<bool>,
     /// Enable/disable approval mode segment.
     pub approval_mode: Option<bool>,
-    /// Enable/disable nori profile segment.
-    pub nori_profile: Option<bool>,
+    /// Enable/disable active skillset segment.
+    pub skillset: Option<bool>,
     /// Enable/disable nori version segment.
     pub nori_version: Option<bool>,
     /// Enable/disable token usage segment.
@@ -1290,8 +1347,8 @@ pub struct FooterSegmentConfig {
     pub context: bool,
     /// Enable/disable approval mode segment.
     pub approval_mode: bool,
-    /// Enable/disable nori profile segment.
-    pub nori_profile: bool,
+    /// Enable/disable active skillset segment.
+    pub skillset: bool,
     /// Enable/disable nori version segment.
     pub nori_version: bool,
     /// Enable/disable token usage segment.
@@ -1316,7 +1373,7 @@ impl Default for FooterSegmentConfig {
             git_stats: false,
             context: true,
             approval_mode: true,
-            nori_profile: false,
+            skillset: false,
             nori_version: false,
             token_usage: true,
             mode_indicator: true,
@@ -1337,7 +1394,7 @@ impl FooterSegmentConfig {
             git_stats: toml.git_stats.unwrap_or(defaults.git_stats),
             context: toml.context.unwrap_or(defaults.context),
             approval_mode: toml.approval_mode.unwrap_or(defaults.approval_mode),
-            nori_profile: toml.nori_profile.unwrap_or(defaults.nori_profile),
+            skillset: toml.skillset.unwrap_or(defaults.skillset),
             nori_version: toml.nori_version.unwrap_or(defaults.nori_version),
             token_usage: toml.token_usage.unwrap_or(defaults.token_usage),
             mode_indicator: toml.mode_indicator.unwrap_or(defaults.mode_indicator),
@@ -1355,7 +1412,7 @@ impl FooterSegmentConfig {
             FooterSegment::GitStats => self.git_stats,
             FooterSegment::Context => self.context,
             FooterSegment::ApprovalMode => self.approval_mode,
-            FooterSegment::NoriProfile => self.nori_profile,
+            FooterSegment::Skillset => self.skillset,
             FooterSegment::NoriVersion => self.nori_version,
             FooterSegment::TokenUsage => self.token_usage,
             FooterSegment::ModeIndicator => self.mode_indicator,
@@ -1373,7 +1430,7 @@ impl FooterSegmentConfig {
             FooterSegment::GitStats => self.git_stats = enabled,
             FooterSegment::Context => self.context = enabled,
             FooterSegment::ApprovalMode => self.approval_mode = enabled,
-            FooterSegment::NoriProfile => self.nori_profile = enabled,
+            FooterSegment::Skillset => self.skillset = enabled,
             FooterSegment::NoriVersion => self.nori_version = enabled,
             FooterSegment::TokenUsage => self.token_usage = enabled,
             FooterSegment::ModeIndicator => self.mode_indicator = enabled,
@@ -1430,7 +1487,7 @@ impl Default for FooterLayoutConfig {
                 FooterSegment::GitStats,
                 FooterSegment::Context,
                 FooterSegment::ApprovalMode,
-                FooterSegment::NoriProfile,
+                FooterSegment::Skillset,
                 FooterSegment::NoriVersion,
                 FooterSegment::TokenUsage,
             ],
@@ -1635,20 +1692,6 @@ impl fmt::Display for FileManager {
     }
 }
 
-/// Approval policy for command execution
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[derive(Default)]
-pub enum ApprovalPolicy {
-    /// Always ask for approval
-    Always,
-    /// Ask on potentially dangerous operations
-    #[default]
-    OnRequest,
-    /// Never ask (dangerous)
-    Never,
-}
-
 /// CLI overrides for config values
 #[derive(Debug, Clone, Default)]
 pub struct NoriConfigOverrides {
@@ -1659,10 +1702,22 @@ pub struct NoriConfigOverrides {
     pub sandbox_mode: Option<SandboxMode>,
 
     /// Override approval policy
-    pub approval_policy: Option<ApprovalPolicy>,
+    pub approval_policy: Option<AskForApproval>,
 
     /// Override current working directory
     pub cwd: Option<PathBuf>,
+
+    /// Additional directories writable under the workspace-write sandbox.
+    pub additional_writable_roots: Vec<PathBuf>,
+
+    /// Dotted-path TOML overrides from `-c key=value` flags.
+    pub raw_overrides: Vec<(String, toml::Value)>,
+}
+
+/// Trust settings resolved for the active project.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct ProjectConfig {
+    pub trust_level: Option<TrustLevel>,
 }
 
 /// Resolved configuration with defaults applied
@@ -1672,17 +1727,47 @@ pub struct NoriConfig {
     /// Persisted to track user's agent preference across sessions
     pub agent: String,
 
-    /// The active ACP agent slug (CLI override > config model > persisted agent)
+    /// The active ACP agent slug (CLI override > persisted agent)
     pub active_agent: String,
 
     /// Sandbox mode for command execution
     pub sandbox_mode: SandboxMode,
 
+    /// Resolved sandbox policy for command execution.
+    pub sandbox_policy: SandboxPolicy,
+
     /// Approval policy for commands
-    pub approval_policy: ApprovalPolicy,
+    pub approval_policy: AskForApproval,
+
+    /// Whether approval or sandbox policy was explicitly configured.
+    pub has_explicit_approval_or_sandbox_policy: bool,
+
+    /// Whether workspace-write was downgraded because Windows sandboxing is unavailable.
+    pub forced_auto_mode_downgraded_on_windows: bool,
+
+    /// Whether the experimental Windows sandbox is enabled in user config.
+    pub windows_sandbox_enabled: bool,
+
+    /// Environment inherited by sandboxed commands.
+    pub shell_environment_policy: ShellEnvironmentPolicy,
+
+    /// Trust settings for the active working directory.
+    pub active_project: ProjectConfig,
+
+    /// User acknowledgement state for safety notices.
+    pub notices: Notice,
+
+    /// Whether to check for Nori updates at startup.
+    pub check_for_update_on_startup: bool,
+
+    /// Disable burst-paste detection in the prompt composer.
+    pub disable_paste_burst: bool,
 
     /// History persistence policy
     pub history_persistence: HistoryPersistence,
+
+    /// External notifier command and arguments.
+    pub notify: Option<Vec<String>>,
 
     /// ACP wire proxy logging settings.
     pub acp_proxy: AcpProxyConfig,
@@ -1815,8 +1900,18 @@ impl Default for NoriConfig {
             agent: DEFAULT_AGENT.to_string(),
             active_agent: DEFAULT_AGENT.to_string(),
             sandbox_mode: SandboxMode::WorkspaceWrite,
-            approval_policy: ApprovalPolicy::OnRequest,
+            sandbox_policy: SandboxPolicy::new_workspace_write_policy(),
+            approval_policy: AskForApproval::OnRequest,
+            has_explicit_approval_or_sandbox_policy: false,
+            forced_auto_mode_downgraded_on_windows: false,
+            windows_sandbox_enabled: false,
+            shell_environment_policy: ShellEnvironmentPolicy::default(),
+            active_project: ProjectConfig::default(),
+            notices: Notice::default(),
+            check_for_update_on_startup: true,
+            disable_paste_burst: false,
             history_persistence: HistoryPersistence::default(),
+            notify: None,
             acp_proxy: AcpProxyConfig {
                 enabled: false,
                 log_dir: PathBuf::from(".nori/cli/acp-wire"),
@@ -1860,6 +1955,18 @@ impl Default for NoriConfig {
             default_models: HashMap::new(),
             agents: Vec::new(),
             cloud_broker_url: None,
+        }
+    }
+}
+
+impl NoriConfig {
+    /// Downgrade workspace-write when the Windows sandbox is unavailable.
+    pub fn apply_windows_sandbox_availability(&mut self, sandbox_available: bool) {
+        let needs_downgrade = !sandbox_available
+            && matches!(self.sandbox_policy, SandboxPolicy::WorkspaceWrite { .. });
+        self.forced_auto_mode_downgraded_on_windows = needs_downgrade;
+        if needs_downgrade {
+            self.sandbox_policy = SandboxPolicy::new_read_only_policy();
         }
     }
 }
@@ -1959,144 +2066,6 @@ pub fn resolve_hook_paths(paths: Option<Vec<String>>) -> Vec<PathBuf> {
         .into_iter()
         .map(|s| expand_tilde(&s))
         .collect()
-}
-
-// ============================================================================
-// MCP Server Configuration
-// ============================================================================
-
-/// MCP server configuration (TOML representation)
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct McpServerConfigToml {
-    // Stdio transport fields
-    /// Command to execute
-    pub command: Option<String>,
-    /// Arguments to pass to the command
-    #[serde(default)]
-    pub args: Option<Vec<String>>,
-    /// Environment variables to set
-    #[serde(default)]
-    pub env: Option<HashMap<String, String>>,
-    /// Environment variable names to inherit
-    #[serde(default)]
-    pub env_vars: Option<Vec<String>>,
-
-    // HTTP transport fields
-    /// URL for HTTP-based MCP server
-    pub url: Option<String>,
-    /// Environment variable containing bearer token
-    pub bearer_token_env_var: Option<String>,
-    /// HTTP headers to include
-    #[serde(default)]
-    pub http_headers: Option<HashMap<String, String>>,
-    /// HTTP headers sourced from environment variables
-    #[serde(default)]
-    pub env_http_headers: Option<HashMap<String, String>>,
-
-    /// Pre-registered OAuth client ID
-    #[serde(default)]
-    pub client_id: Option<String>,
-    /// Environment variable holding the OAuth client secret
-    #[serde(default)]
-    pub client_secret_env_var: Option<String>,
-
-    // Shared fields
-    /// Whether this server is enabled
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    /// Startup timeout in seconds
-    pub startup_timeout_sec: Option<f64>,
-    /// Tool call timeout in seconds
-    pub tool_timeout_sec: Option<f64>,
-    /// Allow-list of tool names
-    pub enabled_tools: Option<Vec<String>>,
-    /// Deny-list of tool names
-    pub disabled_tools: Option<Vec<String>>,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-/// Resolved MCP server configuration
-#[derive(Debug, Clone, PartialEq)]
-pub struct McpServerConfig {
-    /// Transport configuration
-    pub transport: McpServerTransportConfig,
-
-    /// Whether this server is enabled
-    pub enabled: bool,
-
-    /// Startup timeout
-    pub startup_timeout: Option<Duration>,
-
-    /// Tool call timeout
-    pub tool_timeout: Option<Duration>,
-
-    /// Allow-list of tools
-    pub enabled_tools: Option<Vec<String>>,
-
-    /// Deny-list of tools
-    pub disabled_tools: Option<Vec<String>>,
-}
-
-/// MCP server transport configuration
-#[derive(Debug, Clone, PartialEq)]
-pub enum McpServerTransportConfig {
-    /// Stdio-based MCP server (subprocess)
-    Stdio {
-        command: String,
-        args: Vec<String>,
-        env: Option<HashMap<String, String>>,
-        env_vars: Vec<String>,
-    },
-    /// HTTP-based MCP server
-    StreamableHttp {
-        url: String,
-        bearer_token_env_var: Option<String>,
-        http_headers: Option<HashMap<String, String>>,
-        env_http_headers: Option<HashMap<String, String>>,
-        client_id: Option<String>,
-        client_secret_env_var: Option<String>,
-    },
-}
-
-impl McpServerConfigToml {
-    /// Convert TOML representation to resolved config
-    pub fn resolve(&self) -> Result<McpServerConfig, String> {
-        let transport = if let Some(command) = &self.command {
-            if self.url.is_some() {
-                return Err("Cannot specify both 'command' and 'url'".to_string());
-            }
-            McpServerTransportConfig::Stdio {
-                command: command.clone(),
-                args: self.args.clone().unwrap_or_default(),
-                env: self.env.clone(),
-                env_vars: self.env_vars.clone().unwrap_or_default(),
-            }
-        } else if let Some(url) = &self.url {
-            McpServerTransportConfig::StreamableHttp {
-                url: url.clone(),
-                bearer_token_env_var: self.bearer_token_env_var.clone(),
-                http_headers: self.http_headers.clone(),
-                env_http_headers: self.env_http_headers.clone(),
-                client_id: self.client_id.clone(),
-                client_secret_env_var: self.client_secret_env_var.clone(),
-            }
-        } else {
-            return Err("Must specify either 'command' or 'url'".to_string());
-        };
-
-        Ok(McpServerConfig {
-            transport,
-            enabled: self.enabled,
-            startup_timeout: self.startup_timeout_sec.map(Duration::from_secs_f64),
-            tool_timeout: self.tool_timeout_sec.map(Duration::from_secs_f64),
-            enabled_tools: self.enabled_tools.clone(),
-            disabled_tools: self.disabled_tools.clone(),
-        })
-    }
 }
 
 #[cfg(test)]

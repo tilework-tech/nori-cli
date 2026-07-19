@@ -28,7 +28,7 @@ fn test_gemini_acp_live_response() {
     }
 
     let config = SessionConfig::new()
-        .with_model("gemini-acp".to_owned())
+        .with_agent("gemini-acp".to_owned())
         .with_config_toml(generate_live_config("gemini-acp"));
 
     let mut session =
@@ -74,7 +74,7 @@ fn test_claude_acp_live_response() {
     }
 
     let config = SessionConfig::new()
-        .with_model("claude-acp".to_owned())
+        .with_agent("claude-acp".to_owned())
         .with_config_toml(generate_live_config("claude-acp"));
 
     let mut session =
@@ -109,13 +109,6 @@ fn test_claude_acp_live_response() {
 }
 
 /// Generate a config.toml for live ACP testing
-fn generate_live_config(model: &str) -> String {
-    format!(
-        r#"model = "{model}"
-model_provider = "live_acp_provider"
-
-[model_providers.live_acp_provider]
-name = "Live ACP provider for tests"
-"#
-    )
+fn generate_live_config(agent: &str) -> String {
+    format!("agent = \"{agent}\"\n")
 }

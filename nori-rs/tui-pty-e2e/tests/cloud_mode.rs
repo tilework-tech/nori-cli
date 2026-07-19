@@ -303,7 +303,7 @@ fn test_cloud_mode_boots_into_session_picker_without_claiming() {
 #[cfg(target_os = "linux")]
 fn test_plain_nori_does_not_boot_into_the_agent_session_picker() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_string())
+        .with_agent("mock-model".to_string())
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_RESUME", "1")
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_CLOSE", "1");
@@ -619,7 +619,7 @@ fn test_cloud_mode_overrides_agent_flag() {
     let fake = FakeHandroll::new();
     // The harness passes `--agent definitely-not-an-agent`; cloud mode must
     // ignore it and pin the handroll adapter.
-    let config = cloud_session_config(&fake).with_model("definitely-not-an-agent".to_string());
+    let config = cloud_session_config(&fake).with_agent("definitely-not-an-agent".to_string());
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");

@@ -7,11 +7,8 @@ use crate::tui::FrameRequester;
 use assert_matches::assert_matches;
 use codex_common::approval_presets::builtin_approval_presets;
 
-use codex_core::AuthManager;
-use codex_core::CodexAuth;
-use codex_core::config::Config;
-use codex_core::config::ConfigOverrides;
-use codex_core::config::ConfigToml;
+use codex_login::AuthManager;
+use codex_login::CodexAuth;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::plan_tool::PlanItemArg;
@@ -47,6 +44,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use insta::assert_snapshot;
+use nori_config::NoriConfig as Config;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
@@ -60,13 +58,10 @@ fn set_windows_sandbox_enabled(enabled: bool) {
 }
 
 fn test_config() -> Config {
-    // Use base defaults to avoid depending on host state.
-    Config::load_from_base_config_with_overrides(
-        ConfigToml::default(),
-        ConfigOverrides::default(),
-        std::env::temp_dir(),
-    )
-    .expect("config")
+    Config {
+        cwd: std::env::current_dir().expect("current directory"),
+        ..Config::default()
+    }
 }
 
 fn drain_insert_history(

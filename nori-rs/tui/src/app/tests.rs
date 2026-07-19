@@ -9,8 +9,8 @@ use crate::history_cell::HistoryCell;
 use crate::history_cell::UserHistoryCell;
 use crate::history_cell::new_session_info;
 use codex_common::approval_presets::builtin_approval_presets;
-use codex_core::AuthManager;
-use codex_core::CodexAuth;
+use codex_login::AuthManager;
+use codex_login::CodexAuth;
 use codex_protocol::ConversationId;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::Event;
@@ -38,7 +38,6 @@ fn make_test_app() -> App {
         config,
         vertical_footer: false,
         footer_layout_config: nori_config::FooterLayoutConfig::default(),
-        active_profile: None,
         file_search,
         transcript_cells: Vec::new(),
         overlay: None,
@@ -83,7 +82,6 @@ fn make_test_app_with_channels() -> (
             config,
             vertical_footer: false,
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
-            active_profile: None,
             file_search,
             transcript_cells: Vec::new(),
             overlay: None,
@@ -132,62 +130,6 @@ fn approval_preset(id: &str) -> codex_common::approval_presets::ApprovalPreset {
         .into_iter()
         .find(|preset| preset.id == id)
         .expect("approval preset")
-}
-
-#[test]
-fn model_migration_prompt_only_shows_for_deprecated_models() {
-    assert!(should_show_model_migration_prompt("gpt-5", "gpt-5.1", None));
-    assert!(should_show_model_migration_prompt(
-        "gpt-5-codex",
-        "gpt-5.1-codex",
-        None
-    ));
-    assert!(should_show_model_migration_prompt(
-        "gpt-5-codex-mini",
-        "gpt-5.1-codex-mini",
-        None
-    ));
-    assert!(should_show_model_migration_prompt(
-        "gpt-5.1-codex",
-        "gpt-5.1-codex-max",
-        None
-    ));
-    assert!(!should_show_model_migration_prompt(
-        "gpt-5.1-codex",
-        "gpt-5.1-codex",
-        None
-    ));
-}
-
-#[test]
-fn model_migration_prompt_respects_hide_flag_and_self_target() {
-    assert!(!should_show_model_migration_prompt(
-        "gpt-5",
-        "gpt-5.1",
-        Some(true)
-    ));
-    assert!(!should_show_model_migration_prompt(
-        "gpt-5.1", "gpt-5.1", None
-    ));
-}
-
-#[test]
-fn update_reasoning_effort_updates_config() {
-    let mut app = make_test_app();
-    app.config.model_reasoning_effort = Some(ReasoningEffortConfig::Medium);
-    app.chat_widget
-        .set_reasoning_effort(Some(ReasoningEffortConfig::Medium));
-
-    app.on_update_reasoning_effort(Some(ReasoningEffortConfig::High));
-
-    assert_eq!(
-        app.config.model_reasoning_effort,
-        Some(ReasoningEffortConfig::High)
-    );
-    assert_eq!(
-        app.chat_widget.config_ref().model_reasoning_effort,
-        Some(ReasoningEffortConfig::High)
-    );
 }
 
 #[test]
@@ -474,42 +416,6 @@ fn session_summary_skips_resume_hint_without_activity() {
 }
 
 #[test]
-fn gpt5_migration_allows_api_key_and_chatgpt() {
-    assert!(migration_prompt_allows_auth_mode(
-        Some(AuthMode::ApiKey),
-        HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG,
-    ));
-    assert!(migration_prompt_allows_auth_mode(
-        Some(AuthMode::ChatGPT),
-        HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG,
-    ));
-}
-
-#[test]
-fn gpt_5_1_codex_max_migration_limits_to_chatgpt() {
-    assert!(migration_prompt_allows_auth_mode(
-        Some(AuthMode::ChatGPT),
-        HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG,
-    ));
-    assert!(!migration_prompt_allows_auth_mode(
-        Some(AuthMode::ApiKey),
-        HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG,
-    ));
-}
-
-#[test]
-fn other_migrations_block_api_key() {
-    assert!(!migration_prompt_allows_auth_mode(
-        Some(AuthMode::ApiKey),
-        "unknown"
-    ));
-    assert!(migration_prompt_allows_auth_mode(
-        Some(AuthMode::ChatGPT),
-        "unknown"
-    ));
-}
-
-#[test]
 fn test_agent_persistence_to_config() {
     use tempfile::TempDir;
 
@@ -518,7 +424,7 @@ fn test_agent_persistence_to_config() {
 
     // Use ConfigEditsBuilder to persist an agent selection
     ConfigEditsBuilder::new(nori_home)
-        .set_agent(Some("gemini"))
+        .set_agent("gemini")
         .apply_blocking()
         .expect("persist agent");
 
@@ -635,5 +541,50 @@ fn reattach_message_without_title_names_only_the_id() {
     assert!(
         !msg.contains("()"),
         "reattach message must not render an empty title parenthetical, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn persisted_session_settings_update_the_runtime_config_snapshot() {
+    use tempfile::TempDir;
+
+    let home = TempDir::new().expect("create Nori home");
+    let mut app = make_test_app();
+    app.config.nori_home = home.path().to_path_buf();
+
+    app.persist_acp_wire_recording_setting(true).await;
+
+    assert!(app.config.acp_proxy.enabled);
+    assert!(app.chat_widget.config_ref().acp_proxy.enabled);
+
+    let model_options = vec![
+        nori_harness::SessionConfigOption::select(
+            "model",
+            "Model",
+            "sonnet",
+            vec![nori_harness::SessionConfigSelectOption::new("opus", "Opus")],
+        )
+        .category(nori_harness::SessionConfigOptionCategory::Model),
+    ];
+    let persisted = app
+        .persist_default_model_selection("claude-code", "model", "opus", &model_options)
+        .await
+        .expect("persist default model");
+
+    assert!(persisted);
+    assert_eq!(
+        app.config
+            .default_models
+            .get("claude-code")
+            .map(String::as_str),
+        Some("opus")
+    );
+    assert_eq!(
+        app.chat_widget
+            .config_ref()
+            .default_models
+            .get("claude-code")
+            .map(String::as_str),
+        Some("opus")
     );
 }

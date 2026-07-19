@@ -292,6 +292,7 @@ fn build_test_config(temp_dir: &std::path::Path) -> AcpBackendConfig {
         notify_after_idle: crate::config::NotifyAfterIdle::FiveSeconds,
         auto_worktree: crate::config::AutoWorktree::Off,
         auto_worktree_repo_root: None,
+        prompt_summary_enabled: false,
         session_start_hooks: vec![],
         session_end_hooks: vec![],
         pre_user_prompt_hooks: vec![],

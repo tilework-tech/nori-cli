@@ -4,17 +4,20 @@ use super::*;
 fn test_approval_policy_deserialize() {
     #[derive(Deserialize)]
     struct Wrapper {
-        policy: ApprovalPolicy,
+        policy: AskForApproval,
     }
 
-    let w: Wrapper = toml::from_str(r#"policy = "always""#).unwrap();
-    assert_eq!(w.policy, ApprovalPolicy::Always);
+    let w: Wrapper = toml::from_str(r#"policy = "untrusted""#).unwrap();
+    assert_eq!(w.policy, AskForApproval::UnlessTrusted);
+
+    let w: Wrapper = toml::from_str(r#"policy = "on-failure""#).unwrap();
+    assert_eq!(w.policy, AskForApproval::OnFailure);
 
     let w: Wrapper = toml::from_str(r#"policy = "on-request""#).unwrap();
-    assert_eq!(w.policy, ApprovalPolicy::OnRequest);
+    assert_eq!(w.policy, AskForApproval::OnRequest);
 
     let w: Wrapper = toml::from_str(r#"policy = "never""#).unwrap();
-    assert_eq!(w.policy, ApprovalPolicy::Never);
+    assert_eq!(w.policy, AskForApproval::Never);
 }
 
 #[test]
@@ -30,56 +33,6 @@ fn vim_always_submit_round_trips_through_toml() {
         toml::to_string(&parsed).unwrap(),
         "vim_mode = \"always_submit\"\n"
     );
-}
-
-#[test]
-fn test_mcp_server_resolve_stdio() {
-    let toml = McpServerConfigToml {
-        command: Some("my-tool".to_string()),
-        args: Some(vec!["--verbose".to_string()]),
-        enabled: true,
-        ..Default::default()
-    };
-
-    let config = toml.resolve().unwrap();
-    assert!(matches!(
-        config.transport,
-        McpServerTransportConfig::Stdio { .. }
-    ));
-    assert!(config.enabled);
-}
-
-#[test]
-fn test_mcp_server_resolve_http() {
-    let toml = McpServerConfigToml {
-        url: Some("https://example.com/mcp".to_string()),
-        bearer_token_env_var: Some("API_TOKEN".to_string()),
-        enabled: true,
-        ..Default::default()
-    };
-
-    let config = toml.resolve().unwrap();
-    assert!(matches!(
-        config.transport,
-        McpServerTransportConfig::StreamableHttp { .. }
-    ));
-}
-
-#[test]
-fn test_mcp_server_resolve_error_both() {
-    let toml = McpServerConfigToml {
-        command: Some("my-tool".to_string()),
-        url: Some("https://example.com/mcp".to_string()),
-        ..Default::default()
-    };
-
-    assert!(toml.resolve().is_err());
-}
-
-#[test]
-fn test_mcp_server_resolve_error_neither() {
-    let toml = McpServerConfigToml::default();
-    assert!(toml.resolve().is_err());
 }
 
 #[test]
@@ -436,7 +389,7 @@ fn test_tui_config_toml_without_hotkeys() {
 fn test_full_config_toml_with_hotkeys() {
     let config: NoriConfigToml = toml::from_str(
         r#"
-model = "claude-code"
+agent = "claude-code"
 
 [tui]
 vertical_footer = true
@@ -823,7 +776,7 @@ fn test_script_timeout_in_nori_config() {
 fn test_full_config_toml_with_script_timeout() {
     let config: NoriConfigToml = toml::from_str(
         r#"
-model = "claude-code"
+agent = "claude-code"
 
 [tui]
 script_timeout = "2m"
@@ -870,8 +823,8 @@ fn test_footer_segment_deserialize_all_variants() {
     let w: Wrapper = toml::from_str(r#"segment = "approval_mode""#).unwrap();
     assert_eq!(w.segment, FooterSegment::ApprovalMode);
 
-    let w: Wrapper = toml::from_str(r#"segment = "nori_profile""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::NoriProfile);
+    let w: Wrapper = toml::from_str(r#"segment = "skillset""#).unwrap();
+    assert_eq!(w.segment, FooterSegment::Skillset);
 
     let w: Wrapper = toml::from_str(r#"segment = "nori_version""#).unwrap();
     assert_eq!(w.segment, FooterSegment::NoriVersion);
@@ -912,7 +865,7 @@ fn test_footer_segment_display_name() {
     assert_eq!(FooterSegment::GitStats.display_name(), "Git Stats");
     assert_eq!(FooterSegment::Context.display_name(), "Context Window");
     assert_eq!(FooterSegment::ApprovalMode.display_name(), "Approvals");
-    assert_eq!(FooterSegment::NoriProfile.display_name(), "Skillset");
+    assert_eq!(FooterSegment::Skillset.display_name(), "Skillset");
     assert_eq!(
         FooterSegment::NoriVersion.display_name(),
         "Skillset Version"
@@ -938,7 +891,7 @@ fn test_footer_segment_all_variants() {
             FooterSegment::GitStats,
             FooterSegment::Context,
             FooterSegment::ApprovalMode,
-            FooterSegment::NoriProfile,
+            FooterSegment::Skillset,
             FooterSegment::NoriVersion,
             FooterSegment::TokenUsage,
             FooterSegment::ModeIndicator,
@@ -974,7 +927,7 @@ fn test_footer_segment_config_default_is_lean_subset() {
     let expected_disabled = [
         FooterSegment::PromptSummary,
         FooterSegment::GitStats,
-        FooterSegment::NoriProfile,
+        FooterSegment::Skillset,
         FooterSegment::NoriVersion,
     ];
 
@@ -1020,12 +973,12 @@ fn test_footer_segment_config_from_toml_empty_matches_default() {
 fn test_footer_segment_config_from_toml_can_enable_default_off_segments() {
     let toml = FooterSegmentConfigToml {
         vim_mode: Some(true),
-        nori_profile: Some(true),
+        skillset: Some(true),
         ..Default::default()
     };
     let config = FooterSegmentConfig::from_toml(&toml);
     assert!(config.is_enabled(FooterSegment::VimMode));
-    assert!(config.is_enabled(FooterSegment::NoriProfile));
+    assert!(config.is_enabled(FooterSegment::Skillset));
     // Other default-off segments stay off when unset.
     assert!(!config.is_enabled(FooterSegment::PromptSummary));
     assert!(!config.is_enabled(FooterSegment::GitStats));
@@ -1107,7 +1060,7 @@ mode_indicator = false
 fn test_full_config_toml_with_footer_segments() {
     let config: NoriConfigToml = toml::from_str(
         r#"
-model = "claude-code"
+agent = "claude-code"
 
 [tui]
 vertical_footer = true
@@ -1115,7 +1068,7 @@ vertical_footer = true
 [tui.footer_segments]
 prompt_summary = false
 vim_mode = false
-nori_profile = true
+skillset = true
 
 [tui.footer_layout]
 textarea_top_right = ["mode_indicator"]
@@ -1124,7 +1077,7 @@ textarea_top_right = ["mode_indicator"]
     .unwrap();
     assert_eq!(config.tui.footer_segments.prompt_summary, Some(false));
     assert_eq!(config.tui.footer_segments.vim_mode, Some(false));
-    assert_eq!(config.tui.footer_segments.nori_profile, Some(true));
+    assert_eq!(config.tui.footer_segments.skillset, Some(true));
     assert_eq!(config.tui.footer_segments.git_branch, None);
     assert_eq!(
         config.tui.footer_layout.textarea_top_right,

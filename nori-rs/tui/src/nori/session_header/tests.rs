@@ -15,10 +15,10 @@ fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
 }
 
 #[test]
-fn read_nori_profile_finds_ancestor_config() {
+fn active_skillset_discovery_skips_config_without_active_skillset() {
     // Create a temp directory structure:
     // /tmp/xxx/
-    //   .nori-config.json  (with profile)
+    //   .nori-config.json  (with active skillset)
     //   subdir/
     //     nested/  <- cwd
     let tmp = TempDir::new().expect("tempdir");
@@ -28,30 +28,32 @@ fn read_nori_profile_finds_ancestor_config() {
     let nested = root.join("subdir/nested");
     fs::create_dir_all(&nested).expect("create nested dirs");
 
-    // Create .nori-config.json at root with profile
+    // Create a modern .nori-config.json at the root.
     let config_content = r#"{
-        "profile": {
-            "baseProfile": "test-profile"
-        }
+        "activeSkillset": "test-skillset"
     }"#;
     fs::write(root.join(".nori-config.json"), config_content).expect("write config");
 
-    // Call read_nori_profile with nested directory as cwd
-    let profile = read_nori_profile(&nested);
+    // A nearer config without activeSkillset must not shadow the ancestor.
+    fs::write(root.join("subdir/.nori-config.json"), r#"{"version":1}"#)
+        .expect("write nearer config");
+
+    // Discover the active skillset from the nested working directory.
+    let skillset = read_active_skillset(&nested);
 
     assert_eq!(
-        profile,
-        Some("test-profile".to_string()),
-        "Should find profile in ancestor .nori-config.json"
+        skillset,
+        Some("test-skillset".to_string()),
+        "Should find activeSkillset in ancestor .nori-config.json"
     );
 }
 
 #[test]
-fn read_nori_profile_returns_none_when_no_config() {
+fn read_active_skillset_returns_none_when_no_config() {
     let tmp = TempDir::new().expect("tempdir");
-    let profile = read_nori_profile(tmp.path());
+    let skillset = read_active_skillset(tmp.path());
     assert_eq!(
-        profile, None,
+        skillset, None,
         "Should return None when no config file exists"
     );
 }
@@ -123,7 +125,7 @@ fn nori_header_renders_instruction_files() {
         version: "test",
         agent: "test-agent".to_string(),
         directory: PathBuf::from("/tmp/test"),
-        nori_profile: Some("test-profile".to_string()),
+        skillset: Some("test-skillset".to_string()),
         instruction_files: vec![
             InstructionFile {
                 path: PathBuf::from("/home/user/project/AGENTS.md"),
@@ -188,13 +190,13 @@ fn nori_header_renders_correctly() {
 }
 
 #[test]
-fn nori_profile_shows_none_when_not_set() {
+fn skillset_shows_none_when_not_set() {
     // Create cell without a real config file
     let cell = NoriSessionHeaderCell {
         version: "test",
         agent: "test-agent".to_string(),
         directory: PathBuf::from("/tmp/test"),
-        nori_profile: None,
+        skillset: None,
         instruction_files: Vec::new(),
         display_mode: DisplayMode::Full,
         prompt_summary: None,
@@ -209,17 +211,17 @@ fn nori_profile_shows_none_when_not_set() {
 
     assert!(
         rendered.contains("(none)"),
-        "Should show (none) when profile not set"
+        "Should show (none) when skillset is not set"
     );
 }
 
 #[test]
-fn nori_profile_shows_value_when_set() {
+fn skillset_shows_value_when_set() {
     let cell = NoriSessionHeaderCell {
         version: "test",
         agent: "test-agent".to_string(),
         directory: PathBuf::from("/tmp/test"),
-        nori_profile: Some("senior-swe".to_string()),
+        skillset: Some("senior-swe".to_string()),
         instruction_files: Vec::new(),
         display_mode: DisplayMode::Full,
         prompt_summary: None,
@@ -234,7 +236,7 @@ fn nori_profile_shows_value_when_set() {
 
     assert!(
         rendered.contains("senior-swe"),
-        "Should show profile name when set"
+        "Should show skillset name when set"
     );
 }
 
@@ -244,7 +246,7 @@ fn nori_header_snapshot() {
         version: "0.1.0",
         agent: "claude-sonnet".to_string(),
         directory: PathBuf::from("/home/user/project"),
-        nori_profile: Some("senior-swe".to_string()),
+        skillset: Some("senior-swe".to_string()),
         instruction_files: vec![
             InstructionFile {
                 path: PathBuf::from("/home/user/project/AGENTS.md"),
@@ -643,7 +645,7 @@ fn header_renders_instruction_files_section() {
         version: "test",
         agent: "claude-code".to_string(),
         directory: PathBuf::from("/home/user/project"),
-        nori_profile: Some("test-profile".to_string()),
+        skillset: Some("test-skillset".to_string()),
         instruction_files: files,
         display_mode: DisplayMode::Full,
         prompt_summary: None,
@@ -701,7 +703,7 @@ fn header_renders_exact_token_counts_without_tilde() {
         version: "test",
         agent: "codex".to_string(),
         directory: PathBuf::from("/home/user/project"),
-        nori_profile: None,
+        skillset: None,
         instruction_files: files,
         display_mode: DisplayMode::Full,
         prompt_summary: None,
@@ -1215,7 +1217,7 @@ fn context_window_percent_renders_without_token_breakdown() {
         version: "test",
         agent: "test-agent".to_string(),
         directory: PathBuf::from("/tmp/test"),
-        nori_profile: None,
+        skillset: None,
         instruction_files: Vec::new(),
         display_mode: DisplayMode::Full,
         prompt_summary: None,
@@ -1308,7 +1310,7 @@ fn compact_mode_hides_inactive_files() {
         version: "test",
         agent: "claude-code".to_string(),
         directory: PathBuf::from("/home/user/project"),
-        nori_profile: Some("test-profile".to_string()),
+        skillset: Some("test-skillset".to_string()),
         instruction_files: sample_instruction_files(),
         display_mode: DisplayMode::Compact,
         prompt_summary: None,
@@ -1344,7 +1346,7 @@ fn compact_mode_hides_per_file_token_counts() {
         version: "test",
         agent: "claude-code".to_string(),
         directory: PathBuf::from("/home/user/project"),
-        nori_profile: Some("test-profile".to_string()),
+        skillset: Some("test-skillset".to_string()),
         instruction_files: sample_instruction_files(),
         display_mode: DisplayMode::Compact,
         prompt_summary: None,
@@ -1380,7 +1382,7 @@ fn full_mode_shows_inactive_files_and_per_file_counts() {
         version: "test",
         agent: "claude-code".to_string(),
         directory: PathBuf::from("/home/user/project"),
-        nori_profile: Some("test-profile".to_string()),
+        skillset: Some("test-skillset".to_string()),
         instruction_files: sample_instruction_files(),
         display_mode: DisplayMode::Full,
         prompt_summary: None,
@@ -1422,7 +1424,7 @@ fn compact_mode_snapshot() {
         version: "0.1.0",
         agent: "claude-sonnet".to_string(),
         directory: PathBuf::from("/home/user/project"),
-        nori_profile: Some("senior-swe".to_string()),
+        skillset: Some("senior-swe".to_string()),
         instruction_files: vec![
             InstructionFile {
                 path: PathBuf::from("/home/user/project/AGENTS.md"),
@@ -1888,7 +1890,7 @@ fn welcome_card_with_cloud_session_shows_session_line_not_local_cwd() {
         version: "0.1.0",
         agent: "claude-sonnet".to_string(),
         directory: PathBuf::from("/home/user/local-only-checkout"),
-        nori_profile: Some("senior-swe".to_string()),
+        skillset: Some("senior-swe".to_string()),
         instruction_files: Vec::new(),
         display_mode: DisplayMode::Compact,
         prompt_summary: None,

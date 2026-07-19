@@ -125,11 +125,11 @@ impl ChatWidget {
         let cwd = self.config.cwd.clone();
         let env_map: std::collections::HashMap<String, String> = std::env::vars().collect();
         match codex_windows_sandbox::apply_world_writable_scan_and_denies(
-            self.config.codex_home.as_path(),
+            self.config.nori_home.as_path(),
             cwd.as_path(),
             &env_map,
             &self.config.sandbox_policy,
-            Some(self.config.codex_home.as_path()),
+            Some(self.config.nori_home.as_path()),
         ) {
             Ok(_) => None,
             Err(_) => Some((Vec::new(), 0, true)),
@@ -434,10 +434,5 @@ impl ChatWidget {
             .notices
             .hide_world_writable_warning
             .unwrap_or(false)
-    }
-
-    /// Set the reasoning effort in the widget's config copy.
-    pub(crate) fn set_reasoning_effort(&mut self, effort: Option<ReasoningEffortConfig>) {
-        self.config.model_reasoning_effort = effort;
     }
 }

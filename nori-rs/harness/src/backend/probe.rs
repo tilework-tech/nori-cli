@@ -52,15 +52,13 @@ pub struct AgentSessionsProbe {
     pub sessions: Vec<AcpSessionSummary>,
 }
 
-/// Probe using the ambient Nori config — what the TUI entry flow calls.
-/// Only the inputs the probe actually needs are resolved (agent, cwd, and
-/// the wire-log proxy setting); no session-level configuration is involved.
+/// Probe an agent using config values already resolved by the frontend.
 pub async fn probe_agent_sessions_for(
     agent: &str,
     cwd: &std::path::Path,
+    acp_proxy: crate::config::AcpProxyConfig,
 ) -> Result<AgentSessionsProbe, ProbeError> {
-    let nori_config = crate::config::NoriConfig::load().unwrap_or_default();
-    probe(agent, cwd, nori_config.acp_proxy).await
+    probe(agent, cwd, acp_proxy).await
 }
 
 /// Spawn the agent, read capabilities, list sessions, and shut the child

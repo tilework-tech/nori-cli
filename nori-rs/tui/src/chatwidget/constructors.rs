@@ -33,6 +33,7 @@ impl ChatWidget {
         };
 
         let first_prompt_text = initial_prompt.clone();
+        let acp_wire_recording_enabled = config.acp_proxy.enabled;
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -50,10 +51,10 @@ impl ChatWidget {
                 vertical_footer,
                 footer_segment_config,
                 footer_layout_config,
-                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.active_agent)
                     .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
-                agent_slug: config.model.clone(),
+                    .unwrap_or_else(|| config.active_agent.clone()),
+                agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
             config: config.clone(),
@@ -124,6 +125,9 @@ impl ChatWidget {
             last_terminal_title: None,
         };
 
+        widget
+            .bottom_pane
+            .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
         widget.prefetch_rate_limits();
 
         widget
@@ -165,6 +169,7 @@ impl ChatWidget {
         );
 
         let first_prompt_text = initial_prompt.clone();
+        let acp_wire_recording_enabled = config.acp_proxy.enabled;
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -182,10 +187,10 @@ impl ChatWidget {
                 vertical_footer,
                 footer_segment_config,
                 footer_layout_config,
-                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.active_agent)
                     .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
-                agent_slug: config.model.clone(),
+                    .unwrap_or_else(|| config.active_agent.clone()),
+                agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
             config: config.clone(),
@@ -256,6 +261,9 @@ impl ChatWidget {
             last_terminal_title: None,
         };
 
+        widget
+            .bottom_pane
+            .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
         widget.prefetch_rate_limits();
 
         widget

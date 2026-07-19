@@ -20,14 +20,10 @@ const LIVE_TIMEOUT: Duration = Duration::from_secs(30);
 const LIVE_TIMEOUT_INPUT: Duration = Duration::from_millis(500);
 
 /// Config TOML snippet that registers elizacp as a custom local agent.
-const ELIZACP_CONFIG: &str = r#"model = "elizacp"
-model_provider = "elizacp_provider"
+const ELIZACP_CONFIG: &str = r#"agent = "elizacp"
 
 [projects."/"]
 trust_level = "trusted"
-
-[model_providers.elizacp_provider]
-name = "ElizACP provider"
 
 [[agents]]
 name = "ElizACP"
@@ -66,7 +62,7 @@ fn test_elizacp_custom_agent_startup_and_response() {
     }
 
     let config = SessionConfig::new()
-        .with_model("elizacp".to_owned())
+        .with_agent("elizacp".to_owned())
         .with_config_toml(ELIZACP_CONFIG);
 
     let mut session = TuiSession::spawn_with_config(24, 80, config)
@@ -118,7 +114,7 @@ fn test_elizacp_custom_agent_display_name() {
     }
 
     let config = SessionConfig::new()
-        .with_model("elizacp".to_owned())
+        .with_agent("elizacp".to_owned())
         .with_config_toml(ELIZACP_CONFIG);
 
     let mut session = TuiSession::spawn_with_config(24, 80, config)

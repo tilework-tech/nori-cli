@@ -8,8 +8,7 @@ use crate::nori::update_action::UpdateAction;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use codex_core::config::Config;
-use codex_core::default_client::create_client;
+use nori_config::NoriConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::Path;
@@ -34,7 +33,7 @@ struct ReleaseInfo {
     tag_name: String,
 }
 
-pub fn get_upgrade_version(config: &Config) -> Option<String> {
+pub fn get_upgrade_version(config: &NoriConfig) -> Option<String> {
     if !config.check_for_update_on_startup {
         return None;
     }
@@ -63,8 +62,8 @@ pub fn get_upgrade_version(config: &Config) -> Option<String> {
     })
 }
 
-fn version_filepath(config: &Config) -> PathBuf {
-    config.codex_home.join(VERSION_FILENAME)
+fn version_filepath(config: &NoriConfig) -> PathBuf {
+    config.nori_home.join(VERSION_FILENAME)
 }
 
 fn read_version_info(version_file: &Path) -> anyhow::Result<VersionInfo> {
@@ -73,7 +72,8 @@ fn read_version_info(version_file: &Path) -> anyhow::Result<VersionInfo> {
 }
 
 async fn check_for_update(version_file: &Path) -> anyhow::Result<()> {
-    let ReleaseInfo { tag_name } = create_client()
+    let client = reqwest::Client::builder().user_agent("nori-cli").build()?;
+    let ReleaseInfo { tag_name } = client
         .get(LATEST_RELEASE_URL)
         .send()
         .await?
@@ -120,7 +120,7 @@ fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
     Some((maj, min, pat))
 }
 
-pub fn get_upgrade_version_for_popup(config: &Config) -> Option<String> {
+pub fn get_upgrade_version_for_popup(config: &NoriConfig) -> Option<String> {
     if !config.check_for_update_on_startup {
         return None;
     }
@@ -136,7 +136,7 @@ pub fn get_upgrade_version_for_popup(config: &Config) -> Option<String> {
     Some(latest)
 }
 
-pub async fn dismiss_version(config: &Config, version: &str) -> anyhow::Result<()> {
+pub async fn dismiss_version(config: &NoriConfig, version: &str) -> anyhow::Result<()> {
     let version_file = version_filepath(config);
     let mut info = match read_version_info(&version_file) {
         Ok(info) => info,

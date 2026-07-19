@@ -18,7 +18,7 @@ fn session_configured(acp_session_id: Option<&str>) -> Event {
         approval_policy: AskForApproval::Never,
         sandbox_policy: SandboxPolicy::ReadOnly,
         cwd: PathBuf::from("/home/user/project"),
-        reasoning_effort: Some(ReasoningEffortConfig::default()),
+        reasoning_effort: None,
         acp_session_id: acp_session_id.map(str::to_string),
         history_log_id: 0,
         history_entry_count: 0,

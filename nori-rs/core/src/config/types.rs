@@ -3,6 +3,7 @@
 // Note this file should generally be restricted to simple struct/enum
 // definitions that do not contain business logic.
 
+#[cfg(test)]
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -15,8 +16,6 @@ pub use codex_protocol::config_types::ShellEnvironmentPolicyToml;
 
 pub use codex_protocol::config_types::McpServerConfig;
 pub use codex_protocol::config_types::McpServerTransportConfig;
-
-pub const DEFAULT_OTEL_ENVIRONMENT: &str = "dev";
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum UriBasedFileOpener {
@@ -70,78 +69,6 @@ pub enum HistoryPersistence {
     None,
 }
 
-// ===== OTEL configuration =====
-
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum OtelHttpProtocol {
-    /// Binary payload
-    Binary,
-    /// JSON payload
-    Json,
-}
-
-#[derive(Deserialize, Debug, Clone, PartialEq, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct OtelTlsConfig {
-    pub ca_certificate: Option<PathBuf>,
-    pub client_certificate: Option<PathBuf>,
-    pub client_private_key: Option<PathBuf>,
-}
-
-/// Which OTEL exporter to use.
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum OtelExporterKind {
-    None,
-    OtlpHttp {
-        endpoint: String,
-        #[serde(default)]
-        headers: HashMap<String, String>,
-        protocol: OtelHttpProtocol,
-        #[serde(default)]
-        tls: Option<OtelTlsConfig>,
-    },
-    OtlpGrpc {
-        endpoint: String,
-        #[serde(default)]
-        headers: HashMap<String, String>,
-        #[serde(default)]
-        tls: Option<OtelTlsConfig>,
-    },
-}
-
-/// OTEL settings loaded from config.toml. Fields are optional so we can apply defaults.
-#[derive(Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct OtelConfigToml {
-    /// Log user prompt in traces
-    pub log_user_prompt: Option<bool>,
-
-    /// Mark traces with environment (dev, staging, prod, test). Defaults to dev.
-    pub environment: Option<String>,
-
-    /// Exporter to use. Defaults to `otlp-file`.
-    pub exporter: Option<OtelExporterKind>,
-}
-
-/// Effective OTEL settings after defaults are applied.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OtelConfig {
-    pub log_user_prompt: bool,
-    pub environment: String,
-    pub exporter: OtelExporterKind,
-}
-
-impl Default for OtelConfig {
-    fn default() -> Self {
-        OtelConfig {
-            log_user_prompt: false,
-            environment: DEFAULT_OTEL_ENVIRONMENT.to_owned(),
-            exporter: OtelExporterKind::None,
-        }
-    }
-}
-
 /// Collection of settings that are specific to the TUI.
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct Tui {
@@ -182,11 +109,6 @@ pub struct Notice {
     pub hide_world_writable_warning: Option<bool>,
     /// Tracks whether the user opted out of the rate limit model switch reminder.
     pub hide_rate_limit_model_nudge: Option<bool>,
-    /// Tracks whether the user has seen the model migration prompt
-    pub hide_gpt5_1_migration_prompt: Option<bool>,
-    /// Tracks whether the user has seen the gpt-5.1-codex-max migration prompt
-    #[serde(rename = "hide_gpt-5.1-codex-max_migration_prompt")]
-    pub hide_gpt_5_1_codex_max_migration_prompt: Option<bool>,
 }
 
 impl Notice {

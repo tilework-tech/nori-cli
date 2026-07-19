@@ -1,12 +1,16 @@
 use super::*;
+
+#[test]
+fn card_inner_width_accounts_for_borders_and_caps_content() {
+    assert_eq!(card_inner_width(3, 60), None);
+    assert_eq!(card_inner_width(4, 60), Some(0));
+    assert_eq!(card_inner_width(40, 60), Some(36));
+    assert_eq!(card_inner_width(100, 60), Some(60));
+}
 use crate::exec_cell::CommandOutput;
 use crate::exec_cell::ExecCall;
 use crate::exec_cell::ExecCell;
-use codex_core::config::Config;
-use codex_core::config::ConfigOverrides;
-use codex_core::config::ConfigToml;
 use codex_protocol::parse_command::ParsedCommand;
-use dirs::home_dir;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
@@ -14,15 +18,6 @@ use codex_protocol::protocol::ExecCommandSource;
 use mcp_types::CallToolResult;
 use mcp_types::ContentBlock;
 use mcp_types::TextContent;
-
-fn test_config() -> Config {
-    Config::load_from_base_config_with_overrides(
-        ConfigToml::default(),
-        ConfigOverrides::default(),
-        std::env::temp_dir(),
-    )
-    .expect("config")
-}
 
 fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
     lines
@@ -256,49 +251,6 @@ fn completed_mcp_tool_call_multiple_outputs_inline_snapshot() {
     let rendered = render_lines(&cell.display_lines(120)).join("\n");
 
     insta::assert_snapshot!(rendered);
-}
-
-#[test]
-fn session_header_includes_reasoning_level_when_present() {
-    let cell = SessionHeaderHistoryCell::new(
-        "gpt-4o".to_string(),
-        Some(ReasoningEffortConfig::High),
-        std::env::temp_dir(),
-        "test",
-    );
-
-    let lines = render_lines(&cell.display_lines(80));
-    let model_line = lines
-        .into_iter()
-        .find(|line| line.contains("model:"))
-        .expect("model line");
-
-    assert!(model_line.contains("gpt-4o high"));
-    assert!(model_line.contains("/model to change"));
-}
-
-#[test]
-fn session_header_directory_center_truncates() {
-    let mut dir = home_dir().expect("home directory");
-    for part in ["hello", "the", "fox", "is", "very", "fast"] {
-        dir.push(part);
-    }
-
-    let formatted = SessionHeaderHistoryCell::format_directory_inner(&dir, Some(24));
-    let sep = std::path::MAIN_SEPARATOR;
-    let expected = format!("~{sep}hello{sep}the{sep}…{sep}very{sep}fast");
-    assert_eq!(formatted, expected);
-}
-
-#[test]
-fn session_header_directory_front_truncates_long_segment() {
-    let mut dir = home_dir().expect("home directory");
-    dir.push("supercalifragilisticexpialidocious");
-
-    let formatted = SessionHeaderHistoryCell::format_directory_inner(&dir, Some(18));
-    let sep = std::path::MAIN_SEPARATOR;
-    let expected = format!("~{sep}…cexpialidocious");
-    assert_eq!(formatted, expected);
 }
 
 #[test]
@@ -721,12 +673,8 @@ fn plan_update_without_note_snapshot() {
 }
 #[test]
 fn reasoning_summary_block() {
-    let mut config = test_config();
-    config.model_family.reasoning_summary_format = ReasoningSummaryFormat::Experimental;
-
     let cell = new_reasoning_summary_block(
         "**High level reasoning**\n\nDetailed reasoning goes here.".to_string(),
-        &config,
     );
 
     let rendered_display = render_lines(&cell.display_lines(80));
@@ -738,10 +686,7 @@ fn reasoning_summary_block() {
 
 #[test]
 fn reasoning_summary_block_returns_reasoning_cell_when_feature_disabled() {
-    let mut config = test_config();
-    config.model_family.reasoning_summary_format = ReasoningSummaryFormat::Experimental;
-
-    let cell = new_reasoning_summary_block("Detailed reasoning goes here.".to_string(), &config);
+    let cell = new_reasoning_summary_block("Detailed reasoning goes here.".to_string());
 
     let rendered = render_transcript(cell.as_ref());
     assert_eq!(rendered, vec!["• Detailed reasoning goes here."]);
@@ -749,13 +694,7 @@ fn reasoning_summary_block_returns_reasoning_cell_when_feature_disabled() {
 
 #[test]
 fn reasoning_summary_block_falls_back_when_header_is_missing() {
-    let mut config = test_config();
-    config.model_family.reasoning_summary_format = ReasoningSummaryFormat::Experimental;
-
-    let cell = new_reasoning_summary_block(
-        "**High level reasoning without closing".to_string(),
-        &config,
-    );
+    let cell = new_reasoning_summary_block("**High level reasoning without closing".to_string());
 
     let rendered = render_transcript(cell.as_ref());
     assert_eq!(rendered, vec!["• **High level reasoning without closing"]);
@@ -763,21 +702,13 @@ fn reasoning_summary_block_falls_back_when_header_is_missing() {
 
 #[test]
 fn reasoning_summary_block_falls_back_when_summary_is_missing() {
-    let mut config = test_config();
-    config.model_family.reasoning_summary_format = ReasoningSummaryFormat::Experimental;
-
-    let cell = new_reasoning_summary_block(
-        "**High level reasoning without closing**".to_string(),
-        &config,
-    );
+    let cell = new_reasoning_summary_block("**High level reasoning without closing**".to_string());
 
     let rendered = render_transcript(cell.as_ref());
     assert_eq!(rendered, vec!["• High level reasoning without closing"]);
 
-    let cell = new_reasoning_summary_block(
-        "**High level reasoning without closing**\n\n  ".to_string(),
-        &config,
-    );
+    let cell =
+        new_reasoning_summary_block("**High level reasoning without closing**\n\n  ".to_string());
 
     let rendered = render_transcript(cell.as_ref());
     assert_eq!(rendered, vec!["• High level reasoning without closing"]);
@@ -785,12 +716,8 @@ fn reasoning_summary_block_falls_back_when_summary_is_missing() {
 
 #[test]
 fn reasoning_summary_block_splits_header_and_summary_when_present() {
-    let mut config = test_config();
-    config.model_family.reasoning_summary_format = ReasoningSummaryFormat::Experimental;
-
     let cell = new_reasoning_summary_block(
         "**High level plan**\n\nWe should fix the bug next.".to_string(),
-        &config,
     );
 
     let rendered_display = render_lines(&cell.display_lines(80));

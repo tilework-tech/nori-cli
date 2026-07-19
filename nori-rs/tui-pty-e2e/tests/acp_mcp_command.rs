@@ -17,7 +17,7 @@ args = ["hello"]
 "#;
 
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_config_toml(config_toml);
 
     let mut session =
@@ -55,7 +55,7 @@ args = ["hello"]
 #[test]
 #[cfg(target_os = "linux")]
 fn test_mcp_command_no_servers_opens_picker() {
-    let config = SessionConfig::new().with_model("mock-model".to_owned());
+    let config = SessionConfig::new().with_agent("mock-model".to_owned());
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");

@@ -1,21 +1,14 @@
 use crate::auth::AuthCredentialsStoreMode;
-use crate::config::types::DEFAULT_OTEL_ENVIRONMENT;
 use crate::config::types::History;
 use crate::config::types::McpServerConfig;
 use crate::config::types::Notice;
-use crate::config::types::OtelConfig;
-use crate::config::types::OtelConfigToml;
-use crate::config::types::OtelExporterKind;
 use crate::config::types::ReasoningSummaryFormat;
 use crate::config::types::SandboxWorkspaceWrite;
 use crate::config::types::ShellEnvironmentPolicy;
 use crate::config::types::ShellEnvironmentPolicyToml;
 use crate::config::types::Tui;
 use crate::config::types::UriBasedFileOpener;
-use crate::config_loader::LoadedConfigLayers;
 use crate::config_loader::load_config_as_toml;
-use crate::config_loader::load_config_layers_with_overrides;
-use crate::config_loader::merge_toml_values;
 use crate::features::Feature;
 use crate::features::FeatureOverrides;
 use crate::features::Features;
@@ -51,12 +44,10 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::config::profile::ConfigProfile;
 use toml::Value as TomlValue;
 use toml_edit::DocumentMut;
 
 pub mod edit;
-pub mod profile;
 pub mod types;
 
 pub const OPENAI_DEFAULT_MODEL: &str = "gpt-5.1-codex";
@@ -96,8 +87,6 @@ pub struct Config {
 
     /// True if the user passed in an override or set a value in config.toml
     /// for either of approval_policy or sandbox_mode.
-    pub did_user_set_custom_approval_policy_or_sandbox_mode: bool,
-
     /// On Windows, indicates that a previously configured workspace-write sandbox
     /// was coerced to read-only because native auto mode is unsupported.
     pub forced_auto_mode_downgraded_on_windows: bool,
@@ -252,9 +241,6 @@ pub struct Config {
     /// Centralized feature flags; source of truth for feature gating.
     pub features: Features,
 
-    /// The active profile name used to derive this `Config` (if any).
-    pub active_profile: Option<String>,
-
     /// The currently active project config, resolved by checking if cwd:
     /// is (1) part of a git repo, (2) a git worktree, or (3) just using the cwd
     pub active_project: ProjectConfig,
@@ -275,9 +261,6 @@ pub struct Config {
     /// or placeholder replacement will occur for fast keypress bursts.
     pub disable_paste_burst: bool,
 
-    /// OTEL configuration (exporter type, endpoint, headers, etc.).
-    pub otel: crate::config::types::OtelConfig,
-
     /// When `true`, allows falling back to HTTP providers if the model is not
     /// registered in the ACP registry. When `false` (the default), Codex runs
     /// in ACP-only mode and produces an error for unregistered models.
@@ -291,12 +274,7 @@ impl Config {
     ) -> std::io::Result<Self> {
         let codex_home = find_codex_home()?;
 
-        let root_value = load_resolved_config(
-            &codex_home,
-            cli_overrides,
-            crate::config_loader::LoaderOverrides::default(),
-        )
-        .await?;
+        let root_value = load_resolved_config(&codex_home, cli_overrides).await?;
 
         let cfg: ConfigToml = root_value.try_into().map_err(|e| {
             tracing::error!("Failed to deserialize overridden config: {e}");
@@ -311,12 +289,7 @@ pub async fn load_config_as_toml_with_cli_overrides(
     codex_home: &Path,
     cli_overrides: Vec<(String, TomlValue)>,
 ) -> std::io::Result<ConfigToml> {
-    let root_value = load_resolved_config(
-        codex_home,
-        cli_overrides,
-        crate::config_loader::LoaderOverrides::default(),
-    )
-    .await?;
+    let root_value = load_resolved_config(codex_home, cli_overrides).await?;
 
     let cfg: ConfigToml = root_value.try_into().map_err(|e| {
         tracing::error!("Failed to deserialize overridden config: {e}");
@@ -329,31 +302,13 @@ pub async fn load_config_as_toml_with_cli_overrides(
 async fn load_resolved_config(
     codex_home: &Path,
     cli_overrides: Vec<(String, TomlValue)>,
-    overrides: crate::config_loader::LoaderOverrides,
 ) -> std::io::Result<TomlValue> {
-    let layers = load_config_layers_with_overrides(codex_home, overrides).await?;
-    Ok(apply_overlays(layers, cli_overrides))
-}
-
-fn apply_overlays(
-    layers: LoadedConfigLayers,
-    cli_overrides: Vec<(String, TomlValue)>,
-) -> TomlValue {
-    let LoadedConfigLayers {
-        mut base,
-        managed_config,
-        managed_preferences,
-    } = layers;
+    let mut base = load_config_as_toml(codex_home).await?;
 
     for (path, value) in cli_overrides.into_iter() {
         apply_toml_override(&mut base, &path, value);
     }
-
-    for overlay in [managed_config, managed_preferences].into_iter().flatten() {
-        merge_toml_values(&mut base, &overlay);
-    }
-
-    base
+    Ok(base)
 }
 
 pub async fn load_global_mcp_servers(
@@ -642,13 +597,6 @@ pub struct ConfigToml {
     /// Token budget applied when storing tool/function outputs in the context manager.
     pub tool_output_token_limit: Option<usize>,
 
-    /// Profile to use from the `profiles` map.
-    pub profile: Option<String>,
-
-    /// Named profiles to facilitate switching between different configurations.
-    #[serde(default)]
-    pub profiles: HashMap<String, ConfigProfile>,
-
     /// Settings that govern if and what will be written to `~/.codex/history.jsonl`.
     #[serde(default)]
     pub history: Option<History>,
@@ -698,9 +646,6 @@ pub struct ConfigToml {
     /// or placeholder replacement will occur for fast keypress bursts.
     pub disable_paste_burst: Option<bool>,
 
-    /// OTEL configuration.
-    pub otel: Option<crate::config::types::OtelConfigToml>,
-
     /// Tracks whether the Windows onboarding screen has been acknowledged.
     pub windows_wsl_setup_acknowledged: Option<bool>,
 
@@ -735,12 +680,6 @@ pub struct AcpConfigToml {
 
 impl From<ConfigToml> for UserSavedConfig {
     fn from(config_toml: ConfigToml) -> Self {
-        let profiles = config_toml
-            .profiles
-            .into_iter()
-            .map(|(k, v)| (k, v.into()))
-            .collect();
-
         Self {
             approval_policy: config_toml.approval_policy,
             sandbox_mode: config_toml.sandbox_mode,
@@ -752,8 +691,6 @@ impl From<ConfigToml> for UserSavedConfig {
             model_reasoning_summary: config_toml.model_reasoning_summary,
             model_verbosity: config_toml.model_verbosity,
             tools: config_toml.tools.map(From::from),
-            profile: config_toml.profile,
-            profiles,
         }
     }
 }
@@ -803,11 +740,9 @@ impl ConfigToml {
     fn derive_sandbox_policy(
         &self,
         sandbox_mode_override: Option<SandboxMode>,
-        profile_sandbox_mode: Option<SandboxMode>,
         resolved_cwd: &Path,
     ) -> SandboxPolicyResolution {
         let resolved_sandbox_mode = sandbox_mode_override
-            .or(profile_sandbox_mode)
             .or(self.sandbox_mode)
             .or_else(|| {
                 // if no sandbox_mode is set, but user has marked directory as trusted or untrusted, use WorkspaceWrite
@@ -874,27 +809,6 @@ impl ConfigToml {
 
         None
     }
-
-    pub fn get_config_profile(
-        &self,
-        override_profile: Option<String>,
-    ) -> Result<ConfigProfile, std::io::Error> {
-        let profile = override_profile.or_else(|| self.profile.clone());
-
-        match profile {
-            Some(key) => {
-                if let Some(profile) = self.profiles.get(key.as_str()) {
-                    return Ok(profile.clone());
-                }
-
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("config profile `{key}` not found"),
-                ))
-            }
-            None => Ok(ConfigProfile::default()),
-        }
-    }
 }
 
 /// Optional overrides for user configuration (e.g., from CLI flags).
@@ -905,7 +819,6 @@ pub struct ConfigOverrides {
     pub approval_policy: Option<AskForApproval>,
     pub sandbox_mode: Option<SandboxMode>,
     pub model_provider: Option<String>,
-    pub config_profile: Option<String>,
     pub codex_linux_sandbox_exe: Option<PathBuf>,
     pub base_instructions: Option<String>,
     pub developer_instructions: Option<String>,
@@ -918,32 +831,15 @@ pub struct ConfigOverrides {
     pub additional_writable_roots: Vec<PathBuf>,
 }
 
-/// Resolves the OSS provider from CLI override, profile config, or global config.
+/// Resolves the OSS provider from a CLI override or global config.
 /// Returns `None` if no provider is configured at any level.
 pub fn resolve_oss_provider(
     explicit_provider: Option<&str>,
     config_toml: &ConfigToml,
-    config_profile: Option<String>,
 ) -> Option<String> {
-    if let Some(provider) = explicit_provider {
-        // Explicit provider specified (e.g., via --local-provider)
-        Some(provider.to_string())
-    } else {
-        // Check profile config first, then global config
-        let profile = config_toml.get_config_profile(config_profile).ok();
-        if let Some(profile) = &profile {
-            // Check if profile has an oss provider
-            if let Some(profile_oss_provider) = &profile.oss_provider {
-                Some(profile_oss_provider.clone())
-            }
-            // If not then check if the toml has an oss provider
-            else {
-                config_toml.oss_provider.clone()
-            }
-        } else {
-            config_toml.oss_provider.clone()
-        }
-    }
+    explicit_provider
+        .map(ToOwned::to_owned)
+        .or_else(|| config_toml.oss_provider.clone())
 }
 
 impl Config {
@@ -963,7 +859,6 @@ impl Config {
             approval_policy: approval_policy_override,
             sandbox_mode,
             model_provider,
-            config_profile: config_profile_key,
             codex_linux_sandbox_exe,
             base_instructions,
             developer_instructions,
@@ -975,31 +870,13 @@ impl Config {
             additional_writable_roots,
         } = overrides;
 
-        let active_profile_name = config_profile_key
-            .as_ref()
-            .or(cfg.profile.as_ref())
-            .cloned();
-        let config_profile = match active_profile_name.as_ref() {
-            Some(key) => cfg
-                .profiles
-                .get(key)
-                .ok_or_else(|| {
-                    std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        format!("config profile `{key}` not found"),
-                    )
-                })?
-                .clone(),
-            None => ConfigProfile::default(),
-        };
-
         let feature_overrides = FeatureOverrides {
             include_apply_patch_tool: include_apply_patch_tool_override,
             web_search_request: override_tools_web_search_request,
             experimental_sandbox_command_assessment: sandbox_command_assessment_override,
         };
 
-        let features = Features::from_config(&cfg, &config_profile, feature_overrides);
+        let features = Features::from_config(&cfg, feature_overrides);
         #[cfg(target_os = "windows")]
         {
             codex_sandbox::set_windows_sandbox_enabled(features.enabled(Feature::WindowsSandbox));
@@ -1044,7 +921,7 @@ impl Config {
         let SandboxPolicyResolution {
             policy: mut sandbox_policy,
             forced_auto_mode_downgraded_on_windows,
-        } = cfg.derive_sandbox_policy(sandbox_mode, config_profile.sandbox_mode, &resolved_cwd);
+        } = cfg.derive_sandbox_policy(sandbox_mode, &resolved_cwd);
         if let SandboxPolicy::WorkspaceWrite { writable_roots, .. } = &mut sandbox_policy {
             for path in additional_writable_roots {
                 if !writable_roots.iter().any(|existing| existing == &path) {
@@ -1053,7 +930,6 @@ impl Config {
             }
         }
         let approval_policy = approval_policy_override
-            .or(config_profile.approval_policy)
             .or(cfg.approval_policy)
             .unwrap_or_else(|| {
                 if active_project.is_trusted() {
@@ -1066,14 +942,6 @@ impl Config {
                     AskForApproval::default()
                 }
             });
-        let did_user_set_custom_approval_policy_or_sandbox_mode = approval_policy_override
-            .is_some()
-            || config_profile.approval_policy.is_some()
-            || cfg.approval_policy.is_some()
-            || sandbox_mode.is_some()
-            || config_profile.sandbox_mode.is_some()
-            || cfg.sandbox_mode.is_some();
-
         let mut model_providers = built_in_model_providers();
         // Merge user-defined providers into the built-in list.
         for (key, provider) in cfg.model_providers.into_iter() {
@@ -1081,7 +949,6 @@ impl Config {
         }
 
         let model_provider_id = model_provider
-            .or(config_profile.model_provider)
             .or(cfg.model_provider)
             .unwrap_or_else(|| "openai".to_string());
         let model_provider = model_providers
@@ -1117,10 +984,7 @@ impl Config {
 
         let forced_login_method = cfg.forced_login_method;
 
-        let model = model
-            .or(config_profile.model)
-            .or(cfg.model)
-            .unwrap_or_else(default_model);
+        let model = model.or(cfg.model).unwrap_or_else(default_model);
 
         let mut model_family =
             find_family_for_model(&model).unwrap_or_else(|| derive_default_model_family(&model));
@@ -1154,10 +1018,7 @@ impl Config {
         // Load base instructions override from a file if specified. If the
         // path is relative, resolve it against the effective cwd so the
         // behaviour matches other path-like config values.
-        let experimental_instructions_path = config_profile
-            .experimental_instructions_file
-            .as_ref()
-            .or(cfg.experimental_instructions_file.as_ref());
+        let experimental_instructions_path = cfg.experimental_instructions_file.as_ref();
         let file_base_instructions = Self::load_override_from_file(
             experimental_instructions_path,
             &resolved_cwd,
@@ -1166,10 +1027,7 @@ impl Config {
         let base_instructions = base_instructions.or(file_base_instructions);
         let developer_instructions = developer_instructions.or(cfg.developer_instructions);
 
-        let experimental_compact_prompt_path = config_profile
-            .experimental_compact_prompt_file
-            .as_ref()
-            .or(cfg.experimental_compact_prompt_file.as_ref());
+        let experimental_compact_prompt_path = cfg.experimental_compact_prompt_file.as_ref();
         let file_compact_prompt = Self::load_override_from_file(
             experimental_compact_prompt_path,
             &resolved_cwd,
@@ -1189,7 +1047,6 @@ impl Config {
             cwd: resolved_cwd,
             approval_policy,
             sandbox_policy,
-            did_user_set_custom_approval_policy_or_sandbox_mode,
             forced_auto_mode_downgraded_on_windows,
             shell_environment_policy,
             notify: cfg.notify,
@@ -1230,14 +1087,9 @@ impl Config {
                 .show_raw_agent_reasoning
                 .or(show_raw_agent_reasoning)
                 .unwrap_or(false),
-            model_reasoning_effort: config_profile
-                .model_reasoning_effort
-                .or(cfg.model_reasoning_effort),
-            model_reasoning_summary: config_profile
-                .model_reasoning_summary
-                .or(cfg.model_reasoning_summary)
-                .unwrap_or_default(),
-            model_verbosity: config_profile.model_verbosity.or(cfg.model_verbosity),
+            model_reasoning_effort: cfg.model_reasoning_effort,
+            model_reasoning_summary: cfg.model_reasoning_summary.unwrap_or_default(),
+            model_verbosity: cfg.model_verbosity,
             forced_chatgpt_workspace_id,
             forced_login_method,
             include_apply_patch_tool: include_apply_patch_tool_flag,
@@ -1246,7 +1098,6 @@ impl Config {
             use_experimental_unified_exec_tool,
             use_experimental_use_rmcp_client,
             features,
-            active_profile: active_profile_name,
             active_project,
             windows_wsl_setup_acknowledged: cfg.windows_wsl_setup_acknowledged.unwrap_or(false),
             notices: cfg.notice.unwrap_or_default(),
@@ -1268,19 +1119,6 @@ impl Config {
                 .as_ref()
                 .map(|t| t.custom_working_message_list.clone())
                 .unwrap_or_default(),
-            otel: {
-                let t: OtelConfigToml = cfg.otel.unwrap_or_default();
-                let log_user_prompt = t.log_user_prompt.unwrap_or(false);
-                let environment = t
-                    .environment
-                    .unwrap_or(DEFAULT_OTEL_ENVIRONMENT.to_string());
-                let exporter = t.exporter.unwrap_or(OtelExporterKind::None);
-                OtelConfig {
-                    log_user_prompt,
-                    environment,
-                    exporter,
-                }
-            },
             acp_allow_http_fallback: cfg.acp.map(|a| a.allow_http_fallback).unwrap_or(false),
         };
         Ok(config)

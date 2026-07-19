@@ -2,175 +2,6 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
-    let fixture = create_test_fixture()?;
-
-    let zdr_profile_overrides = ConfigOverrides {
-        config_profile: Some("zdr".to_string()),
-        cwd: Some(fixture.cwd()),
-        ..Default::default()
-    };
-    let zdr_profile_config = Config::load_from_base_config_with_overrides(
-        fixture.cfg.clone(),
-        zdr_profile_overrides,
-        fixture.codex_home(),
-    )?;
-    let expected_zdr_profile_config = Config {
-        model: "o3".to_string(),
-        model_family: find_family_for_model("o3").expect("known model slug"),
-        model_context_window: Some(200_000),
-        model_auto_compact_token_limit: Some(180_000),
-        model_provider_id: "openai".to_string(),
-        model_provider: fixture.openai_provider.clone(),
-        approval_policy: AskForApproval::OnFailure,
-        sandbox_policy: SandboxPolicy::new_read_only_policy(),
-        did_user_set_custom_approval_policy_or_sandbox_mode: true,
-        forced_auto_mode_downgraded_on_windows: false,
-        shell_environment_policy: ShellEnvironmentPolicy::default(),
-        user_instructions: None,
-        notify: None,
-        cwd: fixture.cwd(),
-        cli_auth_credentials_store_mode: Default::default(),
-        mcp_servers: HashMap::new(),
-        mcp_oauth_credentials_store_mode: Default::default(),
-        model_providers: fixture.model_provider_map.clone(),
-        project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
-        project_doc_fallback_filenames: Vec::new(),
-        tool_output_token_limit: None,
-        codex_home: fixture.codex_home(),
-        history: History::default(),
-        file_opener: UriBasedFileOpener::VsCode,
-        codex_linux_sandbox_exe: None,
-        hide_agent_reasoning: false,
-        show_raw_agent_reasoning: false,
-        model_reasoning_effort: None,
-        model_reasoning_summary: ReasoningSummary::default(),
-        model_verbosity: None,
-
-        base_instructions: None,
-        developer_instructions: None,
-        compact_prompt: None,
-        forced_chatgpt_workspace_id: None,
-        forced_login_method: None,
-        include_apply_patch_tool: false,
-        tools_web_search_request: false,
-        experimental_sandbox_command_assessment: false,
-        use_experimental_unified_exec_tool: false,
-        use_experimental_use_rmcp_client: false,
-        features: Features::with_defaults(),
-        active_profile: Some("zdr".to_string()),
-        active_project: ProjectConfig { trust_level: None },
-        windows_wsl_setup_acknowledged: false,
-        notices: Default::default(),
-        check_for_update_on_startup: true,
-        disable_paste_burst: false,
-        tui_notifications: true,
-        animations: true,
-        custom_working_messages: true,
-        custom_working_message_list: Vec::new(),
-        otel: OtelConfig::default(),
-        acp_allow_http_fallback: false,
-    };
-
-    assert_eq!(expected_zdr_profile_config, zdr_profile_config);
-
-    Ok(())
-}
-
-#[test]
-fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
-    let fixture = create_test_fixture()?;
-
-    let gpt5_profile_overrides = ConfigOverrides {
-        config_profile: Some("gpt5".to_string()),
-        cwd: Some(fixture.cwd()),
-        ..Default::default()
-    };
-    let gpt5_profile_config = Config::load_from_base_config_with_overrides(
-        fixture.cfg.clone(),
-        gpt5_profile_overrides,
-        fixture.codex_home(),
-    )?;
-    let expected_gpt5_profile_config = Config {
-        model: "gpt-5.1".to_string(),
-        model_family: find_family_for_model("gpt-5.1").expect("known model slug"),
-        model_context_window: Some(272_000),
-        model_auto_compact_token_limit: Some(244_800),
-        model_provider_id: "openai".to_string(),
-        model_provider: fixture.openai_provider.clone(),
-        approval_policy: AskForApproval::OnFailure,
-        sandbox_policy: SandboxPolicy::new_read_only_policy(),
-        did_user_set_custom_approval_policy_or_sandbox_mode: true,
-        forced_auto_mode_downgraded_on_windows: false,
-        shell_environment_policy: ShellEnvironmentPolicy::default(),
-        user_instructions: None,
-        notify: None,
-        cwd: fixture.cwd(),
-        cli_auth_credentials_store_mode: Default::default(),
-        mcp_servers: HashMap::new(),
-        mcp_oauth_credentials_store_mode: Default::default(),
-        model_providers: fixture.model_provider_map.clone(),
-        project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
-        project_doc_fallback_filenames: Vec::new(),
-        tool_output_token_limit: None,
-        codex_home: fixture.codex_home(),
-        history: History::default(),
-        file_opener: UriBasedFileOpener::VsCode,
-        codex_linux_sandbox_exe: None,
-        hide_agent_reasoning: false,
-        show_raw_agent_reasoning: false,
-        model_reasoning_effort: Some(ReasoningEffort::High),
-        model_reasoning_summary: ReasoningSummary::Detailed,
-        model_verbosity: Some(Verbosity::High),
-
-        base_instructions: None,
-        developer_instructions: None,
-        compact_prompt: None,
-        forced_chatgpt_workspace_id: None,
-        forced_login_method: None,
-        include_apply_patch_tool: false,
-        tools_web_search_request: false,
-        experimental_sandbox_command_assessment: false,
-        use_experimental_unified_exec_tool: false,
-        use_experimental_use_rmcp_client: false,
-        features: Features::with_defaults(),
-        active_profile: Some("gpt5".to_string()),
-        active_project: ProjectConfig { trust_level: None },
-        windows_wsl_setup_acknowledged: false,
-        notices: Default::default(),
-        check_for_update_on_startup: true,
-        disable_paste_burst: false,
-        tui_notifications: true,
-        animations: true,
-        custom_working_messages: true,
-        custom_working_message_list: Vec::new(),
-        otel: OtelConfig::default(),
-        acp_allow_http_fallback: false,
-    };
-
-    assert_eq!(expected_gpt5_profile_config, gpt5_profile_config);
-
-    Ok(())
-}
-
-#[test]
-fn test_did_user_set_custom_approval_policy_or_sandbox_mode_defaults_no() -> anyhow::Result<()> {
-    let fixture = create_test_fixture()?;
-
-    let config = Config::load_from_base_config_with_overrides(
-        fixture.cfg.clone(),
-        ConfigOverrides {
-            ..Default::default()
-        },
-        fixture.codex_home(),
-    )?;
-
-    assert!(config.did_user_set_custom_approval_policy_or_sandbox_mode);
-
-    Ok(())
-}
-
-#[test]
 fn test_set_project_trusted_writes_explicit_tables() -> anyhow::Result<()> {
     let project_dir = Path::new("/some/path");
     let mut doc = DocumentMut::new();
@@ -311,7 +142,7 @@ trust_level = "untrusted"
     let cfg = toml::from_str::<ConfigToml>(config_with_untrusted)
         .expect("TOML deserialization should succeed");
 
-    let resolution = cfg.derive_sandbox_policy(None, None, &PathBuf::from("/tmp/test"));
+    let resolution = cfg.derive_sandbox_policy(None, &PathBuf::from("/tmp/test"));
 
     // Verify that untrusted projects get WorkspaceWrite (or ReadOnly on Windows due to downgrade)
     if cfg!(target_os = "windows") {
@@ -334,25 +165,8 @@ trust_level = "untrusted"
 #[test]
 fn test_resolve_oss_provider_explicit_override() {
     let config_toml = ConfigToml::default();
-    let result = resolve_oss_provider(Some("custom-provider"), &config_toml, None);
+    let result = resolve_oss_provider(Some("custom-provider"), &config_toml);
     assert_eq!(result, Some("custom-provider".to_string()));
-}
-
-#[test]
-fn test_resolve_oss_provider_from_profile() {
-    let mut profiles = std::collections::HashMap::new();
-    let profile = ConfigProfile {
-        oss_provider: Some("profile-provider".to_string()),
-        ..Default::default()
-    };
-    profiles.insert("test-profile".to_string(), profile);
-    let config_toml = ConfigToml {
-        profiles,
-        ..Default::default()
-    };
-
-    let result = resolve_oss_provider(None, &config_toml, Some("test-profile".to_string()));
-    assert_eq!(result, Some("profile-provider".to_string()));
 }
 
 #[test]
@@ -362,51 +176,25 @@ fn test_resolve_oss_provider_from_global_config() {
         ..Default::default()
     };
 
-    let result = resolve_oss_provider(None, &config_toml, None);
-    assert_eq!(result, Some("global-provider".to_string()));
-}
-
-#[test]
-fn test_resolve_oss_provider_profile_fallback_to_global() {
-    let mut profiles = std::collections::HashMap::new();
-    let profile = ConfigProfile::default(); // No oss_provider set
-    profiles.insert("test-profile".to_string(), profile);
-    let config_toml = ConfigToml {
-        oss_provider: Some("global-provider".to_string()),
-        profiles,
-        ..Default::default()
-    };
-
-    let result = resolve_oss_provider(None, &config_toml, Some("test-profile".to_string()));
+    let result = resolve_oss_provider(None, &config_toml);
     assert_eq!(result, Some("global-provider".to_string()));
 }
 
 #[test]
 fn test_resolve_oss_provider_none_when_not_configured() {
     let config_toml = ConfigToml::default();
-    let result = resolve_oss_provider(None, &config_toml, None);
+    let result = resolve_oss_provider(None, &config_toml);
     assert_eq!(result, None);
 }
 
 #[test]
-fn test_resolve_oss_provider_explicit_overrides_all() {
-    let mut profiles = std::collections::HashMap::new();
-    let profile = ConfigProfile {
-        oss_provider: Some("profile-provider".to_string()),
-        ..Default::default()
-    };
-    profiles.insert("test-profile".to_string(), profile);
+fn test_resolve_oss_provider_explicit_overrides_global() {
     let config_toml = ConfigToml {
         oss_provider: Some("global-provider".to_string()),
-        profiles,
         ..Default::default()
     };
 
-    let result = resolve_oss_provider(
-        Some("explicit-provider"),
-        &config_toml,
-        Some("test-profile".to_string()),
-    );
+    let result = resolve_oss_provider(Some("explicit-provider"), &config_toml);
     assert_eq!(result, Some("explicit-provider".to_string()));
 }
 
