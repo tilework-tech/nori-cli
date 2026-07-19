@@ -373,10 +373,11 @@ impl AcpBackend {
                                         .prompt_result_tx
                                         .send(session_reducer::InboundEvent::PromptFailed {
                                             failure: Some(crate::normalized::TurnFailure::Fatal),
-                                        })
-                                        .await;
+                                    })
+                                    .await;
                                 }
                             }
+                            break;
                         }
                         None => break,
                     }
@@ -472,6 +473,9 @@ impl AcpBackend {
                     }
                 }
             }
+        }
+        if let Some(abort) = backend.runtime_task_abort.lock().await.take() {
+            abort.abort();
         }
     }
 }
