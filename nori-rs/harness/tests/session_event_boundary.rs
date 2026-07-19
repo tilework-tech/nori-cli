@@ -527,6 +527,115 @@ async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
 
 #[tokio::test]
 #[serial]
+async fn ordered_prompt_content_reaches_the_acp_agent_unchanged() {
+    let temp = tempfile::tempdir().expect("create session directory");
+    let wire_log_dir = temp.path().join("acp-wire");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        acp_proxy: nori_config::AcpProxyConfig {
+            enabled: true,
+            log_dir: wire_log_dir.clone(),
+        },
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    tokio::time::timeout(Duration::from_secs(10), session.handle.get_session_config())
+        .await
+        .expect("session bootstrap should complete")
+        .expect("session config should be available");
+
+    let prompt = vec![
+        acp::v1::ContentBlock::Image(acp::v1::ImageContent::new("aW1hZ2U=", "image/png")),
+        acp::v1::ContentBlock::Text(acp::v1::TextContent::new("first text")),
+        acp::v1::ContentBlock::ResourceLink(acp::v1::ResourceLink::new(
+            "notes",
+            "file:///tmp/notes.md",
+        )),
+        acp::v1::ContentBlock::Text(acp::v1::TextContent::new("second text")),
+    ];
+    let prompt_request_id = session
+        .handle
+        .prompt(prompt.clone())
+        .await
+        .expect("submit mixed-content prompt");
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            match session
+                .events
+                .recv()
+                .await
+                .expect("session event stream closed during prompt")
+            {
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id,
+                    response: Ok(acp::v1::AgentResponse::PromptResponse(_)),
+                }) if request_id == prompt_request_id => break,
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id,
+                    response: Err(error),
+                }) if request_id == prompt_request_id => {
+                    panic!("mixed-content prompt failed: {error:?}")
+                }
+                SessionEvent::Nori(NoriEvent::RequestFailed(failure))
+                    if failure.request_id.as_ref() == Some(&prompt_request_id) =>
+                {
+                    panic!("mixed-content prompt failed: {failure:?}")
+                }
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("mixed-content prompt should complete");
+
+    session.handle.shutdown().await.expect("shutdown session");
+    collect_until_session_ended(&mut session).await;
+
+    let mut wire_logs = std::fs::read_dir(&wire_log_dir)
+        .expect("wire log directory")
+        .map(|entry| entry.expect("wire log entry").path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "jsonl")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        wire_logs.len(),
+        1,
+        "one ACP child should produce one wire log"
+    );
+    let wire_log = wire_logs.pop().expect("ACP wire log");
+    let expected_request_id =
+        serde_json::to_value(&prompt_request_id).expect("serialize prompt request ID");
+    let recorded_prompt = std::fs::read_to_string(wire_log)
+        .expect("read ACP wire log")
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("valid wire log line"))
+        .find(|record| {
+            record["direction"] == "client_to_agent"
+                && record["message"]["method"] == "session/prompt"
+                && record["message"]["id"] == expected_request_id
+        })
+        .expect("recorded correlated session/prompt request");
+
+    assert_eq!(
+        recorded_prompt["message"]["params"]["prompt"],
+        serde_json::to_value(prompt).expect("serialize expected prompt")
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn delegated_permission_round_trips_as_raw_acp_with_the_same_request_id() {
     let temp = tempfile::tempdir().expect("create session directory");
     let config = NoriConfig {

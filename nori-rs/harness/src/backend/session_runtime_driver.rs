@@ -653,9 +653,9 @@ impl AcpBackend {
                         event_id: format!("goal-continuation-{}", uuid::Uuid::new_v4()),
                         kind:
                             crate::normalized::session_runtime::QueuedPromptKind::GoalContinuation,
-                        text: prompt_text,
+                        text: prompt_text.clone(),
+                        content: vec![acp::ContentBlock::Text(acp::TextContent::new(prompt_text))],
                         display_text: None,
-                        images: Vec::new(),
                     },
                 ),
             ))

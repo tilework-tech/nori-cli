@@ -192,8 +192,8 @@ pub struct QueuedPrompt {
     pub event_id: String,
     pub kind: QueuedPromptKind,
     pub text: String,
+    pub content: Vec<acp::ContentBlock>,
     pub display_text: Option<String>,
-    pub images: Vec<acp::ContentBlock>,
 }
 
 // ---------------------------------------------------------------------------

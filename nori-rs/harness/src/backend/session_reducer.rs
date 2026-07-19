@@ -171,13 +171,6 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
     let phase_before = session_phase_label(&runtime.phase);
     let request_id = new_request_id();
 
-    // Build ACP content blocks from the queued prompt.
-    let mut content_blocks = Vec::new();
-    if !prompt.text.is_empty() {
-        content_blocks.push(acp::ContentBlock::Text(acp::TextContent::new(&prompt.text)));
-    }
-    content_blocks.extend(prompt.images.clone());
-
     runtime.phase = SessionPhase::Prompt {
         request_id: request_id.clone(),
         cancelling: false,
@@ -209,7 +202,7 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
 
     out.side_effects.push(SideEffect::SendPrompt {
         request_id,
-        prompt: content_blocks,
+        prompt: prompt.content,
     });
 }
 

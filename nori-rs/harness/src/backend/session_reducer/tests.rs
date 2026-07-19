@@ -22,13 +22,17 @@ fn new_normalizer() -> ClientEventNormalizer {
     ClientEventNormalizer::default()
 }
 
+fn text_content(text: &str) -> Vec<acp::ContentBlock> {
+    vec![acp::ContentBlock::Text(acp::TextContent::new(text))]
+}
+
 fn simple_prompt() -> QueuedPrompt {
     QueuedPrompt {
         event_id: "evt-1".to_string(),
         kind: QueuedPromptKind::User,
         text: "hello".to_string(),
+        content: text_content("hello"),
         display_text: Some("hello".to_string()),
-        images: Vec::new(),
     }
 }
 
@@ -161,8 +165,8 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
         event_id: "goal-continuation-1".to_string(),
         kind: QueuedPromptKind::GoalContinuation,
         text: "Continue working toward the active thread goal.".to_string(),
+        content: text_content("Continue working toward the active thread goal."),
         display_text: None,
-        images: Vec::new(),
     };
     let out = reduce(
         &mut rt,
@@ -408,8 +412,8 @@ fn prompt_submit_while_active_queues() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -441,8 +445,8 @@ fn end_turn_drains_queue() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -490,8 +494,8 @@ fn cancelled_does_not_drain_queue() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );

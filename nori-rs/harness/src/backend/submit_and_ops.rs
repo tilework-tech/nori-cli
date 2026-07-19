@@ -224,8 +224,10 @@ impl AcpBackend {
                         event_id: id.to_string(),
                         kind: crate::normalized::session_runtime::QueuedPromptKind::Compact,
                         text: SUMMARIZATION_PROMPT.to_string(),
+                        content: vec![acp::ContentBlock::Text(acp::TextContent::new(
+                            SUMMARIZATION_PROMPT,
+                        ))],
                         display_text: None,
-                        images: Vec::new(),
                     },
                 ),
             ))

@@ -111,6 +111,11 @@ async fn list_sessions(PathBuf) -> Result<Vec<acp::v1::SessionInfo>>;
 async fn close_session() -> Result<()>;
 ```
 
+Prompt content is canonical as an ordered `Vec<ContentBlock>` and is forwarded
+to ACP without regrouping or reordering blocks. Text used by hooks, display,
+and persistence is a derived projection only and does not replace or
+reconstruct the wire prompt.
+
 History, prompt discovery, undo listing, goal lookup, session listing, and
 config calls return typed values directly. A consumer does not wait for a Nori
 response event or use a generic operation enum. ACP-backed methods still leave

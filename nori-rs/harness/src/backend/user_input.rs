@@ -7,27 +7,27 @@ impl AcpBackend {
         content: Vec<acp::ContentBlock>,
         id: &str,
     ) -> Result<()> {
-        let mut prompt_text = String::new();
-        let mut non_text_blocks = Vec::new();
-        for block in content {
-            match block {
-                acp::ContentBlock::Text(text) => {
-                    if !prompt_text.is_empty() {
-                        prompt_text.push('\n');
-                    }
-                    prompt_text.push_str(&text.text);
+        let prompt_text = content
+            .iter()
+            .filter_map(|block| match block {
+                acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .fold(String::new(), |mut prompt_text, text| {
+                if !prompt_text.is_empty() {
+                    prompt_text.push('\n');
                 }
-                block => non_text_blocks.push(block),
-            }
-        }
+                prompt_text.push_str(text);
+                prompt_text
+            });
 
-        if prompt_text.is_empty() && non_text_blocks.is_empty() {
+        if prompt_text.is_empty() && content.is_empty() {
             return Ok(());
         }
 
         // For image-only prompts, use a placeholder for downstream consumers
         // (hooks, transcript, summary, snapshot labels) that expect non-empty text.
-        let display_text = if prompt_text.is_empty() && !non_text_blocks.is_empty() {
+        let display_text = if prompt_text.is_empty() && !content.is_empty() {
             "[attachment]".to_string()
         } else {
             prompt_text.clone()
@@ -145,7 +145,7 @@ impl AcpBackend {
         let prompt_with_context = if let Some(ctx) = self.pending_hook_context.lock().await.take() {
             format!("{ctx}\n{prompt_text}")
         } else {
-            prompt_text
+            prompt_text.clone()
         };
         let prompt_with_goal_context = self
             .prepend_goal_context_to_prompt(prompt_with_context)
@@ -159,6 +159,21 @@ impl AcpBackend {
         } else {
             prompt_with_goal_context
         };
+
+        // Internal context is an additional leading block. The caller's ACP
+        // content remains an ordered subsequence of the wire prompt.
+        let mut final_content = content;
+        if final_prompt_text != prompt_text {
+            let injected_prefix = final_prompt_text
+                .strip_suffix(&prompt_text)
+                .unwrap_or(&final_prompt_text);
+            if !injected_prefix.is_empty() {
+                final_content.insert(
+                    0,
+                    acp::ContentBlock::Text(acp::TextContent::new(injected_prefix)),
+                );
+            }
+        }
 
         let (phase_before_submit, active_request_id_before_submit, queue_len_before_submit) = {
             let driver = self.session_driver.lock().await;
@@ -177,7 +192,7 @@ impl AcpBackend {
                 .unwrap_or("<none>"),
             queue_len_before_submit,
             prompt_text_len = final_prompt_text.len(),
-            attachments = non_text_blocks.len(),
+            content_blocks = final_content.len(),
             "Accepted user prompt into ACP backend"
         );
 
@@ -189,8 +204,8 @@ impl AcpBackend {
                         event_id: id.to_string(),
                         kind: crate::normalized::session_runtime::QueuedPromptKind::User,
                         text: final_prompt_text,
+                        content: final_content,
                         display_text: Some(prompt_text_for_hooks),
-                        images: non_text_blocks,
                     },
                 ),
             ))
