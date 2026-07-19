@@ -688,3 +688,16 @@ fn vim_escape_then_a_then_escape_returns_to_same_position() {
     t.input(esc_key());
     pretty_assertions::assert_eq!(t.cursor(), 2); // back where we started
 }
+
+#[test]
+fn set_text_preserves_vim_linewise_yank_buffer() {
+    let mut t = vim_normal("hello\nworld");
+    t.set_cursor(8);
+    t.input(shift_key('Y'));
+
+    t.set_text("target");
+    t.set_cursor(0);
+    t.input(key('p'));
+
+    pretty_assertions::assert_eq!(t.text(), "target\nworld");
+}

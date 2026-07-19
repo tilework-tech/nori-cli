@@ -144,14 +144,9 @@ async fn quit_never_disabled_on_cloud_session() {
 
     assert_matches!(op_rx.try_recv(), Ok(Op::Shutdown));
     let feedback = cells_to_text(&drain_insert_history(&mut rx));
-    assert!(
-        feedback.contains("Exiting"),
-        "quit on a cloud session must still begin the exit with feedback, got: {feedback:?}"
-    );
-    assert!(
-        !feedback.contains("unavailable"),
-        "quit must never be marked unavailable by scope, got: {feedback:?}"
-    );
+    assert!(feedback.contains("This session keeps running in the cloud."));
+    assert!(!feedback.contains("unavailable"));
+    assert!(render_bottom_popup(&chat, 80).contains("› Exiting…"));
 }
 
 /// Snapshot: with cloud capabilities the slash popup rows for local-only

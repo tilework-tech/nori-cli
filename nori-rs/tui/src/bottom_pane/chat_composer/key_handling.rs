@@ -5,6 +5,9 @@ use nori_config::VimEnterBehavior;
 impl ChatComposer {
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
+        if !self.input_enabled {
+            return (InputResult::None, false);
+        }
         let result = match &mut self.active_popup {
             ActivePopup::Command(_) => self.handle_key_event_with_slash_popup(key_event),
             ActivePopup::Skill(_) => self.handle_key_event_with_skill_popup(key_event),
@@ -487,7 +490,7 @@ impl ChatComposer {
                 let selected = popup.selected_text().map(String::from);
                 self.active_popup = ActivePopup::None;
                 if let Some(text) = selected {
-                    self.set_text_content(text);
+                    self.set_history_content(text);
                 }
                 (InputResult::None, true)
             }
@@ -631,7 +634,7 @@ impl ChatComposer {
                         _ => unreachable!(),
                     };
                     if let Some(text) = replace_text {
-                        self.set_text_content(text);
+                        self.set_history_content(text);
                         return (InputResult::None, true);
                     }
                 }
@@ -676,13 +679,7 @@ impl ChatComposer {
                 }
 
                 if self.is_shell_mode {
-                    let mut body = self.textarea.text().to_string();
-                    for (placeholder, actual) in &self.pending_pastes {
-                        if body.contains(placeholder) {
-                            body = body.replace(placeholder, actual);
-                        }
-                    }
-                    self.pending_pastes.clear();
+                    let body = self.expand_pending_pastes(self.textarea.text().to_string());
                     self.textarea.set_text("");
                     self.is_shell_mode = false;
                     if body.trim().is_empty() {
@@ -730,14 +727,8 @@ impl ChatComposer {
                 // If we have pending placeholder pastes, replace them in the textarea text
                 // and continue to the normal submission flow to handle slash commands.
                 if !self.pending_pastes.is_empty() {
-                    let mut text = self.textarea.text().to_string();
-                    for (placeholder, actual) in &self.pending_pastes {
-                        if text.contains(placeholder) {
-                            text = text.replace(placeholder, actual);
-                        }
-                    }
+                    let text = self.expand_pending_pastes(self.textarea.text().to_string());
                     self.textarea.set_text(&text);
-                    self.pending_pastes.clear();
                 }
 
                 // During a paste-like burst, treat Enter as a newline instead of submit.
@@ -755,14 +746,6 @@ impl ChatComposer {
                 let original_input = text.clone();
                 let input_starts_with_space = original_input.starts_with(' ');
                 self.textarea.set_text("");
-
-                // Replace all pending pastes in the text
-                for (placeholder, actual) in &self.pending_pastes {
-                    if text.contains(placeholder) {
-                        text = text.replace(placeholder, actual);
-                    }
-                }
-                self.pending_pastes.clear();
 
                 // If there is neither text nor attachments, suppress submission entirely.
                 let has_attachments = !self.attached_images.is_empty();
@@ -1147,6 +1130,18 @@ impl ChatComposer {
         }
 
         false
+    }
+
+    fn expand_pending_pastes(&mut self, mut text: String) -> String {
+        self.pending_pastes
+            .sort_by(|(left, _), (right, _)| right.len().cmp(&left.len()));
+        for (placeholder, actual) in &self.pending_pastes {
+            if text.contains(placeholder) {
+                text = text.replace(placeholder, actual);
+            }
+        }
+        self.pending_pastes.clear();
+        text
     }
 
     pub(super) fn handle_shortcut_overlay_key(&mut self, key_event: &KeyEvent) -> bool {

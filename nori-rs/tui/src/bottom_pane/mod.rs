@@ -271,6 +271,12 @@ impl BottomPane {
         }
     }
 
+    pub(crate) fn show_exit_in_progress(&mut self) {
+        self.view_stack.clear();
+        self.composer.show_exit_in_progress();
+        self.request_redraw();
+    }
+
     pub fn handle_paste(&mut self, pasted: String) {
         if let Some(view) = self.view_stack.last_mut() {
             let needs_redraw = view.handle_paste(pasted);

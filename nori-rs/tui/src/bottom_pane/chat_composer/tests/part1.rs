@@ -496,3 +496,109 @@ fn handle_paste_large_uses_placeholder_and_replaces_on_submit() {
     }
     assert!(composer.pending_pastes.is_empty());
 }
+
+#[test]
+fn paste_normalizes_newlines_and_sanitizes_terminal_controls() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    composer.handle_paste("one\r\ntwo\rthree\t_count_r\x1b[13;2:3uows\n\0four\u{7f}".to_string());
+
+    assert_eq!(
+        composer.current_text(),
+        "one\ntwo\nthree\t_count_rows\nfour"
+    );
+}
+
+#[test]
+fn equal_length_large_pastes_expand_in_order_on_submit() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    let first = "a".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+    let second = "b".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+    let base = format!("[Pasted Content {} chars]", first.chars().count());
+
+    composer.handle_paste(first.clone());
+    composer.handle_paste(second.clone());
+
+    assert_eq!(composer.current_text(), format!("{base}{base} #2"));
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Submitted(format!("{first}{second}")));
+}
+
+#[test]
+fn equal_length_large_pastes_expand_in_order_in_shell_mode() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    let first = "a".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+    let second = "b".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+
+    composer.handle_paste(format!("!{first}"));
+    composer.handle_paste(second.clone());
+
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Submitted(format!("!{first}{second}")));
+}
+
+#[test]
+fn history_recall_places_cursor_at_end_and_keeps_navigating() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    composer.history.record_local_submission("older");
+    composer.history.record_local_submission("newer\nentry");
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(composer.current_text(), "newer\nentry");
+    assert_eq!(composer.textarea.cursor(), "newer\nentry".len());
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(composer.current_text(), "older");
+    assert_eq!(composer.textarea.cursor(), "older".len());
+}
+
+#[test]
+fn asynchronous_history_recall_places_cursor_at_end() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    composer.set_history_metadata(7, 1);
+    composer.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+
+    assert!(composer.on_history_entry_response(7, 0, Some("remote\nentry".to_string())));
+    assert_eq!(composer.current_text(), "remote\nentry");
+    assert_eq!(composer.textarea.cursor(), "remote\nentry".len());
+}

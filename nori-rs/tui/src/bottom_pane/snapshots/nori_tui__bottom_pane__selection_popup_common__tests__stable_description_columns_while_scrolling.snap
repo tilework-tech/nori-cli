@@ -1,0 +1,10 @@
+---
+source: tui/src/bottom_pane/selection_popup_common.rs
+expression: "format!(\"before:\\n{}\\nafter:\\n{}\", buffer_text(&before), buffer_text(&after))"
+---
+before:
+exceptionally-long-command  § first
+a                           § second
+after:
+a                           § second
+b                           § third

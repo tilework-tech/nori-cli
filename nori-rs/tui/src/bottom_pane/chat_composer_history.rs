@@ -87,10 +87,10 @@ impl ChatComposerHistory {
             return true;
         }
 
-        // Textarea is not empty – only navigate when cursor is at start and
-        // text matches last recalled history entry so regular editing is not
-        // hijacked.
-        if cursor != 0 {
+        // Recalled entries keep the cursor at the end for shell-like history
+        // traversal. Preserve start-of-line compatibility while allowing both
+        // boundaries; interior multiline positions remain normal cursor moves.
+        if cursor != 0 && cursor != text.len() {
             return false;
         }
 

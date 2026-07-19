@@ -5,5 +5,5 @@ expression: terminal.backend()
 "                                                            "
 "/ mo                                                        "
 "                                                            "
-"  /model   choose what model and reasoning effort to use    "
-"  /memory  show the contents of all active instruction files"
+"  /model            choose what model and reasoning effort  "
+"                    to use                                  "

@@ -275,3 +275,15 @@ fn yank_restores_last_kill() {
     assert_eq!(t.text(), "hello");
     assert_eq!(t.cursor(), 5);
 }
+
+#[test]
+fn set_text_preserves_characterwise_kill_buffer() {
+    let mut t = ta_with("hello world");
+    t.set_cursor(5);
+    t.kill_to_end_of_line();
+
+    t.set_text("");
+    t.yank();
+
+    pretty_assertions::assert_eq!(t.text(), " world");
+}
