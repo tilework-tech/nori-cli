@@ -684,7 +684,7 @@ impl AcpBackend {
                     .lock()
                     .await
                     .remove(&prompt_event_id);
-                let (prompt_phase_tx, prompt_phase_rx) = oneshot::channel();
+                let (prompt_phase_tx, prompt_phase_rx) = tokio::sync::watch::channel(false);
                 *self.prompt_phase_gate.lock().await = Some(prompt_phase_rx);
                 let (transport_started_tx, transport_started_rx) = oneshot::channel();
                 let backend = (*self).clone();
@@ -700,7 +700,7 @@ impl AcpBackend {
                         content_blocks = prompt.len(),
                         "Sending ACP session/prompt request"
                     );
-                    let result = backend
+                    let (wire_request_id, result) = backend
                         .connection
                         .prompt_with_request_id(session_id, prompt, Some(transport_started_tx))
                         .await;
@@ -708,7 +708,7 @@ impl AcpBackend {
                         Ok(stop_reason) => {
                             debug!(
                                 target: "acp_event_flow",
-                                request_id = %request_id_for_task,
+                                request_id = %wire_request_id,
                                 ?stop_reason,
                                 "Prompt task received ACP session/prompt response"
                             );
@@ -719,11 +719,13 @@ impl AcpBackend {
                         Err(err) => {
                             warn!(
                                 target: "acp_event_flow",
-                                request_id = %request_id_for_task,
+                                request_id = %wire_request_id,
                                 error = %err,
                                 "Prompt task failed before reducer observed a prompt response"
                             );
-                            let failure = backend.send_prompt_error(prompt_kind, &err).await;
+                            let failure = backend
+                                .send_prompt_error(&wire_request_id, prompt_kind, &err)
+                                .await;
                             let _ = prompt_result_tx
                                 .send(InboundEvent::PromptFailed {
                                     failure: Some(failure),
@@ -763,7 +765,7 @@ impl AcpBackend {
                         }
                     }
                 }
-                let _ = prompt_phase_tx.send(());
+                let _ = prompt_phase_tx.send(true);
             }
             SideEffect::SendCancel => {
                 let session_id = self.session_id.read().await.clone();
@@ -813,10 +815,11 @@ impl AcpBackend {
         }
     }
 
-    /// Surface a failed prompt as an `EventMsg::Error` (for display) and report
-    /// its disposition so the caller can attach it to the prompt completion.
+    /// Publish a correlated prompt failure and return its disposition for the
+    /// reducer-owned completion.
     async fn send_prompt_error(
         &self,
+        request_id: &nori_protocol::acp::v1::RequestId,
         prompt_kind: QueuedPromptKind,
         err: &anyhow::Error,
     ) -> crate::normalized::TurnFailure {
@@ -827,13 +830,16 @@ impl AcpBackend {
             }
             QueuedPromptKind::User => {
                 let error_string = format!("{err:?}");
-                let AcpErrorDetails { category, detail } = categorize_acp_error_chain(err);
-                // Top-level Display only: the alternate form (`{err:#}`) walks
-                // the anyhow chain into `acp::Error`'s Display, which dumps the
-                // pretty-printed `data` JSON blob. The clean agent-supplied
-                // `data.detail` is appended parenthetically below instead,
+                let AcpErrorDetails {
+                    category,
+                    message: agent_message,
+                    detail,
+                } = categorize_acp_error_chain(err);
+                // Prefer the concise structured ACP message. Falling back to
+                // top-level Display avoids dumping structured `data` as JSON.
+                // Preserve clean agent-supplied `data.detail` parenthetically,
                 // mirroring `enhance_agent_error`.
-                let display_error = format!("{err}");
+                let display_error = agent_message.unwrap_or_else(|| format!("{err}"));
                 let retryable = category.is_retryable();
                 warn!(
                     ?category,
@@ -890,11 +896,29 @@ impl AcpBackend {
         };
 
         debug!("{message}");
-        if retryable {
-            crate::normalized::TurnFailure::Retryable
+        let (request_failure_kind, turn_failure) = if retryable {
+            (
+                nori_protocol::RequestFailureKind::Retryable,
+                crate::normalized::TurnFailure::Retryable,
+            )
         } else {
-            crate::normalized::TurnFailure::Fatal
-        }
+            (
+                nori_protocol::RequestFailureKind::Fatal,
+                crate::normalized::TurnFailure::Fatal,
+            )
+        };
+        self.wait_for_prompt_phase().await;
+        let _ = self
+            .backend_event_tx
+            .send(BackendEvent::Public(SessionEvent::Nori(
+                nori_protocol::NoriEvent::RequestFailed(nori_protocol::RequestFailure {
+                    request_id: Some(request_id.clone()),
+                    message,
+                    kind: request_failure_kind,
+                }),
+            )))
+            .await;
+        turn_failure
     }
 
     async fn resolve_cancelled_permission(&self, request_id: &str) {

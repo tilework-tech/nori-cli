@@ -808,7 +808,8 @@ impl AcpConnection {
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
     ) -> Result<acp::StopReason> {
-        self.prompt_with_request_id(session_id, prompt, None).await
+        let (_, result) = self.prompt_with_request_id(session_id, prompt, None).await;
+        result
     }
 
     /// Send a prompt and report its transport-assigned request ID as soon as
@@ -818,7 +819,7 @@ impl AcpConnection {
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
         request_started: Option<oneshot::Sender<Result<RequestId>>>,
-    ) -> Result<acp::StopReason> {
+    ) -> (RequestId, Result<acp::StopReason>) {
         debug!(
             target: "acp_event_flow",
             session_id = %session_id,
@@ -836,18 +837,20 @@ impl AcpConnection {
         let _ = self
             .event_tx
             .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
-                request_id,
+                request_id: request_id.clone(),
                 response: response.clone().map(acp::AgentResponse::PromptResponse),
             })))
             .await;
-        let response = response.context("ACP prompt failed")?;
-        debug!(
-            target: "acp_event_flow",
-            session_id = %session_id,
-            stop_reason = ?response.stop_reason,
-            "Transport received ACP session/prompt response"
-        );
-        Ok(response.stop_reason)
+        let result = response.context("ACP prompt failed").map(|response| {
+            debug!(
+                target: "acp_event_flow",
+                session_id = %session_id,
+                stop_reason = ?response.stop_reason,
+                "Transport received ACP session/prompt response"
+            );
+            response.stop_reason
+        });
+        (request_id, result)
     }
 
     /// Cancel an ongoing prompt.

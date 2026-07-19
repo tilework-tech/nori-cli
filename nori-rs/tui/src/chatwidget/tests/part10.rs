@@ -33,6 +33,69 @@ fn next_loop_iteration(
     None
 }
 
+fn drain_loop_iterations_and_history(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+) -> (Vec<(i32, i32)>, String) {
+    let mut loop_iterations = Vec::new();
+    let mut history = String::new();
+    while let Ok(event) = rx.try_recv() {
+        match event {
+            AppEvent::LoopIteration {
+                remaining, total, ..
+            } => loop_iterations.push((remaining, total)),
+            AppEvent::InsertHistoryCell(cell) => {
+                for line in cell.display_lines(80) {
+                    for span in line.spans {
+                        history.push_str(&span.content);
+                    }
+                    history.push('\n');
+                }
+            }
+            _ => {}
+        }
+    }
+    (loop_iterations, history)
+}
+
+fn deliver_prompt_failure(
+    chat: &mut ChatWidget,
+    request_id: nori_protocol::acp::v1::RequestId,
+    kind: nori_protocol::RequestFailureKind,
+    raw_error_first: bool,
+) {
+    let generation = chat.session_generation;
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionPhaseChanged(
+            nori_protocol::SessionPhase::Prompting {
+                request_id: request_id.clone(),
+            },
+        )),
+    );
+    let raw_error = nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+        request_id: request_id.clone(),
+        response: Err(nori_protocol::acp::v1::Error::new(
+            -32001,
+            "raw ACP prompt error",
+        )),
+    });
+    let classified_failure = nori_protocol::SessionEvent::Nori(
+        nori_protocol::NoriEvent::RequestFailed(nori_protocol::RequestFailure {
+            request_id: Some(request_id),
+            message: "classified prompt failure".to_string(),
+            kind,
+        }),
+    );
+    let events = if raw_error_first {
+        [raw_error, classified_failure]
+    } else {
+        [classified_failure, raw_error]
+    };
+    for event in events {
+        chat.handle_session_event(generation, event);
+    }
+}
+
 fn replay_message_update(
     update: nori_protocol::acp::v1::SessionUpdate,
 ) -> nori_protocol::SessionEvent {
@@ -306,6 +369,174 @@ fn loop_stops_on_fatal_failure() {
 
     assert_eq!(chat.loop_remaining, None);
     assert_eq!(next_loop_iteration(&mut rx), None);
+}
+
+#[test]
+fn raw_retryable_prompt_error_completes_and_retries_the_loop_once() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.first_prompt_text = Some("hi".to_string());
+    chat.loop_remaining = Some(5);
+    chat.loop_total = Some(10);
+
+    deliver_prompt_failure(
+        &mut chat,
+        nori_protocol::acp::v1::RequestId::Str("prompt-retryable".to_string()),
+        nori_protocol::RequestFailureKind::Retryable,
+        true,
+    );
+
+    let (loop_iterations, rendered) = drain_loop_iterations_and_history(&mut rx);
+    assert_eq!(loop_iterations, vec![(4, 10)]);
+    assert!(rendered.contains("classified prompt failure"), "{rendered}");
+    assert!(!rendered.contains("raw ACP prompt error"), "{rendered}");
+}
+
+#[test]
+fn raw_fatal_prompt_error_completes_and_disarms_the_loop() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.first_prompt_text = Some("hi".to_string());
+    chat.loop_remaining = Some(5);
+    chat.loop_total = Some(10);
+
+    deliver_prompt_failure(
+        &mut chat,
+        nori_protocol::acp::v1::RequestId::Str("prompt-fatal".to_string()),
+        nori_protocol::RequestFailureKind::Fatal,
+        false,
+    );
+
+    let (loop_iterations, rendered) = drain_loop_iterations_and_history(&mut rx);
+    assert_eq!(chat.loop_remaining, None);
+    assert!(loop_iterations.is_empty(), "{loop_iterations:?}");
+    assert!(rendered.contains("classified prompt failure"), "{rendered}");
+    assert!(!rendered.contains("raw ACP prompt error"), "{rendered}");
+}
+
+#[test]
+fn delayed_raw_errors_from_multiple_failed_prompts_are_not_rendered() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let request_ids = [
+        nori_protocol::acp::v1::RequestId::Str("prompt-a".to_string()),
+        nori_protocol::acp::v1::RequestId::Str("prompt-b".to_string()),
+    ];
+
+    for (index, request_id) in request_ids.iter().cloned().enumerate() {
+        chat.handle_session_event(
+            generation,
+            nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionPhaseChanged(
+                nori_protocol::SessionPhase::Prompting {
+                    request_id: request_id.clone(),
+                },
+            )),
+        );
+        chat.handle_session_event(
+            generation,
+            nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::RequestFailed(
+                nori_protocol::RequestFailure {
+                    request_id: Some(request_id),
+                    message: format!("classified failure {index}"),
+                    kind: nori_protocol::RequestFailureKind::Fatal,
+                },
+            )),
+        );
+    }
+
+    for (index, request_id) in request_ids.into_iter().enumerate() {
+        chat.handle_session_event(
+            generation,
+            nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+                request_id,
+                response: Err(nori_protocol::acp::v1::Error::new(
+                    -32001,
+                    format!("delayed raw error {index}"),
+                )),
+            }),
+        );
+    }
+
+    let rendered = history_text(&mut rx);
+    assert!(rendered.contains("classified failure 0"), "{rendered}");
+    assert!(rendered.contains("classified failure 1"), "{rendered}");
+    assert!(!rendered.contains("delayed raw error"), "{rendered}");
+}
+
+#[test]
+fn unrelated_request_failure_does_not_complete_the_active_prompt() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.first_prompt_text = Some("hi".to_string());
+    chat.loop_remaining = Some(5);
+    chat.loop_total = Some(10);
+    let generation = chat.session_generation;
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionPhaseChanged(
+            nori_protocol::SessionPhase::Prompting {
+                request_id: nori_protocol::acp::v1::RequestId::Str("active-prompt".to_string()),
+            },
+        )),
+    );
+    assert!(chat.bottom_pane.is_task_running());
+
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::RequestFailed(
+            nori_protocol::RequestFailure {
+                request_id: Some(nori_protocol::acp::v1::RequestId::Str(
+                    "unrelated-request".to_string(),
+                )),
+                message: "unrelated failure".to_string(),
+                kind: nori_protocol::RequestFailureKind::Fatal,
+            },
+        )),
+    );
+
+    assert!(chat.bottom_pane.is_task_running());
+    assert_eq!(chat.loop_remaining, Some(5));
+    assert_eq!(next_loop_iteration(&mut rx), None);
+}
+
+#[test]
+fn only_the_correlated_successful_prompt_response_completes_the_turn() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.first_prompt_text = Some("hi".to_string());
+    chat.loop_remaining = Some(5);
+    chat.loop_total = Some(10);
+    let generation = chat.session_generation;
+    let active_request_id = nori_protocol::acp::v1::RequestId::Str("active-prompt".to_string());
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionPhaseChanged(
+            nori_protocol::SessionPhase::Prompting {
+                request_id: active_request_id.clone(),
+            },
+        )),
+    );
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            request_id: nori_protocol::acp::v1::RequestId::Str("unrelated-request".to_string()),
+            response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(
+                nori_protocol::acp::v1::PromptResponse::new(
+                    nori_protocol::acp::v1::StopReason::EndTurn,
+                ),
+            )),
+        }),
+    );
+    assert_eq!(next_loop_iteration(&mut rx), None);
+
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            request_id: active_request_id,
+            response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(
+                nori_protocol::acp::v1::PromptResponse::new(
+                    nori_protocol::acp::v1::StopReason::EndTurn,
+                ),
+            )),
+        }),
+    );
+    assert_eq!(next_loop_iteration(&mut rx), Some((4, 10)));
 }
 
 /// A turn that ended in a failure must not also render the generic

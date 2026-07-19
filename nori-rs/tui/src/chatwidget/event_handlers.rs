@@ -66,17 +66,28 @@ impl ChatWidget {
                 };
             }
             nori_protocol::AcpEvent::Response {
+                request_id,
                 response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(response)),
-                ..
-            } => self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
-                stop_reason: response.stop_reason,
-                last_agent_message: None,
-                failure: None,
-            }),
+            } if self.active_prompt_request_id.as_ref() == Some(&request_id) => {
+                self.active_prompt_request_id = None;
+                self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
+                    stop_reason: response.stop_reason,
+                    last_agent_message: None,
+                    failure: None,
+                });
+            }
             nori_protocol::AcpEvent::Response {
+                request_id,
                 response: Err(error),
-                ..
-            } => self.on_error(error.to_string()),
+            } => {
+                if self.active_prompt_request_id.as_ref() == Some(&request_id) {
+                    if !self.unpaired_prompt_error_ids.remove(&request_id) {
+                        self.unpaired_prompt_error_ids.insert(request_id);
+                    }
+                } else if !self.unpaired_prompt_error_ids.remove(&request_id) {
+                    self.on_error(error.to_string());
+                }
+            }
             nori_protocol::AcpEvent::Request { .. }
             | nori_protocol::AcpEvent::Response { .. }
             | nori_protocol::AcpEvent::Notification(_) => {}
@@ -96,10 +107,12 @@ impl ChatWidget {
                     nori_protocol::SessionPhase::Loading { .. } => {
                         crate::presentation::session_runtime::SessionPhaseView::Loading
                     }
-                    nori_protocol::SessionPhase::Prompting { .. } => {
+                    nori_protocol::SessionPhase::Prompting { request_id } => {
+                        self.active_prompt_request_id = Some(request_id);
                         crate::presentation::session_runtime::SessionPhaseView::Prompt
                     }
-                    nori_protocol::SessionPhase::Cancelling { .. } => {
+                    nori_protocol::SessionPhase::Cancelling { request_id } => {
+                        self.active_prompt_request_id = Some(request_id);
                         crate::presentation::session_runtime::SessionPhaseView::Cancelling
                     }
                 };
@@ -140,7 +153,37 @@ impl ChatWidget {
                 self.on_prompt_summary(summary.summary);
             }
             nori_protocol::NoriEvent::Notice(notice) => self.on_warning(notice.message),
-            nori_protocol::NoriEvent::RequestFailed(failure) => self.on_error(failure.message),
+            nori_protocol::NoriEvent::RequestFailed(failure) => {
+                let completes_active_prompt =
+                    failure.request_id.as_ref().is_some_and(|request_id| {
+                        self.active_prompt_request_id.as_ref() == Some(request_id)
+                    });
+                if completes_active_prompt
+                    && let Some(request_id) = failure.request_id.as_ref()
+                    && !self.unpaired_prompt_error_ids.remove(request_id)
+                {
+                    self.unpaired_prompt_error_ids.insert(request_id.clone());
+                }
+                if completes_active_prompt {
+                    self.on_error(failure.message);
+                    self.active_prompt_request_id = None;
+                    let failure = match failure.kind {
+                        nori_protocol::RequestFailureKind::Retryable => {
+                            crate::presentation::TurnFailure::Retryable
+                        }
+                        nori_protocol::RequestFailureKind::Fatal => {
+                            crate::presentation::TurnFailure::Fatal
+                        }
+                    };
+                    self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
+                        stop_reason: nori_protocol::acp::v1::StopReason::Cancelled,
+                        last_agent_message: None,
+                        failure: Some(failure),
+                    });
+                } else {
+                    self.add_error_message(failure.message);
+                }
+            }
             nori_protocol::NoriEvent::HookOutput(output) => match output.level {
                 nori_protocol::HookOutputLevel::Info => self.add_info_message(output.message, None),
                 nori_protocol::HookOutputLevel::Warn => self.on_warning(output.message),

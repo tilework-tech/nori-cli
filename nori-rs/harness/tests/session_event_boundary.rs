@@ -1293,6 +1293,104 @@ async fn failed_load_preserves_response_order_and_separates_replay_sources() {
 
 #[tokio::test]
 #[serial]
+async fn prompt_error_emits_a_correlated_classified_request_failure() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_PROMPT_FAIL", "1") };
+    let _guard = EnvGuard("MOCK_AGENT_PROMPT_FAIL");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    loop {
+        if matches!(
+            session.events.recv().await,
+            Some(SessionEvent::Nori(NoriEvent::SessionStarted(_)))
+        ) {
+            break;
+        }
+    }
+    let prompt_request_id = session
+        .handle
+        .prompt(vec![acp::v1::ContentBlock::Text(
+            acp::v1::TextContent::new("fail this prompt"),
+        )])
+        .await
+        .expect("transport should assign the prompt ID before the agent responds");
+
+    let (raw_error, failure) = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut raw_error = None;
+        let mut failure = None;
+        let mut saw_prompting = false;
+        while raw_error.is_none() || failure.is_none() {
+            match session
+                .events
+                .recv()
+                .await
+                .expect("session event stream closed during prompt failure")
+            {
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id,
+                    response: Err(error),
+                }) if request_id == prompt_request_id => {
+                    assert!(saw_prompting, "Prompting must precede the raw prompt error");
+                    raw_error = Some(error);
+                }
+                SessionEvent::Nori(NoriEvent::RequestFailed(request_failure))
+                    if request_failure.request_id.as_ref() == Some(&prompt_request_id) =>
+                {
+                    assert!(
+                        saw_prompting,
+                        "Prompting must precede the classified prompt failure"
+                    );
+                    failure = Some(request_failure)
+                }
+                SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
+                    nori_protocol::SessionPhase::Prompting { request_id },
+                )) if request_id == prompt_request_id => saw_prompting = true,
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id,
+                    response: Ok(acp::v1::AgentResponse::PromptResponse(response)),
+                }) if request_id == prompt_request_id => {
+                    panic!("failing prompt unexpectedly completed: {response:?}")
+                }
+                _ => {}
+            }
+        }
+        (
+            raw_error.expect("raw ACP error"),
+            failure.expect("request failure"),
+        )
+    })
+    .await
+    .expect("prompt failure should publish both protocol and lifecycle events");
+
+    assert_eq!(
+        raw_error.code,
+        nori_protocol::acp::v1::ErrorCode::from(-32001)
+    );
+    assert_eq!(failure.request_id.as_ref(), Some(&prompt_request_id));
+    assert_eq!(failure.kind, nori_protocol::RequestFailureKind::Fatal);
+    assert!(
+        failure.message.contains(&raw_error.message),
+        "classified failure should retain the agent's message: {failure:?}"
+    );
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
 async fn child_loss_correlates_request_failure_with_the_active_wire_prompt() {
     // SAFETY: tests that mutate the mock-agent environment run serially.
     unsafe { std::env::set_var("MOCK_AGENT_EXIT_DURING_PROMPT", "1") };

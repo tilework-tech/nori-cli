@@ -95,10 +95,13 @@ async fn forward_available_setup_events(
 }
 
 impl AcpBackend {
-    async fn wait_for_prompt_phase(&self) {
-        let gate = self.prompt_phase_gate.lock().await.take();
-        if let Some(gate) = gate {
-            let _ = gate.await;
+    pub(super) async fn wait_for_prompt_phase(&self) {
+        let mut gate = self.prompt_phase_gate.lock().await.clone();
+        let Some(gate) = gate.as_mut() else {
+            return;
+        };
+        if !*gate.borrow() {
+            let _ = gate.changed().await;
         }
     }
 

@@ -149,10 +149,16 @@ is terminal for that one prompt. Session end reasons are:
 - `SpawnFailed` when no session could be established; and
 - `TimedOut` when a lifecycle watchdog owns the terminal outcome.
 
-An ACP method error remains `AcpEvent::Response { response: Err(..) }`.
-`NoriEvent::RequestFailed` is reserved for a failure that prevents an ACP
-response, such as unexpected connection loss. Successful close ordering is the
-ACP close response, then `SessionEnded(Closed)`, then stream closure.
+ACP method errors remain `AcpEvent::Response { response: Err(..) }`. A failed
+prompt additionally emits a correlated `NoriEvent::RequestFailed` with the same
+transport-assigned wire request ID and a `Retryable` or `Fatal` disposition.
+`SessionPhaseChanged::Prompting` precedes both events. Product consumers use
+the classified failure to complete prompt and loop lifecycle handling, while
+the raw response remains available for protocol observation. Errors from other
+ACP methods remain raw responses only; failures that prevent an ACP response,
+such as unexpected connection loss, also emit `RequestFailed`. Successful close
+ordering is the ACP close response, then `SessionEnded(Closed)`, then stream
+closure.
 Unexpected loss emits `RequestFailed` for affected work and
 `SessionEnded(ConnectionLost)`; an active prompt failure carries that prompt's
 exact ACP wire request ID. The relay then stops and aborts the private reducer

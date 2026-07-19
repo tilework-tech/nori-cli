@@ -35,12 +35,16 @@ The application event loop matches `SessionEvent::Acp` and
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
 - ACP requests drive the permission overlay and retain their raw `RequestId`.
-- Initialize and prompt responses update the matching UI lifecycle; ACP errors
-  surface as failures. Other typed operations complete through their
+- Initialize responses and prompt responses matching the active request update
+  UI lifecycle. For prompt errors, the correlated `NoriEvent::RequestFailed`
+  drives completion, loop disposition, and user-visible display; the matching
+  raw ACP error remains observable but is not rendered or completed a second
+  time. Failures unrelated to the active prompt do not complete it. Other typed
+  operations complete through their
   `HarnessHandle` return values while their raw responses remain observable on
   the stream.
 - Nori events drive lifecycle, queue, replay, compaction, goals, undo,
-  user-shell output, hooks, summaries, notices, and no-response failures.
+  user-shell output, hooks, summaries, notices, and classified failures.
 
 The private modules under `tui/src/presentation/` assemble ACP streaming values
 into display cells and friendly labels. These view models are allowed to be
