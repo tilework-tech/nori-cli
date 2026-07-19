@@ -60,6 +60,8 @@ impl ChatWidget {
             stream_controller: None,
             completed_client_tool_calls: HashSet::new(),
             client_event_normalizer: Default::default(),
+            replay_in_progress: false,
+            replay_message: None,
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(
@@ -179,6 +181,8 @@ impl ChatWidget {
             stream_controller: None,
             completed_client_tool_calls: HashSet::new(),
             client_event_normalizer: Default::default(),
+            replay_in_progress: false,
+            replay_message: None,
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(

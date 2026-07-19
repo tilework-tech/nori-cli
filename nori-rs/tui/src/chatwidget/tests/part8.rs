@@ -119,6 +119,7 @@ fn acp_streamed_answer_counts_assistant_once_when_prompt_completes() {
     chat.handle_client_event(crate::presentation::ClientEvent::MessageDelta(
         crate::presentation::MessageDelta {
             stream: crate::presentation::MessageStream::Answer,
+            message_id: None,
             delta: "Done".to_string(),
         },
     ));
@@ -169,6 +170,7 @@ fn noop_tool_updates_do_not_fragment_streaming_answer() {
         chat.handle_client_event(crate::presentation::ClientEvent::MessageDelta(
             crate::presentation::MessageDelta {
                 stream: crate::presentation::MessageStream::Answer,
+                message_id: None,
                 delta: delta.to_string(),
             },
         ));

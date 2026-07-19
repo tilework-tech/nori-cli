@@ -33,6 +33,133 @@ fn next_loop_iteration(
     None
 }
 
+fn replay_message_update(
+    update: nori_protocol::acp::v1::SessionUpdate,
+) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+        nori_protocol::acp::v1::AgentNotification::SessionNotification(
+            nori_protocol::acp::v1::SessionNotification::new("session", update),
+        ),
+    ))
+}
+
+fn replay_text_chunk(
+    stream: crate::presentation::MessageStream,
+    message_id: &str,
+    text: &str,
+) -> nori_protocol::SessionEvent {
+    let chunk = nori_protocol::acp::v1::ContentChunk::new(
+        nori_protocol::acp::v1::ContentBlock::Text(nori_protocol::acp::v1::TextContent::new(text)),
+    )
+    .message_id(message_id);
+    let update = match stream {
+        crate::presentation::MessageStream::User => {
+            nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(chunk)
+        }
+        crate::presentation::MessageStream::Answer => {
+            nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(chunk)
+        }
+        crate::presentation::MessageStream::Reasoning => {
+            nori_protocol::acp::v1::SessionUpdate::AgentThoughtChunk(chunk)
+        }
+    };
+    replay_message_update(update)
+}
+
+#[test]
+fn replayed_turns_render_as_separate_ordered_history() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.handle_session_event(nori_protocol::SessionEvent::Nori(
+        nori_protocol::NoriEvent::ReplayStarted(nori_protocol::ReplayStarted {
+            source: nori_protocol::ReplaySource::Agent,
+        }),
+    ));
+    for event in [
+        replay_text_chunk(
+            crate::presentation::MessageStream::User,
+            "user-1",
+            "First question",
+        ),
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "answer-1",
+            "First ",
+        ),
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "answer-1",
+            "answer",
+        ),
+        replay_text_chunk(
+            crate::presentation::MessageStream::User,
+            "user-2",
+            "Second question",
+        ),
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "answer-2",
+            "Second answer",
+        ),
+    ] {
+        chat.handle_session_event(event);
+    }
+    chat.handle_session_event(nori_protocol::SessionEvent::Nori(
+        nori_protocol::NoriEvent::ReplayFinished,
+    ));
+
+    let expected = [
+        "First question",
+        "First answer",
+        "Second question",
+        "Second answer",
+    ];
+    let rendered = drain_insert_history(&mut rx)
+        .into_iter()
+        .map(|lines| lines_to_single_string(&lines))
+        .collect::<Vec<_>>();
+    let message_cells = rendered
+        .iter()
+        .filter(|cell| expected.iter().any(|message| cell.contains(message)))
+        .collect::<Vec<_>>();
+
+    assert_eq!(message_cells.len(), expected.len(), "{rendered:#?}");
+    for (index, expected_message) in expected.iter().enumerate() {
+        assert!(
+            message_cells[index].contains(expected_message),
+            "{rendered:#?}"
+        );
+        for other_message in expected
+            .iter()
+            .filter(|message| message != &expected_message)
+        {
+            assert!(
+                !message_cells[index].contains(other_message),
+                "{rendered:#?}"
+            );
+        }
+        assert_eq!(
+            rendered
+                .iter()
+                .map(|cell| cell.matches(expected_message).count())
+                .sum::<usize>(),
+            1
+        );
+    }
+    insta::assert_snapshot!(message_cells.into_iter().cloned().collect::<String>(), @r"
+› First question
+
+
+• First answer
+
+
+› Second question
+
+
+• Second answer
+");
+}
+
 /// A transient (retryable) turn failure must leave the loop armed: the next
 /// iteration fires when the turn completes.
 #[test]

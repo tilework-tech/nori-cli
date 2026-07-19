@@ -77,8 +77,11 @@ explicit agent-side release action.
 
 #### Transcripts and view-only mode
 
-View-only rendering consumes transcript replay through the same presentation
-path as live events. Transcript schema v3 contains lifecycle events even before
+Between `ReplayStarted` and `ReplayFinished`, replayed user and assistant
+messages are assembled in event order and rendered as static conversation
+history with turn boundaries. They are not handled as live output streams.
+
+Transcript schema v3 contains lifecycle events even before
 a prompt, so session pickers determine whether a transcript is empty by its
 exact user-turn count rather than total record count. The loader retains private
 v2 compatibility.

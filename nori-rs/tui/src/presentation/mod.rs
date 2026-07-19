@@ -191,10 +191,11 @@ pub enum ReplayEntry {
 #[serde(rename_all = "snake_case")]
 pub struct MessageDelta {
     pub stream: MessageStream,
+    pub message_id: Option<String>,
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageStream {
     User,
@@ -1038,6 +1039,7 @@ fn message_delta_from_chunk(
     match &chunk.content {
         acp::ContentBlock::Text(text) if !text.text.is_empty() => Some(MessageDelta {
             stream,
+            message_id: chunk.message_id.as_ref().map(ToString::to_string),
             delta: text.text.clone(),
         }),
         _ => None,
@@ -1694,6 +1696,7 @@ mod tests {
             events,
             vec![ClientEvent::MessageDelta(MessageDelta {
                 stream: MessageStream::Answer,
+                message_id: None,
                 delta: "Hello from ACP".into(),
             })]
         );
@@ -1712,6 +1715,7 @@ mod tests {
             events,
             vec![ClientEvent::MessageDelta(MessageDelta {
                 stream: MessageStream::Reasoning,
+                message_id: None,
                 delta: "**Analyzing** the repo".into(),
             })]
         );
@@ -2107,6 +2111,7 @@ mod tests {
             events,
             vec![ClientEvent::MessageDelta(MessageDelta {
                 stream: MessageStream::User,
+                message_id: None,
                 delta: "resume this session".to_string(),
             })]
         );

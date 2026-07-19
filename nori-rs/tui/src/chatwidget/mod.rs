@@ -176,6 +176,8 @@ pub(crate) struct ChatWidget {
     stream_controller: Option<StreamController>,
     completed_client_tool_calls: HashSet<String>,
     client_event_normalizer: crate::presentation::ClientEventNormalizer,
+    replay_in_progress: bool,
+    replay_message: Option<ReplayMessage>,
     // Accumulates the current reasoning block text to extract a header
     reasoning_buffer: String,
     // Accumulates full reasoning content for transcript-only recording
@@ -275,6 +277,12 @@ pub(crate) struct PendingAgentInfo {
 struct UserMessage {
     text: String,
     image_paths: Vec<PathBuf>,
+}
+
+struct ReplayMessage {
+    stream: crate::presentation::MessageStream,
+    message_id: Option<String>,
+    text: String,
 }
 
 impl From<String> for UserMessage {

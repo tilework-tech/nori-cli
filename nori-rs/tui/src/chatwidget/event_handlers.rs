@@ -17,11 +17,15 @@ impl ChatWidget {
             nori_protocol::AcpEvent::Notification(
                 nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
             ) => {
-                for event in self
+                let events = self
                     .client_event_normalizer
-                    .push_session_update(&notification.update)
-                {
-                    self.handle_client_event(event);
+                    .push_session_update(&notification.update);
+                for event in events {
+                    if self.replay_in_progress {
+                        self.handle_replay_client_event(event);
+                    } else {
+                        self.handle_client_event(event);
+                    }
                 }
             }
             nori_protocol::AcpEvent::Request {
@@ -135,10 +139,16 @@ impl ChatWidget {
                 nori_protocol::HookOutputLevel::Warn => self.on_warning(output.message),
                 nori_protocol::HookOutputLevel::Error => self.on_error(output.message),
             },
-            nori_protocol::NoriEvent::ReplayStarted(_)
-            | nori_protocol::NoriEvent::ReplayFinished
-            | nori_protocol::NoriEvent::Undo(_)
-            | nori_protocol::NoriEvent::UserShell(_) => {}
+            nori_protocol::NoriEvent::ReplayStarted(_) => {
+                self.flush_answer_stream_with_separator();
+                self.flush_replay_message();
+                self.replay_in_progress = true;
+            }
+            nori_protocol::NoriEvent::ReplayFinished => {
+                self.flush_replay_message();
+                self.replay_in_progress = false;
+            }
+            nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
         }
     }
 
@@ -679,6 +689,71 @@ impl ChatWidget {
             ));
             self.request_redraw();
         }
+    }
+
+    fn handle_replay_client_event(&mut self, event: crate::presentation::ClientEvent) {
+        match event {
+            crate::presentation::ClientEvent::MessageDelta(delta) => {
+                let same_message = self.replay_message.as_ref().is_some_and(|message| {
+                    message.stream == delta.stream
+                        && match (&message.message_id, &delta.message_id) {
+                            (Some(current), Some(incoming)) => current == incoming,
+                            (None, None) => true,
+                            (Some(_), None) | (None, Some(_)) => false,
+                        }
+                });
+                if same_message {
+                    if let Some(message) = self.replay_message.as_mut() {
+                        message.text.push_str(&delta.delta);
+                    }
+                } else {
+                    self.flush_replay_message();
+                    self.replay_message = Some(ReplayMessage {
+                        stream: delta.stream,
+                        message_id: delta.message_id,
+                        text: delta.delta,
+                    });
+                }
+            }
+            crate::presentation::ClientEvent::PlanSnapshot(snapshot) => {
+                self.flush_replay_message();
+                self.handle_client_replay_entry(crate::presentation::ReplayEntry::PlanSnapshot {
+                    snapshot,
+                });
+            }
+            crate::presentation::ClientEvent::ToolSnapshot(snapshot) => {
+                self.flush_replay_message();
+                self.handle_client_replay_entry(crate::presentation::ReplayEntry::ToolSnapshot {
+                    snapshot: Box::new(snapshot),
+                });
+            }
+            crate::presentation::ClientEvent::ReplayEntry(replay_entry) => {
+                self.flush_replay_message();
+                self.handle_client_replay_entry(replay_entry);
+            }
+            event => {
+                self.flush_replay_message();
+                self.handle_client_event(event);
+            }
+        }
+    }
+
+    fn flush_replay_message(&mut self) {
+        let Some(message) = self.replay_message.take() else {
+            return;
+        };
+        let replay_entry = match message.stream {
+            crate::presentation::MessageStream::User => {
+                crate::presentation::ReplayEntry::UserMessage { text: message.text }
+            }
+            crate::presentation::MessageStream::Answer => {
+                crate::presentation::ReplayEntry::AssistantMessage { text: message.text }
+            }
+            crate::presentation::MessageStream::Reasoning => {
+                crate::presentation::ReplayEntry::ReasoningMessage { text: message.text }
+            }
+        };
+        self.handle_client_replay_entry(replay_entry);
     }
 
     fn handle_client_replay_entry(&mut self, replay_entry: crate::presentation::ReplayEntry) {
