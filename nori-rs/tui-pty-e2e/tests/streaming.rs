@@ -24,12 +24,10 @@ fn test_submit_text() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.wait_for_text("›", TIMEOUT).unwrap();
+    session
+        .wait_for_text("esc to interrupt", TIMEOUT)
+        .expect("Conversation did not start");
 
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     assert_snapshot!(
         "submit_input",
         normalize_for_input_snapshot(session.screen_contents())

@@ -93,16 +93,16 @@ impl ChatWidget {
             return;
         }
         self.exiting = true;
+        self.bottom_pane.show_exit_in_progress();
 
         let is_detach = self.session_agent_capabilities.session_resume
             && !self.session_agent_capabilities.load_session;
-        let message = if is_detach {
-            "Exiting — detaching; this session keeps running in the cloud.".to_string()
-        } else {
-            "Exiting…".to_string()
-        };
-        let hint = is_detach.then(|| "reattach later from the `nori cloud` picker".to_string());
-        self.add_to_history(history_cell::new_info_event(message, hint));
+        if is_detach {
+            self.add_to_history(history_cell::new_info_event(
+                "This session keeps running in the cloud.".to_string(),
+                Some("reattach later from the `nori cloud` picker".to_string()),
+            ));
+        }
         self.request_redraw();
 
         self.submit_op(Op::Shutdown);

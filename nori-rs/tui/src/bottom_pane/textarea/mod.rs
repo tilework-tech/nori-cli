@@ -286,8 +286,6 @@ impl TextArea {
         self.wrap_cache.replace(None);
         self.preferred_col = None;
         self.elements.clear();
-        self.kill_buffer.clear();
-        self.kill_buffer_kind = KillBufferKind::Characterwise;
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.in_undo_group = false;

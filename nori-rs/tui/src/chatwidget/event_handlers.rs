@@ -1101,6 +1101,11 @@ impl ChatWidget {
 
     /// Handle Ctrl-C key press.
     pub(super) fn on_ctrl_c(&mut self) {
+        // Ctrl+C bypasses BottomPane key routing, so gate it here: once exit
+        // is in progress it must not interrupt, clear, or re-hint anything.
+        if self.exiting {
+            return;
+        }
         if self.bottom_pane.on_ctrl_c() == CancellationEvent::Handled {
             return;
         }

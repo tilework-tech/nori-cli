@@ -540,3 +540,29 @@ fn test_partial_placeholder_deletion() {
         ]
     );
 }
+
+#[test]
+fn deleting_one_equal_length_paste_keeps_the_other_payload() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    let first = "a".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+    let second = "b".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+    let base = format!("[Pasted Content {} chars]", first.chars().count());
+    let second_placeholder = format!("{base} #2");
+
+    composer.handle_paste(first);
+    composer.handle_paste(second.clone());
+    composer.textarea.set_cursor(base.len());
+    composer.handle_key_event(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+
+    assert_eq!(composer.current_text(), second_placeholder);
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Submitted(second));
+}
