@@ -1003,6 +1003,48 @@ mod tests {
     }
 
     #[test]
+    fn active_turn_slash_picker_owns_escape_before_interrupt() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        let always_submit = *nori_config::VimEnterBehavior::all_variants()
+            .iter()
+            .find(|behavior| behavior.toml_value() == "always_submit")
+            .expect("always-submit Vim behavior should be available");
+        pane.set_vim_mode(always_submit);
+        pane.set_task_running(true);
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('/'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        std::thread::sleep(Duration::from_millis(550));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert!(!pane.composer.popup_active());
+        assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(matches!(
+            events.try_recv(),
+            Ok(AppEvent::CodexOp(codex_protocol::protocol::Op::Interrupt))
+        ));
+    }
+
+    #[test]
     fn active_turn_escape_interrupts_immediately_when_vim_is_disabled() {
         let (mut pane, mut events) = test_bottom_pane_with_events();
         pane.set_task_running(true);

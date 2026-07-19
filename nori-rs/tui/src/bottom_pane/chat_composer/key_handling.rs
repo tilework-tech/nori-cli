@@ -8,12 +8,47 @@ impl ChatComposer {
         if !self.input_enabled {
             return (InputResult::None, false);
         }
-        let result = match &mut self.active_popup {
-            ActivePopup::Command(_) => self.handle_key_event_with_slash_popup(key_event),
-            ActivePopup::Skill(_) => self.handle_key_event_with_skill_popup(key_event),
-            ActivePopup::File(_) => self.handle_key_event_with_file_popup(key_event),
-            ActivePopup::HistorySearch(_) => self.handle_key_event_with_history_popup(key_event),
-            ActivePopup::None => self.handle_key_event_without_popup(key_event),
+        let is_newline_shortcut = !matches!(self.active_popup, ActivePopup::HistorySearch(_))
+            && matches!(
+                key_event,
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: KeyModifiers::SHIFT | KeyModifiers::ALT,
+                    ..
+                } | KeyEvent {
+                    code: KeyCode::Char('j'),
+                    modifiers: KeyModifiers::CONTROL,
+                    ..
+                }
+            );
+        let result = if is_newline_shortcut {
+            if key_event.kind == KeyEventKind::Release {
+                (InputResult::None, true)
+            } else if self.textarea.is_in_vim_normal_mode() {
+                // A direct edit in Normal mode must also cancel an incomplete
+                // operator such as `d`, just like any other mode transition.
+                self.textarea.enter_vim_normal_mode();
+                self.textarea.insert_str("\n");
+                (InputResult::None, true)
+            } else {
+                // Route through normal input handling so a newline arriving
+                // during a non-bracketed paste stays ordered with its buffer.
+                self.handle_input_basic(KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: KeyModifiers::NONE,
+                    ..key_event
+                })
+            }
+        } else {
+            match &mut self.active_popup {
+                ActivePopup::Command(_) => self.handle_key_event_with_slash_popup(key_event),
+                ActivePopup::Skill(_) => self.handle_key_event_with_skill_popup(key_event),
+                ActivePopup::File(_) => self.handle_key_event_with_file_popup(key_event),
+                ActivePopup::HistorySearch(_) => {
+                    self.handle_key_event_with_history_popup(key_event)
+                }
+                ActivePopup::None => self.handle_key_event_without_popup(key_event),
+            }
         };
 
         if matches!(
@@ -34,6 +69,22 @@ impl ChatComposer {
         key_event: KeyEvent,
     ) -> (InputResult, bool) {
         if self.handle_shortcut_overlay_key(&key_event) {
+            return (InputResult::None, true);
+        }
+        let in_vim_normal = self.textarea.is_in_vim_normal_mode();
+        if self.should_handle_vim_insert_escape(key_event) {
+            return self.handle_input_basic(key_event);
+        }
+        if in_vim_normal && key_event.code == KeyCode::Esc {
+            self.dismissed_command_popup_text = Some(
+                self.textarea
+                    .text()
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
+            );
+            self.active_popup = ActivePopup::None;
             return (InputResult::None, true);
         }
         if key_event.code == KeyCode::Esc {
@@ -57,8 +108,41 @@ impl ChatComposer {
                 code: KeyCode::Char('p'),
                 modifiers: KeyModifiers::CONTROL,
                 ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('k'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if in_vim_normal => {
+                popup.move_up();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Up, ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('p'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
             } => {
                 popup.move_up();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Down,
+                ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('n'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            }
+            | KeyEvent {
+                code: KeyCode::Char('j'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if in_vim_normal => {
+                popup.move_down();
                 (InputResult::None, true)
             }
             KeyEvent {
@@ -80,6 +164,11 @@ impl ChatComposer {
                 self.active_popup = ActivePopup::None;
                 (InputResult::None, true)
             }
+            KeyEvent {
+                code: KeyCode::Char('i'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if in_vim_normal => self.handle_input_basic(key_event),
             KeyEvent {
                 code: KeyCode::Tab, ..
             } => {
@@ -206,6 +295,7 @@ impl ChatComposer {
                 // Fallback to default newline handling if no command selected.
                 self.handle_key_event_without_popup(key_event)
             }
+            _ if in_vim_normal => (InputResult::None, true),
             input => self.handle_input_basic(input),
         }
     }
@@ -217,6 +307,10 @@ impl ChatComposer {
     ) -> (InputResult, bool) {
         if self.handle_shortcut_overlay_key(&key_event) {
             return (InputResult::None, true);
+        }
+        if self.should_handle_vim_insert_escape(key_event) {
+            self.active_popup = ActivePopup::None;
+            return self.handle_input_basic(key_event);
         }
         if key_event.code == KeyCode::Esc {
             let next_mode = esc_hint_mode(self.footer_mode, self.is_task_running);
@@ -338,6 +432,10 @@ impl ChatComposer {
     ) -> (InputResult, bool) {
         if self.handle_shortcut_overlay_key(&key_event) {
             return (InputResult::None, true);
+        }
+        if self.should_handle_vim_insert_escape(key_event) {
+            self.active_popup = ActivePopup::None;
+            return self.handle_input_basic(key_event);
         }
         if key_event.code == KeyCode::Esc {
             let next_mode = esc_hint_mode(self.footer_mode, self.is_task_running);
@@ -571,6 +669,9 @@ impl ChatComposer {
         if !self.is_shell_mode && self.handle_shortcut_overlay_key(&key_event) {
             return (InputResult::None, true);
         }
+        if self.should_handle_vim_insert_escape(key_event) {
+            return self.handle_input_basic(key_event);
+        }
         if self.is_shell_mode
             && self.textarea.text().is_empty()
             && matches!(key_event.code, KeyCode::Esc | KeyCode::Backspace)
@@ -578,11 +679,27 @@ impl ChatComposer {
             self.is_shell_mode = false;
             return (InputResult::None, true);
         }
-        if self.should_handle_vim_insert_escape(key_event) {
-            return self.handle_input_basic(key_event);
-        }
         if self.is_vim_operator_pending() {
             return self.handle_input_basic(key_event);
+        }
+        if self.is_empty()
+            && self.textarea.is_in_vim_normal_mode()
+            && key_event.kind == KeyEventKind::Press
+            && key_event.modifiers == KeyModifiers::NONE
+        {
+            match key_event.code {
+                KeyCode::Char('/') => {
+                    self.textarea.enter_vim_insert_mode();
+                    self.textarea.insert_str("/");
+                    return (InputResult::None, true);
+                }
+                KeyCode::Char('!') => {
+                    self.textarea.enter_vim_insert_mode();
+                    self.is_shell_mode = true;
+                    return (InputResult::None, true);
+                }
+                _ => {}
+            }
         }
         if key_event.code == KeyCode::Esc {
             if self.is_empty() {
@@ -674,7 +791,10 @@ impl ChatComposer {
                             self.textarea.insert_str("\n");
                             return (InputResult::None, true);
                         }
-                        _ => {} // fall through to submit
+                        (VimEnterBehavior::Newline, VimModeState::Normal)
+                        | (VimEnterBehavior::Submit, VimModeState::Insert)
+                        | (VimEnterBehavior::AlwaysSubmit, _)
+                        | (VimEnterBehavior::Off, _) => {} // fall through to submit
                     }
                 }
 

@@ -220,7 +220,7 @@ impl TextArea {
     }
 
     /// Enter Vim Insert mode and start one undo unit for the whole session.
-    fn enter_vim_insert_mode(&mut self) {
+    pub(crate) fn enter_vim_insert_mode(&mut self) {
         self.begin_undo_group();
         self.vim_mode_state = VimModeState::Insert;
         self.vim_normal_mode_entered_at = None;
