@@ -105,6 +105,7 @@ async fn establish_connection(
     cwd: &Path,
     event_tx: mpsc::Sender<ConnectionEvent>,
     event_rx: mpsc::Receiver<ConnectionEvent>,
+    initialize_event_tx: Option<mpsc::Sender<AcpEvent>>,
 ) -> Result<AcpConnection> {
     let connection_event_tx = event_tx.clone();
     let event_tx_for_notifications = event_tx.clone();
@@ -324,12 +325,21 @@ async fn establish_connection(
                 );
                 let request_id = schema_request_id(request.id());
                 let response = request.block_task().await;
-                let _ = event_tx_for_initialize
-                    .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
-                        request_id,
-                        response: response.clone().map(acp::AgentResponse::InitializeResponse),
-                    })))
-                    .await;
+                let initialize_event = AcpEvent::Response {
+                    request_id,
+                    response: response.clone().map(acp::AgentResponse::InitializeResponse),
+                };
+                if let Some(initialize_event_tx) = initialize_event_tx.as_ref() {
+                    if let Err(error) = initialize_event_tx.send(initialize_event).await {
+                        let _ = event_tx_for_initialize
+                            .send(ConnectionEvent::Acp(Box::new(error.0)))
+                            .await;
+                    }
+                } else {
+                    let _ = event_tx_for_initialize
+                        .send(ConnectionEvent::Acp(Box::new(initialize_event)))
+                        .await;
+                }
 
                 match response {
                     Ok(resp) => {
@@ -384,6 +394,29 @@ impl AcpConnection {
         config: &AcpAgentConfig,
         cwd: &Path,
         proxy_config: AcpProxyConfig,
+    ) -> Result<Self> {
+        Self::spawn_inner(config, cwd, proxy_config, None).await
+    }
+
+    /// Spawn an ACP agent while routing the initialize response to an external sink.
+    ///
+    /// The initialize response is sent exclusively to `initialize_event_tx`; it is
+    /// not duplicated in the connection's ordered event receiver. This lets callers
+    /// preserve a raw ACP initialization error even when spawning returns an error.
+    pub async fn spawn_with_initialize_event_sender(
+        config: &AcpAgentConfig,
+        cwd: &Path,
+        proxy_config: AcpProxyConfig,
+        initialize_event_tx: mpsc::Sender<AcpEvent>,
+    ) -> Result<Self> {
+        Self::spawn_inner(config, cwd, proxy_config, Some(initialize_event_tx)).await
+    }
+
+    async fn spawn_inner(
+        config: &AcpAgentConfig,
+        cwd: &Path,
+        proxy_config: AcpProxyConfig,
+        initialize_event_tx: Option<mpsc::Sender<AcpEvent>>,
     ) -> Result<Self> {
         debug!(
             "Spawning ACP agent: {} {:?} in {}",
@@ -545,7 +578,7 @@ impl AcpConnection {
         let child_died = async move {
             let _ = exit_watch.wait_for(std::option::Option::is_some).await;
         };
-        let init = establish_connection(transport, cwd, event_tx, event_rx);
+        let init = establish_connection(transport, cwd, event_tx, event_rx, initialize_event_tx);
         let init_result = tokio::select! {
             result = init => result,
             () = child_died => Err(anyhow::anyhow!("agent exited before initialization finished")),

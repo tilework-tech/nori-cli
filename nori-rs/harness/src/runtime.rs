@@ -25,6 +25,7 @@ use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
 use crate::transcript::Transcript;
+use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::Notice;
 use nori_protocol::RequestFailure;
@@ -51,6 +52,21 @@ async fn spawn_timeout_sequence(event_tx: &UnboundedSender<SessionEvent>) {
         ),
     })));
     tokio::time::sleep(Duration::from_secs(CONNECT_ABORT_SECS)).await;
+}
+
+fn forward_connect_event(
+    event_tx: &UnboundedSender<SessionEvent>,
+    event: SessionEvent,
+    raw_acp_error_observed: &mut bool,
+) {
+    *raw_acp_error_observed |= matches!(
+        &event,
+        SessionEvent::Acp(AcpEvent::Response {
+            response: Err(_),
+            ..
+        })
+    );
+    let _ = event_tx.send(event);
 }
 
 /// Command for controlling ACP session state exposed by the agent.
@@ -534,6 +550,7 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
         let mut connect = connect;
         let mut timeout = std::pin::pin!(spawn_timeout_sequence(&event_tx));
         let mut pending_commands = VecDeque::new();
+        let mut raw_acp_error_observed = false;
         let backend = loop {
             tokio::select! {
             result = &mut connect => {
@@ -542,13 +559,22 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                     Err(e) => {
                         tracing::error!("{failure_label}: {e}");
                         let message = format!("{failure_label}: {e}");
-                        let _ = event_tx.send(SessionEvent::Nori(NoriEvent::RequestFailed(
-                            RequestFailure {
-                                request_id: None,
-                                message: message.clone(),
-                                kind: RequestFailureKind::Fatal,
-                            },
-                        )));
+                        while let Ok(BackendEvent::Public(event)) = backend_event_rx.try_recv() {
+                            forward_connect_event(
+                                &event_tx,
+                                event,
+                                &mut raw_acp_error_observed,
+                            );
+                        }
+                        if !raw_acp_error_observed {
+                            let _ = event_tx.send(SessionEvent::Nori(NoriEvent::RequestFailed(
+                                RequestFailure {
+                                    request_id: None,
+                                    message: message.clone(),
+                                    kind: RequestFailureKind::Fatal,
+                                },
+                            )));
+                        }
                         let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
                             SessionEnded {
                                 reason: SessionEndReason::SpawnFailed,
@@ -574,6 +600,9 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                     Some(command) => pending_commands.push_back(command),
                     None => return,
                 }
+            }
+            Some(BackendEvent::Public(event)) = backend_event_rx.recv() => {
+                forward_connect_event(&event_tx, event, &mut raw_acp_error_observed);
             }
             () = &mut timeout => {
                 tracing::warn!("ACP backend connection timed out");

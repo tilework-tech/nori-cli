@@ -106,6 +106,13 @@ impl SessionDriver {
             .map(|active| active.request_id.to_string())
     }
 
+    pub(crate) fn active_wire_request_id(&self) -> Option<nori_protocol::acp::v1::RequestId> {
+        self.runtime
+            .active
+            .as_ref()
+            .map(|active| active.request_id.clone())
+    }
+
     pub(crate) fn phase_label(&self) -> &'static str {
         session_reducer::session_phase_label(&self.runtime.phase)
     }
@@ -677,6 +684,8 @@ impl AcpBackend {
                     .lock()
                     .await
                     .remove(&prompt_event_id);
+                let (prompt_phase_tx, prompt_phase_rx) = oneshot::channel();
+                *self.prompt_phase_gate.lock().await = Some(prompt_phase_rx);
                 let (transport_started_tx, transport_started_rx) = oneshot::channel();
                 let backend = (*self).clone();
                 let prompt_result_tx = self.prompt_result_tx.clone();
@@ -754,6 +763,7 @@ impl AcpBackend {
                         }
                     }
                 }
+                let _ = prompt_phase_tx.send(());
             }
             SideEffect::SendCancel => {
                 let session_id = self.session_id.read().await.clone();

@@ -251,6 +251,10 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
+            eprintln!("Mock agent: exiting during prompt");
+            std::process::exit(17);
+        }
         self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
         let request_permission = arguments.prompt.iter().any(|block| {
@@ -1322,6 +1326,13 @@ async fn main() -> acp::Result<()> {
                     return responder
                         .respond_with_error(acp::Error::new(-32000, "Authentication required"));
                 }
+                if std::env::var("MOCK_AGENT_INITIALIZE_FAIL").is_ok() {
+                    eprintln!("Mock agent: simulating initialize failure");
+                    return responder.respond_with_error(acp::Error::new(
+                        -32004,
+                        "Mock initialize failure for testing",
+                    ));
+                }
 
                 eprintln!("Mock agent: initialize");
                 let mut response = acp::InitializeResponse::new(arguments.protocol_version)
@@ -1393,7 +1404,7 @@ async fn main() -> acp::Result<()> {
                 let state = state.clone();
                 async move |arguments: acp::NewSessionRequest,
                             responder: Responder<acp::NewSessionResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     let session_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
                     if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
                         && let Ok(fail_from) = fail_from.parse::<i64>()
@@ -1414,6 +1425,17 @@ async fn main() -> acp::Result<()> {
                         .lock()
                         .unwrap()
                         .insert(session_key.clone(), session_config.clone());
+                    if std::env::var("MOCK_AGENT_NEW_SESSION_NOTIFICATION").is_ok() {
+                        MockAgent {
+                            cx: cx.clone(),
+                            state: state.clone(),
+                        }
+                        .send_text_chunk(
+                            acp::SessionId::new(session_key.clone()),
+                            "new session setup notification",
+                        )
+                        .await?;
+                    }
                     if std::env::var("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION").is_ok()
                         && let Err(error) =
                             initialize_advertised_nori_client(&arguments.mcp_servers).await
@@ -1437,14 +1459,6 @@ async fn main() -> acp::Result<()> {
                 async move |arguments: acp::LoadSessionRequest,
                             responder: Responder<acp::LoadSessionResponse>,
                             cx: ConnectionTo<Client>| {
-                    if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
-                        eprintln!("Mock agent: simulating load_session failure");
-                        return responder.respond_with_error(acp::Error::new(
-                            -32001,
-                            "Mock load_session failure for testing",
-                        ));
-                    }
-
                     let session_config = state
                         .session_configs
                         .lock()
@@ -1470,6 +1484,14 @@ async fn main() -> acp::Result<()> {
                                 .send_text_chunk(session_id.clone(), &format!("replay chunk {i}"))
                                 .await?;
                         }
+                    }
+
+                    if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating load_session failure");
+                        return responder.respond_with_error(acp::Error::new(
+                            -32001,
+                            "Mock load_session failure for testing",
+                        ));
                     }
 
                     responder.respond(

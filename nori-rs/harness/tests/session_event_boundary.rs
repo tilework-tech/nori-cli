@@ -21,6 +21,62 @@ impl Drop for EnvGuard {
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "this helper turns missing boundary events into focused test failures"
+)]
+async fn collect_until_session_ended(
+    session: &mut nori_harness::runtime::LaunchedSession,
+) -> Vec<SessionEvent> {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("session event stream closed before SessionEnded");
+            let ended = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
+            events.push(event);
+            if ended {
+                return events;
+            }
+        }
+    })
+    .await
+    .expect("session should reach a terminal lifecycle event")
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "this helper turns missing boundary events into focused test failures"
+)]
+fn assert_acp_bootstrap_error_is_not_mirrored(events: &[SessionEvent]) {
+    let error_index = events
+        .iter()
+        .position(|event| {
+            matches!(
+                event,
+                SessionEvent::Acp(AcpEvent::Response {
+                    response: Err(_),
+                    ..
+                })
+            )
+        })
+        .expect("the ACP bootstrap error response must remain observable");
+    let ended_index = events
+        .iter()
+        .position(|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_))))
+        .expect("bootstrap failure should end the session");
+    assert!(error_index < ended_index);
+    assert!(
+        events
+            .iter()
+            .all(|event| !matches!(event, SessionEvent::Nori(NoriEvent::RequestFailed(_)))),
+        "an ACP error response must not be mirrored as RequestFailed"
+    );
+}
+
 #[tokio::test]
 #[serial]
 async fn shutdown_interrupts_a_hung_connection_attempt() {
@@ -63,6 +119,192 @@ async fn shutdown_interrupts_a_hung_connection_attempt() {
         .await
         .expect("shutdown should close the public event stream");
     assert!(next_event.is_none());
+}
+
+#[tokio::test]
+#[serial]
+async fn initialize_error_remains_raw_without_a_nori_failure_mirror() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_INITIALIZE_FAIL", "1") };
+    let _guard = EnvGuard("MOCK_AGENT_INITIALIZE_FAIL");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    let events = collect_until_session_ended(&mut session).await;
+    assert_acp_bootstrap_error_is_not_mirrored(&events);
+}
+
+#[tokio::test]
+#[serial]
+async fn new_session_error_remains_raw_without_a_nori_failure_mirror() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0") };
+    let _guard = EnvGuard("MOCK_AGENT_FAIL_NEW_SESSION_FROM");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    let events = collect_until_session_ended(&mut session).await;
+    assert_acp_bootstrap_error_is_not_mirrored(&events);
+}
+
+#[tokio::test]
+#[serial]
+async fn resume_error_remains_raw_without_a_nori_failure_mirror() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_RESUME", "1");
+        std::env::set_var("MOCK_AGENT_RESUME_SESSION_FAIL", "1");
+    }
+    let _resume_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_RESUME");
+    let _fail_guard = EnvGuard("MOCK_AGENT_RESUME_SESSION_FAIL");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: Some(SessionResume {
+            acp_session_id: Some("missing-session".to_string()),
+            transcript: None,
+        }),
+    });
+
+    let events = collect_until_session_ended(&mut session).await;
+    assert_acp_bootstrap_error_is_not_mirrored(&events);
+}
+
+#[tokio::test]
+#[serial]
+async fn setup_notifications_and_default_config_response_precede_session_start() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_NEW_SESSION_NOTIFICATION", "1") };
+    let _guard = EnvGuard("MOCK_AGENT_NEW_SESSION_NOTIFICATION");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let mut config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    config
+        .default_models
+        .insert("mock-model".to_string(), "mock-model-fast".to_string());
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    let events = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("setup event stream closed");
+            let started = matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)));
+            events.push(event);
+            if started {
+                return events;
+            }
+        }
+    })
+    .await
+    .expect("session setup should complete");
+
+    let index_of = |predicate: &dyn Fn(&SessionEvent) -> bool, message: &str| {
+        events.iter().position(predicate).expect(message)
+    };
+    let initialize_index = index_of(
+        &|event| {
+            matches!(
+                event,
+                SessionEvent::Acp(AcpEvent::Response {
+                    response: Ok(acp::v1::AgentResponse::InitializeResponse(_)),
+                    ..
+                })
+            )
+        },
+        "initialize response should be observable",
+    );
+    let notification_index = index_of(
+        &|event| {
+            matches!(
+                event,
+                SessionEvent::Acp(AcpEvent::Notification(
+                    acp::v1::AgentNotification::SessionNotification(_)
+                ))
+            )
+        },
+        "interleaved setup notification should be observable",
+    );
+    let new_session_index = index_of(
+        &|event| {
+            matches!(
+                event,
+                SessionEvent::Acp(AcpEvent::Response {
+                    response: Ok(acp::v1::AgentResponse::NewSessionResponse(_)),
+                    ..
+                })
+            )
+        },
+        "new-session response should be observable",
+    );
+    let config_index = index_of(
+        &|event| {
+            matches!(
+                event,
+                SessionEvent::Acp(AcpEvent::Response {
+                    response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(_)),
+                    ..
+                })
+            )
+        },
+        "default-model config response should be observable",
+    );
+    let started_index = index_of(
+        &|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_))),
+        "session should start",
+    );
+    assert!(initialize_index < notification_index);
+    assert!(notification_index < new_session_index);
+    assert!(new_session_index < config_index);
+    assert!(config_index < started_index);
+
+    session.handle.shutdown().await.expect("shutdown session");
 }
 
 #[tokio::test]
@@ -175,6 +417,11 @@ async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
                 SessionEvent::Acp(AcpEvent::Notification(
                     acp::v1::AgentNotification::SessionNotification(notification),
                 )) => {
+                    assert_eq!(
+                        prompting_request_id.as_ref(),
+                        Some(&prompt_request_id),
+                        "Prompting must be the first public event attributable to the prompt"
+                    );
                     assert_eq!(notification.session_id, acp_session_id);
                     if let acp::v1::SessionUpdate::AgentMessageChunk(chunk) = notification.update
                         && let acp::v1::ContentBlock::Text(text) = chunk.content
@@ -186,6 +433,11 @@ async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
                     request_id,
                     response: Ok(acp::v1::AgentResponse::PromptResponse(response)),
                 }) if request_id == prompt_request_id => {
+                    assert_eq!(
+                        prompting_request_id.as_ref(),
+                        Some(&prompt_request_id),
+                        "Prompting must precede the correlated prompt response"
+                    );
                     return (chunks, response.stop_reason, prompting_request_id);
                 }
                 SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
@@ -322,6 +574,7 @@ async fn delegated_permission_round_trips_as_raw_acp_with_the_same_request_id() 
         .expect("submit permission prompt");
 
     let permission_request_id = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut saw_prompting = false;
         loop {
             match session
                 .events
@@ -333,10 +586,17 @@ async fn delegated_permission_round_trips_as_raw_acp_with_the_same_request_id() 
                     request_id,
                     request: acp::v1::AgentRequest::RequestPermissionRequest(permission_request),
                 }) => {
+                    assert!(
+                        saw_prompting,
+                        "Prompting must precede a delegated request from that prompt"
+                    );
                     assert_eq!(permission_request.session_id, acp_session_id);
                     assert_eq!(permission_request.options.len(), 2);
                     return request_id;
                 }
+                SessionEvent::Nori(NoriEvent::SessionPhaseChanged(
+                    nori_protocol::SessionPhase::Prompting { request_id },
+                )) if request_id == prompt_request_id => saw_prompting = true,
                 SessionEvent::Acp(AcpEvent::Response {
                     request_id,
                     response: Ok(acp::v1::AgentResponse::PromptResponse(_)),
@@ -772,15 +1032,39 @@ async fn resumed_load_preserves_bootstrap_response_and_brackets_raw_replay() {
 
 #[tokio::test]
 #[serial]
-async fn failed_load_response_precedes_fallback_session_start() {
+async fn failed_load_preserves_response_order_and_separates_replay_sources() {
     // SAFETY: this test is serialized with every other environment-mutating test.
     unsafe {
         std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
         std::env::set_var("MOCK_AGENT_LOAD_SESSION_FAIL", "1");
+        std::env::set_var("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT", "2");
     }
     let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
     let _fail_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_FAIL");
+    let _count_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_NOTIFICATION_COUNT");
     let temp = tempfile::tempdir().expect("create session directory");
+    let recorder = nori_harness::TranscriptRecorder::new(
+        temp.path(),
+        temp.path(),
+        Some("mock-model".to_string()),
+        "boundary-test",
+        Some("missing-session".to_string()),
+    )
+    .await
+    .expect("create fallback transcript");
+    recorder
+        .record_user_message("saved-user", "saved local user turn", Vec::new())
+        .await
+        .expect("record fallback user turn");
+    recorder.flush().await.expect("flush fallback transcript");
+    let transcript = nori_harness::TranscriptLoader::new(temp.path().to_path_buf())
+        .load_transcript(recorder.project_id(), recorder.session_id())
+        .await
+        .expect("load fallback transcript");
+    recorder
+        .shutdown()
+        .await
+        .expect("close fallback transcript");
     let config = NoriConfig {
         active_agent: "mock-model".to_string(),
         cwd: temp.path().to_path_buf(),
@@ -794,27 +1078,30 @@ async fn failed_load_response_precedes_fallback_session_start() {
         initial_context: None,
         resume: Some(SessionResume {
             acp_session_id: Some("missing-session".to_string()),
-            transcript: None,
+            transcript: Some(transcript),
         }),
     });
 
     let events = tokio::time::timeout(Duration::from_secs(10), async {
         let mut events = Vec::new();
+        let mut replay_finished = 0;
         loop {
             let event = session
                 .events
                 .recv()
                 .await
                 .expect("fallback event stream closed");
-            let started = matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)));
+            if matches!(event, SessionEvent::Nori(NoriEvent::ReplayFinished)) {
+                replay_finished += 1;
+            }
             events.push(event);
-            if started {
+            if replay_finished == 2 {
                 return events;
             }
         }
     })
     .await
-    .expect("fallback session should start");
+    .expect("agent and transcript replay batches should finish");
 
     let failed_load_index = events
         .iter()
@@ -847,5 +1134,102 @@ async fn failed_load_response_precedes_fallback_session_start() {
     assert!(failed_load_index < fallback_new_index);
     assert!(fallback_new_index < started_index);
 
+    let mut batches = Vec::new();
+    let mut active_batch = None;
+    for event in &events {
+        match event {
+            SessionEvent::Nori(NoriEvent::ReplayStarted(started)) => {
+                assert!(active_batch.is_none(), "replay batches must not nest");
+                active_batch = Some((started.source, Vec::new()));
+            }
+            SessionEvent::Acp(AcpEvent::Notification(
+                acp::v1::AgentNotification::SessionNotification(notification),
+            )) => {
+                let (_, texts) = active_batch
+                    .as_mut()
+                    .expect("historical notifications must be inside replay markers");
+                if let acp::v1::SessionUpdate::AgentMessageChunk(chunk) = &notification.update
+                    && let acp::v1::ContentBlock::Text(text) = &chunk.content
+                {
+                    texts.push(text.text.clone());
+                }
+                if let acp::v1::SessionUpdate::UserMessageChunk(chunk) = &notification.update
+                    && let acp::v1::ContentBlock::Text(text) = &chunk.content
+                {
+                    texts.push(text.text.clone());
+                }
+            }
+            SessionEvent::Nori(NoriEvent::ReplayFinished) => {
+                batches.push(active_batch.take().expect("ReplayFinished needs a batch"));
+            }
+            SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
+        }
+    }
+    assert_eq!(
+        batches,
+        vec![
+            (
+                nori_protocol::ReplaySource::Agent,
+                vec!["replay chunk 0".to_string(), "replay chunk 1".to_string()],
+            ),
+            (
+                nori_protocol::ReplaySource::Transcript,
+                vec!["saved local user turn".to_string()],
+            ),
+        ]
+    );
+
     session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn child_loss_correlates_request_failure_with_the_active_wire_prompt() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_EXIT_DURING_PROMPT", "1") };
+    let _guard = EnvGuard("MOCK_AGENT_EXIT_DURING_PROMPT");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    loop {
+        if matches!(
+            session.events.recv().await,
+            Some(SessionEvent::Nori(NoriEvent::SessionStarted(_)))
+        ) {
+            break;
+        }
+    }
+    let prompt_request_id = session
+        .handle
+        .prompt(vec![acp::v1::ContentBlock::Text(
+            acp::v1::TextContent::new("exit during this prompt"),
+        )])
+        .await
+        .expect("transport should assign the prompt ID before the child exits");
+    let events = collect_until_session_ended(&mut session).await;
+    let failure = events
+        .iter()
+        .find_map(|event| match event {
+            SessionEvent::Nori(NoriEvent::RequestFailed(failure)) => Some(failure),
+            SessionEvent::Acp(_) | SessionEvent::Nori(_) => None,
+        })
+        .expect("child loss should fail the active prompt");
+    assert_eq!(failure.request_id.as_ref(), Some(&prompt_request_id));
+    assert!(matches!(
+        events.last(),
+        Some(SessionEvent::Nori(NoriEvent::SessionEnded(ended)))
+            if ended.reason == nori_protocol::SessionEndReason::ConnectionLost
+    ));
 }

@@ -264,6 +264,9 @@ pub struct AcpBackend {
     session_event_tx: mpsc::Sender<session_runtime_driver::SessionRuntimeInput>,
     /// Prompt result channel bridged with ACP notifications to preserve ordering.
     prompt_result_tx: mpsc::Sender<session_reducer::InboundEvent>,
+    /// Blocks the first prompt-time transport event until the public Prompting
+    /// phase carrying the exact wire request ID has been emitted.
+    prompt_phase_gate: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
     /// How long after idle before sending a notification
     notify_after_idle: crate::config::NotifyAfterIdle,
     /// Stack of ghost commit snapshots for /undo support

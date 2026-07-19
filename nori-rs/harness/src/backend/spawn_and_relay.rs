@@ -1,6 +1,107 @@
 use super::*;
 
+async fn forward_public_acp_event(
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    event: nori_protocol::AcpEvent,
+) -> Result<()> {
+    backend_event_tx
+        .send(BackendEvent::Public(SessionEvent::Acp(event)))
+        .await
+        .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))
+}
+
+pub(super) async fn spawn_connection_with_public_initialize(
+    agent_config: &crate::registry::AcpAgentConfig,
+    cwd: &std::path::Path,
+    acp_proxy: crate::config::AcpProxyConfig,
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+) -> Result<AcpConnection> {
+    let (initialize_event_tx, mut initialize_event_rx) = mpsc::channel(1);
+    let connection_result = AcpConnection::spawn_with_initialize_event_sender(
+        agent_config,
+        cwd,
+        acp_proxy,
+        initialize_event_tx,
+    )
+    .await;
+    let initialize_event = initialize_event_rx.recv().await;
+    let initialize_observed = initialize_event.is_some();
+    if let Some(initialize_event) = initialize_event {
+        forward_public_acp_event(backend_event_tx, initialize_event).await?;
+    }
+    match connection_result {
+        Ok(connection) if initialize_observed => Ok(connection),
+        Ok(_) => anyhow::bail!("ACP agent produced no initialize response"),
+        Err(error) => Err(enhance_agent_error(error, agent_config)),
+    }
+}
+
+async fn forward_setup_event(
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    event: crate::connection::ConnectionEvent,
+) -> Result<bool> {
+    match event {
+        crate::connection::ConnectionEvent::Acp(event) => {
+            let is_response = matches!(&*event, nori_protocol::AcpEvent::Response { .. });
+            forward_public_acp_event(backend_event_tx, *event).await?;
+            Ok(is_response)
+        }
+        // The public ACP notification immediately precedes this private
+        // reducer projection. Reducer processing starts after setup.
+        crate::connection::ConnectionEvent::SessionUpdate(_) => Ok(false),
+        crate::connection::ConnectionEvent::DelegatedRequest(request) => {
+            let _ = request
+                .response_tx
+                .send(Ok(acp::ClientResponse::RequestPermissionResponse(
+                    acp::RequestPermissionResponse::new(acp::RequestPermissionOutcome::Cancelled),
+                )));
+            Ok(false)
+        }
+        crate::connection::ConnectionEvent::SessionClosed => {
+            anyhow::bail!("ACP session closed during bootstrap")
+        }
+        crate::connection::ConnectionEvent::ChildExited {
+            status,
+            stderr_tail,
+        } => {
+            anyhow::bail!("ACP agent exited during bootstrap (status: {status:?}): {stderr_tail}")
+        }
+    }
+}
+
+async fn forward_setup_events_through_response(
+    event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+) -> Result<()> {
+    loop {
+        let event = event_rx
+            .recv()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("ACP bootstrap event stream closed"))?;
+        if forward_setup_event(backend_event_tx, event).await? {
+            return Ok(());
+        }
+    }
+}
+
+async fn forward_available_setup_events(
+    event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+) -> Result<()> {
+    while let Ok(event) = event_rx.try_recv() {
+        forward_setup_event(backend_event_tx, event).await?;
+    }
+    Ok(())
+}
+
 impl AcpBackend {
+    async fn wait_for_prompt_phase(&self) {
+        let gate = self.prompt_phase_gate.lock().await.take();
+        if let Some(gate) = gate {
+            let _ = gate.await;
+        }
+    }
+
     /// Spawn an ACP backend for the given configuration.
     ///
     /// This will:
@@ -24,11 +125,14 @@ impl AcpBackend {
 
         let agent_config = get_agent_config(&config.agent)?;
         debug!("Spawning ACP backend for agent: {}", config.agent);
-        let mut connection =
-            match AcpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
-                Ok(conn) => conn,
-                Err(e) => return Err(enhance_agent_error(e, &agent_config)),
-            };
+        let mut connection = spawn_connection_with_public_initialize(
+            &agent_config,
+            &cwd,
+            config.acp_proxy.clone(),
+            &backend_event_tx,
+        )
+        .await?;
+        let mut event_rx = connection.take_event_receiver();
 
         let thread_goal_state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
         let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -50,9 +154,19 @@ impl AcpBackend {
             server.commit(&goal_mcp_http_server).await;
         }
         let session_result = connection.create_session(&cwd, mcp_servers).await;
+        let setup_forward_result =
+            forward_setup_events_through_response(&mut event_rx, &backend_event_tx).await;
         let session_id = match session_result {
-            Ok(id) => id,
-            Err(e) => return Err(enhance_agent_error(e, &agent_config)),
+            Ok(id) => {
+                setup_forward_result?;
+                id
+            }
+            Err(error) => {
+                if let Err(forward_error) = setup_forward_result {
+                    warn!(%forward_error, "failed to forward ACP new-session error response");
+                }
+                return Err(enhance_agent_error(error, &agent_config));
+            }
         };
 
         debug!("ACP session created: {:?}", session_id);
@@ -61,25 +175,10 @@ impl AcpBackend {
         if let Some(ref default_model) = config.default_model {
             session_defaults::apply_default_model(&connection, &session_id, default_model).await;
         }
+        forward_available_setup_events(&mut event_rx, &backend_event_tx).await?;
 
         let capabilities_update =
             nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
-        let mut event_rx = connection.take_event_receiver();
-        for _ in 0..2 {
-            let event = event_rx
-                .recv()
-                .await
-                .ok_or_else(|| anyhow::anyhow!("ACP bootstrap event stream closed"))?;
-            let crate::connection::ConnectionEvent::Acp(event) = event else {
-                anyhow::bail!("ACP bootstrap events arrived out of order");
-            };
-            backend_event_tx
-                .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
-                    *event,
-                )))
-                .await
-                .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))?;
-        }
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
@@ -151,6 +250,7 @@ impl AcpBackend {
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),
             prompt_result_tx: prompt_result_tx.clone(),
+            prompt_phase_gate: Arc::new(Mutex::new(None)),
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(true)),
@@ -264,6 +364,7 @@ impl AcpBackend {
                 maybe_event = event_rx.recv() => {
                     match maybe_event {
                         Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
+                            backend.wait_for_prompt_phase().await;
                             relay_seq += 1;
                             debug!(
                                 target: "acp_event_flow",
@@ -280,6 +381,7 @@ impl AcpBackend {
                                 .await;
                         }
                         Some(crate::connection::ConnectionEvent::Acp(event)) => {
+                            backend.wait_for_prompt_phase().await;
                             let _ = backend
                                 .backend_event_tx
                                 .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
@@ -302,6 +404,7 @@ impl AcpBackend {
                             break;
                         }
                         Some(crate::connection::ConnectionEvent::DelegatedRequest(request)) => {
+                            backend.wait_for_prompt_phase().await;
                             relay_seq += 1;
                             let current_policy = *approval_policy_rx.borrow();
                             debug!(
@@ -327,6 +430,7 @@ impl AcpBackend {
                             status,
                             stderr_tail,
                         }) => {
+                            backend.wait_for_prompt_phase().await;
                             if !backend.is_shutting_down.load(Ordering::Relaxed) {
                                 let mut message = match status {
                                     Some(code) => format!(
@@ -340,12 +444,17 @@ impl AcpBackend {
                                     message.push('\n');
                                     message.push_str(&stderr_tail);
                                 }
+                                let request_id = backend
+                                    .session_driver
+                                    .lock()
+                                    .await
+                                    .active_wire_request_id();
                                 let _ = backend
                                     .backend_event_tx
                                     .send(BackendEvent::Public(SessionEvent::Nori(
                                         nori_protocol::NoriEvent::RequestFailed(
                                             nori_protocol::RequestFailure {
-                                                request_id: None,
+                                                request_id,
                                                 message: message.clone(),
                                                 kind: nori_protocol::RequestFailureKind::Fatal,
                                             },

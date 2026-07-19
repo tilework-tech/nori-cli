@@ -42,6 +42,24 @@ fn retarget_replay_event(
     event
 }
 
+struct ReplayBatch {
+    source: nori_protocol::ReplaySource,
+    events: Vec<nori_protocol::SessionEvent>,
+}
+
+impl ReplayBatch {
+    fn new(
+        source: nori_protocol::ReplaySource,
+        events: Vec<nori_protocol::SessionEvent>,
+    ) -> Option<Self> {
+        if events.is_empty() {
+            None
+        } else {
+            Some(Self { source, events })
+        }
+    }
+}
+
 fn drain_setup_session_events(
     event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
 ) -> Result<Vec<nori_protocol::SessionEvent>> {
@@ -78,6 +96,19 @@ fn drain_setup_session_events(
     Ok(events)
 }
 
+async fn forward_setup_session_events(
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    events: impl IntoIterator<Item = nori_protocol::SessionEvent>,
+) -> Result<()> {
+    for event in events {
+        backend_event_tx
+            .send(BackendEvent::Public(event))
+            .await
+            .map_err(|_| anyhow::anyhow!("session event receiver closed during setup"))?;
+    }
+    Ok(())
+}
+
 fn response_request_id(events: &[nori_protocol::SessionEvent]) -> Option<acp::RequestId> {
     events.iter().find_map(|event| match event {
         nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
@@ -110,27 +141,14 @@ impl AcpBackend {
         );
 
         let agent_config = get_agent_config(&config.agent)?;
-        let mut connection = AcpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone())
-            .await
-            .map_err(|e| enhance_agent_error(e, &agent_config))?;
-
-        // `AcpConnection::spawn` completes only after initialize has returned,
-        // so its first queued transport event is the schema-native initialize
-        // response. Preserve it before any Nori lifecycle event is emitted.
+        let mut connection = spawn_and_relay::spawn_connection_with_public_initialize(
+            &agent_config,
+            &cwd,
+            config.acp_proxy.clone(),
+            &backend_event_tx,
+        )
+        .await?;
         let mut event_rx = connection.take_event_receiver();
-        let initialize_event = event_rx
-            .recv()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("ACP bootstrap event stream closed"))?;
-        let crate::connection::ConnectionEvent::Acp(initialize_event) = initialize_event else {
-            anyhow::bail!("ACP initialize response arrived out of order");
-        };
-        backend_event_tx
-            .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
-                *initialize_event,
-            )))
-            .await
-            .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))?;
 
         let supports_load_session = connection.capabilities().load_session;
         let supports_session_resume = connection
@@ -166,8 +184,7 @@ impl AcpBackend {
             used_fallback,
             deferred_setup_session_events,
             deferred_replay_client_events,
-            deferred_replay_session_events,
-            replay_source,
+            deferred_replay_batches,
             event_rx,
             session_driver_state,
         ) = if let Some(sid) = acp_session_id.filter(|_| supports_load_session) {
@@ -337,8 +354,9 @@ impl AcpBackend {
                         None,
                         setup_session_events,
                         buffered_client_events,
-                        replay_session_events,
-                        Some(nori_protocol::ReplaySource::Agent),
+                        ReplayBatch::new(nori_protocol::ReplaySource::Agent, replay_session_events)
+                            .into_iter()
+                            .collect(),
                         recovered_rx,
                         session_driver,
                     )
@@ -363,7 +381,16 @@ impl AcpBackend {
                             },
                         ),
                     )];
-                    setup_session_events.extend(buffered_session_events);
+                    let (agent_replay_events, current_session_events): (Vec<_>, Vec<_>) =
+                        buffered_session_events.into_iter().partition(|event| {
+                            matches!(
+                                event,
+                                nori_protocol::SessionEvent::Acp(
+                                    nori_protocol::AcpEvent::Notification(_)
+                                )
+                            )
+                        });
+                    setup_session_events.extend(current_session_events);
                     setup_session_events.push(nori_protocol::SessionEvent::Nori(
                         nori_protocol::NoriEvent::SessionPhaseChanged(
                             nori_protocol::SessionPhase::Idle,
@@ -379,10 +406,16 @@ impl AcpBackend {
                         &goal_mcp_http_server,
                     )
                     .await?;
-                    let session_id = connection
-                        .create_session(&cwd, mcp_servers)
-                        .await
-                        .map_err(|e| enhance_agent_error(e, &agent_config))?;
+                    let session_id = match connection.create_session(&cwd, mcp_servers).await {
+                        Ok(session_id) => session_id,
+                        Err(error) => {
+                            setup_session_events
+                                .extend(drain_setup_session_events(&mut recovered_rx)?);
+                            forward_setup_session_events(&backend_event_tx, setup_session_events)
+                                .await?;
+                            return Err(enhance_agent_error(error, &agent_config));
+                        }
+                    };
 
                     if let Some(ref default_model) = config.default_model {
                         session_defaults::apply_default_model(
@@ -408,6 +441,16 @@ impl AcpBackend {
                         } else {
                             (Vec::new(), Vec::new(), None)
                         };
+                    let mut replay_batches =
+                        ReplayBatch::new(nori_protocol::ReplaySource::Agent, agent_replay_events)
+                            .into_iter()
+                            .collect::<Vec<_>>();
+                    if let Some(transcript_batch) = ReplayBatch::new(
+                        nori_protocol::ReplaySource::Transcript,
+                        replay_session_events,
+                    ) {
+                        replay_batches.push(transcript_batch);
+                    }
 
                     (
                         session_id,
@@ -416,8 +459,7 @@ impl AcpBackend {
                         Some(e.to_string()),
                         setup_session_events,
                         replay_events,
-                        replay_session_events,
-                        Some(nori_protocol::ReplaySource::Transcript),
+                        replay_batches,
                         recovered_rx,
                         session_runtime_driver::SessionDriver::new(),
                     )
@@ -442,10 +484,14 @@ impl AcpBackend {
             )
             .await?;
 
-            let session_id = connection
-                .resume_session(sid, &cwd, mcp_servers)
-                .await
-                .map_err(|e| enhance_agent_error(e, &agent_config))?;
+            let session_id = match connection.resume_session(sid, &cwd, mcp_servers).await {
+                Ok(session_id) => session_id,
+                Err(error) => {
+                    let setup_events = drain_setup_session_events(&mut event_rx)?;
+                    forward_setup_session_events(&backend_event_tx, setup_events).await?;
+                    return Err(enhance_agent_error(error, &agent_config));
+                }
+            };
             debug!("ACP session resumed via session/resume: {sid}");
             let setup_session_events = drain_setup_session_events(&mut event_rx)?;
 
@@ -457,7 +503,6 @@ impl AcpBackend {
                 setup_session_events,
                 Vec::new(),
                 Vec::new(),
-                None,
                 event_rx,
                 session_runtime_driver::SessionDriver::new(),
             )
@@ -475,10 +520,14 @@ impl AcpBackend {
                 &goal_mcp_http_server,
             )
             .await?;
-            let session_id = connection
-                .create_session(&cwd, mcp_servers)
-                .await
-                .map_err(|e| enhance_agent_error(e, &agent_config))?;
+            let session_id = match connection.create_session(&cwd, mcp_servers).await {
+                Ok(session_id) => session_id,
+                Err(error) => {
+                    let setup_events = drain_setup_session_events(&mut event_rx)?;
+                    forward_setup_session_events(&backend_event_tx, setup_events).await?;
+                    return Err(enhance_agent_error(error, &agent_config));
+                }
+            };
 
             if let Some(ref default_model) = config.default_model {
                 session_defaults::apply_default_model(&connection, &session_id, default_model)
@@ -507,8 +556,12 @@ impl AcpBackend {
                 None,
                 setup_session_events,
                 replay_events,
-                replay_session_events,
-                Some(nori_protocol::ReplaySource::Transcript),
+                ReplayBatch::new(
+                    nori_protocol::ReplaySource::Transcript,
+                    replay_session_events,
+                )
+                .into_iter()
+                .collect(),
                 event_rx,
                 session_runtime_driver::SessionDriver::new(),
             )
@@ -521,12 +574,7 @@ impl AcpBackend {
                 thread_goal::ThreadGoalState::from_replay_events(&replay_events_for_goal_state);
         }
 
-        for event in deferred_setup_session_events {
-            backend_event_tx
-                .send(BackendEvent::Public(event))
-                .await
-                .map_err(|_| anyhow::anyhow!("session event receiver closed during setup"))?;
-        }
+        forward_setup_session_events(&backend_event_tx, deferred_setup_session_events).await?;
 
         let capabilities_update =
             nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
@@ -598,6 +646,7 @@ impl AcpBackend {
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),
             prompt_result_tx: prompt_result_tx.clone(),
+            prompt_phase_gate: Arc::new(Mutex::new(None)),
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(is_first_prompt_val)),
@@ -708,17 +757,16 @@ impl AcpBackend {
         let replay_session_id = backend.session_id().await;
         let relay_backend = backend.clone();
         let relay_task = tokio::spawn(async move {
-            if !deferred_replay_session_events.is_empty() {
+            for ReplayBatch { source, events } in deferred_replay_batches {
                 let _ = relay_backend
                     .backend_event_tx
                     .send(BackendEvent::Public(SessionEvent::Nori(
                         nori_protocol::NoriEvent::ReplayStarted(nori_protocol::ReplayStarted {
-                            source: replay_source
-                                .unwrap_or(nori_protocol::ReplaySource::Transcript),
+                            source,
                         }),
                     )))
                     .await;
-                for event in deferred_replay_session_events {
+                for event in events {
                     let _ = relay_backend
                         .backend_event_tx
                         .send(BackendEvent::Public(retarget_replay_event(
