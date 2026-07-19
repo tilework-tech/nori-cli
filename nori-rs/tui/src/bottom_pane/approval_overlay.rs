@@ -136,9 +136,9 @@ impl ApprovalOverlay {
         self.app_event_tx
             .send(AppEvent::HarnessAction(HarnessAction::RespondToAgent {
                 request_id: request.request_id.clone(),
-                response: Ok(acp::ClientResponse::RequestPermissionResponse(
+                response: Box::new(Ok(acp::ClientResponse::RequestPermissionResponse(
                     acp::RequestPermissionResponse::new(outcome),
-                )),
+                ))),
             }));
         self.current_complete = true;
         self.advance_queue();
@@ -151,9 +151,9 @@ impl ApprovalOverlay {
         self.app_event_tx
             .send(AppEvent::HarnessAction(HarnessAction::RespondToAgent {
                 request_id: request.request_id.clone(),
-                response: Ok(acp::ClientResponse::RequestPermissionResponse(
+                response: Box::new(Ok(acp::ClientResponse::RequestPermissionResponse(
                     acp::RequestPermissionResponse::new(acp::RequestPermissionOutcome::Cancelled),
-                )),
+                ))),
             }));
     }
 

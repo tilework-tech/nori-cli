@@ -10,6 +10,9 @@ use crate::acp::v1::RequestId;
 /// An event emitted by one Nori harness session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "source", content = "event", rename_all = "snake_case")]
+// Keep the approved schema-shaped API unboxed; consumers should not inherit a
+// Nori-specific indirection solely because ACP's response aggregate is large.
+#[allow(clippy::large_enum_variant)]
 pub enum SessionEvent {
     /// Semantics owned by the Agent Client Protocol.
     Acp(AcpEvent),
@@ -20,6 +23,7 @@ pub enum SessionEvent {
 /// Raw ACP traffic emitted by the agent toward its client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "message_type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum AcpEvent {
     Notification(acp::v1::AgentNotification),
     Request {

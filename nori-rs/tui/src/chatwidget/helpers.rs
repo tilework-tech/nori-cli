@@ -390,7 +390,7 @@ impl ChatWidget {
                 HarnessAction::RespondToAgent {
                     request_id,
                     response,
-                } => handle.respond_to_agent(request_id, response).await,
+                } => handle.respond_to_agent(request_id, *response).await,
             };
             if let Err(error) = result {
                 app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));

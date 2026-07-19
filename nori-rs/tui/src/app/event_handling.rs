@@ -90,7 +90,7 @@ impl App {
             self.config.forced_auto_mode_downgraded_on_windows = false;
         }
         self.chat_widget.set_approval_policy(approval);
-        self.chat_widget.set_sandbox_policy(sandbox.clone());
+        self.chat_widget.set_sandbox_policy(sandbox);
     }
 
     pub(super) async fn handle_event(

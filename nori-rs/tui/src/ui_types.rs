@@ -63,17 +63,19 @@ impl TokenUsage {
 
 impl fmt::Display for TokenUsage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let cached = (self.cached_input() > 0)
-            .then(|| format!(" (+ {} cached)", format_number(self.cached_input())))
-            .unwrap_or_default();
-        let reasoning = (self.reasoning_output_tokens > 0)
-            .then(|| {
-                format!(
-                    " (reasoning {})",
-                    format_number(self.reasoning_output_tokens)
-                )
-            })
-            .unwrap_or_default();
+        let cached = if self.cached_input() > 0 {
+            format!(" (+ {} cached)", format_number(self.cached_input()))
+        } else {
+            String::new()
+        };
+        let reasoning = if self.reasoning_output_tokens > 0 {
+            format!(
+                " (reasoning {})",
+                format_number(self.reasoning_output_tokens)
+            )
+        } else {
+            String::new()
+        };
         write!(
             f,
             "Token usage: total={} input={}{} output={}{}",

@@ -19,7 +19,7 @@ mod acp_connection_tests;
 #[derive(Debug)]
 pub enum ConnectionEvent {
     /// Raw ACP traffic retained for the public harness boundary.
-    Acp(AcpEvent),
+    Acp(Box<AcpEvent>),
     /// The active session was released successfully through ACP `session/close`.
     SessionClosed,
     /// Private reducer input paired with the preceding raw notification.

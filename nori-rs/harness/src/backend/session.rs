@@ -82,7 +82,7 @@ impl AcpBackend {
         };
         backend_event_tx
             .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
-                initialize_event,
+                *initialize_event,
             )))
             .await
             .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))?;
@@ -150,7 +150,7 @@ impl AcpBackend {
                             match maybe_event {
                                 Some(crate::connection::ConnectionEvent::Acp(event)) => {
                                     buffered_session_events.push(
-                                        nori_protocol::SessionEvent::Acp(event),
+                                        nori_protocol::SessionEvent::Acp(*event),
                                     );
                                 }
                                 Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
@@ -175,7 +175,7 @@ impl AcpBackend {
                                 match event {
                                     crate::connection::ConnectionEvent::Acp(event) => {
                                         buffered_session_events.push(
-                                            nori_protocol::SessionEvent::Acp(event),
+                                            nori_protocol::SessionEvent::Acp(*event),
                                         );
                                     }
                                     crate::connection::ConnectionEvent::SessionUpdate(update) => {

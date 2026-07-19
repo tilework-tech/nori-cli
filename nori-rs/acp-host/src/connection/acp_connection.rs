@@ -162,9 +162,9 @@ async fn establish_connection(
                             state.config_options = update.config_options.clone();
                         }
                         if event_tx
-                            .send(ConnectionEvent::Acp(AcpEvent::Notification(
+                            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Notification(
                                 acp::AgentNotification::SessionNotification(notification.clone()),
-                            )))
+                            ))))
                             .await
                             .is_err()
                         {
@@ -348,10 +348,10 @@ async fn establish_connection(
                 let request_id = schema_request_id(request.id());
                 let response = request.block_task().await;
                 let _ = event_tx_for_initialize
-                    .send(ConnectionEvent::Acp(AcpEvent::Response {
+                    .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                         request_id,
                         response: response.clone().map(acp::AgentResponse::InitializeResponse),
-                    }))
+                    })))
                     .await;
 
                 match response {
@@ -631,10 +631,10 @@ impl AcpConnection {
         let response = request.block_task().await;
         let _ = self
             .event_tx
-            .send(ConnectionEvent::Acp(AcpEvent::Response {
+            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                 request_id,
                 response: response.clone().map(acp::AgentResponse::NewSessionResponse),
-            }))
+            })))
             .await;
         let response = response.context("Failed to create ACP session")?;
 
@@ -665,12 +665,12 @@ impl AcpConnection {
         let response = request.block_task().await;
         let _ = self
             .event_tx
-            .send(ConnectionEvent::Acp(AcpEvent::Response {
+            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                 request_id,
                 response: response
                     .clone()
                     .map(acp::AgentResponse::LoadSessionResponse),
-            }))
+            })))
             .await;
         let response = response.context("Failed to load ACP session")?;
 
@@ -704,12 +704,12 @@ impl AcpConnection {
         let response = request.block_task().await;
         let _ = self
             .event_tx
-            .send(ConnectionEvent::Acp(AcpEvent::Response {
+            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                 request_id,
                 response: response
                     .clone()
                     .map(acp::AgentResponse::ResumeSessionResponse),
-            }))
+            })))
             .await;
         let response = response.context("Failed to resume ACP session")?;
 
@@ -731,12 +731,12 @@ impl AcpConnection {
         let response = request.block_task().await;
         let _ = self
             .event_tx
-            .send(ConnectionEvent::Acp(AcpEvent::Response {
+            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                 request_id,
                 response: response
                     .clone()
                     .map(acp::AgentResponse::CloseSessionResponse),
-            }))
+            })))
             .await;
         response.context("Failed to close ACP session")?;
         let _ = self.event_tx.send(ConnectionEvent::SessionClosed).await;
@@ -767,12 +767,12 @@ impl AcpConnection {
             let response = request.block_task().await;
             let _ = self
                 .event_tx
-                .send(ConnectionEvent::Acp(AcpEvent::Response {
+                .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                     request_id,
                     response: response
                         .clone()
                         .map(acp::AgentResponse::ListSessionsResponse),
-                }))
+                })))
                 .await;
             let response = response.context("Failed to list ACP sessions")?;
 
@@ -837,10 +837,10 @@ impl AcpConnection {
             let response = request.block_task().await;
             let _ = self
                 .event_tx
-                .send(ConnectionEvent::Acp(AcpEvent::Response {
+                .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                     request_id,
                     response: response.clone().map(acp::AgentResponse::PromptResponse),
-                }))
+                })))
                 .await;
             let response = response.context("ACP prompt failed");
 
@@ -944,12 +944,12 @@ impl AcpConnection {
         let response = request.block_task().await;
         let _ = self
             .event_tx
-            .send(ConnectionEvent::Acp(AcpEvent::Response {
+            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
                 request_id,
                 response: response
                     .clone()
                     .map(acp::AgentResponse::SetSessionConfigOptionResponse),
-            }))
+            })))
             .await;
         let response = response.context("Failed to set ACP session config option")?;
 

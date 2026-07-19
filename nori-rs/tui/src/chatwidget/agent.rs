@@ -98,7 +98,7 @@ fn launch_acp_agent(
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     let spec = SessionLaunchSpec {
-        config: Arc::new(config.clone()),
+        config: Arc::new(config),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
         session_context: Some(include_str!("../../session_context.md").to_string()),
         initial_context: fork_context,

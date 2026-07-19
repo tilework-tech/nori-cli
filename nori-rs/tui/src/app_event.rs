@@ -43,7 +43,8 @@ pub(crate) enum HarnessAction {
     ClearGoal,
     RespondToAgent {
         request_id: nori_protocol::acp::v1::RequestId,
-        response: Result<nori_protocol::acp::v1::ClientResponse, nori_protocol::acp::v1::Error>,
+        response:
+            Box<Result<nori_protocol::acp::v1::ClientResponse, nori_protocol::acp::v1::Error>>,
     },
 }
 

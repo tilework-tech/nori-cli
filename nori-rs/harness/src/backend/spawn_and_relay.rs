@@ -75,7 +75,7 @@ impl AcpBackend {
             };
             backend_event_tx
                 .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
-                    event,
+                    *event,
                 )))
                 .await
                 .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))?;
@@ -279,7 +279,7 @@ impl AcpBackend {
                             let _ = backend
                                 .backend_event_tx
                                 .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
-                                    event,
+                                    *event,
                                 )))
                                 .await;
                         }
@@ -400,7 +400,7 @@ impl AcpBackend {
                                         let _ = backend
                                             .backend_event_tx
                                             .send(BackendEvent::Public(
-                                                nori_protocol::SessionEvent::Acp(event),
+                                                nori_protocol::SessionEvent::Acp(*event),
                                             ))
                                             .await;
                                     }
