@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1 as acp;
+use nori_protocol::acp::v1 as acp;
 use serde_json::json;
 use tokio::time::Duration;
 use tokio::time::sleep;

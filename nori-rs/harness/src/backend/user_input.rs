@@ -1,40 +1,34 @@
 use super::*;
 
 impl AcpBackend {
-    /// Handle user input by sending a prompt to the ACP agent.
-    pub(super) async fn handle_user_input(&self, items: Vec<UserInput>, id: &str) -> Result<()> {
-        // Separate text items (needed for hooks, summary, transcript) from
-        // image items (converted to ACP ContentBlock::Image).
+    /// Submit schema-native ACP content through Nori's prompt lifecycle.
+    pub(super) async fn handle_prompt(
+        &self,
+        content: Vec<acp::ContentBlock>,
+        id: &str,
+    ) -> Result<()> {
         let mut prompt_text = String::new();
-        let mut image_items = Vec::new();
-        for item in items {
-            match item {
-                UserInput::Text { text } => {
+        let mut non_text_blocks = Vec::new();
+        for block in content {
+            match block {
+                acp::ContentBlock::Text(text) => {
                     if !prompt_text.is_empty() {
                         prompt_text.push('\n');
                     }
-                    prompt_text.push_str(&text);
+                    prompt_text.push_str(&text.text);
                 }
-                UserInput::Image { .. } | UserInput::LocalImage { .. } => {
-                    image_items.push(item);
-                }
-                _ => {
-                    warn!("Unknown UserInput variant in ACP mode");
-                }
+                block => non_text_blocks.push(block),
             }
         }
 
-        // Convert image items to ACP content blocks
-        let image_blocks = translator::user_inputs_to_content_blocks(image_items)?;
-
-        if prompt_text.is_empty() && image_blocks.is_empty() {
+        if prompt_text.is_empty() && non_text_blocks.is_empty() {
             return Ok(());
         }
 
         // For image-only prompts, use a placeholder for downstream consumers
         // (hooks, transcript, summary, snapshot labels) that expect non-empty text.
-        let display_text = if prompt_text.is_empty() && !image_blocks.is_empty() {
-            "[image]".to_string()
+        let display_text = if prompt_text.is_empty() && !non_text_blocks.is_empty() {
+            "[attachment]".to_string()
         } else {
             prompt_text.clone()
         };
@@ -53,8 +47,7 @@ impl AcpBackend {
             .await;
             route_hook_results(
                 &results,
-                &self.event_tx,
-                id,
+                &self.backend_event_tx,
                 Some(&self.pending_hook_context),
             )
             .await;
@@ -83,7 +76,7 @@ impl AcpBackend {
                 let skip_summary = cfg!(debug_assertions) && self.agent_name.starts_with("mock-");
                 if !skip_summary && (self.prompt_summary_enabled || self.auto_worktree.is_enabled())
                 {
-                    let event_tx = self.event_tx.clone();
+                    let event_tx = self.backend_event_tx.clone();
                     let agent_name = self.agent_name.clone();
                     let cwd = self.cwd.clone();
                     let prompt_for_summary = display_text.clone();
@@ -184,7 +177,7 @@ impl AcpBackend {
                 .unwrap_or("<none>"),
             queue_len_before_submit,
             prompt_text_len = final_prompt_text.len(),
-            image_blocks = image_blocks.len(),
+            attachments = non_text_blocks.len(),
             "Accepted user prompt into ACP backend"
         );
 
@@ -192,31 +185,17 @@ impl AcpBackend {
             .session_event_tx
             .send(session_runtime_driver::SessionRuntimeInput::Reducer(
                 session_reducer::InboundEvent::PromptSubmit(
-                    nori_protocol::session_runtime::QueuedPrompt {
+                    crate::normalized::session_runtime::QueuedPrompt {
                         event_id: id.to_string(),
-                        kind: nori_protocol::session_runtime::QueuedPromptKind::User,
+                        kind: crate::normalized::session_runtime::QueuedPromptKind::User,
                         text: final_prompt_text,
                         display_text: Some(prompt_text_for_hooks),
-                        images: image_blocks,
+                        images: non_text_blocks,
                     },
                 ),
             ))
             .await;
 
         Ok(())
-    }
-
-    /// Handle an exec approval decision by finding and resolving the pending approval.
-    pub(super) async fn handle_exec_approval(&self, call_id: &str, decision: ReviewDecision) {
-        let mut pending = self.pending_approvals.lock().await;
-        if let Some(pos) = pending
-            .iter()
-            .position(|pending_request| pending_request.request.event.call_id() == call_id)
-        {
-            let request = pending.remove(pos);
-            let _ = request.request.response_tx.send(decision);
-        } else {
-            warn!("No pending approval found for call_id: {}", call_id);
-        }
     }
 }

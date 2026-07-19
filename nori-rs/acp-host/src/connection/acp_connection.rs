@@ -12,8 +12,6 @@ use agent_client_protocol::Agent;
 use agent_client_protocol::Client;
 use agent_client_protocol::ConnectionTo;
 use agent_client_protocol::Lines;
-use agent_client_protocol_schema::ProtocolVersion;
-use agent_client_protocol_schema::v1 as acp;
 use anyhow::Context;
 use anyhow::Result;
 use futures::AsyncBufReadExt;
@@ -30,9 +28,8 @@ use tracing::debug;
 use tracing::warn;
 
 use super::AcpSessionConfigState;
-use super::ApprovalEventType;
-use super::ApprovalRequest;
 use super::ConnectionEvent;
+use super::DelegatedRequest;
 use super::child_lifecycle::ChildHandle;
 use super::child_lifecycle::SHUTDOWN_GRACE;
 use super::child_lifecycle::STDERR_TAIL_LINES;
@@ -40,11 +37,26 @@ use super::child_lifecycle::collect_stderr_tail;
 use super::wire_log::WireDirection;
 use super::wire_log::WireLogger;
 use crate::registry::AcpAgentConfig;
-use crate::translator;
 use nori_config::AcpProxyConfig;
+use nori_protocol::AcpEvent;
+use nori_protocol::acp::ProtocolVersion;
+use nori_protocol::acp::v1 as acp;
+use nori_protocol::acp::v1::RequestId;
 
 /// Minimum supported ACP protocol version.
 const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
+
+fn schema_request_id(id: serde_json::Value) -> RequestId {
+    match id {
+        serde_json::Value::Null => RequestId::Null,
+        serde_json::Value::Number(number) => number
+            .as_i64()
+            .map(RequestId::Number)
+            .unwrap_or_else(|| RequestId::Str(number.to_string())),
+        serde_json::Value::String(id) => RequestId::Str(id),
+        other => RequestId::Str(other.to_string()),
+    }
+}
 
 #[derive(Debug, Default)]
 struct SessionPromptState {
@@ -72,6 +84,9 @@ pub struct AcpConnection {
 
     /// Ordered inbox of raw ACP events from the transport layer.
     event_rx: mpsc::Receiver<ConnectionEvent>,
+
+    /// Sender retained so outgoing request completions join the ordered inbox.
+    event_tx: mpsc::Sender<ConnectionEvent>,
 
     /// Per-session prompt boundary state used to absorb stale terminal stop
     /// responses after cancellation without widening the public phase model.
@@ -103,16 +118,15 @@ async fn establish_connection(
     event_tx: mpsc::Sender<ConnectionEvent>,
     event_rx: mpsc::Receiver<ConnectionEvent>,
 ) -> Result<AcpConnection> {
+    let connection_event_tx = event_tx.clone();
     let event_tx_for_notifications = event_tx.clone();
-    let event_tx_for_write = event_tx.clone();
-    let event_tx_for_read = event_tx.clone();
+    let event_tx_for_initialize = event_tx.clone();
     let prompt_state =
         std::sync::Arc::new(Mutex::new(HashMap::<String, SessionPromptState>::new()));
     let prompt_state_for_notifications = prompt_state.clone();
     let session_config_state =
         std::sync::Arc::new(std::sync::RwLock::new(AcpSessionConfigState::new()));
     let session_config_state_for_notifications = session_config_state.clone();
-    let approval_cwd = cwd.to_path_buf();
     let write_cwd = cwd.to_path_buf();
     let read_cwd = cwd.to_path_buf();
 
@@ -148,11 +162,21 @@ async fn establish_connection(
                             state.config_options = update.config_options.clone();
                         }
                         if event_tx
+                            .send(ConnectionEvent::Acp(AcpEvent::Notification(
+                                acp::AgentNotification::SessionNotification(notification.clone()),
+                            )))
+                            .await
+                            .is_err()
+                        {
+                            warn!("Notification channel closed, dropping notification");
+                            return Ok(());
+                        }
+                        if event_tx
                             .send(ConnectionEvent::SessionUpdate(notification.update))
                             .await
                             .is_err()
                         {
-                            warn!("Notification channel closed, dropping update");
+                            warn!("Notification channel closed, dropping reducer update");
                         }
                         Ok(())
                     }
@@ -162,36 +186,20 @@ async fn establish_connection(
             .on_receive_request(
                 {
                     let event_tx = event_tx.clone();
-                    let cwd = approval_cwd;
                     async move |request: acp::RequestPermissionRequest,
                                 responder: agent_client_protocol::Responder<
                         acp::RequestPermissionResponse,
                     >,
                                 connection: ConnectionTo<Agent>| {
-                        let event = if let Some(patch_event) =
-                            translator::permission_request_to_patch_approval_event(&request, &cwd)
-                        {
-                            ApprovalEventType::Patch(patch_event)
-                        } else {
-                            let exec_event =
-                                translator::permission_request_to_approval_event(&request, &cwd);
-                            ApprovalEventType::Exec(exec_event)
-                        };
-
                         let (response_tx, response_rx) = oneshot::channel();
-                        let approval = ApprovalRequest {
-                            request_id: match responder.id() {
-                                serde_json::Value::String(id) => id,
-                                other => other.to_string(),
-                            },
-                            event,
-                            acp_request: request.clone(),
-                            options: request.options.clone(),
+                        let delegated = DelegatedRequest {
+                            request_id: schema_request_id(responder.id()),
+                            request: acp::AgentRequest::RequestPermissionRequest(request),
                             response_tx,
                         };
 
                         if event_tx
-                            .send(ConnectionEvent::ApprovalRequest(approval))
+                            .send(ConnectionEvent::DelegatedRequest(delegated))
                             .await
                             .is_err()
                         {
@@ -202,32 +210,18 @@ async fn establish_connection(
                         }
 
                         connection.spawn(async move {
-                            let outcome = match response_rx.await {
-                                Ok(decision) => translator::review_decision_to_permission_outcome(
-                                    decision,
-                                    &request.options,
-                                ),
-                                Err(_) => {
-                                    let option_id = request
-                                        .options
-                                        .iter()
-                                        .find(|opt| {
-                                            matches!(
-                                                opt.kind,
-                                                acp::PermissionOptionKind::RejectOnce
-                                                    | acp::PermissionOptionKind::RejectAlways
-                                            )
-                                        })
-                                        .map(|opt| opt.option_id.clone())
-                                        .unwrap_or_else(|| {
-                                            acp::PermissionOptionId::from("deny".to_string())
-                                        });
-                                    acp::RequestPermissionOutcome::Selected(
-                                        acp::SelectedPermissionOutcome::new(option_id),
-                                    )
-                                }
+                            let response = match response_rx.await {
+                                Ok(Ok(acp::ClientResponse::RequestPermissionResponse(
+                                    response,
+                                ))) => Ok(response),
+                                Ok(Ok(_)) => Err(acp::Error::invalid_params()
+                                    .data("response variant does not match permission request")),
+                                Ok(Err(error)) => Err(error),
+                                Err(_) => Ok(acp::RequestPermissionResponse::new(
+                                    acp::RequestPermissionOutcome::Cancelled,
+                                )),
                             };
-                            responder.respond(acp::RequestPermissionResponse::new(outcome))?;
+                            responder.respond_with_result(response)?;
                             Ok(())
                         })?;
 
@@ -238,25 +232,12 @@ async fn establish_connection(
             )
             .on_receive_request(
                 {
-                    let event_tx = event_tx_for_write;
                     let cwd = write_cwd;
                     async move |request: acp::WriteTextFileRequest,
                                 responder: agent_client_protocol::Responder<
                         acp::WriteTextFileResponse,
                     >,
                                 _connection: ConnectionTo<Agent>| {
-                        let tool_call_id = acp::ToolCallId::from(format!(
-                            "write_text_file-{}",
-                            request.path.display()
-                        ));
-                        let title = format!("Writing {}", request.path.display());
-                        let tool_call = acp::ToolCall::new(tool_call_id, title)
-                            .kind(acp::ToolKind::Execute)
-                            .status(acp::ToolCallStatus::Pending);
-                        let _ = event_tx.try_send(ConnectionEvent::SessionUpdate(
-                            acp::SessionUpdate::ToolCall(tool_call),
-                        ));
-
                         let path = &request.path;
                         let resolved_path = if path.is_relative() {
                             cwd.join(path)
@@ -324,25 +305,12 @@ async fn establish_connection(
             )
             .on_receive_request(
                 {
-                    let event_tx = event_tx_for_read;
                     let cwd = read_cwd;
                     async move |request: acp::ReadTextFileRequest,
                                 responder: agent_client_protocol::Responder<
                         acp::ReadTextFileResponse,
                     >,
                                 _connection: ConnectionTo<Agent>| {
-                        let tool_call_id = acp::ToolCallId::from(format!(
-                            "read_text_file-{}",
-                            request.path.display()
-                        ));
-                        let title = format!("Reading {}", request.path.display());
-                        let tool_call = acp::ToolCall::new(tool_call_id, title)
-                            .kind(acp::ToolKind::Execute)
-                            .status(acp::ToolCallStatus::Pending);
-                        let _ = event_tx.try_send(ConnectionEvent::SessionUpdate(
-                            acp::SessionUpdate::ToolCall(tool_call),
-                        ));
-
                         let resolved_path = if request.path.is_relative() {
                             cwd.join(&request.path)
                         } else {
@@ -365,22 +333,25 @@ async fn establish_connection(
                 agent_client_protocol::on_receive_request!(),
             )
             .connect_with(transport, |connection: ConnectionTo<Agent>| async move {
-                let response = connection
-                    .send_request(
-                        acp::InitializeRequest::new(ProtocolVersion::LATEST)
-                            .client_capabilities(
-                                acp::ClientCapabilities::new().fs(
-                                    acp::FileSystemCapabilities::new()
-                                        .read_text_file(true)
-                                        .write_text_file(true),
-                                ),
-                            )
-                            .client_info(
-                                acp::Implementation::new("codex", env!("CARGO_PKG_VERSION"))
-                                    .title("Codex CLI"),
-                            ),
-                    )
-                    .block_task()
+                let request = connection.send_request(
+                    acp::InitializeRequest::new(ProtocolVersion::LATEST)
+                        .client_capabilities(
+                            acp::ClientCapabilities::new().fs(acp::FileSystemCapabilities::new()
+                                .read_text_file(true)
+                                .write_text_file(true)),
+                        )
+                        .client_info(
+                            acp::Implementation::new("nori", env!("CARGO_PKG_VERSION"))
+                                .title("Nori CLI"),
+                        ),
+                );
+                let request_id = schema_request_id(request.id());
+                let response = request.block_task().await;
+                let _ = event_tx_for_initialize
+                    .send(ConnectionEvent::Acp(AcpEvent::Response {
+                        request_id,
+                        response: response.clone().map(acp::AgentResponse::InitializeResponse),
+                    }))
                     .await;
 
                 match response {
@@ -422,6 +393,7 @@ async fn establish_connection(
         cx,
         agent_capabilities: capabilities,
         event_rx,
+        event_tx: connection_event_tx,
         prompt_state,
         session_config_state,
         connection_task,
@@ -652,12 +624,19 @@ impl AcpConnection {
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
     ) -> Result<acp::SessionId> {
-        let response = self
+        let request = self
             .cx
-            .send_request(acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers))
-            .block_task()
-            .await
-            .context("Failed to create ACP session")?;
+            .send_request(acp::NewSessionRequest::new(cwd).mcp_servers(mcp_servers));
+        let request_id = schema_request_id(request.id());
+        let response = request.block_task().await;
+        let _ = self
+            .event_tx
+            .send(ConnectionEvent::Acp(AcpEvent::Response {
+                request_id,
+                response: response.clone().map(acp::AgentResponse::NewSessionResponse),
+            }))
+            .await;
+        let response = response.context("Failed to create ACP session")?;
 
         if let Some(config_options) = response.config_options
             && let Ok(mut state) = self.session_config_state.write()
@@ -679,14 +658,21 @@ impl AcpConnection {
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
     ) -> Result<acp::SessionId> {
-        let response = self
-            .cx
-            .send_request(
-                acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
-            )
-            .block_task()
-            .await
-            .context("Failed to load ACP session")?;
+        let request = self.cx.send_request(
+            acp::LoadSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
+        );
+        let request_id = schema_request_id(request.id());
+        let response = request.block_task().await;
+        let _ = self
+            .event_tx
+            .send(ConnectionEvent::Acp(AcpEvent::Response {
+                request_id,
+                response: response
+                    .clone()
+                    .map(acp::AgentResponse::LoadSessionResponse),
+            }))
+            .await;
+        let response = response.context("Failed to load ACP session")?;
 
         if let Some(config_options) = response.config_options
             && let Ok(mut state) = self.session_config_state.write()
@@ -711,15 +697,21 @@ impl AcpConnection {
         cwd: &Path,
         mcp_servers: Vec<acp::McpServer>,
     ) -> Result<acp::SessionId> {
-        let response = self
-            .cx
-            .send_request(
-                acp::ResumeSessionRequest::new(session_id.to_string(), cwd)
-                    .mcp_servers(mcp_servers),
-            )
-            .block_task()
-            .await
-            .context("Failed to resume ACP session")?;
+        let request = self.cx.send_request(
+            acp::ResumeSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
+        );
+        let request_id = schema_request_id(request.id());
+        let response = request.block_task().await;
+        let _ = self
+            .event_tx
+            .send(ConnectionEvent::Acp(AcpEvent::Response {
+                request_id,
+                response: response
+                    .clone()
+                    .map(acp::AgentResponse::ResumeSessionResponse),
+            }))
+            .await;
+        let response = response.context("Failed to resume ACP session")?;
 
         if let Some(config_options) = response.config_options
             && let Ok(mut state) = self.session_config_state.write()
@@ -732,11 +724,22 @@ impl AcpConnection {
 
     /// Close (release) a session via ACP `session/close`.
     pub async fn close_session(&self, session_id: &str) -> Result<()> {
-        self.cx
-            .send_request(acp::CloseSessionRequest::new(session_id.to_string()))
-            .block_task()
-            .await
-            .context("Failed to close ACP session")?;
+        let request = self
+            .cx
+            .send_request(acp::CloseSessionRequest::new(session_id.to_string()));
+        let request_id = schema_request_id(request.id());
+        let response = request.block_task().await;
+        let _ = self
+            .event_tx
+            .send(ConnectionEvent::Acp(AcpEvent::Response {
+                request_id,
+                response: response
+                    .clone()
+                    .map(acp::AgentResponse::CloseSessionResponse),
+            }))
+            .await;
+        response.context("Failed to close ACP session")?;
+        let _ = self.event_tx.send(ConnectionEvent::SessionClosed).await;
         Ok(())
     }
 
@@ -745,15 +748,12 @@ impl AcpConnection {
     /// `cwd` is forwarded as the spec's working-directory filter. Cursor-based
     /// pagination is drained internally, so the returned vector contains every
     /// page concatenated in agent order.
-    pub async fn list_sessions(
-        &self,
-        cwd: &Path,
-    ) -> Result<Vec<crate::connection::AcpSessionSummary>> {
+    pub async fn list_sessions(&self, cwd: &Path) -> Result<Vec<acp::SessionInfo>> {
         // Bound pagination so a misbehaving agent that keeps returning a
         // `next_cursor` cannot pin the picker in an unbounded loop.
         const MAX_SESSION_LIST_PAGES: usize = 1000;
 
-        let mut summaries = Vec::new();
+        let mut sessions = Vec::new();
         let mut cursor: Option<String> = None;
 
         for _ in 0..MAX_SESSION_LIST_PAGES {
@@ -762,22 +762,21 @@ impl AcpConnection {
                 request = request.cursor(cursor);
             }
 
-            let response = self
-                .cx
-                .send_request(request)
-                .block_task()
-                .await
-                .context("Failed to list ACP sessions")?;
+            let request = self.cx.send_request(request);
+            let request_id = schema_request_id(request.id());
+            let response = request.block_task().await;
+            let _ = self
+                .event_tx
+                .send(ConnectionEvent::Acp(AcpEvent::Response {
+                    request_id,
+                    response: response
+                        .clone()
+                        .map(acp::AgentResponse::ListSessionsResponse),
+                }))
+                .await;
+            let response = response.context("Failed to list ACP sessions")?;
 
-            summaries.extend(response.sessions.into_iter().map(|session| {
-                crate::connection::AcpSessionSummary {
-                    session_id: session.session_id.to_string(),
-                    cwd: session.cwd,
-                    title: session.title,
-                    updated_at: session.updated_at,
-                    meta: session.meta.map(serde_json::Value::Object),
-                }
-            }));
+            sessions.extend(response.sessions);
 
             match response.next_cursor {
                 Some(next) => cursor = Some(next),
@@ -785,7 +784,7 @@ impl AcpConnection {
             }
         }
 
-        Ok(summaries)
+        Ok(sessions)
     }
 
     /// Send a prompt to an existing session and receive streaming updates.
@@ -796,8 +795,20 @@ impl AcpConnection {
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
     ) -> Result<acp::StopReason> {
+        self.prompt_with_request_id(session_id, prompt, None).await
+    }
+
+    /// Send a prompt and report its transport-assigned request ID as soon as
+    /// the request is issued.
+    pub async fn prompt_with_request_id(
+        &self,
+        session_id: acp::SessionId,
+        prompt: Vec<acp::ContentBlock>,
+        request_started: Option<oneshot::Sender<Result<RequestId>>>,
+    ) -> Result<acp::StopReason> {
         let session_key = session_id.to_string();
         let mut attempt = 0_i64;
+        let mut request_started = request_started;
 
         loop {
             attempt += 1;
@@ -816,12 +827,22 @@ impl AcpConnection {
                 update_seq_before,
                 "Transport sending ACP session/prompt request"
             );
-            let response = self
+            let request = self
                 .cx
-                .send_request(acp::PromptRequest::new(session_id.clone(), prompt.clone()))
-                .block_task()
-                .await
-                .context("ACP prompt failed");
+                .send_request(acp::PromptRequest::new(session_id.clone(), prompt.clone()));
+            let request_id = schema_request_id(request.id());
+            if let Some(request_started) = request_started.take() {
+                let _ = request_started.send(Ok(request_id.clone()));
+            }
+            let response = request.block_task().await;
+            let _ = self
+                .event_tx
+                .send(ConnectionEvent::Acp(AcpEvent::Response {
+                    request_id,
+                    response: response.clone().map(acp::AgentResponse::PromptResponse),
+                }))
+                .await;
+            let response = response.context("ACP prompt failed");
 
             match response {
                 Ok(response) => {
@@ -912,16 +933,25 @@ impl AcpConnection {
         value: impl Into<acp::SessionConfigValueId>,
     ) -> Result<()> {
         let value = acp::SessionConfigOptionValue::value_id(value.into());
-        let response = self
+        let request = self
             .cx
             .send_request(acp::SetSessionConfigOptionRequest::new(
                 session_id.clone(),
                 config_id,
                 value,
-            ))
-            .block_task()
-            .await
-            .context("Failed to set ACP session config option")?;
+            ));
+        let request_id = schema_request_id(request.id());
+        let response = request.block_task().await;
+        let _ = self
+            .event_tx
+            .send(ConnectionEvent::Acp(AcpEvent::Response {
+                request_id,
+                response: response
+                    .clone()
+                    .map(acp::AgentResponse::SetSessionConfigOptionResponse),
+            }))
+            .await;
+        let response = response.context("Failed to set ACP session config option")?;
 
         if let Ok(mut state) = self.session_config_state.write() {
             state.config_options = response.config_options;

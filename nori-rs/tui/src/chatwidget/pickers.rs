@@ -89,7 +89,7 @@ impl ChatWidget {
             && (self.session_agent_capabilities.load_session
                 || self.session_agent_capabilities.session_resume)
         {
-            let Some(handle) = self.acp_handle.clone() else {
+            let Some(handle) = self.harness_handle.clone() else {
                 // Deferred widget (picker-first entry, post-/close): there is
                 // no live connection to list over — re-run the pre-session
                 // probe at the app layer instead.
@@ -221,7 +221,7 @@ impl ChatWidget {
     /// Show the resume picker populated from the agent's ACP `session/list`.
     pub(crate) fn show_acp_resume_session_picker(
         &mut self,
-        sessions: Vec<nori_harness::AcpSessionSummary>,
+        sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
     ) {
         let params = crate::nori::resume_session_picker::acp_resume_session_picker_params(sessions);
         self.bottom_pane.show_selection_view(params);
@@ -390,10 +390,7 @@ impl ChatWidget {
 
     /// Open the MCP server management popup.
     pub(crate) fn open_mcp_servers_popup(&mut self) {
-        let servers: std::collections::BTreeMap<
-            String,
-            codex_protocol::config_types::McpServerConfig,
-        > = self
+        let servers: std::collections::BTreeMap<String, nori_config::McpServerConfig> = self
             .config
             .mcp_servers
             .iter()
@@ -619,12 +616,13 @@ impl ChatWidget {
             self.bottom_pane.show_selection_view(params);
             return;
         }
-        if let Some(handle) = self.acp_handle.clone() {
+        if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
                 if let Some(config_options) = handle.get_session_config().await {
                     let model_option = config_options.into_iter().find(|opt| {
-                        opt.category == Some(nori_harness::SessionConfigOptionCategory::Model)
+                        opt.category
+                            == Some(nori_protocol::acp::v1::SessionConfigOptionCategory::Model)
                     });
                     if let Some(option) = model_option {
                         app_event_tx.send(AppEvent::OpenAcpSessionConfigValuePicker { option });
@@ -649,7 +647,7 @@ impl ChatWidget {
 
     /// Open the generic ACP session-config picker.
     pub(crate) fn open_session_config_popup(&mut self) {
-        if let Some(handle) = self.acp_handle.clone() {
+        if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
                 let config_options = handle.get_session_config().await.unwrap_or_default();
@@ -665,7 +663,7 @@ impl ChatWidget {
     /// Open the top-level ACP session-config picker with the current config snapshot.
     pub(crate) fn open_acp_session_config_picker(
         &mut self,
-        config_options: Vec<nori_harness::SessionConfigOption>,
+        config_options: Vec<nori_protocol::acp::v1::SessionConfigOption>,
     ) {
         let params =
             crate::nori::session_config_picker::acp_session_config_picker_params(&config_options);
@@ -675,7 +673,7 @@ impl ChatWidget {
     /// Open the value picker for one ACP session config option.
     pub(crate) fn open_acp_session_config_value_picker(
         &mut self,
-        option: nori_harness::SessionConfigOption,
+        option: nori_protocol::acp::v1::SessionConfigOption,
     ) {
         let params =
             crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
@@ -690,7 +688,7 @@ impl ChatWidget {
         option_name: String,
         value_name: String,
     ) {
-        if let Some(handle) = self.acp_handle.clone() {
+        if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             let generation = self.acp_mode_config_generation;
             let agent = self.config.active_agent.clone();

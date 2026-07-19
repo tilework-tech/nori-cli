@@ -139,7 +139,7 @@ impl ChatWidget {
                 self.open_viewonly_session_picker();
             }
             SlashCommand::Close => {
-                let Some(handle) = self.acp_handle.clone() else {
+                let Some(handle) = self.harness_handle.clone() else {
                     self.add_error_message("No live agent connection to close.".to_string());
                     return;
                 };
@@ -154,10 +154,6 @@ impl ChatWidget {
                                     None,
                                 ),
                             )));
-                            // Return to the session picker — never auto-claim
-                            // a fresh session (on a cloud agent that would
-                            // silently boot a new VM).
-                            tx.send(AppEvent::SessionClosed);
                         }
                         Err(e) => {
                             tx.send(AppEvent::SessionCloseFailed {
@@ -181,7 +177,9 @@ impl ChatWidget {
             }
             SlashCommand::Compact => {
                 self.clear_token_usage();
-                self.app_event_tx.send(AppEvent::CodexOp(Op::Compact));
+                self.app_event_tx.send(AppEvent::HarnessAction(
+                    crate::app_event::HarnessAction::Compact,
+                ));
             }
             SlashCommand::Agent => {
                 self.open_agent_popup();
@@ -222,7 +220,9 @@ impl ChatWidget {
                 );
             }
             SlashCommand::Undo => {
-                self.app_event_tx.send(AppEvent::CodexOp(Op::UndoList));
+                self.app_event_tx.send(AppEvent::HarnessAction(
+                    crate::app_event::HarnessAction::LoadUndoSnapshots,
+                ));
             }
             SlashCommand::Browse => match self.config.file_manager {
                 Some(fm) => {

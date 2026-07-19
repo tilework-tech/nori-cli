@@ -6,36 +6,29 @@ use crate::chatwidget::ChatWidget;
 use crate::client_event_format;
 use crate::client_tool_cell;
 use crate::diff_render::DiffSummary;
-use crate::exec_command::strip_bash_lc_and_escape;
 use crate::file_search::FileSearchManager;
 use crate::history_cell::HistoryCell;
 use crate::nori::agent_picker::PendingAgentSelection;
 use crate::pager_overlay::Overlay;
-use crate::render::highlight::highlight_bash_to_lines;
 use crate::render::renderable::Renderable;
 use crate::resume_picker::ResumeSelection;
 use crate::tui;
 use crate::tui::TuiEvent;
+use crate::ui_types::TokenUsage;
 use crate::update_action::UpdateAction;
 use codex_ansi_escape::ansi_escape_line;
 use codex_login::AuthManager;
-use codex_protocol::ConversationId;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::FinalOutput;
-use codex_protocol::protocol::Op;
-use codex_protocol::protocol::SandboxPolicy;
-use codex_protocol::protocol::TokenUsage;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_config::AskForApproval;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigEdits as ConfigEditsBuilder;
+use nori_config::SandboxPolicy;
+use nori_harness::ConversationId;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
-use ratatui::widgets::Wrap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -64,7 +57,7 @@ fn session_summary(
     conversation_id: Option<ConversationId>,
     conversation_has_activity: bool,
 ) -> Option<SessionSummary> {
-    let usage_line = (!token_usage.is_zero()).then(|| FinalOutput::from(token_usage).to_string());
+    let usage_line = (!token_usage.is_zero()).then(|| token_usage.to_string());
     let resume_command = conversation_id
         .filter(|_| conversation_has_activity)
         .map(|conversation_id| resume_command_for_conversation(&conversation_id));
@@ -210,7 +203,6 @@ impl App {
                 vertical_footer,
                 footer_segment_config: config.footer_segment_config.clone(),
                 footer_layout_config: config.footer_layout_config.clone(),
-                expected_agent: None,
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
             };
@@ -309,8 +301,8 @@ impl App {
             let should_check = codex_sandbox::get_platform_sandbox().is_some()
                 && matches!(
                     app.config.sandbox_policy,
-                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
+                    nori_config::SandboxPolicy::WorkspaceWrite { .. }
+                        | nori_config::SandboxPolicy::ReadOnly
                 )
                 && !app
                     .config
@@ -375,7 +367,7 @@ impl App {
         frame_requester: crate::tui::FrameRequester,
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
-        expected_agent: Option<String>,
+        _expected_agent: Option<String>,
         deferred_spawn: bool,
         fork_context: Option<String>,
     ) -> crate::chatwidget::ChatWidgetInit {
@@ -390,7 +382,6 @@ impl App {
             vertical_footer: self.vertical_footer,
             footer_segment_config: self.footer_segment_config.clone(),
             footer_layout_config: self.footer_layout_config.clone(),
-            expected_agent,
             deferred_spawn,
             fork_context,
         }
@@ -405,7 +396,7 @@ impl App {
             .set_loop_count_override(self.loop_count_override);
     }
 
-    pub(crate) fn token_usage(&self) -> codex_protocol::protocol::TokenUsage {
+    pub(crate) fn token_usage(&self) -> TokenUsage {
         self.chat_widget.token_usage()
     }
 
@@ -450,6 +441,3 @@ impl App {
         })
     }
 }
-
-#[cfg(test)]
-mod tests;

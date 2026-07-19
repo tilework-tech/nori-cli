@@ -1,20 +1,14 @@
-//! ACP-faithful session runtime types.
-//!
-//! These types implement the turn-state model defined in the ACP Turn State
-//! spec. `SessionRuntime` is the single source of truth for whether a session
-//! is idle, loading, or processing a prompt.
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use agent_client_protocol_schema::v1 as acp;
+use nori_protocol::acp::v1 as acp;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::AgentCommandInfo;
-use crate::PlanSnapshot;
-use crate::ToolSnapshot;
+use super::AgentCommandInfo;
+use super::PlanSnapshot;
+use super::ToolSnapshot;
 
 // ---------------------------------------------------------------------------
 // Session phase
@@ -66,19 +60,11 @@ impl From<&SessionPhase> for SessionPhaseView {
 // Active request state
 // ---------------------------------------------------------------------------
 
-/// Whether the active request is a load or a prompt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ActiveRequestKind {
-    Loading,
-    Prompt,
-}
-
 /// In-flight request state. Exists only while a `session/prompt` or
 /// `session/load` is active. Cleared when the response arrives.
 #[derive(Debug, Clone)]
 pub struct ActiveRequestState {
     pub request_id: String,
-    pub kind: ActiveRequestKind,
     pub prompt: Option<QueuedPrompt>,
     pub open_agent_message: Option<OpenMessage>,
     pub open_thought_message: Option<OpenMessage>,
@@ -91,10 +77,9 @@ pub struct ActiveRequestState {
 }
 
 impl ActiveRequestState {
-    pub fn new(request_id: String, kind: ActiveRequestKind) -> Self {
+    pub fn new_loading(request_id: String) -> Self {
         Self {
             request_id,
-            kind,
             prompt: None,
             open_agent_message: None,
             open_thought_message: None,
@@ -108,7 +93,7 @@ impl ActiveRequestState {
     pub fn new_prompt(request_id: String, prompt: QueuedPrompt) -> Self {
         Self {
             prompt: Some(prompt),
-            ..Self::new(request_id, ActiveRequestKind::Prompt)
+            ..Self::new_loading(request_id)
         }
     }
 }

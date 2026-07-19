@@ -5,12 +5,90 @@ use super::*;
 /// rejection is the real guard — but large summaries are worth logging.
 const TRANSCRIPT_SUMMARY_WARN_CHARS: usize = 200_000;
 
-pub(crate) fn should_record_client_event(event: &nori_protocol::ClientEvent) -> bool {
-    !matches!(
-        event,
-        nori_protocol::ClientEvent::ToolSnapshot(snapshot)
-            if snapshot.phase == nori_protocol::ToolPhase::InProgress
-    )
+/// Recover the agent-to-client ACP notification stream stored in a v3
+/// transcript. For v1/v2 transcripts, synthesize message notifications from
+/// the stable user/assistant entries so old sessions remain replayable.
+pub fn transcript_to_replay_session_events(
+    transcript: &crate::transcript::Transcript,
+) -> Vec<nori_protocol::SessionEvent> {
+    let raw_notifications: Vec<_> = transcript
+        .entries
+        .iter()
+        .filter_map(|line| match &line.entry {
+            crate::transcript::TranscriptEntry::SessionEvent(entry)
+                if matches!(
+                    entry.event,
+                    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                        nori_protocol::acp::v1::AgentNotification::SessionNotification(_)
+                    ))
+                ) =>
+            {
+                Some(entry.event.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    if !raw_notifications.is_empty() {
+        return raw_notifications;
+    }
+
+    let session_id = transcript
+        .meta
+        .acp_session_id
+        .clone()
+        .unwrap_or_else(|| format!("transcript-{}", transcript.meta.session_id));
+    transcript
+        .entries
+        .iter()
+        .flat_map(|line| {
+            let updates: Vec<_> = match &line.entry {
+                crate::transcript::TranscriptEntry::User(user) => {
+                    vec![nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(
+                        nori_protocol::acp::v1::ContentChunk::new(
+                            nori_protocol::acp::v1::ContentBlock::Text(
+                                nori_protocol::acp::v1::TextContent::new(user.content.clone()),
+                            ),
+                        ),
+                    )]
+                }
+                crate::transcript::TranscriptEntry::Assistant(assistant) => assistant
+                    .content
+                    .iter()
+                    .map(|block| match block {
+                        ContentBlock::Text { text } => {
+                            nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
+                                nori_protocol::acp::v1::ContentChunk::new(
+                                    nori_protocol::acp::v1::ContentBlock::Text(
+                                        nori_protocol::acp::v1::TextContent::new(text.clone()),
+                                    ),
+                                ),
+                            )
+                        }
+                        ContentBlock::Thinking { thinking } => {
+                            nori_protocol::acp::v1::SessionUpdate::AgentThoughtChunk(
+                                nori_protocol::acp::v1::ContentChunk::new(
+                                    nori_protocol::acp::v1::ContentBlock::Text(
+                                        nori_protocol::acp::v1::TextContent::new(thinking.clone()),
+                                    ),
+                                ),
+                            )
+                        }
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            updates.into_iter().map(|update| {
+                nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                    nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                        nori_protocol::acp::v1::SessionNotification::new(
+                            session_id.clone(),
+                            update,
+                        ),
+                    ),
+                ))
+            })
+        })
+        .collect()
 }
 
 /// Convert a loaded transcript into normalized replay events suitable for ACP
@@ -19,14 +97,14 @@ pub(crate) fn should_record_client_event(event: &nori_protocol::ClientEvent) -> 
 /// live approval or turn-lifecycle state.
 pub fn transcript_to_replay_client_events(
     transcript: &crate::transcript::Transcript,
-) -> Vec<nori_protocol::ClientEvent> {
+) -> Vec<crate::normalized::ClientEvent> {
     let mut replay = Vec::new();
 
     for line in &transcript.entries {
         match &line.entry {
             crate::transcript::TranscriptEntry::User(user) => {
-                replay.push(nori_protocol::ClientEvent::ReplayEntry(
-                    nori_protocol::ReplayEntry::UserMessage {
+                replay.push(crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::UserMessage {
                         text: user.content.clone(),
                     },
                 ));
@@ -35,13 +113,15 @@ pub fn transcript_to_replay_client_events(
                 for block in &assistant.content {
                     match block {
                         ContentBlock::Text { text } if !text.is_empty() => {
-                            replay.push(nori_protocol::ClientEvent::ReplayEntry(
-                                nori_protocol::ReplayEntry::AssistantMessage { text: text.clone() },
+                            replay.push(crate::normalized::ClientEvent::ReplayEntry(
+                                crate::normalized::ReplayEntry::AssistantMessage {
+                                    text: text.clone(),
+                                },
                             ))
                         }
                         ContentBlock::Thinking { thinking } if !thinking.is_empty() => {
-                            replay.push(nori_protocol::ClientEvent::ReplayEntry(
-                                nori_protocol::ReplayEntry::ReasoningMessage {
+                            replay.push(crate::normalized::ClientEvent::ReplayEntry(
+                                crate::normalized::ReplayEntry::ReasoningMessage {
                                     text: thinking.clone(),
                                 },
                             ))
@@ -52,11 +132,26 @@ pub fn transcript_to_replay_client_events(
             }
             crate::transcript::TranscriptEntry::ClientEvent(client_event) => {
                 if let Some(replay_entry) = replay_entry_from_client_event(&client_event.event) {
-                    replay.push(nori_protocol::ClientEvent::ReplayEntry(replay_entry));
+                    replay.push(crate::normalized::ClientEvent::ReplayEntry(replay_entry));
                 } else if should_pass_through_replay_client_event(&client_event.event) {
                     replay.push(client_event.event.clone());
                 }
             }
+            crate::transcript::TranscriptEntry::SessionEvent(session_event) => match &session_event
+                .event
+            {
+                nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::GoalChanged(Some(
+                    goal,
+                ))) => {
+                    replay.push(crate::normalized::ClientEvent::ThreadGoalUpdated(
+                        crate::normalized::ThreadGoalUpdated { goal: goal.clone() },
+                    ));
+                }
+                nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::GoalChanged(None)) => {
+                    replay.push(crate::normalized::ClientEvent::ThreadGoalCleared);
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -65,14 +160,14 @@ pub fn transcript_to_replay_client_events(
 }
 
 pub fn client_events_to_replay_client_events(
-    client_events: Vec<nori_protocol::ClientEvent>,
-) -> Vec<nori_protocol::ClientEvent> {
+    client_events: Vec<crate::normalized::ClientEvent>,
+) -> Vec<crate::normalized::ClientEvent> {
     let mut replay = Vec::new();
-    let mut current_stream: Option<nori_protocol::MessageStream> = None;
+    let mut current_stream: Option<crate::normalized::MessageStream> = None;
     let mut current_text = String::new();
 
-    let flush_message = |replay: &mut Vec<nori_protocol::ClientEvent>,
-                         stream: &mut Option<nori_protocol::MessageStream>,
+    let flush_message = |replay: &mut Vec<crate::normalized::ClientEvent>,
+                         stream: &mut Option<crate::normalized::MessageStream>,
                          text: &mut String| {
         let Some(stream) = stream.take() else {
             return;
@@ -83,20 +178,22 @@ pub fn client_events_to_replay_client_events(
 
         let text = std::mem::take(text);
         let entry = match stream {
-            nori_protocol::MessageStream::User => nori_protocol::ReplayEntry::UserMessage { text },
-            nori_protocol::MessageStream::Answer => {
-                nori_protocol::ReplayEntry::AssistantMessage { text }
+            crate::normalized::MessageStream::User => {
+                crate::normalized::ReplayEntry::UserMessage { text }
             }
-            nori_protocol::MessageStream::Reasoning => {
-                nori_protocol::ReplayEntry::ReasoningMessage { text }
+            crate::normalized::MessageStream::Answer => {
+                crate::normalized::ReplayEntry::AssistantMessage { text }
+            }
+            crate::normalized::MessageStream::Reasoning => {
+                crate::normalized::ReplayEntry::ReasoningMessage { text }
             }
         };
-        replay.push(nori_protocol::ClientEvent::ReplayEntry(entry));
+        replay.push(crate::normalized::ClientEvent::ReplayEntry(entry));
     };
 
     for event in client_events {
         match event {
-            nori_protocol::ClientEvent::MessageDelta(message_delta) => {
+            crate::normalized::ClientEvent::MessageDelta(message_delta) => {
                 if current_stream.as_ref() != Some(&message_delta.stream) {
                     flush_message(&mut replay, &mut current_stream, &mut current_text);
                     current_stream = Some(message_delta.stream);
@@ -106,7 +203,7 @@ pub fn client_events_to_replay_client_events(
             other => {
                 flush_message(&mut replay, &mut current_stream, &mut current_text);
                 if let Some(replay_entry) = replay_entry_from_client_event(&other) {
-                    replay.push(nori_protocol::ClientEvent::ReplayEntry(replay_entry));
+                    replay.push(crate::normalized::ClientEvent::ReplayEntry(replay_entry));
                 } else if should_pass_through_replay_client_event(&other) {
                     replay.push(other);
                 }
@@ -157,7 +254,7 @@ pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> Stri
             }
             crate::transcript::TranscriptEntry::ClientEvent(client_event) => {
                 match &client_event.event {
-                    nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot)
+                    crate::normalized::ClientEvent::ToolSnapshot(tool_snapshot)
                         if seen_tool_calls.insert(tool_snapshot.call_id.clone()) =>
                     {
                         summary.push_str(&format!("[Tool: {}]\n", tool_snapshot.title));
@@ -181,50 +278,50 @@ pub fn transcript_to_summary(transcript: &crate::transcript::Transcript) -> Stri
 }
 
 fn replay_entry_from_client_event(
-    event: &nori_protocol::ClientEvent,
-) -> Option<nori_protocol::ReplayEntry> {
+    event: &crate::normalized::ClientEvent,
+) -> Option<crate::normalized::ReplayEntry> {
     match event {
-        nori_protocol::ClientEvent::ToolSnapshot(snapshot)
+        crate::normalized::ClientEvent::ToolSnapshot(snapshot)
             if matches!(
                 snapshot.phase,
-                nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+                crate::normalized::ToolPhase::Completed | crate::normalized::ToolPhase::Failed
             ) =>
         {
-            Some(nori_protocol::ReplayEntry::ToolSnapshot {
+            Some(crate::normalized::ReplayEntry::ToolSnapshot {
                 snapshot: Box::new(snapshot.clone()),
             })
         }
-        nori_protocol::ClientEvent::ToolSnapshot(_) => None,
-        nori_protocol::ClientEvent::PlanSnapshot(snapshot) => {
-            Some(nori_protocol::ReplayEntry::PlanSnapshot {
+        crate::normalized::ClientEvent::ToolSnapshot(_) => None,
+        crate::normalized::ClientEvent::PlanSnapshot(snapshot) => {
+            Some(crate::normalized::ReplayEntry::PlanSnapshot {
                 snapshot: snapshot.clone(),
             })
         }
-        nori_protocol::ClientEvent::ApprovalRequest(_)
-        | nori_protocol::ClientEvent::MessageDelta(_)
-        | nori_protocol::ClientEvent::SessionPhaseChanged(_)
-        | nori_protocol::ClientEvent::PromptCompleted(_)
-        | nori_protocol::ClientEvent::LoadCompleted
-        | nori_protocol::ClientEvent::QueueChanged(_)
-        | nori_protocol::ClientEvent::ContextCompacted(_)
-        | nori_protocol::ClientEvent::ReplayEntry(_)
-        | nori_protocol::ClientEvent::AgentCommandsUpdate(_)
-        | nori_protocol::ClientEvent::SessionCapabilitiesChanged(_)
-        | nori_protocol::ClientEvent::SessionUpdateInfo(_)
-        | nori_protocol::ClientEvent::SessionConfigUpdate(_)
-        | nori_protocol::ClientEvent::SessionModeChanged(_)
-        | nori_protocol::ClientEvent::ThreadGoalUpdated(_)
-        | nori_protocol::ClientEvent::ThreadGoalCleared
-        | nori_protocol::ClientEvent::Warning(_) => None,
+        crate::normalized::ClientEvent::ApprovalRequest(_)
+        | crate::normalized::ClientEvent::MessageDelta(_)
+        | crate::normalized::ClientEvent::SessionPhaseChanged(_)
+        | crate::normalized::ClientEvent::PromptCompleted(_)
+        | crate::normalized::ClientEvent::LoadCompleted
+        | crate::normalized::ClientEvent::QueueChanged(_)
+        | crate::normalized::ClientEvent::ContextCompacted(_)
+        | crate::normalized::ClientEvent::ReplayEntry(_)
+        | crate::normalized::ClientEvent::AgentCommandsUpdate(_)
+        | crate::normalized::ClientEvent::SessionCapabilitiesChanged(_)
+        | crate::normalized::ClientEvent::SessionUpdateInfo(_)
+        | crate::normalized::ClientEvent::SessionConfigUpdate(_)
+        | crate::normalized::ClientEvent::SessionModeChanged(_)
+        | crate::normalized::ClientEvent::ThreadGoalUpdated(_)
+        | crate::normalized::ClientEvent::ThreadGoalCleared
+        | crate::normalized::ClientEvent::Warning(_) => None,
     }
 }
 
-fn should_pass_through_replay_client_event(event: &nori_protocol::ClientEvent) -> bool {
+fn should_pass_through_replay_client_event(event: &crate::normalized::ClientEvent) -> bool {
     matches!(
         event,
-        nori_protocol::ClientEvent::SessionUpdateInfo(_)
-            | nori_protocol::ClientEvent::ThreadGoalUpdated(_)
-            | nori_protocol::ClientEvent::ThreadGoalCleared
+        crate::normalized::ClientEvent::SessionUpdateInfo(_)
+            | crate::normalized::ClientEvent::ThreadGoalUpdated(_)
+            | crate::normalized::ClientEvent::ThreadGoalCleared
     )
 }
 
@@ -288,26 +385,30 @@ mod tests {
                 agent: Some("claude-code".into()),
             }),
             TranscriptEntry::ClientEvent(ClientEventEntry {
-                event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-                    call_id: "tool-1".into(),
-                    title: "Read Cargo.toml".into(),
-                    kind: nori_protocol::ToolKind::Read,
-                    phase: nori_protocol::ToolPhase::Completed,
-                    locations: vec![],
-                    invocation: Some(nori_protocol::Invocation::Read {
-                        path: PathBuf::from("Cargo.toml"),
-                    }),
-                    artifacts: vec![],
-                    raw_input: None,
-                    raw_output: None,
-                    owner_request_id: None,
-                }),
+                event: crate::normalized::ClientEvent::ToolSnapshot(
+                    crate::normalized::ToolSnapshot {
+                        call_id: "tool-1".into(),
+                        title: "Read Cargo.toml".into(),
+                        kind: crate::normalized::ToolKind::Read,
+                        phase: crate::normalized::ToolPhase::Completed,
+                        locations: vec![],
+                        invocation: Some(crate::normalized::Invocation::Read {
+                            path: PathBuf::from("Cargo.toml"),
+                        }),
+                        artifacts: vec![],
+                        raw_input: None,
+                        raw_output: None,
+                        owner_request_id: None,
+                    },
+                ),
             }),
             TranscriptEntry::ClientEvent(ClientEventEntry {
-                event: nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
-                    stream: nori_protocol::MessageStream::Answer,
-                    delta: "duplicate streamed text".into(),
-                }),
+                event: crate::normalized::ClientEvent::MessageDelta(
+                    crate::normalized::MessageDelta {
+                        stream: crate::normalized::MessageStream::Answer,
+                        delta: "duplicate streamed text".into(),
+                    },
+                ),
             }),
         ]);
 
@@ -316,35 +417,39 @@ mod tests {
         assert_eq!(
             replay,
             vec![
-                nori_protocol::ClientEvent::ReplayEntry(nori_protocol::ReplayEntry::UserMessage {
-                    text: "Inspect the repo".into(),
-                }),
-                nori_protocol::ClientEvent::ReplayEntry(
-                    nori_protocol::ReplayEntry::ReasoningMessage {
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::UserMessage {
+                        text: "Inspect the repo".into(),
+                    }
+                ),
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::ReasoningMessage {
                         text: "Need to inspect files".into(),
                     },
                 ),
-                nori_protocol::ClientEvent::ReplayEntry(
-                    nori_protocol::ReplayEntry::AssistantMessage {
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::AssistantMessage {
                         text: "I found the ACP bridge.".into(),
                     },
                 ),
-                nori_protocol::ClientEvent::ReplayEntry(nori_protocol::ReplayEntry::ToolSnapshot {
-                    snapshot: Box::new(nori_protocol::ToolSnapshot {
-                        call_id: "tool-1".into(),
-                        title: "Read Cargo.toml".into(),
-                        kind: nori_protocol::ToolKind::Read,
-                        phase: nori_protocol::ToolPhase::Completed,
-                        locations: vec![],
-                        invocation: Some(nori_protocol::Invocation::Read {
-                            path: PathBuf::from("Cargo.toml"),
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::ToolSnapshot {
+                        snapshot: Box::new(crate::normalized::ToolSnapshot {
+                            call_id: "tool-1".into(),
+                            title: "Read Cargo.toml".into(),
+                            kind: crate::normalized::ToolKind::Read,
+                            phase: crate::normalized::ToolPhase::Completed,
+                            locations: vec![],
+                            invocation: Some(crate::normalized::Invocation::Read {
+                                path: PathBuf::from("Cargo.toml"),
+                            }),
+                            artifacts: vec![],
+                            raw_input: None,
+                            raw_output: None,
+                            owner_request_id: None,
                         }),
-                        artifacts: vec![],
-                        raw_input: None,
-                        raw_output: None,
-                        owner_request_id: None,
-                    }),
-                }),
+                    }
+                ),
             ]
         );
     }
@@ -352,22 +457,24 @@ mod tests {
     #[test]
     fn client_events_to_replay_client_events_buffers_user_deltas_and_preserves_info_updates() {
         let replay = client_events_to_replay_client_events(vec![
-            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
-                stream: nori_protocol::MessageStream::User,
+            crate::normalized::ClientEvent::MessageDelta(crate::normalized::MessageDelta {
+                stream: crate::normalized::MessageStream::User,
                 delta: "Resume".into(),
             }),
-            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
-                stream: nori_protocol::MessageStream::User,
+            crate::normalized::ClientEvent::MessageDelta(crate::normalized::MessageDelta {
+                stream: crate::normalized::MessageStream::User,
                 delta: " this session".into(),
             }),
-            nori_protocol::ClientEvent::SessionUpdateInfo(nori_protocol::SessionUpdateInfo {
-                kind: nori_protocol::SessionUpdateKind::SessionInfo,
-                message: "Session info updated: title=\"Resume chat\"".into(),
-                hint: None,
-                usage: None,
-            }),
-            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
-                stream: nori_protocol::MessageStream::Answer,
+            crate::normalized::ClientEvent::SessionUpdateInfo(
+                crate::normalized::SessionUpdateInfo {
+                    kind: crate::normalized::SessionUpdateKind::SessionInfo,
+                    message: "Session info updated: title=\"Resume chat\"".into(),
+                    hint: None,
+                    usage: None,
+                },
+            ),
+            crate::normalized::ClientEvent::MessageDelta(crate::normalized::MessageDelta {
+                stream: crate::normalized::MessageStream::Answer,
                 delta: "Loaded.".into(),
             }),
         ]);
@@ -375,17 +482,21 @@ mod tests {
         assert_eq!(
             replay,
             vec![
-                nori_protocol::ClientEvent::ReplayEntry(nori_protocol::ReplayEntry::UserMessage {
-                    text: "Resume this session".into(),
-                }),
-                nori_protocol::ClientEvent::SessionUpdateInfo(nori_protocol::SessionUpdateInfo {
-                    kind: nori_protocol::SessionUpdateKind::SessionInfo,
-                    message: "Session info updated: title=\"Resume chat\"".into(),
-                    hint: None,
-                    usage: None,
-                }),
-                nori_protocol::ClientEvent::ReplayEntry(
-                    nori_protocol::ReplayEntry::AssistantMessage {
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::UserMessage {
+                        text: "Resume this session".into(),
+                    }
+                ),
+                crate::normalized::ClientEvent::SessionUpdateInfo(
+                    crate::normalized::SessionUpdateInfo {
+                        kind: crate::normalized::SessionUpdateKind::SessionInfo,
+                        message: "Session info updated: title=\"Resume chat\"".into(),
+                        hint: None,
+                        usage: None,
+                    }
+                ),
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::AssistantMessage {
                         text: "Loaded.".into(),
                     },
                 ),
@@ -395,8 +506,8 @@ mod tests {
 
     #[test]
     fn client_events_to_replay_client_events_preserves_goal_updates() {
-        let goal_event =
-            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
+        let goal_event = crate::normalized::ClientEvent::ThreadGoalUpdated(
+            crate::normalized::ThreadGoalUpdated {
                 goal: nori_protocol::ThreadGoal {
                     objective: "Keep the north star".to_string(),
                     status: nori_protocol::ThreadGoalStatus::Active,
@@ -405,7 +516,8 @@ mod tests {
                     created_at: 100,
                     updated_at: 107,
                 },
-            });
+            },
+        );
         let replay = client_events_to_replay_client_events(vec![goal_event.clone()]);
 
         assert_eq!(replay, vec![goal_event]);
@@ -414,25 +526,28 @@ mod tests {
     #[test]
     fn client_events_to_replay_client_events_preserves_goal_clears() {
         let replay = client_events_to_replay_client_events(vec![
-            nori_protocol::ClientEvent::ThreadGoalCleared,
+            crate::normalized::ClientEvent::ThreadGoalCleared,
         ]);
 
-        assert_eq!(replay, vec![nori_protocol::ClientEvent::ThreadGoalCleared]);
+        assert_eq!(
+            replay,
+            vec![crate::normalized::ClientEvent::ThreadGoalCleared]
+        );
     }
 
     #[test]
     fn client_events_to_replay_client_events_preserves_mixed_message_delta_order() {
         let replay = client_events_to_replay_client_events(vec![
-            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
-                stream: nori_protocol::MessageStream::Answer,
+            crate::normalized::ClientEvent::MessageDelta(crate::normalized::MessageDelta {
+                stream: crate::normalized::MessageStream::Answer,
                 delta: "CI is green.".into(),
             }),
-            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
-                stream: nori_protocol::MessageStream::Reasoning,
+            crate::normalized::ClientEvent::MessageDelta(crate::normalized::MessageDelta {
+                stream: crate::normalized::MessageStream::Reasoning,
                 delta: "Preparing PR.".into(),
             }),
-            nori_protocol::ClientEvent::MessageDelta(nori_protocol::MessageDelta {
-                stream: nori_protocol::MessageStream::Answer,
+            crate::normalized::ClientEvent::MessageDelta(crate::normalized::MessageDelta {
+                stream: crate::normalized::MessageStream::Answer,
                 delta: "The PR is up.".into(),
             }),
         ]);
@@ -440,18 +555,18 @@ mod tests {
         assert_eq!(
             replay,
             vec![
-                nori_protocol::ClientEvent::ReplayEntry(
-                    nori_protocol::ReplayEntry::AssistantMessage {
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::AssistantMessage {
                         text: "CI is green.".into(),
                     },
                 ),
-                nori_protocol::ClientEvent::ReplayEntry(
-                    nori_protocol::ReplayEntry::ReasoningMessage {
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::ReasoningMessage {
                         text: "Preparing PR.".into(),
                     },
                 ),
-                nori_protocol::ClientEvent::ReplayEntry(
-                    nori_protocol::ReplayEntry::AssistantMessage {
+                crate::normalized::ClientEvent::ReplayEntry(
+                    crate::normalized::ReplayEntry::AssistantMessage {
                         text: "The PR is up.".into(),
                     },
                 ),
@@ -462,12 +577,12 @@ mod tests {
     #[test]
     fn transcript_to_replay_client_events_preserves_session_update_info() {
         let transcript = make_transcript(vec![TranscriptEntry::ClientEvent(ClientEventEntry {
-            event: nori_protocol::ClientEvent::SessionUpdateInfo(
-                nori_protocol::SessionUpdateInfo {
-                    kind: nori_protocol::SessionUpdateKind::Usage,
+            event: crate::normalized::ClientEvent::SessionUpdateInfo(
+                crate::normalized::SessionUpdateInfo {
+                    kind: crate::normalized::SessionUpdateKind::Usage,
                     message: "Session usage: 128 / 4096 tokens".into(),
                     hint: None,
-                    usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                    usage: Some(crate::normalized::session_runtime::SessionUsageState {
                         used_tokens: 128,
                         total_tokens: 4096,
                         cost_display: None,
@@ -480,12 +595,12 @@ mod tests {
 
         assert_eq!(
             replay,
-            vec![nori_protocol::ClientEvent::SessionUpdateInfo(
-                nori_protocol::SessionUpdateInfo {
-                    kind: nori_protocol::SessionUpdateKind::Usage,
+            vec![crate::normalized::ClientEvent::SessionUpdateInfo(
+                crate::normalized::SessionUpdateInfo {
+                    kind: crate::normalized::SessionUpdateKind::Usage,
                     message: "Session usage: 128 / 4096 tokens".into(),
                     hint: None,
-                    usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                    usage: Some(crate::normalized::session_runtime::SessionUsageState {
                         used_tokens: 128,
                         total_tokens: 4096,
                         cost_display: None,
@@ -493,44 +608,5 @@ mod tests {
                 },
             )]
         );
-    }
-
-    #[test]
-    fn transcript_recording_skips_in_progress_tool_snapshots() {
-        let in_progress = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            call_id: "tool-1".into(),
-            title: "Search repo".into(),
-            kind: nori_protocol::ToolKind::Search,
-            phase: nori_protocol::ToolPhase::InProgress,
-            locations: vec![],
-            invocation: Some(nori_protocol::Invocation::Search {
-                query: Some("needle".into()),
-                path: Some(PathBuf::from("/repo")),
-            }),
-            artifacts: vec![nori_protocol::Artifact::Text {
-                text: "streaming output".into(),
-            }],
-            raw_input: None,
-            raw_output: None,
-            owner_request_id: None,
-        });
-        let pending = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            phase: nori_protocol::ToolPhase::Pending,
-            ..match &in_progress {
-                nori_protocol::ClientEvent::ToolSnapshot(snapshot) => snapshot.clone(),
-                _ => unreachable!(),
-            }
-        });
-        let completed = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
-            phase: nori_protocol::ToolPhase::Completed,
-            ..match &in_progress {
-                nori_protocol::ClientEvent::ToolSnapshot(snapshot) => snapshot.clone(),
-                _ => unreachable!(),
-            }
-        });
-
-        assert!(!should_record_client_event(&in_progress));
-        assert!(should_record_client_event(&pending));
-        assert!(should_record_client_event(&completed));
     }
 }

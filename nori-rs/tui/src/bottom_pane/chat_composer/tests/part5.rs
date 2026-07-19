@@ -136,7 +136,7 @@ fn agent_commands_use_updated_prefix_after_slug_change() {
 
     // Simulate: agent commands arrive with empty prefix (slug not yet set)
     composer.set_agent_commands(
-        vec![nori_protocol::AgentCommandInfo {
+        vec![crate::presentation::AgentCommandInfo {
             name: "loop".to_string(),
             description: "loop desc".to_string(),
             input_hint: None,

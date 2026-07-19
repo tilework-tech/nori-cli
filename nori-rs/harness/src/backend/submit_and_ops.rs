@@ -1,268 +1,202 @@
 use super::*;
 
 impl AcpBackend {
-    /// Submit an operation to the ACP backend.
-    ///
-    /// Translates Codex `Op` variants to appropriate ACP actions:
-    /// - `Op::UserInput` → ACP prompt
-    /// - `Op::Interrupt` → ACP cancel
-    /// - `Op::ExecApproval` → Resolve pending approval
-    /// - Other ops → Send error event (not supported)
-    pub async fn submit(&self, op: Op) -> Result<String> {
+    pub(crate) async fn cancel(&self) -> Result<()> {
+        self.session_event_tx
+            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                session_reducer::InboundEvent::CancelSubmit,
+            ))
+            .await
+            .map_err(|_| anyhow::anyhow!("session runtime closed"))
+    }
+
+    pub(crate) async fn shutdown(&self) -> Result<()> {
+        self.teardown(true).await;
+        let _ = self
+            .backend_event_tx
+            .send(BackendEvent::Public(SessionEvent::Nori(
+                nori_protocol::NoriEvent::SessionEnded(nori_protocol::SessionEnded {
+                    reason: nori_protocol::SessionEndReason::Shutdown,
+                    message: None,
+                }),
+            )))
+            .await;
+        Ok(())
+    }
+
+    pub(super) async fn teardown(&self, cancel_session: bool) {
+        self.is_shutting_down
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
+            abort.abort();
+        }
+        if let Some(abort) = self.prompt_task_abort.lock().await.take() {
+            abort.abort();
+        }
+        if cancel_session {
+            let _ = self.connection.cancel(&*self.session_id.read().await).await;
+        }
+
+        if !self.session_end_hooks.is_empty() {
+            let results =
+                crate::hooks::execute_hooks(&self.session_end_hooks, self.script_timeout).await;
+            route_hook_results(&results, &self.backend_event_tx, None).await;
+        }
+        if let Some(handle) = crate::hooks::execute_hooks_fire_and_forget(
+            self.async_session_end_hooks.clone(),
+            self.script_timeout,
+            HashMap::new(),
+        ) && let Err(error) = handle.await
+        {
+            warn!("Async session_end hook task panicked: {error}");
+        }
+        self.connection.shutdown().await;
+    }
+
+    pub(crate) async fn add_history(&self, text: String) -> Result<()> {
+        crate::message_history::append_entry(
+            &text,
+            &self.conversation_id,
+            &self.nori_home,
+            self.history_persistence,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
+    pub(crate) async fn history_entry(
+        &self,
+        log_id: i64,
+        offset: i64,
+    ) -> Result<Option<crate::HistoryEntry>> {
+        let log_id =
+            u64::try_from(log_id).map_err(|_| anyhow::anyhow!("invalid history log id"))?;
+        let offset =
+            usize::try_from(offset).map_err(|_| anyhow::anyhow!("invalid history offset"))?;
+        let nori_home = self.nori_home.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::message_history::lookup(log_id, offset, &nori_home)
+        })
+        .await
+        .map_err(Into::into)
+    }
+
+    pub(crate) async fn search_history(
+        &self,
+        max_results: i64,
+    ) -> Result<Vec<crate::HistoryEntry>> {
+        let max_results = usize::try_from(max_results)
+            .map_err(|_| anyhow::anyhow!("invalid history result limit"))?;
+        let nori_home = self.nori_home.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::message_history::search_entries(&nori_home, max_results)
+        })
+        .await
+        .map_err(Into::into)
+    }
+
+    pub(crate) async fn custom_prompts(&self) -> Vec<crate::CustomPrompt> {
+        crate::custom_prompts::discover_prompts_in(&commands_dir(&self.nori_home)).await
+    }
+
+    pub(crate) async fn compact(&self) -> Result<()> {
+        self.handle_compact(&generate_id()).await
+    }
+
+    pub(crate) async fn undo(&self) -> Result<()> {
+        self.connection
+            .cancel(&*self.session_id.read().await)
+            .await
+            .ok();
+        crate::undo::handle_undo(
+            &self.backend_event_tx,
+            &generate_id(),
+            &self.cwd,
+            &self.ghost_snapshots,
+        )
+        .await;
+        Ok(())
+    }
+
+    pub(crate) async fn undo_snapshots(&self) -> Vec<crate::UndoSnapshot> {
+        self.ghost_snapshots.list().await
+    }
+
+    pub(crate) async fn undo_to(&self, index: i64) -> Result<()> {
+        self.connection
+            .cancel(&*self.session_id.read().await)
+            .await
+            .ok();
+        crate::undo::handle_undo_to(
+            &self.backend_event_tx,
+            &generate_id(),
+            &self.cwd,
+            &self.ghost_snapshots,
+            index,
+        )
+        .await;
+        Ok(())
+    }
+
+    pub(crate) async fn run_user_shell(&self, command: String) -> Result<()> {
+        let backend_event_tx = self.backend_event_tx.clone();
+        let cwd = self.cwd.clone();
+        let operation_id = generate_id();
+        tokio::spawn(async move {
+            user_shell::run_user_shell_command(&backend_event_tx, &operation_id, &cwd, command)
+                .await;
+        });
+        Ok(())
+    }
+
+    pub(crate) fn set_approval_policy(&self, policy: nori_config::AskForApproval) {
+        let _ = self.approval_policy_tx.send(policy);
+    }
+
+    pub(crate) async fn respond_to_agent(
+        &self,
+        request_id: acp::RequestId,
+        response: Result<acp::ClientResponse, acp::Error>,
+    ) -> Result<()> {
+        let mut pending = self.pending_approvals.lock().await;
+        let Some(index) = pending
+            .iter()
+            .position(|pending| pending.request.request_id == request_id)
+        else {
+            anyhow::bail!("no delegated ACP request is pending for {request_id}");
+        };
+        let pending = pending.remove(index);
+        pending
+            .request
+            .response_tx
+            .send(response)
+            .map_err(|_| anyhow::anyhow!("ACP request responder closed"))
+    }
+
+    pub(crate) async fn submit_prompt(
+        &self,
+        content: Vec<acp::ContentBlock>,
+        response_tx: oneshot::Sender<Result<acp::RequestId>>,
+    ) {
+        let has_content = content.iter().any(|block| match block {
+            acp::ContentBlock::Text(text) => !text.text.is_empty(),
+            _ => true,
+        });
+        if !has_content {
+            let _ = response_tx.send(Err(anyhow::anyhow!("prompt content is empty")));
+            return;
+        }
+
         let id = generate_id();
-
-        // Cancel any running idle timer on new user activity
-        if let Some(abort_handle) = self.idle_timer_abort.lock().await.take() {
-            abort_handle.abort();
+        self.pending_prompt_submissions
+            .lock()
+            .await
+            .insert(id.clone(), response_tx);
+        if let Err(error) = self.handle_prompt(content, &id).await
+            && let Some(response_tx) = self.pending_prompt_submissions.lock().await.remove(&id)
+        {
+            let _ = response_tx.send(Err(error));
         }
-
-        match op {
-            Op::UserInput { items } => {
-                self.handle_user_input(items, &id).await?;
-            }
-            Op::ThreadGoalGet => {
-                self.handle_thread_goal_get().await;
-            }
-            Op::ThreadGoalSet { objective, status } => {
-                self.handle_thread_goal_set(objective, status).await;
-            }
-            Op::ThreadGoalClear => {
-                self.handle_thread_goal_clear().await;
-            }
-            Op::Interrupt => {
-                let _ = self
-                    .session_event_tx
-                    .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                        session_reducer::InboundEvent::CancelSubmit,
-                    ))
-                    .await;
-            }
-            Op::ExecApproval {
-                id: call_id,
-                decision,
-            } => {
-                self.handle_exec_approval(&call_id, decision).await;
-            }
-            Op::PatchApproval {
-                id: call_id,
-                decision,
-            } => {
-                self.handle_exec_approval(&call_id, decision).await;
-            }
-            Op::Shutdown => {
-                self.is_shutting_down
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                debug!("Processing Op::Shutdown in ACP mode");
-                if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
-                    abort.abort();
-                }
-                if let Some(abort) = self.prompt_task_abort.lock().await.take() {
-                    abort.abort();
-                }
-                let _ = self.connection.cancel(&*self.session_id.read().await).await;
-
-                // Execute session_end hooks and route output before teardown
-                if !self.session_end_hooks.is_empty() {
-                    let results =
-                        crate::hooks::execute_hooks(&self.session_end_hooks, self.script_timeout)
-                            .await;
-                    // Context lines are irrelevant during shutdown, so pass None.
-                    route_hook_results(&results, &self.event_tx, &id, None).await;
-                }
-
-                // Async session end hooks: await completion before shutdown
-                // so the runtime doesn't kill them when the process exits.
-                if let Some(handle) = crate::hooks::execute_hooks_fire_and_forget(
-                    self.async_session_end_hooks.clone(),
-                    self.script_timeout,
-                    HashMap::new(),
-                ) && let Err(e) = handle.await
-                {
-                    warn!("Async session_end hook task panicked: {e}");
-                }
-
-                // Shutdown transcript recorder
-                if let Some(ref recorder) = self.transcript_recorder
-                    && let Err(e) = recorder.shutdown().await
-                {
-                    warn!("Failed to shutdown transcript recorder: {e}");
-                }
-
-                self.connection.shutdown().await;
-
-                let _ = self
-                    .event_tx
-                    .send(Event {
-                        id: id.clone(),
-                        msg: EventMsg::ShutdownComplete,
-                    })
-                    .await;
-            }
-            Op::AddToHistory { text } => {
-                // Append to history file in the background
-                let nori_home = self.nori_home.clone();
-                let conversation_id = self.conversation_id;
-                let persistence = self.history_persistence;
-                tokio::spawn(async move {
-                    if let Err(e) = crate::message_history::append_entry(
-                        &text,
-                        &conversation_id,
-                        &nori_home,
-                        persistence,
-                    )
-                    .await
-                    {
-                        warn!("failed to append to message history: {e}");
-                    }
-                });
-            }
-            Op::GetHistoryEntryRequest { offset, log_id } => {
-                // Look up history entry in the background
-                let nori_home = self.nori_home.clone();
-                let event_tx = self.event_tx.clone();
-                let id_clone = id.clone();
-                tokio::spawn(async move {
-                    // Run lookup in blocking thread because it does file IO + locking.
-                    let entry_opt = tokio::task::spawn_blocking(move || {
-                        crate::message_history::lookup(log_id, offset, &nori_home)
-                    })
-                    .await
-                    .unwrap_or(None);
-
-                    let event = Event {
-                        id: id_clone,
-                        msg: EventMsg::GetHistoryEntryResponse(
-                            codex_protocol::protocol::GetHistoryEntryResponseEvent {
-                                offset,
-                                log_id,
-                                entry: entry_opt.map(|e| {
-                                    codex_protocol::message_history::HistoryEntry {
-                                        conversation_id: e.session_id,
-                                        ts: e.ts,
-                                        text: e.text,
-                                    }
-                                }),
-                            },
-                        ),
-                    };
-
-                    let _ = event_tx.send(event).await;
-                });
-            }
-            Op::SearchHistoryRequest { max_results } => {
-                let nori_home = self.nori_home.clone();
-                let event_tx = self.event_tx.clone();
-                let id_clone = id.clone();
-                tokio::spawn(async move {
-                    let entries = tokio::task::spawn_blocking(move || {
-                        crate::message_history::search_entries(&nori_home, max_results)
-                    })
-                    .await
-                    .unwrap_or_default();
-
-                    let event = Event {
-                        id: id_clone,
-                        msg: EventMsg::SearchHistoryResponse(
-                            codex_protocol::protocol::SearchHistoryResponseEvent {
-                                entries: entries
-                                    .into_iter()
-                                    .map(|e| codex_protocol::message_history::HistoryEntry {
-                                        conversation_id: e.session_id,
-                                        ts: e.ts,
-                                        text: e.text,
-                                    })
-                                    .collect(),
-                            },
-                        ),
-                    };
-
-                    let _ = event_tx.send(event).await;
-                });
-            }
-            Op::Compact => {
-                self.handle_compact(&id).await?;
-            }
-            Op::ListCustomPrompts => {
-                let dir = commands_dir(&self.nori_home);
-                let event_tx = self.event_tx.clone();
-                let id_clone = id.clone();
-                tokio::spawn(async move {
-                    let custom_prompts = crate::custom_prompts::discover_prompts_in(&dir).await;
-                    let _ = event_tx
-                        .send(Event {
-                            id: id_clone,
-                            msg: EventMsg::ListCustomPromptsResponse(
-                                codex_protocol::protocol::ListCustomPromptsResponseEvent {
-                                    custom_prompts,
-                                },
-                            ),
-                        })
-                        .await;
-                });
-            }
-            Op::Undo => {
-                // Best-effort cancel any in-progress agent turn before restoring.
-                self.connection
-                    .cancel(&*self.session_id.read().await)
-                    .await
-                    .ok();
-                crate::undo::handle_undo(&self.event_tx, &id, &self.cwd, &self.ghost_snapshots)
-                    .await;
-            }
-            Op::UndoList => {
-                crate::undo::handle_list_snapshots(&self.event_tx, &id, &self.ghost_snapshots)
-                    .await;
-            }
-            Op::UndoTo { index } => {
-                self.connection
-                    .cancel(&*self.session_id.read().await)
-                    .await
-                    .ok();
-                crate::undo::handle_undo_to(
-                    &self.event_tx,
-                    &id,
-                    &self.cwd,
-                    &self.ghost_snapshots,
-                    index,
-                )
-                .await;
-            }
-            Op::RunUserShellCommand { command } => {
-                let event_tx = self.event_tx.clone();
-                let cwd = self.cwd.clone();
-                let id = id.clone();
-                let shell_task = tokio::spawn(async move {
-                    user_shell::run_user_shell_command(&event_tx, &id, &cwd, command).await;
-                });
-                drop(shell_task);
-            }
-            Op::OverrideTurnContext {
-                approval_policy, ..
-            } => {
-                // Update approval policy if provided
-                if let Some(policy) = approval_policy {
-                    debug!("Updating approval policy to {policy:?} in ACP mode");
-                    // Send the new policy to the approval handler via watch channel
-                    let _ = self.approval_policy_tx.send(policy);
-                }
-            }
-            // These ops are internal/context-related, silently ignore
-            Op::UserTurn { .. } | Op::ResolveElicitation { .. } => {
-                debug!("Ignoring internal Op in ACP mode: {}", get_op_name(&op));
-            }
-            // Catch any new Op variants we haven't handled - only show error in debug builds
-            _ => {
-                let op_name = get_op_name(&op);
-                warn!("Unknown Op in ACP mode: {op_name}");
-                #[cfg(debug_assertions)]
-                self.send_error(&format!(
-                    "Operation '{op_name}' is not supported in ACP mode"
-                ))
-                .await;
-            }
-        }
-
-        Ok(id)
     }
 
     /// Handle the /compact operation by sending a summarization prompt to the agent,
@@ -280,9 +214,9 @@ impl AcpBackend {
             .session_event_tx
             .send(session_runtime_driver::SessionRuntimeInput::Reducer(
                 session_reducer::InboundEvent::PromptSubmit(
-                    nori_protocol::session_runtime::QueuedPrompt {
+                    crate::normalized::session_runtime::QueuedPrompt {
                         event_id: id.to_string(),
-                        kind: nori_protocol::session_runtime::QueuedPromptKind::Compact,
+                        kind: crate::normalized::session_runtime::QueuedPromptKind::Compact,
                         text: SUMMARIZATION_PROMPT.to_string(),
                         display_text: None,
                         images: Vec::new(),
@@ -292,19 +226,6 @@ impl AcpBackend {
             .await;
 
         Ok(())
-    }
-
-    /// Send an error event to the TUI.
-    pub(super) async fn send_error(&self, message: &str) {
-        let _ = self
-            .event_tx
-            .send(Event {
-                id: String::new(),
-                msg: EventMsg::Error(ErrorEvent {
-                    message: message.to_string(),
-                }),
-            })
-            .await;
     }
 
     /// Get the current ACP session config snapshot from the connection.

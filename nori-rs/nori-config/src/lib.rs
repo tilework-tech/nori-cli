@@ -3,19 +3,30 @@
 //! Provides a minimal, standalone configuration system for ACP-only mode.
 //! Configuration is loaded from `~/.nori/cli/config.toml`.
 
+mod config_types;
 mod edits;
 mod git_root;
 mod loader;
+mod policy;
 mod types;
 
-pub use codex_protocol::config_types::McpServerConfig;
-pub use codex_protocol::config_types::McpServerTransportConfig;
+pub use config_types::EnvironmentVariablePattern;
+pub use config_types::McpServerConfig;
+pub use config_types::McpServerTransportConfig;
+pub use config_types::SandboxMode;
+pub use config_types::ShellEnvironmentPolicy;
+pub use config_types::ShellEnvironmentPolicyInherit;
+pub use config_types::ShellEnvironmentPolicyToml;
+pub use config_types::TrustLevel;
 pub use edits::NoriConfigEdits;
 pub use git_root::resolve_root_git_project_for_trust;
 pub use loader::CONFIG_FILE;
 pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
+pub use policy::AskForApproval;
+pub use policy::SandboxPolicy;
+pub use policy::WritableRoot;
 pub use types::AcpProxyConfig;
 pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;
@@ -55,7 +66,7 @@ pub use types::resolve_hook_paths;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_protocol::protocol::AskForApproval;
+    use crate::AskForApproval;
     use serial_test::serial;
     use std::env;
     use tempfile::TempDir;
@@ -105,10 +116,7 @@ mod tests {
         );
         assert_eq!(config.os_notifications, OsNotifications::Enabled);
         assert!(!config.vertical_footer);
-        assert_eq!(
-            config.sandbox_mode,
-            codex_protocol::config_types::SandboxMode::WorkspaceWrite
-        );
+        assert_eq!(config.sandbox_mode, crate::SandboxMode::WorkspaceWrite);
         assert_eq!(config.approval_policy, AskForApproval::OnRequest);
     }
 
@@ -141,10 +149,7 @@ custom_working_message_list = ["alpha", "beta"]
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
 
         assert_eq!(config.agent, Some("gemini".to_string()));
-        assert_eq!(
-            config.sandbox_mode,
-            Some(codex_protocol::config_types::SandboxMode::ReadOnly)
-        );
+        assert_eq!(config.sandbox_mode, Some(crate::SandboxMode::ReadOnly));
         assert_eq!(config.approval_policy, Some(AskForApproval::OnFailure));
         assert_eq!(config.tui.animations, Some(false));
         assert_eq!(

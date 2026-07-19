@@ -3,10 +3,8 @@
 //! Provides `AcpConnection` for communicating with ACP agents over the
 //! Agent Client Protocol via stdin/stdout (local subprocess via `spawn()`).
 
-use agent_client_protocol_schema::v1 as acp;
-use codex_protocol::approvals::ApplyPatchApprovalRequestEvent;
-use codex_protocol::approvals::ExecApprovalRequestEvent;
-use codex_protocol::protocol::ReviewDecision;
+use nori_protocol::AcpEvent;
+use nori_protocol::acp::v1 as acp;
 use tokio::sync::oneshot;
 
 pub mod acp_connection;
@@ -20,8 +18,13 @@ mod acp_connection_tests;
 /// Raw events emitted by the ACP transport adapter in source order.
 #[derive(Debug)]
 pub enum ConnectionEvent {
+    /// Raw ACP traffic retained for the public harness boundary.
+    Acp(AcpEvent),
+    /// The active session was released successfully through ACP `session/close`.
+    SessionClosed,
+    /// Private reducer input paired with the preceding raw notification.
     SessionUpdate(acp::SessionUpdate),
-    ApprovalRequest(ApprovalRequest),
+    DelegatedRequest(DelegatedRequest),
     /// The agent subprocess exited on its own. `status` is the exit code
     /// (`None` when killed by a signal); `stderr_tail` carries the child's
     /// most recent stderr output for error reporting.
@@ -48,68 +51,12 @@ pub fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {
     }
 }
 
-/// The type of approval event to send to the UI.
-///
-/// This enum allows us to use the more appropriate approval UI for different
-/// operation types - exec approval for shell commands, patch approval for
-/// file edits/writes/deletes.
+/// A schema-native agent request paired with its transport responder.
 #[derive(Debug)]
-pub enum ApprovalEventType {
-    /// Exec approval for shell commands and other operations
-    Exec(ExecApprovalRequestEvent),
-    /// Patch approval for file edit/write/delete operations
-    Patch(ApplyPatchApprovalRequestEvent),
-}
-
-impl ApprovalEventType {
-    /// Get the call_id from the event
-    pub fn call_id(&self) -> &str {
-        match self {
-            ApprovalEventType::Exec(e) => &e.call_id,
-            ApprovalEventType::Patch(e) => &e.call_id,
-        }
-    }
-}
-
-/// An approval request sent from the ACP layer to the UI layer.
-///
-/// When an ACP agent requests permission to perform an operation,
-/// this struct is sent to the UI layer which should display the request
-/// to the user and return their decision via the response channel.
-#[derive(Debug)]
-pub struct ApprovalRequest {
-    /// JSON-RPC request ID for the ACP permission request.
-    pub request_id: String,
-    /// The translated Codex approval event (either exec or patch)
-    pub event: ApprovalEventType,
-    /// The original ACP permission request.
-    pub acp_request: acp::RequestPermissionRequest,
-    /// The original ACP permission options for translating the response
-    pub options: Vec<acp::PermissionOption>,
-    /// Channel to send the user's decision back
-    pub response_tx: oneshot::Sender<ReviewDecision>,
-}
-
-/// Owned summary of one session returned by ACP `session/list`.
-///
-/// This decouples consumers (e.g. the TUI resume picker) from the raw ACP
-/// schema types, exposing only the fields the picker renders.
-// `Eq` is intentionally not derived: `meta` is an arbitrary `serde_json::Value`
-// (may contain floats), which is `PartialEq` but not `Eq`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct AcpSessionSummary {
-    /// The agent's session identifier, used to resume via `session/load`.
-    pub session_id: String,
-    /// The working directory the session was created in (absolute path).
-    pub cwd: std::path::PathBuf,
-    /// Human-readable session title, when the agent provides one.
-    pub title: Option<String>,
-    /// ISO 8601 timestamp of last activity, when the agent provides one.
-    pub updated_at: Option<String>,
-    /// The session's ACP `_meta` extension payload, when the agent attaches
-    /// one. The resume picker inspects `_meta.nori.origin == "cloud"` to
-    /// identify cloud sessions (whose `cwd` is not a real filesystem path).
-    pub meta: Option<serde_json::Value>,
+pub struct DelegatedRequest {
+    pub request_id: acp::RequestId,
+    pub request: acp::AgentRequest,
+    pub response_tx: oneshot::Sender<Result<acp::ClientResponse, acp::Error>>,
 }
 
 /// Session config state captured from ACP session setup and updates.
@@ -117,12 +64,12 @@ pub struct AcpSessionSummary {
 /// This stores the complete current `configOptions` snapshot for the active
 /// session. ACP responses and notifications replace the full list.
 #[derive(Debug, Clone, Default)]
-pub struct AcpSessionConfigState {
+pub(crate) struct AcpSessionConfigState {
     pub config_options: Vec<acp::SessionConfigOption>,
 }
 
 impl AcpSessionConfigState {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 }

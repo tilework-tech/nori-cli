@@ -1,20 +1,33 @@
 use super::*;
 
+fn local_image_content(
+    path: &std::path::Path,
+) -> Result<nori_protocol::acp::v1::ContentBlock, String> {
+    use base64::Engine as _;
+
+    let bytes = std::fs::read(path)
+        .map_err(|error| format!("Failed to read image file {}: {error}", path.display()))?;
+    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+    let mime_type = match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        _ => "image/png",
+    };
+    Ok(nori_protocol::acp::v1::ContentBlock::Image(
+        nori_protocol::acp::v1::ImageContent::new(data, mime_type),
+    ))
+}
+
 impl ChatWidget {
     pub(super) fn flush_active_cell(&mut self) {
         if let Some(active) = self.active_cell.take() {
-            // Always flush to history to preserve chronological ordering.
-            // If this is an incomplete ExecCell or ClientToolCell, mark its
-            // pending call_ids as already-flushed so that later completion
-            // events don't create duplicate cells.
-            if let Some(exec_cell) = active.as_any().downcast_ref::<ExecCell>()
-                && exec_cell.is_active()
-            {
-                let pending_ids = exec_cell.pending_call_ids();
-                for id in &pending_ids {
-                    self.completed_client_tool_calls.insert(id.clone());
-                }
-            } else if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>() {
+            if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>() {
                 if client_cell.is_active() {
                     self.completed_client_tool_calls
                         .insert(client_cell.call_id().to_owned());
@@ -59,10 +72,7 @@ impl ChatWidget {
         if self.exiting {
             return;
         }
-        // No live backend (deferred spawn, or the backend already shut
-        // down): the op channel has no receiver, so a submitted prompt would
-        // be echoed into history and silently dropped. Explain instead.
-        if self.codex_op_tx.is_closed() {
+        if self.harness_handle.is_none() {
             self.add_error_message(
                 "No active session — pick one with /resume or start one with /new.".to_string(),
             );
@@ -141,8 +151,6 @@ impl ChatWidget {
             return;
         }
 
-        let mut items: Vec<UserInput> = Vec::new();
-
         // Special-case: "!cmd" executes a local shell command instead of sending to the model.
         if let Some(stripped) = text.strip_prefix('!') {
             let cmd = stripped.trim();
@@ -155,25 +163,30 @@ impl ChatWidget {
                 )));
                 return;
             }
-            self.submit_op(Op::RunUserShellCommand {
-                command: cmd.to_string(),
-            });
+            self.submit_harness_action(crate::app_event::HarnessAction::RunUserShell(
+                cmd.to_string(),
+            ));
             return;
         }
 
+        let mut content = Vec::new();
         if !text.is_empty() {
-            items.push(UserInput::Text { text: text.clone() });
+            content.push(nori_protocol::acp::v1::ContentBlock::Text(
+                nori_protocol::acp::v1::TextContent::new(text.clone()),
+            ));
         }
 
         for path in image_paths {
-            items.push(UserInput::LocalImage { path });
+            match local_image_content(&path) {
+                Ok(image) => content.push(image),
+                Err(error) => {
+                    self.add_error_message(error);
+                    return;
+                }
+            }
         }
 
-        self.codex_op_tx
-            .send(Op::UserInput { items })
-            .unwrap_or_else(|e| {
-                tracing::error!("failed to send message: {e}");
-            });
+        self.submit_prompt(content);
 
         // Persist the text to cross-session message history.
         self.persist_prompt_history(&text);
@@ -190,209 +203,9 @@ impl ChatWidget {
             return;
         }
 
-        self.codex_op_tx
-            .send(Op::AddToHistory {
-                text: text.to_string(),
-            })
-            .unwrap_or_else(|e| {
-                tracing::error!("failed to send AddHistory op: {e}");
-            });
-    }
-
-    /// Replay a subset of initial events into the UI to seed the transcript when
-    /// resuming an existing session. This approximates the live event flow and
-    /// is intentionally conservative: only safe-to-replay items are rendered to
-    /// avoid triggering side effects. Event ids are passed as `None` to
-    /// distinguish replayed events from live ones.
-    pub(super) fn replay_initial_messages(&mut self, events: Vec<EventMsg>) {
-        for msg in events {
-            if matches!(msg, EventMsg::SessionConfigured(_)) {
-                continue;
-            }
-            // `id: None` indicates a synthetic/fake id coming from replay.
-            self.dispatch_event_msg(None, msg, true);
-        }
-    }
-
-    pub(crate) fn handle_codex_event(&mut self, event: Event) {
-        let Event { id, msg } = event;
-
-        // When expected_agent is set (during agent switching), we need to filter events
-        // to prevent events from the OLD agent from affecting the NEW widget.
-        if let Some(ref expected) = self.expected_agent {
-            tracing::debug!(
-                "Event filtering active: expected_agent={}, session_configured_received={}",
-                expected,
-                self.session_configured_received
-            );
-            if !self.session_configured_received {
-                // Only process SessionConfigured events, and only if the model matches
-                match &msg {
-                    EventMsg::SessionConfigured(e) => {
-                        if e.model.to_lowercase() != expected.to_lowercase() {
-                            tracing::debug!(
-                                "Ignoring SessionConfigured from wrong model: expected={}, got={}",
-                                expected,
-                                e.model
-                            );
-                            return;
-                        }
-                        tracing::debug!(
-                            "SessionConfigured received with matching model: {}",
-                            e.model
-                        );
-                        // Model matches, proceed with processing
-                    }
-                    // Ignore all other events until SessionConfigured arrives
-                    _ => {
-                        tracing::debug!(
-                            "Ignoring event before SessionConfigured: {:?} (waiting for model={})",
-                            std::mem::discriminant(&msg),
-                            expected
-                        );
-                        return;
-                    }
-                }
-            }
-        }
-
-        self.dispatch_event_msg(Some(id), msg, false);
-    }
-
-    /// Dispatch a protocol `EventMsg` to the appropriate handler.
-    ///
-    /// `id` is `Some` for live events and `None` for replayed events from
-    /// `replay_initial_messages()`. Callers should treat `None` as a "fake" id
-    /// that must not be used to correlate follow-up actions.
-    pub(super) fn dispatch_event_msg(
-        &mut self,
-        id: Option<String>,
-        msg: EventMsg,
-        from_replay: bool,
-    ) {
-        match msg {
-            EventMsg::AgentMessageDelta(_)
-            | EventMsg::AgentReasoningDelta(_)
-            | EventMsg::ExecCommandOutputDelta(_) => {}
-            _ => {
-                tracing::trace!("handle_codex_event: {:?}", msg);
-            }
-        }
-
-        match msg {
-            EventMsg::SessionConfigured(e) => self.on_session_configured(e),
-            EventMsg::AgentMessage(AgentMessageEvent { message }) => self.on_agent_message(message),
-            EventMsg::AgentMessageDelta(AgentMessageDeltaEvent { delta }) => {
-                self.on_agent_message_delta(delta)
-            }
-            EventMsg::AgentReasoningDelta(AgentReasoningDeltaEvent { delta })
-            | EventMsg::AgentReasoningRawContentDelta(AgentReasoningRawContentDeltaEvent {
-                delta,
-            }) => self.on_agent_reasoning_delta(delta),
-            EventMsg::AgentReasoning(AgentReasoningEvent { .. }) => self.on_agent_reasoning_final(),
-            EventMsg::AgentReasoningRawContent(AgentReasoningRawContentEvent { text }) => {
-                self.on_agent_reasoning_delta(text);
-                self.on_agent_reasoning_final()
-            }
-            EventMsg::AgentReasoningSectionBreak(_) => self.on_reasoning_section_break(),
-            EventMsg::TaskStarted(_) => self.on_task_started(),
-            EventMsg::TaskComplete(TaskCompleteEvent { last_agent_message }) => {
-                self.on_task_complete(last_agent_message)
-            }
-            EventMsg::TokenCount(ev) => {
-                self.set_token_info(ev.info);
-                self.on_rate_limit_snapshot(ev.rate_limits);
-            }
-            EventMsg::Warning(WarningEvent { message }) => self.on_warning(message),
-            EventMsg::Error(ErrorEvent { message }) => self.on_error(message),
-            EventMsg::McpStartupUpdate(ev) => self.on_mcp_startup_update(ev),
-            EventMsg::McpStartupComplete(ev) => self.on_mcp_startup_complete(ev),
-            EventMsg::TurnAborted(ev) => match ev.reason {
-                TurnAbortReason::Interrupted => {
-                    self.on_error("Turn aborted: interrupted".to_owned())
-                }
-                TurnAbortReason::Replaced => {
-                    self.on_error("Turn aborted: replaced by a new task".to_owned())
-                }
-            },
-            EventMsg::PlanUpdate(update) => self.on_plan_update(update),
-            EventMsg::ExecApprovalRequest(ev) => {
-                // For replayed events, synthesize an empty id (these should not occur).
-                self.on_exec_approval_request(id.unwrap_or_default(), ev)
-            }
-            EventMsg::ApplyPatchApprovalRequest(ev) => {
-                self.on_apply_patch_approval_request(id.unwrap_or_default(), ev)
-            }
-            EventMsg::ElicitationRequest(ev) => {
-                self.on_elicitation_request(ev);
-            }
-            EventMsg::ExecCommandBegin(ev) => self.on_exec_command_begin(ev),
-            EventMsg::ExecCommandOutputDelta(delta) => self.on_exec_command_output_delta(delta),
-            EventMsg::PatchApplyBegin(ev) => self.on_patch_apply_begin(ev),
-            EventMsg::PatchApplyEnd(ev) => self.on_patch_apply_end(ev),
-            EventMsg::ExecCommandEnd(ev) => self.on_exec_command_end(ev),
-            EventMsg::ViewImageToolCall(ev) => self.on_view_image_tool_call(ev),
-            EventMsg::McpToolCallBegin(ev) => self.on_mcp_tool_call_begin(ev),
-            EventMsg::McpToolCallEnd(ev) => self.on_mcp_tool_call_end(ev),
-            EventMsg::WebSearchBegin(ev) => self.on_web_search_begin(ev),
-            EventMsg::WebSearchEnd(ev) => self.on_web_search_end(ev),
-            EventMsg::GetHistoryEntryResponse(ev) => self.on_get_history_entry_response(ev),
-            EventMsg::ListCustomPromptsResponse(ev) => self.on_list_custom_prompts(ev),
-            EventMsg::ShutdownComplete => self.on_shutdown_complete(),
-            EventMsg::TurnDiff(TurnDiffEvent { unified_diff }) => self.on_turn_diff(unified_diff),
-            EventMsg::DeprecationNotice(ev) => self.on_deprecation_notice(ev),
-            EventMsg::BackgroundEvent(BackgroundEventEvent { message }) => {
-                self.on_background_event(message)
-            }
-            EventMsg::UndoStarted(ev) => self.on_undo_started(ev),
-            EventMsg::UndoCompleted(ev) => self.on_undo_completed(ev),
-            EventMsg::UndoListResult(ev) => self.on_undo_list_result(ev),
-            EventMsg::StreamError(StreamErrorEvent { message }) => self.on_stream_error(message),
-            EventMsg::UserMessage(ev) => {
-                if from_replay {
-                    self.on_user_message_event(ev);
-                }
-            }
-            EventMsg::ContextCompacted(event) => self.on_context_compacted(event),
-            EventMsg::RawResponseItem(_)
-            | EventMsg::ItemStarted(_)
-            | EventMsg::ItemCompleted(_)
-            | EventMsg::AgentMessageContentDelta(_)
-            | EventMsg::ReasoningContentDelta(_)
-            | EventMsg::ReasoningRawContentDelta(_) => {}
-            EventMsg::PromptSummary(ev) => self.on_prompt_summary(ev.summary),
-            EventMsg::HookOutput(HookOutputEvent { message, level }) => match level {
-                HookOutputLevel::Info => {
-                    self.add_plain_history_lines(vec![Line::from(message)]);
-                }
-                HookOutputLevel::Warn => {
-                    self.on_warning(message);
-                }
-                HookOutputLevel::Error => {
-                    self.add_error_message(message);
-                }
-            },
-            EventMsg::SearchHistoryResponse(ev) => {
-                self.bottom_pane.on_search_history_response(ev.entries);
-                self.request_redraw();
-            }
-        }
-    }
-
-    pub(super) fn on_user_message_event(&mut self, event: UserMessageEvent) {
-        let message = event.message.trim();
-        if !message.is_empty() {
-            self.add_to_history(history_cell::new_user_prompt(message.to_string()));
-        }
-    }
-
-    pub(super) fn request_exit(&mut self) {
-        // Clear the ctrl-c quit hint to make room for the exit message
-        self.bottom_pane.clear_ctrl_c_quit_hint();
-        self.request_redraw();
-
-        // Send exit request - app.rs will handle adding the exit message cell before exiting
-        self.app_event_tx.send(AppEvent::ExitRequest);
+        self.submit_harness_action(crate::app_event::HarnessAction::AddHistory(
+            text.to_string(),
+        ));
     }
 
     /// Create an exit message cell with session statistics.
@@ -432,11 +245,7 @@ impl ChatWidget {
     pub(super) fn finalize_active_cell_as_failed(&mut self) {
         if let Some(mut cell) = self.active_cell.take() {
             // Insert finalized cell into history and keep grouping consistent.
-            if let Some(exec) = cell.as_any_mut().downcast_mut::<ExecCell>() {
-                exec.mark_failed();
-            } else if let Some(tool) = cell.as_any_mut().downcast_mut::<McpToolCallCell>() {
-                tool.mark_failed();
-            } else if let Some(client) = cell.as_any_mut().downcast_mut::<ClientToolCell>() {
+            if let Some(client) = cell.as_any_mut().downcast_mut::<ClientToolCell>() {
                 client.mark_failed();
             }
             self.add_boxed_history(cell);
@@ -470,15 +279,5 @@ impl ChatWidget {
             context_window_percent,
             self.cloud_session_identity(),
         ));
-    }
-
-    pub(super) fn stop_rate_limit_poller(&mut self) {
-        if let Some(handle) = self.rate_limit_poller.take() {
-            handle.abort();
-        }
-    }
-
-    pub(super) fn prefetch_rate_limits(&mut self) {
-        // Rate limit prefetching is not used in Nori (no backend-client)
     }
 }

@@ -9,7 +9,7 @@ use tokio::process::Child;
 use crate::spawn::CODEX_SANDBOX_ENV_VAR;
 use crate::spawn::StdioPolicy;
 use crate::spawn::spawn_child_async;
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::SandboxPolicy;
 
 const MACOS_SEATBELT_BASE_POLICY: &str = include_str!("seatbelt_base_policy.sbpl");
 const MACOS_SEATBELT_NETWORK_POLICY: &str = include_str!("seatbelt_network_policy.sbpl");
@@ -158,7 +158,7 @@ mod tests {
     use super::MACOS_SEATBELT_BASE_POLICY;
     use super::create_seatbelt_command_args;
     use super::macos_dir_params;
-    use codex_protocol::protocol::SandboxPolicy;
+    use nori_config::SandboxPolicy;
     use pretty_assertions::assert_eq;
     use std::fs;
     use std::path::Path;

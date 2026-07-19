@@ -1,10 +1,10 @@
 use super::*;
 
 /// Deliver a prompt completion through the real client-event entry point.
-fn deliver_completion(chat: &mut ChatWidget, failure: Option<nori_protocol::TurnFailure>) {
-    chat.handle_client_event(nori_protocol::ClientEvent::PromptCompleted(
-        nori_protocol::PromptCompleted {
-            stop_reason: nori_protocol::StopReason::Cancelled,
+fn deliver_completion(chat: &mut ChatWidget, failure: Option<crate::presentation::TurnFailure>) {
+    chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(
+        crate::presentation::PromptCompleted {
+            stop_reason: nori_protocol::acp::v1::StopReason::Cancelled,
             last_agent_message: None,
             failure,
         },
@@ -42,7 +42,7 @@ fn loop_survives_retryable_failure() {
     chat.loop_remaining = Some(5);
     chat.loop_total = Some(10);
 
-    deliver_completion(&mut chat, Some(nori_protocol::TurnFailure::Retryable));
+    deliver_completion(&mut chat, Some(crate::presentation::TurnFailure::Retryable));
 
     assert_eq!(next_loop_iteration(&mut rx), Some((4, 10)));
 }
@@ -55,7 +55,7 @@ fn loop_stops_on_fatal_failure() {
     chat.loop_remaining = Some(5);
     chat.loop_total = Some(10);
 
-    deliver_completion(&mut chat, Some(nori_protocol::TurnFailure::Fatal));
+    deliver_completion(&mut chat, Some(crate::presentation::TurnFailure::Fatal));
 
     assert_eq!(chat.loop_remaining, None);
     assert_eq!(next_loop_iteration(&mut rx), None);
@@ -67,7 +67,7 @@ fn loop_stops_on_fatal_failure() {
 fn failure_completion_does_not_add_interrupted_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 
-    deliver_completion(&mut chat, Some(nori_protocol::TurnFailure::Fatal));
+    deliver_completion(&mut chat, Some(crate::presentation::TurnFailure::Fatal));
 
     assert!(
         !history_text(&mut rx).contains("Conversation interrupted"),

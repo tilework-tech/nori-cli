@@ -903,12 +903,12 @@ mod tests {
         let session_id = recorder.session_id().to_string();
 
         recorder
-            .record_client_event(&nori_protocol::ClientEvent::ToolSnapshot(
-                nori_protocol::ToolSnapshot {
+            .record_client_event(&crate::normalized::ClientEvent::ToolSnapshot(
+                crate::normalized::ToolSnapshot {
                     call_id: "call-001".to_string(),
                     title: "Edit /tmp/test.md".to_string(),
-                    kind: nori_protocol::ToolKind::Edit,
-                    phase: nori_protocol::ToolPhase::Completed,
+                    kind: crate::normalized::ToolKind::Edit,
+                    phase: crate::normalized::ToolPhase::Completed,
                     locations: vec![],
                     invocation: None,
                     artifacts: vec![],

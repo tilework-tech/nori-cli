@@ -2,7 +2,6 @@
 members = [
     "ansi-escape",
     "async-utils",
-    "app-server-protocol",
     "apply-patch",
     "arg0",
     "cli",
@@ -17,7 +16,6 @@ members = [
     "process-hardening",
     "acp-host",
     "nori-config",
-    "protocol",
     "sandbox",
     "rmcp-client",
     "stdio-to-uds",
@@ -50,7 +48,6 @@ repository = "https://github.com/tilework-tech/nori-cli"
 [workspace.dependencies]
 # Internal
 codex-ansi-escape = { path = "ansi-escape" }
-codex-app-server-protocol = { path = "app-server-protocol" }
 codex-apply-patch = { path = "apply-patch" }
 codex-arg0 = { path = "arg0" }
 codex-async-utils = { path = "async-utils" }
@@ -66,7 +63,6 @@ nori-acp-host = { path = "acp-host" }
 nori-config = { path = "nori-config" }
 codex-login = { path = "login" }
 codex-process-hardening = { path = "process-hardening" }
-codex-protocol = { path = "protocol" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
 nori-protocol = { path = "nori-protocol" }

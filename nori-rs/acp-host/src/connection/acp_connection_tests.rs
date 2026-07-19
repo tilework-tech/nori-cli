@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use super::ApprovalRequest;
 use super::ConnectionEvent;
+use super::DelegatedRequest;
 use super::acp_connection::AcpConnection;
-use agent_client_protocol_schema::v1 as acp;
+use nori_protocol::acp::v1 as acp;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serial_test::serial;
@@ -24,17 +24,56 @@ fn mock_agent_config() -> Option<crate::registry::AcpAgentConfig> {
 
 async fn recv_approval_request(
     event_rx: &mut tokio::sync::mpsc::Receiver<ConnectionEvent>,
-) -> ApprovalRequest {
+) -> DelegatedRequest {
     loop {
         let event = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
             .await
             .expect("Approval request should arrive within 5s")
             .expect("Event channel should not be closed");
 
-        if let ConnectionEvent::ApprovalRequest(approval) = event {
+        if let ConnectionEvent::DelegatedRequest(approval) = event {
             return approval;
         }
     }
+}
+
+async fn recv_agent_message_text(
+    event_rx: &mut tokio::sync::mpsc::Receiver<ConnectionEvent>,
+) -> String {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let event = event_rx
+                .recv()
+                .await
+                .expect("Event channel should stay open");
+            if let ConnectionEvent::SessionUpdate(acp::SessionUpdate::AgentMessageChunk(chunk)) =
+                event
+                && let acp::ContentBlock::Text(text) = chunk.content
+            {
+                return text.text;
+            }
+        }
+    })
+    .await
+    .expect("Agent message should arrive within 5s")
+}
+
+fn approve_request(approval: DelegatedRequest) {
+    let acp::AgentRequest::RequestPermissionRequest(request) = approval.request else {
+        panic!("expected a permission request");
+    };
+    let option_id = request
+        .options
+        .first()
+        .expect("permission request should have an option")
+        .option_id
+        .clone();
+    let response = acp::RequestPermissionResponse::new(acp::RequestPermissionOutcome::Selected(
+        acp::SelectedPermissionOutcome::new(option_id),
+    ));
+    let _ = approval
+        .response_tx
+        .send(Ok(acp::ClientResponse::RequestPermissionResponse(response)));
 }
 
 async fn drive_logged_prompt(
@@ -415,15 +454,7 @@ async fn test_approval_receiver_forwards_requests() {
 
     let approval = recv_approval_request(&mut event_rx).await;
 
-    assert!(
-        !approval.options.is_empty(),
-        "Approval request should have permission options"
-    );
-
-    // Accept the first option to unblock the prompt.
-    let _ = approval
-        .response_tx
-        .send(codex_protocol::protocol::ReviewDecision::Approved);
+    approve_request(approval);
 
     // The prompt should complete (either normally or error) after approval.
     let result = tokio::time::timeout(std::time::Duration::from_secs(10), prompt_handle)
@@ -474,37 +505,30 @@ async fn test_event_receiver_preserves_update_then_approval_order() {
     let prompt_handle =
         tokio::spawn(async move { conn_for_prompt.prompt(session_id, prompt).await });
 
-    let first_event = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
-        .await
-        .expect("expected first event within timeout")
-        .expect("event channel should stay open");
-
+    let mut saw_agent_message = false;
     let approval = loop {
         let event = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
             .await
             .expect("expected approval event within timeout")
             .expect("event channel should stay open");
 
-        if let ConnectionEvent::ApprovalRequest(approval) = event {
-            break approval;
+        match event {
+            ConnectionEvent::SessionUpdate(acp::SessionUpdate::AgentMessageChunk(_)) => {
+                saw_agent_message = true;
+            }
+            ConnectionEvent::DelegatedRequest(approval) => break approval,
+            ConnectionEvent::Acp(_)
+            | ConnectionEvent::SessionClosed
+            | ConnectionEvent::SessionUpdate(_)
+            | ConnectionEvent::ChildExited { .. } => {}
         }
     };
 
     assert!(
-        matches!(
-            first_event,
-            ConnectionEvent::SessionUpdate(acp::SessionUpdate::AgentMessageChunk(_))
-        ),
+        saw_agent_message,
         "expected prompt updates to remain ordered ahead of the approval request"
     );
-    assert!(
-        !approval.options.is_empty(),
-        "Approval request should have permission options"
-    );
-
-    let _ = approval
-        .response_tx
-        .send(codex_protocol::protocol::ReviewDecision::Approved);
+    approve_request(approval);
 
     let result = tokio::time::timeout(std::time::Duration::from_secs(10), prompt_handle)
         .await
@@ -740,17 +764,8 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
             .await
     });
 
-    let first_update = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
-        .await
-        .expect("Prompt 1 should start streaming within 5s")
-        .expect("Event channel should stay open");
-    assert!(
-        matches!(
-            first_update,
-            ConnectionEvent::SessionUpdate(acp::SessionUpdate::AgentMessageChunk(_))
-        ),
-        "Prompt 1 should receive a streamed agent message before cancel"
-    );
+    let first_update = recv_agent_message_text(&mut event_rx).await;
+    assert!(!first_update.is_empty());
 
     conn.cancel(&session_id)
         .await
@@ -779,19 +794,7 @@ async fn test_sequential_prompt_after_cancel_receives_response() {
             .await
     });
 
-    let second_update = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
-        .await
-        .expect("Prompt 2 should start streaming within 5s")
-        .expect("Event channel should stay open");
-    let second_text = match second_update {
-        ConnectionEvent::SessionUpdate(acp::SessionUpdate::AgentMessageChunk(chunk)) => {
-            match chunk.content {
-                acp::ContentBlock::Text(text) => text.text,
-                other => panic!("Prompt 2 should receive text content, got: {other:?}"),
-            }
-        }
-        other => panic!("Prompt 2 should receive an agent text chunk, got: {other:?}"),
-    };
+    let second_text = recv_agent_message_text(&mut event_rx).await;
     assert!(
         !second_text.is_empty(),
         "Prompt 2 should receive non-empty text updates after cancel"
@@ -858,17 +861,8 @@ async fn test_prompt_after_cancel_absorbs_empty_end_turn_tail() {
             .await
     });
 
-    let first_update = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
-        .await
-        .expect("Prompt 1 should start streaming within 5s")
-        .expect("Event channel should stay open");
-    assert!(
-        matches!(
-            first_update,
-            ConnectionEvent::SessionUpdate(acp::SessionUpdate::AgentMessageChunk(_))
-        ),
-        "Prompt 1 should receive a streamed agent message before cancel"
-    );
+    let first_update = recv_agent_message_text(&mut event_rx).await;
+    assert!(!first_update.is_empty());
 
     conn.cancel(&session_id)
         .await
@@ -1109,7 +1103,10 @@ async fn test_child_exit_emits_event_with_stderr_tail() {
             } => {
                 break (status, stderr_tail);
             }
-            ConnectionEvent::SessionUpdate(_) | ConnectionEvent::ApprovalRequest(_) => {}
+            ConnectionEvent::Acp(_)
+            | ConnectionEvent::SessionClosed
+            | ConnectionEvent::SessionUpdate(_)
+            | ConnectionEvent::DelegatedRequest(_) => {}
         }
     };
 
@@ -1156,9 +1153,8 @@ async fn test_spawn_failure_surfaces_child_stderr() {
     );
 }
 
-/// `list_sessions` drains the agent's `session/list` pages and maps each
-/// `SessionInfo` into an owned `AcpSessionSummary`, preserving the optional
-/// `title`/`updated_at` fields (including their absence).
+/// `list_sessions` drains the agent's `session/list` pages without projecting
+/// ACP-owned session data into a host-owned mirror.
 #[tokio::test]
 #[serial]
 async fn test_list_sessions_maps_agent_session_info() {
@@ -1197,27 +1193,16 @@ async fn test_list_sessions_maps_agent_session_info() {
     }
 
     let expected = vec![
-        super::AcpSessionSummary {
-            session_id: "mock-session-1".to_string(),
-            cwd: temp_dir.path().to_path_buf(),
-            title: Some("First mock session".to_string()),
-            updated_at: Some("2026-01-02T03:04:05Z".to_string()),
-            meta: None,
-        },
-        super::AcpSessionSummary {
-            session_id: "mock-session-2".to_string(),
-            cwd: temp_dir.path().to_path_buf(),
-            title: None,
-            updated_at: None,
-            meta: None,
-        },
+        acp::SessionInfo::new("mock-session-1", temp_dir.path())
+            .title("First mock session")
+            .updated_at("2026-01-02T03:04:05Z"),
+        acp::SessionInfo::new("mock-session-2", temp_dir.path()),
     ];
     assert_eq!(summaries, expected);
 }
 
 /// A session's ACP `_meta` extension payload survives the trip from the agent's
-/// `session/list` response through `list_sessions` onto
-/// `AcpSessionSummary.meta`. The env-gated mock attaches
+/// `session/list` response through the schema-native result. The env-gated mock attaches
 /// `_meta = {"nori": {"origin": "cloud"}}` to its first row only; the CLI must
 /// surface that object (and must not leak it onto other rows) so the resume
 /// picker can distinguish cloud sessions without the legacy cwd == "/"
@@ -1259,21 +1244,16 @@ async fn test_list_sessions_preserves_session_meta() {
         std::env::remove_var("MOCK_AGENT_LIST_SESSIONS_META");
     }
 
+    let meta = serde_json::json!({"nori": {"origin": "cloud"}})
+        .as_object()
+        .cloned()
+        .expect("object metadata");
     let expected = vec![
-        super::AcpSessionSummary {
-            session_id: "mock-session-1".to_string(),
-            cwd: temp_dir.path().to_path_buf(),
-            title: Some("First mock session".to_string()),
-            updated_at: Some("2026-01-02T03:04:05Z".to_string()),
-            meta: Some(serde_json::json!({"nori": {"origin": "cloud"}})),
-        },
-        super::AcpSessionSummary {
-            session_id: "mock-session-2".to_string(),
-            cwd: temp_dir.path().to_path_buf(),
-            title: None,
-            updated_at: None,
-            meta: None,
-        },
+        acp::SessionInfo::new("mock-session-1", temp_dir.path())
+            .title("First mock session")
+            .updated_at("2026-01-02T03:04:05Z")
+            .meta(meta),
+        acp::SessionInfo::new("mock-session-2", temp_dir.path()),
     ];
     assert_eq!(summaries, expected);
 }

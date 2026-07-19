@@ -848,24 +848,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "codex-app-server-protocol"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "codex-protocol",
- "mcp-types",
- "pretty_assertions",
- "schemars 0.8.22",
- "serde",
- "serde_json",
- "strum_macros 0.27.2",
- "thiserror 2.0.17",
- "ts-rs",
- "uuid",
-]
-
-[[package]]
 name = "codex-apply-patch"
 version = "0.0.0"
 dependencies = [
@@ -908,8 +890,7 @@ name = "codex-common"
 version = "0.0.0"
 dependencies = [
  "clap",
- "codex-app-server-protocol",
- "codex-protocol",
+ "nori-config",
  "once_cell",
  "serde",
  "tempfile",
@@ -926,7 +907,6 @@ dependencies = [
  "assert_matches",
  "base64",
  "chrono",
- "codex-app-server-protocol",
  "codex-apply-patch",
  "codex-arg0",
  "codex-async-utils",
@@ -935,7 +915,6 @@ dependencies = [
  "codex-file-search",
  "codex-git",
  "codex-keyring-store",
- "codex-protocol",
  "codex-rmcp-client",
  "codex-sandbox",
  "codex-utils-pty",
@@ -952,6 +931,7 @@ dependencies = [
  "http",
  "keyring",
  "mcp-types",
+ "nori-config",
  "notify-rust",
  "once_cell",
  "openssl-sys",
@@ -1045,10 +1025,10 @@ name = "codex-linux-sandbox"
 version = "0.0.0"
 dependencies = [
  "clap",
- "codex-protocol",
  "codex-sandbox",
  "landlock",
  "libc",
+ "nori-config",
  "seccompiler",
  "tempfile",
  "tokio",
@@ -1061,7 +1041,6 @@ dependencies = [
  "anyhow",
  "base64",
  "chrono",
- "codex-app-server-protocol",
  "codex-core",
  "core_test_support",
  "rand 0.9.4",
@@ -1086,41 +1065,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "codex-protocol"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "base64",
- "codex-git",
- "codex-utils-image",
- "icu_decimal",
- "icu_locale_core",
- "icu_provider",
- "mcp-types",
- "mime_guess",
- "pretty_assertions",
- "schemars 0.8.22",
- "serde",
- "serde_json",
- "serde_with",
- "strum 0.27.2",
- "strum_macros 0.27.2",
- "sys-locale",
- "tempfile",
- "tracing",
- "ts-rs",
- "uuid",
- "wildmatch",
-]
-
-[[package]]
 name = "codex-rmcp-client"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum",
  "codex-keyring-store",
- "codex-protocol",
  "dirs",
  "escargot",
  "futures",
@@ -1149,12 +1099,12 @@ version = "0.0.0"
 dependencies = [
  "async-channel",
  "chardetng",
- "codex-protocol",
  "codex-windows-sandbox",
  "encoding_rs",
  "landlock",
  "libc",
  "maplit",
+ "nori-config",
  "pretty_assertions",
  "seccompiler",
  "serde",
@@ -1236,9 +1186,9 @@ name = "codex-windows-sandbox"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "codex-protocol",
  "dirs-next",
  "dunce",
+ "nori-config",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -2117,17 +2067,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fixed_decimal"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35943d22b2f19c0cb198ecf915910a8158e94541c89dcc63300d7799d46c2c5e"
-dependencies = [
- "displaydoc",
- "smallvec",
- "writeable",
-]
-
-[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2685,42 +2624,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "icu_decimal"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a38c52231bc348f9b982c1868a2af3195199623007ba2c7650f432038f5b3e8e"
-dependencies = [
- "fixed_decimal",
- "icu_decimal_data",
- "icu_locale",
- "icu_locale_core",
- "icu_provider",
- "writeable",
- "zerovec",
-]
-
-[[package]]
-name = "icu_decimal_data"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2905b4044eab2dd848fe84199f9195567b63ab3a93094711501363f63546fef7"
-
-[[package]]
-name = "icu_locale"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "532b11722e350ab6bf916ba6eb0efe3ee54b932666afec989465f9243fe6dd60"
-dependencies = [
- "icu_collections",
- "icu_locale_core",
- "icu_locale_data",
- "icu_provider",
- "potential_utf",
- "tinystr",
- "zerovec",
-]
-
-[[package]]
 name = "icu_locale_core"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2728,17 +2631,10 @@ checksum = "edba7861004dd3714265b4db54a3c390e880ab658fec5f7db895fae2046b5bb6"
 dependencies = [
  "displaydoc",
  "litemap",
- "serde",
  "tinystr",
  "writeable",
  "zerovec",
 ]
-
-[[package]]
-name = "icu_locale_data"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f03e2fcaefecdf05619f3d6f91740e79ab969b4dd54f77cbf546b1d0d28e3147"
 
 [[package]]
 name = "icu_normalizer"
@@ -2788,8 +2684,6 @@ checksum = "85962cf0ce02e1e0a629cc34e7ca3e373ce20dda4c4d7294bbd0bf1fdb59e614"
 dependencies = [
  "displaydoc",
  "icu_locale_core",
- "serde",
- "stable_deref_trait",
  "writeable",
  "yoke",
  "zerofrom",
@@ -3387,16 +3281,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
-name = "mime_guess"
-version = "2.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
-dependencies = [
- "mime",
- "unicase",
-]
-
-[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3431,6 +3315,7 @@ dependencies = [
  "agent-client-protocol",
  "env_logger",
  "futures",
+ "nori-protocol",
  "serde_json",
  "tokio",
  "tokio-util",
@@ -3562,16 +3447,15 @@ name = "nori-acp-host"
 version = "0.0.0"
 dependencies = [
  "agent-client-protocol",
- "agent-client-protocol-schema",
  "anyhow",
  "base64",
- "codex-protocol",
  "codex-rmcp-client",
  "codex-utils-string",
  "diffy",
  "futures",
  "libc",
  "nori-config",
+ "nori-protocol",
  "oauth2",
  "pretty_assertions",
  "regex",
@@ -3595,12 +3479,10 @@ dependencies = [
  "assert_matches",
  "clap",
  "clap_complete",
- "codex-app-server-protocol",
  "codex-arg0",
  "codex-common",
  "codex-execpolicy",
  "codex-process-hardening",
- "codex-protocol",
  "codex-sandbox",
  "codex-stdio-to-uds",
  "codex-windows-sandbox",
@@ -3627,7 +3509,6 @@ name = "nori-config"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "codex-protocol",
  "dirs",
  "pretty_assertions",
  "serde",
@@ -3635,20 +3516,18 @@ dependencies = [
  "tempfile",
  "toml",
  "toml_edit",
+ "wildmatch",
 ]
 
 [[package]]
 name = "nori-harness"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol",
- "agent-client-protocol-schema",
  "anyhow",
  "axum",
  "base64",
  "chrono",
  "codex-git",
- "codex-protocol",
  "codex-rmcp-client",
  "codex-utils-string",
  "diffy",
@@ -3727,13 +3606,11 @@ dependencies = [
  "chrono",
  "clap",
  "codex-ansi-escape",
- "codex-app-server-protocol",
  "codex-arg0",
  "codex-common",
  "codex-file-search",
  "codex-git",
  "codex-login",
- "codex-protocol",
  "codex-rmcp-client",
  "codex-sandbox",
  "codex-utils-pty",
@@ -4408,8 +4285,6 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b73949432f5e2a09657003c25bca5e19a0e9c84f8058ca374f49e0ebe605af77"
 dependencies = [
- "serde_core",
- "writeable",
  "zerovec",
 ]
 
@@ -5886,15 +5761,6 @@ dependencies = [
  "thiserror 2.0.17",
  "walkdir",
  "yaml-rust",
-]
-
-[[package]]
-name = "sys-locale"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
-dependencies = [
- "libc",
 ]
 
 [[package]]
@@ -7654,7 +7520,6 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f41bb01b8226ef4bfd589436a297c53d118f65921786300e427be8d487695cc"
 dependencies = [
- "serde",
  "stable_deref_trait",
  "yoke-derive",
  "zerofrom",
@@ -7872,7 +7737,6 @@ version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c28719294829477f525be0186d13efa9a3c602f7ec202ca9e353d310fb9a002"
 dependencies = [
- "serde",
  "yoke",
  "zerofrom",
  "zerovec-derive",

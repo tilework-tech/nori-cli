@@ -4,20 +4,19 @@
 //! mutates [`SessionRuntime`] and produces [`ClientEvent`]s. The caller
 //! executes any [`SideEffect`]s after reduction.
 
-use agent_client_protocol_schema::v1 as acp;
-use nori_protocol::ClientEvent;
-use nori_protocol::ClientEventNormalizer;
-use nori_protocol::PromptCompleted;
-use nori_protocol::QueueChanged;
-use nori_protocol::WarningInfo;
-use nori_protocol::session_runtime::ActiveRequestKind;
-use nori_protocol::session_runtime::ActiveRequestState;
-use nori_protocol::session_runtime::OpenMessage;
-use nori_protocol::session_runtime::QueuedPrompt;
-use nori_protocol::session_runtime::SessionPhase;
-use nori_protocol::session_runtime::SessionRuntime;
-use nori_protocol::session_runtime::TranscriptMessage;
-use nori_protocol::session_runtime::TranscriptRole;
+use crate::normalized::ClientEvent;
+use crate::normalized::ClientEventNormalizer;
+use crate::normalized::PromptCompleted;
+use crate::normalized::QueueChanged;
+use crate::normalized::WarningInfo;
+use crate::normalized::session_runtime::ActiveRequestState;
+use crate::normalized::session_runtime::OpenMessage;
+use crate::normalized::session_runtime::QueuedPrompt;
+use crate::normalized::session_runtime::SessionPhase;
+use crate::normalized::session_runtime::SessionRuntime;
+use crate::normalized::session_runtime::TranscriptMessage;
+use crate::normalized::session_runtime::TranscriptRole;
+use nori_protocol::acp::v1 as acp;
 use tracing::debug;
 
 /// Everything that can affect [`SessionRuntime`] state.
@@ -31,7 +30,7 @@ pub enum InboundEvent {
     /// `failure` describes the disposition carried onto the completion (`None`
     /// for a clean forced-cancel/timeout).
     PromptFailed {
-        failure: Option<nori_protocol::TurnFailure>,
+        failure: Option<crate::normalized::TurnFailure>,
     },
     /// The response to an active `session/load` request.
     LoadResponse,
@@ -232,7 +231,7 @@ fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
             if snapshot.owner_request_id.as_deref() == Some(&owner_id)
                 && !is_terminal_phase(&snapshot.phase)
             {
-                snapshot.phase = nori_protocol::ToolPhase::Failed;
+                snapshot.phase = crate::normalized::ToolPhase::Failed;
             }
         }
 
@@ -331,7 +330,7 @@ fn reduce_prompt_response(
 
 fn reduce_prompt_failed(
     runtime: &mut SessionRuntime,
-    failure: Option<nori_protocol::TurnFailure>,
+    failure: Option<crate::normalized::TurnFailure>,
     out: &mut ReduceOutput,
 ) {
     let active_request_id = runtime
@@ -379,10 +378,7 @@ fn reduce_load_submit(runtime: &mut SessionRuntime, request_id: String, out: &mu
     runtime.phase = SessionPhase::Loading {
         request_id: request_id.clone(),
     };
-    runtime.active = Some(ActiveRequestState::new(
-        request_id,
-        ActiveRequestKind::Loading,
-    ));
+    runtime.active = Some(ActiveRequestState::new_loading(request_id));
     runtime.orphan_update_warning_emitted = false;
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
@@ -530,7 +526,7 @@ fn reduce_metadata_update(
         }
         acp::SessionUpdate::UsageUpdate(usage) => {
             runtime.persisted.session_usage =
-                Some(nori_protocol::session_runtime::SessionUsageState {
+                Some(crate::normalized::session_runtime::SessionUsageState {
                     used_tokens: saturating_i64(usage.used),
                     total_tokens: saturating_i64(usage.size),
                     cost_display: usage
@@ -740,10 +736,10 @@ fn saturating_i64(value: u64) -> i64 {
     }
 }
 
-fn is_terminal_phase(phase: &nori_protocol::ToolPhase) -> bool {
+fn is_terminal_phase(phase: &crate::normalized::ToolPhase) -> bool {
     matches!(
         phase,
-        nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+        crate::normalized::ToolPhase::Completed | crate::normalized::ToolPhase::Failed
     )
 }
 
@@ -754,7 +750,7 @@ fn queued_prompt_texts(runtime: &SessionRuntime) -> Vec<String> {
         .filter(|prompt| {
             matches!(
                 prompt.kind,
-                nori_protocol::session_runtime::QueuedPromptKind::User
+                crate::normalized::session_runtime::QueuedPromptKind::User
             )
         })
         .filter_map(|prompt| {

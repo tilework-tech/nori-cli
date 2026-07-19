@@ -6,17 +6,23 @@
 use std::path::Path;
 
 use codex_git::GhostCommit;
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::SnapshotInfo;
-use codex_protocol::protocol::UndoCompletedEvent;
-use codex_protocol::protocol::UndoListResultEvent;
-use codex_protocol::protocol::UndoStartedEvent;
+use nori_protocol::NoriEvent;
+use nori_protocol::SessionEvent;
+use nori_protocol::UndoEvent;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+
+use crate::backend::BackendEvent;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UndoSnapshot {
+    pub index: i64,
+    pub short_id: String,
+    pub label: String,
+}
 
 /// A ghost commit paired with a user-facing label (the user's message at that turn).
 pub struct SnapshotEntry {
@@ -67,7 +73,7 @@ impl GhostSnapshotStack {
     }
 
     /// Return snapshot metadata in reverse chronological order (most recent first).
-    pub async fn list(&self) -> Vec<SnapshotInfo> {
+    pub async fn list(&self) -> Vec<UndoSnapshot> {
         let snapshots = self.snapshots.lock().await;
         snapshots
             .iter()
@@ -75,7 +81,7 @@ impl GhostSnapshotStack {
             .enumerate()
             .map(|(i, entry)| {
                 let short_id: String = entry.commit.id().chars().take(7).collect();
-                SnapshotInfo {
+                UndoSnapshot {
                     index: i as i64,
                     short_id,
                     label: entry.label.clone(),
@@ -109,18 +115,18 @@ impl GhostSnapshotStack {
 ///
 /// Emits `UndoStarted` and `UndoCompleted` events on the provided channel.
 pub async fn handle_undo(
-    event_tx: &mpsc::Sender<Event>,
+    event_tx: &mpsc::Sender<BackendEvent>,
     id: &str,
     cwd: &Path,
     snapshots: &GhostSnapshotStack,
 ) {
     let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::UndoStarted(UndoStartedEvent {
+        .send(BackendEvent::Public(SessionEvent::Nori(NoriEvent::Undo(
+            UndoEvent::Started {
+                operation_id: id.to_string(),
                 message: Some("Undo in progress...".to_string()),
-            }),
-        })
+            },
+        ))))
         .await;
 
     let snapshot = snapshots.pop().await;
@@ -128,10 +134,7 @@ pub async fn handle_undo(
     let completed = match snapshot {
         None => {
             warn!("Undo requested but no snapshots available");
-            UndoCompletedEvent {
-                success: false,
-                message: Some("No snapshot available to undo.".to_string()),
-            }
+            (false, Some("No snapshot available to undo.".to_string()))
         }
         Some(ghost_commit) => {
             let commit_id = ghost_commit.id().to_string();
@@ -145,38 +148,35 @@ pub async fn handle_undo(
                 Ok(Ok(())) => {
                     let short_id: String = commit_id.chars().take(7).collect();
                     info!(commit_id, "Undo restored ghost snapshot");
-                    UndoCompletedEvent {
-                        success: true,
-                        message: Some(format!(
+                    (
+                        true,
+                        Some(format!(
                             "Undo restored snapshot {short_id}. Note: the agent is not aware that files have changed."
                         )),
-                    }
+                    )
                 }
                 Ok(Err(err)) => {
                     let message = format!("Failed to restore snapshot {commit_id}: {err}");
                     warn!("{message}");
-                    UndoCompletedEvent {
-                        success: false,
-                        message: Some(message),
-                    }
+                    (false, Some(message))
                 }
                 Err(err) => {
                     let message = format!("Failed to restore snapshot {commit_id}: {err}");
                     error!("{message}");
-                    UndoCompletedEvent {
-                        success: false,
-                        message: Some(message),
-                    }
+                    (false, Some(message))
                 }
             }
         }
     };
 
     let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::UndoCompleted(completed),
-        })
+        .send(BackendEvent::Public(SessionEvent::Nori(NoriEvent::Undo(
+            UndoEvent::Completed {
+                operation_id: id.to_string(),
+                success: completed.0,
+                message: completed.1,
+            },
+        ))))
         .await;
 }
 
@@ -185,35 +185,29 @@ pub async fn handle_undo(
 /// Emits `UndoStarted` and `UndoCompleted` events on the provided channel.
 /// The completion message includes a warning that the agent is unaware of the change.
 pub async fn handle_undo_to(
-    event_tx: &mpsc::Sender<Event>,
+    event_tx: &mpsc::Sender<BackendEvent>,
     id: &str,
     cwd: &Path,
     snapshots: &GhostSnapshotStack,
     index: i64,
 ) {
     let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::UndoStarted(UndoStartedEvent {
+        .send(BackendEvent::Public(SessionEvent::Nori(NoriEvent::Undo(
+            UndoEvent::Started {
+                operation_id: id.to_string(),
                 message: Some("Undo in progress...".to_string()),
-            }),
-        })
+            },
+        ))))
         .await;
 
     let completed = match snapshots.restore_to_index(index).await {
         Err(RestoreError::Empty) => {
             warn!("Undo requested but no snapshots available");
-            UndoCompletedEvent {
-                success: false,
-                message: Some("No snapshot available to undo.".to_string()),
-            }
+            (false, Some("No snapshot available to undo.".to_string()))
         }
         Err(RestoreError::OutOfBounds) => {
             warn!("Undo requested with out-of-bounds index {index}");
-            UndoCompletedEvent {
-                success: false,
-                message: Some(format!("Invalid snapshot index: {index}")),
-            }
+            (false, Some(format!("Invalid snapshot index: {index}")))
         }
         Ok(ghost_commit) => {
             let commit_id = ghost_commit.id().to_string();
@@ -227,52 +221,34 @@ pub async fn handle_undo_to(
                 Ok(Ok(())) => {
                     let short_id: String = commit_id.chars().take(7).collect();
                     info!(commit_id, "Undo restored ghost snapshot via undo_to");
-                    UndoCompletedEvent {
-                        success: true,
-                        message: Some(format!(
+                    (
+                        true,
+                        Some(format!(
                             "Restored snapshot {short_id}. Note: the agent is not aware that files have changed."
                         )),
-                    }
+                    )
                 }
                 Ok(Err(err)) => {
                     let message = format!("Failed to restore snapshot {commit_id}: {err}");
                     warn!("{message}");
-                    UndoCompletedEvent {
-                        success: false,
-                        message: Some(message),
-                    }
+                    (false, Some(message))
                 }
                 Err(err) => {
                     let message = format!("Failed to restore snapshot {commit_id}: {err}");
                     error!("{message}");
-                    UndoCompletedEvent {
-                        success: false,
-                        message: Some(message),
-                    }
+                    (false, Some(message))
                 }
             }
         }
     };
 
     let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::UndoCompleted(completed),
-        })
-        .await;
-}
-
-/// Send the list of available undo snapshots as an `UndoListResult` event.
-pub async fn handle_list_snapshots(
-    event_tx: &mpsc::Sender<Event>,
-    id: &str,
-    snapshots: &GhostSnapshotStack,
-) {
-    let list = snapshots.list().await;
-    let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::UndoListResult(UndoListResultEvent { snapshots: list }),
-        })
+        .send(BackendEvent::Public(SessionEvent::Nori(NoriEvent::Undo(
+            UndoEvent::Completed {
+                operation_id: id.to_string(),
+                success: completed.0,
+                message: completed.1,
+            },
+        ))))
         .await;
 }

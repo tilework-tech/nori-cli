@@ -8,11 +8,11 @@
 //! [`launch_session`], and consume [`SessionEvent`]s; no terminal or UI
 //! concepts appear here (crate-layering dependency rule 2).
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use codex_protocol::protocol::Op;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
 use futures::future::BoxFuture;
 use tokio::sync::mpsc;
@@ -24,47 +24,107 @@ use tokio::sync::oneshot;
 use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
-use crate::connection::AcpSessionSummary;
 use crate::transcript::Transcript;
-use agent_client_protocol_schema::v1::SessionConfigOption;
+use nori_protocol::NoriEvent;
+use nori_protocol::Notice;
+use nori_protocol::RequestFailure;
+use nori_protocol::RequestFailureKind;
+use nori_protocol::SessionEndReason;
+use nori_protocol::SessionEnded;
+pub use nori_protocol::SessionEvent;
+use nori_protocol::acp;
+use nori_protocol::acp::v1::SessionConfigOption;
 
 /// Duration before showing a warning that connection is taking too long.
 const CONNECT_WARNING_SECS: u64 = 8;
 /// Duration after the warning before forcibly aborting the connection attempt.
 const CONNECT_ABORT_SECS: u64 = 30;
 
-/// Drain ops from the channel, discarding everything except `Op::Shutdown`.
-/// Returns when `Op::Shutdown` is received or the channel is closed.
-pub async fn drain_until_shutdown(rx: &mut UnboundedReceiver<Op>) {
-    while let Some(op) = rx.recv().await {
-        if matches!(op, Op::Shutdown) {
-            return;
-        }
-    }
-}
-
 /// Two-phase timeout: warn after `CONNECT_WARNING_SECS`, abort after an
 /// additional `CONNECT_ABORT_SECS`.
 async fn spawn_timeout_sequence(event_tx: &UnboundedSender<SessionEvent>) {
     tokio::time::sleep(Duration::from_secs(CONNECT_WARNING_SECS)).await;
-    let _ = event_tx.send(SessionEvent::Backend(Box::new(BackendEvent::Control(
-        codex_protocol::protocol::Event {
-            id: String::new(),
-            msg: codex_protocol::protocol::EventMsg::Warning(
-                codex_protocol::protocol::WarningEvent {
-                    message: format!(
-                        "Connection is taking longer than expected. \
-                         Will abort in {CONNECT_ABORT_SECS}s if still unresponsive."
-                    ),
-                },
-            ),
-        },
-    ))));
+    let _ = event_tx.send(SessionEvent::Nori(NoriEvent::Notice(Notice {
+        message: format!(
+            "Connection is taking longer than expected. \
+             Will abort in {CONNECT_ABORT_SECS}s if still unresponsive."
+        ),
+    })));
     tokio::time::sleep(Duration::from_secs(CONNECT_ABORT_SECS)).await;
 }
 
 /// Command for controlling ACP session state exposed by the agent.
-pub enum AcpAgentCommand {
+enum HarnessCommand {
+    /// Submit one ACP prompt and return its transport request ID.
+    Prompt {
+        content: Vec<acp::v1::ContentBlock>,
+        response_tx: oneshot::Sender<anyhow::Result<acp::v1::RequestId>>,
+    },
+    /// Shut down the active harness session.
+    Shutdown {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    /// Respond to a delegated agent-to-client ACP request.
+    RespondToAgent {
+        request_id: acp::v1::RequestId,
+        response: Result<acp::v1::ClientResponse, acp::v1::Error>,
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    Cancel {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    AddHistory {
+        text: String,
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    HistoryEntry {
+        log_id: i64,
+        offset: i64,
+        response_tx: oneshot::Sender<anyhow::Result<Option<crate::HistoryEntry>>>,
+    },
+    SearchHistory {
+        max_results: i64,
+        response_tx: oneshot::Sender<anyhow::Result<Vec<crate::HistoryEntry>>>,
+    },
+    CustomPrompts {
+        response_tx: oneshot::Sender<Vec<crate::CustomPrompt>>,
+    },
+    Compact {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    Undo {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    UndoSnapshots {
+        response_tx: oneshot::Sender<Vec<crate::UndoSnapshot>>,
+    },
+    UndoTo {
+        index: i64,
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    RunUserShell {
+        command: String,
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    SetApprovalPolicy {
+        policy: nori_config::AskForApproval,
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    Goal {
+        response_tx: oneshot::Sender<Option<nori_protocol::ThreadGoal>>,
+    },
+    SetGoal {
+        objective: String,
+        status: Option<nori_protocol::ThreadGoalStatus>,
+        response_tx: oneshot::Sender<anyhow::Result<nori_protocol::ThreadGoal>>,
+    },
+    SetGoalStatus {
+        status: nori_protocol::ThreadGoalStatus,
+        response_tx: oneshot::Sender<anyhow::Result<nori_protocol::ThreadGoal>>,
+    },
+    ClearGoal {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
     /// Get the current ACP session config snapshot.
     GetSessionConfig {
         response_tx: oneshot::Sender<Vec<SessionConfigOption>>,
@@ -78,7 +138,7 @@ pub enum AcpAgentCommand {
     /// List the agent's known sessions via ACP `session/list`.
     ListSessions {
         cwd: PathBuf,
-        response_tx: oneshot::Sender<anyhow::Result<Vec<AcpSessionSummary>>>,
+        response_tx: oneshot::Sender<anyhow::Result<Vec<acp::v1::SessionInfo>>>,
     },
     /// Close (release) the active session via ACP `session/close`.
     CloseSession {
@@ -86,20 +146,198 @@ pub enum AcpAgentCommand {
     },
 }
 
-/// Handle for communicating with an ACP agent.
-///
-/// This handle provides access to ACP session control operations in addition
-/// to the standard Op channel.
+/// Typed handle for controlling one Nori harness session.
 #[derive(Clone)]
-pub struct AcpAgentHandle {
-    command_tx: mpsc::UnboundedSender<AcpAgentCommand>,
+pub struct HarnessHandle {
+    command_tx: mpsc::UnboundedSender<HarnessCommand>,
 }
 
-impl AcpAgentHandle {
-    /// Build a handle around an existing command channel. Intended for tests
-    /// that fake the agent side of the channel.
-    pub fn from_command_tx(command_tx: mpsc::UnboundedSender<AcpAgentCommand>) -> Self {
-        Self { command_tx }
+impl HarnessHandle {
+    /// Submit a prompt and return the ACP request ID used on the wire.
+    pub async fn prompt(
+        &self,
+        content: Vec<acp::v1::ContentBlock>,
+    ) -> anyhow::Result<acp::v1::RequestId> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::Prompt {
+                content,
+                response_tx,
+            })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not accept the prompt"))?
+    }
+
+    /// Shut down the active harness session.
+    pub async fn shutdown(&self) -> anyhow::Result<()> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::Shutdown { response_tx })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not shut down"))?
+    }
+
+    /// Complete a delegated ACP request using its original request ID.
+    pub async fn respond_to_agent(
+        &self,
+        request_id: acp::v1::RequestId,
+        response: Result<acp::v1::ClientResponse, acp::v1::Error>,
+    ) -> anyhow::Result<()> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::RespondToAgent {
+                request_id,
+                response,
+                response_tx,
+            })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP request response was not accepted"))?
+    }
+
+    pub async fn cancel(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::Cancel { response_tx })
+            .await
+    }
+
+    pub async fn add_history(&self, text: String) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::AddHistory { text, response_tx })
+            .await
+    }
+
+    pub async fn history_entry(
+        &self,
+        log_id: i64,
+        offset: i64,
+    ) -> anyhow::Result<Option<crate::HistoryEntry>> {
+        self.request(|response_tx| HarnessCommand::HistoryEntry {
+            log_id,
+            offset,
+            response_tx,
+        })
+        .await
+    }
+
+    pub async fn search_history(
+        &self,
+        max_results: i64,
+    ) -> anyhow::Result<Vec<crate::HistoryEntry>> {
+        self.request(|response_tx| HarnessCommand::SearchHistory {
+            max_results,
+            response_tx,
+        })
+        .await
+    }
+
+    pub async fn custom_prompts(&self) -> anyhow::Result<Vec<crate::CustomPrompt>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::CustomPrompts { response_tx })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+    }
+
+    pub async fn compact(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::Compact { response_tx })
+            .await
+    }
+
+    pub async fn undo(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::Undo { response_tx })
+            .await
+    }
+
+    pub async fn undo_snapshots(&self) -> anyhow::Result<Vec<crate::UndoSnapshot>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::UndoSnapshots { response_tx })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+    }
+
+    pub async fn undo_to(&self, index: i64) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::UndoTo { index, response_tx })
+            .await
+    }
+
+    pub async fn run_user_shell(&self, command: String) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::RunUserShell {
+            command,
+            response_tx,
+        })
+        .await
+    }
+
+    pub async fn set_approval_policy(
+        &self,
+        policy: nori_config::AskForApproval,
+    ) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::SetApprovalPolicy {
+            policy,
+            response_tx,
+        })
+        .await
+    }
+
+    pub async fn goal(&self) -> anyhow::Result<Option<nori_protocol::ThreadGoal>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::Goal { response_tx })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+    }
+
+    pub async fn set_goal(
+        &self,
+        objective: String,
+        status: Option<nori_protocol::ThreadGoalStatus>,
+    ) -> anyhow::Result<nori_protocol::ThreadGoal> {
+        self.request(|response_tx| HarnessCommand::SetGoal {
+            objective,
+            status,
+            response_tx,
+        })
+        .await
+    }
+
+    pub async fn set_goal_status(
+        &self,
+        status: nori_protocol::ThreadGoalStatus,
+    ) -> anyhow::Result<nori_protocol::ThreadGoal> {
+        self.request(|response_tx| HarnessCommand::SetGoalStatus {
+            status,
+            response_tx,
+        })
+        .await
+    }
+
+    pub async fn clear_goal(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::ClearGoal { response_tx })
+            .await
+    }
+
+    async fn request<T>(
+        &self,
+        command: impl FnOnce(oneshot::Sender<anyhow::Result<T>>) -> HarnessCommand,
+    ) -> anyhow::Result<T> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(command(response_tx))
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
     }
 
     /// Get the current ACP session config snapshot from the agent.
@@ -107,7 +345,7 @@ impl AcpAgentHandle {
         let (response_tx, response_rx) = oneshot::channel();
         if self
             .command_tx
-            .send(AcpAgentCommand::GetSessionConfig { response_tx })
+            .send(HarnessCommand::GetSessionConfig { response_tx })
             .is_err()
         {
             return None;
@@ -123,7 +361,7 @@ impl AcpAgentHandle {
     ) -> anyhow::Result<Vec<SessionConfigOption>> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
-            .send(AcpAgentCommand::SetSessionConfigOption {
+            .send(HarnessCommand::SetSessionConfigOption {
                 config_id,
                 value,
                 response_tx,
@@ -135,10 +373,10 @@ impl AcpAgentHandle {
     }
 
     /// List the agent's known sessions via ACP `session/list`.
-    pub async fn list_sessions(&self, cwd: PathBuf) -> anyhow::Result<Vec<AcpSessionSummary>> {
+    pub async fn list_sessions(&self, cwd: PathBuf) -> anyhow::Result<Vec<acp::v1::SessionInfo>> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
-            .send(AcpAgentCommand::ListSessions { cwd, response_tx })
+            .send(HarnessCommand::ListSessions { cwd, response_tx })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
         response_rx
             .await
@@ -149,7 +387,7 @@ impl AcpAgentHandle {
     pub async fn close_session(&self) -> anyhow::Result<()> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
-            .send(AcpAgentCommand::CloseSession { response_tx })
+            .send(HarnessCommand::CloseSession { response_tx })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
         response_rx
             .await
@@ -180,41 +418,23 @@ pub struct SessionLaunchSpec {
     pub resume: Option<SessionResume>,
 }
 
-/// Events emitted by a launched session, in addition to the backend's own
-/// control/client events.
-#[derive(Debug)]
-pub enum SessionEvent {
-    /// A normalized backend event (control-plane or session-domain).
-    Backend(Box<BackendEvent>),
-    /// The backend failed to spawn/resume, or timed out while connecting.
-    SpawnFailed { error: String },
-    /// `Op::Shutdown` arrived while the backend was still connecting.
-    ShutdownRequested,
-}
-
-/// A running session: the op channel, the session-control handle, and the
-/// stream of session events.
+/// A running session and its ordered event stream.
 pub struct LaunchedSession {
-    /// Sender for submitting operations to the agent.
-    pub op_tx: UnboundedSender<Op>,
-    /// Handle for session-control operations (config options, session list).
-    pub handle: AcpAgentHandle,
+    /// Typed handle for ACP and Nori session operations.
+    pub handle: HarnessHandle,
     /// Session event stream; closes when the backend shuts down.
     pub events: UnboundedReceiver<SessionEvent>,
 }
 
 /// Launch an ACP agent session (or resume one, when `spec.resume` is set).
 ///
-/// Returns immediately; connection happens on a background task. The op and
-/// handle channels queue until the backend is up. If spawning fails, times
-/// out, or `Op::Shutdown` arrives first, a terminal [`SessionEvent`] is
-/// emitted and the event stream closes.
+/// Returns immediately; connection happens on a background task and handle
+/// calls queue until the backend is ready.
 pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
-    let (codex_op_tx, mut codex_op_rx) = unbounded_channel::<Op>();
-    let (agent_cmd_tx, mut agent_cmd_rx) = unbounded_channel::<AcpAgentCommand>();
+    let (agent_cmd_tx, mut agent_cmd_rx) = unbounded_channel::<HarnessCommand>();
     let (event_tx, event_rx) = unbounded_channel::<SessionEvent>();
 
-    let handle = AcpAgentHandle {
+    let handle = HarnessHandle {
         command_tx: agent_cmd_tx,
     };
 
@@ -311,55 +531,181 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
 
         // Race backend init against shutdown requests and a timeout.
         // This ensures the user can always exit even if the backend hangs.
-        let backend = tokio::select! {
-            result = connect => {
+        let mut connect = connect;
+        let mut timeout = std::pin::pin!(spawn_timeout_sequence(&event_tx));
+        let mut pending_commands = VecDeque::new();
+        let backend = loop {
+            tokio::select! {
+            result = &mut connect => {
                 match result {
-                    Ok(b) => Arc::new(b),
+                    Ok(b) => break Arc::new(b),
                     Err(e) => {
                         tracing::error!("{failure_label}: {e}");
-                        drop(codex_op_rx);
-                        let _ = event_tx.send(SessionEvent::SpawnFailed {
-                            error: format!("{failure_label}: {e}"),
-                        });
+                        let message = format!("{failure_label}: {e}");
+                        let _ = event_tx.send(SessionEvent::Nori(NoriEvent::RequestFailed(
+                            RequestFailure {
+                                request_id: None,
+                                message: message.clone(),
+                                kind: RequestFailureKind::Fatal,
+                            },
+                        )));
+                        let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
+                            SessionEnded {
+                                reason: SessionEndReason::SpawnFailed,
+                                message: Some(message),
+                            },
+                        )));
                         return;
                     }
                 }
             }
-            () = drain_until_shutdown(&mut codex_op_rx) => {
-                tracing::info!("shutdown requested while ACP backend was connecting");
-                drop(codex_op_rx);
-                let _ = event_tx.send(SessionEvent::ShutdownRequested);
+            command = agent_cmd_rx.recv() => {
+                match command {
+                    Some(HarnessCommand::Shutdown { response_tx }) => {
+                        let _ = response_tx.send(Ok(()));
+                        let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
+                            SessionEnded {
+                                reason: SessionEndReason::Shutdown,
+                                message: None,
+                            },
+                        )));
+                        return;
+                    }
+                    Some(command) => pending_commands.push_back(command),
+                    None => return,
+                }
+            }
+            () = &mut timeout => {
+                tracing::warn!("ACP backend connection timed out");
+                let message = "Connection timed out. The agent did not respond.".to_string();
+                let _ = event_tx.send(SessionEvent::Nori(NoriEvent::RequestFailed(
+                    RequestFailure {
+                        request_id: None,
+                        message: message.clone(),
+                        kind: RequestFailureKind::Retryable,
+                    },
+                )));
+                let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
+                    SessionEnded {
+                        reason: SessionEndReason::TimedOut,
+                        message: Some(message),
+                    },
+                )));
                 return;
             }
-            () = spawn_timeout_sequence(&event_tx) => {
-                tracing::warn!("ACP backend connection timed out");
-                drop(codex_op_rx);
-                let _ = event_tx.send(SessionEvent::SpawnFailed {
-                    error: "Connection timed out. The agent did not respond.".to_string(),
-                });
-                return;
             }
         };
 
-        // Forward ops to backend
-        let backend_for_ops = Arc::clone(&backend);
-        tokio::spawn(async move {
-            while let Some(op) = codex_op_rx.recv().await {
-                if let Err(e) = backend_for_ops.submit(op).await {
-                    tracing::error!("failed to submit op: {e}");
-                }
-            }
-        });
-
+        let transcript_recorder = backend.transcript_recorder();
         let backend_for_agent = Arc::clone(&backend);
         tokio::spawn(async move {
-            while let Some(cmd) = agent_cmd_rx.recv().await {
+            loop {
+                let cmd = match pending_commands.pop_front() {
+                    Some(command) => command,
+                    None => match agent_cmd_rx.recv().await {
+                        Some(command) => command,
+                        None => break,
+                    },
+                };
                 match cmd {
-                    AcpAgentCommand::GetSessionConfig { response_tx } => {
+                    HarnessCommand::Prompt {
+                        content,
+                        response_tx,
+                    } => {
+                        backend_for_agent.submit_prompt(content, response_tx).await;
+                    }
+                    HarnessCommand::Shutdown { response_tx } => {
+                        let result = backend_for_agent.shutdown().await;
+                        let shutdown_complete = result.is_ok();
+                        let _ = response_tx.send(result);
+                        if shutdown_complete {
+                            break;
+                        }
+                    }
+                    HarnessCommand::RespondToAgent {
+                        request_id,
+                        response,
+                        response_tx,
+                    } => {
+                        let result = backend_for_agent
+                            .respond_to_agent(request_id, response)
+                            .await;
+                        let _ = response_tx.send(result);
+                    }
+                    HarnessCommand::Cancel { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.cancel().await);
+                    }
+                    HarnessCommand::AddHistory { text, response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.add_history(text).await);
+                    }
+                    HarnessCommand::HistoryEntry {
+                        log_id,
+                        offset,
+                        response_tx,
+                    } => {
+                        let _ =
+                            response_tx.send(backend_for_agent.history_entry(log_id, offset).await);
+                    }
+                    HarnessCommand::SearchHistory {
+                        max_results,
+                        response_tx,
+                    } => {
+                        let _ =
+                            response_tx.send(backend_for_agent.search_history(max_results).await);
+                    }
+                    HarnessCommand::CustomPrompts { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.custom_prompts().await);
+                    }
+                    HarnessCommand::Compact { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.compact().await);
+                    }
+                    HarnessCommand::Undo { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.undo().await);
+                    }
+                    HarnessCommand::UndoSnapshots { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.undo_snapshots().await);
+                    }
+                    HarnessCommand::UndoTo { index, response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.undo_to(index).await);
+                    }
+                    HarnessCommand::RunUserShell {
+                        command,
+                        response_tx,
+                    } => {
+                        let _ = response_tx.send(backend_for_agent.run_user_shell(command).await);
+                    }
+                    HarnessCommand::SetApprovalPolicy {
+                        policy,
+                        response_tx,
+                    } => {
+                        backend_for_agent.set_approval_policy(policy);
+                        let _ = response_tx.send(Ok(()));
+                    }
+                    HarnessCommand::Goal { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.current_goal().await);
+                    }
+                    HarnessCommand::SetGoal {
+                        objective,
+                        status,
+                        response_tx,
+                    } => {
+                        let _ =
+                            response_tx.send(backend_for_agent.set_goal(objective, status).await);
+                    }
+                    HarnessCommand::SetGoalStatus {
+                        status,
+                        response_tx,
+                    } => {
+                        let _ = response_tx.send(backend_for_agent.set_goal_status(status).await);
+                    }
+                    HarnessCommand::ClearGoal { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.clear_goal().await);
+                    }
+                    HarnessCommand::GetSessionConfig { response_tx } => {
                         let state = backend_for_agent.config_options();
                         let _ = response_tx.send(state);
                     }
-                    AcpAgentCommand::SetSessionConfigOption {
+                    HarnessCommand::SetSessionConfigOption {
                         config_id,
                         value,
                         response_tx,
@@ -370,35 +716,47 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                             .map(|()| backend_for_agent.config_options());
                         let _ = response_tx.send(result);
                     }
-                    AcpAgentCommand::ListSessions { cwd, response_tx } => {
+                    HarnessCommand::ListSessions { cwd, response_tx } => {
                         let result = backend_for_agent.connection().list_sessions(&cwd).await;
                         let _ = response_tx.send(result);
                     }
-                    AcpAgentCommand::CloseSession { response_tx } => {
+                    HarnessCommand::CloseSession { response_tx } => {
                         let result = backend_for_agent.close_active_session().await;
+                        let close_complete = result.is_ok();
                         let _ = response_tx.send(result);
+                        if close_complete {
+                            break;
+                        }
                     }
                 }
             }
         });
 
-        // Drop our Arc reference - the op and agent-control tasks have their own.
-        // This is necessary so that when these tasks exit, the backend is fully dropped,
-        // which drops event_tx, allowing event_rx to return None and this task to exit.
+        // Drop our Arc reference; the typed command task owns the backend.
         drop(backend);
 
-        while let Some(event) = backend_event_rx.recv().await {
-            if event_tx
-                .send(SessionEvent::Backend(Box::new(event)))
-                .is_err()
+        while let Some(BackendEvent::Public(event)) = backend_event_rx.recv().await {
+            let session_ended = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
+            if let Some(recorder) = transcript_recorder.as_ref()
+                && let Err(error) = recorder.record_session_event(&event).await
             {
+                tracing::warn!(%error, "failed to record public session event");
+            }
+            if event_tx.send(event).is_err() {
                 break;
             }
+            if session_ended {
+                break;
+            }
+        }
+        if let Some(recorder) = transcript_recorder.as_ref()
+            && let Err(error) = recorder.shutdown().await
+        {
+            tracing::warn!(%error, "failed to shut down transcript recorder");
         }
     });
 
     LaunchedSession {
-        op_tx: codex_op_tx,
         handle,
         events: event_rx,
     }
@@ -407,13 +765,9 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol_schema::v1::SessionConfigOptionCategory;
-    use agent_client_protocol_schema::v1::SessionConfigSelectOption;
-    use codex_protocol::protocol::AskForApproval;
-    use codex_protocol::protocol::EventMsg;
-    use codex_protocol::protocol::SandboxPolicy;
+    use nori_protocol::acp::v1::SessionConfigOptionCategory;
+    use nori_protocol::acp::v1::SessionConfigSelectOption;
     use pretty_assertions::assert_eq;
-    use std::time::Duration;
 
     fn mode_option(current_value: &str) -> SessionConfigOption {
         SessionConfigOption::select(
@@ -430,10 +784,10 @@ mod tests {
 
     #[tokio::test]
     async fn set_session_config_option_returns_refreshed_config_snapshot() {
-        let (command_tx, mut command_rx) = unbounded_channel::<AcpAgentCommand>();
+        let (command_tx, mut command_rx) = unbounded_channel::<HarnessCommand>();
         tokio::spawn(async move {
             while let Some(command) = command_rx.recv().await {
-                if let AcpAgentCommand::SetSessionConfigOption {
+                if let HarnessCommand::SetSessionConfigOption {
                     config_id: _,
                     value,
                     response_tx,
@@ -443,7 +797,7 @@ mod tests {
                 }
             }
         });
-        let handle = AcpAgentHandle { command_tx };
+        let handle = HarnessHandle { command_tx };
 
         let config_options = handle
             .set_session_config_option("mode".to_string(), "build".to_string())
@@ -451,69 +805,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(config_options, vec![mode_option("build")]);
-    }
-
-    #[tokio::test]
-    async fn launch_session_uses_the_injected_resolved_config() {
-        let temp = tempfile::tempdir().expect("create session directory");
-        let marker = temp.path().join("hook-ran");
-        let hook = temp.path().join("session-start.sh");
-        std::fs::write(&hook, format!("printf injected > {}\n", marker.display()))
-            .expect("write hook");
-
-        let config = crate::config::NoriConfig {
-            active_agent: "mock-model".to_string(),
-            cwd: temp.path().to_path_buf(),
-            nori_home: temp.path().to_path_buf(),
-            approval_policy: AskForApproval::Never,
-            sandbox_policy: SandboxPolicy::ReadOnly,
-            session_start_hooks: vec![hook],
-            ..Default::default()
-        };
-
-        let spec = SessionLaunchSpec {
-            config: Arc::new(config),
-            cli_version: "test".to_string(),
-            session_context: None,
-            initial_context: None,
-            resume: None,
-        };
-        let LaunchedSession {
-            op_tx,
-            handle,
-            mut events,
-        } = launch_session(spec);
-
-        let configured = tokio::time::timeout(Duration::from_secs(10), async {
-            loop {
-                match events.recv().await.expect("session event stream closed") {
-                    SessionEvent::Backend(event) => {
-                        if let BackendEvent::Control(event) = *event
-                            && let EventMsg::SessionConfigured(configured) = event.msg
-                        {
-                            break configured;
-                        }
-                    }
-                    SessionEvent::SpawnFailed { error } => panic!("session spawn failed: {error}"),
-                    SessionEvent::ShutdownRequested => {
-                        panic!("session shut down before configuration")
-                    }
-                }
-            }
-        })
-        .await
-        .expect("session should configure from injected config");
-
-        assert_eq!(configured.model, "mock-model");
-        assert_eq!(configured.cwd, temp.path());
-        assert_eq!(configured.approval_policy, AskForApproval::Never);
-        assert_eq!(configured.sandbox_policy, SandboxPolicy::ReadOnly);
-        assert_eq!(
-            std::fs::read_to_string(marker).expect("read hook marker"),
-            "injected"
-        );
-        op_tx.send(Op::Shutdown).expect("request shutdown");
-        drop(op_tx);
-        drop(handle);
     }
 }

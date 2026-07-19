@@ -14,7 +14,6 @@ impl ChatWidget {
             vertical_footer,
             footer_segment_config,
             footer_layout_config,
-            expected_agent,
             deferred_spawn,
             fork_context,
         } = common;
@@ -23,11 +22,7 @@ impl ChatWidget {
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
         let spawn_result = if deferred_spawn {
-            let (op_tx, _) = tokio::sync::mpsc::unbounded_channel();
-            SpawnAgentResult {
-                op_tx,
-                acp_handle: None,
-            }
+            SpawnAgentResult { handle: None }
         } else {
             spawn_agent(config.clone(), app_event_tx.clone(), fork_context)
         };
@@ -37,7 +32,6 @@ impl ChatWidget {
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
-            codex_op_tx: spawn_result.op_tx,
             bottom_pane: BottomPane::new(BottomPaneParams {
                 frame_requester,
                 app_event_tx,
@@ -63,26 +57,15 @@ impl ChatWidget {
                 initial_prompt.unwrap_or_default(),
                 initial_images,
             ),
-            token_info: None,
-            rate_limit_snapshot: None,
-            rate_limit_warnings: RateLimitWarningState::default(),
-
-            rate_limit_poller: None,
             stream_controller: None,
-            running_commands: HashMap::new(),
-            suppressed_exec_calls: HashSet::new(),
             completed_client_tool_calls: HashSet::new(),
-            last_unified_wait: None,
-            task_complete_pending: false,
-            mcp_startup_status: None,
-            interrupts: InterruptManager::new(),
+            client_event_normalizer: Default::default(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,
                 &config.custom_working_message_list,
             ),
-            retry_status_header: None,
             conversation_id: None,
             show_welcome_banner: true,
             suppress_session_configured_redraw: false,
@@ -90,13 +73,11 @@ impl ChatWidget {
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
             current_rollout_path: None,
-            pending_exec_cells: PendingExecCellTracker::new(),
             pending_client_tool_cells: HashMap::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_agent,
             session_configured_received: false,
-            acp_handle: spawn_result.acp_handle,
+            harness_handle: spawn_result.handle,
             session_close_in_flight: false,
             exiting: false,
             acp_config_option_snapshot: None,
@@ -109,7 +90,7 @@ impl ChatWidget {
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
-            session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+            session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
             acp_session_id: None,
             cloud_session_title: None,
             builtin_command_availability: HashMap::new(),
@@ -128,8 +109,6 @@ impl ChatWidget {
         widget
             .bottom_pane
             .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
-        widget.prefetch_rate_limits();
-
         widget
     }
 
@@ -153,7 +132,6 @@ impl ChatWidget {
             vertical_footer,
             footer_segment_config,
             footer_layout_config,
-            expected_agent,
             deferred_spawn: _,
             fork_context: _,
         } = common;
@@ -173,7 +151,6 @@ impl ChatWidget {
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
-            codex_op_tx: spawn_result.op_tx,
             bottom_pane: BottomPane::new(BottomPaneParams {
                 frame_requester,
                 app_event_tx,
@@ -199,26 +176,15 @@ impl ChatWidget {
                 initial_prompt.unwrap_or_default(),
                 initial_images,
             ),
-            token_info: None,
-            rate_limit_snapshot: None,
-            rate_limit_warnings: RateLimitWarningState::default(),
-
-            rate_limit_poller: None,
             stream_controller: None,
-            running_commands: HashMap::new(),
-            suppressed_exec_calls: HashSet::new(),
             completed_client_tool_calls: HashSet::new(),
-            last_unified_wait: None,
-            task_complete_pending: false,
-            mcp_startup_status: None,
-            interrupts: InterruptManager::new(),
+            client_event_normalizer: Default::default(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,
                 &config.custom_working_message_list,
             ),
-            retry_status_header: None,
             conversation_id: None,
             show_welcome_banner: false,
             suppress_session_configured_redraw: false,
@@ -226,13 +192,11 @@ impl ChatWidget {
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
             current_rollout_path: None,
-            pending_exec_cells: PendingExecCellTracker::new(),
             pending_client_tool_cells: HashMap::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_agent,
             session_configured_received: false,
-            acp_handle: spawn_result.acp_handle,
+            harness_handle: spawn_result.handle,
             session_close_in_flight: false,
             exiting: false,
             acp_config_option_snapshot: None,
@@ -245,7 +209,7 @@ impl ChatWidget {
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
-            session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+            session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
             acp_session_id,
             cloud_session_title: title,
             builtin_command_availability: HashMap::new(),
@@ -264,8 +228,6 @@ impl ChatWidget {
         widget
             .bottom_pane
             .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
-        widget.prefetch_rate_limits();
-
         widget
     }
 
@@ -287,7 +249,6 @@ impl ChatWidget {
     /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
     pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
         let spawn_result = spawn_agent(config, app_event_tx, None);
-        self.codex_op_tx = spawn_result.op_tx;
-        self.acp_handle = spawn_result.acp_handle;
+        self.harness_handle = spawn_result.handle;
     }
 }

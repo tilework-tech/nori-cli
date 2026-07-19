@@ -1,12 +1,12 @@
 //! Type definitions for Nori configuration
 
-use codex_protocol::config_types::McpServerConfig;
-use codex_protocol::config_types::SandboxMode;
-use codex_protocol::config_types::ShellEnvironmentPolicy;
-use codex_protocol::config_types::ShellEnvironmentPolicyToml;
-use codex_protocol::config_types::TrustLevel;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::SandboxPolicy;
+use crate::AskForApproval;
+use crate::McpServerConfig;
+use crate::SandboxMode;
+use crate::SandboxPolicy;
+use crate::ShellEnvironmentPolicy;
+use crate::ShellEnvironmentPolicyToml;
+use crate::TrustLevel;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;

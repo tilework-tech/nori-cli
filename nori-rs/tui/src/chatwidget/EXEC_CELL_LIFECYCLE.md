@@ -133,7 +133,7 @@ display or debugging cell lifecycle issues.
 ### ACP Snapshot Behavior
 
 ACP session-domain tool activity now reaches the TUI as normalized
-`nori_protocol::ClientEvent::ToolSnapshot` values rather than as a translated
+`crate::presentation::ClientEvent::ToolSnapshot` values rather than as a translated
 `ExecCommandBegin/End` stream from the backend. A single tool call typically
 produces multiple snapshots for the same `call_id`:
 

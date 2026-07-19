@@ -1,18 +1,56 @@
-use codex_protocol::num_format::format_elapsed_seconds;
-use codex_protocol::num_format::format_si_suffix;
-use codex_protocol::protocol::ThreadGoalStatus;
-use codex_protocol::protocol::validate_thread_goal_objective;
-use nori_protocol::ClientEvent;
-use nori_protocol::SessionUpdateInfo;
-use nori_protocol::SessionUpdateKind;
-use nori_protocol::ThreadGoalUpdated;
+use crate::normalized::ClientEvent;
+use crate::normalized::SessionUpdateInfo;
+use crate::normalized::SessionUpdateKind;
+use crate::normalized::ThreadGoalUpdated;
+use nori_protocol::validate_thread_goal_objective;
 
 use super::*;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GoalStatus {
+    Active,
+    Paused,
+    Blocked,
+    UsageLimited,
+    BudgetLimited,
+    Complete,
+}
+
+fn format_elapsed_seconds(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    if seconds < 60 {
+        return format!("{seconds}s");
+    }
+    format!("{}m {}s", seconds / 60, seconds % 60)
+}
+
+fn format_si_suffix(value: i64) -> String {
+    let value = value.max(0);
+    if value < 1_000 {
+        return value.to_string();
+    }
+
+    for (scale, suffix) in [(1_000_i64, "K"), (1_000_000, "M"), (1_000_000_000, "G")] {
+        let scaled = value as f64 / scale as f64;
+        let rounded = if scaled < 10.0 {
+            format!("{scaled:.2}")
+        } else if scaled < 100.0 {
+            format!("{scaled:.1}")
+        } else if scaled < 999.5 {
+            format!("{scaled:.0}")
+        } else {
+            continue;
+        };
+        return format!("{rounded}{suffix}");
+    }
+
+    format!("{:.0}G", value as f64 / 1_000_000_000.0)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ThreadGoalSnapshot {
     pub(crate) objective: String,
-    pub(crate) status: ThreadGoalStatus,
+    pub(crate) status: GoalStatus,
     pub(crate) tokens_used: i64,
     pub(crate) time_used_seconds: i64,
     pub(crate) created_at: i64,
@@ -35,7 +73,7 @@ impl ThreadGoalSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StoredThreadGoal {
     objective: String,
-    status: ThreadGoalStatus,
+    status: GoalStatus,
     tokens_used: i64,
     token_usage_checkpoint: Option<i64>,
     accumulated_active_seconds: i64,
@@ -110,12 +148,12 @@ impl ThreadGoalState {
     pub(crate) fn prompt_context(&self, now: i64) -> Option<String> {
         self.snapshot(now).map(|goal| {
             let status = match goal.status {
-                ThreadGoalStatus::Active => "active",
-                ThreadGoalStatus::Paused => "paused",
-                ThreadGoalStatus::Blocked => "blocked",
-                ThreadGoalStatus::UsageLimited => "usage limited",
-                ThreadGoalStatus::BudgetLimited => "limited by budget",
-                ThreadGoalStatus::Complete => "complete",
+                GoalStatus::Active => "active",
+                GoalStatus::Paused => "paused",
+                GoalStatus::Blocked => "blocked",
+                GoalStatus::UsageLimited => "usage limited",
+                GoalStatus::BudgetLimited => "limited by budget",
+                GoalStatus::Complete => "complete",
             };
             format!(
                 "<goal_context>\nStatus: {}\nObjective: {}\nTime used: {}\nTokens used: {}\n</goal_context>",
@@ -129,7 +167,7 @@ impl ThreadGoalState {
 
     pub(crate) fn continuation_prompt(&self, now: i64) -> Option<String> {
         let goal = self.snapshot(now)?;
-        if goal.status != ThreadGoalStatus::Active {
+        if goal.status != GoalStatus::Active {
             return None;
         }
 
@@ -157,25 +195,25 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
     pub(crate) fn resume_notice(&self, now: i64) -> Option<SessionUpdateInfo> {
         let goal = self.snapshot(now)?;
         match goal.status {
-            ThreadGoalStatus::Paused => Some(SessionUpdateInfo {
+            GoalStatus::Paused => Some(SessionUpdateInfo {
                 kind: SessionUpdateKind::SessionInfo,
                 message: format!("Goal is paused: {}", goal.objective),
                 hint: Some("Use /goal resume to continue, /goal edit to change it, or /goal clear to remove it.".to_string()),
                 usage: None,
             }),
-            ThreadGoalStatus::Blocked => Some(SessionUpdateInfo {
+            GoalStatus::Blocked => Some(SessionUpdateInfo {
                 kind: SessionUpdateKind::SessionInfo,
                 message: format!("Goal is blocked: {}", goal.objective),
                 hint: Some("Resolve the blocker, then use /goal resume to continue; /goal edit and /goal clear are also available.".to_string()),
                 usage: None,
             }),
-            ThreadGoalStatus::UsageLimited => Some(SessionUpdateInfo {
+            GoalStatus::UsageLimited => Some(SessionUpdateInfo {
                 kind: SessionUpdateKind::SessionInfo,
                 message: format!("Goal is usage limited: {}", goal.objective),
                 hint: Some("Use /goal resume after usage is available again, /goal edit to change it, or /goal clear to remove it.".to_string()),
                 usage: None,
             }),
-            ThreadGoalStatus::Active | ThreadGoalStatus::BudgetLimited | ThreadGoalStatus::Complete => None,
+            GoalStatus::Active | GoalStatus::BudgetLimited | GoalStatus::Complete => None,
         }
     }
 
@@ -192,22 +230,22 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
             return self.resume_notice(now);
         }
         self.snapshot(now).and_then(|goal| match goal.status {
-            ThreadGoalStatus::Active
-            | ThreadGoalStatus::Paused
-            | ThreadGoalStatus::Blocked
-            | ThreadGoalStatus::UsageLimited => Some(unavailable_notice()),
-            ThreadGoalStatus::BudgetLimited | ThreadGoalStatus::Complete => None,
+            GoalStatus::Active
+            | GoalStatus::Paused
+            | GoalStatus::Blocked
+            | GoalStatus::UsageLimited => Some(unavailable_notice()),
+            GoalStatus::BudgetLimited | GoalStatus::Complete => None,
         })
     }
 
     pub(crate) fn set_objective(
         &mut self,
         objective: String,
-        status: Option<ThreadGoalStatus>,
+        status: Option<GoalStatus>,
         now: i64,
     ) -> Result<ThreadGoalSnapshot, String> {
         validate_thread_goal_objective(&objective)?;
-        let status = status.unwrap_or(ThreadGoalStatus::Active);
+        let status = status.unwrap_or(GoalStatus::Active);
         let goal = StoredThreadGoal {
             objective,
             status,
@@ -225,7 +263,7 @@ Before deciding that the goal is achieved, treat completion as unproven and veri
 
     pub(crate) fn set_status(
         &mut self,
-        status: ThreadGoalStatus,
+        status: GoalStatus,
         now: i64,
     ) -> Result<ThreadGoalSnapshot, String> {
         let Some(goal) = self.goal.as_mut() else {
@@ -288,7 +326,7 @@ impl StoredThreadGoal {
         }
     }
 
-    fn apply_status(&mut self, status: ThreadGoalStatus, now: i64) {
+    fn apply_status(&mut self, status: GoalStatus, now: i64) {
         self.accumulated_active_seconds = self.active_seconds(now);
         self.status = status;
         self.active_started_at = active_started_at(status, now);
@@ -304,36 +342,36 @@ impl StoredThreadGoal {
     }
 }
 
-fn active_started_at(status: ThreadGoalStatus, now: i64) -> Option<i64> {
+fn active_started_at(status: GoalStatus, now: i64) -> Option<i64> {
     match status {
-        ThreadGoalStatus::Active => Some(now),
-        ThreadGoalStatus::Paused
-        | ThreadGoalStatus::Blocked
-        | ThreadGoalStatus::UsageLimited
-        | ThreadGoalStatus::BudgetLimited
-        | ThreadGoalStatus::Complete => None,
+        GoalStatus::Active => Some(now),
+        GoalStatus::Paused
+        | GoalStatus::Blocked
+        | GoalStatus::UsageLimited
+        | GoalStatus::BudgetLimited
+        | GoalStatus::Complete => None,
     }
 }
 
-fn client_status(status: ThreadGoalStatus) -> nori_protocol::ThreadGoalStatus {
+fn client_status(status: GoalStatus) -> nori_protocol::ThreadGoalStatus {
     match status {
-        ThreadGoalStatus::Active => nori_protocol::ThreadGoalStatus::Active,
-        ThreadGoalStatus::Paused => nori_protocol::ThreadGoalStatus::Paused,
-        ThreadGoalStatus::Blocked => nori_protocol::ThreadGoalStatus::Blocked,
-        ThreadGoalStatus::UsageLimited => nori_protocol::ThreadGoalStatus::UsageLimited,
-        ThreadGoalStatus::BudgetLimited => nori_protocol::ThreadGoalStatus::BudgetLimited,
-        ThreadGoalStatus::Complete => nori_protocol::ThreadGoalStatus::Complete,
+        GoalStatus::Active => nori_protocol::ThreadGoalStatus::Active,
+        GoalStatus::Paused => nori_protocol::ThreadGoalStatus::Paused,
+        GoalStatus::Blocked => nori_protocol::ThreadGoalStatus::Blocked,
+        GoalStatus::UsageLimited => nori_protocol::ThreadGoalStatus::UsageLimited,
+        GoalStatus::BudgetLimited => nori_protocol::ThreadGoalStatus::BudgetLimited,
+        GoalStatus::Complete => nori_protocol::ThreadGoalStatus::Complete,
     }
 }
 
-fn status_from_client(status: nori_protocol::ThreadGoalStatus) -> ThreadGoalStatus {
+fn status_from_client(status: nori_protocol::ThreadGoalStatus) -> GoalStatus {
     match status {
-        nori_protocol::ThreadGoalStatus::Active => ThreadGoalStatus::Active,
-        nori_protocol::ThreadGoalStatus::Paused => ThreadGoalStatus::Paused,
-        nori_protocol::ThreadGoalStatus::Blocked => ThreadGoalStatus::Blocked,
-        nori_protocol::ThreadGoalStatus::UsageLimited => ThreadGoalStatus::UsageLimited,
-        nori_protocol::ThreadGoalStatus::BudgetLimited => ThreadGoalStatus::BudgetLimited,
-        nori_protocol::ThreadGoalStatus::Complete => ThreadGoalStatus::Complete,
+        nori_protocol::ThreadGoalStatus::Active => GoalStatus::Active,
+        nori_protocol::ThreadGoalStatus::Paused => GoalStatus::Paused,
+        nori_protocol::ThreadGoalStatus::Blocked => GoalStatus::Blocked,
+        nori_protocol::ThreadGoalStatus::UsageLimited => GoalStatus::UsageLimited,
+        nori_protocol::ThreadGoalStatus::BudgetLimited => GoalStatus::BudgetLimited,
+        nori_protocol::ThreadGoalStatus::Complete => GoalStatus::Complete,
     }
 }
 
@@ -345,6 +383,70 @@ pub(super) fn now_seconds() -> i64 {
 }
 
 impl AcpBackend {
+    pub(crate) async fn current_goal(&self) -> Option<nori_protocol::ThreadGoal> {
+        self.thread_goal_state
+            .lock()
+            .await
+            .snapshot(now_seconds())
+            .map(ThreadGoalSnapshot::into_client_goal)
+    }
+
+    pub(crate) async fn set_goal(
+        &self,
+        objective: String,
+        status: Option<nori_protocol::ThreadGoalStatus>,
+    ) -> Result<nori_protocol::ThreadGoal> {
+        if !self.goal_automation_available().await {
+            anyhow::bail!("goal management is unavailable for this session");
+        }
+        let status = status.map(status_from_client);
+        let goal = self
+            .thread_goal_state
+            .lock()
+            .await
+            .set_objective(objective, status, now_seconds())
+            .map_err(anyhow::Error::msg)?;
+        let should_start = goal.status == GoalStatus::Active;
+        let goal = goal.into_client_goal();
+        self.emit_goal_changed(Some(goal.clone())).await;
+        if should_start {
+            self.submit_goal_continuation_if_idle().await;
+        }
+        Ok(goal)
+    }
+
+    pub(crate) async fn clear_goal(&self) -> Result<()> {
+        if !self.goal_automation_available().await {
+            anyhow::bail!("goal management is unavailable for this session");
+        }
+        if self.thread_goal_state.lock().await.clear() {
+            self.emit_goal_changed(None).await;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn set_goal_status(
+        &self,
+        status: nori_protocol::ThreadGoalStatus,
+    ) -> Result<nori_protocol::ThreadGoal> {
+        if !self.goal_automation_available().await {
+            anyhow::bail!("goal management is unavailable for this session");
+        }
+        let goal = self
+            .thread_goal_state
+            .lock()
+            .await
+            .set_status(status_from_client(status), now_seconds())
+            .map_err(anyhow::Error::msg)?;
+        let should_start = goal.status == GoalStatus::Active;
+        let goal = goal.into_client_goal();
+        self.emit_goal_changed(Some(goal.clone())).await;
+        if should_start {
+            self.submit_goal_continuation_if_idle().await;
+        }
+        Ok(goal)
+    }
+
     pub(super) async fn thread_goal_update_from_client_event(
         &self,
         client_event: &ClientEvent,
@@ -379,128 +481,22 @@ impl AcpBackend {
         }
     }
 
-    pub(super) async fn handle_thread_goal_get(&self) {
-        if !self.goal_automation_available().await {
-            self.emit_goal_unavailable().await;
-            return;
-        }
-
-        let now = now_seconds();
-        let goal = self.thread_goal_state.lock().await.snapshot(now);
-        match goal {
-            Some(goal) => {
-                self.emit_thread_goal_updated(goal).await;
-            }
-            None => {
-                emit_client_event(
-                    &self.backend_event_tx,
-                    self.transcript_recorder.as_ref(),
-                    ClientEvent::SessionUpdateInfo(SessionUpdateInfo {
-                        kind: SessionUpdateKind::SessionInfo,
-                        message: "Usage: /goal <objective>".to_string(),
-                        hint: Some("No goal is currently set.".to_string()),
-                        usage: None,
-                    }),
-                )
-                .await;
-            }
-        }
-    }
-
-    pub(super) async fn handle_thread_goal_set(
-        &self,
-        objective: Option<String>,
-        status: Option<ThreadGoalStatus>,
-    ) {
-        if !self.goal_automation_available().await {
-            self.emit_goal_unavailable().await;
-            return;
-        }
-
-        let now = now_seconds();
-        let result = {
-            let mut state = self.thread_goal_state.lock().await;
-            match objective {
-                Some(objective) => state.set_objective(objective, status, now),
-                None => match status {
-                    Some(status) => state.set_status(status, now),
-                    None => Err("goal update must include an objective or status".to_string()),
-                },
-            }
-        };
-
-        match result {
-            Ok(goal) => {
-                let should_start = goal.status == ThreadGoalStatus::Active;
-                self.emit_thread_goal_updated(goal).await;
-                if should_start {
-                    self.submit_goal_continuation_if_idle().await;
-                }
-            }
-            Err(message) => self.send_error(&message).await,
-        }
-    }
-
-    pub(super) async fn handle_thread_goal_clear(&self) {
-        if !self.goal_automation_available().await {
-            self.emit_goal_unavailable().await;
-            return;
-        }
-
-        let cleared = self.thread_goal_state.lock().await.clear();
-        if cleared {
-            emit_client_event(
-                &self.backend_event_tx,
-                self.transcript_recorder.as_ref(),
-                ClientEvent::ThreadGoalCleared,
-            )
-            .await;
-        } else {
-            emit_client_event(
-                &self.backend_event_tx,
-                self.transcript_recorder.as_ref(),
-                ClientEvent::SessionUpdateInfo(SessionUpdateInfo {
-                    kind: SessionUpdateKind::SessionInfo,
-                    message: "No goal to clear".to_string(),
-                    hint: Some("This session does not currently have a goal.".to_string()),
-                    usage: None,
-                }),
-            )
-            .await;
-        }
-    }
-
     async fn goal_automation_available(&self) -> bool {
         self.goal_mcp_http_server.lock().await.is_some()
     }
 
-    async fn emit_goal_unavailable(&self) {
-        // Deliberately not recorded to the transcript: like resume notices this
-        // is a transient affordance derived from session state. Recording it
-        // would replay and accumulate a duplicate notice on every /goal op.
+    async fn emit_goal_changed(&self, goal: Option<nori_protocol::ThreadGoal>) {
         let _ = self
             .backend_event_tx
-            .send(BackendEvent::Client(ClientEvent::SessionUpdateInfo(
-                unavailable_notice(),
+            .send(BackendEvent::Public(nori_protocol::SessionEvent::Nori(
+                nori_protocol::NoriEvent::GoalChanged(goal),
             )))
             .await;
-    }
-
-    async fn emit_thread_goal_updated(&self, goal: ThreadGoalSnapshot) {
-        emit_client_event(
-            &self.backend_event_tx,
-            self.transcript_recorder.as_ref(),
-            ClientEvent::ThreadGoalUpdated(ThreadGoalUpdated {
-                goal: goal.into_client_goal(),
-            }),
-        )
-        .await;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use codex_protocol::protocol::ThreadGoalStatus;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -512,13 +508,13 @@ mod tests {
         let goal = goals
             .set_objective(
                 "Ship the ACP goal command".to_string(),
-                Some(ThreadGoalStatus::Active),
+                Some(GoalStatus::Active),
                 10,
             )
             .expect("valid objective");
 
         assert_eq!(goal.objective, "Ship the ACP goal command");
-        assert_eq!(goal.status, ThreadGoalStatus::Active);
+        assert_eq!(goal.status, GoalStatus::Active);
         assert_eq!(goal.tokens_used, 0);
         assert_eq!(goal.time_used_seconds, 0);
         assert_eq!(goal.created_at, 10);
@@ -533,11 +529,11 @@ mod tests {
             .expect("valid objective");
 
         let goal = goals
-            .set_status(ThreadGoalStatus::Paused, 25)
+            .set_status(GoalStatus::Paused, 25)
             .expect("existing goal");
 
         assert_eq!(goal.objective, "Keep going");
-        assert_eq!(goal.status, ThreadGoalStatus::Paused);
+        assert_eq!(goal.status, GoalStatus::Paused);
         assert_eq!(goal.time_used_seconds, 15);
         assert_eq!(goal.created_at, 10);
         assert_eq!(goal.updated_at, 25);
@@ -550,15 +546,15 @@ mod tests {
             .set_objective("Keep going".to_string(), None, 10)
             .expect("valid objective");
         goals
-            .set_status(ThreadGoalStatus::Paused, 25)
+            .set_status(GoalStatus::Paused, 25)
             .expect("existing goal");
         goals
-            .set_status(ThreadGoalStatus::Active, 100)
+            .set_status(GoalStatus::Active, 100)
             .expect("existing goal");
 
         let goal = goals.snapshot(130).expect("goal exists");
 
-        assert_eq!(goal.status, ThreadGoalStatus::Active);
+        assert_eq!(goal.status, GoalStatus::Active);
         assert_eq!(goal.time_used_seconds, 45);
     }
 
@@ -577,31 +573,35 @@ mod tests {
     #[test]
     fn rehydrates_latest_goal_from_replay_events() {
         let goals = ThreadGoalState::from_replay_events(&[
-            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
-                goal: nori_protocol::ThreadGoal {
-                    objective: "Earlier goal".to_string(),
-                    status: nori_protocol::ThreadGoalStatus::Paused,
-                    tokens_used: 12,
-                    time_used_seconds: 5,
-                    created_at: 1,
-                    updated_at: 8,
+            crate::normalized::ClientEvent::ThreadGoalUpdated(
+                crate::normalized::ThreadGoalUpdated {
+                    goal: nori_protocol::ThreadGoal {
+                        objective: "Earlier goal".to_string(),
+                        status: nori_protocol::ThreadGoalStatus::Paused,
+                        tokens_used: 12,
+                        time_used_seconds: 5,
+                        created_at: 1,
+                        updated_at: 8,
+                    },
                 },
-            }),
-            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
-                goal: nori_protocol::ThreadGoal {
-                    objective: "Keep going".to_string(),
-                    status: nori_protocol::ThreadGoalStatus::Active,
-                    tokens_used: 42,
-                    time_used_seconds: 15,
-                    created_at: 10,
-                    updated_at: 25,
+            ),
+            crate::normalized::ClientEvent::ThreadGoalUpdated(
+                crate::normalized::ThreadGoalUpdated {
+                    goal: nori_protocol::ThreadGoal {
+                        objective: "Keep going".to_string(),
+                        status: nori_protocol::ThreadGoalStatus::Active,
+                        tokens_used: 42,
+                        time_used_seconds: 15,
+                        created_at: 10,
+                        updated_at: 25,
+                    },
                 },
-            }),
+            ),
         ]);
 
         let goal = goals.snapshot(30).expect("goal should be rehydrated");
         assert_eq!(goal.objective, "Keep going");
-        assert_eq!(goal.status, ThreadGoalStatus::Active);
+        assert_eq!(goal.status, GoalStatus::Active);
         assert_eq!(goal.tokens_used, 42);
         assert_eq!(goal.time_used_seconds, 20);
         assert_eq!(goal.created_at, 10);
@@ -611,17 +611,19 @@ mod tests {
     #[test]
     fn rehydration_respects_latest_clear_event() {
         let goals = ThreadGoalState::from_replay_events(&[
-            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
-                goal: nori_protocol::ThreadGoal {
-                    objective: "Keep going".to_string(),
-                    status: nori_protocol::ThreadGoalStatus::Paused,
-                    tokens_used: 42,
-                    time_used_seconds: 15,
-                    created_at: 10,
-                    updated_at: 25,
+            crate::normalized::ClientEvent::ThreadGoalUpdated(
+                crate::normalized::ThreadGoalUpdated {
+                    goal: nori_protocol::ThreadGoal {
+                        objective: "Keep going".to_string(),
+                        status: nori_protocol::ThreadGoalStatus::Paused,
+                        tokens_used: 42,
+                        time_used_seconds: 15,
+                        created_at: 10,
+                        updated_at: 25,
+                    },
                 },
-            }),
-            nori_protocol::ClientEvent::ThreadGoalCleared,
+            ),
+            crate::normalized::ClientEvent::ThreadGoalCleared,
         ]);
 
         assert_eq!(goals.snapshot(30), None);
@@ -660,7 +662,7 @@ mod tests {
         assert!(prompt.contains("<objective>\nKeep going\n</objective>"));
 
         goals
-            .set_status(ThreadGoalStatus::Paused, 30)
+            .set_status(GoalStatus::Paused, 30)
             .expect("existing goal");
 
         assert_eq!(goals.continuation_prompt(35), None);
@@ -672,12 +674,12 @@ mod tests {
         assert_eq!(goals.resume_notice(10), None);
 
         goals
-            .set_objective("Keep going".to_string(), Some(ThreadGoalStatus::Active), 10)
+            .set_objective("Keep going".to_string(), Some(GoalStatus::Active), 10)
             .expect("valid objective");
         assert_eq!(goals.resume_notice(15), None);
 
         goals
-            .set_status(ThreadGoalStatus::Paused, 20)
+            .set_status(GoalStatus::Paused, 20)
             .expect("existing goal");
         let paused_notice = goals.resume_notice(25).expect("paused goal notice");
         assert_eq!(paused_notice.kind, SessionUpdateKind::SessionInfo);
@@ -690,7 +692,7 @@ mod tests {
         );
 
         goals
-            .set_status(ThreadGoalStatus::Blocked, 30)
+            .set_status(GoalStatus::Blocked, 30)
             .expect("existing goal");
         let blocked_notice = goals.resume_notice(35).expect("blocked goal notice");
         assert_eq!(blocked_notice.message, "Goal is blocked: Keep going");
@@ -702,7 +704,7 @@ mod tests {
         );
 
         goals
-            .set_status(ThreadGoalStatus::UsageLimited, 40)
+            .set_status(GoalStatus::UsageLimited, 40)
             .expect("existing goal");
         let usage_notice = goals.resume_notice(45).expect("usage-limited goal notice");
         assert_eq!(usage_notice.message, "Goal is usage limited: Keep going");
@@ -714,7 +716,7 @@ mod tests {
         );
 
         goals
-            .set_status(ThreadGoalStatus::Complete, 50)
+            .set_status(GoalStatus::Complete, 50)
             .expect("existing goal");
         assert_eq!(goals.resume_notice(55), None);
     }
@@ -727,7 +729,7 @@ mod tests {
         assert_eq!(goals.resume_notice_for(10, false), None);
 
         goals
-            .set_objective("Keep going".to_string(), Some(ThreadGoalStatus::Active), 10)
+            .set_objective("Keep going".to_string(), Some(GoalStatus::Active), 10)
             .expect("valid objective");
         // Active goal with automation available has no resume affordance...
         assert_eq!(goals.resume_notice_for(15, true), None);
@@ -740,9 +742,9 @@ mod tests {
         // Every resumable status surfaces the unavailable notice without
         // automation, and never the misleading /goal resume affordance.
         for status in [
-            ThreadGoalStatus::Paused,
-            ThreadGoalStatus::Blocked,
-            ThreadGoalStatus::UsageLimited,
+            GoalStatus::Paused,
+            GoalStatus::Blocked,
+            GoalStatus::UsageLimited,
         ] {
             goals.set_status(status, 20).expect("existing goal");
             let available = goals
@@ -762,7 +764,7 @@ mod tests {
 
         // Terminal statuses surface nothing in either mode.
         goals
-            .set_status(ThreadGoalStatus::Complete, 30)
+            .set_status(GoalStatus::Complete, 30)
             .expect("existing goal");
         assert_eq!(goals.resume_notice_for(35, true), None);
         assert_eq!(goals.resume_notice_for(35, false), None);
@@ -818,26 +820,30 @@ mod tests {
     #[test]
     fn rehydrated_goal_usage_checkpoint_survives_future_usage_updates() {
         let goals = ThreadGoalState::from_replay_events(&[
-            nori_protocol::ClientEvent::SessionUpdateInfo(nori_protocol::SessionUpdateInfo {
-                kind: nori_protocol::SessionUpdateKind::Usage,
-                message: "Session usage: 200 / 4096 tokens".to_string(),
-                hint: None,
-                usage: Some(nori_protocol::session_runtime::SessionUsageState {
-                    used_tokens: 200,
-                    total_tokens: 4096,
-                    cost_display: None,
-                }),
-            }),
-            nori_protocol::ClientEvent::ThreadGoalUpdated(nori_protocol::ThreadGoalUpdated {
-                goal: nori_protocol::ThreadGoal {
-                    objective: "Keep going".to_string(),
-                    status: nori_protocol::ThreadGoalStatus::Active,
-                    tokens_used: 42,
-                    time_used_seconds: 15,
-                    created_at: 10,
-                    updated_at: 25,
+            crate::normalized::ClientEvent::SessionUpdateInfo(
+                crate::normalized::SessionUpdateInfo {
+                    kind: crate::normalized::SessionUpdateKind::Usage,
+                    message: "Session usage: 200 / 4096 tokens".to_string(),
+                    hint: None,
+                    usage: Some(crate::normalized::session_runtime::SessionUsageState {
+                        used_tokens: 200,
+                        total_tokens: 4096,
+                        cost_display: None,
+                    }),
                 },
-            }),
+            ),
+            crate::normalized::ClientEvent::ThreadGoalUpdated(
+                crate::normalized::ThreadGoalUpdated {
+                    goal: nori_protocol::ThreadGoal {
+                        objective: "Keep going".to_string(),
+                        status: nori_protocol::ThreadGoalStatus::Active,
+                        tokens_used: 42,
+                        time_used_seconds: 15,
+                        created_at: 10,
+                        updated_at: 25,
+                    },
+                },
+            ),
         ]);
         let mut goals = goals;
 

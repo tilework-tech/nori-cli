@@ -19,8 +19,8 @@ use agent_client_protocol::ByteStreams;
 use agent_client_protocol::Client;
 use agent_client_protocol::ConnectionTo;
 use agent_client_protocol::Responder;
-use agent_client_protocol::schema::v1 as acp;
 use futures::io::AsyncRead;
+use nori_protocol::acp::v1 as acp;
 use serde_json::json;
 use tokio::time::Duration;
 use tokio::time::sleep;
@@ -255,6 +255,12 @@ impl MockAgent {
         eprintln!("Mock agent: prompt");
         self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
+        let request_permission = arguments.prompt.iter().any(|block| {
+            matches!(
+                block,
+                acp::ContentBlock::Text(text) if text.text == "mock:request-permission"
+            )
+        });
         let pending_cancel_tail_empty_end_turns = self
             .state
             .pending_cancel_tail_empty_end_turns
@@ -875,7 +881,7 @@ impl MockAgent {
         }
 
         // Support requesting permission from client for testing approval bridging
-        if std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
+        if request_permission || std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
             eprintln!("Mock agent: requesting permission from client");
 
             // Create a tool call update describing the operation

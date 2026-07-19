@@ -395,7 +395,7 @@ impl ChatComposer {
 
     pub(crate) fn set_agent_commands(
         &mut self,
-        commands: Vec<nori_protocol::AgentCommandInfo>,
+        commands: Vec<crate::presentation::AgentCommandInfo>,
         prefix: String,
     ) {
         self.agent_commands = commands.clone();

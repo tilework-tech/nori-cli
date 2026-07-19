@@ -5,9 +5,9 @@
 
 use std::path::PathBuf;
 
+use crate::normalized::ClientEvent as NoriClientEvent;
 use chrono::SecondsFormat;
 use chrono::Utc;
-use nori_protocol::ClientEvent as NoriClientEvent;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -17,7 +17,7 @@ pub fn now_iso8601() -> String {
 }
 
 /// Current schema version for forward compatibility.
-pub const SCHEMA_VERSION: u8 = 2;
+pub const SCHEMA_VERSION: u8 = 3;
 
 /// Wrapper for each line in the transcript JSONL file.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -44,6 +44,8 @@ pub enum TranscriptEntry {
     Assistant(AssistantEntry),
     /// Normalized ACP-native client event
     ClientEvent(ClientEventEntry),
+    /// Public raw ACP/Nori session event (schema v3 and newer).
+    SessionEvent(SessionEventEntry),
     /// Tool execution (stored like core rollout for consistency)
     ToolCall(ToolCallEntry),
     /// Tool result
@@ -57,6 +59,17 @@ pub enum TranscriptEntry {
 pub struct ClientEventEntry {
     /// ACP-native normalized event payload.
     pub event: NoriClientEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionEventEntry {
+    pub event: nori_protocol::SessionEvent,
+}
+
+impl PartialEq for SessionEventEntry {
+    fn eq(&self, other: &Self) -> bool {
+        serde_json::to_value(&self.event).ok() == serde_json::to_value(&other.event).ok()
+    }
 }
 
 /// Git repository information captured at session start.

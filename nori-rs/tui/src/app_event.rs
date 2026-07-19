@@ -2,24 +2,55 @@ use std::path::PathBuf;
 
 use codex_common::approval_presets::ApprovalPreset;
 use codex_file_search::FileMatch;
-use codex_protocol::protocol::ConversationPathResponseEvent;
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::RateLimitSnapshot;
-use nori_harness::SessionConfigOption;
+use nori_protocol::acp::v1::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
 use crate::nori::session_config_mode::AcpModeConfig;
 use crate::system_info::SystemInfo;
 
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::AskForApproval;
+use nori_config::SandboxPolicy;
+
+#[derive(Debug, Clone)]
+pub(crate) struct ConversationPathResponseEvent {
+    pub(crate) conversation_id: nori_harness::ConversationId,
+}
+
+#[derive(Debug)]
+pub(crate) enum HarnessAction {
+    Cancel,
+    Shutdown,
+    Compact,
+    UndoTo(i64),
+    LoadUndoSnapshots,
+    RunUserShell(String),
+    AddHistory(String),
+    HistoryEntry {
+        log_id: i64,
+        offset: i64,
+    },
+    SearchHistory {
+        max_results: i64,
+    },
+    LoadCustomPrompts,
+    LoadGoal,
+    SetGoal {
+        objective: String,
+        status: Option<nori_protocol::ThreadGoalStatus>,
+    },
+    SetGoalStatus(nori_protocol::ThreadGoalStatus),
+    ClearGoal,
+    RespondToAgent {
+        request_id: nori_protocol::acp::v1::RequestId,
+        response: Result<nori_protocol::acp::v1::ClientResponse, nori_protocol::acp::v1::Error>,
+    },
+}
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
-    CodexEvent(Event),
-    ClientEvent(nori_protocol::ClientEvent),
+    SessionEvent(nori_protocol::SessionEvent),
 
     /// Start a new session.
     NewSession,
@@ -54,9 +85,17 @@ pub(crate) enum AppEvent {
     /// Request to exit the application gracefully.
     ExitRequest,
 
-    /// Forward an `Op` to the Agent. Using an `AppEvent` for this avoids
-    /// bubbling channels through layers of widgets.
-    CodexOp(codex_protocol::protocol::Op),
+    HarnessAction(HarnessAction),
+    HistoryEntryLoaded {
+        log_id: i64,
+        offset: i64,
+        entry: Option<nori_harness::HistoryEntry>,
+    },
+    HistorySearchLoaded(Vec<nori_harness::HistoryEntry>),
+    CustomPromptsLoaded(Vec<nori_harness::CustomPrompt>),
+    UndoSnapshotsLoaded(Vec<nori_harness::UndoSnapshot>),
+    GoalLoaded(Option<nori_protocol::ThreadGoal>),
+    HarnessActionFailed(String),
 
     /// Kick off an asynchronous file search for the given query (text after
     /// the `@`). Previous searches may be cancelled by the app layer so there
@@ -84,10 +123,6 @@ pub(crate) enum AppEvent {
         /// Optional agent name (e.g., "claude-code", "gemini") to determine agent kind
         agent: Option<String>,
     },
-
-    /// Result of refreshing rate limits
-    #[allow(dead_code)]
-    RateLimitSnapshotFetched(RateLimitSnapshot),
 
     /// Result of computing a `/diff` command.
     DiffResult(String),
@@ -402,7 +437,7 @@ pub(crate) enum AppEvent {
     /// Execute a custom prompt script asynchronously.
     ExecuteScript {
         /// The custom prompt to execute.
-        prompt: codex_protocol::custom_prompts::CustomPrompt,
+        prompt: nori_harness::custom_prompts::CustomPrompt,
         /// Positional arguments from the command line.
         args: Vec<String>,
     },
@@ -476,8 +511,8 @@ pub(crate) enum AppEvent {
     /// Show the resume session picker sourced from the live agent's ACP
     /// `session/list` rather than the local transcript store.
     ShowAcpResumeSessionPicker {
-        /// Session summaries reported by the agent.
-        sessions: Vec<nori_harness::AcpSessionSummary>,
+        /// Schema-native session records reported by the agent.
+        sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
     },
 
     /// Resume a session reported by the agent's `session/list`, via
@@ -500,9 +535,7 @@ pub(crate) enum AppEvent {
     OpenFileManagerPicker,
 
     /// Persist the full MCP servers map to config.toml.
-    SaveMcpServers(
-        std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
-    ),
+    SaveMcpServers(std::collections::BTreeMap<String, nori_config::McpServerConfig>),
 
     /// Trigger an MCP OAuth login flow for a server.
     McpOAuthLogin {
@@ -532,9 +565,7 @@ pub(crate) enum AppEvent {
     ComputeMcpAuthStatuses,
 
     /// Deliver computed MCP auth statuses to the active picker view.
-    McpAuthStatusesReady(
-        std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
-    ),
+    McpAuthStatusesReady(std::collections::HashMap<String, codex_rmcp_client::McpAuthStatus>),
 
     /// Browser launched successfully with CDP details.
     BrowserLaunched {

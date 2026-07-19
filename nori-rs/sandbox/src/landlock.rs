@@ -1,6 +1,6 @@
 use crate::spawn::StdioPolicy;
 use crate::spawn::spawn_child_async;
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::SandboxPolicy;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -52,14 +52,15 @@ pub(crate) fn create_linux_sandbox_command_args(
         .to_string();
 
     #[expect(clippy::expect_used)]
-    let sandbox_policy_json =
-        serde_json::to_string(sandbox_policy).expect("Failed to serialize SandboxPolicy to JSON");
+    let sandbox_policy_arg = sandbox_policy
+        .to_helper_arg()
+        .expect("Failed to serialize SandboxPolicy");
 
     let mut linux_cmd: Vec<String> = vec![
         "--sandbox-policy-cwd".to_string(),
         sandbox_policy_cwd,
         "--sandbox-policy".to_string(),
-        sandbox_policy_json,
+        sandbox_policy_arg,
         // Separator so that command arguments starting with `-` are not parsed as
         // options of the helper itself.
         "--".to_string(),

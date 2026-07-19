@@ -27,6 +27,7 @@ use super::types::ContentBlock;
 use super::types::GitInfo;
 use super::types::PatchApplyEntry;
 use super::types::PatchOperationType;
+use super::types::SessionEventEntry;
 use super::types::SessionMetaEntry;
 use super::types::ToolCallEntry;
 use super::types::ToolResultEntry;
@@ -34,7 +35,7 @@ use super::types::TranscriptEntry;
 use super::types::TranscriptLine;
 use super::types::UserEntry;
 use super::types::now_iso8601;
-use nori_protocol::ClientEvent as NoriClientEvent;
+use crate::normalized::ClientEvent as NoriClientEvent;
 
 /// Commands sent to the background writer task.
 enum TranscriptCmd {
@@ -164,6 +165,17 @@ impl TranscriptRecorder {
     /// Record a normalized ACP-native client event.
     pub async fn record_client_event(&self, event: &NoriClientEvent) -> io::Result<()> {
         self.send_entry(TranscriptEntry::ClientEvent(ClientEventEntry {
+            event: event.clone(),
+        }))
+        .await
+    }
+
+    /// Record the exact public event delivered across the Harness boundary.
+    pub async fn record_session_event(
+        &self,
+        event: &nori_protocol::SessionEvent,
+    ) -> io::Result<()> {
+        self.send_entry(TranscriptEntry::SessionEvent(SessionEventEntry {
             event: event.clone(),
         }))
         .await
@@ -571,11 +583,11 @@ mod tests {
             .await
             .unwrap();
 
-        let event = nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+        let event = crate::normalized::ClientEvent::ToolSnapshot(crate::normalized::ToolSnapshot {
             call_id: "call-001".to_string(),
             title: "Edit /src/main.rs".to_string(),
-            kind: nori_protocol::ToolKind::Edit,
-            phase: nori_protocol::ToolPhase::Completed,
+            kind: crate::normalized::ToolKind::Edit,
+            phase: crate::normalized::ToolPhase::Completed,
             locations: vec![],
             invocation: None,
             artifacts: vec![],
