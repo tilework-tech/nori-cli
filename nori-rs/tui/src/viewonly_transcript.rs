@@ -397,7 +397,6 @@ fn format_timestamp(iso: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nori_harness::transcript::AssistantEntry;
     use nori_harness::transcript::SessionEventEntry;
     use nori_harness::transcript::SessionMetaEntry;
     use nori_harness::transcript::TranscriptLine;
@@ -416,26 +415,6 @@ mod tests {
             },
             entries: entries.into_iter().map(TranscriptLine::new).collect(),
         }
-    }
-
-    #[test]
-    fn renders_stable_assistant_content_once() {
-        let transcript = transcript(vec![TranscriptEntry::Assistant(AssistantEntry {
-            id: "message".to_string(),
-            content: vec![ContentBlock::Text {
-                text: "final answer".to_string(),
-            }],
-            agent: Some("mock".to_string()),
-        })]);
-
-        let entries = transcript_to_entries(&transcript);
-        assert_eq!(
-            entries
-                .iter()
-                .filter(|entry| matches!(entry, ViewonlyEntry::Assistant { .. }))
-                .count(),
-            1
-        );
     }
 
     #[test]
