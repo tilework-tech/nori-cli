@@ -602,3 +602,28 @@ fn asynchronous_history_recall_places_cursor_at_end() {
     assert_eq!(composer.current_text(), "remote\nentry");
     assert_eq!(composer.textarea.cursor(), "remote\nentry".len());
 }
+
+/// A remote history response that lands after exit began must not touch the
+/// frozen composer — neither its text nor its cursor.
+#[test]
+fn stale_history_response_while_exiting_leaves_composer_untouched() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    composer.set_history_metadata(7, 1);
+    composer.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    composer.insert_str("draft");
+    composer.textarea.set_cursor(0);
+
+    composer.show_exit_in_progress();
+    composer.on_history_entry_response(7, 0, Some("remote entry".to_string()));
+
+    assert_eq!(composer.current_text(), "draft");
+    assert_eq!(composer.textarea.cursor(), 0);
+}

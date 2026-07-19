@@ -208,6 +208,11 @@ impl BottomPane {
 
     /// Forward a key event to the active view or the composer.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> InputResult {
+        // Once exit is in progress every key is inert, including the
+        // task-status Esc interrupt below — teardown owns the backend.
+        if !self.composer.input_enabled() {
+            return InputResult::None;
+        }
         // If a modal/view is active, handle it here; otherwise forward to composer.
         if let Some(view) = self.view_stack.last_mut() {
             if key_event.code == KeyCode::Esc

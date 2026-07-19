@@ -15,22 +15,22 @@ fn sanitize_pasted_text(text: &str) -> String {
 
 impl ChatComposer {
     pub fn handle_paste(&mut self, pasted: String) -> bool {
-        if !self.input_enabled {
-            return false;
-        }
-        let pasted = pasted.replace("\r\n", "\n").replace('\r', "\n");
-        let pasted = sanitize_pasted_text(&pasted);
         self.handle_paste_with_shell_detection(pasted, true)
     }
 
+    /// Shared chokepoint for explicit pastes and paste-burst flushes: input
+    /// gating, newline normalization, and terminal-control sanitization all
+    /// happen here so no path can insert unsanitized text.
     pub(super) fn handle_paste_with_shell_detection(
         &mut self,
-        mut pasted: String,
+        pasted: String,
         detect_shell_mode: bool,
     ) -> bool {
         if !self.input_enabled {
             return false;
         }
+        let normalized = pasted.replace("\r\n", "\n").replace('\r', "\n");
+        let mut pasted = sanitize_pasted_text(&normalized);
         if detect_shell_mode
             && !self.is_shell_mode
             && self.textarea.text().is_empty()
@@ -110,9 +110,6 @@ impl ChatComposer {
     }
 
     pub(crate) fn flush_paste_burst_if_due(&mut self) -> bool {
-        if !self.input_enabled {
-            return false;
-        }
         self.handle_paste_burst_flush(Instant::now())
     }
 

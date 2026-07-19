@@ -126,6 +126,79 @@ async fn exiting_closes_bottom_pane_views() {
     assert!(render_bottom_popup(&chat, 80).contains("› Exiting…"));
 }
 
+/// Esc normally interrupts a running task; once exit begins, teardown owns
+/// the backend and Esc must be inert instead of racing it with Op::Interrupt.
+#[tokio::test]
+async fn exiting_refuses_task_status_escape_interrupt() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();
+    chat.bottom_pane.set_task_running(true);
+    chat.dispatch_command(SlashCommand::Quit);
+    assert_matches!(op_rx.try_recv(), Ok(Op::Shutdown));
+    while rx.try_recv().is_ok() {}
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    let mut saw_interrupt = false;
+    while let Ok(event) = rx.try_recv() {
+        if matches!(event, AppEvent::CodexOp(Op::Interrupt)) {
+            saw_interrupt = true;
+        }
+    }
+    assert!(
+        !saw_interrupt,
+        "Esc must not interrupt a task after exit has disabled input"
+    );
+}
+
+/// Programmatic prefill (deferred agent flows, queued callbacks) must not
+/// overwrite the preserved draft once exit begins.
+#[tokio::test]
+async fn exiting_ignores_programmatic_composer_prefill() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.insert_str("preserved draft");
+    chat.dispatch_command(SlashCommand::Quit);
+
+    chat.set_composer_text("late prefill".to_string());
+
+    assert_eq!(chat.bottom_pane.composer_text(), "preserved draft");
+}
+
+/// Ctrl+C bypasses BottomPane key routing entirely, so it needs its own
+/// teardown gate: once exit begins it must not race the shutdown with
+/// Op::Interrupt (or any other backend op).
+#[tokio::test]
+async fn ctrl_c_while_exiting_does_not_interrupt_running_task() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual();
+    chat.bottom_pane.set_task_running(true);
+    chat.dispatch_command(SlashCommand::Quit);
+    assert_matches!(op_rx.try_recv(), Ok(Op::Shutdown));
+    while op_rx.try_recv().is_ok() {}
+
+    chat.on_ctrl_c();
+
+    let mut ops = Vec::new();
+    while let Ok(op) = op_rx.try_recv() {
+        ops.push(op);
+    }
+    assert!(
+        ops.is_empty(),
+        "Ctrl+C after exit must not submit backend ops, got: {ops:?}"
+    );
+}
+
+/// A second Ctrl+C during teardown must not clear the hidden draft — the
+/// composer is frozen, not editable-but-invisible.
+#[tokio::test]
+async fn ctrl_c_while_exiting_preserves_hidden_draft() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    chat.insert_str("preserved draft");
+    chat.dispatch_command(SlashCommand::Quit);
+
+    chat.on_ctrl_c();
+
+    assert_eq!(chat.bottom_pane.composer_text(), "preserved draft");
+}
+
 #[tokio::test]
 async fn repeated_cloud_exit_requests_are_idempotent() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual();

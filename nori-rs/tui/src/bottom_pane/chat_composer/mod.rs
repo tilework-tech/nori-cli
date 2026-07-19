@@ -114,7 +114,6 @@ pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
     input_enabled: bool,
-    input_disabled_placeholder: Option<String>,
     active_popup: ActivePopup,
     app_event_tx: AppEventSender,
     history: ChatComposerHistory,
@@ -186,7 +185,6 @@ impl ChatComposer {
             textarea: TextArea::new(),
             textarea_state: RefCell::new(TextAreaState::default()),
             input_enabled: true,
-            input_disabled_placeholder: None,
             active_popup: ActivePopup::None,
             app_event_tx,
             history: ChatComposerHistory::new(),
@@ -320,8 +318,15 @@ impl ChatComposer {
         self.footer_hint_override = items;
     }
 
+    pub(super) fn input_enabled(&self) -> bool {
+        self.input_enabled
+    }
+
     /// Replace the entire composer content with `text` and reset cursor.
     pub(crate) fn set_text_content(&mut self, text: String) {
+        if !self.input_enabled {
+            return;
+        }
         // Clear any existing content, placeholders, and attachments first.
         self.textarea.set_text("");
         self.pending_pastes.clear();
@@ -338,12 +343,15 @@ impl ChatComposer {
     }
 
     fn set_history_content(&mut self, text: String) {
+        if !self.input_enabled {
+            return;
+        }
         self.set_text_content(text);
         self.textarea.set_cursor(self.textarea.text().len());
     }
 
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {
-        if self.is_empty() {
+        if !self.input_enabled || self.is_empty() {
             return None;
         }
         let previous = self.current_text();
@@ -421,7 +429,6 @@ impl ChatComposer {
 
     pub(crate) fn show_exit_in_progress(&mut self) {
         self.input_enabled = false;
-        self.input_disabled_placeholder = Some("Exiting…".to_string());
         self.active_popup = ActivePopup::None;
         self.footer_hint_override = Some(Vec::new());
         self.ctrl_c_quit_hint = false;
@@ -564,6 +571,24 @@ impl Renderable for ChatComposer {
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let [composer_rect, textarea_rect, popup_rect] = self.layout_areas(area);
+        if !self.input_enabled {
+            // Frozen exit state: no popups, no footer, no cursor — just a dim
+            // prompt and message over the composer block.
+            Block::default()
+                .style(user_message_style())
+                .render_ref(composer_rect, buf);
+            if !textarea_rect.is_empty() {
+                let prompt = "›".dim();
+                buf.set_span(
+                    textarea_rect.x - LIVE_PREFIX_COLS,
+                    textarea_rect.y,
+                    &prompt,
+                    textarea_rect.width,
+                );
+                Line::from("Exiting…".dim()).render_ref(textarea_rect, buf);
+            }
+            return;
+        }
         match &self.active_popup {
             ActivePopup::Command(popup) => {
                 popup.render_ref(popup_rect, buf);
@@ -625,17 +650,13 @@ impl Renderable for ChatComposer {
         );
         let prompt_indicator = self.prompt_indicator();
         if !textarea_rect.is_empty() {
-            let prompt = if self.input_enabled {
-                match prompt_indicator {
-                    PromptIndicator::Normal => "›".bold(),
-                    PromptIndicator::Shortcut => {
-                        Span::styled("?", Style::default().fg(Color::DarkGray))
-                    }
-                    PromptIndicator::Slash => "/".cyan(),
-                    PromptIndicator::Shell => "!".red(),
+            let prompt = match prompt_indicator {
+                PromptIndicator::Normal => "›".bold(),
+                PromptIndicator::Shortcut => {
+                    Span::styled("?", Style::default().fg(Color::DarkGray))
                 }
-            } else {
-                "›".dim()
+                PromptIndicator::Slash => "/".cyan(),
+                PromptIndicator::Shell => "!".red(),
             };
             buf.set_span(
                 textarea_rect.x - LIVE_PREFIX_COLS,
@@ -647,13 +668,8 @@ impl Renderable for ChatComposer {
 
         let body_rect = Self::textarea_body_rect(textarea_rect, prompt_indicator);
         let mut state = self.textarea_state.borrow_mut();
-        if self.input_enabled {
-            StatefulWidgetRef::render_ref(&(&self.textarea), body_rect, buf, &mut state);
-        }
-        if self.input_enabled
-            && prompt_indicator.hides_textarea_prefix()
-            && !textarea_rect.is_empty()
-        {
+        StatefulWidgetRef::render_ref(&(&self.textarea), body_rect, buf, &mut state);
+        if prompt_indicator.hides_textarea_prefix() && !textarea_rect.is_empty() {
             buf.set_string(
                 textarea_rect.x.saturating_sub(1),
                 textarea_rect.y,
@@ -661,19 +677,13 @@ impl Renderable for ChatComposer {
                 user_message_style(),
             );
         }
-        if !self.input_enabled || (!self.is_shell_mode && self.textarea.text().is_empty()) {
-            let placeholder_text = if self.input_enabled {
-                if matches!(prompt_indicator, PromptIndicator::Shortcut) {
-                    self.placeholder_text
-                        .strip_prefix("? ")
-                        .unwrap_or(&self.placeholder_text)
-                } else {
-                    &self.placeholder_text
-                }
+        if !self.is_shell_mode && self.textarea.text().is_empty() {
+            let placeholder_text = if matches!(prompt_indicator, PromptIndicator::Shortcut) {
+                self.placeholder_text
+                    .strip_prefix("? ")
+                    .unwrap_or(&self.placeholder_text)
             } else {
-                self.input_disabled_placeholder
-                    .as_deref()
-                    .unwrap_or("Input disabled.")
+                &self.placeholder_text
             };
             let placeholder = Span::from(placeholder_text).dim();
             Line::from(vec![placeholder]).render_ref(body_rect.inner(Margin::new(0, 0)), buf);
@@ -695,9 +705,7 @@ impl ChatComposer {
     }
 
     fn prompt_indicator(&self) -> PromptIndicator {
-        if !self.input_enabled {
-            PromptIndicator::Normal
-        } else if self.is_shell_mode {
+        if self.is_shell_mode {
             PromptIndicator::Shell
         } else if self.textarea.text().starts_with('/') {
             PromptIndicator::Slash

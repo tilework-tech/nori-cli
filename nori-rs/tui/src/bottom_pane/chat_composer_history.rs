@@ -297,4 +297,18 @@ mod tests {
 
         assert_eq!(Some("command3".into()), history.navigate_up(&tx));
     }
+
+    #[test]
+    fn recalled_history_only_handles_navigation_at_text_boundaries() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut history = ChatComposerHistory::new();
+        history.record_local_submission("first\nmessage");
+        let recalled = history.navigate_up(&tx).expect("history entry");
+
+        assert!(history.should_handle_navigation(&recalled, 0));
+        assert!(history.should_handle_navigation(&recalled, recalled.len()));
+        assert!(!history.should_handle_navigation(&recalled, "first".len()));
+        assert!(!history.should_handle_navigation("edited", "edited".len()));
+    }
 }
