@@ -6,6 +6,9 @@ use codex_execpolicy::ExecPolicyCheckCommand;
 use nori_cli::LandlockCommand;
 use nori_cli::SeatbeltCommand;
 use nori_cli::WindowsCommand;
+use nori_config::AskForApproval;
+use nori_config::NoriConfigOverrides;
+use nori_config::SandboxMode;
 use nori_config::find_nori_home;
 use nori_harness::init_rolling_file_tracing;
 
@@ -15,7 +18,11 @@ use nori_tui::RESUME_HINT_LEAD;
 use nori_tui::resume_command_for_conversation;
 use nori_tui::update_action::UpdateAction;
 use owo_colors::OwoColorize;
+use std::io::IsTerminal;
+use std::io::Read;
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 use supports_color::Stream;
 
 #[cfg(not(windows))]
@@ -73,6 +80,9 @@ enum Subcommand {
 
     /// Run a TUI session backed by a cloud VM via the nori-sessions broker.
     Cloud(CloudCommand),
+
+    /// Run a prompt non-interactively or serve the ACP stdio facade.
+    Exec(ExecCommand),
 }
 
 #[derive(Debug, Parser)]
@@ -103,6 +113,32 @@ struct ResumeCommand {
 struct CloudCommand {
     #[clap(flatten)]
     config_overrides: TuiCli,
+}
+
+#[derive(Debug, Parser)]
+struct ExecCommand {
+    /// Prompt to send. Reads stdin when omitted.
+    #[arg(value_name = "PROMPT", conflicts_with = "acp")]
+    prompt: Option<String>,
+
+    /// Serve a bounded ACP agent facade over stdio.
+    #[arg(long)]
+    acp: bool,
+
+    /// ACP agent to run behind the facade.
+    #[arg(long)]
+    agent: Option<String>,
+
+    /// Working directory for the execution.
+    #[arg(short = 'C', long = "cwd", value_name = "DIR")]
+    cwd: Option<PathBuf>,
+
+    /// Disable approval prompts and sandboxing for ACP-visible operations.
+    #[arg(long)]
+    dangerously_bypass_approvals_and_sandbox: bool,
+
+    #[clap(flatten)]
+    config_overrides: CliConfigOverrides,
 }
 
 #[derive(Debug, Parser)]
@@ -412,6 +448,15 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
         }
+        Some(Subcommand::Exec(cmd)) => {
+            run_exec(
+                cmd,
+                interactive,
+                root_config_overrides,
+                env!("CARGO_PKG_VERSION").to_string(),
+            )
+            .await?;
+        }
         Some(Subcommand::Completions(cmd)) => {
             clap_complete::generate(
                 cmd.shell,
@@ -422,6 +467,88 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
     }
 
+    Ok(())
+}
+
+async fn run_exec(
+    cmd: ExecCommand,
+    interactive: TuiCli,
+    root_config_overrides: CliConfigOverrides,
+    cli_version: String,
+) -> anyhow::Result<()> {
+    let ExecCommand {
+        prompt,
+        acp,
+        agent,
+        cwd,
+        dangerously_bypass_approvals_and_sandbox,
+        config_overrides,
+    } = cmd;
+
+    let mut raw_overrides = root_config_overrides.raw_overrides;
+    raw_overrides.extend(interactive.config_overrides.raw_overrides);
+    raw_overrides.extend(config_overrides.raw_overrides);
+    let raw_overrides = CliConfigOverrides { raw_overrides }
+        .parse_overrides()
+        .map_err(anyhow::Error::msg)?;
+
+    let bypass = dangerously_bypass_approvals_and_sandbox
+        || interactive.dangerously_bypass_approvals_and_sandbox;
+    let (sandbox_mode, approval_policy) = if bypass {
+        (
+            Some(SandboxMode::DangerFullAccess),
+            Some(AskForApproval::Never),
+        )
+    } else {
+        (None, Some(AskForApproval::OnRequest))
+    };
+    let cwd = cwd
+        .or(interactive.cwd)
+        .map(|path| path.canonicalize().unwrap_or(path));
+    let overrides = NoriConfigOverrides {
+        agent: agent.or(interactive.agent),
+        sandbox_mode,
+        approval_policy,
+        cwd,
+        additional_writable_roots: interactive.add_dir,
+        raw_overrides,
+    };
+    let config = nori_config::NoriConfig::load_with_overrides(overrides)?;
+    nori_harness::initialize_registry(config.agents.clone())
+        .map_err(|error| anyhow::anyhow!("failed to initialize agent registry: {error}"))?;
+    let config = Arc::new(config);
+
+    if acp {
+        return nori_exec::run_acp(config, cli_version).await;
+    }
+
+    let prompt = match prompt {
+        Some(prompt) => prompt,
+        None => {
+            let mut stdin = std::io::stdin();
+            if stdin.is_terminal() {
+                anyhow::bail!("a prompt argument or piped stdin is required");
+            }
+            let mut prompt = String::new();
+            stdin.read_to_string(&mut prompt)?;
+            if prompt.is_empty() {
+                anyhow::bail!("a prompt argument or piped stdin is required");
+            }
+            prompt
+        }
+    };
+    let outcome = nori_exec::run_plaintext(config, cli_version, prompt).await?;
+    {
+        let mut stdout = std::io::stdout().lock();
+        stdout.write_all(outcome.output.as_bytes())?;
+        if !outcome.output.ends_with('\n') {
+            stdout.write_all(b"\n")?;
+        }
+        stdout.flush()?;
+    }
+    if outcome.permission_denied {
+        anyhow::bail!("permission request was rejected during unattended execution");
+    }
     Ok(())
 }
 

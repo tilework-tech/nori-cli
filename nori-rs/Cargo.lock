@@ -3489,6 +3489,7 @@ dependencies = [
  "ctor 0.5.0",
  "libc",
  "nori-config",
+ "nori-exec",
  "nori-harness",
  "nori-tui",
  "owo-colors",
@@ -3517,6 +3518,20 @@ dependencies = [
  "toml",
  "toml_edit",
  "wildmatch",
+]
+
+[[package]]
+name = "nori-exec"
+version = "0.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "futures",
+ "nori-config",
+ "nori-harness",
+ "nori-protocol",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
