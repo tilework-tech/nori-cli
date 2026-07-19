@@ -267,6 +267,11 @@ impl ChatComposer {
         self.textarea.should_handle_vim_insert_escape(key_event)
     }
 
+    pub(crate) fn should_handle_vim_escape_during_task(&self, key_event: KeyEvent) -> bool {
+        self.textarea
+            .should_handle_vim_escape_during_task(key_event)
+    }
+
     pub(crate) fn is_vim_operator_pending(&self) -> bool {
         self.textarea.is_in_vim_normal_mode() && self.textarea.is_vim_operator_pending()
     }
