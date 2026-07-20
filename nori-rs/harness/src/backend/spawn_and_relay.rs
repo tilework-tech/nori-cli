@@ -1,6 +1,110 @@
 use super::*;
 
+async fn forward_public_acp_event(
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    event: nori_protocol::AcpEvent,
+) -> Result<()> {
+    backend_event_tx
+        .send(BackendEvent::Public(SessionEvent::Acp(event)))
+        .await
+        .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))
+}
+
+pub(super) async fn spawn_connection_with_public_initialize(
+    agent_config: &crate::registry::AcpAgentConfig,
+    cwd: &std::path::Path,
+    acp_proxy: crate::config::AcpProxyConfig,
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+) -> Result<AcpConnection> {
+    let (initialize_event_tx, mut initialize_event_rx) = mpsc::channel(1);
+    let connection_result = AcpConnection::spawn_with_initialize_event_sender(
+        agent_config,
+        cwd,
+        acp_proxy,
+        initialize_event_tx,
+    )
+    .await;
+    let initialize_event = initialize_event_rx.recv().await;
+    let initialize_observed = initialize_event.is_some();
+    if let Some(initialize_event) = initialize_event {
+        forward_public_acp_event(backend_event_tx, initialize_event).await?;
+    }
+    match connection_result {
+        Ok(connection) if initialize_observed => Ok(connection),
+        Ok(_) => anyhow::bail!("ACP agent produced no initialize response"),
+        Err(error) => Err(enhance_agent_error(error, agent_config)),
+    }
+}
+
+async fn forward_setup_event(
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+    event: crate::connection::ConnectionEvent,
+) -> Result<bool> {
+    match event {
+        crate::connection::ConnectionEvent::Acp(event) => {
+            let is_response = matches!(&*event, nori_protocol::AcpEvent::Response { .. });
+            forward_public_acp_event(backend_event_tx, *event).await?;
+            Ok(is_response)
+        }
+        // The public ACP notification immediately precedes this private
+        // reducer projection. Reducer processing starts after setup.
+        crate::connection::ConnectionEvent::SessionUpdate(_) => Ok(false),
+        crate::connection::ConnectionEvent::DelegatedRequest(request) => {
+            let _ = request
+                .response_tx
+                .send(Ok(acp::ClientResponse::RequestPermissionResponse(
+                    acp::RequestPermissionResponse::new(acp::RequestPermissionOutcome::Cancelled),
+                )));
+            Ok(false)
+        }
+        crate::connection::ConnectionEvent::SessionClosed => {
+            anyhow::bail!("ACP session closed during bootstrap")
+        }
+        crate::connection::ConnectionEvent::ChildExited {
+            status,
+            stderr_tail,
+        } => {
+            anyhow::bail!("ACP agent exited during bootstrap (status: {status:?}): {stderr_tail}")
+        }
+    }
+}
+
+async fn forward_setup_events_through_response(
+    event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+) -> Result<()> {
+    loop {
+        let event = event_rx
+            .recv()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("ACP bootstrap event stream closed"))?;
+        if forward_setup_event(backend_event_tx, event).await? {
+            return Ok(());
+        }
+    }
+}
+
+async fn forward_available_setup_events(
+    event_rx: &mut mpsc::Receiver<crate::connection::ConnectionEvent>,
+    backend_event_tx: &mpsc::Sender<BackendEvent>,
+) -> Result<()> {
+    while let Ok(event) = event_rx.try_recv() {
+        forward_setup_event(backend_event_tx, event).await?;
+    }
+    Ok(())
+}
+
 impl AcpBackend {
+    pub(super) async fn wait_for_prompt_phase(&self) {
+        let mut gate = self.prompt_phase_gate.lock().await.clone();
+        let Some(gate) = gate.as_mut() else {
+            return;
+        };
+        if !*gate.borrow() {
+            let _ = gate.changed().await;
+        }
+    }
+
     /// Spawn an ACP backend for the given configuration.
     ///
     /// This will:
@@ -20,21 +124,20 @@ impl AcpBackend {
         config: &AcpBackendConfig,
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
-        let (event_tx, event_rx) = mpsc::channel(32);
-        tokio::spawn(forward_control_events(event_rx, backend_event_tx.clone()));
-
         let cwd = config.cwd.clone();
 
         let agent_config = get_agent_config(&config.agent)?;
         debug!("Spawning ACP backend for agent: {}", config.agent);
-        let mut connection =
-            match AcpConnection::spawn(&agent_config, &cwd, config.acp_proxy.clone()).await {
-                Ok(conn) => conn,
-                Err(e) => return Err(enhance_agent_error(e, &agent_config)),
-            };
+        let mut connection = spawn_connection_with_public_initialize(
+            &agent_config,
+            &cwd,
+            config.acp_proxy.clone(),
+            &backend_event_tx,
+        )
+        .await?;
+        let mut event_rx = connection.take_event_receiver();
 
         let thread_goal_state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
-        let transcript_recorder_cell = Arc::new(Mutex::new(None));
         let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let goal_mcp_http_server = Arc::new(Mutex::new(None));
 
@@ -47,7 +150,6 @@ impl AcpBackend {
             &mut mcp_servers,
             Arc::clone(&thread_goal_state),
             backend_event_tx.clone(),
-            Arc::clone(&transcript_recorder_cell),
             Arc::clone(&goal_mcp_connected),
         )
         .await?;
@@ -55,9 +157,19 @@ impl AcpBackend {
             server.commit(&goal_mcp_http_server).await;
         }
         let session_result = connection.create_session(&cwd, mcp_servers).await;
+        let setup_forward_result =
+            forward_setup_events_through_response(&mut event_rx, &backend_event_tx).await;
         let session_id = match session_result {
-            Ok(id) => id,
-            Err(e) => return Err(enhance_agent_error(e, &agent_config)),
+            Ok(id) => {
+                setup_forward_result?;
+                id
+            }
+            Err(error) => {
+                if let Err(forward_error) = setup_forward_result {
+                    warn!(%forward_error, "failed to forward ACP new-session error response");
+                }
+                return Err(enhance_agent_error(error, &agent_config));
+            }
         };
 
         debug!("ACP session created: {:?}", session_id);
@@ -66,10 +178,10 @@ impl AcpBackend {
         if let Some(ref default_model) = config.default_model {
             session_defaults::apply_default_model(&connection, &session_id, default_model).await;
         }
+        forward_available_setup_events(&mut event_rx, &backend_event_tx).await?;
 
         let capabilities_update =
             nori_client_mcp::capabilities_update_for_session(&connection, &goal_mcp_connected);
-        let event_rx = connection.take_event_receiver();
 
         let connection = Arc::new(connection);
         let pending_approvals = Arc::new(Mutex::new(Vec::new()));
@@ -108,29 +220,24 @@ impl AcpBackend {
                 None
             }
         };
-        *transcript_recorder_cell.lock().await = transcript_recorder.clone();
+        let transcript_id = transcript_recorder
+            .as_ref()
+            .map(|recorder| recorder.session_id().to_string());
+        let transcript_path = transcript_recorder
+            .as_ref()
+            .map(|recorder| recorder.transcript_path().to_path_buf());
         let conversation_id = transcript_recorder
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
         let pending_hook_context = fallback_session_context_for_connection(config, &connection);
-        // Cloud identity contract (see resume_session): name the session only
-        // for a cloud-shaped agent — `session/resume` without `session/load`.
-        let acp_session_id = (connection
-            .capabilities()
-            .session_capabilities
-            .resume
-            .is_some()
-            && !connection.capabilities().load_session)
-            .then(|| session_id.to_string());
-
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
-            event_tx: event_tx.clone(),
             backend_event_tx: backend_event_tx.clone(),
             cwd: cwd.clone(),
             pending_approvals: Arc::clone(&pending_approvals),
+            pending_prompt_submissions: Arc::new(Mutex::new(HashMap::new())),
             user_notifier: Arc::clone(&user_notifier),
             idle_timer_abort: Arc::clone(&idle_timer_abort),
             nori_home: config.nori_home.clone(),
@@ -142,11 +249,11 @@ impl AcpBackend {
             thread_goal_state,
             goal_mcp_connected,
             goal_mcp_http_server,
-            transcript_recorder_cell,
             pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder,
             session_event_tx: session_event_tx.clone(),
             prompt_result_tx: prompt_result_tx.clone(),
+            prompt_phase_gate: Arc::new(Mutex::new(None)),
             notify_after_idle: config.notify_after_idle,
             ghost_snapshots: Arc::new(GhostSnapshotStack::new()),
             is_first_prompt: Arc::new(Mutex::new(true)),
@@ -169,10 +276,12 @@ impl AcpBackend {
             is_shutting_down: Arc::new(AtomicBool::new(false)),
             prompt_task_abort: Arc::new(Mutex::new(None)),
             cancel_timeout_abort: Arc::new(Mutex::new(None)),
+            runtime_task_abort: Arc::new(Mutex::new(None)),
+            relay_task_abort: Arc::new(Mutex::new(None)),
         };
 
         let runtime_backend = backend.clone();
-        tokio::spawn(async move {
+        let runtime_task = tokio::spawn(async move {
             while let Some(input) = session_event_rx.recv().await {
                 match input {
                     session_runtime_driver::SessionRuntimeInput::Reducer(event) => {
@@ -189,12 +298,13 @@ impl AcpBackend {
                 }
             }
         });
+        *backend.runtime_task_abort.lock().await = Some(runtime_task.abort_handle());
 
         // Execute session_start hooks
         run_session_start_hooks(
             &config.session_start_hooks,
             config.script_timeout,
-            &event_tx,
+            &backend_event_tx,
             Some(&backend.pending_hook_context),
         )
         .await;
@@ -206,44 +316,37 @@ impl AcpBackend {
             HashMap::new(),
         );
 
-        // Send synthetic SessionConfigured event
-        let session_configured = SessionConfiguredEvent {
-            session_id: conversation_id,
-            model: config.agent.clone(),
-            model_provider_id: "acp".to_string(),
-            approval_policy: config.approval_policy,
-            sandbox_policy: config.sandbox_policy.clone(),
-            cwd: cwd.clone(),
-            reasoning_effort: None,
-            acp_session_id,
-            history_log_id,
-            history_entry_count,
-            initial_messages: None,
-            rollout_path: cwd.join(".codex-rollout.jsonl"),
-        };
-
-        event_tx
-            .send(Event {
-                id: String::new(),
-                msg: EventMsg::SessionConfigured(session_configured),
-            })
+        backend_event_tx
+            .send(BackendEvent::Public(SessionEvent::Nori(
+                nori_protocol::NoriEvent::CapabilitiesChanged(public_nori_capabilities(
+                    capabilities_update,
+                )),
+            )))
             .await
             .ok();
         backend_event_tx
-            .send(BackendEvent::Client(
-                ClientEvent::SessionCapabilitiesChanged(capabilities_update),
-            ))
+            .send(BackendEvent::Public(nori_protocol::SessionEvent::Nori(
+                nori_protocol::NoriEvent::SessionStarted(nori_protocol::SessionStarted {
+                    transcript_id,
+                    acp_session_id: backend.session_id().await,
+                    cwd: cwd.clone(),
+                    transcript_path,
+                    history_log_id: i64::try_from(history_log_id).unwrap_or(i64::MAX),
+                    history_entry_count: i64::try_from(history_entry_count).unwrap_or(i64::MAX),
+                }),
+            )))
             .await
             .ok();
 
         // Spawn reducer loop: processes all transport events and prompt
         // results through the serialized reducer/runtime pipeline.
-        tokio::spawn(Self::run_connection_event_relay(
+        let relay_task = tokio::spawn(Self::run_connection_event_relay(
             backend.clone(),
             event_rx,
             prompt_result_rx,
             approval_policy_rx,
         ));
+        *backend.relay_task_abort.lock().await = Some(relay_task.abort_handle());
 
         Ok(backend)
     }
@@ -264,6 +367,7 @@ impl AcpBackend {
                 maybe_event = event_rx.recv() => {
                     match maybe_event {
                         Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
+                            backend.wait_for_prompt_phase().await;
                             relay_seq += 1;
                             debug!(
                                 target: "acp_event_flow",
@@ -279,14 +383,38 @@ impl AcpBackend {
                                 ))
                                 .await;
                         }
-                        Some(crate::connection::ConnectionEvent::ApprovalRequest(request)) => {
+                        Some(crate::connection::ConnectionEvent::Acp(event)) => {
+                            backend.wait_for_prompt_phase().await;
+                            let _ = backend
+                                .backend_event_tx
+                                .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
+                                    *event,
+                                )))
+                                .await;
+                        }
+                        Some(crate::connection::ConnectionEvent::SessionClosed) => {
+                            let _ = backend
+                                .backend_event_tx
+                                .send(BackendEvent::Public(SessionEvent::Nori(
+                                    nori_protocol::NoriEvent::SessionEnded(
+                                        nori_protocol::SessionEnded {
+                                            reason: nori_protocol::SessionEndReason::Closed,
+                                            message: None,
+                                        },
+                                    ),
+                                )))
+                                .await;
+                            break;
+                        }
+                        Some(crate::connection::ConnectionEvent::DelegatedRequest(request)) => {
+                            backend.wait_for_prompt_phase().await;
                             relay_seq += 1;
                             let current_policy = *approval_policy_rx.borrow();
                             debug!(
                                 target: "acp_event_flow",
                                 relay_seq,
                                 relay_source = "transport_event_rx",
-                                call_id = request.event.call_id(),
+                                request_id = %request.request_id,
                                 "Relaying permission request into serialized session runtime"
                             );
                             let _ = backend
@@ -294,7 +422,6 @@ impl AcpBackend {
                                 .send(
                                     session_runtime_driver::SessionRuntimeInput::PermissionRequest {
                                         pending_request: Box::new(PendingApprovalRequest {
-                                            request_id: request.request_id.clone(),
                                             request,
                                         }),
                                         current_policy,
@@ -306,6 +433,7 @@ impl AcpBackend {
                             status,
                             stderr_tail,
                         }) => {
+                            backend.wait_for_prompt_phase().await;
                             if !backend.is_shutting_down.load(Ordering::Relaxed) {
                                 let mut message = match status {
                                     Some(code) => format!(
@@ -319,12 +447,33 @@ impl AcpBackend {
                                     message.push('\n');
                                     message.push_str(&stderr_tail);
                                 }
+                                let request_id = backend
+                                    .session_driver
+                                    .lock()
+                                    .await
+                                    .active_wire_request_id();
                                 let _ = backend
-                                    .event_tx
-                                    .send(Event {
-                                        id: String::new(),
-                                        msg: EventMsg::Error(ErrorEvent { message }),
-                                    })
+                                    .backend_event_tx
+                                    .send(BackendEvent::Public(SessionEvent::Nori(
+                                        nori_protocol::NoriEvent::RequestFailed(
+                                            nori_protocol::RequestFailure {
+                                                request_id,
+                                                message: message.clone(),
+                                                kind: nori_protocol::RequestFailureKind::Fatal,
+                                            },
+                                        ),
+                                    )))
+                                    .await;
+                                let _ = backend
+                                    .backend_event_tx
+                                    .send(BackendEvent::Public(SessionEvent::Nori(
+                                        nori_protocol::NoriEvent::SessionEnded(
+                                            nori_protocol::SessionEnded {
+                                                reason: nori_protocol::SessionEndReason::ConnectionLost,
+                                                message: Some(message),
+                                            },
+                                        ),
+                                    )))
                                     .await;
                                 // Fail any in-flight prompt loudly instead of
                                 // letting it wait on a dead transport forever.
@@ -335,11 +484,12 @@ impl AcpBackend {
                                     let _ = backend
                                         .prompt_result_tx
                                         .send(session_reducer::InboundEvent::PromptFailed {
-                                            failure: Some(nori_protocol::TurnFailure::Fatal),
-                                        })
-                                        .await;
+                                            failure: Some(crate::normalized::TurnFailure::Fatal),
+                                    })
+                                    .await;
                                 }
                             }
+                            break;
                         }
                         None => break,
                     }
@@ -363,6 +513,14 @@ impl AcpBackend {
                         None => {
                             while let Some(event) = event_rx.recv().await {
                                 match event {
+                                    crate::connection::ConnectionEvent::Acp(event) => {
+                                        let _ = backend
+                                            .backend_event_tx
+                                            .send(BackendEvent::Public(
+                                                nori_protocol::SessionEvent::Acp(*event),
+                                            ))
+                                            .await;
+                                    }
                                     crate::connection::ConnectionEvent::SessionUpdate(update) => {
                                         relay_seq += 1;
                                         debug!(
@@ -379,19 +537,33 @@ impl AcpBackend {
                                             ))
                                             .await;
                                     }
+                                    crate::connection::ConnectionEvent::SessionClosed => {
+                                        let _ = backend
+                                            .backend_event_tx
+                                            .send(BackendEvent::Public(SessionEvent::Nori(
+                                                nori_protocol::NoriEvent::SessionEnded(
+                                                    nori_protocol::SessionEnded {
+                                                        reason: nori_protocol::SessionEndReason::Closed,
+                                                        message: None,
+                                                    },
+                                                ),
+                                            )))
+                                            .await;
+                                        break;
+                                    }
                                     // This drain only runs during teardown
                                     // (prompt channel closed); the exit was
                                     // either user-initiated or already
                                     // reported by the main relay arm.
                                     crate::connection::ConnectionEvent::ChildExited { .. } => {}
-                                    crate::connection::ConnectionEvent::ApprovalRequest(request) => {
+                                    crate::connection::ConnectionEvent::DelegatedRequest(request) => {
                                         relay_seq += 1;
                                         let current_policy = *approval_policy_rx.borrow();
                                         debug!(
                                             target: "acp_event_flow",
                                             relay_seq,
                                             relay_source = "transport_event_rx_drain",
-                                            call_id = request.event.call_id(),
+                                            request_id = %request.request_id,
                                             "Draining permission request after prompt result channel closed"
                                         );
                                         let _ = backend
@@ -399,7 +571,6 @@ impl AcpBackend {
                                             .send(
                                                 session_runtime_driver::SessionRuntimeInput::PermissionRequest {
                                                     pending_request: Box::new(PendingApprovalRequest {
-                                                        request_id: request.request_id.clone(),
                                                         request,
                                                     }),
                                                     current_policy,
@@ -415,79 +586,8 @@ impl AcpBackend {
                 }
             }
         }
-    }
-
-    #[cfg(test)]
-    #[allow(clippy::too_many_arguments)]
-    pub(super) async fn run_approval_handler(
-        backend: AcpBackend,
-        mut approval_rx: mpsc::Receiver<ApprovalRequest>,
-        _pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
-        _user_notifier: Arc<crate::UserNotifier>,
-        approval_policy_rx: watch::Receiver<AskForApproval>,
-    ) {
-        let approval_policy_rx = approval_policy_rx;
-        while let Some(request) = approval_rx.recv().await {
-            let current_policy = *approval_policy_rx.borrow();
-            let _ = backend
-                .session_event_tx
-                .send(
-                    session_runtime_driver::SessionRuntimeInput::PermissionRequest {
-                        pending_request: Box::new(PendingApprovalRequest {
-                            request_id: request.request_id.clone(),
-                            request,
-                        }),
-                        current_policy,
-                    },
-                )
-                .await;
-        }
-    }
-
-    #[cfg(test)]
-    pub(super) async fn run_notification_relay(
-        backend: AcpBackend,
-        mut notification_rx: mpsc::Receiver<acp::SessionUpdate>,
-        mut prompt_result_rx: mpsc::Receiver<session_reducer::InboundEvent>,
-    ) {
-        loop {
-            tokio::select! {
-                biased;
-                maybe_update = notification_rx.recv() => {
-                    match maybe_update {
-                        Some(update) => {
-                            let _ = backend
-                                .session_event_tx
-                                .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                                    session_reducer::InboundEvent::Notification(Box::new(update)),
-                                ))
-                                .await;
-                        }
-                        None => break,
-                    }
-                }
-                maybe_result = prompt_result_rx.recv() => {
-                    match maybe_result {
-                        Some(result) => {
-                            let _ = backend
-                                .session_event_tx
-                                .send(session_runtime_driver::SessionRuntimeInput::Reducer(result))
-                                .await;
-                        }
-                        None => {
-                            while let Some(update) = notification_rx.recv().await {
-                                let _ = backend
-                                    .session_event_tx
-                                    .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                                        session_reducer::InboundEvent::Notification(Box::new(update)),
-                                    ))
-                                    .await;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
+        if let Some(abort) = backend.runtime_task_abort.lock().await.take() {
+            abort.abort();
         }
     }
 }

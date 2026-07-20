@@ -50,12 +50,12 @@ fn make_composer_with_agent_commands()
     );
     composer.set_agent_commands(
         vec![
-            nori_protocol::AgentCommandInfo {
+            crate::presentation::AgentCommandInfo {
                 name: "loop".to_string(),
                 description: "Run a command on a recurring interval".to_string(),
                 input_hint: None,
             },
-            nori_protocol::AgentCommandInfo {
+            crate::presentation::AgentCommandInfo {
                 name: "schedule".to_string(),
                 description: "Schedule a remote agent".to_string(),
                 input_hint: None,
@@ -82,7 +82,7 @@ fn make_composer_with_commands(
     composer.set_agent_commands(
         commands
             .into_iter()
-            .map(|name| nori_protocol::AgentCommandInfo {
+            .map(|name| crate::presentation::AgentCommandInfo {
                 name: name.to_string(),
                 description: format!("Description for {name}"),
                 input_hint: None,
@@ -392,12 +392,12 @@ fn dollar_skill_popup_renders_de_sigiled_names() {
     snapshot_composer_state("dollar_skill_popup", false, |composer| {
         composer.set_agent_commands(
             vec![
-                nori_protocol::AgentCommandInfo {
+                crate::presentation::AgentCommandInfo {
                     name: "$using-skills".to_string(),
                     description: "Use skill instructions".to_string(),
                     input_hint: None,
                 },
-                nori_protocol::AgentCommandInfo {
+                crate::presentation::AgentCommandInfo {
                     name: "$writing-plans".to_string(),
                     description: "Write an implementation plan".to_string(),
                     input_hint: None,

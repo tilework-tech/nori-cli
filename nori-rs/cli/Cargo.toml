@@ -21,13 +21,11 @@ clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
 nori-harness = { workspace = true }
 nori-config = { workspace = true }
-codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = ["cli"] }
 codex-sandbox = { workspace = true }
 codex-execpolicy = { workspace = true }
 codex-process-hardening = { workspace = true }
-codex-protocol = { workspace = true }
 codex-stdio-to-uds = { workspace = true }
 nori-tui = { workspace = true }
 ctor = { workspace = true }

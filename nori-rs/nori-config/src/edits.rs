@@ -1,10 +1,10 @@
 //! Comment-preserving edits for Nori's user configuration.
 
 use crate::CONFIG_FILE;
+use crate::McpServerConfig;
+use crate::TrustLevel;
 use anyhow::Context;
 use anyhow::Result;
-use codex_protocol::config_types::McpServerConfig;
-use codex_protocol::config_types::TrustLevel;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs::OpenOptions;

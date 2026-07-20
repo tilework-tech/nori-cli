@@ -4,7 +4,6 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use codex_protocol::protocol::Op;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -132,7 +131,9 @@ impl StatusIndicatorWidget {
     }
 
     pub(crate) fn interrupt(&self) {
-        self.app_event_tx.send(AppEvent::CodexOp(Op::Interrupt));
+        self.app_event_tx.send(AppEvent::HarnessAction(
+            crate::app_event::HarnessAction::Cancel,
+        ));
     }
 
     /// Update the animated header label (left of the brackets).
@@ -147,11 +148,6 @@ impl StatusIndicatorWidget {
 
     pub(crate) fn set_interrupt_hint_visible(&mut self, visible: bool) {
         self.show_interrupt_hint = visible;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn interrupt_hint_visible(&self) -> bool {
-        self.show_interrupt_hint
     }
 
     pub(crate) fn pause_timer(&mut self) {

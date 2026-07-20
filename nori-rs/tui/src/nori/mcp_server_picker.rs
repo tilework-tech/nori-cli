@@ -6,13 +6,13 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
-use codex_protocol::config_types::McpServerConfig;
-use codex_protocol::config_types::McpServerTransportConfig;
-use codex_protocol::protocol::McpAuthStatus;
+use codex_rmcp_client::McpAuthStatus;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use nori_config::McpServerConfig;
+use nori_config::McpServerTransportConfig;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -786,7 +786,7 @@ impl BottomPaneView for McpServerPickerView {
 
     fn update_mcp_auth_statuses(
         &mut self,
-        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+        statuses: &std::collections::HashMap<String, codex_rmcp_client::McpAuthStatus>,
     ) {
         self.auth_statuses = statuses.clone();
 
@@ -1082,7 +1082,7 @@ impl Renderable for McpServerPickerView {
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
-    use codex_protocol::protocol::McpAuthStatus;
+    use codex_rmcp_client::McpAuthStatus;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     use pretty_assertions::assert_eq;

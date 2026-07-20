@@ -41,7 +41,7 @@ fn make_composer_with_paste_bursts() -> ChatComposer {
 fn make_composer_with_skills() -> ChatComposer {
     let mut composer = make_composer();
     composer.set_agent_commands(
-        vec![nori_protocol::AgentCommandInfo {
+        vec![crate::presentation::AgentCommandInfo {
             name: "$using-skills".to_string(),
             description: "Use skill instructions".to_string(),
             input_hint: None,

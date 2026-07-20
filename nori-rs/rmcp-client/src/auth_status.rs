@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use anyhow::Error;
 use anyhow::Result;
-use codex_protocol::protocol::McpAuthStatus;
 use reqwest::Client;
 use reqwest::StatusCode;
 use reqwest::Url;
@@ -11,6 +10,7 @@ use reqwest::header::HeaderMap;
 use serde::Deserialize;
 use tracing::debug;
 
+use crate::McpAuthStatus;
 use crate::OAuthCredentialsStoreMode;
 use crate::oauth::has_oauth_tokens;
 use crate::utils::apply_default_headers;

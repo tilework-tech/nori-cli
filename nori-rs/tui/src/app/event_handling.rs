@@ -84,21 +84,13 @@ impl App {
         self.config.approval_policy = approval;
         self.config.sandbox_policy = sandbox.clone();
         #[cfg(target_os = "windows")]
-        if !matches!(sandbox, codex_protocol::protocol::SandboxPolicy::ReadOnly)
+        if !matches!(sandbox, nori_config::SandboxPolicy::ReadOnly)
             || codex_sandbox::get_platform_sandbox().is_some()
         {
             self.config.forced_auto_mode_downgraded_on_windows = false;
         }
         self.chat_widget.set_approval_policy(approval);
-        self.chat_widget.set_sandbox_policy(sandbox.clone());
-        self.chat_widget.submit_op(Op::OverrideTurnContext {
-            cwd: None,
-            approval_policy: Some(approval),
-            sandbox_policy: Some(sandbox),
-            model: None,
-            effort: None,
-            summary: None,
-        });
+        self.chat_widget.set_sandbox_policy(sandbox);
     }
 
     pub(super) async fn handle_event(
@@ -145,7 +137,6 @@ impl App {
                 // The session was released; land back on the session picker
                 // with a fresh deferred widget — never auto-claim a new
                 // session (on a cloud agent that would boot a new VM).
-                self.shutdown_current_conversation();
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
                     None,
@@ -172,9 +163,27 @@ impl App {
                         // detach wording on quit) is right before any session
                         // exists.
                         self.chat_widget.handle_client_event(
-                            nori_protocol::ClientEvent::SessionCapabilitiesChanged(
-                                nori_protocol::SessionCapabilitiesView {
-                                    agent: probe.capabilities,
+                            crate::presentation::ClientEvent::SessionCapabilitiesChanged(
+                                crate::presentation::SessionCapabilitiesView {
+                                    agent: crate::presentation::AgentCapabilitiesView {
+                                        http_mcp: probe.capabilities.mcp_capabilities.http,
+                                        load_session: probe.capabilities.load_session,
+                                        session_list: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .list
+                                            .is_some(),
+                                        session_resume: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .resume
+                                            .is_some(),
+                                        session_close: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .close
+                                            .is_some(),
+                                    },
                                     ..Default::default()
                                 },
                             ),
@@ -282,20 +291,8 @@ impl App {
             AppEvent::CommitTick => {
                 self.chat_widget.on_commit_tick();
             }
-            AppEvent::CodexEvent(event) => {
-                if self.suppress_shutdown_complete {
-                    if matches!(event.msg, EventMsg::ShutdownComplete) {
-                        self.suppress_shutdown_complete = false;
-                        return Ok(true);
-                    }
-                    if matches!(event.msg, EventMsg::TurnAborted(_)) {
-                        return Ok(true);
-                    }
-                }
-                self.chat_widget.handle_codex_event(event);
-            }
-            AppEvent::ClientEvent(event) => {
-                self.chat_widget.handle_client_event(event);
+            AppEvent::SessionEvent { generation, event } => {
+                self.chat_widget.handle_session_event(generation, event);
             }
             AppEvent::ConversationHistory(ev) => {
                 self.on_conversation_history_for_backtrack(tui, ev)?;
@@ -344,7 +341,28 @@ impl App {
                 // Exit the application
                 return Ok(false);
             }
-            AppEvent::CodexOp(op) => self.chat_widget.submit_op(op),
+            AppEvent::HarnessAction(action) => {
+                self.chat_widget.submit_harness_action(action);
+            }
+            AppEvent::HistoryEntryLoaded {
+                log_id,
+                offset,
+                entry,
+            } => self
+                .chat_widget
+                .on_history_entry_loaded(log_id, offset, entry),
+            AppEvent::HistorySearchLoaded(entries) => {
+                self.chat_widget.on_history_search_loaded(entries);
+            }
+            AppEvent::CustomPromptsLoaded(prompts) => {
+                self.chat_widget.on_custom_prompts_loaded(prompts);
+            }
+            AppEvent::UndoSnapshotsLoaded(snapshots) => {
+                self.chat_widget.on_undo_snapshots_loaded(snapshots);
+            }
+            AppEvent::GoalLoaded(Some(goal)) => self.chat_widget.handle_thread_goal_updated(goal),
+            AppEvent::GoalLoaded(None) => self.chat_widget.handle_thread_goal_cleared(),
+            AppEvent::HarnessActionFailed(message) => self.chat_widget.add_error_message(message),
             AppEvent::DiffResult(text) => {
                 // Clear the in-progress state in the bottom pane
                 self.chat_widget.on_diff_complete();
@@ -386,9 +404,6 @@ impl App {
             }
             AppEvent::RefreshSystemInfoForDirectory { dir, agent } => {
                 self.request_system_info_refresh(dir, agent, self.chat_widget.first_prompt_text());
-            }
-            AppEvent::RateLimitSnapshotFetched(snapshot) => {
-                self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
             }
             AppEvent::OpenFullAccessConfirmation { preset } => {
                 self.chat_widget.open_full_access_confirmation(preset);
@@ -464,8 +479,8 @@ impl App {
                 #[cfg(target_os = "windows")]
                 let sandbox_is_workspace_write_or_ro = matches!(
                     sandbox,
-                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
+                    nori_config::SandboxPolicy::WorkspaceWrite { .. }
+                        | nori_config::SandboxPolicy::ReadOnly
                 );
 
                 self.apply_approval_preset(approval, sandbox);
@@ -542,103 +557,63 @@ impl App {
             AppEvent::OpenApprovalsPopup => {
                 self.chat_widget.open_approvals_popup();
             }
-            AppEvent::FullScreenApprovalRequest(request) => match request {
-                ApprovalRequest::ApplyPatch { cwd, changes, .. } => {
-                    let _ = tui.enter_alt_screen();
-                    let diff_summary = DiffSummary::new(changes, cwd);
-                    self.overlay = Some(Overlay::new_static_with_renderables(
-                        vec![diff_summary.into()],
-                        "P A T C H".to_string(),
-                    ));
-                }
-                ApprovalRequest::Exec { command, .. } => {
-                    let _ = tui.enter_alt_screen();
-                    let full_cmd = strip_bash_lc_and_escape(&command);
-                    let full_cmd_lines = highlight_bash_to_lines(&full_cmd);
-                    self.overlay = Some(Overlay::new_static_with_lines(
-                        full_cmd_lines,
-                        "E X E C".to_string(),
-                    ));
-                }
-                ApprovalRequest::McpElicitation {
-                    server_name,
-                    message,
-                    ..
-                } => {
-                    let _ = tui.enter_alt_screen();
-                    let paragraph = Paragraph::new(vec![
-                        Line::from(vec!["Server: ".into(), server_name.bold()]),
-                        Line::from(""),
-                        Line::from(message),
-                    ])
-                    .wrap(Wrap { trim: false });
-                    self.overlay = Some(Overlay::new_static_with_renderables(
-                        vec![Box::new(paragraph)],
-                        "E L I C I T A T I O N".to_string(),
-                    ));
-                }
-                ApprovalRequest::AcpTool {
+            AppEvent::FullScreenApprovalRequest(request) => {
+                let ApprovalRequest {
                     title,
                     kind,
                     cwd,
                     snapshot,
                     ..
-                } => {
-                    let _ = tui.enter_alt_screen();
+                } = request;
+                let _ = tui.enter_alt_screen();
 
-                    // For edit-like tools, show DiffSummary in fullscreen
-                    let edit_changes = if matches!(
-                        kind,
-                        nori_protocol::ToolKind::Create
-                            | nori_protocol::ToolKind::Edit
-                            | nori_protocol::ToolKind::Delete
-                            | nori_protocol::ToolKind::Move
-                    ) {
-                        let mut changes = client_tool_cell::diff_changes_from_artifacts(
-                            &snapshot.artifacts,
-                            &cwd,
-                        );
-                        if changes.is_empty() {
-                            changes = client_tool_cell::changes_from_invocation(
-                                &snapshot.invocation,
-                                &cwd,
-                            );
-                        }
-                        if changes.is_empty() {
-                            None
-                        } else {
-                            Some(changes)
-                        }
-                    } else {
-                        None
-                    };
-
-                    if let Some(changes) = edit_changes {
-                        let diff_summary = DiffSummary::new(changes, cwd);
-                        self.overlay = Some(Overlay::new_static_with_renderables(
-                            vec![diff_summary.into()],
-                            "P A T C H".to_string(),
-                        ));
-                    } else {
-                        let rel_title = client_event_format::relativize_paths_in_text(&title, &cwd);
-                        let mut lines = vec![Line::from(rel_title.clone())];
-                        if let Some(inv_text) =
-                            client_event_format::format_invocation(&snapshot.invocation)
-                        {
-                            let rel_inv =
-                                client_event_format::relativize_paths_in_text(&inv_text, &cwd);
-                            if !client_event_format::is_invocation_redundant(&rel_inv, &rel_title) {
-                                lines.push(Line::from(rel_inv));
-                            }
-                        }
-                        for text in client_event_format::format_artifacts(&snapshot.artifacts) {
-                            lines.push(Line::from(text));
-                        }
-                        self.overlay =
-                            Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
+                let edit_changes = if matches!(
+                    kind,
+                    crate::presentation::ToolKind::Create
+                        | crate::presentation::ToolKind::Edit
+                        | crate::presentation::ToolKind::Delete
+                        | crate::presentation::ToolKind::Move
+                ) {
+                    let mut changes =
+                        client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts, &cwd);
+                    if changes.is_empty() {
+                        changes =
+                            client_tool_cell::changes_from_invocation(&snapshot.invocation, &cwd);
                     }
+                    if changes.is_empty() {
+                        None
+                    } else {
+                        Some(changes)
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(changes) = edit_changes {
+                    let diff_summary = DiffSummary::new(changes, cwd);
+                    self.overlay = Some(Overlay::new_static_with_renderables(
+                        vec![diff_summary.into()],
+                        "P A T C H".to_string(),
+                    ));
+                } else {
+                    let rel_title = client_event_format::relativize_paths_in_text(&title, &cwd);
+                    let mut lines = vec![Line::from(rel_title.clone())];
+                    if let Some(inv_text) =
+                        client_event_format::format_invocation(&snapshot.invocation)
+                    {
+                        let rel_inv =
+                            client_event_format::relativize_paths_in_text(&inv_text, &cwd);
+                        if !client_event_format::is_invocation_redundant(&rel_inv, &rel_title) {
+                            lines.push(Line::from(rel_inv));
+                        }
+                    }
+                    for text in client_event_format::format_artifacts(&snapshot.artifacts) {
+                        lines.push(Line::from(text));
+                    }
+                    self.overlay =
+                        Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
                 }
-            },
+            }
             AppEvent::SetPendingAgent {
                 agent_name,
                 display_name,
@@ -695,8 +670,7 @@ impl App {
                 // Shutdown current conversation
                 self.shutdown_current_conversation();
 
-                // Create the new chat widget with the new config and the message as initial prompt
-                // Set expected_agent to filter events from the OLD agent until SessionConfigured
+                // Create the new chat widget with the new config and the message as initial prompt.
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
                     Some(message_text),
@@ -1294,10 +1268,10 @@ impl App {
                     let mut statuses = std::collections::HashMap::new();
                     for (name, config) in servers {
                         let status = match config.transport {
-                            codex_protocol::config_types::McpServerTransportConfig::Stdio {
+                            nori_config::McpServerTransportConfig::Stdio {
                                 ..
-                            } => codex_protocol::protocol::McpAuthStatus::Unsupported,
-                            codex_protocol::config_types::McpServerTransportConfig::StreamableHttp {
+                            } => codex_rmcp_client::McpAuthStatus::Unsupported,
+                            nori_config::McpServerTransportConfig::StreamableHttp {
                                 url,
                                 bearer_token_env_var,
                                 http_headers,
@@ -1316,7 +1290,7 @@ impl App {
                                 tracing::warn!(
                                     "failed to determine auth status for MCP server `{name}`: {err:?}"
                                 );
-                                codex_protocol::protocol::McpAuthStatus::Unsupported
+                                codex_rmcp_client::McpAuthStatus::Unsupported
                             }),
                         };
                         statuses.insert(name, status);

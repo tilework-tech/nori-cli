@@ -9,11 +9,6 @@ pub(super) fn next_acp_mode_config_generation() -> i64 {
 }
 
 impl ChatWidget {
-    #[cfg(test)]
-    pub(crate) fn acp_mode_config_generation(&self) -> i64 {
-        self.acp_mode_config_generation
-    }
-
     pub(crate) fn apply_acp_mode_config_snapshot(
         &mut self,
         generation: i64,
@@ -62,7 +57,7 @@ impl ChatWidget {
     }
 
     pub(super) fn refresh_acp_mode_config_snapshot(&self) {
-        let Some(handle) = self.acp_handle.clone() else {
+        let Some(handle) = self.harness_handle.clone() else {
             return;
         };
         let generation = self.acp_mode_config_generation;
@@ -79,7 +74,7 @@ impl ChatWidget {
     }
 
     pub(super) fn cycle_acp_mode_config(&mut self) -> bool {
-        let Some(handle) = self.acp_handle.clone() else {
+        let Some(handle) = self.harness_handle.clone() else {
             return false;
         };
         let generation = self.acp_mode_config_generation;

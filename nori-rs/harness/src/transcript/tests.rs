@@ -109,11 +109,11 @@ mod types_tests {
     #[test]
     fn test_client_event_entry_serialization() {
         let entry = TranscriptEntry::ClientEvent(ClientEventEntry {
-            event: nori_protocol::ClientEvent::ToolSnapshot(nori_protocol::ToolSnapshot {
+            event: crate::normalized::ClientEvent::ToolSnapshot(crate::normalized::ToolSnapshot {
                 call_id: "call-001".to_string(),
                 title: "Edit /src/main.rs".to_string(),
-                kind: nori_protocol::ToolKind::Edit,
-                phase: nori_protocol::ToolPhase::Completed,
+                kind: crate::normalized::ToolKind::Edit,
+                phase: crate::normalized::ToolPhase::Completed,
                 locations: vec![],
                 invocation: None,
                 artifacts: vec![],
@@ -136,6 +136,36 @@ mod types_tests {
         assert_eq!(parsed["event"]["event_type"], "tool_snapshot");
         assert_eq!(parsed["event"]["call_id"], "call-001");
         assert_eq!(parsed["event"]["title"], "Edit /src/main.rs");
+    }
+
+    #[test]
+    fn session_event_entry_round_trips_raw_acp_notification_at_schema_v3() {
+        let event = nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+            nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                nori_protocol::acp::v1::SessionNotification::new(
+                    "session-1",
+                    nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(
+                        nori_protocol::acp::v1::ContentChunk::new(
+                            nori_protocol::acp::v1::ContentBlock::Text(
+                                nori_protocol::acp::v1::TextContent::new("hello"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ));
+        let line = TranscriptLine::new(TranscriptEntry::SessionEvent(SessionEventEntry {
+            event: event.clone(),
+        }));
+
+        let json = serde_json::to_string(&line).unwrap();
+        let parsed: TranscriptLine = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(line.v, 3);
+        assert_eq!(
+            parsed.entry,
+            TranscriptEntry::SessionEvent(SessionEventEntry { event })
+        );
     }
 
     #[test]

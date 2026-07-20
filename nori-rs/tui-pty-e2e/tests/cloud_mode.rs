@@ -545,6 +545,14 @@ fn test_cloud_mode_child_death_mid_session_surfaces_error() {
     session
         .wait_for_text("tunnel collapsed", TIMEOUT)
         .expect("the error must include the child's recent stderr");
+    assert!(
+        !session.wait_for_process_exit(Duration::from_millis(500)),
+        "an agent connection failure must not exit the client interface"
+    );
+    assert!(
+        !session.screen_contents().contains("Goodbye!"),
+        "an agent connection failure must preserve the error state, not render an exit summary"
+    );
 }
 
 /// Cloud sessions record local transcripts like any other agent session

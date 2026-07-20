@@ -1,11 +1,11 @@
-//! E2E coverage for ACP runaway in-progress tool snapshot handling.
+//! E2E coverage for lossless ACP tool-update transcript recording.
 //!
 //! These tests drive the real `nori` binary against `mock-acp-agent`.
 //! The mock emits many `in_progress` updates for the same Search tool call,
 //! with a cumulatively growing text payload on each update.
 //!
-//! The transcript should retain durable tool lifecycle states without
-//! persisting every intermediate rewrite of the same streaming tool call.
+//! The v3 transcript should retain the exact raw ACP notifications. Compaction
+//! and presentation are consumer concerns, not behavior of the public boundary.
 
 use std::path::Path;
 use std::time::Duration;
@@ -67,88 +67,106 @@ fn read_transcript(nori_home: &Path, project_id: &str, session_id: &str) -> Stri
 }
 
 #[derive(Debug)]
-struct RunawaySnapshotStats {
+struct RunawayToolEventStats {
     call_id: String,
     title: String,
     has_pending_snapshot: bool,
     has_completed_snapshot: bool,
     in_progress_count: usize,
-    total_snapshot_count: usize,
-    max_artifact_text_len: usize,
+    total_event_count: usize,
+    max_content_text_len: usize,
 }
 
-fn runaway_snapshot_stats(transcript: &str, expected_title: &str) -> Option<RunawaySnapshotStats> {
+fn max_text_len(value: &Value) -> usize {
+    match value {
+        Value::Object(fields) => fields
+            .iter()
+            .map(|(key, value)| {
+                let own = if key == "text" {
+                    value.as_str().map(str::len).unwrap_or_default()
+                } else {
+                    0
+                };
+                own.max(max_text_len(value))
+            })
+            .max()
+            .unwrap_or_default(),
+        Value::Array(values) => values.iter().map(max_text_len).max().unwrap_or_default(),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => 0,
+    }
+}
+
+fn runaway_tool_event_stats(transcript: &str) -> Option<RunawayToolEventStats> {
     let mut call_id = None;
     let mut title = None;
     let mut has_pending_snapshot = false;
     let mut has_completed_snapshot = false;
     let mut in_progress_count = 0usize;
-    let mut total_snapshot_count = 0usize;
-    let mut max_artifact_text_len = 0usize;
+    let mut total_event_count = 0usize;
+    let mut max_content_text_len = 0usize;
 
     for line in transcript.lines().filter(|line| !line.trim().is_empty()) {
         let value: Value = serde_json::from_str(line).expect("transcript line should parse");
-        if value.get("type").and_then(Value::as_str) != Some("client_event") {
+        if value.get("type").and_then(Value::as_str) != Some("session_event") {
             continue;
         }
 
-        let Some(event) = value.get("event") else {
+        let Some(event) = value.pointer("/event/event").filter(|event| {
+            event.get("message_type").and_then(Value::as_str) == Some("notification")
+        }) else {
             continue;
         };
-        if event.get("event_type").and_then(Value::as_str) != Some("tool_snapshot") {
+        let Some(update) = event.get("update") else {
             continue;
-        }
-        if event.get("title").and_then(Value::as_str) != Some(expected_title) {
+        };
+        let update_kind = update.get("sessionUpdate").and_then(Value::as_str);
+        if !matches!(update_kind, Some("tool_call" | "tool_call_update")) {
             continue;
         }
 
-        total_snapshot_count += 1;
-        call_id = event
-            .get("call_id")
+        let event_call_id = update
+            .get("toolCallId")
             .and_then(Value::as_str)
-            .map(ToOwned::to_owned)
-            .or(call_id);
-        title = event
+            .unwrap_or_default();
+        if event_call_id != "runaway-search-001" {
+            continue;
+        }
+
+        total_event_count += 1;
+        call_id = Some(event_call_id.to_string());
+        title = update
             .get("title")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned)
             .or(title);
 
-        match event.get("phase").and_then(Value::as_str) {
-            Some("pending") => has_pending_snapshot = true,
-            Some("completed") => has_completed_snapshot = true,
-            Some("in_progress") => in_progress_count += 1,
-            Some(_) | None => {}
+        match (update_kind, update.get("status").and_then(Value::as_str)) {
+            (Some("tool_call"), None) => has_pending_snapshot = true,
+            (_, Some("pending")) => has_pending_snapshot = true,
+            (_, Some("completed")) => has_completed_snapshot = true,
+            (_, Some("in_progress")) => in_progress_count += 1,
+            (_, Some(_) | None) => {}
         }
-
-        if let Some(artifacts) = event.get("artifacts").and_then(Value::as_array) {
-            for artifact in artifacts {
-                if artifact.get("artifact_type").and_then(Value::as_str) == Some("text")
-                    && let Some(text) = artifact.get("text").and_then(Value::as_str)
-                {
-                    max_artifact_text_len = max_artifact_text_len.max(text.len());
-                }
-            }
-        }
+        max_content_text_len = max_content_text_len.max(max_text_len(update));
     }
 
-    call_id.map(|call_id| RunawaySnapshotStats {
+    call_id.map(|call_id| RunawayToolEventStats {
         call_id,
         title: title.unwrap_or_default(),
         has_pending_snapshot,
         has_completed_snapshot,
         in_progress_count,
-        total_snapshot_count,
-        max_artifact_text_len,
+        total_event_count,
+        max_content_text_len,
     })
 }
 
-fn find_runaway_snapshot_stats(nori_home: &Path, expected_title: &str) -> RunawaySnapshotStats {
+fn find_runaway_tool_event_stats(nori_home: &Path, expected_title: &str) -> RunawayToolEventStats {
     let mut matching_stats = find_transcripts(nori_home)
         .into_iter()
         .filter_map(|(project_id, session_id)| {
             let transcript = read_transcript(nori_home, &project_id, &session_id);
-            runaway_snapshot_stats(&transcript, expected_title)
+            runaway_tool_event_stats(&transcript)
         })
         .collect::<Vec<_>>();
 
@@ -165,7 +183,7 @@ fn find_runaway_snapshot_stats(nori_home: &Path, expected_title: &str) -> Runawa
 
 #[test]
 #[cfg(target_os = "linux")]
-fn test_runaway_search_transcript_omits_in_progress_snapshots_for_one_call() {
+fn test_runaway_search_transcript_preserves_the_raw_acp_tool_stream() {
     let expected_title = "Search runaway-pattern in runaway-search-fixture";
     let config = SessionConfig::new()
         .with_agent("mock-model".to_owned())
@@ -202,27 +220,27 @@ fn test_runaway_search_transcript_omits_in_progress_snapshots_for_one_call() {
     session.send_key(Key::Ctrl('c')).unwrap();
     std::thread::sleep(Duration::from_millis(1000));
 
-    let stats = find_runaway_snapshot_stats(&nori_home, expected_title);
+    let stats = find_runaway_tool_event_stats(&nori_home, expected_title);
     assert_eq!(stats.title, expected_title);
     assert_eq!(stats.call_id, "runaway-search-001");
     assert!(
         stats.has_pending_snapshot,
-        "expected the transcript to keep the initial pending snapshot, stats={stats:?}"
+        "expected the transcript to keep the initial pending tool call, stats={stats:?}"
     );
     assert!(
         stats.has_completed_snapshot,
-        "expected the transcript to keep the final completed snapshot, stats={stats:?}"
+        "expected the transcript to keep the final completed update, stats={stats:?}"
     );
     assert_eq!(
-        stats.in_progress_count, 0,
-        "expected transcripts to omit in_progress snapshots for streaming tool updates, stats={stats:?}"
+        stats.in_progress_count, 24,
+        "expected every raw in-progress ACP update to remain observable, stats={stats:?}"
+    );
+    assert_eq!(
+        stats.total_event_count, 26,
+        "expected one pending call, 24 progress updates, and one completion, stats={stats:?}"
     );
     assert!(
-        stats.total_snapshot_count >= 2,
-        "expected the transcript to retain durable snapshots for the call, stats={stats:?}"
-    );
-    assert!(
-        stats.max_artifact_text_len >= 20_000,
-        "expected the final completed snapshot to preserve the search output, stats={stats:?}"
+        stats.max_content_text_len >= 20_000,
+        "expected the raw update stream to preserve the search output, stats={stats:?}"
     );
 }

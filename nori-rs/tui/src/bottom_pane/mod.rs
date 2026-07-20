@@ -49,7 +49,7 @@ pub(crate) enum CancellationEvent {
 
 pub(crate) use chat_composer::ChatComposer;
 pub(crate) use chat_composer::InputResult;
-use codex_protocol::custom_prompts::CustomPrompt;
+use nori_harness::custom_prompts::CustomPrompt;
 
 use crate::status_indicator_widget::StatusIndicatorWidget;
 pub(crate) use list_selection_view::SelectionAction;
@@ -424,16 +424,6 @@ impl BottomPane {
         }
     }
 
-    pub(crate) fn set_context_window_percent(&mut self, percent: Option<i64>) {
-        if self.context_window_percent == percent {
-            return;
-        }
-
-        self.context_window_percent = percent;
-        self.composer.set_context_window_percent(percent);
-        self.request_redraw();
-    }
-
     /// Update the agent display name used in approval dialogs and slash command descriptions.
     pub(crate) fn set_agent_display_name(&mut self, name: String) {
         self.agent_display_name = name;
@@ -513,11 +503,6 @@ impl BottomPane {
         self.composer.set_footer_segment_enabled(segment, enabled);
     }
 
-    #[cfg(test)]
-    pub(crate) fn footer_segment_config(&self) -> nori_config::FooterSegmentConfig {
-        self.composer.footer_segment_config()
-    }
-
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(
         &mut self,
@@ -583,7 +568,10 @@ impl BottomPane {
     }
 
     /// Update agent-provided commands available for the slash popup.
-    pub(crate) fn set_agent_commands(&mut self, commands: Vec<nori_protocol::AgentCommandInfo>) {
+    pub(crate) fn set_agent_commands(
+        &mut self,
+        commands: Vec<crate::presentation::AgentCommandInfo>,
+    ) {
         let prefix = self.agent_slug.clone();
         self.composer.set_agent_commands(commands, prefix);
         self.request_redraw();
@@ -638,7 +626,7 @@ impl BottomPane {
     /// Update ACP-reported session usage displayed in the footer.
     pub(crate) fn set_session_usage(
         &mut self,
-        usage: Option<nori_protocol::session_runtime::SessionUsageState>,
+        usage: Option<crate::presentation::session_runtime::SessionUsageState>,
     ) {
         self.composer.set_session_usage(usage);
         self.request_redraw();
@@ -680,7 +668,7 @@ impl BottomPane {
     /// Forward MCP auth statuses to the active view (if any).
     pub(crate) fn update_mcp_auth_statuses(
         &mut self,
-        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+        statuses: &std::collections::HashMap<String, codex_rmcp_client::McpAuthStatus>,
     ) {
         if let Some(view) = self.view_stack.last_mut() {
             view.update_mcp_auth_statuses(statuses);
@@ -774,10 +762,7 @@ impl BottomPane {
         }
     }
 
-    pub(crate) fn on_search_history_response(
-        &mut self,
-        entries: Vec<codex_protocol::message_history::HistoryEntry>,
-    ) {
+    pub(crate) fn on_search_history_response(&mut self, entries: Vec<nori_harness::HistoryEntry>) {
         self.composer.on_search_history_response(entries);
         self.request_redraw();
     }
@@ -891,11 +876,30 @@ mod tests {
     }
 
     fn exec_request() -> ApprovalRequest {
-        ApprovalRequest::Exec {
-            id: "1".to_string(),
-            command: vec!["echo".into(), "ok".into()],
-            reason: None,
-            risk: None,
+        ApprovalRequest {
+            request_id: "1".to_string().into(),
+            title: "Run echo ok".to_string(),
+            kind: crate::presentation::ToolKind::Execute,
+            cwd: std::env::current_dir().expect("current directory"),
+            snapshot: Box::new(crate::presentation::ToolSnapshot {
+                call_id: "call-1".to_string(),
+                title: "Run echo ok".to_string(),
+                kind: crate::presentation::ToolKind::Execute,
+                phase: crate::presentation::ToolPhase::PendingApproval,
+                locations: Vec::new(),
+                invocation: Some(crate::presentation::Invocation::Command {
+                    command: "echo ok".to_string(),
+                }),
+                artifacts: Vec::new(),
+                raw_input: None,
+                raw_output: None,
+                owner_request_id: None,
+            }),
+            options: vec![nori_protocol::acp::v1::PermissionOption::new(
+                nori_protocol::acp::v1::PermissionOptionId::new("allow-once"),
+                "Allow",
+                nori_protocol::acp::v1::PermissionOptionKind::AllowOnce,
+            )],
         }
     }
 
@@ -967,7 +971,9 @@ mod tests {
 
         assert!(matches!(
             events.try_recv(),
-            Ok(AppEvent::CodexOp(codex_protocol::protocol::Op::Interrupt))
+            Ok(AppEvent::HarnessAction(
+                crate::app_event::HarnessAction::Cancel
+            ))
         ));
     }
 
@@ -1036,7 +1042,9 @@ mod tests {
         ));
         assert!(matches!(
             events.try_recv(),
-            Ok(AppEvent::CodexOp(codex_protocol::protocol::Op::Interrupt))
+            Ok(AppEvent::HarnessAction(
+                crate::app_event::HarnessAction::Cancel
+            ))
         ));
     }
 
@@ -1052,7 +1060,9 @@ mod tests {
 
         assert!(matches!(
             events.try_recv(),
-            Ok(AppEvent::CodexOp(codex_protocol::protocol::Op::Interrupt))
+            Ok(AppEvent::HarnessAction(
+                crate::app_event::HarnessAction::Cancel
+            ))
         ));
     }
 
@@ -1202,11 +1212,11 @@ mod tests {
         // Push an approval modal (e.g., command approval) which should hide the status view.
         pane.push_approval_request(exec_request());
 
-        // Simulate pressing 'n' (No) on the modal.
+        // Reject the schema-native permission request with Escape.
         use crossterm::event::KeyCode;
         use crossterm::event::KeyEvent;
         use crossterm::event::KeyModifiers;
-        pane.handle_key_event(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        pane.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
         // After denial, since the task is still running, the status indicator should be
         // visible above the composer. The modal should be gone.

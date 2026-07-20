@@ -1,5 +1,15 @@
 # Goodbye Card Session Stats Implementation Plan
 
+**Status: Superseded historical plan.** This document describes the pre-hard-cut
+`nori_protocol::ClientEvent` architecture and must not be used as current
+implementation guidance. The ACP-canonical refactor deleted that public API.
+Current tool/stat projection is private to `nori-tui`; see
+`docs/specs/goodbye-card.md`, `docs/specs/acp-tui/APPLICATION-SPEC.md`, and
+`docs/specs/protocol-unification.md`.
+
+All paths, types, and proposed tasks below are retained only as the historical
+record of the original plan.
+
 **Goal:** Make the Nori goodbye card accurately summarize ACP session messages, tool calls, skills, and subagents for the common Claude/Codex paths.
 
 **Architecture:** Keep the stats logic in the TUI where the goodbye card already reads `SessionStats`. Feed `SessionStats` from normalized `nori_protocol::ClientEvent` values, especially `ToolSnapshot` and `PromptCompleted`, so the implementation depends on common ACP event shapes instead of backend-specific transcript schemas. Add a small, generic transcript fallback only for subagent launches that are known to be missing from visible ACP events.
@@ -30,7 +40,7 @@ I will add or update `insta` snapshot coverage for a goodbye card containing ACP
 
 NOTE: I will write _all_ tests before I add any implementation behavior.
 
-## Current Code Path
+## Historical code path at the time of this plan
 
 Relevant files in this worktree:
 

@@ -35,7 +35,6 @@ clap = { workspace = true, features = ["derive"] }
 nori-harness = { workspace = true }
 nori-config = { workspace = true }
 codex-ansi-escape = { workspace = true }
-codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = [
     "cli",
@@ -49,7 +48,6 @@ nori-installed = { workspace = true }
 nori-protocol = { workspace = true }
 codex-file-search = { workspace = true }
 codex-login = { workspace = true }
-codex-protocol = { workspace = true }
 codex-utils-pty = { workspace = true, optional = true }
 color-eyre = { workspace = true }
 crossterm = { workspace = true, features = ["bracketed-paste", "event-stream"] }

@@ -1,9 +1,242 @@
 use super::*;
 use crate::client_tool_cell::ClientToolCell;
-use codex_protocol::plan_tool::PlanItemArg;
-use codex_protocol::plan_tool::StepStatus;
+use crate::ui_types::PlanItem;
+use crate::ui_types::PlanUpdate;
+use crate::ui_types::StepStatus;
 
 impl ChatWidget {
+    pub(crate) fn handle_session_event(
+        &mut self,
+        generation: crate::app_event::SessionGeneration,
+        event: nori_protocol::SessionEvent,
+    ) {
+        if generation != self.session_generation {
+            return;
+        }
+        match event {
+            nori_protocol::SessionEvent::Acp(event) => self.handle_acp_event(event),
+            nori_protocol::SessionEvent::Nori(event) => self.handle_nori_event(event),
+        }
+    }
+
+    fn handle_acp_event(&mut self, event: nori_protocol::AcpEvent) {
+        match event {
+            nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
+            ) => {
+                let events = self
+                    .client_event_normalizer
+                    .push_session_update(&notification.update);
+                for event in events {
+                    if self.replay_in_progress {
+                        self.handle_replay_client_event(event);
+                    } else {
+                        self.handle_client_event(event);
+                    }
+                }
+            }
+            nori_protocol::AcpEvent::Request {
+                request_id,
+                request: nori_protocol::acp::v1::AgentRequest::RequestPermissionRequest(request),
+            } => {
+                for event in self
+                    .client_event_normalizer
+                    .push_permission_request(&request)
+                {
+                    if let crate::presentation::ClientEvent::ApprovalRequest(approval) = event {
+                        self.handle_client_approval_request(
+                            approval,
+                            request_id.clone(),
+                            request.options.clone(),
+                        );
+                    }
+                }
+            }
+            nori_protocol::AcpEvent::Response {
+                response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
+                ..
+            } => {
+                let capabilities = response.agent_capabilities;
+                self.session_agent_capabilities = crate::presentation::AgentCapabilitiesView {
+                    http_mcp: capabilities.mcp_capabilities.http,
+                    load_session: capabilities.load_session,
+                    session_list: capabilities.session_capabilities.list.is_some(),
+                    session_resume: capabilities.session_capabilities.resume.is_some(),
+                    session_close: capabilities.session_capabilities.close.is_some(),
+                };
+            }
+            nori_protocol::AcpEvent::Response {
+                request_id,
+                response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(response)),
+            } if self.active_prompt_request_id.as_ref() == Some(&request_id) => {
+                self.active_prompt_request_id = None;
+                self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
+                    stop_reason: response.stop_reason,
+                    last_agent_message: None,
+                    failure: None,
+                });
+            }
+            nori_protocol::AcpEvent::Response {
+                request_id,
+                response: Err(error),
+            } => {
+                if self.active_prompt_request_id.as_ref() == Some(&request_id) {
+                    if !self.unpaired_prompt_error_ids.remove(&request_id) {
+                        self.unpaired_prompt_error_ids.insert(request_id);
+                    }
+                } else if !self.unpaired_prompt_error_ids.remove(&request_id) {
+                    self.on_error(error.to_string());
+                }
+            }
+            nori_protocol::AcpEvent::Request { .. }
+            | nori_protocol::AcpEvent::Response { .. }
+            | nori_protocol::AcpEvent::Notification(_) => {}
+        }
+    }
+
+    fn handle_nori_event(&mut self, event: nori_protocol::NoriEvent) {
+        match event {
+            nori_protocol::NoriEvent::SessionStarted(started) => {
+                self.on_session_started(started);
+            }
+            nori_protocol::NoriEvent::SessionPhaseChanged(phase) => {
+                let phase = match phase {
+                    nori_protocol::SessionPhase::Idle => {
+                        crate::presentation::session_runtime::SessionPhaseView::Idle
+                    }
+                    nori_protocol::SessionPhase::Loading { .. } => {
+                        crate::presentation::session_runtime::SessionPhaseView::Loading
+                    }
+                    nori_protocol::SessionPhase::Prompting { request_id } => {
+                        self.active_prompt_request_id = Some(request_id);
+                        crate::presentation::session_runtime::SessionPhaseView::Prompt
+                    }
+                    nori_protocol::SessionPhase::Cancelling { request_id } => {
+                        self.active_prompt_request_id = Some(request_id);
+                        crate::presentation::session_runtime::SessionPhaseView::Cancelling
+                    }
+                };
+                self.handle_client_phase_changed(phase);
+            }
+            nori_protocol::NoriEvent::SessionEnded(ended) => match ended.reason {
+                nori_protocol::SessionEndReason::Shutdown => {
+                    self.app_event_tx.send(AppEvent::ExitRequest);
+                }
+                nori_protocol::SessionEndReason::Closed => {
+                    self.app_event_tx.send(AppEvent::SessionClosed);
+                }
+                nori_protocol::SessionEndReason::ConnectionLost
+                | nori_protocol::SessionEndReason::SpawnFailed
+                | nori_protocol::SessionEndReason::TimedOut => {}
+            },
+            nori_protocol::NoriEvent::QueueChanged(queue) => {
+                self.bottom_pane.set_queued_user_messages(queue.prompts);
+                self.request_redraw();
+            }
+            nori_protocol::NoriEvent::ContextCompacted(compacted) => {
+                self.on_context_compacted(compacted.summary);
+            }
+            nori_protocol::NoriEvent::GoalChanged(Some(goal)) => {
+                self.handle_thread_goal_updated(goal);
+            }
+            nori_protocol::NoriEvent::GoalChanged(None) => self.handle_thread_goal_cleared(),
+            nori_protocol::NoriEvent::CapabilitiesChanged(capabilities) => {
+                self.handle_session_capabilities_changed(
+                    crate::presentation::SessionCapabilitiesView {
+                        agent: self.session_agent_capabilities.clone(),
+                        nori_client: Default::default(),
+                        builtin_commands: capabilities.builtin_commands,
+                    },
+                );
+            }
+            nori_protocol::NoriEvent::PromptSummaryUpdated(summary) => {
+                self.on_prompt_summary(summary.summary);
+            }
+            nori_protocol::NoriEvent::Notice(notice) => self.on_warning(notice.message),
+            nori_protocol::NoriEvent::RequestFailed(failure) => {
+                let completes_active_prompt =
+                    failure.request_id.as_ref().is_some_and(|request_id| {
+                        self.active_prompt_request_id.as_ref() == Some(request_id)
+                    });
+                if completes_active_prompt
+                    && let Some(request_id) = failure.request_id.as_ref()
+                    && !self.unpaired_prompt_error_ids.remove(request_id)
+                {
+                    self.unpaired_prompt_error_ids.insert(request_id.clone());
+                }
+                if completes_active_prompt {
+                    self.on_error(failure.message);
+                    self.active_prompt_request_id = None;
+                    let failure = match failure.kind {
+                        nori_protocol::RequestFailureKind::Retryable => {
+                            crate::presentation::TurnFailure::Retryable
+                        }
+                        nori_protocol::RequestFailureKind::Fatal => {
+                            crate::presentation::TurnFailure::Fatal
+                        }
+                    };
+                    self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
+                        stop_reason: nori_protocol::acp::v1::StopReason::Cancelled,
+                        last_agent_message: None,
+                        failure: Some(failure),
+                    });
+                } else {
+                    self.add_error_message(failure.message);
+                }
+            }
+            nori_protocol::NoriEvent::HookOutput(output) => match output.level {
+                nori_protocol::HookOutputLevel::Info => self.add_info_message(output.message, None),
+                nori_protocol::HookOutputLevel::Warn => self.on_warning(output.message),
+                nori_protocol::HookOutputLevel::Error => self.on_error(output.message),
+            },
+            nori_protocol::NoriEvent::ReplayStarted(_) => {
+                self.flush_answer_stream_with_separator();
+                self.flush_replay_message();
+                self.replay_in_progress = true;
+            }
+            nori_protocol::NoriEvent::ReplayFinished => {
+                self.flush_replay_message();
+                self.replay_in_progress = false;
+            }
+            nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
+        }
+    }
+
+    fn on_session_started(&mut self, event: nori_protocol::SessionStarted) {
+        self.session_configured_received = true;
+        self.submit_harness_action(crate::app_event::HarnessAction::LoadCustomPrompts);
+        self.bottom_pane.hide_status_indicator();
+        self.update_approval_mode_label();
+        self.bottom_pane.set_history_metadata(
+            u64::try_from(event.history_log_id).unwrap_or_default(),
+            usize::try_from(event.history_entry_count).unwrap_or_default(),
+        );
+        self.conversation_id = event
+            .transcript_id
+            .as_deref()
+            .and_then(|id| nori_harness::ConversationId::from_string(id).ok());
+        self.current_rollout_path = event.transcript_path;
+        self.acp_session_id = self
+            .session_agent_capabilities
+            .live_reattach()
+            .then(|| event.acp_session_id.to_string());
+        self.refresh_cloud_session_indicator();
+        self.add_to_history(history_cell::new_session_info(
+            &self.config,
+            self.config.active_agent.clone(),
+            self.show_welcome_banner,
+            self.cloud_session_identity(),
+        ));
+        if let Some(user_message) = self.initial_user_message.take() {
+            self.submit_user_message(user_message);
+        }
+        if !self.suppress_session_configured_redraw {
+            self.request_redraw();
+        }
+        self.refresh_acp_mode_config_snapshot();
+        self.refresh_terminal_title();
+    }
+
     pub(super) fn flush_answer_stream_with_separator(&mut self) {
         if let Some(mut controller) = self.stream_controller.take()
             && let Some(cell) = controller.finalize()
@@ -17,95 +250,7 @@ impl ChatWidget {
         self.bottom_pane.update_status_header(header);
     }
 
-    // --- Small event handlers ---
-    pub(super) fn on_session_configured(
-        &mut self,
-        event: codex_protocol::protocol::SessionConfiguredEvent,
-    ) {
-        // Mark that we've received SessionConfigured - this unlocks event processing
-        // when expected_agent is set (during agent switching)
-        self.session_configured_received = true;
-
-        // Clear the "Connecting to [Agent]" status indicator shown during agent startup
-        self.bottom_pane.hide_status_indicator();
-
-        // Update footer with current approval mode
-        self.update_approval_mode_label();
-
-        self.bottom_pane
-            .set_history_metadata(event.history_log_id, event.history_entry_count);
-        self.conversation_id = Some(event.session_id);
-        self.current_rollout_path = Some(event.rollout_path.clone());
-        let initial_messages = event.initial_messages.clone();
-        // The harness is the source of truth: Some(id) only for cloud
-        // sessions, None for local agents (which also clears any stale
-        // resume-picker seed after resuming onto a local agent).
-        self.acp_session_id = event.acp_session_id.clone();
-        self.refresh_cloud_session_indicator();
-        let cloud_session = self.cloud_session_identity();
-        self.add_to_history(history_cell::new_session_info(
-            &self.config,
-            event,
-            self.show_welcome_banner,
-            cloud_session,
-        ));
-        if let Some(messages) = initial_messages {
-            self.replay_initial_messages(messages);
-        }
-        // Ask the active agent to enumerate custom prompts for this session.
-        self.submit_op(Op::ListCustomPrompts);
-        if let Some(user_message) = self.initial_user_message.take() {
-            self.submit_user_message(user_message);
-        }
-        if !self.suppress_session_configured_redraw {
-            self.request_redraw();
-        }
-        self.refresh_acp_mode_config_snapshot();
-        self.refresh_terminal_title();
-    }
-
-    pub(super) fn on_agent_message(&mut self, message: String) {
-        // Track assistant message for session statistics
-        self.session_stats.record_assistant_message();
-
-        // If we have a stream_controller, then the final agent message is redundant and will be a
-        // duplicate of what has already been streamed.
-        if self.stream_controller.is_none() {
-            self.handle_streaming_delta(message);
-        }
-        self.flush_answer_stream_with_separator();
-
-        // Finalize any incomplete ExecCell still in active_cell. In ACP, tool
-        // End events can race with the agent message on separate async channels.
-        // If the End event hasn't arrived yet, the incomplete cell would fill the
-        // viewport and block the agent's text from rendering. Mark it failed and
-        // flush to history so the viewport is freed.
-        self.finalize_active_cell_as_failed();
-        self.pending_exec_cells.drain_failed();
-        // Discard orphan buffered execute cells — silence is better than
-        // showing description text as command output.
-        self.pending_client_tool_cells.clear();
-
-        // Handle pending task_complete state.
-        if self.task_complete_pending {
-            self.bottom_pane.hide_status_indicator();
-            self.task_complete_pending = false;
-        }
-
-        // Flush pending End events while discarding stale Begin events, so
-        // completed tool results are rendered but new tool-call cells don't
-        // appear below the agent's final message.
-        let mut mgr = std::mem::take(&mut self.interrupts);
-        mgr.flush_completions_and_clear(self);
-        self.interrupts = mgr;
-
-        self.request_redraw();
-    }
-
-    pub(super) fn on_context_compacted(
-        &mut self,
-        event: codex_protocol::protocol::ContextCompactedEvent,
-    ) {
+    pub(super) fn on_context_compacted(&mut self, summary: Option<String>) {
         // Step 1: Flush the streamed summary from the old session.
         self.flush_answer_stream_with_separator();
         self.pending_client_tool_cells.clear();
@@ -116,7 +261,7 @@ impl ChatWidget {
         // When the ACP backend provides a summary, show a session header
         // followed by the summary reprinted as the first assistant message
         // of the new session. This makes the session boundary visible.
-        if let Some(summary) = event.summary {
+        if let Some(summary) = summary {
             // Step 3: Insert a new session header (same card as a fresh session,
             // but without install hints since this is not the first launch).
             use crate::nori::session_header::DisplayMode;
@@ -160,32 +305,11 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn on_agent_reasoning_final(&mut self) {
-        // At the end of a reasoning block, record transcript-only content.
-        self.full_reasoning_buffer.push_str(&self.reasoning_buffer);
-        if !self.full_reasoning_buffer.is_empty() {
-            let cell =
-                history_cell::new_reasoning_summary_block(self.full_reasoning_buffer.clone());
-            self.add_boxed_history(cell);
-        }
-        self.reasoning_buffer.clear();
-        self.full_reasoning_buffer.clear();
-        self.request_redraw();
-    }
-
-    pub(super) fn on_reasoning_section_break(&mut self) {
-        // Start a new reasoning block for header extraction and accumulate transcript.
-        self.full_reasoning_buffer.push_str(&self.reasoning_buffer);
-        self.full_reasoning_buffer.push_str("\n\n");
-        self.reasoning_buffer.clear();
-    }
-
     // Raw reasoning uses the same flow as summarized reasoning
 
     pub(super) fn on_task_started(&mut self) {
         self.bottom_pane.clear_ctrl_c_quit_hint();
         self.bottom_pane.set_task_running(true);
-        self.retry_status_header = None;
         self.bottom_pane.set_interrupt_hint_visible(true);
         self.set_status_header(crate::status_indicator_widget::pick_status_message(
             self.config.custom_working_messages,
@@ -203,33 +327,12 @@ impl ChatWidget {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
 
-        // Process any deferred completion events (ExecEnd, McpEnd, PatchEnd) so
-        // in-progress tool cells transition to their finished state ("Running" →
-        // "Ran"). Discard begin events that would create new cells below the
-        // agent's final message.
-        let mut mgr = std::mem::take(&mut self.interrupts);
-        let discarded = mgr.flush_completions_and_clear(self);
-        self.interrupts = mgr;
-        if discarded > 0 {
-            debug!("on_task_complete: discarded {discarded} deferred begin/other interrupt events");
-        }
-
-        // Drain any pending ExecCells that weren't completed (e.g., due to interruption).
-        self.pending_exec_cells.drain_failed();
-        // Discard orphan buffered execute cells.
         self.pending_client_tool_cells.clear();
-
-        // Safety net: finalize any incomplete ExecCell still stuck in active_cell.
-        // This can happen when tool End events arrive after the request has already finished
-        // (ACP race condition) or when streaming text kept the cell in active_cell.
         self.finalize_active_cell_as_failed();
 
         // Mark task stopped and request redraw now that all content is in history.
         self.bottom_pane.set_task_running(false);
-        self.running_commands.clear();
-        self.suppressed_exec_calls.clear();
         self.completed_client_tool_calls.clear();
-        self.last_unified_wait = None;
         self.request_redraw();
         self.refresh_terminal_title();
 
@@ -260,83 +363,12 @@ impl ChatWidget {
         }
     }
 
-    pub(crate) fn set_token_info(&mut self, info: Option<TokenUsageInfo>) {
-        match info {
-            Some(info) => self.apply_token_info(info),
-            None => {
-                self.bottom_pane.set_context_window_percent(None);
-                self.token_info = None;
-            }
-        }
-    }
-
-    pub(super) fn apply_token_info(&mut self, info: TokenUsageInfo) {
-        let percent = self.context_used_percent(&info);
-        self.bottom_pane.set_context_window_percent(percent);
-        self.token_info = Some(info);
-    }
-
-    pub(super) fn context_used_percent(&self, info: &TokenUsageInfo) -> Option<i64> {
-        info.model_context_window
-            .or_else(|| {
-                nori_harness::get_agent_config(&self.config.active_agent)
-                    .ok()
-                    .and_then(|agent| agent.context_window_size())
-            })
-            .map(|window| {
-                let remaining = info
-                    .last_token_usage
-                    .percent_of_context_window_remaining(window);
-                (100 - remaining).clamp(0, 100)
-            })
-    }
-
-    pub(crate) fn on_rate_limit_snapshot(&mut self, snapshot: Option<RateLimitSnapshot>) {
-        if let Some(snapshot) = snapshot {
-            let warnings = self.rate_limit_warnings.take_warnings(
-                snapshot
-                    .secondary
-                    .as_ref()
-                    .map(|window| window.used_percent),
-                snapshot
-                    .secondary
-                    .as_ref()
-                    .and_then(|window| window.window_minutes),
-                snapshot.primary.as_ref().map(|window| window.used_percent),
-                snapshot
-                    .primary
-                    .as_ref()
-                    .and_then(|window| window.window_minutes),
-            );
-
-            let display = crate::status::rate_limit_snapshot_display(&snapshot, Local::now());
-            self.rate_limit_snapshot = Some(display);
-
-            if !warnings.is_empty() {
-                for warning in warnings {
-                    self.add_to_history(history_cell::new_warning_event(warning));
-                }
-                self.request_redraw();
-            }
-        } else {
-            self.rate_limit_snapshot = None;
-        }
-    }
-
-    /// Finalize any active exec as failed and stop/clear running UI state.
+    /// Finalize any active tool as failed and stop/clear running UI state.
     pub(super) fn finalize_turn(&mut self) {
-        // Ensure any spinner is replaced by a red ✗ and flushed into history.
         self.finalize_active_cell_as_failed();
-        // Drain any incomplete ExecCells saved in pending_exec_cells.
-        self.pending_exec_cells.drain_failed();
-        // Discard orphan buffered execute cells.
         self.pending_client_tool_cells.clear();
-        // Reset running state and clear streaming buffers.
         self.bottom_pane.set_task_running(false);
-        self.running_commands.clear();
-        self.suppressed_exec_calls.clear();
         self.completed_client_tool_calls.clear();
-        self.last_unified_wait = None;
         self.stream_controller = None;
     }
 
@@ -354,75 +386,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn on_mcp_startup_update(&mut self, ev: McpStartupUpdateEvent) {
-        let mut status = self.mcp_startup_status.take().unwrap_or_default();
-        if let McpStartupStatus::Failed { error } = &ev.status {
-            self.on_warning(error);
-        }
-        status.insert(ev.server, ev.status);
-        self.mcp_startup_status = Some(status);
-        self.bottom_pane.set_task_running(true);
-        if let Some(current) = &self.mcp_startup_status {
-            let total = current.len();
-            let mut starting: Vec<_> = current
-                .iter()
-                .filter_map(|(name, state)| {
-                    if matches!(state, McpStartupStatus::Starting) {
-                        Some(name)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            starting.sort();
-            if let Some(first) = starting.first() {
-                let completed = total.saturating_sub(starting.len());
-                let max_to_show = 3;
-                let mut to_show: Vec<String> = starting
-                    .iter()
-                    .take(max_to_show)
-                    .map(ToString::to_string)
-                    .collect();
-                if starting.len() > max_to_show {
-                    to_show.push("…".to_string());
-                }
-                let header = if total > 1 {
-                    format!(
-                        "Starting MCP servers ({completed}/{total}): {}",
-                        to_show.join(", ")
-                    )
-                } else {
-                    format!("Booting MCP server: {first}")
-                };
-                self.set_status_header(header);
-            }
-        }
-        self.request_redraw();
-    }
-
-    pub(super) fn on_mcp_startup_complete(&mut self, ev: McpStartupCompleteEvent) {
-        let mut parts = Vec::new();
-        if !ev.failed.is_empty() {
-            let failed_servers: Vec<_> = ev.failed.iter().map(|f| f.server.clone()).collect();
-            parts.push(format!("failed: {}", failed_servers.join(", ")));
-        }
-        if !ev.cancelled.is_empty() {
-            self.on_warning(format!(
-                "MCP startup interrupted. The following servers were not initialized: {}",
-                ev.cancelled.join(", ")
-            ));
-        }
-        if !parts.is_empty() {
-            self.on_warning(format!("MCP startup incomplete ({})", parts.join("; ")));
-        }
-
-        self.mcp_startup_status = None;
-        self.bottom_pane.set_task_running(false);
-        self.request_redraw();
-        self.refresh_terminal_title();
-    }
-
-    pub(super) fn on_plan_update(&mut self, update: UpdatePlanArgs) {
+    pub(super) fn on_plan_update(&mut self, update: PlanUpdate) {
         if self.plan_drawer_mode != PlanDrawerMode::Off {
             self.pinned_plan = Some(update);
             self.request_redraw();
@@ -432,187 +396,30 @@ impl ChatWidget {
         }
     }
 
-    pub(super) fn on_exec_approval_request(&mut self, id: String, ev: ExecApprovalRequestEvent) {
-        // Approval requests must be handled immediately, not deferred. In ACP mode,
-        // the agent subprocess is blocked waiting for the user's approval decision.
-        // If we defer the approval popup, we create a deadlock: the agent waits for
-        // approval, but TaskComplete (which would flush the queue) won't arrive until
-        // the agent finishes, which won't happen until approval is granted.
-        self.handle_exec_approval_now(id, ev);
-    }
-
-    pub(super) fn on_apply_patch_approval_request(
+    pub(crate) fn on_history_entry_loaded(
         &mut self,
-        id: String,
-        ev: ApplyPatchApprovalRequestEvent,
+        log_id: i64,
+        offset: i64,
+        entry: Option<nori_harness::HistoryEntry>,
     ) {
-        // Same as on_exec_approval_request: handle immediately to avoid deadlock.
-        self.handle_apply_patch_approval_now(id, ev);
-    }
-
-    pub(super) fn on_elicitation_request(&mut self, ev: ElicitationRequestEvent) {
-        let ev2 = ev.clone();
-        self.defer_or_handle(
-            |q| q.push_elicitation(ev),
-            |s| s.handle_elicitation_request_now(ev2),
-        );
-    }
-
-    pub(super) fn on_exec_command_begin(&mut self, ev: ExecCommandBeginEvent) {
-        self.flush_answer_stream_with_separator();
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_exec_begin(ev), |s| s.handle_exec_begin_now(ev2));
-    }
-
-    pub(super) fn on_exec_command_output_delta(
-        &mut self,
-        _ev: codex_protocol::protocol::ExecCommandOutputDeltaEvent,
-    ) {
-        // TODO: Handle streaming exec output if/when implemented
-    }
-
-    pub(super) fn on_patch_apply_begin(&mut self, event: PatchApplyBeginEvent) {
-        // Track Edit tool call for session statistics
-        self.session_stats.record_tool_call("Edit");
-
-        // Observe directories from file paths to potentially update footer git info.
-        self.observe_directories_from_changes(&event.changes);
-
-        self.add_to_history(history_cell::new_patch_event(
-            event.changes,
-            &self.config.cwd,
-        ));
-    }
-
-    pub(super) fn on_view_image_tool_call(&mut self, event: ViewImageToolCallEvent) {
-        // Track ViewImage tool call for session statistics
-        self.session_stats.record_tool_call("ViewImage");
-
-        self.flush_answer_stream_with_separator();
-        self.add_to_history(history_cell::new_view_image_tool_call(
-            event.path,
-            &self.config.cwd,
-        ));
-        self.request_redraw();
-    }
-
-    pub(super) fn on_patch_apply_end(
-        &mut self,
-        event: codex_protocol::protocol::PatchApplyEndEvent,
-    ) {
-        self.flush_answer_stream_with_separator();
-        let ev2 = event.clone();
-        self.defer_or_handle(
-            |q| q.push_patch_end(event),
-            |s| s.handle_patch_apply_end_now(ev2),
-        );
-    }
-
-    pub(super) fn on_exec_command_end(&mut self, ev: ExecCommandEndEvent) {
-        self.flush_answer_stream_with_separator();
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_exec_end(ev), |s| s.handle_exec_end_now(ev2));
-    }
-
-    pub(super) fn on_mcp_tool_call_begin(&mut self, ev: McpToolCallBeginEvent) {
-        self.flush_answer_stream_with_separator();
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_mcp_begin(ev), |s| s.handle_mcp_begin_now(ev2));
-    }
-
-    pub(super) fn on_mcp_tool_call_end(&mut self, ev: McpToolCallEndEvent) {
-        self.flush_answer_stream_with_separator();
-        let ev2 = ev.clone();
-        self.defer_or_handle(|q| q.push_mcp_end(ev), |s| s.handle_mcp_end_now(ev2));
-    }
-
-    pub(super) fn on_web_search_begin(&mut self, _ev: WebSearchBeginEvent) {
-        self.flush_answer_stream_with_separator();
-    }
-
-    pub(super) fn on_web_search_end(&mut self, ev: WebSearchEndEvent) {
-        // Track WebSearch tool call for session statistics
-        self.session_stats.record_tool_call("WebSearch");
-
-        self.flush_answer_stream_with_separator();
-        self.add_to_history(history_cell::new_web_search_call(format!(
-            "Searched: {}",
-            ev.query
-        )));
-    }
-
-    pub(super) fn on_get_history_entry_response(
-        &mut self,
-        event: codex_protocol::protocol::GetHistoryEntryResponseEvent,
-    ) {
-        let codex_protocol::protocol::GetHistoryEntryResponseEvent {
-            offset,
-            log_id,
-            entry,
-        } = event;
+        let (Ok(log_id), Ok(offset)) = (u64::try_from(log_id), usize::try_from(offset)) else {
+            return;
+        };
         self.bottom_pane
             .on_history_entry_response(log_id, offset, entry.map(|e| e.text));
-    }
-
-    pub(super) fn on_shutdown_complete(&mut self) {
-        self.request_exit();
-    }
-
-    pub(super) fn on_turn_diff(&mut self, unified_diff: String) {
-        tracing::debug!("TurnDiffEvent: {unified_diff}");
-    }
-
-    pub(super) fn on_deprecation_notice(&mut self, event: DeprecationNoticeEvent) {
-        let DeprecationNoticeEvent { summary, details } = event;
-        self.add_to_history(history_cell::new_deprecation_notice(summary, details));
-        self.request_redraw();
-    }
-
-    pub(super) fn on_background_event(&mut self, message: String) {
-        tracing::debug!("BackgroundEvent: {message}");
-        self.bottom_pane.ensure_status_indicator();
-        self.bottom_pane.set_interrupt_hint_visible(true);
-        self.set_status_header(message);
     }
 
     pub(super) fn on_prompt_summary(&mut self, summary: String) {
         self.bottom_pane.set_prompt_summary(Some(summary));
     }
 
-    pub(super) fn on_undo_started(&mut self, event: UndoStartedEvent) {
-        self.bottom_pane.ensure_status_indicator();
-        self.bottom_pane.set_interrupt_hint_visible(false);
-        let message = event
-            .message
-            .unwrap_or_else(|| "Undo in progress...".to_string());
-        self.set_status_header(message);
-    }
-
-    pub(super) fn on_undo_completed(&mut self, event: UndoCompletedEvent) {
-        let UndoCompletedEvent { success, message } = event;
-        self.bottom_pane.hide_status_indicator();
-        let message = message.unwrap_or_else(|| {
-            if success {
-                "Undo completed successfully.".to_string()
-            } else {
-                "Undo failed.".to_string()
-            }
-        });
-        if success {
-            self.add_info_message(message, None);
-        } else {
-            self.add_error_message(message);
-        }
-    }
-
-    pub(super) fn on_undo_list_result(&mut self, event: UndoListResultEvent) {
-        if event.snapshots.is_empty() {
+    pub(crate) fn on_undo_snapshots_loaded(&mut self, snapshots: Vec<nori_harness::UndoSnapshot>) {
+        if snapshots.is_empty() {
             self.add_info_message("No undo snapshots available.".to_string(), None);
             return;
         }
 
-        let items: Vec<SelectionItem> = event
-            .snapshots
+        let items: Vec<SelectionItem> = snapshots
             .into_iter()
             .map(|snap| {
                 let index = snap.index;
@@ -626,7 +433,9 @@ impl ChatWidget {
                     selected_description: None,
                     is_current: false,
                     actions: vec![Box::new(move |_| {
-                        tx.send(AppEvent::CodexOp(Op::UndoTo { index }));
+                        tx.send(AppEvent::HarnessAction(
+                            crate::app_event::HarnessAction::UndoTo(index),
+                        ));
                     })],
                     dismiss_on_select: true,
                     search_value: None,
@@ -646,13 +455,6 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn on_stream_error(&mut self, message: String) {
-        if self.retry_status_header.is_none() {
-            self.retry_status_header = Some(self.current_status_header.clone());
-        }
-        self.set_status_header(message);
-    }
-
     /// Periodic tick to commit at most one queued line to history with a small delay,
     /// animating the output.
     pub(crate) fn on_commit_tick(&mut self) {
@@ -669,22 +471,6 @@ impl ChatWidget {
             if is_idle {
                 self.app_event_tx.send(AppEvent::StopCommitAnimation);
             }
-        }
-    }
-
-    #[inline]
-    pub(super) fn defer_or_handle(
-        &mut self,
-        push: impl FnOnce(&mut InterruptManager),
-        handle: impl FnOnce(&mut Self),
-    ) {
-        // Preserve deterministic FIFO across queued interrupts: once anything
-        // is queued due to an active write cycle, continue queueing until the
-        // queue is flushed to avoid reordering (e.g., ExecEnd before ExecBegin).
-        if self.stream_controller.is_some() || !self.interrupts.is_empty() {
-            push(&mut self.interrupts);
-        } else {
-            handle(self);
         }
     }
 
@@ -714,102 +500,6 @@ impl ChatWidget {
             self.app_event_tx.send(AppEvent::StartCommitAnimation);
         }
         self.request_redraw();
-    }
-
-    pub(crate) fn handle_exec_end_now(&mut self, ev: ExecCommandEndEvent) {
-        let running = self.running_commands.remove(&ev.call_id);
-        if self.suppressed_exec_calls.remove(&ev.call_id) {
-            return;
-        }
-        let (command, parsed, source) = match running {
-            Some(rc) => (rc.command, rc.parsed_cmd, rc.source),
-            None => (ev.command.clone(), ev.parsed_cmd.clone(), ev.source),
-        };
-        let is_unified_exec_interaction =
-            matches!(source, ExecCommandSource::UnifiedExecInteraction);
-
-        // First check if there's a pending ExecCell for this call_id
-        // (saved when the incomplete cell was flushed due to streaming)
-        if let Some(pending_cell) = self.pending_exec_cells.retrieve(&ev.call_id) {
-            // Preserve any existing active_cell before replacing with pending cell.
-            // This ensures cells aren't lost when multiple ExecCells exist concurrently
-            // (e.g., when a new tool call begins after text streaming flushes an incomplete cell).
-            self.flush_active_cell();
-            // Move the pending cell to active_cell so we can complete it
-            self.active_cell = Some(pending_cell);
-        } else {
-            // Normal flow: check if active_cell is an ExecCell
-            let needs_new = self
-                .active_cell
-                .as_ref()
-                .map(|cell| cell.as_any().downcast_ref::<ExecCell>().is_none())
-                .unwrap_or(true);
-
-            if needs_new {
-                self.flush_active_cell();
-                self.active_cell = Some(Box::new(new_active_exec_command(
-                    ev.call_id.clone(),
-                    command,
-                    parsed,
-                    source,
-                    None,
-                    self.config.animations,
-                )));
-            }
-        }
-
-        if let Some(cell) = self
-            .active_cell
-            .as_mut()
-            .and_then(|c| c.as_any_mut().downcast_mut::<ExecCell>())
-        {
-            let output = if is_unified_exec_interaction {
-                CommandOutput {
-                    exit_code: ev.exit_code,
-                    formatted_output: String::new(),
-                    aggregated_output: String::new(),
-                }
-            } else {
-                CommandOutput {
-                    exit_code: ev.exit_code,
-                    formatted_output: ev.formatted_output.clone(),
-                    aggregated_output: ev.aggregated_output.clone(),
-                }
-            };
-            cell.complete_call(&ev.call_id, output, ev.duration);
-
-            let is_active = cell.is_active();
-            let is_exploring = cell.is_exploring_cell();
-
-            // After completing a call, decide whether to keep the cell or flush it:
-            //
-            // 1. If cell still has pending calls (is_active), KEEP IT IN active_cell
-            //    so it remains visible during streaming. Previously it was saved to
-            //    pending_exec_cells which made it invisible - that was the bug.
-            //
-            // 2. If cell is fully complete AND is an exploring cell, keep it in
-            //    active_cell to allow grouping with subsequent exploring commands.
-            //
-            // 3. If cell is fully complete AND is NOT an exploring cell, flush it
-            //    to history immediately.
-            if !is_active && !is_exploring {
-                self.flush_active_cell();
-            }
-        }
-    }
-
-    pub(crate) fn handle_patch_apply_end_now(
-        &mut self,
-        event: codex_protocol::protocol::PatchApplyEndEvent,
-    ) {
-        // Observe directories from file paths to potentially update footer git info.
-        self.observe_directories_from_changes(&event.changes);
-
-        // If the patch was successful, just let the "Edited" block stand.
-        // Otherwise, add a failure block.
-        if !event.success {
-            self.add_to_history(history_cell::new_patch_apply_failure(event.stderr));
-        }
     }
 
     /// Observes the parent directories of file paths to update the effective CWD tracker.
@@ -845,264 +535,6 @@ impl ChatWidget {
         }
     }
 
-    /// Observes the parent directories of changed files to update the effective CWD tracker.
-    /// If the effective CWD changes (after debounce), triggers a system info refresh.
-    ///
-    /// Uses the git repository root for the refresh directory rather than the file's parent
-    /// to ensure git commands work correctly. Also skips directories that don't exist yet
-    /// (which can happen when creating new files in new directories).
-    pub(super) fn observe_directories_from_changes(
-        &mut self,
-        changes: &std::collections::HashMap<PathBuf, codex_protocol::protocol::FileChange>,
-    ) {
-        for file_path in changes.keys() {
-            // Resolve relative paths against config.cwd before extracting parent
-            let absolute_path = if file_path.is_absolute() {
-                file_path.clone()
-            } else {
-                self.config.cwd.join(file_path)
-            };
-
-            if self.effective_cwd_tracker.observe_file_path(&absolute_path) {
-                // Find the git root for this path, falling back to parent directory
-                // This ensures git commands work correctly even when the immediate
-                // parent directory doesn't exist yet (new file in new directory)
-                let refresh_dir = crate::effective_cwd_tracker::find_git_root(&absolute_path)
-                    .or_else(|| {
-                        // Fall back to parent directory only if it exists
-                        absolute_path
-                            .parent()
-                            .filter(|p| p.exists())
-                            .map(std::path::Path::to_path_buf)
-                    });
-
-                if let Some(dir) = refresh_dir {
-                    self.app_event_tx
-                        .send(AppEvent::RefreshSystemInfoForDirectory {
-                            dir,
-                            agent: Some(self.config.active_agent.clone()),
-                        });
-                }
-            }
-        }
-    }
-
-    pub(crate) fn handle_exec_approval_now(&mut self, id: String, ev: ExecApprovalRequestEvent) {
-        self.flush_answer_stream_with_separator();
-        let command = shlex::try_join(ev.command.iter().map(String::as_str))
-            .unwrap_or_else(|_| ev.command.join(" "));
-        self.notify(Notification::ExecApprovalRequested { command });
-
-        let request = ApprovalRequest::Exec {
-            id,
-            command: ev.command,
-            reason: ev.reason,
-            risk: ev.risk,
-        };
-        self.bottom_pane.push_approval_request(request);
-        self.request_redraw();
-    }
-
-    pub(crate) fn handle_apply_patch_approval_now(
-        &mut self,
-        id: String,
-        ev: ApplyPatchApprovalRequestEvent,
-    ) {
-        self.flush_answer_stream_with_separator();
-
-        let request = ApprovalRequest::ApplyPatch {
-            id,
-            reason: ev.reason,
-            changes: ev.changes.clone(),
-            cwd: self.config.cwd.clone(),
-        };
-        self.bottom_pane.push_approval_request(request);
-        self.request_redraw();
-        self.notify(Notification::EditApprovalRequested {
-            cwd: self.config.cwd.clone(),
-            changes: ev.changes.keys().cloned().collect(),
-        });
-    }
-
-    pub(crate) fn handle_elicitation_request_now(&mut self, ev: ElicitationRequestEvent) {
-        self.flush_answer_stream_with_separator();
-
-        self.notify(Notification::ElicitationRequested {
-            server_name: ev.server_name.clone(),
-        });
-
-        let request = ApprovalRequest::McpElicitation {
-            server_name: ev.server_name,
-            request_id: ev.id,
-            message: ev.message,
-        };
-        self.bottom_pane.push_approval_request(request);
-        self.request_redraw();
-    }
-
-    pub(crate) fn handle_exec_begin_now(&mut self, ev: ExecCommandBeginEvent) {
-        // Track Bash tool call for session statistics
-        self.session_stats.record_tool_call("Bash");
-
-        // Check if any parsed commands are Read operations to SKILL.md files
-        for parsed_cmd in &ev.parsed_cmd {
-            if let codex_protocol::parse_command::ParsedCommand::Read { path, .. } = parsed_cmd
-                && let Some(skill_name) = extract_skill_from_read_path(path.to_str())
-            {
-                self.session_stats.record_skill(&skill_name);
-            }
-        }
-
-        // Observe the command's working directory to potentially update footer git info.
-        // If the effective CWD changes (after debounce), trigger a system info refresh.
-        if self.effective_cwd_tracker.observe_directory(ev.cwd.clone()) {
-            self.app_event_tx
-                .send(AppEvent::RefreshSystemInfoForDirectory {
-                    dir: ev.cwd.clone(),
-                    agent: Some(self.config.active_agent.clone()),
-                });
-        }
-
-        // Ensure the status indicator is visible while the command runs.
-        self.running_commands.insert(
-            ev.call_id.clone(),
-            RunningCommand {
-                command: ev.command.clone(),
-                parsed_cmd: ev.parsed_cmd.clone(),
-                source: ev.source,
-            },
-        );
-        let is_wait_interaction = matches!(ev.source, ExecCommandSource::UnifiedExecInteraction)
-            && ev
-                .interaction_input
-                .as_deref()
-                .map(str::is_empty)
-                .unwrap_or(true);
-        let command_display = ev.command.join(" ");
-        let should_suppress_unified_wait = is_wait_interaction
-            && self
-                .last_unified_wait
-                .as_ref()
-                .is_some_and(|wait| wait.is_duplicate(&command_display));
-        if is_wait_interaction {
-            self.last_unified_wait = Some(UnifiedExecWaitState::new(command_display));
-        } else {
-            self.last_unified_wait = None;
-        }
-        if should_suppress_unified_wait {
-            self.suppressed_exec_calls.insert(ev.call_id);
-            return;
-        }
-        let interaction_input = ev.interaction_input.clone();
-
-        // Check if we can add this call to an existing ExecCell
-        if let Some(cell) = self
-            .active_cell
-            .as_mut()
-            .and_then(|c| c.as_any_mut().downcast_mut::<ExecCell>())
-            && let Some(new_exec) = cell.with_added_call(
-                ev.call_id.clone(),
-                ev.command.clone(),
-                ev.parsed_cmd.clone(),
-                ev.source,
-                interaction_input.clone(),
-            )
-        {
-            *cell = new_exec;
-        } else {
-            self.flush_active_cell();
-
-            self.active_cell = Some(Box::new(new_active_exec_command(
-                ev.call_id.clone(),
-                ev.command.clone(),
-                ev.parsed_cmd,
-                ev.source,
-                interaction_input,
-                self.config.animations,
-            )));
-        }
-
-        self.request_redraw();
-    }
-
-    pub(crate) fn handle_mcp_begin_now(&mut self, ev: McpToolCallBeginEvent) {
-        // Track tool call for session statistics
-        self.session_stats.record_tool_call(&ev.invocation.tool);
-
-        // Check if this is a Skill tool call and extract skill name
-        if ev.invocation.tool == "Skill"
-            && let Some(skill_name) = extract_skill_from_raw_input(ev.invocation.arguments.as_ref())
-        {
-            self.session_stats.record_skill(&skill_name);
-        }
-
-        // Check if this is a Task tool call and extract subagent type
-        if ev.invocation.tool == "Task"
-            && let Some(subagent_type) =
-                extract_subagent_from_raw_input(ev.invocation.arguments.as_ref())
-        {
-            self.session_stats.record_subagent(&subagent_type);
-        }
-
-        self.flush_answer_stream_with_separator();
-        self.flush_active_cell();
-        self.active_cell = Some(Box::new(history_cell::new_active_mcp_tool_call(
-            ev.call_id,
-            ev.invocation,
-            self.config.animations,
-        )));
-        self.request_redraw();
-    }
-
-    pub(crate) fn handle_mcp_end_now(&mut self, ev: McpToolCallEndEvent) {
-        self.flush_answer_stream_with_separator();
-
-        let McpToolCallEndEvent {
-            call_id,
-            invocation,
-            duration,
-            result,
-        } = ev;
-
-        // If this is a Task tool call, scan the result text for skill paths
-        // This captures skills used by subagents whose tool calls are not directly visible
-        if invocation.tool == "Task"
-            && let Ok(tool_result) = &result
-        {
-            for content_block in &tool_result.content {
-                if let mcp_types::ContentBlock::TextContent(text_content) = content_block {
-                    for skill_name in extract_skills_from_text(&text_content.text) {
-                        self.session_stats.record_skill(&skill_name);
-                    }
-                }
-            }
-        }
-
-        let extra_cell = match self
-            .active_cell
-            .as_mut()
-            .and_then(|cell| cell.as_any_mut().downcast_mut::<McpToolCallCell>())
-        {
-            Some(cell) if cell.call_id() == call_id => cell.complete(duration, result),
-            _ => {
-                self.flush_active_cell();
-                let mut cell = history_cell::new_active_mcp_tool_call(
-                    call_id,
-                    invocation,
-                    self.config.animations,
-                );
-                let extra_cell = cell.complete(duration, result);
-                self.active_cell = Some(Box::new(cell));
-                extra_cell
-            }
-        };
-
-        self.flush_active_cell();
-        if let Some(extra) = extra_cell {
-            self.add_boxed_history(extra);
-        }
-    }
-
     /// Handle Ctrl-C key press.
     pub(super) fn on_ctrl_c(&mut self) {
         // Ctrl+C bypasses BottomPane key routing, so gate it here: once exit
@@ -1116,70 +548,74 @@ impl ChatWidget {
 
         if self.bottom_pane.is_task_running() {
             self.bottom_pane.show_ctrl_c_quit_hint();
-            self.submit_op(Op::Interrupt);
+            self.submit_harness_action(crate::app_event::HarnessAction::Cancel);
             return;
         }
 
         self.begin_exit();
     }
 
-    pub(super) fn on_list_custom_prompts(&mut self, ev: ListCustomPromptsResponseEvent) {
-        let len = ev.custom_prompts.len();
+    pub(crate) fn on_custom_prompts_loaded(
+        &mut self,
+        custom_prompts: Vec<nori_harness::CustomPrompt>,
+    ) {
+        let len = custom_prompts.len();
         tracing::debug!("received {len} custom prompts");
         // Forward to bottom pane so the slash popup can show them now.
-        self.bottom_pane.set_custom_prompts(ev.custom_prompts);
+        self.bottom_pane.set_custom_prompts(custom_prompts);
     }
 
-    pub(crate) fn handle_client_event(&mut self, event: nori_protocol::ClientEvent) {
+    pub(crate) fn on_history_search_loaded(&mut self, entries: Vec<nori_harness::HistoryEntry>) {
+        self.bottom_pane.on_search_history_response(entries);
+        self.request_redraw();
+    }
+
+    pub(crate) fn handle_client_event(&mut self, event: crate::presentation::ClientEvent) {
         match event {
-            nori_protocol::ClientEvent::ApprovalRequest(approval) => {
-                self.handle_client_approval_request(approval);
-            }
-            nori_protocol::ClientEvent::ToolSnapshot(tool_snapshot) => {
+            crate::presentation::ClientEvent::ApprovalRequest(_) => {}
+            crate::presentation::ClientEvent::ToolSnapshot(tool_snapshot) => {
                 self.handle_client_tool_snapshot(tool_snapshot);
             }
-            nori_protocol::ClientEvent::MessageDelta(message_delta) => {
+            crate::presentation::ClientEvent::MessageDelta(message_delta) => {
                 self.handle_client_message_delta(message_delta);
             }
-            nori_protocol::ClientEvent::PlanSnapshot(plan_snapshot) => {
+            crate::presentation::ClientEvent::PlanSnapshot(plan_snapshot) => {
                 self.handle_client_plan_snapshot(plan_snapshot);
             }
-            nori_protocol::ClientEvent::SessionPhaseChanged(phase) => {
+            crate::presentation::ClientEvent::SessionPhaseChanged(phase) => {
                 self.handle_client_phase_changed(phase);
             }
-            nori_protocol::ClientEvent::PromptCompleted(completed) => {
+            crate::presentation::ClientEvent::PromptCompleted(completed) => {
                 self.handle_client_prompt_completed(completed);
             }
-            nori_protocol::ClientEvent::LoadCompleted => {
+            crate::presentation::ClientEvent::LoadCompleted => {
                 self.request_redraw();
             }
-            nori_protocol::ClientEvent::QueueChanged(queue_changed) => {
+            crate::presentation::ClientEvent::QueueChanged(queue_changed) => {
                 self.bottom_pane
                     .set_queued_user_messages(queue_changed.prompts);
                 self.request_redraw();
             }
-            nori_protocol::ClientEvent::ContextCompacted(context_compacted) => {
-                self.on_context_compacted(codex_protocol::protocol::ContextCompactedEvent {
-                    summary: context_compacted.summary,
-                });
+            crate::presentation::ClientEvent::ContextCompacted(context_compacted) => {
+                self.on_context_compacted(context_compacted.summary);
             }
-            nori_protocol::ClientEvent::ReplayEntry(replay_entry) => {
+            crate::presentation::ClientEvent::ReplayEntry(replay_entry) => {
                 self.handle_client_replay_entry(replay_entry);
             }
-            nori_protocol::ClientEvent::AgentCommandsUpdate(update) => {
+            crate::presentation::ClientEvent::AgentCommandsUpdate(update) => {
                 self.bottom_pane.set_agent_commands(update.commands);
             }
-            nori_protocol::ClientEvent::SessionConfigUpdate(update) => {
+            crate::presentation::ClientEvent::SessionConfigUpdate(update) => {
                 self.handle_acp_session_config_update(&update.config_options);
             }
-            nori_protocol::ClientEvent::SessionUpdateInfo(update) => {
-                if update.kind == nori_protocol::SessionUpdateKind::ConfigOptions {
+            crate::presentation::ClientEvent::SessionUpdateInfo(update) => {
+                if update.kind == crate::presentation::SessionUpdateKind::ConfigOptions {
                     self.refresh_acp_mode_config_snapshot();
                     self.request_redraw();
                     return;
                 }
                 self.clear_pending_goal_edit_if_no_goal(&update);
-                if update.kind == nori_protocol::SessionUpdateKind::Usage
+                if update.kind == crate::presentation::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
                 {
                     self.bottom_pane.set_session_usage(Some(usage));
@@ -1188,60 +624,60 @@ impl ChatWidget {
                 }
                 self.request_redraw();
             }
-            nori_protocol::ClientEvent::SessionModeChanged(update) => {
+            crate::presentation::ClientEvent::SessionModeChanged(update) => {
                 self.handle_acp_session_mode_changed(&update.current_mode_id);
             }
-            nori_protocol::ClientEvent::SessionCapabilitiesChanged(update) => {
+            crate::presentation::ClientEvent::SessionCapabilitiesChanged(update) => {
                 self.handle_session_capabilities_changed(update);
             }
-            nori_protocol::ClientEvent::ThreadGoalUpdated(update) => {
+            crate::presentation::ClientEvent::ThreadGoalUpdated(update) => {
                 self.handle_thread_goal_updated(update.goal);
             }
-            nori_protocol::ClientEvent::ThreadGoalCleared => {
+            crate::presentation::ClientEvent::ThreadGoalCleared => {
                 self.handle_thread_goal_cleared();
             }
-            nori_protocol::ClientEvent::Warning(warning) => {
+            crate::presentation::ClientEvent::Warning(warning) => {
                 self.on_warning(warning.message);
             }
         }
     }
 
-    fn handle_client_message_delta(&mut self, message_delta: nori_protocol::MessageDelta) {
+    fn handle_client_message_delta(&mut self, message_delta: crate::presentation::MessageDelta) {
         match message_delta.stream {
-            nori_protocol::MessageStream::User => {}
-            nori_protocol::MessageStream::Answer => {
+            crate::presentation::MessageStream::User => {}
+            crate::presentation::MessageStream::Answer => {
                 self.assistant_stream_seen_for_stats = true;
                 self.on_agent_message_delta(message_delta.delta)
             }
-            nori_protocol::MessageStream::Reasoning => {
+            crate::presentation::MessageStream::Reasoning => {
                 self.on_agent_reasoning_delta(message_delta.delta);
             }
         }
     }
 
-    fn handle_client_plan_snapshot(&mut self, plan_snapshot: nori_protocol::PlanSnapshot) {
+    fn handle_client_plan_snapshot(&mut self, plan_snapshot: crate::presentation::PlanSnapshot) {
         self.on_plan_update(plan_snapshot_to_update_plan_args(plan_snapshot));
     }
 
     fn handle_client_phase_changed(
         &mut self,
-        phase: nori_protocol::session_runtime::SessionPhaseView,
+        phase: crate::presentation::session_runtime::SessionPhaseView,
     ) {
         let previous_phase = self.acp_session_phase.replace(phase);
 
         match phase {
-            nori_protocol::session_runtime::SessionPhaseView::Idle => {
+            crate::presentation::session_runtime::SessionPhaseView::Idle => {
                 self.bottom_pane.set_task_running(false);
                 self.bottom_pane.set_interrupt_hint_visible(false);
                 if !matches!(
                     previous_phase,
-                    Some(nori_protocol::session_runtime::SessionPhaseView::Idle)
+                    Some(crate::presentation::session_runtime::SessionPhaseView::Idle)
                 ) {
                     self.request_redraw();
                     self.refresh_terminal_title();
                 }
             }
-            nori_protocol::session_runtime::SessionPhaseView::Loading => {
+            crate::presentation::session_runtime::SessionPhaseView::Loading => {
                 self.bottom_pane.set_task_running(true);
                 self.bottom_pane.ensure_status_indicator();
                 self.bottom_pane.set_interrupt_hint_visible(false);
@@ -1249,11 +685,11 @@ impl ChatWidget {
                 self.request_redraw();
                 self.refresh_terminal_title();
             }
-            nori_protocol::session_runtime::SessionPhaseView::Prompt => {
+            crate::presentation::session_runtime::SessionPhaseView::Prompt => {
                 if matches!(
                     previous_phase,
-                    Some(nori_protocol::session_runtime::SessionPhaseView::Prompt)
-                        | Some(nori_protocol::session_runtime::SessionPhaseView::Cancelling)
+                    Some(crate::presentation::session_runtime::SessionPhaseView::Prompt)
+                        | Some(crate::presentation::session_runtime::SessionPhaseView::Cancelling)
                 ) {
                     self.bottom_pane.set_task_running(true);
                     self.bottom_pane.ensure_status_indicator();
@@ -1264,7 +700,7 @@ impl ChatWidget {
                     self.on_task_started();
                 }
             }
-            nori_protocol::session_runtime::SessionPhaseView::Cancelling => {
+            crate::presentation::session_runtime::SessionPhaseView::Cancelling => {
                 self.bottom_pane.set_task_running(true);
                 self.bottom_pane.ensure_status_indicator();
                 self.bottom_pane.set_interrupt_hint_visible(false);
@@ -1275,17 +711,17 @@ impl ChatWidget {
         }
     }
 
-    fn handle_client_prompt_completed(&mut self, completed: nori_protocol::PromptCompleted) {
+    fn handle_client_prompt_completed(&mut self, completed: crate::presentation::PromptCompleted) {
         // The completion owns the loop lifecycle: a fatal failure disarms the
         // loop *before* on_task_complete can re-fire it, while a retryable
         // failure leaves it armed so the next iteration retries. Deciding this
         // here (rather than in on_error) keeps it on a single ordered event.
-        if completed.failure == Some(nori_protocol::TurnFailure::Fatal) {
+        if completed.failure == Some(crate::presentation::TurnFailure::Fatal) {
             self.cancel_loop();
         }
         // A failure already surfaces its own error cell; only a clean user
         // cancellation shows the generic "interrupted" notice.
-        let interrupted = completed.stop_reason == nori_protocol::StopReason::Cancelled
+        let interrupted = completed.stop_reason == nori_protocol::acp::v1::StopReason::Cancelled
             && completed.failure.is_none();
         let has_final_message = completed
             .last_agent_message
@@ -1305,56 +741,112 @@ impl ChatWidget {
         }
     }
 
-    fn handle_client_replay_entry(&mut self, replay_entry: nori_protocol::ReplayEntry) {
+    fn handle_replay_client_event(&mut self, event: crate::presentation::ClientEvent) {
+        match event {
+            crate::presentation::ClientEvent::MessageDelta(delta) => {
+                let same_message = self.replay_message.as_ref().is_some_and(|message| {
+                    message.stream == delta.stream
+                        && match (&message.message_id, &delta.message_id) {
+                            (Some(current), Some(incoming)) => current == incoming,
+                            (None, None) => true,
+                            (Some(_), None) | (None, Some(_)) => false,
+                        }
+                });
+                if same_message {
+                    if let Some(message) = self.replay_message.as_mut() {
+                        message.text.push_str(&delta.delta);
+                    }
+                } else {
+                    self.flush_replay_message();
+                    self.replay_message = Some(ReplayMessage {
+                        stream: delta.stream,
+                        message_id: delta.message_id,
+                        text: delta.delta,
+                    });
+                }
+            }
+            crate::presentation::ClientEvent::PlanSnapshot(snapshot) => {
+                self.flush_replay_message();
+                self.handle_client_replay_entry(crate::presentation::ReplayEntry::PlanSnapshot {
+                    snapshot,
+                });
+            }
+            crate::presentation::ClientEvent::ToolSnapshot(snapshot) => {
+                self.flush_replay_message();
+                self.handle_client_replay_entry(crate::presentation::ReplayEntry::ToolSnapshot {
+                    snapshot: Box::new(snapshot),
+                });
+            }
+            crate::presentation::ClientEvent::ReplayEntry(replay_entry) => {
+                self.flush_replay_message();
+                self.handle_client_replay_entry(replay_entry);
+            }
+            event => {
+                self.flush_replay_message();
+                self.handle_client_event(event);
+            }
+        }
+    }
+
+    fn flush_replay_message(&mut self) {
+        let Some(message) = self.replay_message.take() else {
+            return;
+        };
+        let replay_entry = match message.stream {
+            crate::presentation::MessageStream::User => {
+                crate::presentation::ReplayEntry::UserMessage { text: message.text }
+            }
+            crate::presentation::MessageStream::Answer => {
+                crate::presentation::ReplayEntry::AssistantMessage { text: message.text }
+            }
+            crate::presentation::MessageStream::Reasoning => {
+                crate::presentation::ReplayEntry::ReasoningMessage { text: message.text }
+            }
+        };
+        self.handle_client_replay_entry(replay_entry);
+    }
+
+    fn handle_client_replay_entry(&mut self, replay_entry: crate::presentation::ReplayEntry) {
         match replay_entry {
-            nori_protocol::ReplayEntry::UserMessage { text } => {
+            crate::presentation::ReplayEntry::UserMessage { text } => {
                 self.add_to_history(history_cell::new_user_prompt(text));
             }
-            nori_protocol::ReplayEntry::AssistantMessage { text } => {
+            crate::presentation::ReplayEntry::AssistantMessage { text } => {
                 self.handle_streaming_delta(text);
                 self.flush_answer_stream_with_separator();
             }
-            nori_protocol::ReplayEntry::ReasoningMessage { text } => {
+            crate::presentation::ReplayEntry::ReasoningMessage { text } => {
                 let cell = history_cell::new_reasoning_summary_block(text);
                 self.add_boxed_history(cell);
             }
-            nori_protocol::ReplayEntry::PlanSnapshot { snapshot } => {
+            crate::presentation::ReplayEntry::PlanSnapshot { snapshot } => {
                 self.add_to_history(history_cell::new_plan_update(
                     plan_snapshot_to_update_plan_args(snapshot),
                 ));
             }
-            nori_protocol::ReplayEntry::ToolSnapshot { snapshot } => {
+            crate::presentation::ReplayEntry::ToolSnapshot { snapshot } => {
                 self.handle_client_tool_snapshot(*snapshot);
             }
         }
         self.request_redraw();
     }
 
-    fn handle_client_approval_request(&mut self, approval: nori_protocol::ApprovalRequest) {
-        let Some(request) = approval_request_from_client_event(approval, &self.config.cwd) else {
+    fn handle_client_approval_request(
+        &mut self,
+        approval: crate::presentation::ApprovalRequest,
+        request_id: nori_protocol::acp::v1::RequestId,
+        options: Vec<nori_protocol::acp::v1::PermissionOption>,
+    ) {
+        let Some(request) =
+            approval_request_from_client_event(approval, &self.config.cwd, request_id, options)
+        else {
             return;
         };
 
         self.flush_answer_stream_with_separator();
-        match &request {
-            ApprovalRequest::ApplyPatch { changes, .. } => {
-                self.notify(Notification::EditApprovalRequested {
-                    cwd: self.config.cwd.clone(),
-                    changes: changes.keys().cloned().collect(),
-                });
-            }
-            ApprovalRequest::Exec { command, .. } => {
-                let command = shlex::try_join(command.iter().map(String::as_str))
-                    .unwrap_or_else(|_| command.join(" "));
-                self.notify(Notification::ExecApprovalRequested { command });
-            }
-            ApprovalRequest::McpElicitation { .. } => {}
-            ApprovalRequest::AcpTool { title, .. } => {
-                self.notify(Notification::ExecApprovalRequested {
-                    command: title.clone(),
-                });
-            }
-        }
+        self.notify(Notification::ExecApprovalRequested {
+            command: request.title.clone(),
+        });
         self.bottom_pane.push_approval_request(request);
         self.request_redraw();
     }
@@ -1362,7 +854,7 @@ impl ChatWidget {
     /// All ACP tool kinds route through ClientToolCell for native rendering.
     /// ClientToolCell auto-detects exploring tools (Read/Search) and renders
     /// them with "Explored" format, while Execute uses shell-style transcript.
-    fn handle_client_tool_snapshot(&mut self, tool_snapshot: nori_protocol::ToolSnapshot) {
+    fn handle_client_tool_snapshot(&mut self, tool_snapshot: crate::presentation::ToolSnapshot) {
         // NOTE: The answer stream is finalized only on paths that insert a new
         // history cell. No-op updates (e.g., progress notifications for a
         // long-running tool whose cell was already flushed) must not finalize
@@ -1374,11 +866,11 @@ impl ChatWidget {
         // For completed Create/Edit/Delete/Move, observe directories for footer refreshes.
         if matches!(
             tool_snapshot.kind,
-            nori_protocol::ToolKind::Create
-                | nori_protocol::ToolKind::Edit
-                | nori_protocol::ToolKind::Delete
-                | nori_protocol::ToolKind::Move
-        ) && tool_snapshot.phase == nori_protocol::ToolPhase::Completed
+            crate::presentation::ToolKind::Create
+                | crate::presentation::ToolKind::Edit
+                | crate::presentation::ToolKind::Delete
+                | crate::presentation::ToolKind::Move
+        ) && tool_snapshot.phase == crate::presentation::ToolPhase::Completed
         {
             self.observe_directories_from_paths(
                 tool_snapshot.locations.iter().map(|l| l.path.as_path()),
@@ -1472,7 +964,7 @@ impl ChatWidget {
         if let Some(active) = self.active_cell.take() {
             if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>()
                 && client_cell.is_active()
-                && *client_cell.snapshot_kind() == nori_protocol::ToolKind::Execute
+                && *client_cell.snapshot_kind() == crate::presentation::ToolKind::Execute
             {
                 let call_id = client_cell.call_id().to_owned();
                 if let Ok(boxed) = active.into_any().downcast::<ClientToolCell>() {
@@ -1485,9 +977,9 @@ impl ChatWidget {
         }
         let should_flush = !matches!(
             tool_snapshot.phase,
-            nori_protocol::ToolPhase::Pending
-                | nori_protocol::ToolPhase::PendingApproval
-                | nori_protocol::ToolPhase::InProgress
+            crate::presentation::ToolPhase::Pending
+                | crate::presentation::ToolPhase::PendingApproval
+                | crate::presentation::ToolPhase::InProgress
         ) && !is_new_exploring;
         let mut cell = ClientToolCell::new(
             tool_snapshot,
@@ -1504,135 +996,38 @@ impl ChatWidget {
     }
 }
 
-fn generic_execute_command_text(
-    snapshot: &nori_protocol::ToolSnapshot,
-    cwd: &std::path::Path,
-) -> String {
-    let title = crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd);
-    formatted_client_tool_command_text(&title, snapshot.raw_input.as_ref(), None).unwrap_or(title)
-}
-
-fn compact_json(value: &serde_json::Value) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| value.to_string())
-}
-
-fn formatted_client_tool_command_text(
-    title: &str,
-    raw_input: Option<&serde_json::Value>,
-    fallback_arg: Option<&str>,
-) -> Option<String> {
-    let args = raw_input
-        .and_then(extract_client_tool_display_args)
-        .or_else(|| fallback_arg.map(str::to_string));
-
-    match args {
-        Some(args) if !args.is_empty() && !title.contains(&args) => {
-            Some(format!("{title}({args})"))
-        }
-        Some(_) => Some(title.to_string()),
-        None => None,
-    }
-}
-
-fn extract_client_tool_display_args(input: &serde_json::Value) -> Option<String> {
-    input
-        .get("command")
-        .or_else(|| input.get("cmd"))
-        .or_else(|| input.get("path"))
-        .or_else(|| input.get("query"))
-        .or_else(|| input.get("pattern"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
-}
-
-fn generic_tool_command_text(
-    tool_name: &str,
-    input: Option<&serde_json::Value>,
-    snapshot: &nori_protocol::ToolSnapshot,
-    cwd: &std::path::Path,
-) -> String {
-    match input {
-        Some(raw_input)
-            if !raw_input.is_null()
-                && !raw_input.as_object().is_some_and(serde_json::Map::is_empty) =>
-        {
-            let sanitized = crate::client_event_format::sanitize_tool_title(tool_name, cwd);
-            format!("{sanitized} {}", compact_json(raw_input))
-        }
-        _ => crate::client_event_format::sanitize_tool_title(&snapshot.title, cwd),
-    }
-}
-
 fn approval_request_from_client_event(
-    approval: nori_protocol::ApprovalRequest,
+    approval: crate::presentation::ApprovalRequest,
     cwd: &std::path::Path,
+    request_id: nori_protocol::acp::v1::RequestId,
+    options: Vec<nori_protocol::acp::v1::PermissionOption>,
 ) -> Option<ApprovalRequest> {
-    let nori_protocol::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
+    let crate::presentation::ApprovalSubject::ToolSnapshot(snapshot) = approval.subject;
 
-    // Execute with a real shell command → Exec (bash-highlighted overlay)
-    if matches!(snapshot.kind, nori_protocol::ToolKind::Execute)
-        && matches!(
-            snapshot.invocation,
-            Some(nori_protocol::Invocation::Command { .. })
-        )
-    {
-        return Some(ApprovalRequest::Exec {
-            id: approval.call_id,
-            command: approval_command_from_snapshot(&snapshot),
-            reason: None,
-            risk: None,
-        });
-    }
-
-    // Everything else (including Edit/Delete/Move) → AcpTool (native protocol fields)
-    Some(ApprovalRequest::AcpTool {
-        call_id: approval.call_id,
+    Some(ApprovalRequest {
+        request_id,
         title: approval.title,
         kind: approval.kind,
         cwd: cwd.to_path_buf(),
         snapshot: Box::new(snapshot),
+        options,
     })
 }
 
-fn approval_command_from_snapshot(snapshot: &nori_protocol::ToolSnapshot) -> Vec<String> {
-    match snapshot.invocation.as_ref() {
-        Some(nori_protocol::Invocation::Command { command }) => {
-            vec!["bash".into(), "-lc".into(), command.clone()]
-        }
-        Some(nori_protocol::Invocation::Tool { tool_name, input }) => {
-            let fallback_cwd = std::path::Path::new(".");
-            vec![generic_tool_command_text(
-                tool_name,
-                input.as_ref(),
-                snapshot,
-                fallback_cwd,
-            )]
-        }
-        Some(nori_protocol::Invocation::Read { .. })
-        | Some(nori_protocol::Invocation::Search { .. })
-        | Some(nori_protocol::Invocation::ListFiles { .. })
-        | Some(nori_protocol::Invocation::RawJson(_))
-        | Some(nori_protocol::Invocation::FileChanges { .. })
-        | Some(nori_protocol::Invocation::FileOperations { .. })
-        | None => {
-            let fallback_cwd = std::path::Path::new(".");
-            vec![generic_execute_command_text(snapshot, fallback_cwd)]
-        }
-    }
-}
-
-fn plan_snapshot_to_update_plan_args(plan_snapshot: nori_protocol::PlanSnapshot) -> UpdatePlanArgs {
-    UpdatePlanArgs {
+fn plan_snapshot_to_update_plan_args(
+    plan_snapshot: crate::presentation::PlanSnapshot,
+) -> PlanUpdate {
+    PlanUpdate {
         explanation: None,
         plan: plan_snapshot
             .entries
             .into_iter()
-            .map(|entry| PlanItemArg {
+            .map(|entry| PlanItem {
                 step: entry.step,
                 status: match entry.status {
-                    nori_protocol::PlanStatus::Pending => StepStatus::Pending,
-                    nori_protocol::PlanStatus::InProgress => StepStatus::InProgress,
-                    nori_protocol::PlanStatus::Completed => StepStatus::Completed,
+                    crate::presentation::PlanStatus::Pending => StepStatus::Pending,
+                    crate::presentation::PlanStatus::InProgress => StepStatus::InProgress,
+                    crate::presentation::PlanStatus::Completed => StepStatus::Completed,
                 },
             })
             .collect(),

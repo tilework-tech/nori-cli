@@ -1,7 +1,7 @@
 use super::*;
 use crate::slash_command::CommandScope;
-use codex_protocol::num_format::format_elapsed_seconds;
-use codex_protocol::num_format::format_si_suffix;
+use crate::ui_types::format_elapsed_seconds;
+use crate::ui_types::format_si_suffix;
 use strum::IntoEnumIterator;
 
 impl ChatWidget {
@@ -25,36 +25,29 @@ impl ChatWidget {
         let lower = rest.to_ascii_lowercase();
         match lower.as_str() {
             "pause" => {
-                self.submit_op(Op::ThreadGoalSet {
-                    objective: None,
-                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Paused),
-                });
+                self.submit_harness_action(crate::app_event::HarnessAction::SetGoalStatus(
+                    nori_protocol::ThreadGoalStatus::Paused,
+                ));
             }
             "resume" => {
-                self.submit_op(Op::ThreadGoalSet {
-                    objective: None,
-                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
-                });
+                self.submit_harness_action(crate::app_event::HarnessAction::SetGoalStatus(
+                    nori_protocol::ThreadGoalStatus::Active,
+                ));
             }
             "clear" => {
-                self.submit_op(Op::ThreadGoalClear);
+                self.submit_harness_action(crate::app_event::HarnessAction::ClearGoal);
             }
             "edit" => {
                 self.open_goal_editor_or_request_snapshot();
             }
             _ => {
-                if let Err(message) = codex_protocol::protocol::validate_thread_goal_objective(rest)
-                {
-                    self.add_error_message(message);
-                    return true;
-                }
                 if self.should_confirm_before_replacing_goal() {
                     self.show_replace_goal_confirmation(rest.to_string());
                     return true;
                 }
-                self.submit_op(Op::ThreadGoalSet {
-                    objective: Some(rest.to_string()),
-                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+                self.submit_harness_action(crate::app_event::HarnessAction::SetGoal {
+                    objective: rest.to_string(),
+                    status: Some(nori_protocol::ThreadGoalStatus::Active),
                 });
             }
         }
@@ -63,7 +56,7 @@ impl ChatWidget {
 
     pub(super) fn handle_session_capabilities_changed(
         &mut self,
-        update: nori_protocol::SessionCapabilitiesView,
+        update: crate::presentation::SessionCapabilitiesView,
     ) {
         self.builtin_command_availability = update.builtin_commands;
         self.session_agent_capabilities = update.agent;
@@ -134,10 +127,10 @@ impl ChatWidget {
 
     pub(super) fn request_thread_goal_status(&mut self) {
         self.pending_goal_status = true;
-        self.submit_op(Op::ThreadGoalGet);
+        self.submit_harness_action(crate::app_event::HarnessAction::LoadGoal);
     }
 
-    pub(super) fn handle_thread_goal_updated(&mut self, goal: nori_protocol::ThreadGoal) {
+    pub(crate) fn handle_thread_goal_updated(&mut self, goal: nori_protocol::ThreadGoal) {
         let should_show_summary = self.current_goal.as_ref().is_none_or(|previous| {
             previous.objective != goal.objective
                 || previous.status != goal.status
@@ -155,7 +148,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn handle_thread_goal_cleared(&mut self) {
+    pub(crate) fn handle_thread_goal_cleared(&mut self) {
         self.current_goal = None;
         self.pending_goal_status = false;
         self.pending_goal_edit = false;
@@ -165,16 +158,16 @@ impl ChatWidget {
 
     pub(super) fn clear_pending_goal_edit_if_no_goal(
         &mut self,
-        update: &nori_protocol::SessionUpdateInfo,
+        update: &crate::presentation::SessionUpdateInfo,
     ) {
         if self.pending_goal_edit
-            && update.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            && update.kind == crate::presentation::SessionUpdateKind::SessionInfo
             && update.hint.as_deref() == Some("No goal is currently set.")
         {
             self.pending_goal_edit = false;
         }
         if self.pending_goal_status
-            && update.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            && update.kind == crate::presentation::SessionUpdateKind::SessionInfo
             && update.hint.as_deref() == Some("No goal is currently set.")
         {
             self.pending_goal_status = false;
@@ -186,7 +179,7 @@ impl ChatWidget {
             self.open_goal_editor(goal);
         } else {
             self.pending_goal_edit = true;
-            self.submit_op(Op::ThreadGoalGet);
+            self.submit_harness_action(crate::app_event::HarnessAction::LoadGoal);
         }
     }
 
@@ -217,10 +210,12 @@ impl ChatWidget {
                 name: "Replace current goal".to_string(),
                 description: Some("Set the new objective and start it now".to_string()),
                 actions: vec![Box::new(move |tx| {
-                    tx.send(AppEvent::CodexOp(Op::ThreadGoalSet {
-                        objective: Some(replacement.clone()),
-                        status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
-                    }));
+                    tx.send(AppEvent::HarnessAction(
+                        crate::app_event::HarnessAction::SetGoal {
+                            objective: replacement.clone(),
+                            status: Some(nori_protocol::ThreadGoalStatus::Active),
+                        },
+                    ));
                 })],
                 dismiss_on_select: true,
                 ..Default::default()
@@ -275,7 +270,7 @@ fn default_command_unavailable_reason(command: SlashCommand) -> String {
 /// agent's `session/close` capability.
 fn scope_unavailable_reason(
     command: SlashCommand,
-    agent: &nori_protocol::AgentCapabilitiesView,
+    agent: &crate::presentation::AgentCapabilitiesView,
 ) -> Option<String> {
     match command.scope() {
         CommandScope::LocalOnly if agent.live_reattach() => Some(format!(

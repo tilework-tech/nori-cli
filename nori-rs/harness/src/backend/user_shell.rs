@@ -1,52 +1,29 @@
 use std::path::Path;
-use std::time::Instant;
-
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::ExecCommandBeginEvent;
-use codex_protocol::protocol::ExecCommandEndEvent;
-use codex_protocol::protocol::ExecCommandOutputDeltaEvent;
-use codex_protocol::protocol::ExecCommandSource;
-use codex_protocol::protocol::ExecOutputStream;
-use codex_protocol::protocol::TaskCompleteEvent;
-use codex_protocol::protocol::TaskStartedEvent;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
+use super::BackendEvent;
+use nori_protocol::NoriEvent;
+use nori_protocol::SessionEvent;
+use nori_protocol::UserShellEvent;
+use nori_protocol::UserShellStream;
+
 pub(crate) async fn run_user_shell_command(
-    event_tx: &mpsc::Sender<Event>,
+    event_tx: &mpsc::Sender<BackendEvent>,
     id: &str,
     cwd: &Path,
     command: String,
 ) {
     let argv = shell_command_argv(&command);
-    let parsed_cmd = crate::parse_command::parse_command(&argv);
-    let call_id = format!("user-shell-{id}");
-    let started = Instant::now();
 
     let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::TaskStarted(TaskStartedEvent {
-                model_context_window: None,
-            }),
-        })
-        .await;
-
-    let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::ExecCommandBegin(ExecCommandBeginEvent {
-                call_id: call_id.clone(),
-                process_id: None,
-                turn_id: id.to_string(),
-                command: argv.clone(),
+        .send(BackendEvent::Public(SessionEvent::Nori(
+            NoriEvent::UserShell(UserShellEvent::Started {
+                operation_id: id.to_string(),
+                command,
                 cwd: cwd.to_path_buf(),
-                parsed_cmd: parsed_cmd.clone(),
-                source: ExecCommandSource::UserShell,
-                interaction_input: None,
             }),
-        })
+        )))
         .await;
 
     let output = Command::new(&argv[0])
@@ -66,61 +43,34 @@ pub(crate) async fn run_user_shell_command(
 
     if !stdout_bytes.is_empty() {
         let _ = event_tx
-            .send(Event {
-                id: id.to_string(),
-                msg: EventMsg::ExecCommandOutputDelta(ExecCommandOutputDeltaEvent {
-                    call_id: call_id.clone(),
-                    stream: ExecOutputStream::Stdout,
+            .send(BackendEvent::Public(SessionEvent::Nori(
+                NoriEvent::UserShell(UserShellEvent::Output {
+                    operation_id: id.to_string(),
+                    stream: UserShellStream::Stdout,
                     chunk: stdout_bytes.clone(),
                 }),
-            })
+            )))
             .await;
     }
     if !stderr_bytes.is_empty() {
         let _ = event_tx
-            .send(Event {
-                id: id.to_string(),
-                msg: EventMsg::ExecCommandOutputDelta(ExecCommandOutputDeltaEvent {
-                    call_id: call_id.clone(),
-                    stream: ExecOutputStream::Stderr,
+            .send(BackendEvent::Public(SessionEvent::Nori(
+                NoriEvent::UserShell(UserShellEvent::Output {
+                    operation_id: id.to_string(),
+                    stream: UserShellStream::Stderr,
                     chunk: stderr_bytes.clone(),
                 }),
-            })
+            )))
             .await;
     }
 
-    let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
-    let stderr = String::from_utf8_lossy(&stderr_bytes).to_string();
-    let aggregated_output = format!("{stdout}{stderr}");
     let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::ExecCommandEnd(ExecCommandEndEvent {
-                call_id,
-                process_id: None,
-                turn_id: id.to_string(),
-                command: argv,
-                cwd: cwd.to_path_buf(),
-                parsed_cmd,
-                source: ExecCommandSource::UserShell,
-                interaction_input: None,
-                stdout,
-                stderr,
-                aggregated_output: aggregated_output.clone(),
+        .send(BackendEvent::Public(SessionEvent::Nori(
+            NoriEvent::UserShell(UserShellEvent::Finished {
+                operation_id: id.to_string(),
                 exit_code,
-                duration: started.elapsed(),
-                formatted_output: aggregated_output,
             }),
-        })
-        .await;
-
-    let _ = event_tx
-        .send(Event {
-            id: id.to_string(),
-            msg: EventMsg::TaskComplete(TaskCompleteEvent {
-                last_agent_message: None,
-            }),
-        })
+        )))
         .await;
 }
 
@@ -144,7 +94,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
-    async fn user_shell_command_runs_and_finishes_with_task_complete() {
+    async fn user_shell_command_emits_typed_lifecycle() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let (event_tx, mut event_rx) = mpsc::channel(8);
 
@@ -160,27 +110,21 @@ mod tests {
         let mut saw_stdout = false;
         let mut saw_complete = false;
         while let Some(event) = event_rx.recv().await {
-            if let EventMsg::ExecCommandOutputDelta(ev) = &event.msg
-                && ev.stream == ExecOutputStream::Stdout
-                && ev
-                    .chunk
+            if let BackendEvent::Public(SessionEvent::Nori(NoriEvent::UserShell(
+                UserShellEvent::Output { stream, chunk, .. },
+            ))) = &event
+                && *stream == UserShellStream::Stdout
+                && chunk
                     .windows(b"nori-shell".len())
                     .any(|w| w == b"nori-shell")
             {
                 saw_stdout = true;
             }
-            if let EventMsg::ExecCommandEnd(ev) = &event.msg {
-                assert_eq!(ev.source, ExecCommandSource::UserShell);
-                assert_eq!(ev.cwd, temp_dir.path());
-                assert!(
-                    ev.stdout.contains("nori-shell"),
-                    "stdout should contain 'nori-shell', got: {:?}",
-                    ev.stdout
-                );
-                assert_eq!(ev.exit_code, 0);
-            }
-            if let EventMsg::TaskComplete(ev) = &event.msg {
-                assert_eq!(ev.last_agent_message, None);
+            if let BackendEvent::Public(SessionEvent::Nori(NoriEvent::UserShell(
+                UserShellEvent::Finished { exit_code, .. },
+            ))) = &event
+            {
+                assert_eq!(*exit_code, 0);
                 saw_complete = true;
             }
         }

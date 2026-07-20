@@ -32,17 +32,17 @@ use crate::wrapping::word_wrap_lines;
 
 #[derive(Debug)]
 pub(crate) struct ClientToolCell {
-    snapshot: nori_protocol::ToolSnapshot,
-    exploring_snapshots: Vec<nori_protocol::ToolSnapshot>,
+    snapshot: crate::presentation::ToolSnapshot,
+    exploring_snapshots: Vec<crate::presentation::ToolSnapshot>,
     cwd: PathBuf,
-    edit_changes: HashMap<PathBuf, codex_protocol::protocol::FileChange>,
+    edit_changes: HashMap<PathBuf, crate::ui_types::FileChange>,
     animations_enabled: bool,
     start_time: Option<Instant>,
 }
 
 impl ClientToolCell {
     pub(crate) fn new(
-        snapshot: nori_protocol::ToolSnapshot,
+        snapshot: crate::presentation::ToolSnapshot,
         cwd: PathBuf,
         animations_enabled: bool,
     ) -> Self {
@@ -70,7 +70,7 @@ impl ClientToolCell {
         is_active_phase(&self.snapshot.phase)
     }
 
-    pub(crate) fn snapshot_kind(&self) -> &nori_protocol::ToolKind {
+    pub(crate) fn snapshot_kind(&self) -> &crate::presentation::ToolKind {
         &self.snapshot.kind
     }
 
@@ -97,7 +97,7 @@ impl ClientToolCell {
 
     /// Add another exploring snapshot to this cell's group, or update an
     /// existing one if the call_id is already present.
-    pub(crate) fn merge_exploring(&mut self, snapshot: nori_protocol::ToolSnapshot) {
+    pub(crate) fn merge_exploring(&mut self, snapshot: crate::presentation::ToolSnapshot) {
         // Update in place if the call_id already exists in the group
         if let Some(existing) = self
             .exploring_snapshots
@@ -110,7 +110,7 @@ impl ClientToolCell {
         self.exploring_snapshots.push(snapshot);
     }
 
-    pub(crate) fn apply_snapshot(&mut self, snapshot: nori_protocol::ToolSnapshot) {
+    pub(crate) fn apply_snapshot(&mut self, snapshot: crate::presentation::ToolSnapshot) {
         if self.snapshot.call_id != snapshot.call_id {
             return;
         }
@@ -136,7 +136,7 @@ impl ClientToolCell {
 
     pub(crate) fn mark_failed(&mut self) {
         if self.is_active() {
-            self.snapshot.phase = nori_protocol::ToolPhase::Failed;
+            self.snapshot.phase = crate::presentation::ToolPhase::Failed;
             self.start_time = None;
         }
     }
@@ -174,17 +174,19 @@ impl ClientToolCell {
             let snap = &snapshots[i];
 
             // Group consecutive reads by filename
-            if snap.kind == nori_protocol::ToolKind::Read {
+            if snap.kind == crate::presentation::ToolKind::Read {
                 let mut names: Vec<String> = Vec::new();
-                if let Some(nori_protocol::Invocation::Read { path }) = &snap.invocation {
+                if let Some(crate::presentation::Invocation::Read { path }) = &snap.invocation {
                     names.push(read_display_name(path));
                 } else {
                     names.push(relativize_paths_in_text(&snap.title, &self.cwd));
                 }
                 let mut j = i + 1;
-                while j < snapshots.len() && snapshots[j].kind == nori_protocol::ToolKind::Read {
+                while j < snapshots.len()
+                    && snapshots[j].kind == crate::presentation::ToolKind::Read
+                {
                     let next = &snapshots[j];
-                    if let Some(nori_protocol::Invocation::Read { path }) = &next.invocation {
+                    if let Some(crate::presentation::Invocation::Read { path }) = &next.invocation {
                         names.push(read_display_name(path));
                     } else {
                         names.push(relativize_paths_in_text(&next.title, &self.cwd));
@@ -206,8 +208,10 @@ impl ClientToolCell {
             }
 
             // Search sub-item
-            if snap.kind == nori_protocol::ToolKind::Search {
-                if let Some(nori_protocol::Invocation::Search { query, path }) = &snap.invocation {
+            if snap.kind == crate::presentation::ToolKind::Search {
+                if let Some(crate::presentation::Invocation::Search { query, path }) =
+                    &snap.invocation
+                {
                     let mut spans: Vec<Span<'static>> = vec!["Search".cyan(), " ".into()];
                     if let Some(q) = query {
                         spans.push(q.clone().into());
@@ -219,7 +223,8 @@ impl ClientToolCell {
                         );
                     }
                     sub_items.push(Line::from(spans));
-                } else if let Some(nori_protocol::Invocation::ListFiles { path }) = &snap.invocation
+                } else if let Some(crate::presentation::Invocation::ListFiles { path }) =
+                    &snap.invocation
                 {
                     let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
                     if let Some(p) = path {
@@ -242,9 +247,10 @@ impl ClientToolCell {
             // ListFiles invocation (from Read/Search tools classified as exploring)
             if matches!(
                 &snap.invocation,
-                Some(nori_protocol::Invocation::ListFiles { .. })
+                Some(crate::presentation::Invocation::ListFiles { .. })
             ) {
-                if let Some(nori_protocol::Invocation::ListFiles { path }) = &snap.invocation {
+                if let Some(crate::presentation::Invocation::ListFiles { path }) = &snap.invocation
+                {
                     let mut spans: Vec<Span<'static>> = vec!["List".cyan(), " ".into()];
                     if let Some(p) = path {
                         spans.push(
@@ -299,16 +305,16 @@ impl ClientToolCell {
         let mut lines = Vec::new();
 
         // Bullet: green for completed, red for failed, spinner for active
-        let bullet = if self.snapshot.phase == nori_protocol::ToolPhase::Completed {
+        let bullet = if self.snapshot.phase == crate::presentation::ToolPhase::Completed {
             "•".green().bold()
-        } else if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+        } else if self.snapshot.phase == crate::presentation::ToolPhase::Failed {
             "•".red().bold()
         } else {
             spinner(self.start_time, self.animations_enabled)
         };
 
         // For failed edits: show error text or "(failed)" fallback
-        if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+        if self.snapshot.phase == crate::presentation::ToolPhase::Failed {
             let header =
                 relativize_paths_in_text(&format_edit_tool_header(&self.snapshot), &self.cwd);
             lines.push(Line::from(vec![bullet, " ".into(), header.bold()]));
@@ -326,7 +332,7 @@ impl ClientToolCell {
             if let Some((first, rest)) = diff_lines.split_first() {
                 // Replace DiffSummary's dim "• " bullet with our phase-aware
                 // bullet, and for Move tools swap the "Edited" verb with "Moved".
-                let is_move = self.snapshot.kind == nori_protocol::ToolKind::Move;
+                let is_move = self.snapshot.kind == crate::presentation::ToolKind::Move;
                 let mut header_spans = vec![bullet, " ".into()];
                 for span in &first.spans {
                     if span.content.as_ref() == "• " {
@@ -355,7 +361,7 @@ impl ClientToolCell {
         let mut lines = Vec::new();
         let bullet = if self.is_active() {
             spinner(self.start_time, self.animations_enabled)
-        } else if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+        } else if self.snapshot.phase == crate::presentation::ToolPhase::Failed {
             "•".red().bold()
         } else {
             "•".dim()
@@ -378,7 +384,7 @@ impl ClientToolCell {
             }
         }
 
-        let is_failed = self.snapshot.phase == nori_protocol::ToolPhase::Failed;
+        let is_failed = self.snapshot.phase == crate::presentation::ToolPhase::Failed;
 
         // For failed tools with no text artifacts, extract error from raw_output
         if is_failed
@@ -418,7 +424,7 @@ impl ClientToolCell {
         let title = if self.is_active() { "Running" } else { "Ran" };
 
         let command = match &self.snapshot.invocation {
-            Some(nori_protocol::Invocation::Command { command }) => command.clone(),
+            Some(crate::presentation::Invocation::Command { command }) => command.clone(),
             _ => self.snapshot.title.clone(),
         };
 
@@ -480,14 +486,13 @@ impl ClientToolCell {
             } else {
                 let output = crate::exec_cell::CommandOutput {
                     exit_code: extract_exit_code(&self.snapshot).unwrap_or_else(|| {
-                        if self.snapshot.phase == nori_protocol::ToolPhase::Failed {
+                        if self.snapshot.phase == crate::presentation::ToolPhase::Failed {
                             1
                         } else {
                             0
                         }
                     }),
                     aggregated_output: text,
-                    formatted_output: String::new(),
                 };
                 let raw_output = output_lines(
                     Some(&output),
@@ -539,7 +544,7 @@ impl ClientToolCell {
     /// matching the style used in the upstream Codex ExecCell transcript view.
     fn render_execute_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
         let command = match &self.snapshot.invocation {
-            Some(nori_protocol::Invocation::Command { command }) => command.clone(),
+            Some(crate::presentation::Invocation::Command { command }) => command.clone(),
             _ => self.snapshot.title.clone(),
         };
 
@@ -590,18 +595,18 @@ const OUTPUT_SUBSEQUENT_PREFIX: &str = "    ";
 const OUTPUT_PREFIX_WIDTH: usize = 4;
 const OUTPUT_MAX_LINES: usize = 5;
 
-fn exit_code_success(snapshot: &nori_protocol::ToolSnapshot) -> Option<bool> {
+fn exit_code_success(snapshot: &crate::presentation::ToolSnapshot) -> Option<bool> {
     if let Some(exit_code) = extract_exit_code(snapshot) {
         return Some(exit_code == 0);
     }
     match snapshot.phase {
-        nori_protocol::ToolPhase::Completed => Some(true),
-        nori_protocol::ToolPhase::Failed => Some(false),
+        crate::presentation::ToolPhase::Completed => Some(true),
+        crate::presentation::ToolPhase::Failed => Some(false),
         _ => None,
     }
 }
 
-fn extract_exit_code(snapshot: &nori_protocol::ToolSnapshot) -> Option<i32> {
+fn extract_exit_code(snapshot: &crate::presentation::ToolSnapshot) -> Option<i32> {
     snapshot
         .raw_output
         .as_ref()?
@@ -610,7 +615,7 @@ fn extract_exit_code(snapshot: &nori_protocol::ToolSnapshot) -> Option<i32> {
         .map(|c| c as i32)
 }
 
-fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> {
+fn execute_output_text(snapshot: &crate::presentation::ToolSnapshot) -> Option<String> {
     // Prefer stdout from raw_output (most accurate)
     if let Some(raw) = &snapshot.raw_output
         && let Some(stdout) = raw.get("stdout").and_then(serde_json::Value::as_str)
@@ -624,7 +629,7 @@ fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String>
     // not stdout.
     if !is_active_phase(&snapshot.phase) {
         for artifact in &snapshot.artifacts {
-            if let nori_protocol::Artifact::Text { text } = artifact
+            if let crate::presentation::Artifact::Text { text } = artifact
                 && !text.is_empty()
             {
                 return Some(strip_code_fences(text));
@@ -635,7 +640,7 @@ fn execute_output_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String>
     None
 }
 
-fn extract_error_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> {
+fn extract_error_text(snapshot: &crate::presentation::ToolSnapshot) -> Option<String> {
     let raw = snapshot.raw_output.as_ref()?;
     for key in ["error", "stderr", "output"] {
         if let Some(text) = raw.get(key).and_then(serde_json::Value::as_str)
@@ -654,17 +659,17 @@ fn extract_error_text(snapshot: &nori_protocol::ToolSnapshot) -> Option<String> 
 }
 
 pub(crate) fn diff_changes_from_artifacts(
-    artifacts: &[nori_protocol::Artifact],
+    artifacts: &[crate::presentation::Artifact],
     cwd: &std::path::Path,
-) -> std::collections::HashMap<std::path::PathBuf, codex_protocol::protocol::FileChange> {
+) -> std::collections::HashMap<std::path::PathBuf, crate::ui_types::FileChange> {
     let mut changes = std::collections::HashMap::new();
     for artifact in artifacts {
-        if let nori_protocol::Artifact::Diff(change) = artifact {
+        if let crate::presentation::Artifact::Diff(change) = artifact {
             let file_change = match &change.old_text {
-                None => codex_protocol::protocol::FileChange::Add {
+                None => crate::ui_types::FileChange::Add {
                     content: change.new_text.clone(),
                 },
-                Some(old_text) => codex_protocol::protocol::FileChange::Update {
+                Some(old_text) => crate::ui_types::FileChange::Update {
                     unified_diff: create_contextual_patch(
                         &change.path,
                         cwd,
@@ -681,18 +686,18 @@ pub(crate) fn diff_changes_from_artifacts(
 }
 
 pub(crate) fn changes_from_invocation(
-    invocation: &Option<nori_protocol::Invocation>,
+    invocation: &Option<crate::presentation::Invocation>,
     cwd: &std::path::Path,
-) -> std::collections::HashMap<std::path::PathBuf, codex_protocol::protocol::FileChange> {
+) -> std::collections::HashMap<std::path::PathBuf, crate::ui_types::FileChange> {
     let mut changes = std::collections::HashMap::new();
     match invocation.as_ref() {
-        Some(nori_protocol::Invocation::FileChanges { changes: fc }) => {
+        Some(crate::presentation::Invocation::FileChanges { changes: fc }) => {
             for change in fc {
                 let file_change = match &change.old_text {
-                    None => codex_protocol::protocol::FileChange::Add {
+                    None => crate::ui_types::FileChange::Add {
                         content: change.new_text.clone(),
                     },
-                    Some(old_text) => codex_protocol::protocol::FileChange::Update {
+                    Some(old_text) => crate::ui_types::FileChange::Update {
                         unified_diff: create_contextual_patch(
                             &change.path,
                             cwd,
@@ -705,33 +710,33 @@ pub(crate) fn changes_from_invocation(
                 changes.insert(change.path.clone(), file_change);
             }
         }
-        Some(nori_protocol::Invocation::FileOperations { operations }) => {
+        Some(crate::presentation::Invocation::FileOperations { operations }) => {
             for op in operations {
                 let (path, file_change) = match op {
-                    nori_protocol::FileOperation::Create { path, new_text } => (
+                    crate::presentation::FileOperation::Create { path, new_text } => (
                         path.clone(),
-                        codex_protocol::protocol::FileChange::Add {
+                        crate::ui_types::FileChange::Add {
                             content: new_text.clone(),
                         },
                     ),
-                    nori_protocol::FileOperation::Update {
+                    crate::presentation::FileOperation::Update {
                         path,
                         old_text,
                         new_text,
                     } => (
                         path.clone(),
-                        codex_protocol::protocol::FileChange::Update {
+                        crate::ui_types::FileChange::Update {
                             unified_diff: create_contextual_patch(path, cwd, old_text, new_text),
                             move_path: None,
                         },
                     ),
-                    nori_protocol::FileOperation::Delete { path, old_text } => (
+                    crate::presentation::FileOperation::Delete { path, old_text } => (
                         path.clone(),
-                        codex_protocol::protocol::FileChange::Delete {
+                        crate::ui_types::FileChange::Delete {
                             content: old_text.clone().unwrap_or_default(),
                         },
                     ),
-                    nori_protocol::FileOperation::Move {
+                    crate::presentation::FileOperation::Move {
                         from_path,
                         to_path,
                         old_text,
@@ -741,7 +746,7 @@ pub(crate) fn changes_from_invocation(
                         let new = new_text.clone().unwrap_or_else(|| old.clone());
                         (
                             from_path.clone(),
-                            codex_protocol::protocol::FileChange::Update {
+                            crate::ui_types::FileChange::Update {
                                 unified_diff: create_contextual_patch(from_path, cwd, &old, &new),
                                 move_path: Some(to_path.clone()),
                             },
@@ -757,9 +762,9 @@ pub(crate) fn changes_from_invocation(
 }
 
 fn changes_from_snapshot(
-    snapshot: &nori_protocol::ToolSnapshot,
+    snapshot: &crate::presentation::ToolSnapshot,
     cwd: &std::path::Path,
-) -> HashMap<PathBuf, codex_protocol::protocol::FileChange> {
+) -> HashMap<PathBuf, crate::ui_types::FileChange> {
     let diff_changes = diff_changes_from_artifacts(&snapshot.artifacts, cwd);
     if diff_changes.is_empty() {
         changes_from_invocation(&snapshot.invocation, cwd)
@@ -781,14 +786,14 @@ impl HistoryCell for ClientToolCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         if !self.exploring_snapshots.is_empty() || is_exploring_snapshot(&self.snapshot) {
             self.render_exploring_lines(width)
-        } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
+        } else if self.snapshot.kind == crate::presentation::ToolKind::Execute {
             self.render_execute_lines(width)
         } else if matches!(
             self.snapshot.kind,
-            nori_protocol::ToolKind::Create
-                | nori_protocol::ToolKind::Edit
-                | nori_protocol::ToolKind::Delete
-                | nori_protocol::ToolKind::Move
+            crate::presentation::ToolKind::Create
+                | crate::presentation::ToolKind::Edit
+                | crate::presentation::ToolKind::Delete
+                | crate::presentation::ToolKind::Move
         ) {
             self.render_edit_lines(width)
         } else {
@@ -799,14 +804,14 @@ impl HistoryCell for ClientToolCell {
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
         if !self.exploring_snapshots.is_empty() || is_exploring_snapshot(&self.snapshot) {
             self.render_exploring_lines(width)
-        } else if self.snapshot.kind == nori_protocol::ToolKind::Execute {
+        } else if self.snapshot.kind == crate::presentation::ToolKind::Execute {
             self.render_execute_transcript_lines(width)
         } else if matches!(
             self.snapshot.kind,
-            nori_protocol::ToolKind::Create
-                | nori_protocol::ToolKind::Edit
-                | nori_protocol::ToolKind::Delete
-                | nori_protocol::ToolKind::Move
+            crate::presentation::ToolKind::Create
+                | crate::presentation::ToolKind::Edit
+                | crate::presentation::ToolKind::Delete
+                | crate::presentation::ToolKind::Move
         ) {
             self.render_edit_lines(width)
         } else {
@@ -824,23 +829,23 @@ fn read_display_name(path: &std::path::Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
-fn is_active_phase(phase: &nori_protocol::ToolPhase) -> bool {
+fn is_active_phase(phase: &crate::presentation::ToolPhase) -> bool {
     matches!(
         phase,
-        nori_protocol::ToolPhase::Pending
-            | nori_protocol::ToolPhase::PendingApproval
-            | nori_protocol::ToolPhase::InProgress
+        crate::presentation::ToolPhase::Pending
+            | crate::presentation::ToolPhase::PendingApproval
+            | crate::presentation::ToolPhase::InProgress
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nori_protocol::Artifact;
-    use nori_protocol::Invocation;
-    use nori_protocol::ToolKind;
-    use nori_protocol::ToolPhase;
-    use nori_protocol::ToolSnapshot;
+    use crate::presentation::Artifact;
+    use crate::presentation::Invocation;
+    use crate::presentation::ToolKind;
+    use crate::presentation::ToolPhase;
+    use crate::presentation::ToolSnapshot;
 
     fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
         lines
@@ -1108,7 +1113,7 @@ mod tests {
             title: "Fetch resource".into(),
             kind: ToolKind::Fetch,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: "/repo/README.md".into(),
                 line: None,
             }],
@@ -1400,16 +1405,18 @@ mod tests {
             title: "Edit README.md".into(),
             kind: ToolKind::Edit,
             phase: ToolPhase::InProgress,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("README.md"),
                 line: None,
             }],
             invocation: None,
-            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
-                path: PathBuf::from("README.md"),
-                old_text: Some("# Old Title\n".into()),
-                new_text: "# New Title\n".into(),
-            })],
+            artifacts: vec![crate::presentation::Artifact::Diff(
+                crate::presentation::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("# Old Title\n".into()),
+                    new_text: "# New Title\n".into(),
+                },
+            )],
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
@@ -1441,7 +1448,7 @@ mod tests {
             title: "Read README.md".into(),
             kind: ToolKind::Read,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("README.md"),
                 line: None,
             }],
@@ -1662,7 +1669,7 @@ mod tests {
             title: format!("Edit {path}"),
             kind: ToolKind::Edit,
             phase,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from(path),
                 line: None,
             }],
@@ -1718,7 +1725,7 @@ mod tests {
             title: "Delete temp.txt".into(),
             kind: ToolKind::Delete,
             phase: ToolPhase::Failed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("temp.txt"),
                 line: None,
             }],
@@ -1814,11 +1821,13 @@ mod tests {
         let snapshot = make_edit_snapshot(
             ToolPhase::Failed,
             "README.md",
-            vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
-                path: PathBuf::from("README.md"),
-                old_text: Some("# Old\n".into()),
-                new_text: "# New\n".into(),
-            })],
+            vec![crate::presentation::Artifact::Diff(
+                crate::presentation::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("# Old\n".into()),
+                    new_text: "# New\n".into(),
+                },
+            )],
             None,
         );
         let cell = ClientToolCell::new(snapshot, PathBuf::from("/tmp/test-cwd"), false);
@@ -1875,7 +1884,7 @@ mod tests {
             title: "Move old.rs to new.rs".into(),
             kind: ToolKind::Move,
             phase: ToolPhase::Failed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("old.rs"),
                 line: None,
             }],
@@ -1904,12 +1913,12 @@ mod tests {
             title: "Delete temp.txt".into(),
             kind: ToolKind::Delete,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("temp.txt"),
                 line: None,
             }],
-            invocation: Some(nori_protocol::Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Delete {
+            invocation: Some(crate::presentation::Invocation::FileOperations {
+                operations: vec![crate::presentation::FileOperation::Delete {
                     path: PathBuf::from("temp.txt"),
                     old_text: Some("old content\n".into()),
                 }],
@@ -1951,12 +1960,12 @@ mod tests {
             title: "Move old.rs to new.rs".into(),
             kind: ToolKind::Move,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("old.rs"),
                 line: None,
             }],
-            invocation: Some(nori_protocol::Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Move {
+            invocation: Some(crate::presentation::Invocation::FileOperations {
+                operations: vec![crate::presentation::FileOperation::Move {
                     from_path: PathBuf::from("old.rs"),
                     to_path: PathBuf::from("new.rs"),
                     old_text: Some("content\n".into()),
@@ -1997,12 +2006,12 @@ mod tests {
             title: "Edit src/lib.rs".into(),
             kind: ToolKind::Edit,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("src/lib.rs"),
                 line: None,
             }],
-            invocation: Some(nori_protocol::Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Update {
+            invocation: Some(crate::presentation::Invocation::FileOperations {
+                operations: vec![crate::presentation::FileOperation::Update {
                     path: PathBuf::from("src/lib.rs"),
                     old_text: "fn old() {}\n".into(),
                     new_text: "fn new() {}\n".into(),
@@ -2039,8 +2048,8 @@ mod tests {
         write_updated_rust_fixture(dir.path(), "src/lib.rs", 50, "fn line_50_updated() {}");
 
         let changes = changes_from_invocation(
-            &Some(nori_protocol::Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Update {
+            &Some(crate::presentation::Invocation::FileOperations {
+                operations: vec![crate::presentation::FileOperation::Update {
                     path: PathBuf::from("src/lib.rs"),
                     old_text: "fn line_50() {}\n".into(),
                     new_text: "fn line_50_updated() {}\n".into(),
@@ -2052,7 +2061,7 @@ mod tests {
         let change = changes
             .get(&PathBuf::from("src/lib.rs"))
             .expect("change should exist");
-        let codex_protocol::protocol::FileChange::Update { unified_diff, .. } = change else {
+        let crate::ui_types::FileChange::Update { unified_diff, .. } = change else {
             panic!("expected update diff, got {change:?}");
         };
         assert!(
@@ -2067,8 +2076,8 @@ mod tests {
         write_updated_rust_fixture(dir.path(), "src/old.rs", 75, "fn renamed_line_75() {}");
 
         let changes = changes_from_invocation(
-            &Some(nori_protocol::Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Move {
+            &Some(crate::presentation::Invocation::FileOperations {
+                operations: vec![crate::presentation::FileOperation::Move {
                     from_path: PathBuf::from("src/old.rs"),
                     to_path: PathBuf::from("src/new.rs"),
                     old_text: Some("fn line_75() {}\n".into()),
@@ -2081,7 +2090,7 @@ mod tests {
         let change = changes
             .get(&PathBuf::from("src/old.rs"))
             .expect("change should exist");
-        let codex_protocol::protocol::FileChange::Update { unified_diff, .. } = change else {
+        let crate::ui_types::FileChange::Update { unified_diff, .. } = change else {
             panic!("expected update diff, got {change:?}");
         };
         assert!(
@@ -2101,12 +2110,12 @@ mod tests {
             title: "Edit src/lib.rs".into(),
             kind: ToolKind::Edit,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("src/lib.rs"),
                 line: None,
             }],
-            invocation: Some(nori_protocol::Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Update {
+            invocation: Some(crate::presentation::Invocation::FileOperations {
+                operations: vec![crate::presentation::FileOperation::Update {
                     path: PathBuf::from("src/lib.rs"),
                     old_text: "fn line_50() {}\n".into(),
                     new_text: "fn line_50_updated() {}\n".into(),
@@ -2137,16 +2146,18 @@ mod tests {
             title: "Edit README.md".into(),
             kind: ToolKind::Edit,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("README.md"),
                 line: None,
             }],
             invocation: None,
-            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
-                path: PathBuf::from("README.md"),
-                old_text: Some("# Old Title\n".into()),
-                new_text: "# New Title\n".into(),
-            })],
+            artifacts: vec![crate::presentation::Artifact::Diff(
+                crate::presentation::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: Some("# Old Title\n".into()),
+                    new_text: "# New Title\n".into(),
+                },
+            )],
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
@@ -2182,23 +2193,23 @@ mod tests {
             kind: ToolKind::Edit,
             phase: ToolPhase::Completed,
             locations: vec![
-                nori_protocol::ToolLocation {
+                crate::presentation::ToolLocation {
                     path: PathBuf::from("README.md"),
                     line: None,
                 },
-                nori_protocol::ToolLocation {
+                crate::presentation::ToolLocation {
                     path: PathBuf::from("src/lib.rs"),
                     line: None,
                 },
             ],
             invocation: None,
             artifacts: vec![
-                nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                crate::presentation::Artifact::Diff(crate::presentation::FileChange {
                     path: PathBuf::from("README.md"),
                     old_text: Some("# Old\n".into()),
                     new_text: "# New\n".into(),
                 }),
-                nori_protocol::Artifact::Diff(nori_protocol::FileChange {
+                crate::presentation::Artifact::Diff(crate::presentation::FileChange {
                     path: PathBuf::from("src/lib.rs"),
                     old_text: Some("fn old() {}\n".into()),
                     new_text: "fn new() {}\n".into(),
@@ -2236,22 +2247,24 @@ mod tests {
             title: "Write README.md".into(),
             kind: ToolKind::Edit,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("README.md"),
                 line: None,
             }],
             invocation: Some(Invocation::FileChanges {
-                changes: vec![nori_protocol::FileChange {
+                changes: vec![crate::presentation::FileChange {
                     path: PathBuf::from("README.md"),
                     old_text: None,
                     new_text: "hello\nworld\n".into(),
                 }],
             }),
-            artifacts: vec![nori_protocol::Artifact::Diff(nori_protocol::FileChange {
-                path: PathBuf::from("README.md"),
-                old_text: None,
-                new_text: "hello\nworld\n".into(),
-            })],
+            artifacts: vec![crate::presentation::Artifact::Diff(
+                crate::presentation::FileChange {
+                    path: PathBuf::from("README.md"),
+                    old_text: None,
+                    new_text: "hello\nworld\n".into(),
+                },
+            )],
             raw_input: None,
             raw_output: None,
             owner_request_id: None,
@@ -2284,12 +2297,12 @@ mod tests {
             title: "Move old.rs".into(),
             kind: ToolKind::Move,
             phase: ToolPhase::Completed,
-            locations: vec![nori_protocol::ToolLocation {
+            locations: vec![crate::presentation::ToolLocation {
                 path: PathBuf::from("old.rs"),
                 line: None,
             }],
             invocation: Some(Invocation::FileOperations {
-                operations: vec![nori_protocol::FileOperation::Move {
+                operations: vec![crate::presentation::FileOperation::Move {
                     from_path: PathBuf::from("old.rs"),
                     to_path: PathBuf::from("new.rs"),
                     old_text: None,

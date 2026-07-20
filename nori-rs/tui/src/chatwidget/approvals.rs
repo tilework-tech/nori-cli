@@ -395,6 +395,13 @@ impl ChatWidget {
     /// Set the approval policy in the widget's config copy.
     pub(crate) fn set_approval_policy(&mut self, policy: AskForApproval) {
         self.config.approval_policy = policy;
+        if let Some(handle) = self.harness_handle.clone() {
+            tokio::spawn(async move {
+                if let Err(error) = handle.set_approval_policy(policy).await {
+                    tracing::warn!(%error, "failed to update harness approval policy");
+                }
+            });
+        }
         self.update_approval_mode_label();
     }
 

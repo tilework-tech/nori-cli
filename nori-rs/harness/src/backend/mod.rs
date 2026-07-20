@@ -1,10 +1,6 @@
 //! Backend adapter for ACP agents in the TUI
 //!
-//! This module provides `AcpBackend`, which adapts the ACP connection interface
-//! to be compatible with the TUI's event-driven architecture. It translates
-//! between Codex `Op` submissions and ACP protocol calls, emits ACP session
-//! semantics on `nori_protocol::ClientEvent`, and keeps `codex_protocol::Event`
-//! only for shared control-plane notifications.
+//! This module provides the private runtime behind the typed harness API.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,41 +8,27 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use agent_client_protocol_schema::v1 as acp;
+use crate::ConversationId;
 use anyhow::Result;
-use codex_protocol::ConversationId;
-use codex_protocol::config_types::McpServerConfig;
-#[cfg(test)]
-use codex_protocol::parse_command::ParsedCommand;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::ErrorEvent;
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::HookOutputEvent;
-use codex_protocol::protocol::HookOutputLevel;
-use codex_protocol::protocol::Op;
-use codex_protocol::protocol::PromptSummaryEvent;
-use codex_protocol::protocol::ReviewDecision;
-use codex_protocol::protocol::SandboxPolicy;
-use codex_protocol::protocol::SessionConfiguredEvent;
-use codex_protocol::protocol::WarningEvent;
-use codex_protocol::user_input::UserInput;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
-use nori_protocol::ClientEvent;
+use nori_config::AskForApproval;
+use nori_config::McpServerConfig;
+use nori_config::SandboxPolicy;
+use nori_protocol::SessionEvent;
+use nori_protocol::acp::v1 as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tokio::sync::watch;
 use tracing::debug;
 use tracing::warn;
 
-use crate::connection::ApprovalEventType;
-use crate::connection::ApprovalRequest;
+use crate::connection::DelegatedRequest;
 use crate::connection::acp_connection::AcpConnection;
 use crate::registry::get_agent_config;
 use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
-use crate::translator;
 use crate::undo::GhostSnapshotStack;
 
 // =============================================================================
@@ -227,21 +209,13 @@ pub struct AcpBackendConfig {
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
-/// Backend adapter that provides a TUI-compatible interface for ACP agents.
-///
-/// This struct wraps a `AcpConnection` and translates between:
-/// - Codex `Op` submissions → ACP protocol calls
-/// - ACP control-plane output → `codex_protocol::Event`
-/// - ACP session-domain output → `nori_protocol::ClientEvent`
 #[derive(Debug, Clone)]
 pub enum BackendEvent {
-    Control(Event),
-    Client(ClientEvent),
+    Public(SessionEvent),
 }
 
 pub(crate) struct PendingApprovalRequest {
-    request_id: String,
-    request: ApprovalRequest,
+    request: DelegatedRequest,
 }
 
 #[derive(Clone)]
@@ -249,12 +223,14 @@ pub struct AcpBackend {
     connection: Arc<AcpConnection>,
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
     session_id: Arc<RwLock<acp::SessionId>>,
-    event_tx: mpsc::Sender<Event>,
     backend_event_tx: mpsc::Sender<BackendEvent>,
     /// Working directory for the session
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
+    /// Typed prompt callers waiting for the ACP transport request ID.
+    pending_prompt_submissions:
+        Arc<Mutex<HashMap<String, oneshot::Sender<Result<acp::RequestId>>>>>,
     /// Notifier for OS-level notifications (approval waiting, idle)
     user_notifier: Arc<crate::UserNotifier>,
     /// Abort handle for the idle detection timer (if running)
@@ -280,7 +256,6 @@ pub struct AcpBackend {
     goal_mcp_http_server: Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
     /// Transcript recorder cell used by local MCP tools created before the
     /// recorder's session ID is known.
-    transcript_recorder_cell: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
     pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence
@@ -289,6 +264,9 @@ pub struct AcpBackend {
     session_event_tx: mpsc::Sender<session_runtime_driver::SessionRuntimeInput>,
     /// Prompt result channel bridged with ACP notifications to preserve ordering.
     prompt_result_tx: mpsc::Sender<session_reducer::InboundEvent>,
+    /// Blocks prompt-time transport and failure events until the public Prompting
+    /// phase carrying the exact wire request ID has been emitted.
+    prompt_phase_gate: Arc<Mutex<Option<tokio::sync::watch::Receiver<bool>>>>,
     /// How long after idle before sending a notification
     notify_after_idle: crate::config::NotifyAfterIdle,
     /// Stack of ghost commit snapshots for /undo support
@@ -333,6 +311,16 @@ pub struct AcpBackend {
     prompt_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
     /// Abort handle for the cancel timeout watchdog (if any)
     cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the serialized reducer task.
+    runtime_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the connection event relay task.
+    relay_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+}
+
+impl AcpBackend {
+    pub(crate) fn transcript_recorder(&self) -> Option<Arc<TranscriptRecorder>> {
+        self.transcript_recorder.clone()
+    }
 }
 
 fn fallback_session_context_for_connection(
@@ -348,7 +336,6 @@ fn fallback_session_context_for_connection(
 
 #[cfg(unix)]
 pub mod browser_session;
-mod helpers;
 mod nori_client_context;
 mod nori_client_mcp;
 pub mod probe;
@@ -359,42 +346,21 @@ mod session_runtime_driver;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod thread_goal;
+mod transcript;
 mod user_input;
 mod user_shell;
-use helpers::get_op_name;
-mod tool_display;
-#[cfg(test)]
-pub(crate) use tool_display::classify_tool_to_parsed_command;
-#[cfg(test)]
-pub(crate) use tool_display::truncate_for_log;
-mod transcript;
 pub use transcript::client_events_to_replay_client_events;
 pub use transcript::transcript_to_replay_client_events;
+pub use transcript::transcript_to_replay_session_events;
 pub use transcript::transcript_to_summary;
 mod hooks;
 
-pub(crate) async fn emit_client_event(
-    backend_event_tx: &mpsc::Sender<BackendEvent>,
-    transcript_recorder: Option<&Arc<TranscriptRecorder>>,
-    client_event: ClientEvent,
-) {
-    let _ = backend_event_tx
-        .send(BackendEvent::Client(client_event.clone()))
-        .await;
-    if let Some(recorder) = transcript_recorder
-        && transcript::should_record_client_event(&client_event)
-        && let Err(e) = recorder.record_client_event(&client_event).await
-    {
-        warn!("Failed to record normalized client event: {e}");
-    }
-}
-
-pub(crate) async fn forward_control_events(
-    mut event_rx: mpsc::Receiver<Event>,
-    backend_event_tx: mpsc::Sender<BackendEvent>,
-) {
-    while let Some(event) = event_rx.recv().await {
-        let _ = backend_event_tx.send(BackendEvent::Control(event)).await;
+fn public_nori_capabilities(
+    view: crate::normalized::SessionCapabilitiesView,
+) -> nori_protocol::NoriCapabilities {
+    nori_protocol::NoriCapabilities {
+        goal_management: view.nori_client.advertised,
+        builtin_commands: view.builtin_commands,
     }
 }
 
@@ -403,6 +369,3 @@ use hooks::generate_id;
 use hooks::route_hook_results;
 use hooks::run_prompt_summary;
 use hooks::run_session_start_hooks;
-
-#[cfg(test)]
-mod tests;

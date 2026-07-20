@@ -62,10 +62,10 @@ impl SessionStats {
     }
 
     /// Record an ACP tool snapshot for goodbye-card statistics.
-    pub fn record_client_tool_snapshot(&mut self, snapshot: &nori_protocol::ToolSnapshot) {
+    pub fn record_client_tool_snapshot(&mut self, snapshot: &crate::presentation::ToolSnapshot) {
         let should_count_tool = matches!(
             snapshot.phase,
-            nori_protocol::ToolPhase::Completed | nori_protocol::ToolPhase::Failed
+            crate::presentation::ToolPhase::Completed | crate::presentation::ToolPhase::Failed
         ) && self
             .recorded_client_tool_call_ids
             .insert(snapshot.call_id.clone());
@@ -81,7 +81,7 @@ impl SessionStats {
         if let Some(subagent_type) = extract_subagent_from_raw_input(snapshot.raw_input.as_ref()) {
             self.record_subagent(&subagent_type);
         }
-        if let Some(nori_protocol::Invocation::Tool { input, .. }) = &snapshot.invocation
+        if let Some(crate::presentation::Invocation::Tool { input, .. }) = &snapshot.invocation
             && let Some(subagent_type) = extract_subagent_from_raw_input(input.as_ref())
         {
             self.record_subagent(&subagent_type);
@@ -104,24 +104,24 @@ impl SessionStats {
     }
 }
 
-fn client_tool_stats_name(snapshot: &nori_protocol::ToolSnapshot) -> String {
+fn client_tool_stats_name(snapshot: &crate::presentation::ToolSnapshot) -> String {
     let kind = crate::client_event_format::format_tool_kind(&snapshot.kind);
     match &snapshot.kind {
-        nori_protocol::ToolKind::Other(other)
+        crate::presentation::ToolKind::Other(other)
             if other.eq_ignore_ascii_case("other") && !snapshot.title.trim().is_empty() =>
         {
             snapshot.title.trim().to_string()
         }
-        nori_protocol::ToolKind::Read
-        | nori_protocol::ToolKind::Search
-        | nori_protocol::ToolKind::Execute
-        | nori_protocol::ToolKind::Create
-        | nori_protocol::ToolKind::Edit
-        | nori_protocol::ToolKind::Delete
-        | nori_protocol::ToolKind::Move
-        | nori_protocol::ToolKind::Fetch
-        | nori_protocol::ToolKind::Think
-        | nori_protocol::ToolKind::Other(_) => kind.to_string(),
+        crate::presentation::ToolKind::Read
+        | crate::presentation::ToolKind::Search
+        | crate::presentation::ToolKind::Execute
+        | crate::presentation::ToolKind::Create
+        | crate::presentation::ToolKind::Edit
+        | crate::presentation::ToolKind::Delete
+        | crate::presentation::ToolKind::Move
+        | crate::presentation::ToolKind::Fetch
+        | crate::presentation::ToolKind::Think
+        | crate::presentation::ToolKind::Other(_) => kind.to_string(),
     }
 }
 

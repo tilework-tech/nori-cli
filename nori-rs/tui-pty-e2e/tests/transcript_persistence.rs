@@ -210,11 +210,25 @@ fn test_transcript_contains_assistant_message() {
     let content =
         read_transcript(&nori_home, project_id, session_id).expect("Should read transcript");
 
-    // Verify assistant message is in transcript
+    let records = content
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("valid transcript line"))
+        .collect::<Vec<_>>();
     assert!(
-        content.contains("\"type\":\"assistant\"")
-            || content.contains("\"type\":\"client_event\",\"event\":{\"event_type\":\"message_delta\",\"stream\":\"answer\""),
-        "Transcript should contain assistant text or normalized answer message deltas. Content:\n{}",
+        records.iter().any(|record| {
+            record["type"] == "session_event"
+                && record["event"]["source"] == "acp"
+                && record["event"]["event"]["message_type"] == "notification"
+                && record["event"]["event"]["update"]["sessionUpdate"] == "agent_message_chunk"
+        }),
+        "Transcript should preserve the raw ACP assistant notification. Content:\n{}",
+        content
+    );
+    assert!(
+        records
+            .iter()
+            .all(|record| record["type"] != "assistant" && record["type"] != "client_event"),
+        "v3 transcripts must not duplicate raw ACP output in legacy normalized records. Content:\n{}",
         content
     );
     assert!(

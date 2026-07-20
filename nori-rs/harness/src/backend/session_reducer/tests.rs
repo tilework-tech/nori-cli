@@ -1,12 +1,11 @@
-use agent_client_protocol_schema::v1 as acp;
-use nori_protocol::ClientEvent;
-use nori_protocol::ClientEventNormalizer;
-use nori_protocol::session_runtime::ActiveRequestKind;
-use nori_protocol::session_runtime::QueuedPrompt;
-use nori_protocol::session_runtime::QueuedPromptKind;
-use nori_protocol::session_runtime::SessionPhase;
-use nori_protocol::session_runtime::SessionPhaseView;
-use nori_protocol::session_runtime::SessionRuntime;
+use crate::normalized::ClientEvent;
+use crate::normalized::ClientEventNormalizer;
+use crate::normalized::session_runtime::QueuedPrompt;
+use crate::normalized::session_runtime::QueuedPromptKind;
+use crate::normalized::session_runtime::SessionPhase;
+use crate::normalized::session_runtime::SessionPhaseView;
+use crate::normalized::session_runtime::SessionRuntime;
+use nori_protocol::acp::v1 as acp;
 use pretty_assertions::assert_eq;
 
 use super::InboundEvent;
@@ -23,13 +22,17 @@ fn new_normalizer() -> ClientEventNormalizer {
     ClientEventNormalizer::default()
 }
 
+fn text_content(text: &str) -> Vec<acp::ContentBlock> {
+    vec![acp::ContentBlock::Text(acp::TextContent::new(text))]
+}
+
 fn simple_prompt() -> QueuedPrompt {
     QueuedPrompt {
         event_id: "evt-1".to_string(),
         kind: QueuedPromptKind::User,
         text: "hello".to_string(),
+        content: text_content("hello"),
         display_text: Some("hello".to_string()),
-        images: Vec::new(),
     }
 }
 
@@ -47,6 +50,10 @@ fn sample_config_option() -> acp::SessionConfigOption {
 
 fn notification(update: acp::SessionUpdate) -> InboundEvent {
     InboundEvent::Notification(Box::new(update))
+}
+
+fn request_id(value: &str) -> acp::RequestId {
+    acp::RequestId::Str(value.to_string())
 }
 
 fn has_event(events: &[ClientEvent], pred: impl Fn(&ClientEvent) -> bool) -> bool {
@@ -82,7 +89,7 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         }
     ));
 
-    assert!(has_event(&out.events, |e| matches!(
+    assert!(!has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
     )));
@@ -92,6 +99,22 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         e,
         SideEffect::SendPrompt { .. }
     )));
+
+    let out = reduce(
+        &mut rt,
+        InboundEvent::PromptStarted {
+            request_id: request_id("wire-1"),
+        },
+        &mut norm,
+    );
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
+    )));
+    assert!(matches!(
+        rt.phase,
+        SessionPhase::Prompt { request_id: ref wire_id, .. } if wire_id == &request_id("wire-1")
+    ));
 }
 
 #[test]
@@ -142,8 +165,8 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
         event_id: "goal-continuation-1".to_string(),
         kind: QueuedPromptKind::GoalContinuation,
         text: "Continue working toward the active thread goal.".to_string(),
+        content: text_content("Continue working toward the active thread goal."),
         display_text: None,
-        images: Vec::new(),
     };
     let out = reduce(
         &mut rt,
@@ -172,7 +195,7 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
             .map(|message| (message.role, message.content.as_str()))
             .collect::<Vec<_>>(),
         vec![(
-            nori_protocol::session_runtime::TranscriptRole::User,
+            crate::normalized::session_runtime::TranscriptRole::User,
             "hello"
         )]
     );
@@ -200,21 +223,21 @@ fn session_phase_label_labels_known_phases() {
     assert_eq!(session_phase_label(&SessionPhase::Idle), "idle");
     assert_eq!(
         session_phase_label(&SessionPhase::Prompt {
-            request_id: "req-1".to_string(),
+            request_id: request_id("req-1"),
             cancelling: false,
         }),
         "prompt"
     );
     assert_eq!(
         session_phase_label(&SessionPhase::Prompt {
-            request_id: "req-1".to_string(),
+            request_id: request_id("req-1"),
             cancelling: true,
         }),
         "cancelling"
     );
     assert_eq!(
         session_phase_label(&SessionPhase::Loading {
-            request_id: "req-2".to_string(),
+            request_id: request_id("req-2"),
         }),
         "loading"
     );
@@ -389,8 +412,8 @@ fn prompt_submit_while_active_queues() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -422,8 +445,8 @@ fn end_turn_drains_queue() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -443,7 +466,7 @@ fn end_turn_drains_queue() {
     // Should have transitioned directly to a new Prompt phase
     assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
 
-    assert!(has_event(&out.events, |e| matches!(
+    assert!(!has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
     )));
@@ -471,8 +494,8 @@ fn cancelled_does_not_drain_queue() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -525,7 +548,7 @@ fn tool_call_gets_owner_request_id() {
         .expect("tool should exist");
     assert_eq!(
         snapshot.owner_request_id.as_deref(),
-        Some(request_id.as_str())
+        Some(request_id.to_string().as_str())
     );
 }
 
@@ -560,7 +583,7 @@ fn cancel_marks_active_tools_cancelled() {
         .tool_calls
         .get("tc-1")
         .expect("tool should exist");
-    assert_eq!(snapshot.phase, nori_protocol::ToolPhase::Failed);
+    assert_eq!(snapshot.phase, crate::normalized::ToolPhase::Failed);
 }
 
 // =========================================================================
@@ -667,7 +690,7 @@ fn multiple_chunks_assembled_into_one_transcript_entry() {
         .persisted
         .transcript
         .iter()
-        .filter(|m| m.role == nori_protocol::session_runtime::TranscriptRole::Agent)
+        .filter(|m| m.role == crate::normalized::session_runtime::TranscriptRole::Agent)
         .collect();
     assert_eq!(agent_messages.len(), 1);
     assert_eq!(agent_messages[0].content, "hello world!");
@@ -719,19 +742,19 @@ fn mixed_agent_and_thought_chunks_preserve_transcript_order() {
         transcript,
         vec![
             (
-                nori_protocol::session_runtime::TranscriptRole::User,
+                crate::normalized::session_runtime::TranscriptRole::User,
                 "hello",
             ),
             (
-                nori_protocol::session_runtime::TranscriptRole::Agent,
+                crate::normalized::session_runtime::TranscriptRole::Agent,
                 "CI is green.",
             ),
             (
-                nori_protocol::session_runtime::TranscriptRole::Thought,
+                crate::normalized::session_runtime::TranscriptRole::Thought,
                 "Preparing PR.",
             ),
             (
-                nori_protocol::session_runtime::TranscriptRole::Agent,
+                crate::normalized::session_runtime::TranscriptRole::Agent,
                 "The PR is up.",
             ),
         ]
@@ -750,15 +773,14 @@ fn load_transitions_idle_to_loading_and_back() {
     reduce(
         &mut rt,
         InboundEvent::LoadSubmit {
-            request_id: "load-1".to_string(),
+            request_id: request_id("load-1"),
         },
         &mut norm,
     );
 
     assert_eq!(rt.phase_view(), SessionPhaseView::Loading);
     assert!(rt.active.is_some());
-    let active = rt.active.as_ref().unwrap();
-    assert_eq!(active.kind, ActiveRequestKind::Loading);
+    let _active = rt.active.as_ref().unwrap();
 
     // Load response
     reduce(&mut rt, InboundEvent::LoadResponse, &mut norm);
@@ -779,7 +801,7 @@ fn load_does_not_drain_queue() {
     reduce(
         &mut rt,
         InboundEvent::LoadSubmit {
-            request_id: "load-1".to_string(),
+            request_id: request_id("load-1"),
         },
         &mut norm,
     );
@@ -893,7 +915,7 @@ fn session_info_update_is_accepted_while_idle_and_emits_info_event() {
     assert!(has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionUpdateInfo(info)
-            if info.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            if info.kind == crate::normalized::SessionUpdateKind::SessionInfo
     )));
 }
 
@@ -909,7 +931,7 @@ fn usage_update_is_accepted_while_idle_and_emits_info_event() {
 
     assert_eq!(
         rt.persisted.session_usage,
-        Some(nori_protocol::session_runtime::SessionUsageState {
+        Some(crate::normalized::session_runtime::SessionUsageState {
             used_tokens: 128,
             total_tokens: 4096,
             cost_display: Some("0.42 USD".to_string()),
@@ -922,7 +944,7 @@ fn usage_update_is_accepted_while_idle_and_emits_info_event() {
     assert!(has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionUpdateInfo(info)
-            if info.kind == nori_protocol::SessionUpdateKind::Usage
+            if info.kind == crate::normalized::SessionUpdateKind::Usage
     )));
 }
 
@@ -972,7 +994,7 @@ fn prompt_failed_carries_failure_disposition_onto_completion() {
     let out = reduce(
         &mut rt,
         InboundEvent::PromptFailed {
-            failure: Some(nori_protocol::TurnFailure::Fatal),
+            failure: Some(crate::normalized::TurnFailure::Fatal),
         },
         &mut norm,
     );
@@ -980,7 +1002,7 @@ fn prompt_failed_carries_failure_disposition_onto_completion() {
     assert!(has_event(&out.events, |e| matches!(
         e,
         ClientEvent::PromptCompleted(completed)
-            if completed.failure == Some(nori_protocol::TurnFailure::Fatal)
+            if completed.failure == Some(crate::normalized::TurnFailure::Fatal)
     )));
 }
 

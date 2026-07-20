@@ -163,10 +163,7 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
 
     let mut lines = Vec::new();
     if !token_usage.is_zero() {
-        lines.push(format!(
-            "{}",
-            codex_protocol::protocol::FinalOutput::from(token_usage)
-        ));
+        lines.push(token_usage.to_string());
     }
 
     if conversation_has_activity && let Some(session_id) = conversation_id {
@@ -255,7 +252,7 @@ fn run_skillsets_command(cmd: SkillsetsCommand) -> anyhow::Result<()> {
         }
     } else {
         // Fall back to npx/bunx if not in PATH
-        use nori_harness::registry::detect_preferred_package_manager;
+        use nori_harness::detect_preferred_package_manager;
 
         let package_manager = detect_preferred_package_manager();
         let runner = package_manager.command(); // "npx" or "bunx"
@@ -490,8 +487,8 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_protocol::ConversationId;
-    use codex_protocol::protocol::TokenUsage;
+    use nori_harness::ConversationId;
+    use nori_tui::TokenUsage;
     use pretty_assertions::assert_eq;
 
     fn finalize_resume_from_args(args: &[&str]) -> TuiCli {

@@ -466,7 +466,7 @@ mod windows_impl {
 mod stub {
     use anyhow::bail;
     use anyhow::Result;
-    use codex_protocol::protocol::SandboxPolicy;
+    use nori_config::SandboxPolicy;
     use std::collections::HashMap;
     use std::path::Path;
 

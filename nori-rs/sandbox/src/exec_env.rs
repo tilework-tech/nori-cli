@@ -1,6 +1,6 @@
-use codex_protocol::config_types::EnvironmentVariablePattern;
-use codex_protocol::config_types::ShellEnvironmentPolicy;
-use codex_protocol::config_types::ShellEnvironmentPolicyInherit;
+use nori_config::EnvironmentVariablePattern;
+use nori_config::ShellEnvironmentPolicy;
+use nori_config::ShellEnvironmentPolicyInherit;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -71,8 +71,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_protocol::config_types::ShellEnvironmentPolicyInherit;
     use maplit::hashmap;
+    use nori_config::ShellEnvironmentPolicyInherit;
 
     fn make_vars(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
         pairs

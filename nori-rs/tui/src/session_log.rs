@@ -6,9 +6,7 @@ use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-use codex_protocol::protocol::Op;
 use nori_config::NoriConfig;
-use serde::Serialize;
 use serde_json::json;
 
 use crate::app_event::AppEvent;
@@ -121,9 +119,6 @@ pub(crate) fn log_inbound_app_event(event: &AppEvent) {
     }
 
     match event {
-        AppEvent::CodexEvent(ev) => {
-            write_record("to_tui", "codex_event", ev);
-        }
         AppEvent::NewSession => {
             let value = json!({
                 "ts": now_ts(),
@@ -173,13 +168,6 @@ pub(crate) fn log_inbound_app_event(event: &AppEvent) {
     }
 }
 
-pub(crate) fn log_outbound_op(op: &Op) {
-    if !LOGGER.is_enabled() {
-        return;
-    }
-    write_record("from_tui", "op", op);
-}
-
 pub(crate) fn log_session_end() {
     if !LOGGER.is_enabled() {
         return;
@@ -188,19 +176,6 @@ pub(crate) fn log_session_end() {
         "ts": now_ts(),
         "dir": "meta",
         "kind": "session_end",
-    });
-    LOGGER.write_json_line(value);
-}
-
-fn write_record<T>(dir: &str, kind: &str, obj: &T)
-where
-    T: Serialize,
-{
-    let value = json!({
-        "ts": now_ts(),
-        "dir": dir,
-        "kind": kind,
-        "payload": obj,
     });
     LOGGER.write_json_line(value);
 }

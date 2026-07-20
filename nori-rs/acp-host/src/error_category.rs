@@ -1,4 +1,4 @@
-use agent_client_protocol as acp;
+use nori_protocol::acp::v1 as acp;
 
 /// Categories of ACP spawn errors for providing actionable user messages.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,11 +54,13 @@ impl AcpErrorCategory {
     }
 }
 
-/// A categorized ACP error, carrying the agent-supplied `error.data.detail`
-/// (e.g. a login hint) when the structured error included one.
+/// A categorized ACP error, carrying the agent-supplied message and
+/// `error.data.detail` (e.g. a login hint) when the chain includes a structured
+/// ACP error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcpErrorDetails {
     pub category: AcpErrorCategory,
+    pub message: Option<String>,
     pub detail: Option<String>,
 }
 
@@ -79,6 +81,7 @@ pub fn categorize_acp_error_chain(error: &anyhow::Error) -> AcpErrorDetails {
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string)
         });
+        let message = Some(acp_error.message.clone());
         let category = match i32::from(acp_error.code) {
             -32000 => AcpErrorCategory::Authentication,
             -32002 => AcpErrorCategory::SessionNotFound,
@@ -88,10 +91,15 @@ pub fn categorize_acp_error_chain(error: &anyhow::Error) -> AcpErrorDetails {
             -32015 => AcpErrorCategory::SessionAlreadyActive,
             _ => categorize_acp_error(&format!("{acp_error:?}")),
         };
-        return AcpErrorDetails { category, detail };
+        return AcpErrorDetails {
+            category,
+            message,
+            detail,
+        };
     }
     AcpErrorDetails {
         category: categorize_acp_error(&format!("{error:?}")),
+        message: None,
         detail: None,
     }
 }
@@ -152,7 +160,6 @@ pub fn categorize_acp_error(error: &str) -> AcpErrorCategory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol as acp;
     use pretty_assertions::assert_eq;
 
     /// Wrap a structured ACP error the way connection methods surface it: as
@@ -171,9 +178,14 @@ mod tests {
         let details = categorize_acp_error_chain(&error);
 
         assert_eq!(
-            (details.category, details.detail.as_deref()),
+            (
+                details.category,
+                details.message.as_deref(),
+                details.detail.as_deref()
+            ),
             (
                 AcpErrorCategory::Authentication,
+                Some("Authentication required"),
                 Some("run: nori-handroll login")
             )
         );
@@ -217,8 +229,8 @@ mod tests {
         let details = categorize_acp_error_chain(&error);
 
         assert_eq!(
-            (details.category, details.detail),
-            (AcpErrorCategory::QuotaExceeded, None)
+            (details.category, details.message, details.detail),
+            (AcpErrorCategory::QuotaExceeded, None, None)
         );
     }
 

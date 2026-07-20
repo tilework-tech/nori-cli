@@ -47,8 +47,8 @@ impl From<SessionMetadata> for SessionPickerInfo {
 
 /// Load sessions for the current working directory with preview text.
 ///
-/// Sessions with only the session_meta entry (entry_count <= 1) are filtered out
-/// since they have no actual conversation content to display.
+/// Sessions without a user turn are filtered out since they have no
+/// conversation content to display.
 pub async fn load_sessions_with_preview(
     nori_home: &Path,
     cwd: &Path,
@@ -117,8 +117,10 @@ async fn load_session_previews(
             "loading preview for session",
         );
 
-        // Skip sessions with no conversation content (only session_meta).
-        if session.entry_count <= 1 {
+        let user_turn_count = loader
+            .count_user_turns(&session.project_id, &session.session_id)
+            .await?;
+        if user_turn_count == 0 {
             tracing::info!(
                 target: "nori_resume",
                 phase = "load_sessions_with_preview.session.skipped_empty",
@@ -126,7 +128,7 @@ async fn load_session_previews(
                 total_sessions,
                 session_id = %session.session_id,
                 elapsed_ms = session_started.elapsed().as_millis(),
-                "skipped session with no conversation content",
+                "skipped session with no user turns",
             );
             continue;
         }
@@ -137,7 +139,7 @@ async fn load_session_previews(
             session_id: session.session_id,
             project_id: session.project_id,
             started_at: session.started_at,
-            user_turn_count: None,
+            user_turn_count: Some(user_turn_count),
             first_message_preview: preview,
         });
 

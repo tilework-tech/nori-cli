@@ -49,9 +49,9 @@ use crate::render::renderable::Renderable;
 use crate::slash_command::SlashCommand;
 use crate::slash_command::built_in_slash_commands;
 use crate::style::user_message_style;
-use codex_protocol::custom_prompts::CustomPrompt;
-use codex_protocol::custom_prompts::CustomPromptKind;
-use codex_protocol::custom_prompts::PROMPTS_CMD_PREFIX;
+use nori_harness::custom_prompts::CustomPrompt;
+use nori_harness::custom_prompts::CustomPromptKind;
+use nori_harness::custom_prompts::PROMPTS_CMD_PREFIX;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -135,14 +135,14 @@ pub(crate) struct ChatComposer {
     // When true, disables paste-burst logic and inserts characters immediately.
     disable_paste_burst: bool,
     custom_prompts: Vec<CustomPrompt>,
-    agent_commands: Vec<nori_protocol::AgentCommandInfo>,
+    agent_commands: Vec<crate::presentation::AgentCommandInfo>,
     agent_command_prefix: String,
     command_description_overrides: HashMap<SlashCommand, Line<'static>>,
     disabled_builtin_commands: HashMap<SlashCommand, Line<'static>>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
     context_window_percent: Option<i64>,
-    session_usage: Option<nori_protocol::session_runtime::SessionUsageState>,
+    session_usage: Option<crate::presentation::session_runtime::SessionUsageState>,
     system_info: Option<crate::system_info::SystemInfo>,
     /// The approval mode label to display in the footer (e.g., "Read Only", "Agent", "Full Access").
     approval_mode_label: Option<String>,
@@ -251,11 +251,6 @@ impl ChatComposer {
         self.footer_layout_config = config;
     }
 
-    #[cfg(test)]
-    pub(super) fn footer_segment_config(&self) -> nori_config::FooterSegmentConfig {
-        self.footer_segment_config.clone()
-    }
-
     pub(crate) fn set_hotkey_config(&mut self, config: nori_config::HotkeyConfig) {
         self.textarea.set_hotkey_config(config);
     }
@@ -312,10 +307,7 @@ impl ChatComposer {
     }
 
     /// Deliver search history results to the popup (if still open).
-    pub(crate) fn on_search_history_response(
-        &mut self,
-        entries: Vec<codex_protocol::message_history::HistoryEntry>,
-    ) {
+    pub(crate) fn on_search_history_response(&mut self, entries: Vec<nori_harness::HistoryEntry>) {
         if let ActivePopup::HistorySearch(popup) = &mut self.active_popup {
             popup.set_entries(entries);
         }
@@ -453,15 +445,9 @@ impl ChatComposer {
         self.is_task_running = running;
     }
 
-    pub(crate) fn set_context_window_percent(&mut self, percent: Option<i64>) {
-        if self.context_window_percent != percent {
-            self.context_window_percent = percent;
-        }
-    }
-
     pub(crate) fn set_session_usage(
         &mut self,
-        usage: Option<nori_protocol::session_runtime::SessionUsageState>,
+        usage: Option<crate::presentation::session_runtime::SessionUsageState>,
     ) {
         self.session_usage = usage;
     }

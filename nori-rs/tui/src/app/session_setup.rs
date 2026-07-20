@@ -42,10 +42,7 @@ impl App {
     }
 
     pub(super) fn shutdown_current_conversation(&mut self) {
-        if self.chat_widget.conversation_id().is_some() {
-            self.suppress_shutdown_complete = true;
-            self.chat_widget.submit_op(Op::Shutdown);
-        }
+        self.chat_widget.shutdown_harness_session();
     }
 
     /// Display a loaded transcript in the history view.
@@ -269,7 +266,7 @@ impl App {
         cwd: PathBuf,
         env_map: std::collections::HashMap<String, String>,
         logs_base_dir: PathBuf,
-        sandbox_policy: codex_protocol::protocol::SandboxPolicy,
+        sandbox_policy: nori_config::SandboxPolicy,
         tx: AppEventSender,
     ) {
         tokio::task::spawn_blocking(move || {

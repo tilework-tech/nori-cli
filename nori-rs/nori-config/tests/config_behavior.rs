@@ -1,10 +1,10 @@
-use codex_protocol::config_types::SandboxMode;
-use codex_protocol::config_types::TrustLevel;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::AskForApproval;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigEdits;
 use nori_config::NoriConfigOverrides;
+use nori_config::SandboxMode;
+use nori_config::SandboxPolicy;
+use nori_config::TrustLevel;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
@@ -378,14 +378,14 @@ args = ["@modelcontextprotocol/server-filesystem", "."]
     .expect("write config");
 
     let config = NoriConfig::load_from_path(&config_path).expect("load config");
-    let server: &codex_protocol::config_types::McpServerConfig = config
+    let server: &nori_config::McpServerConfig = config
         .mcp_servers
         .get("files")
         .expect("resolved MCP server");
 
     assert!(matches!(
         server.transport,
-        codex_protocol::config_types::McpServerTransportConfig::Stdio { .. }
+        nori_config::McpServerTransportConfig::Stdio { .. }
     ));
     assert_eq!(
         config.notify,
@@ -411,8 +411,8 @@ command = "old-server"
     let mut servers = std::collections::BTreeMap::new();
     servers.insert(
         "docs".to_string(),
-        codex_protocol::config_types::McpServerConfig {
-            transport: codex_protocol::config_types::McpServerTransportConfig::StreamableHttp {
+        nori_config::McpServerConfig {
+            transport: nori_config::McpServerTransportConfig::StreamableHttp {
                 url: "https://docs.example.test/mcp".to_string(),
                 bearer_token_env_var: Some("DOCS_TOKEN".to_string()),
                 http_headers: None,
@@ -472,7 +472,7 @@ hide_world_writable_warning = false
     assert!(config.disable_paste_burst);
     assert_eq!(
         config.shell_environment_policy.inherit,
-        codex_protocol::config_types::ShellEnvironmentPolicyInherit::Core
+        nori_config::ShellEnvironmentPolicyInherit::Core
     );
     assert!(config.shell_environment_policy.ignore_default_excludes);
     assert_eq!(config.notices.hide_full_access_warning, Some(true));
@@ -490,7 +490,7 @@ fn safety_and_environment_settings_have_nori_defaults() {
     assert!(!config.disable_paste_burst);
     assert_eq!(
         config.shell_environment_policy,
-        codex_protocol::config_types::ShellEnvironmentPolicy::default()
+        nori_config::ShellEnvironmentPolicy::default()
     );
     assert_eq!(config.notices, nori_config::Notice::default());
 }

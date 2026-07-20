@@ -4,7 +4,7 @@ use super::*;
 /// `PromptSummary` event with the result. Designed to be called as a
 /// fire-and-forget task from `handle_user_input`.
 pub(super) async fn run_prompt_summary(
-    event_tx: &mpsc::Sender<Event>,
+    event_tx: &mpsc::Sender<BackendEvent>,
     agent_name: &str,
     cwd: &std::path::Path,
     user_prompt: &str,
@@ -23,7 +23,9 @@ pub(super) async fn run_prompt_summary(
         "Summarize the following user request in 5 words or fewer. \
          Reply with ONLY the summary, no extra text.\n\n{user_prompt}"
     );
-    let prompt = vec![translator::text_to_content_block(&summarization_prompt)];
+    let prompt = vec![acp::ContentBlock::Text(acp::TextContent::new(
+        summarization_prompt,
+    ))];
 
     // Take the ordered event receiver so we can collect updates from this
     // throwaway connection. The main session uses the reducer loop instead.
@@ -104,10 +106,11 @@ pub(super) async fn run_prompt_summary(
         }
 
         let _ = event_tx
-            .send(Event {
-                id: String::new(),
-                msg: EventMsg::PromptSummary(PromptSummaryEvent { summary }),
-            })
+            .send(BackendEvent::Public(SessionEvent::Nori(
+                nori_protocol::NoriEvent::PromptSummaryUpdated(nori_protocol::PromptSummary {
+                    summary,
+                }),
+            )))
             .await;
     }
 
@@ -130,20 +133,18 @@ pub(super) fn commands_dir(nori_home: &std::path::Path) -> PathBuf {
 /// Failed hooks emit `Warning` events.
 pub(super) async fn route_hook_results(
     results: &[crate::hooks::HookResult],
-    event_tx: &mpsc::Sender<Event>,
-    event_id: &str,
+    event_tx: &mpsc::Sender<BackendEvent>,
     pending_hook_context: Option<&Mutex<Option<String>>>,
 ) {
     for result in results {
         if !result.success {
             if let Some(ref err) = result.error {
                 let _ = event_tx
-                    .send(Event {
-                        id: event_id.to_string(),
-                        msg: EventMsg::Warning(WarningEvent {
+                    .send(BackendEvent::Public(SessionEvent::Nori(
+                        nori_protocol::NoriEvent::Notice(nori_protocol::Notice {
                             message: err.clone(),
                         }),
-                    })
+                    )))
                     .await;
             }
             continue;
@@ -157,35 +158,32 @@ pub(super) async fn route_hook_results(
                     }
                     crate::hooks::HookOutputLine::Output(msg) => {
                         let _ = event_tx
-                            .send(Event {
-                                id: event_id.to_string(),
-                                msg: EventMsg::HookOutput(HookOutputEvent {
+                            .send(BackendEvent::Public(SessionEvent::Nori(
+                                nori_protocol::NoriEvent::HookOutput(nori_protocol::HookOutput {
                                     message: msg,
-                                    level: HookOutputLevel::Info,
+                                    level: nori_protocol::HookOutputLevel::Info,
                                 }),
-                            })
+                            )))
                             .await;
                     }
                     crate::hooks::HookOutputLine::OutputWarn(msg) => {
                         let _ = event_tx
-                            .send(Event {
-                                id: event_id.to_string(),
-                                msg: EventMsg::HookOutput(HookOutputEvent {
+                            .send(BackendEvent::Public(SessionEvent::Nori(
+                                nori_protocol::NoriEvent::HookOutput(nori_protocol::HookOutput {
                                     message: msg,
-                                    level: HookOutputLevel::Warn,
+                                    level: nori_protocol::HookOutputLevel::Warn,
                                 }),
-                            })
+                            )))
                             .await;
                     }
                     crate::hooks::HookOutputLine::OutputError(msg) => {
                         let _ = event_tx
-                            .send(Event {
-                                id: event_id.to_string(),
-                                msg: EventMsg::HookOutput(HookOutputEvent {
+                            .send(BackendEvent::Public(SessionEvent::Nori(
+                                nori_protocol::NoriEvent::HookOutput(nori_protocol::HookOutput {
                                     message: msg,
-                                    level: HookOutputLevel::Error,
+                                    level: nori_protocol::HookOutputLevel::Error,
                                 }),
-                            })
+                            )))
                             .await;
                     }
                     crate::hooks::HookOutputLine::Context(ctx) => {
@@ -215,14 +213,14 @@ pub(super) async fn route_hook_results(
 pub(super) async fn run_session_start_hooks(
     hooks: &[PathBuf],
     timeout: std::time::Duration,
-    event_tx: &mpsc::Sender<Event>,
+    event_tx: &mpsc::Sender<BackendEvent>,
     pending_hook_context: Option<&Mutex<Option<String>>>,
 ) {
     if hooks.is_empty() {
         return;
     }
     let results = crate::hooks::execute_hooks(hooks, timeout).await;
-    route_hook_results(&results, event_tx, "", pending_hook_context).await;
+    route_hook_results(&results, event_tx, pending_hook_context).await;
 }
 
 /// Generate a unique ID for operations

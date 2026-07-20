@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::render::renderable::Renderable;
-use codex_protocol::protocol::McpAuthStatus;
+use codex_rmcp_client::McpAuthStatus;
 use crossterm::event::KeyEvent;
 
 use super::CancellationEvent;

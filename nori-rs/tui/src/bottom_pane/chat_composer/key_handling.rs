@@ -769,8 +769,8 @@ impl ChatComposer {
             {
                 let vim_mode = self.textarea.vim_mode_state_if_enabled().is_some();
                 self.active_popup = ActivePopup::HistorySearch(HistorySearchPopup::new(vim_mode));
-                self.app_event_tx.send(AppEvent::CodexOp(
-                    codex_protocol::protocol::Op::SearchHistoryRequest { max_results: 500 },
+                self.app_event_tx.send(AppEvent::HarnessAction(
+                    crate::app_event::HarnessAction::SearchHistory { max_results: 500 },
                 ));
                 (InputResult::None, true)
             }
