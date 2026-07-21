@@ -13,7 +13,7 @@ types, agent hosting, sandboxing, authentication, and testing.
 The production path is layered downward:
 
 ```text
-nori-cli / nori-tui
+nori-cli / nori-tui / nori-exec
         -> nori-harness
         -> nori-acp-host
         -> ACP agent subprocess
@@ -28,6 +28,8 @@ used in production.
 ### Core Implementation
 
 - `cli/` dispatches the `nori` binary and sandbox debug commands.
+- `exec/` projects the harness into a final-answer plaintext command or a
+  bounded standard ACP-over-stdio agent facade.
 - `tui/` renders events and forwards user intent through typed harness methods.
 - `harness/` owns session orchestration, private reduction, transcripts, goals,
   undo, hooks, worktrees, history, and the embeddable runtime API.

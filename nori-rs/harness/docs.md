@@ -16,7 +16,7 @@ it through typed methods, and consume one ordered stream of
 ### How it fits into the larger codebase
 
 ```text
-headless consumer      nori-tui
+nori-exec              nori-tui
         \                 /
          \               /
           v             v
@@ -33,6 +33,12 @@ The harness consumes raw ACP traffic from `nori-acp-host`, publishes it without
 changing ACP semantics, and adds the small Nori-owned event branch. Stateful
 ACP reduction remains private because it supports harness behavior; widget and
 display projection remains private to the TUI.
+
+`nori-exec` is the production headless consumer. It uses the same typed handle
+and event stream to implement both a finite plaintext projection and a bounded
+ACP agent facade. The facade preserves ACP request/response semantics where the
+shell caller participates, rather than serializing the private reducer or
+inventing a second public event vocabulary.
 
 ### Core Implementation
 

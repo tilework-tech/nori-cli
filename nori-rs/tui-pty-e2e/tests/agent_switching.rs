@@ -765,8 +765,9 @@ fn extract_agent_messages_from_log(log_path: &std::path::Path) -> Vec<String> {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_agent_switch_message_flow_mock_to_mock_alt() {
-    // Use default response (Test message 1/2) - both agents will use this
-    let config = SessionConfig::new().with_agent("mock-model".to_string());
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_ECHO_PROMPT", "1");
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -782,9 +783,9 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for initial agent response (default response)
+    // Wait for the initial agent's echoed prompt.
     session
-        .wait_for_text("Test message", Duration::from_secs(5))
+        .wait_for_text("test initial", Duration::from_secs(5))
         .expect("Initial agent should respond");
 
     // Log messages before switch
@@ -878,15 +879,11 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
         "Should have prompt calls for both agents, messages: {:?}",
         msgs_after_prompt
     );
-    std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-
-    // Final verification: the screen should show response content
-    let screen = session.screen_contents();
-    assert!(
-        screen.contains("Test message"),
-        "Screen should contain response text. Screen:\n{}",
-        screen
-    );
+    // Final verification: wait for the response itself rather than assuming it
+    // has rendered immediately after the mock logs receipt of the prompt.
+    session
+        .wait_for_text("test after switch", TIMEOUT)
+        .expect("Screen should contain response text");
 }
 
 // ============================================================================

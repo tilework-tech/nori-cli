@@ -1,0 +1,18 @@
+[package]
+name = "nori-exec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+nori-config = { workspace = true }
+nori-harness = { workspace = true }
+nori-protocol = { workspace = true }
+tokio = { workspace = true, features = ["io-std", "macros", "rt-multi-thread", "sync"] }
+tokio-util = { workspace = true, features = ["compat"] }
