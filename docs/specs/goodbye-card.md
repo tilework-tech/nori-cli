@@ -1,42 +1,35 @@
 # Goodbye Card
 
-The Nori goodbye card is rendered by `nori-tui` when the user exits the TUI. It is a presentation layer over `SessionStats`; it should not parse agent transcripts or infer behavior directly from rendered history cells.
+The Nori goodbye card is a TUI presentation over `SessionStats`. It must not
+define or depend on a public ACP normalization protocol.
 
-## Session Stats Source
+## Session stats source
 
-For ACP-backed Nori sessions, goodbye-card stats are driven primarily by normalized `nori_protocol::ClientEvent` values:
+For ACP-backed sessions, the TUI's private presentation reducer observes raw
+ACP session notifications and the relevant Nori lifecycle events. It records
+completed or failed tool calls once per ACP call ID, assistant turns once per
+completed answer, and token information when an agent exposes it. Tool labels
+are presentation inferences and may use the ACP tool title as a fallback.
 
-- `ToolSnapshot` records completed or failed tool calls once per `call_id`.
-- `ToolSnapshot` surfaces are scanned for skill and subagent signals on every update, including duplicate updates for an already counted call.
-- `MessageDelta { stream: Answer, .. }` plus `PromptCompleted` records one assistant message for streamed ACP answers.
-- `PromptCompleted { last_agent_message: Some(..), .. }` records one assistant message when the final payload is present.
+This state never crosses the harness boundary as a normalized `ClientEvent` or
+Codex event. Headless embedders receive raw ACP envelopes and may compute their
+own statistics without inheriting TUI assumptions.
 
-Tool calls are grouped by normalized ACP tool kind (`read`, `execute`, `edit`, etc.). Generic `Other("Other")` tool snapshots fall back to the snapshot title so agent-style tools can appear as `Agent`.
+## Skill and subagent detection
 
-## Skill Detection
+Skill detection scans presentation-visible ACP tool paths and structured values
+for paths ending in `/SKILL.md`. Subagent detection recognizes common structured
+agent identifier fields. Each discovered skill or subagent is listed once.
 
-Skills are detected generically from paths or string values ending in:
+Some agents omit delegated subagent launches from visible ACP updates. When the
+TUI has already discovered an agent transcript for token-footer data, it may
+opportunistically scan that transcript for the same subagent fields. This
+fallback contributes names only; tool counts and assistant turns remain driven
+by the live presentation path.
 
-```text
-/<skill-dir>/SKILL.md
-```
+## Invariants
 
-The extractor scans ACP snapshot locations, invocations, artifacts, raw input, and raw output. The card lists each skill once.
-
-## Subagent Detection
-
-Subagents are detected from common structured fields in ACP snapshot raw input or transcript fallback data:
-
-- `subagent_type`
-- `agentType`
-- `agent_type`
-- `agentId`
-- `agent_id`
-
-The card lists each subagent once.
-
-## Transcript Fallback
-
-Some agents do not expose every delegated subagent launch as a visible ACP tool event. When a transcript is already discovered for token footer data, `nori-acp` also scans the discovered JSONL transcript for the same subagent fields, including JSON-encoded argument strings such as Codex `spawn_agent` calls.
-
-This fallback is opportunistic and narrow: it scans only the current discovered transcript and only contributes subagent names. Tool counts, skills, and assistant-message counts remain ACP-event driven.
+- The card does not parse rendered history cells.
+- The card does not write derived stats into `nori-protocol` or transcripts.
+- Duplicate ACP updates for one call ID do not duplicate tool counts.
+- Presentation fallback logic remains private to `nori-tui`.

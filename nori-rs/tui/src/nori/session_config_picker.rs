@@ -1,6 +1,6 @@
 //! Generic picker helpers for ACP session config options.
 
-use nori_harness as acp;
+use nori_protocol::acp::v1 as acp;
 use ratatui::text::Line;
 
 use crate::app_event::AppEvent;

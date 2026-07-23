@@ -1,5 +1,13 @@
 # ACP Cancel Turn Boundary Bug Report
 
+**Status: Historical investigation, superseded as current protocol guidance.**
+The evidence below is retained unchanged, but the ACP-canonical boundary now
+treats each Harness prompt as exactly one `session/prompt` request and accepts a
+successful empty `EndTurn` as that request's terminal response. Nori does not
+absorb the response or resend the prompt. Any remaining user-visible issue in
+this scenario must be investigated from the correlated wire request/response,
+not repaired with client-side cancel-tail retry logic.
+
 ## Summary
 
 Nori releases the ACP session back to the UI too early after a cancelled prompt turn.

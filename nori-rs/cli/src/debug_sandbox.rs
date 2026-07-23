@@ -6,7 +6,6 @@ mod seatbelt;
 use std::path::PathBuf;
 
 use codex_common::CliConfigOverrides;
-use codex_protocol::config_types::SandboxMode;
 use codex_sandbox::exec_env::create_env;
 use codex_sandbox::landlock::spawn_command_under_linux_sandbox;
 #[cfg(target_os = "macos")]
@@ -14,6 +13,7 @@ use codex_sandbox::seatbelt::spawn_command_under_seatbelt;
 use codex_sandbox::spawn::StdioPolicy;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
+use nori_config::SandboxMode;
 
 use crate::LandlockCommand;
 use crate::SeatbeltCommand;

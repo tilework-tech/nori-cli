@@ -19,9 +19,8 @@ use crate::nori::token_count::TokenCount;
 use crate::nori::token_count::count_tokens;
 use crate::nori::token_count::format_token_count;
 use crate::system_info::read_active_skillset;
+use crate::ui_types::format_si_suffix;
 use crate::version::CODEX_CLI_VERSION;
-use codex_protocol::num_format::format_si_suffix;
-use codex_protocol::protocol::SessionConfiguredEvent;
 use nori_config::NoriConfig;
 use nori_harness::TranscriptTokenUsage;
 use ratatui::prelude::*;
@@ -712,12 +711,10 @@ pub(crate) fn new_nori_status_output(
 /// local cwd.
 pub(crate) fn new_nori_session_info(
     config: &NoriConfig,
-    event: SessionConfiguredEvent,
+    model: String,
     is_first_event: bool,
     cloud_session: Option<CloudSessionInfo>,
 ) -> SessionInfoCell {
-    let SessionConfiguredEvent { model, .. } = event;
-
     SessionInfoCell::new(if is_first_event {
         // Header box rendered as history (so it appears at the very top)
         let header = NoriSessionHeaderCell::new(model, config.cwd.clone())

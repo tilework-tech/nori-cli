@@ -9,12 +9,12 @@ pub use app::AppExitInfo;
 pub use app::RESUME_HINT_LEAD;
 pub use app::resume_command_for_conversation;
 use codex_login::AuthManager;
-use codex_protocol::config_types::SandboxMode;
-use codex_protocol::protocol::AskForApproval;
 #[cfg(target_os = "windows")]
 use codex_sandbox::get_platform_sandbox;
+use nori_config::AskForApproval;
 use nori_config::NoriConfig;
 use nori_config::NoriConfigOverrides;
+use nori_config::SandboxMode;
 use nori_harness::transcript::SessionMetadata;
 use nori_harness::transcript::TranscriptLoader;
 use std::fs::OpenOptions;
@@ -25,6 +25,7 @@ use tracing_subscriber::EnvFilter;
 #[allow(unused_imports)]
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::prelude::*;
+pub use ui_types::TokenUsage;
 
 mod additional_dirs;
 mod app;
@@ -59,6 +60,7 @@ mod markdown_stream;
 mod nori;
 mod pager_overlay;
 mod pinned_plan_drawer;
+mod presentation;
 pub mod public_widgets;
 mod render;
 mod resume_picker;
@@ -77,6 +79,7 @@ mod terminal_title;
 mod text_formatting;
 mod tui;
 mod ui_consts;
+mod ui_types;
 mod viewonly_transcript;
 
 // Nori-specific update modules
@@ -329,7 +332,7 @@ async fn run_ratatui_app(
                 UpdatePromptOutcome::RunUpdate(action) => {
                     crate::tui::restore()?;
                     return Ok(AppExitInfo {
-                        token_usage: codex_protocol::protocol::TokenUsage::default(),
+                        token_usage: crate::ui_types::TokenUsage::default(),
                         conversation_id: None,
                         conversation_has_activity: false,
                         update_action: Some(action),
@@ -368,7 +371,7 @@ async fn run_ratatui_app(
             session_log::log_session_end();
             let _ = tui.terminal.clear();
             return Ok(AppExitInfo {
-                token_usage: codex_protocol::protocol::TokenUsage::default(),
+                token_usage: crate::ui_types::TokenUsage::default(),
                 conversation_id: None,
                 conversation_has_activity: false,
                 update_action: None,
@@ -480,7 +483,7 @@ async fn run_ratatui_app(
                 restore();
                 session_log::log_session_end();
                 return Ok(AppExitInfo {
-                    token_usage: codex_protocol::protocol::TokenUsage::default(),
+                    token_usage: crate::ui_types::TokenUsage::default(),
                     conversation_id: None,
                     conversation_has_activity: false,
                     update_action: None,
@@ -557,7 +560,7 @@ fn resume_startup_error(tui: &mut Tui, message: String) -> color_eyre::Result<Ap
         error!("Failed to write resume error message: {err}");
     }
     Ok(AppExitInfo {
-        token_usage: codex_protocol::protocol::TokenUsage::default(),
+        token_usage: crate::ui_types::TokenUsage::default(),
         conversation_id: None,
         conversation_has_activity: false,
         update_action: None,
@@ -702,7 +705,7 @@ mod tests {
     }
     #[test]
     fn untrusted_project_skips_trust_prompt() -> std::io::Result<()> {
-        use codex_protocol::config_types::TrustLevel;
+        use nori_config::TrustLevel;
         let temp_dir = TempDir::new()?;
         let mut config = NoriConfig {
             cwd: temp_dir.path().to_path_buf(),

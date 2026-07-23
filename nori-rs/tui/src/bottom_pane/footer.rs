@@ -3,7 +3,7 @@ use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::system_info::NoriVersionSource;
 use crate::ui_consts::FOOTER_INDENT_COLS;
-use codex_protocol::num_format::format_si_suffix;
+use crate::ui_types::format_si_suffix;
 use crossterm::event::KeyCode;
 use nori_config::FooterFormatPart;
 use nori_config::FooterLayoutConfig;

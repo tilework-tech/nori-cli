@@ -1,53 +1,43 @@
 # Nori transcript format
 
-Reference for Nori's on-disk session transcript format, for tools that want to
-read or write Nori transcripts without depending on the `nori-harness` crate.
-Transcripts capture the client-side view of a conversation: what the user
-typed, what the assistant responded, and which tools ran.
+Reference for Nori's versioned JSONL session transcripts. Schema v3 is the
+canonical write format. The Harness keeps older v1/v2 storage compatibility
+private so embedders do not inherit the retired normalized protocol as API.
 
-Canonical implementation: `nori-rs/harness/src/transcript/` (crate
-`nori-harness`) — `types.rs` (schema), `recorder.rs` (writer), `loader.rs`
-(reader), `project.rs` (project id derivation).
+Canonical implementation: `nori-rs/harness/src/transcript/` in
+`nori-harness`. The versioned `TranscriptLine` and `TranscriptEntry` storage
+types are private. Public Rust readers use `TranscriptLoader`, `Transcript`,
+`Transcript::records()`, and `TranscriptRecord`.
 
 ## File locations
 
-Transcripts live under the Nori home directory:
-
-- `$NORI_HOME` if set, otherwise `~/.nori/cli` (see `nori-config`).
-
-Layout:
+Transcripts live under the Nori home directory (`$NORI_HOME`, or
+`~/.nori/cli` by default):
 
 ```text
 $NORI_HOME/transcripts/by-project/{project-id}/
-  ├── project.json            # Project metadata
+  ├── project.json
   └── sessions/
-      └── {session-id}.jsonl  # One file per session
+      └── {session-id}.jsonl
 ```
 
-- `{session-id}` is a UUIDv4 generated at session start.
+- `{session-id}` is a UUIDv4 generated when recording starts.
 - Session files are created with mode `0600` on Unix.
-- The file is created fresh (truncated) when the session starts, then
-  appended to line by line. Each line is flushed after writing, but the file
-  is never fsynced, so the tail of a crashed session may be missing.
+- The writer creates a fresh file, appends one JSON object per line, and flushes
+  each line. It does not `fsync`, so a crashed session can lose its tail.
 
-### Project ids and `project.json`
+### Project IDs and `project.json`
 
-The project id is 16 lowercase hex characters derived by hashing, in priority
-order:
+The project ID is 16 lowercase hexadecimal characters derived by hashing, in
+priority order:
 
-1. the normalized git remote URL of `origin` (e.g.
-   `git@github.com:user/repo.git` and `https://github.com/user/repo.git` both
-   normalize to `github.com/user/repo`), else
-2. the git root absolute path, else
-3. the canonicalized working directory path.
+1. the normalized `origin` Git remote;
+2. the absolute Git root; or
+3. the canonicalized working directory.
 
-The hash is Rust's `DefaultHasher`, which is **not guaranteed stable across
-Rust versions**. Treat project ids as opaque directory names: discover
-projects by listing `by-project/` and reading each `project.json`, and do not
-try to recompute ids yourself.
-
-`project.json` (pretty-printed JSON, rewritten on every new session in the
-project):
+Rust's `DefaultHasher` is not guaranteed stable across Rust versions. Treat the
+ID as an opaque directory name and discover projects by listing `by-project/`
+and reading `project.json`.
 
 ```json
 {
@@ -61,129 +51,217 @@ project):
 }
 ```
 
-`git_remote` and `git_root` are `null` outside a git repo. Because the file is
-rewritten each session, `created_at` reflects the most recent session, not the
-first.
+`git_remote` and `git_root` are `null` outside a Git repository. The file is
+rewritten when a new session starts in the project.
 
-## Line format
+## Common line envelope
 
-Session files are JSONL: one self-contained JSON object per line, `\n`
-terminated. Every line shares an envelope, with the entry's fields flattened
-into the same object:
+Each nonblank JSONL line is a self-contained object with flattened entry
+fields:
 
-- `ts` — ISO 8601 timestamp with millisecond precision, UTC (`Z` suffix),
-  e.g. `"2026-07-03T12:30:45.123Z"`.
-- `v` — schema version, currently `2`.
-- `type` — the entry kind (snake_case), plus the entry's own fields.
+- `ts`: ISO 8601 UTC timestamp with millisecond precision;
+- `v`: storage schema version, currently `3`; and
+- `type`: snake-case entry kind.
 
-The **first line must be a `session_meta` entry**; readers reject files whose
-first line is not valid session metadata.
+Canonical writers put `session_meta` first. The full loader must find valid
+session metadata and treats an unparseable line before metadata as a hard
+error. After metadata, it skips blank, unknown, or unparseable lines so an
+otherwise readable transcript survives schema changes.
 
-### `session_meta` (first line)
+## Canonical schema v3
+
+The runtime v3 writer emits three entry kinds: `session_meta`, `user`, and
+`session_event`. It does not write `assistant`, `client_event`, `tool_call`,
+`tool_result`, or `patch_apply` entries.
+
+### `session_meta`
 
 ```json
-{"ts":"2026-07-03T12:30:45.123Z","v":2,"type":"session_meta","session_id":"7f9c2f6a-1c1e-4a9b-9a3e-2f0d8b7c6d5e","project_id":"a1b2c3d4e5f60718","started_at":"2026-07-03T12:30:45.123Z","cwd":"/home/user/src/my-repo","agent":"claude-code","cli_version":"0.9.0","git":{"branch":"main","commit_hash":"1975265abc..."},"acp_session_id":"acp-sess-abc123"}
+{
+  "ts": "2026-07-03T12:30:45.123Z",
+  "v": 3,
+  "type": "session_meta",
+  "session_id": "7f9c2f6a-1c1e-4a9b-9a3e-2f0d8b7c6d5e",
+  "project_id": "a1b2c3d4e5f60718",
+  "started_at": "2026-07-03T12:30:45.123Z",
+  "cwd": "/home/user/src/my-repo",
+  "agent": "claude-code",
+  "cli_version": "0.9.0",
+  "git": { "branch": "main", "commit_hash": "1975265abc..." },
+  "acp_session_id": "acp-sess-abc123"
+}
 ```
 
-Optional fields, omitted when absent: `agent` (ACP agent slug, e.g.
-`claude-code`, `codex`, `gemini`), `git` (and within it `branch`,
-`commit_hash`), and `acp_session_id` (the ACP agent's own session id, used to
-resume via `session/load`).
+Optional fields are omitted when absent: `agent`, `git`, and
+`acp_session_id`. Within `git`, `branch` and `commit_hash` are optional.
+`acp_session_id` is the agent's identity used for ACP session load or resume;
+it is distinct from Nori's transcript `session_id`.
 
 ### `user`
 
-```json
-{"ts":"2026-07-03T12:31:02.001Z","v":2,"type":"user","id":"msg-001","content":"What files are in src?","attachments":[{"type":"file_path","path":"/tmp/screenshot.png"}]}
-```
-
-`attachments` is omitted when empty. Each attachment is tagged by `type`:
-`file_path` (`path`) or `base64` (`data`, `mime_type`).
-
-### `assistant`
+User input is stored explicitly because it travels from client to agent and
+cannot be reconstructed from an agent-to-client event stream.
 
 ```json
-{"ts":"2026-07-03T12:31:10.500Z","v":2,"type":"assistant","id":"msg-002","content":[{"type":"thinking","thinking":"Let me check src."},{"type":"text","text":"src contains main.rs and lib.rs."}],"agent":"claude-code"}
+{
+  "ts": "2026-07-03T12:31:02.001Z",
+  "v": 3,
+  "type": "user",
+  "id": "msg-001",
+  "content": "What files are in src?",
+  "attachments": [{ "type": "file_path", "path": "/tmp/screenshot.png" }]
+}
 ```
 
-`content` is a list of blocks tagged by `type`: `text` (`text`) or `thinking`
-(`thinking`). `agent` is optional.
+`attachments` is omitted when empty. Supported private storage shapes are
+`file_path` (`path`) and `base64` (`data`, `mime_type`). The current Harness
+input path records display text with an empty attachment list.
 
-### `tool_call` / `tool_result`
+### `session_event`
+
+The `event` field contains the exact public `nori_protocol::SessionEvent`
+delivered by the Harness. Its outer `source` is `acp` or `nori`.
+
+A representative ACP notification is:
 
 ```json
-{"ts":"2026-07-03T12:31:05.000Z","v":2,"type":"tool_call","call_id":"call-001","name":"shell","input":{"command":"ls src/"}}
-{"ts":"2026-07-03T12:31:05.250Z","v":2,"type":"tool_result","call_id":"call-001","output":"main.rs\nlib.rs","exit_code":0}
+{
+  "ts": "2026-07-03T12:31:03.001Z",
+  "v": 3,
+  "type": "session_event",
+  "event": {
+    "source": "acp",
+    "event": {
+      "message_type": "notification",
+      "sessionId": "acp-sess-abc123",
+      "update": {
+        "sessionUpdate": "agent_message_chunk",
+        "content": { "type": "text", "text": "src contains main.rs." }
+      }
+    }
+  }
+}
 ```
 
-`input` is arbitrary JSON. On results, `truncated` (bool) is omitted when
-false and `exit_code` is omitted when not applicable. `call_id` correlates
-call and result.
-
-### `patch_apply`
+A representative Nori lifecycle event is:
 
 ```json
-{"ts":"2026-07-03T12:31:20.000Z","v":2,"type":"patch_apply","call_id":"call-002","operation":"edit","path":"/home/user/src/my-repo/src/main.rs","success":true}
+{
+  "ts": "2026-07-03T12:31:03.002Z",
+  "v": 3,
+  "type": "session_event",
+  "event": {
+    "source": "nori",
+    "event": {
+      "event_type": "session_phase_changed",
+      "event": { "phase": "idle" }
+    }
+  }
+}
 ```
 
-`operation` is `edit`, `write`, or `delete`. `error` (string) is present only
-on failure.
+ACP payload casing and shape come from `nori_protocol::acp`; the outer Nori
+tags come from `SessionEvent`, `AcpEvent`, and `NoriEvent`. ACP requests and
+responses retain the schema `RequestId`, which may be a string, number, or
+`null`. Because v3 stores the exact public event payload, its nested ACP shape
+tracks the ACP schema re-export selected by `nori-protocol`.
 
-### `client_event`
+V3 intentionally has one canonical copy of agent output: the raw ACP
+notification. It does not also persist a derived assistant record or the
+private TUI/Harness presentation projection.
 
-Wraps a normalized ACP-native event from the `nori-protocol` crate. The
-payload lives under `event` and is internally tagged by `event_type`
-(snake_case), with the variant's fields flattened alongside the tag:
+## Setup, phases, and replay
 
-```json
-{"ts":"2026-07-03T12:31:06.000Z","v":2,"type":"client_event","event":{"event_type":"tool_snapshot","call_id":"call-001","title":"Edit src/main.rs","kind":"edit","phase":"completed","locations":[],"invocation":null,"artifacts":[],"raw_input":null,"raw_output":null}}
-```
+The recorded live stream preserves Harness publication order.
 
-Variants (see `nori-rs/nori-protocol/src/lib.rs` for payload shapes):
-`tool_snapshot`, `approval_request`, `message_delta`, `plan_snapshot`,
-`session_phase_changed`, `prompt_completed`, `load_completed`,
-`queue_changed`, `context_compacted`, `replay_entry`,
-`agent_commands_update`, `session_capabilities_changed`,
-`session_update_info`, `session_config_update`, `session_mode_changed`,
-`thread_goal_updated`, `thread_goal_cleared`, `warning`. This set tracks the
-protocol crate and changes more often than the core entry types; readers
-should be prepared to skip unknown `event_type`s.
+- Current initialize and session setup responses precede
+  `NoriEvent::SessionStarted`.
+- If `session/load` fails and Nori falls back to `session/new`, both the failed
+  load response and fallback-new response precede `SessionStarted`.
+- `SessionPhase::{Loading, Prompting, Cancelling}` stores the exact ACP wire
+  `RequestId` for the active operation.
+- One accepted Harness prompt corresponds to exactly one ACP
+  `session/prompt`; there is no cancel-tail resend heuristic. A successful
+  empty `EndTurn` is terminal for that request.
+
+Replay is a filtered projection, not a second reading mode for all stored
+events. The public replay sequence is:
+
+1. `NoriEvent::ReplayStarted`;
+2. historical `SessionEvent::Acp(AcpEvent::Notification(...))` values in
+   source order; and
+3. `NoriEvent::ReplayFinished`.
+
+For v3, an explicit `user` entry is projected to an ACP user-message
+notification at its recorded position. Stored ACP notifications remain exact,
+apart from retargeting their session ID to the active session. Stored Nori
+events, ACP requests, and ACP responses are not emitted inside replay brackets.
+In particular, the current load/new response is never mislabeled as historical
+replay. Historical requests cannot repeat side effects, and historical
+responses cannot complete live requests.
+
+Agent-sourced `session/load` replay follows the same outward rule: the markers
+bracket the load-time ACP notifications in agent order, while the current load
+response remains outside the brackets and before `SessionStarted`.
+
+## Private v1/v2 compatibility
+
+Older transcripts can contain these retired storage records:
+
+- `assistant` text/thinking blocks;
+- normalized `client_event` values;
+- `tool_call` and `tool_result`; and
+- `patch_apply`.
+
+Those shapes remain private to the Harness transcript types and loader. They
+are not re-exported from `nori-protocol`, and `TranscriptEntry` /
+`TranscriptLine` are not public Harness types. New code must not write v2 or
+recreate the former normalized protocol facade.
+
+The compatibility projection is intentionally narrower than the old storage
+enum:
+
+- `Transcript::records()` exposes user text, legacy assistant text, legacy
+  thinking text, and exact v3 `SessionEvent` values;
+- it skips normalized client events and legacy tool/patch storage records;
+- internal resume code may privately derive completed display/goal state from
+  selected legacy records; and
+- v1/v2 user/assistant content can be synthesized as ACP message notifications
+  when no raw v3 notification stream exists.
+
+The checked-in public compatibility test covers v2 user, assistant, and
+thinking records. There is not currently a checked-in fixture matrix covering
+every legacy top-level record and all 18 former normalized `ClientEvent` tags.
+
+The loader does not expose a version-specific decoder API. It tolerantly
+deserializes the private storage enum; unknown fields are ignored, unknown or
+unparseable post-metadata lines are skipped, and blank lines are skipped.
 
 ## Token usage
 
-Nori transcript entries do not carry token counts. The only usage data that
-can appear is the optional `usage` field inside `session_update_info` client
-events. The token statistics shown in the TUI footer are parsed from the
-underlying agent's *own* transcript files (`~/.claude/projects/`,
-`~/.codex/sessions/`, `~/.gemini/tmp/`) by
-`nori-rs/harness/src/transcript_discovery.rs`; those are third-party formats
-and out of scope here.
-
-## Versioning and compatibility
-
-- `v` is currently `2`. The loader does not branch on it; it exists for
-  forward compatibility.
-- **Unknown fields are ignored** (no `deny_unknown_fields` anywhere in the
-  schema).
-- **Unknown or unparseable lines are silently skipped** by the full-transcript
-  loader — except the first line, which must parse as `session_meta` or the
-  load fails.
-- Blank lines are skipped.
-- Lightweight scanners (session pickers, first-user-message preview, user-turn
-  counts) inspect only the `type` field per line, so extra entry kinds never
-  break listing.
-
-Writer expectations for third-party producers:
-
-- One JSON object per line, no pretty-printing, `\n` terminated.
-- First line is `session_meta` with at minimum `session_id`, `project_id`,
-  `started_at`, `cwd`, `cli_version` (plus the `ts`/`v`/`type` envelope).
-- Name the file `{session_id}.jsonl` and keep `session_id` consistent between
-  the filename and the metadata — loaders derive paths from the id.
+Canonical v3 transcript entries have no separate Nori token-count record. ACP
+usage can appear inside stored ACP session notifications. The goodbye-card
+token statistics may also be read from the underlying agent's own transcript
+files by `nori-rs/harness/src/transcript_discovery.rs`; those third-party
+formats are outside this reference.
 
 ## Reading transcripts programmatically
 
-If you can take a Rust dependency, use the `nori-harness` crate
-(`nori-rs/harness`): `TranscriptLine` / `TranscriptEntry` are the canonical
-serde types, `TranscriptLoader` handles discovery, listing, and
-tolerant parsing, and `TranscriptRecorder` is the canonical writer. Anything
-this document says is a simplification of those types.
+Use `nori_harness::TranscriptLoader` (or the equivalent exports under
+`nori_harness::transcript`) and iterate `Transcript::records()`:
+
+```rust
+for record in transcript.records() {
+    match record {
+        TranscriptRecord::User { content } => { /* ... */ }
+        TranscriptRecord::Assistant { content } => { /* legacy v1/v2 */ }
+        TranscriptRecord::Thinking { content } => { /* legacy v1/v2 */ }
+        TranscriptRecord::SessionEvent(event) => { /* exact v3 event */ }
+    }
+}
+```
+
+Do not depend on the private versioned storage enum. A third-party producer
+that writes JSONL directly must version its integration against this document
+and the selected `nori-protocol` ACP schema; Nori does not promise that exact
+serialized public events are a permanently frozen storage ABI.

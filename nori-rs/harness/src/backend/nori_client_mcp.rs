@@ -59,9 +59,8 @@ use serde::Deserialize;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+use super::thread_goal::GoalStatus;
 use super::*;
-use codex_protocol::protocol::ThreadGoalStatus;
-use nori_protocol::ThreadGoalUpdated;
 
 const DUPLICATE_CREATE_GOAL_ERROR: &str = "cannot create a new goal because this thread already has a goal; use update_goal only when the existing goal is complete";
 
@@ -96,11 +95,11 @@ enum GoalCompletion {
     Blocked,
 }
 
-impl From<GoalCompletion> for ThreadGoalStatus {
+impl From<GoalCompletion> for GoalStatus {
     fn from(value: GoalCompletion) -> Self {
         match value {
-            GoalCompletion::Complete => ThreadGoalStatus::Complete,
-            GoalCompletion::Blocked => ThreadGoalStatus::Blocked,
+            GoalCompletion::Complete => GoalStatus::Complete,
+            GoalCompletion::Blocked => GoalStatus::Blocked,
         }
     }
 }
@@ -112,9 +111,8 @@ impl From<GoalCompletion> for ThreadGoalStatus {
 pub(crate) struct NoriClientShared {
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     backend_event_tx: mpsc::Sender<BackendEvent>,
-    transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     connected: Arc<AtomicBool>,
-    agent_capabilities: nori_protocol::AgentCapabilitiesView,
+    agent_capabilities: crate::normalized::AgentCapabilitiesView,
     nori_client_advertised: bool,
 }
 
@@ -122,15 +120,13 @@ impl NoriClientShared {
     pub(crate) fn new(
         thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
         backend_event_tx: mpsc::Sender<BackendEvent>,
-        transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
         connected: Arc<AtomicBool>,
-        agent_capabilities: nori_protocol::AgentCapabilitiesView,
+        agent_capabilities: crate::normalized::AgentCapabilitiesView,
         nori_client_advertised: bool,
     ) -> Self {
         Self {
             thread_goal_state,
             backend_event_tx,
-            transcript_recorder,
             connected,
             agent_capabilities,
             nori_client_advertised,
@@ -179,7 +175,7 @@ impl NoriClientService {
             if state.snapshot(now).is_some() {
                 return Ok(tool_error(DUPLICATE_CREATE_GOAL_ERROR));
             }
-            state.set_objective(objective, Some(ThreadGoalStatus::Active), now)
+            state.set_objective(objective, Some(GoalStatus::Active), now)
         };
         Ok(self.respond_with_goal(result).await)
     }
@@ -207,15 +203,15 @@ impl NoriClientService {
     ) -> CallToolResult {
         match result {
             Ok(goal) => {
-                let recorder = self.shared.transcript_recorder.lock().await.clone();
-                emit_client_event(
-                    &self.shared.backend_event_tx,
-                    recorder.as_ref(),
-                    ClientEvent::ThreadGoalUpdated(ThreadGoalUpdated {
-                        goal: goal.clone().into_client_goal(),
-                    }),
-                )
-                .await;
+                let _ = self
+                    .shared
+                    .backend_event_tx
+                    .send(BackendEvent::Public(nori_protocol::SessionEvent::Nori(
+                        nori_protocol::NoriEvent::GoalChanged(Some(
+                            goal.clone().into_client_goal(),
+                        )),
+                    )))
+                    .await;
                 tool_success(serde_json::json!({ "goal": goal_json(goal) }))
             }
             Err(err) => tool_error(err),
@@ -288,17 +284,18 @@ impl ServerHandler for NoriClientService {
     ) -> Result<InitializeResult, McpError> {
         let already_connected = self.shared.connected.swap(true, Ordering::Relaxed);
         if !already_connected {
-            let recorder = self.shared.transcript_recorder.lock().await.clone();
-            emit_client_event(
-                &self.shared.backend_event_tx,
-                recorder.as_ref(),
-                ClientEvent::SessionCapabilitiesChanged(capabilities_update(
-                    self.shared.agent_capabilities.clone(),
-                    self.shared.nori_client_advertised,
-                    true,
-                )),
-            )
-            .await;
+            let update = capabilities_update(
+                self.shared.agent_capabilities.clone(),
+                self.shared.nori_client_advertised,
+                true,
+            );
+            let _ = self
+                .shared
+                .backend_event_tx
+                .send(BackendEvent::Public(SessionEvent::Nori(
+                    nori_protocol::NoriEvent::CapabilitiesChanged(public_nori_capabilities(update)),
+                )))
+                .await;
         }
         if context.peer.peer_info().is_none() {
             context.peer.set_peer_info(request);
@@ -328,14 +325,14 @@ fn goal_json(goal: thread_goal::ThreadGoalSnapshot) -> serde_json::Value {
     })
 }
 
-fn status_label(status: ThreadGoalStatus) -> &'static str {
+fn status_label(status: GoalStatus) -> &'static str {
     match status {
-        ThreadGoalStatus::Active => "active",
-        ThreadGoalStatus::Paused => "paused",
-        ThreadGoalStatus::Blocked => "blocked",
-        ThreadGoalStatus::UsageLimited => "usage_limited",
-        ThreadGoalStatus::BudgetLimited => "budget_limited",
-        ThreadGoalStatus::Complete => "complete",
+        GoalStatus::Active => "active",
+        GoalStatus::Paused => "paused",
+        GoalStatus::Blocked => "blocked",
+        GoalStatus::UsageLimited => "usage_limited",
+        GoalStatus::BudgetLimited => "budget_limited",
+        GoalStatus::Complete => "complete",
     }
 }
 
@@ -450,7 +447,7 @@ async fn require_bearer_token(
 pub(super) fn capabilities_update_for_session(
     connection: &AcpConnection,
     connected: &AtomicBool,
-) -> nori_protocol::SessionCapabilitiesView {
+) -> crate::normalized::SessionCapabilitiesView {
     capabilities_update_for_nori_client(
         connection,
         connection.capabilities().mcp_capabilities.http,
@@ -462,7 +459,7 @@ pub(super) fn capabilities_update_for_nori_client(
     connection: &AcpConnection,
     nori_client_advertised: bool,
     nori_client_initialized: bool,
-) -> nori_protocol::SessionCapabilitiesView {
+) -> crate::normalized::SessionCapabilitiesView {
     capabilities_update(
         agent_capabilities_view(connection),
         nori_client_advertised,
@@ -473,9 +470,9 @@ pub(super) fn capabilities_update_for_nori_client(
 /// Project the agent's ACP capabilities into the client-facing view.
 pub(crate) fn agent_capabilities_view(
     connection: &AcpConnection,
-) -> nori_protocol::AgentCapabilitiesView {
+) -> crate::normalized::AgentCapabilitiesView {
     let capabilities = connection.capabilities();
-    nori_protocol::AgentCapabilitiesView {
+    crate::normalized::AgentCapabilitiesView {
         http_mcp: capabilities.mcp_capabilities.http,
         load_session: capabilities.load_session,
         session_list: capabilities.session_capabilities.list.is_some(),
@@ -485,13 +482,13 @@ pub(crate) fn agent_capabilities_view(
 }
 
 fn capabilities_update(
-    agent: nori_protocol::AgentCapabilitiesView,
+    agent: crate::normalized::AgentCapabilitiesView,
     nori_client_advertised: bool,
     nori_client_initialized: bool,
-) -> nori_protocol::SessionCapabilitiesView {
-    nori_protocol::SessionCapabilitiesView {
+) -> crate::normalized::SessionCapabilitiesView {
+    crate::normalized::SessionCapabilitiesView {
         agent,
-        nori_client: nori_protocol::NoriClientCapabilitiesView {
+        nori_client: crate::normalized::NoriClientCapabilitiesView {
             advertised: nori_client_advertised,
             initialized: nori_client_initialized,
         },
@@ -513,7 +510,6 @@ pub(super) async fn register_for_session(
     mcp_servers: &mut Vec<acp::McpServer>,
     thread_goal_state: Arc<Mutex<thread_goal::ThreadGoalState>>,
     backend_event_tx: mpsc::Sender<BackendEvent>,
-    transcript_recorder: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
     connected: Arc<AtomicBool>,
 ) -> Result<Option<PendingNoriClientServer>> {
     if !connection.capabilities().mcp_capabilities.http {
@@ -523,7 +519,6 @@ pub(super) async fn register_for_session(
     let next_server = NoriClientServer::spawn(NoriClientShared::new(
         thread_goal_state,
         backend_event_tx,
-        transcript_recorder,
         Arc::clone(&connected),
         agent_capabilities_view(connection),
         true,
@@ -548,8 +543,8 @@ mod tests {
 
     use super::*;
 
-    fn test_agent_capabilities() -> nori_protocol::AgentCapabilitiesView {
-        nori_protocol::AgentCapabilitiesView {
+    fn test_agent_capabilities() -> crate::normalized::AgentCapabilitiesView {
+        crate::normalized::AgentCapabilitiesView {
             http_mcp: true,
             load_session: false,
             session_list: false,
@@ -563,7 +558,6 @@ mod tests {
         NoriClientService::new(NoriClientShared::new(
             Arc::new(Mutex::new(thread_goal::ThreadGoalState::default())),
             backend_event_tx,
-            Arc::new(Mutex::new(None)),
             Arc::new(AtomicBool::new(false)),
             test_agent_capabilities(),
             true,
@@ -645,7 +639,6 @@ mod tests {
         let service = NoriClientService::new(NoriClientShared::new(
             Arc::new(Mutex::new(thread_goal::ThreadGoalState::default())),
             backend_event_tx,
-            Arc::new(Mutex::new(None)),
             Arc::new(AtomicBool::new(false)),
             test_agent_capabilities(),
             true,
@@ -663,9 +656,9 @@ mod tests {
         .expect("create_goal should emit a client event before timeout")
         .expect("create_goal should emit a client event");
         match emitted_event {
-            BackendEvent::Client(ClientEvent::ThreadGoalUpdated(update)) => {
-                assert_eq!(update.goal.objective, "Ship the ACP goal bridge");
-            }
+            BackendEvent::Public(SessionEvent::Nori(nori_protocol::NoriEvent::GoalChanged(
+                Some(goal),
+            ))) => assert_eq!(goal.objective, "Ship the ACP goal bridge"),
             other => panic!("expected thread goal update, got {other:?}"),
         }
 
@@ -730,7 +723,6 @@ mod tests {
         let server = NoriClientServer::spawn(NoriClientShared::new(
             Arc::clone(&state),
             backend_event_tx,
-            Arc::new(Mutex::new(None)),
             Arc::clone(&connected),
             test_agent_capabilities(),
             true,
@@ -805,7 +797,6 @@ mod tests {
         let server = NoriClientServer::spawn(NoriClientShared::new(
             Arc::clone(&state),
             backend_event_tx,
-            Arc::new(Mutex::new(None)),
             Arc::clone(&connected),
             test_agent_capabilities(),
             true,
@@ -913,7 +904,6 @@ mod tests {
         let server = NoriClientServer::spawn(NoriClientShared::new(
             Arc::clone(&state),
             backend_event_tx,
-            Arc::new(Mutex::new(None)),
             Arc::clone(&connected),
             test_agent_capabilities(),
             true,

@@ -1,11 +1,11 @@
 #![cfg(target_os = "linux")]
-use codex_protocol::config_types::ShellEnvironmentPolicy;
-use codex_protocol::protocol::SandboxPolicy;
 use codex_sandbox::error::CodexErr;
 use codex_sandbox::error::SandboxErr;
 use codex_sandbox::exec::ExecParams;
 use codex_sandbox::exec::process_exec_tool_call;
 use codex_sandbox::exec_env::create_env;
+use nori_config::SandboxPolicy;
+use nori_config::ShellEnvironmentPolicy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
@@ -62,7 +62,6 @@ async fn run_cmd(cmd: &[&str], writable_roots: &[PathBuf], timeout_ms: u64) {
         &sandbox_policy,
         sandbox_cwd.as_path(),
         &codex_linux_sandbox_exe,
-        None,
     )
     .await
     .unwrap();
@@ -156,7 +155,6 @@ async fn assert_network_blocked(cmd: &[&str]) {
         &sandbox_policy,
         sandbox_cwd.as_path(),
         &codex_linux_sandbox_exe,
-        None,
     )
     .await;
 

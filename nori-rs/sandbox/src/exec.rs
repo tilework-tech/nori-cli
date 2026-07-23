@@ -26,11 +26,7 @@ use crate::sandboxing::SandboxManager;
 use crate::spawn::StdioPolicy;
 use crate::spawn::spawn_child_async;
 use crate::text_encoding::bytes_to_string_smart;
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::ExecCommandOutputDeltaEvent;
-use codex_protocol::protocol::ExecOutputStream;
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::SandboxPolicy;
 
 pub const DEFAULT_EXEC_COMMAND_TIMEOUT_MS: u64 = 10_000;
 
@@ -44,10 +40,6 @@ const EXEC_TIMEOUT_EXIT_CODE: i32 = 124; // conventional timeout exit code
 // I/O buffer sizing
 const READ_CHUNK_SIZE: usize = 8192; // bytes per read
 const AGGREGATE_BUFFER_INITIAL_CAPACITY: usize = 8 * 1024; // 8 KiB
-
-/// Limit the number of ExecCommandOutputDelta events emitted per exec call.
-/// Aggregation still collects full output; only the live event stream is capped.
-pub(crate) const MAX_EXEC_OUTPUT_DELTAS_PER_CALL: usize = 10_000;
 
 #[derive(Debug)]
 pub struct ExecParams {
@@ -120,19 +112,11 @@ pub enum SandboxType {
     WindowsRestrictedToken,
 }
 
-#[derive(Clone)]
-pub struct StdoutStream {
-    pub sub_id: String,
-    pub call_id: String,
-    pub tx_event: Sender<Event>,
-}
-
 pub async fn process_exec_tool_call(
     params: ExecParams,
     sandbox_policy: &SandboxPolicy,
     sandbox_cwd: &Path,
     codex_linux_sandbox_exe: &Option<PathBuf>,
-    stdout_stream: Option<StdoutStream>,
 ) -> Result<ExecToolCallOutput> {
     let sandbox_type = match &sandbox_policy {
         SandboxPolicy::DangerFullAccess => SandboxType::None,
@@ -179,13 +163,12 @@ pub async fn process_exec_tool_call(
         .map_err(CodexErr::from)?;
 
     // Route through the sandboxing module for a single, unified execution path.
-    crate::sandboxing::execute_env(exec_env, sandbox_policy, stdout_stream).await
+    crate::sandboxing::execute_env(exec_env, sandbox_policy).await
 }
 
 pub(crate) async fn execute_exec_env(
     env: ExecEnv,
     sandbox_policy: &SandboxPolicy,
-    stdout_stream: Option<StdoutStream>,
 ) -> Result<ExecToolCallOutput> {
     let ExecEnv {
         command,
@@ -209,7 +192,7 @@ pub(crate) async fn execute_exec_env(
     };
 
     let start = Instant::now();
-    let raw_output_result = exec(params, sandbox, sandbox_policy, stdout_stream).await;
+    let raw_output_result = exec(params, sandbox, sandbox_policy).await;
     let duration = start.elapsed();
     finalize_exec_result(raw_output_result, sandbox, duration)
 }
@@ -491,7 +474,6 @@ async fn exec(
     params: ExecParams,
     sandbox: SandboxType,
     sandbox_policy: &SandboxPolicy,
-    stdout_stream: Option<StdoutStream>,
 ) -> Result<RawExecToolCallOutput> {
     #[cfg(target_os = "windows")]
     if sandbox == SandboxType::WindowsRestrictedToken
@@ -525,7 +507,7 @@ async fn exec(
         env,
     )
     .await?;
-    consume_truncated_output(child, expiration, stdout_stream).await
+    consume_truncated_output(child, expiration).await
 }
 
 /// Consumes the output of a child process, truncating it so it is suitable for
@@ -533,7 +515,6 @@ async fn exec(
 async fn consume_truncated_output(
     mut child: Child,
     expiration: ExecExpiration,
-    stdout_stream: Option<StdoutStream>,
 ) -> Result<RawExecToolCallOutput> {
     // Both stdout and stderr were configured with `Stdio::piped()`
     // above, therefore `take()` should normally return `Some`.  If it doesn't
@@ -554,14 +535,10 @@ async fn consume_truncated_output(
 
     let stdout_handle = tokio::spawn(read_capped(
         BufReader::new(stdout_reader),
-        stdout_stream.clone(),
-        false,
         Some(agg_tx.clone()),
     ));
     let stderr_handle = tokio::spawn(read_capped(
         BufReader::new(stderr_reader),
-        stdout_stream.clone(),
-        true,
         Some(agg_tx.clone()),
     ));
 
@@ -651,42 +628,16 @@ async fn consume_truncated_output(
 
 async fn read_capped<R: AsyncRead + Unpin + Send + 'static>(
     mut reader: R,
-    stream: Option<StdoutStream>,
-    is_stderr: bool,
     aggregate_tx: Option<Sender<Vec<u8>>>,
 ) -> io::Result<StreamOutput<Vec<u8>>> {
     let mut buf = Vec::with_capacity(AGGREGATE_BUFFER_INITIAL_CAPACITY);
     let mut tmp = [0u8; READ_CHUNK_SIZE];
-    let mut emitted_deltas: usize = 0;
-
     // No caps: append all bytes
 
     loop {
         let n = reader.read(&mut tmp).await?;
         if n == 0 {
             break;
-        }
-
-        if let Some(stream) = &stream
-            && emitted_deltas < MAX_EXEC_OUTPUT_DELTAS_PER_CALL
-        {
-            let chunk = tmp[..n].to_vec();
-            let msg = EventMsg::ExecCommandOutputDelta(ExecCommandOutputDeltaEvent {
-                call_id: stream.call_id.clone(),
-                stream: if is_stderr {
-                    ExecOutputStream::Stderr
-                } else {
-                    ExecOutputStream::Stdout
-                },
-                chunk,
-            });
-            let event = Event {
-                id: stream.sub_id.clone(),
-                msg,
-            };
-            #[allow(clippy::let_unit_value)]
-            let _ = stream.tx_event.send(event).await;
-            emitted_deltas += 1;
         }
 
         if let Some(tx) = &aggregate_tx {
@@ -850,7 +801,7 @@ mod tests {
             arg0: None,
         };
 
-        let output = exec(params, SandboxType::None, &SandboxPolicy::ReadOnly, None).await?;
+        let output = exec(params, SandboxType::None, &SandboxPolicy::ReadOnly).await?;
         assert!(output.timed_out);
 
         let stdout = output.stdout.from_utf8_lossy().text;
@@ -903,7 +854,6 @@ mod tests {
             &SandboxPolicy::DangerFullAccess,
             cwd.as_path(),
             &None,
-            None,
         )
         .await;
         let output = match result {

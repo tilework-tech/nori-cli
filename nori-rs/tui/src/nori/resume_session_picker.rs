@@ -10,8 +10,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use nori_harness::AcpSessionSummary;
 use nori_harness::transcript::TranscriptLoader;
+use nori_protocol::acp::v1::SessionInfo;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -103,9 +103,7 @@ pub fn resume_session_picker_params(
 /// Columns map as: `title` → row name (falling back to the session id when the
 /// agent omits a title), `updated_at` → relative time, and `cwd` → the row
 /// description.
-pub fn acp_resume_session_picker_params(
-    mut sessions: Vec<AcpSessionSummary>,
-) -> SelectionViewParams {
+pub fn acp_resume_session_picker_params(mut sessions: Vec<SessionInfo>) -> SelectionViewParams {
     // Agents return rows in arbitrary order; show most-recent-first. Missing
     // or unparseable `updated_at` sorts after every dated row, and the sort
     // is stable so ties (and undated rows) keep the agent's order.
@@ -161,7 +159,8 @@ pub fn acp_resume_session_picker_params(
         let mut is_cloud_origin = session
             .meta
             .as_ref()
-            .and_then(|meta| meta.pointer("/nori/origin"))
+            .and_then(|meta| meta.get("nori"))
+            .and_then(|nori| nori.get("origin"))
             .and_then(serde_json::Value::as_str)
             == Some("cloud");
         // Transition shim: handroll in the wild doesn't emit `_meta` yet and
@@ -172,7 +171,7 @@ pub fn acp_resume_session_picker_params(
             .title
             .clone()
             .filter(|title| !title.is_empty())
-            .unwrap_or_else(|| session.session_id.clone());
+            .unwrap_or_else(|| session.session_id.to_string());
         let description = match (session.updated_at.as_deref(), cwd_display.as_deref()) {
             (Some(updated_at), Some(cwd)) => {
                 Some(format!("{} · {cwd}", format_relative_time(updated_at)))
@@ -186,7 +185,7 @@ pub fn acp_resume_session_picker_params(
             None => format!("{} {name}", session.session_id),
         };
 
-        let acp_session_id = session.session_id;
+        let acp_session_id = session.session_id.to_string();
         let title = session.title.filter(|title| !title.is_empty());
         let actions: Vec<SelectionAction> = vec![Box::new(move |tx: &AppEventSender| {
             tx.send(AppEvent::ResumeAcpSession {
@@ -318,6 +317,20 @@ mod tests {
     use nori_harness::TranscriptRecorder;
     use tracing_subscriber::fmt::MakeWriter;
 
+    fn acp_session_info(
+        session_id: &str,
+        cwd: &str,
+        title: Option<&str>,
+        updated_at: Option<&str>,
+        meta: Option<serde_json::Value>,
+    ) -> SessionInfo {
+        let mut session = SessionInfo::new(session_id.to_string(), PathBuf::from(cwd));
+        session.title = title.map(str::to_string);
+        session.updated_at = updated_at.map(str::to_string);
+        session.meta = meta.and_then(|value| value.as_object().cloned());
+        session
+    }
+
     #[derive(Clone)]
     struct CapturedLogs {
         bytes: Arc<Mutex<Vec<u8>>>,
@@ -399,20 +412,14 @@ mod tests {
     #[test]
     fn acp_resume_picker_maps_agent_session_summaries() {
         let sessions = vec![
-            AcpSessionSummary {
-                session_id: "agent-sess-1".to_string(),
-                cwd: PathBuf::from("/repo/one"),
-                title: Some("Fix the parser".to_string()),
-                updated_at: Some("2020-01-15T10:30:00Z".to_string()),
-                meta: None,
-            },
-            AcpSessionSummary {
-                session_id: "agent-sess-2".to_string(),
-                cwd: PathBuf::from("/repo/two"),
-                title: None,
-                updated_at: None,
-                meta: None,
-            },
+            acp_session_info(
+                "agent-sess-1",
+                "/repo/one",
+                Some("Fix the parser"),
+                Some("2020-01-15T10:30:00Z"),
+                None,
+            ),
+            acp_session_info("agent-sess-2", "/repo/two", None, None, None),
         ];
 
         let params = acp_resume_session_picker_params(sessions);
@@ -441,13 +448,13 @@ mod tests {
     /// creating is a deliberate pick.
     #[test]
     fn acp_resume_picker_pins_a_create_new_row_first() {
-        let sessions = vec![AcpSessionSummary {
-            session_id: "agent-sess-1".to_string(),
-            cwd: PathBuf::from("/"),
-            title: Some("slack · claude".to_string()),
-            updated_at: None,
-            meta: None,
-        }];
+        let sessions = vec![acp_session_info(
+            "agent-sess-1",
+            "/",
+            Some("slack · claude"),
+            None,
+            None,
+        )];
 
         let params = acp_resume_session_picker_params(sessions);
 
@@ -478,13 +485,13 @@ mod tests {
         // Cloud sessions carry the sentinel cwd "/" — the broker tracks no
         // real working directory — so the picker must neither display it nor
         // include it in the search haystack.
-        let sessions = vec![AcpSessionSummary {
-            session_id: "cloud-sess-1".to_string(),
-            cwd: PathBuf::from("/"),
-            title: Some("slack · claude".to_string()),
-            updated_at: None,
-            meta: None,
-        }];
+        let sessions = vec![acp_session_info(
+            "cloud-sess-1",
+            "/",
+            Some("slack · claude"),
+            None,
+            None,
+        )];
 
         let params = acp_resume_session_picker_params(sessions);
 
@@ -502,13 +509,13 @@ mod tests {
     /// description nor the search haystack.
     #[test]
     fn acp_resume_picker_hides_cwd_for_meta_marked_cloud_rows() {
-        let sessions = vec![AcpSessionSummary {
-            session_id: "cloud-sess-1".to_string(),
-            cwd: PathBuf::from("/home/x/proj"),
-            title: Some("slack · claude".to_string()),
-            updated_at: None,
-            meta: Some(serde_json::json!({"nori": {"origin": "cloud"}})),
-        }];
+        let sessions = vec![acp_session_info(
+            "cloud-sess-1",
+            "/home/x/proj",
+            Some("slack · claude"),
+            None,
+            Some(serde_json::json!({"nori": {"origin": "cloud"}})),
+        )];
 
         let params = acp_resume_session_picker_params(sessions);
 
@@ -526,20 +533,20 @@ mod tests {
     #[test]
     fn acp_resume_picker_shows_cwd_for_unmarked_rows() {
         let sessions = vec![
-            AcpSessionSummary {
-                session_id: "local-sess-1".to_string(),
-                cwd: PathBuf::from("/home/x/proj"),
-                title: Some("Fix the parser".to_string()),
-                updated_at: None,
-                meta: None,
-            },
-            AcpSessionSummary {
-                session_id: "local-sess-2".to_string(),
-                cwd: PathBuf::from("/home/x/other"),
-                title: Some("Tune the linter".to_string()),
-                updated_at: None,
-                meta: Some(serde_json::json!({"nori": {"origin": "local"}})),
-            },
+            acp_session_info(
+                "local-sess-1",
+                "/home/x/proj",
+                Some("Fix the parser"),
+                None,
+                None,
+            ),
+            acp_session_info(
+                "local-sess-2",
+                "/home/x/other",
+                Some("Tune the linter"),
+                None,
+                Some(serde_json::json!({"nori": {"origin": "local"}})),
+            ),
         ];
 
         let params = acp_resume_session_picker_params(sessions);
@@ -565,27 +572,27 @@ mod tests {
     #[test]
     fn acp_resume_picker_orders_rows_most_recent_first() {
         let sessions = vec![
-            AcpSessionSummary {
-                session_id: "sess-jan".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("January session".to_string()),
-                updated_at: Some("2026-01-01T00:00:00Z".to_string()),
-                meta: None,
-            },
-            AcpSessionSummary {
-                session_id: "sess-mar".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("March session".to_string()),
-                updated_at: Some("2026-03-01T00:00:00Z".to_string()),
-                meta: None,
-            },
-            AcpSessionSummary {
-                session_id: "sess-feb".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("February session".to_string()),
-                updated_at: Some("2026-02-01T00:00:00Z".to_string()),
-                meta: None,
-            },
+            acp_session_info(
+                "sess-jan",
+                "/",
+                Some("January session"),
+                Some("2026-01-01T00:00:00Z"),
+                None,
+            ),
+            acp_session_info(
+                "sess-mar",
+                "/",
+                Some("March session"),
+                Some("2026-03-01T00:00:00Z"),
+                None,
+            ),
+            acp_session_info(
+                "sess-feb",
+                "/",
+                Some("February session"),
+                Some("2026-02-01T00:00:00Z"),
+                None,
+            ),
         ];
 
         let params = acp_resume_session_picker_params(sessions);
@@ -607,27 +614,15 @@ mod tests {
     #[test]
     fn acp_resume_picker_orders_undated_rows_after_dated_rows_stably() {
         let sessions = vec![
-            AcpSessionSummary {
-                session_id: "sess-undated-a".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("Undated A".to_string()),
-                updated_at: None,
-                meta: None,
-            },
-            AcpSessionSummary {
-                session_id: "sess-dated".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("Dated".to_string()),
-                updated_at: Some("2026-02-01T00:00:00Z".to_string()),
-                meta: None,
-            },
-            AcpSessionSummary {
-                session_id: "sess-undated-b".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("Undated B".to_string()),
-                updated_at: None,
-                meta: None,
-            },
+            acp_session_info("sess-undated-a", "/", Some("Undated A"), None, None),
+            acp_session_info(
+                "sess-dated",
+                "/",
+                Some("Dated"),
+                Some("2026-02-01T00:00:00Z"),
+                None,
+            ),
+            acp_session_info("sess-undated-b", "/", Some("Undated B"), None, None),
         ];
 
         let params = acp_resume_session_picker_params(sessions);
@@ -645,22 +640,22 @@ mod tests {
     #[test]
     fn acp_resume_picker_treats_unparseable_updated_at_like_undated() {
         let sessions = vec![
-            AcpSessionSummary {
-                session_id: "sess-garbage".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("Garbage timestamp".to_string()),
-                // Lexicographically after "2026-…", so a raw string sort
-                // (descending) would wrongly rank this row first.
-                updated_at: Some("not-a-timestamp".to_string()),
-                meta: None,
-            },
-            AcpSessionSummary {
-                session_id: "sess-dated".to_string(),
-                cwd: PathBuf::from("/"),
-                title: Some("Dated".to_string()),
-                updated_at: Some("2026-02-01T00:00:00Z".to_string()),
-                meta: None,
-            },
+            // Lexicographically after "2026-…", so a raw string sort
+            // (descending) would wrongly rank this row first.
+            acp_session_info(
+                "sess-garbage",
+                "/",
+                Some("Garbage timestamp"),
+                Some("not-a-timestamp"),
+                None,
+            ),
+            acp_session_info(
+                "sess-dated",
+                "/",
+                Some("Dated"),
+                Some("2026-02-01T00:00:00Z"),
+                None,
+            ),
         ];
 
         let params = acp_resume_session_picker_params(sessions);

@@ -1,4 +1,4 @@
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::SandboxPolicy;
 
 pub fn summarize_sandbox_policy(sandbox_policy: &SandboxPolicy) -> String {
     match sandbox_policy {

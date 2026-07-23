@@ -10,7 +10,7 @@ The `nori-cli` crate is the main binary that provides the `nori` command. It ser
 
 This crate is the primary entry point that ties together the core crates:
 
-- **Always included:** `nori-tui`, `nori-harness`, `nori-config`, `codex-sandbox`
+- **Always included:** `nori-tui`, `nori-exec`, `nori-harness`, `nori-config`, `codex-sandbox`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 - **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers
 
@@ -38,12 +38,19 @@ match subcommand {
     None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Resume(cmd)) => nori_tui::run_main(...),
     Some(Subcommand::Cloud(cmd)) => nori_tui::run_main(...),  // Pinned nori-handroll agent
+    Some(Subcommand::Exec(cmd)) => run_exec(cmd),
     Some(Subcommand::Sandbox(args)) => debug_sandbox::run_*(...),
     Some(Subcommand::Skillsets(cmd)) => run_skillsets_command(...),
     Some(Subcommand::Completions(cmd)) => clap_complete::generate(...),
     // ... other subcommands
 }
 ```
+
+**ExecCommand**: Provides two terminal-independent execution surfaces:
+- `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. If the positional prompt is omitted, the command reads it from stdin. Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
+- `nori exec --acp` serves Nori itself as a bounded ACP agent over stdio. The caller uses standard ACP JSON-RPC methods and notifications; Nori does not add a JSONL envelope or a second event schema.
+- Both modes use the same resolved configuration and `nori-harness` runtime as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
+- The explicit `--dangerously-bypass-approvals-and-sandbox` flag is the only unattended auto-approval path and applies only to permission boundaries visible through ACP.
 
 **CloudCommand** (`cloud.rs`): Runs a TUI session backed by Nori Sessions by delegating everything cloud-related to the external `nori-handroll` binary (from the nori-sessions repo). The CLI no longer contains any broker client, OAuth flow, or WebSocket transport -- it does not know the word "broker" beyond translating one config value:
 - `resolve_handroll_bin()` resolves the `nori-handroll` binary. A `NORI_HANDROLL_BIN` env override wins when set and must point at an existing file (a dangling override is an error, not a fallback); otherwise the first `nori-handroll` on `PATH` is used. A missing binary fails with an actionable "install Nori Sessions" error before the TUI starts
@@ -92,6 +99,10 @@ These allow testing sandbox behavior without running the full TUI. All commands 
 The CLI resolves this stack through `nori-config` and passes the resulting `NoriConfig` into the TUI and harness. It does not load or translate a second `codex-core` configuration. Codex-style `--profile`, `profile`, `[profiles]`, and the legacy `model` key are intentionally unsupported; use `agent` for the agent selection and Nori Skillsets for reusable agent behavior.
 
 Authentication remains available inside the TUI through `/login`. The standalone top-level `nori login` and `nori logout` commands were removed so the CLI has one interactive authentication surface.
+
+**Headless Approval Behavior:**
+
+Plaintext execution cannot wait for an interactive answer. By default, Nori selects the first reject option offered by the ACP agent, or cancels the request if no reject option exists. The agent may then explain or recover, and that final text is still written to stdout, but the process exits unsuccessfully so automation cannot mistake partial work for an approved completion. In ACP facade mode, permission requests are forwarded to the caller as standard `session/request_permission` requests and the correlated response is relayed to the downstream agent. Caller EOF cancels outstanding work and shuts down the downstream session.
 
 For `nori resume`, subcommand-scoped interactive flags are copied into the same `TuiCli` structure used by a fresh interactive launch. If both root-level and resume-scoped flags are present, the resume-scoped flag wins for that field while preserving unrelated root-level settings.
 

@@ -8,9 +8,8 @@
 use super::AcpBackendConfig;
 use super::enhance_agent_error;
 use super::get_agent_config;
-use super::nori_client_mcp;
-use crate::connection::AcpSessionSummary;
 use crate::connection::acp_connection::AcpConnection;
+use nori_protocol::acp::v1 as acp;
 
 /// How long the probe waits for its child to exit after stdin EOF before
 /// killing it. EOF is a non-terminal detach signal for cloud agents
@@ -46,10 +45,10 @@ impl std::error::Error for ProbeError {}
 /// What the probe learned about the agent before any session exists.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentSessionsProbe {
-    /// The agent's advertised capability view, exactly as the TUI projects it.
-    pub capabilities: nori_protocol::AgentCapabilitiesView,
+    /// The agent's schema-native advertised capabilities.
+    pub capabilities: acp::AgentCapabilities,
     /// The agent's `session/list` rows (broker titles included, when present).
-    pub sessions: Vec<AcpSessionSummary>,
+    pub sessions: Vec<acp::SessionInfo>,
 }
 
 /// Probe an agent using config values already resolved by the frontend.
@@ -79,8 +78,8 @@ async fn probe(
         .await
         .map_err(|e| ProbeError::Failed(format!("{:#}", enhance_agent_error(e, &agent_config))))?;
 
-    let capabilities = nori_client_mcp::agent_capabilities_view(&connection);
-    if !capabilities.session_list {
+    let capabilities = connection.capabilities().clone();
+    if capabilities.session_capabilities.list.is_none() {
         connection.shutdown_with_grace(PROBE_SHUTDOWN_GRACE).await;
         return Err(ProbeError::SessionListUnsupported(format!(
             "Agent '{agent}' does not advertise session listing (session/list), so there are \

@@ -18,9 +18,9 @@ workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 clap = { workspace = true, features = ["derive"] }
 codex-sandbox = { workspace = true }
-codex-protocol = { workspace = true }
 landlock = { workspace = true }
 libc = { workspace = true }
+nori-config = { workspace = true }
 seccompiler = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]

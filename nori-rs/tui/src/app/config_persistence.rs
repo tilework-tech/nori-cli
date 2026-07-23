@@ -19,11 +19,11 @@ pub(super) async fn persist_default_model_selection(
     agent: &str,
     config_id: &str,
     value: &str,
-    config_options: &[nori_harness::SessionConfigOption],
+    config_options: &[nori_protocol::acp::v1::SessionConfigOption],
 ) -> anyhow::Result<bool> {
     let is_model_option = config_options.iter().any(|option| {
         option.id.to_string() == config_id
-            && option.category == Some(nori_harness::SessionConfigOptionCategory::Model)
+            && option.category == Some(nori_protocol::acp::v1::SessionConfigOptionCategory::Model)
     });
     if !is_model_option {
         return Ok(false);
@@ -46,7 +46,7 @@ impl App {
         agent: &str,
         config_id: &str,
         value: &str,
-        config_options: &[nori_harness::SessionConfigOption],
+        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
     ) -> anyhow::Result<bool> {
         let persisted = persist_default_model_selection(
             &self.config.nori_home,
@@ -450,7 +450,7 @@ impl App {
 
     pub(super) async fn persist_mcp_servers(
         &mut self,
-        servers: std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
+        servers: std::collections::BTreeMap<String, nori_config::McpServerConfig>,
     ) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
             .replace_mcp_servers(&servers)
@@ -597,28 +597,31 @@ mod tests {
         );
     }
 
-    fn session_config_options_with_model() -> Vec<nori_harness::SessionConfigOption> {
+    fn session_config_options_with_model() -> Vec<nori_protocol::acp::v1::SessionConfigOption> {
         vec![
-            nori_harness::SessionConfigOption::select(
+            nori_protocol::acp::v1::SessionConfigOption::select(
                 "model",
                 "Model",
                 "sonnet",
                 vec![
-                    nori_harness::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-                    nori_harness::SessionConfigSelectOption::new("opus", "Opus"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new("opus", "Opus"),
                 ],
             )
-            .category(nori_harness::SessionConfigOptionCategory::Model),
-            nori_harness::SessionConfigOption::select(
+            .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Model),
+            nori_protocol::acp::v1::SessionConfigOption::select(
                 "permission-mode",
                 "Mode",
                 "default",
                 vec![
-                    nori_harness::SessionConfigSelectOption::new("default", "Default"),
-                    nori_harness::SessionConfigSelectOption::new("acceptEdits", "Accept Edits"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new("default", "Default"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new(
+                        "acceptEdits",
+                        "Accept Edits",
+                    ),
                 ],
             )
-            .category(nori_harness::SessionConfigOptionCategory::Mode),
+            .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Mode),
         ]
     }
 

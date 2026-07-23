@@ -4,69 +4,45 @@ Path: @/nori-rs/tui-pty-e2e
 
 ### Overview
 
-The tui-pty-e2e crate provides end-to-end testing infrastructure for the Nori TUI. It spawns the TUI in a pseudo-terminal and drives it with simulated keyboard input while capturing and validating screen output.
+`tui-pty-e2e` drives the real `nori` binary inside a pseudo-terminal and asserts
+on the parsed terminal screen. It is the final regression boundary for behavior
+that unit tests cannot prove across process, harness, event, and rendering
+layers.
 
 ### How it fits into the larger codebase
 
-This is a test-only crate that exercises:
-- The `nori` binary built from `@/nori-rs/cli/` (which embeds the TUI from `@/nori-rs/tui/`), optionally with a subcommand such as `nori cloud`
-- `@/nori-rs/mock-acp-agent/` - Mock agent for predictable responses
+Tests launch `nori` with `mock-acp-agent`, send keyboard input, and observe
+screen output and process lifecycle. The path under test is:
 
-Tests validate rendering behavior end-to-end by checking the actual terminal screen buffer contents, including the ordering and presence/absence of cells (tool output, agent text, approval prompts). This catches integration issues that unit tests on individual components would miss, such as race conditions between streaming text and tool event rendering.
+```text
+PTY -> nori-tui -> nori-harness -> nori-acp-host -> mock ACP agent
+```
 
 ### Core Implementation
 
-**PTY Management**: Uses `portable_pty` to create a pseudo-terminal with:
-- Configurable terminal size
-- Input writing capability
-- Output capture
+`portable_pty` supplies the terminal, `vt100` maintains a virtual screen, and
+test helpers send keys, wait for stable text, capture output, and enforce exit
+deadlines.
 
-**Terminal Parsing**: Uses `vt100::Parser` to interpret ANSI escape sequences and maintain a virtual screen buffer.
+Scenarios cover representative raw ACP messages, tools, plans, permissions and
+responses; Nori lifecycle and failure behavior; query-driven pickers; cloud
+list/resume/close/detach; transcript persistence and view-only selection; MCP
+and browser workflows; and ordering races between streaming text and tool
+updates.
 
-**Test Utilities**:
-- `wait_for_text()` - Block until expected text appears on screen
-- `send_keys()` - Simulate keyboard input
-- `get_screen_content()` - Capture current display state
-- `wait_for_process_exit()` - Poll for the TUI process itself to exit within a timeout, draining PTY output so the child cannot block on a full PTY buffer; used to assert the quit hard-exit deadline
-
-**Tool Call Rendering Tests** (`acp_tool_calls.rs`):
-
-Tests in this file verify that tool call events (Explored, Ran, Searched cells) render in the correct chronological positions relative to agent text. The core invariant under test is that tool cells appear BEFORE the agent text that follows them in the scrollback, even when tool calls have not completed yet. Key test patterns include:
-- Verifying chronological ordering: tool cells appear before the final agent text in screen position (asserted via string position comparisons)
-- Verifying no duplicate tool cells when text arrives during an incomplete tool call (the `MOCK_AGENT_INTERLEAVED_TOOL_CALL` scenario); the same scenario's snapshot also pins that a suppressed-duplicate tool completion arriving between two answer text chunks does not split the streamed message into separate cells (see the Chronological Ordering Invariant in `@/nori-rs/tui/docs.md`)
-- Verifying that tool completions deferred during the final text stream are discarded rather than rendered after the agent's response (the `MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM` scenario)
-- Verifying that cascade-deferred tool events do not produce orphan cells (the `MOCK_AGENT_ORPHAN_TOOL_CELLS` scenario), where a Begin is deferred due to a non-empty queue and later discarded, but its End must also be discarded to avoid raw call_id rendering
-- Verifying that generic tool calls with no `raw_input` (the `MOCK_AGENT_GENERIC_TOOL_CALL` scenario) display a resolved semantic name from `ev.command` instead of the raw tool call ID
-- Verifying that incomplete (stuck) tool calls that never receive End events do not block the agent's final text from rendering (the `MOCK_AGENT_STUCK_TOOL_CALLS` scenario), where `finalize_active_cell_as_failed()` cleans up incomplete ExecCells on turn boundaries
-- Verifying that multi-call exploring cells (the `MOCK_AGENT_MULTI_CALL_EXPLORING` scenario) are flushed to history when text arrives, potentially splitting into separate cells for calls that complete before vs after the flush
-
-**MCP Command Tests** (`acp_mcp_command.rs`):
-
-Tests verify the `/mcp` slash command in ACP mode:
-- With configured MCP servers: verifies that server details (name, transport) are displayed even though individual tool names are unavailable in ACP mode
-- Without configured MCP servers: verifies the "No MCP servers configured" fallback message appears
-
-**Cloud Mode Tests** (`cloud_mode.rs`):
-
-Tests drive `nori cloud` end to end with fake `nori-handroll` shell scripts that wrap the `mock_acp_agent` binary and record their invocation and lifecycle to marker files. The harness gained `SessionConfig::with_subcommand()` so a session can run `nori <subcommand>` instead of plain `nori`, and the fake binary is injected via the `NORI_HANDROLL_BIN` env override. The fake appends one `eof` line to its `released` marker per child that saw stdin EOF and finished its own teardown (post-sessions-#1276 that teardown is a *detach*, not a release), and captures agent stderr to a marker file. Because picker-first entry spawns a short-lived probe child per boot, tests count `released` lines from a baseline rather than checking file existence. Scenarios cover: the prompt round-trip through the handroll child, EOF-detach on exit (a cooperative child completes its EOF path rather than being SIGKILLed), picker-first entry (boots into the session picker without claiming a session -- enforced by failing any premature `session/new` -- with plain `nori` proving the picker boot is cloud-entry-only), picking a listed session for a live reattach and picking "Start a new session" for a fresh one, `/close` returning to the picker instead of auto-claiming, quit hard-exiting within the deadline even when the child ignores EOF (`MOCK_AGENT_IGNORE_EOF`), mid-session child death surfacing a visible error, unconditional local transcript recording, the actionable error when no handroll binary exists, `--agent` being overridden by the pinned `nori-cloud` agent, `[cloud] broker_url` reaching the child as `NORI_BROKER_URL`, and an immediately-exiting unauthenticated child surfacing its stderr auth hint.
-
-**Browser Command Tests** (`browser_command.rs`):
-
-Tests verify the full `/browser` integration flow: start app, launch Chrome, agent modifies page via CDP, verify browser state independently. The test spawns the nori binary with `MOCK_AGENT_BROWSER_MODIFY=1`, sends `/browser`, waits for the CDP endpoint to appear on screen, then waits for the mock agent's `BROWSER_MODIFIED:title=NORI_BROWSER_TEST` confirmation. The test independently verifies the browser title via a direct CDP WebSocket connection using `tungstenite` and `ureq`. This test is `#[ignore]` and `#[cfg(target_os = "linux")]` because it requires Chrome/Chromium installed and a display server (X11/Wayland). Run with `cargo test -p tui-pty-e2e -- --ignored browser`.
-
-**Debug Output**: Colorized output (via `owo-colors`) for test debugging:
-- Sent input highlighted
-- Expected vs actual screen content
-- Timing information
+The protocol hard cut did not introduce a test-only compatibility path. PTY
+tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
+typed `HarnessHandle` methods available to headless embedders.
 
 ### Things to Know
 
-- Tests require the `vt100-tests` feature enabled in nori-tui
-- The mock agent is spawned as the ACP backend
-- Screen capture includes full ANSI state (colors, attributes)
-- Timing-sensitive tests use configurable timeouts
-- Debug styles respect color terminal detection
-- Snapshot tests use `insta` for visual verification of screen output; snapshots live in `tests/snapshots/`
-- `normalize_for_input_snapshot()` normalizes dynamic content before snapshot comparison: session timestamps/IDs become `[TIMESTAMP]`/`[SESSION_ID]`, and the randomly selected whimsical status indicator header becomes `[STATUS]`. It also collapses runs of consecutive blank lines into a single blank line, because PTY timing can cause the exact count of blank lines between content sections to vary between runs. Tests that check for the status indicator being active use `"esc to interrupt"` as the stable anchor text rather than any specific status message.
+- Build the mock agent before local runs when CI has not supplied its path.
+- Tests require the TUI `vt100-tests` feature.
+- Snapshot normalization removes dynamic session IDs, timestamps, and status
+  text while retaining meaningful terminal ordering and content.
+- Transcript pickers treat a v3 transcript as non-empty only when it has at
+  least one user turn; lifecycle records alone do not make it resumable.
+- Timing-sensitive scenarios use bounded waits, but assertions target visible
+  behavior rather than private reducer calls.
 
 Created and maintained by Nori.

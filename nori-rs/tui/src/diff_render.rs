@@ -21,7 +21,7 @@ use crate::render::line_utils::prefix_lines;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::InsetRenderable;
 use crate::render::renderable::Renderable;
-use codex_protocol::protocol::FileChange;
+use crate::ui_types::FileChange;
 
 // ---------------------------------------------------------------------------
 // Color-level and theme detection
@@ -141,7 +141,7 @@ pub struct DiffSummary {
 }
 
 impl DiffSummary {
-    pub fn new(changes: HashMap<PathBuf, FileChange>, cwd: PathBuf) -> Self {
+    pub(crate) fn new(changes: HashMap<PathBuf, FileChange>, cwd: PathBuf) -> Self {
         Self { changes, cwd }
     }
 }

@@ -28,7 +28,7 @@ use tokio::fs;
 use tokio::io::AsyncReadExt;
 
 use crate::config::HistoryPersistence;
-use codex_protocol::ConversationId;
+use uuid::Uuid;
 
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
@@ -47,6 +47,33 @@ pub struct HistoryEntry {
     pub session_id: String,
     pub ts: u64,
     pub text: String,
+}
+
+/// Nori's persisted transcript/history identity, distinct from ACP SessionId.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ConversationId(Uuid);
+
+impl ConversationId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    pub fn from_string(value: &str) -> std::result::Result<Self, uuid::Error> {
+        Uuid::parse_str(value).map(Self)
+    }
+}
+
+impl Default for ConversationId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for ConversationId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
 }
 
 /// Get the history file path for a given nori_home directory.

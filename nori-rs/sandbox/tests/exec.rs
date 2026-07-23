@@ -3,12 +3,12 @@
 use std::collections::HashMap;
 use std::string::ToString;
 
-use codex_protocol::protocol::SandboxPolicy;
 use codex_sandbox::exec::ExecParams;
 use codex_sandbox::exec::ExecToolCallOutput;
 use codex_sandbox::exec::SandboxType;
 use codex_sandbox::exec::process_exec_tool_call;
 use codex_sandbox::spawn::CODEX_SANDBOX_ENV_VAR;
+use nori_config::SandboxPolicy;
 use tempfile::TempDir;
 
 use codex_sandbox::error::Result;
@@ -41,7 +41,7 @@ async fn run_test_cmd(tmp: TempDir, cmd: Vec<&str>) -> Result<ExecToolCallOutput
 
     let policy = SandboxPolicy::new_read_only_policy();
 
-    process_exec_tool_call(params, &policy, tmp.path(), &None, None).await
+    process_exec_tool_call(params, &policy, tmp.path(), &None).await
 }
 
 /// Command succeeds with exit code 0 normally

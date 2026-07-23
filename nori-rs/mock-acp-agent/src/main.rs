@@ -19,8 +19,8 @@ use agent_client_protocol::ByteStreams;
 use agent_client_protocol::Client;
 use agent_client_protocol::ConnectionTo;
 use agent_client_protocol::Responder;
-use agent_client_protocol::schema::v1 as acp;
 use futures::io::AsyncRead;
+use nori_protocol::acp::v1 as acp;
 use serde_json::json;
 use tokio::time::Duration;
 use tokio::time::sleep;
@@ -76,8 +76,6 @@ impl<R: AsyncRead + Unpin> AsyncRead for ExitOnEof<R> {
 struct MockState {
     next_session_id: AtomicI64,
     cancel_requested: AtomicBool,
-    pending_cancel_tail_empty_end_turns: AtomicI64,
-    follow_up_after_cancel_tail: AtomicBool,
     session_configs: Mutex<HashMap<String, MockSessionConfig>>,
 }
 
@@ -253,24 +251,18 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
+            eprintln!("Mock agent: exiting during prompt");
+            std::process::exit(17);
+        }
         self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
-        let pending_cancel_tail_empty_end_turns = self
-            .state
-            .pending_cancel_tail_empty_end_turns
-            .load(Ordering::SeqCst);
-        if pending_cancel_tail_empty_end_turns > 0 {
-            self.state
-                .pending_cancel_tail_empty_end_turns
-                .store(pending_cancel_tail_empty_end_turns - 1, Ordering::SeqCst);
-            eprintln!("Mock agent: emitting empty end_turn from cancel tail");
-            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
-        }
-        let complete_after_default_response = self
-            .state
-            .follow_up_after_cancel_tail
-            .swap(false, Ordering::SeqCst);
-
+        let request_permission = arguments.prompt.iter().any(|block| {
+            matches!(
+                block,
+                acp::ContentBlock::Text(text) if text.text == "mock:request-permission"
+            )
+        });
         // Support configurable stderr output for testing stderr capture
         if let Ok(count_str) = std::env::var("MOCK_AGENT_STDERR_COUNT")
             && let Ok(count) = count_str.parse::<usize>()
@@ -847,14 +839,6 @@ impl MockAgent {
             }
         }
 
-        if complete_after_default_response {
-            let response = std::env::var("MOCK_AGENT_CANCEL_TAIL_FOLLOW_UP_RESPONSE")
-                .unwrap_or_else(|_| "Recovered after cancel tail".to_string());
-            self.send_text_chunk(session_id.clone(), &response).await?;
-            eprintln!("Mock agent: completing follow-up prompt after cancel tail");
-            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
-        }
-
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
             self.send_text_chunk(session_id.clone(), &response).await?;
@@ -875,7 +859,7 @@ impl MockAgent {
         }
 
         // Support requesting permission from client for testing approval bridging
-        if std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
+        if request_permission || std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
             eprintln!("Mock agent: requesting permission from client");
 
             // Create a tool call update describing the operation
@@ -1110,23 +1094,6 @@ impl MockAgent {
                 sleep(Duration::from_millis(10)).await;
             }
 
-            let cancel_tail_empty_end_turns =
-                std::env::var("MOCK_AGENT_CANCEL_TAIL_EMPTY_END_TURNS")
-                    .ok()
-                    .and_then(|count| count.parse::<i64>().ok())
-                    .unwrap_or(0);
-            if self.cancel_requested() && cancel_tail_empty_end_turns > 0 {
-                self.state
-                    .pending_cancel_tail_empty_end_turns
-                    .store(cancel_tail_empty_end_turns, Ordering::SeqCst);
-                self.state
-                    .follow_up_after_cancel_tail
-                    .store(true, Ordering::SeqCst);
-                eprintln!(
-                    "Mock agent: queued {cancel_tail_empty_end_turns} empty end_turn responses after cancel"
-                );
-            }
-
             return Ok(acp::PromptResponse::new(if self.cancel_requested() {
                 acp::StopReason::Cancelled
             } else {
@@ -1359,6 +1326,13 @@ async fn main() -> acp::Result<()> {
                     return responder
                         .respond_with_error(acp::Error::new(-32000, "Authentication required"));
                 }
+                if std::env::var("MOCK_AGENT_INITIALIZE_FAIL").is_ok() {
+                    eprintln!("Mock agent: simulating initialize failure");
+                    return responder.respond_with_error(acp::Error::new(
+                        -32004,
+                        "Mock initialize failure for testing",
+                    ));
+                }
 
                 eprintln!("Mock agent: initialize");
                 let mut response = acp::InitializeResponse::new(arguments.protocol_version)
@@ -1430,7 +1404,7 @@ async fn main() -> acp::Result<()> {
                 let state = state.clone();
                 async move |arguments: acp::NewSessionRequest,
                             responder: Responder<acp::NewSessionResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     let session_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
                     if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
                         && let Ok(fail_from) = fail_from.parse::<i64>()
@@ -1451,6 +1425,17 @@ async fn main() -> acp::Result<()> {
                         .lock()
                         .unwrap()
                         .insert(session_key.clone(), session_config.clone());
+                    if std::env::var("MOCK_AGENT_NEW_SESSION_NOTIFICATION").is_ok() {
+                        MockAgent {
+                            cx: cx.clone(),
+                            state: state.clone(),
+                        }
+                        .send_text_chunk(
+                            acp::SessionId::new(session_key.clone()),
+                            "new session setup notification",
+                        )
+                        .await?;
+                    }
                     if std::env::var("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION").is_ok()
                         && let Err(error) =
                             initialize_advertised_nori_client(&arguments.mcp_servers).await
@@ -1474,14 +1459,6 @@ async fn main() -> acp::Result<()> {
                 async move |arguments: acp::LoadSessionRequest,
                             responder: Responder<acp::LoadSessionResponse>,
                             cx: ConnectionTo<Client>| {
-                    if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
-                        eprintln!("Mock agent: simulating load_session failure");
-                        return responder.respond_with_error(acp::Error::new(
-                            -32001,
-                            "Mock load_session failure for testing",
-                        ));
-                    }
-
                     let session_config = state
                         .session_configs
                         .lock()
@@ -1507,6 +1484,14 @@ async fn main() -> acp::Result<()> {
                                 .send_text_chunk(session_id.clone(), &format!("replay chunk {i}"))
                                 .await?;
                         }
+                    }
+
+                    if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating load_session failure");
+                        return responder.respond_with_error(acp::Error::new(
+                            -32001,
+                            "Mock load_session failure for testing",
+                        ));
                     }
 
                     responder.respond(
