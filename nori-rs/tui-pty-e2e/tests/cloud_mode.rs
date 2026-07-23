@@ -673,6 +673,13 @@ fn test_cloud_mode_surfaces_auth_error_from_child_stderr() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("nori-handroll login", TIMEOUT)
-        .expect("the child's stderr auth message should be surfaced to the user");
+        .wait_for(
+            |screen| {
+                let visible_text: String = screen.split_whitespace().collect();
+                visible_text
+                    .contains("AuthenticationrequiredforNoriCloudACP.run:nori-handrolllogin")
+            },
+            TIMEOUT,
+        )
+        .expect("the auth error should include an actionable login command");
 }
