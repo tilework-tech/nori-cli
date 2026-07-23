@@ -278,6 +278,33 @@ pub(crate) fn make_chatwidget_manual() -> (
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
     tokio::sync::mpsc::UnboundedReceiver<Op>,
 ) {
+    make_chatwidget_manual_with_footer_config(
+        nori_config::FooterSegmentConfig::default(),
+        nori_config::FooterLayoutConfig::default(),
+    )
+}
+
+pub(crate) fn make_chatwidget_manual_with_footer_layout(
+    footer_layout_config: nori_config::FooterLayoutConfig,
+) -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<Op>,
+) {
+    make_chatwidget_manual_with_footer_config(
+        nori_config::FooterSegmentConfig::default(),
+        footer_layout_config,
+    )
+}
+
+pub(crate) fn make_chatwidget_manual_with_footer_config(
+    footer_segment_config: nori_config::FooterSegmentConfig,
+    footer_layout_config: nori_config::FooterLayoutConfig,
+) -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<Op>,
+) {
     let (tx_raw, rx) = unbounded_channel::<AppEvent>();
     let app_event_tx = AppEventSender::new(tx_raw);
     let (op_tx, op_rx) = unbounded_channel::<Op>();
@@ -293,8 +320,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         custom_working_messages: cfg.custom_working_messages,
         custom_working_message_list: cfg.custom_working_message_list.clone(),
         vertical_footer: false,
-        footer_segment_config: nori_config::FooterSegmentConfig::default(),
-        footer_layout_config: nori_config::FooterLayoutConfig::default(),
+        footer_segment_config,
+        footer_layout_config,
         agent_display_name: String::new(),
         agent_slug: String::new(),
     });

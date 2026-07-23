@@ -231,7 +231,7 @@ fn chat_widget_init_carries_footer_layout_config() {
     let mut app = make_test_app();
     let footer_layout_config =
         nori_config::FooterLayoutConfig::from_toml(&nori_config::FooterLayoutConfigToml {
-            textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator]),
+            textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator.into()]),
             ..Default::default()
         });
     app.footer_layout_config = footer_layout_config.clone();

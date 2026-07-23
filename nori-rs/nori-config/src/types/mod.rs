@@ -1215,8 +1215,18 @@ pub enum FooterSegment {
     WorktreeName,
     /// Git stats: "+10 -3"
     GitStats,
-    /// Context window: "Context: 34K (27%)"
+    /// Default context window display: "27% / 128k"
     Context,
+    /// Percentage of the context window currently used: "27%"
+    ContextUsedPercent,
+    /// Percentage of the context window still available: "73%"
+    ContextRemainingPercent,
+    /// Tokens currently used in the context window: "34.0k"
+    ContextUsedTokens,
+    /// Tokens still available in the context window: "94.0k"
+    ContextRemainingTokens,
+    /// Maximum context window size: "128k"
+    ContextWindowTokens,
     /// Approval mode: "Approvals: Agent"
     ApprovalMode,
     /// Active skillset: "Skillset: name"
@@ -1242,6 +1252,11 @@ impl FooterSegment {
             Self::WorktreeName => "Worktree Name",
             Self::GitStats => "Git Stats",
             Self::Context => "Context Window",
+            Self::ContextUsedPercent => "Context Used %",
+            Self::ContextRemainingPercent => "Context Remaining %",
+            Self::ContextUsedTokens => "Context Used Tokens",
+            Self::ContextRemainingTokens => "Context Remaining Tokens",
+            Self::ContextWindowTokens => "Context Window Tokens",
             Self::ApprovalMode => "Approvals",
             Self::Skillset => "Skillset",
             Self::NoriVersion => "Skillset Version",
@@ -1260,6 +1275,11 @@ impl FooterSegment {
             Self::WorktreeName => "worktree_name",
             Self::GitStats => "git_stats",
             Self::Context => "context",
+            Self::ContextUsedPercent => "context_used_percent",
+            Self::ContextRemainingPercent => "context_remaining_percent",
+            Self::ContextUsedTokens => "context_used_tokens",
+            Self::ContextRemainingTokens => "context_remaining_tokens",
+            Self::ContextWindowTokens => "context_window_tokens",
             Self::ApprovalMode => "approval_mode",
             Self::Skillset => "skillset",
             Self::NoriVersion => "nori_version",
@@ -1278,6 +1298,11 @@ impl FooterSegment {
             Self::WorktreeName,
             Self::GitStats,
             Self::Context,
+            Self::ContextUsedPercent,
+            Self::ContextRemainingPercent,
+            Self::ContextUsedTokens,
+            Self::ContextRemainingTokens,
+            Self::ContextWindowTokens,
             Self::ApprovalMode,
             Self::Skillset,
             Self::NoriVersion,
@@ -1291,6 +1316,13 @@ impl FooterSegment {
     pub fn default_order() -> &'static [FooterSegment] {
         Self::all_variants()
     }
+
+    fn from_toml_key(key: &str) -> Option<Self> {
+        Self::all_variants()
+            .iter()
+            .copied()
+            .find(|segment| segment.toml_key() == key)
+    }
 }
 
 impl fmt::Display for FooterSegment {
@@ -1300,7 +1332,7 @@ impl fmt::Display for FooterSegment {
 }
 
 /// TOML-deserializable footer segment configuration.
-/// Each field is optional - if not specified, the segment is enabled by default.
+/// Each field is optional; unspecified fields use `FooterSegmentConfig::default`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FooterSegmentConfigToml {
@@ -1316,6 +1348,16 @@ pub struct FooterSegmentConfigToml {
     pub git_stats: Option<bool>,
     /// Enable/disable context window segment.
     pub context: Option<bool>,
+    /// Enable/disable context used percentage segment.
+    pub context_used_percent: Option<bool>,
+    /// Enable/disable context remaining percentage segment.
+    pub context_remaining_percent: Option<bool>,
+    /// Enable/disable context used token segment.
+    pub context_used_tokens: Option<bool>,
+    /// Enable/disable context remaining token segment.
+    pub context_remaining_tokens: Option<bool>,
+    /// Enable/disable context window maximum token segment.
+    pub context_window_tokens: Option<bool>,
     /// Enable/disable approval mode segment.
     pub approval_mode: Option<bool>,
     /// Enable/disable active skillset segment.
@@ -1345,6 +1387,16 @@ pub struct FooterSegmentConfig {
     pub git_stats: bool,
     /// Enable/disable context window segment.
     pub context: bool,
+    /// Enable/disable context used percentage segment.
+    pub context_used_percent: bool,
+    /// Enable/disable context remaining percentage segment.
+    pub context_remaining_percent: bool,
+    /// Enable/disable context used token segment.
+    pub context_used_tokens: bool,
+    /// Enable/disable context remaining token segment.
+    pub context_remaining_tokens: bool,
+    /// Enable/disable context window maximum token segment.
+    pub context_window_tokens: bool,
     /// Enable/disable approval mode segment.
     pub approval_mode: bool,
     /// Enable/disable active skillset segment.
@@ -1372,6 +1424,11 @@ impl Default for FooterSegmentConfig {
             worktree_name: true,
             git_stats: false,
             context: true,
+            context_used_percent: false,
+            context_remaining_percent: false,
+            context_used_tokens: false,
+            context_remaining_tokens: false,
+            context_window_tokens: false,
             approval_mode: true,
             skillset: false,
             nori_version: false,
@@ -1393,6 +1450,21 @@ impl FooterSegmentConfig {
             worktree_name: toml.worktree_name.unwrap_or(defaults.worktree_name),
             git_stats: toml.git_stats.unwrap_or(defaults.git_stats),
             context: toml.context.unwrap_or(defaults.context),
+            context_used_percent: toml
+                .context_used_percent
+                .unwrap_or(defaults.context_used_percent),
+            context_remaining_percent: toml
+                .context_remaining_percent
+                .unwrap_or(defaults.context_remaining_percent),
+            context_used_tokens: toml
+                .context_used_tokens
+                .unwrap_or(defaults.context_used_tokens),
+            context_remaining_tokens: toml
+                .context_remaining_tokens
+                .unwrap_or(defaults.context_remaining_tokens),
+            context_window_tokens: toml
+                .context_window_tokens
+                .unwrap_or(defaults.context_window_tokens),
             approval_mode: toml.approval_mode.unwrap_or(defaults.approval_mode),
             skillset: toml.skillset.unwrap_or(defaults.skillset),
             nori_version: toml.nori_version.unwrap_or(defaults.nori_version),
@@ -1411,6 +1483,11 @@ impl FooterSegmentConfig {
             FooterSegment::WorktreeName => self.worktree_name,
             FooterSegment::GitStats => self.git_stats,
             FooterSegment::Context => self.context,
+            FooterSegment::ContextUsedPercent => self.context_used_percent,
+            FooterSegment::ContextRemainingPercent => self.context_remaining_percent,
+            FooterSegment::ContextUsedTokens => self.context_used_tokens,
+            FooterSegment::ContextRemainingTokens => self.context_remaining_tokens,
+            FooterSegment::ContextWindowTokens => self.context_window_tokens,
             FooterSegment::ApprovalMode => self.approval_mode,
             FooterSegment::Skillset => self.skillset,
             FooterSegment::NoriVersion => self.nori_version,
@@ -1429,6 +1506,11 @@ impl FooterSegmentConfig {
             FooterSegment::WorktreeName => self.worktree_name = enabled,
             FooterSegment::GitStats => self.git_stats = enabled,
             FooterSegment::Context => self.context = enabled,
+            FooterSegment::ContextUsedPercent => self.context_used_percent = enabled,
+            FooterSegment::ContextRemainingPercent => self.context_remaining_percent = enabled,
+            FooterSegment::ContextUsedTokens => self.context_used_tokens = enabled,
+            FooterSegment::ContextRemainingTokens => self.context_remaining_tokens = enabled,
+            FooterSegment::ContextWindowTokens => self.context_window_tokens = enabled,
             FooterSegment::ApprovalMode => self.approval_mode = enabled,
             FooterSegment::Skillset => self.skillset = enabled,
             FooterSegment::NoriVersion => self.nori_version = enabled,
@@ -1447,6 +1529,128 @@ impl FooterSegmentConfig {
     }
 }
 
+/// A footer layout entry: either one built-in segment or one custom format.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FooterLayoutItem {
+    Builtin(FooterSegment),
+    Custom(FooterFormat),
+}
+
+impl From<FooterSegment> for FooterLayoutItem {
+    fn from(segment: FooterSegment) -> Self {
+        Self::Builtin(segment)
+    }
+}
+
+impl<'de> Deserialize<'de> for FooterLayoutItem {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct CustomFooterFormat {
+            format: String,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum FooterLayoutItemToml {
+            Builtin(String),
+            Custom(CustomFooterFormat),
+        }
+
+        match FooterLayoutItemToml::deserialize(deserializer)? {
+            FooterLayoutItemToml::Builtin(key) => FooterSegment::from_toml_key(&key)
+                .map(Self::Builtin)
+                .ok_or_else(|| serde::de::Error::custom(format!("unknown footer segment `{key}`"))),
+            FooterLayoutItemToml::Custom(custom) => FooterFormat::parse(&custom.format)
+                .map(Self::Custom)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+}
+
+/// A validated custom footer format, compiled when configuration is loaded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FooterFormat {
+    parts: Vec<FooterFormatPart>,
+}
+
+impl FooterFormat {
+    fn parse(format: &str) -> Result<Self, String> {
+        let mut chars = format.chars().peekable();
+        let mut parts = Vec::new();
+        let mut text = String::new();
+
+        while let Some(ch) = chars.next() {
+            match ch {
+                '{' if chars.peek() == Some(&'{') => {
+                    chars.next();
+                    text.push('{');
+                }
+                '}' if chars.peek() == Some(&'}') => {
+                    chars.next();
+                    text.push('}');
+                }
+                '{' => {
+                    if !text.is_empty() {
+                        parts.push(FooterFormatPart::Text(std::mem::take(&mut text)));
+                    }
+
+                    let mut placeholder = String::new();
+                    loop {
+                        match chars.next() {
+                            Some('}') => break,
+                            Some('{') => {
+                                return Err(format!(
+                                    "invalid footer format `{format}`: nested `{{` in placeholder"
+                                ));
+                            }
+                            Some(ch) => placeholder.push(ch),
+                            None => {
+                                return Err(format!(
+                                    "invalid footer format `{format}`: missing closing `}}`"
+                                ));
+                            }
+                        }
+                    }
+
+                    let Some(segment) = FooterSegment::from_toml_key(&placeholder) else {
+                        return Err(format!(
+                            "unknown footer segment placeholder `{placeholder}` in `{format}`"
+                        ));
+                    };
+                    parts.push(FooterFormatPart::Segment(segment));
+                }
+                '}' => {
+                    return Err(format!(
+                        "invalid footer format `{format}`: unmatched closing `}}`"
+                    ));
+                }
+                _ => text.push(ch),
+            }
+        }
+
+        if !text.is_empty() {
+            parts.push(FooterFormatPart::Text(text));
+        }
+
+        Ok(Self { parts })
+    }
+
+    pub fn parts(&self) -> &[FooterFormatPart] {
+        &self.parts
+    }
+}
+
+/// One compiled piece of a custom footer format.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FooterFormatPart {
+    Text(String),
+    Segment(FooterSegment),
+}
+
 /// TOML-deserializable footer segment placement settings.
 ///
 /// Each field replaces that placement when present. Listed segments are moved
@@ -1456,42 +1660,47 @@ impl FooterSegmentConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FooterLayoutConfigToml {
-    pub footer_left: Option<Vec<FooterSegment>>,
-    pub footer_right: Option<Vec<FooterSegment>>,
-    pub textarea_top_left: Option<Vec<FooterSegment>>,
-    pub textarea_top_right: Option<Vec<FooterSegment>>,
-    pub textarea_bottom_left: Option<Vec<FooterSegment>>,
-    pub textarea_bottom_right: Option<Vec<FooterSegment>>,
+    pub footer_left: Option<Vec<FooterLayoutItem>>,
+    pub footer_right: Option<Vec<FooterLayoutItem>>,
+    pub textarea_top_left: Option<Vec<FooterLayoutItem>>,
+    pub textarea_top_right: Option<Vec<FooterLayoutItem>>,
+    pub textarea_bottom_left: Option<Vec<FooterLayoutItem>>,
+    pub textarea_bottom_right: Option<Vec<FooterLayoutItem>>,
 }
 
 /// Resolved footer segment placement configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FooterLayoutConfig {
-    pub footer_left: Vec<FooterSegment>,
-    pub footer_right: Vec<FooterSegment>,
-    pub textarea_top_left: Vec<FooterSegment>,
-    pub textarea_top_right: Vec<FooterSegment>,
-    pub textarea_bottom_left: Vec<FooterSegment>,
-    pub textarea_bottom_right: Vec<FooterSegment>,
+    pub footer_left: Vec<FooterLayoutItem>,
+    pub footer_right: Vec<FooterLayoutItem>,
+    pub textarea_top_left: Vec<FooterLayoutItem>,
+    pub textarea_top_right: Vec<FooterLayoutItem>,
+    pub textarea_bottom_left: Vec<FooterLayoutItem>,
+    pub textarea_bottom_right: Vec<FooterLayoutItem>,
 }
 
 impl Default for FooterLayoutConfig {
     fn default() -> Self {
         Self {
             footer_left: vec![
-                FooterSegment::CloudSession,
-                FooterSegment::PromptSummary,
-                FooterSegment::VimMode,
-                FooterSegment::GitBranch,
-                FooterSegment::WorktreeName,
-                FooterSegment::GitStats,
-                FooterSegment::Context,
-                FooterSegment::ApprovalMode,
-                FooterSegment::Skillset,
-                FooterSegment::NoriVersion,
-                FooterSegment::TokenUsage,
+                FooterSegment::CloudSession.into(),
+                FooterSegment::PromptSummary.into(),
+                FooterSegment::VimMode.into(),
+                FooterSegment::GitBranch.into(),
+                FooterSegment::WorktreeName.into(),
+                FooterSegment::GitStats.into(),
+                FooterSegment::Context.into(),
+                FooterSegment::ContextUsedPercent.into(),
+                FooterSegment::ContextRemainingPercent.into(),
+                FooterSegment::ContextUsedTokens.into(),
+                FooterSegment::ContextRemainingTokens.into(),
+                FooterSegment::ContextWindowTokens.into(),
+                FooterSegment::ApprovalMode.into(),
+                FooterSegment::Skillset.into(),
+                FooterSegment::NoriVersion.into(),
+                FooterSegment::TokenUsage.into(),
             ],
-            footer_right: vec![FooterSegment::ModeIndicator],
+            footer_right: vec![FooterSegment::ModeIndicator.into()],
             textarea_top_left: Vec::new(),
             textarea_top_right: Vec::new(),
             textarea_bottom_left: Vec::new(),
@@ -1532,7 +1741,7 @@ impl FooterLayoutConfig {
         config
     }
 
-    fn remove_segments(&mut self, segments: &[FooterSegment]) {
+    fn remove_segments(&mut self, segments: &[FooterLayoutItem]) {
         self.footer_left
             .retain(|segment| !segments.contains(segment));
         self.footer_right

@@ -703,12 +703,154 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
     let contents = terminal.backend().vt100().screen().contents();
 
     assert!(
-        contents.contains("Context 16% (42.6K)"),
+        contents.contains("16% / 258k"),
         "expected ACP session usage in footer, got: {contents:?}"
     );
     assert!(
         !contents.contains("Context: 69.2K (27%)"),
         "expected transcript fallback to be disabled, got: {contents:?}"
+    );
+}
+
+#[test]
+fn transcript_usage_supplies_default_context_percentage_and_window_size() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_system_info_refresh(crate::system_info::SystemInfo {
+        transcript_location: Some(nori_harness::TranscriptLocation {
+            agent_kind: nori_harness::AgentKind::Codex,
+            transcript_path: PathBuf::from("/tmp/codex-transcript.jsonl"),
+            session_id: "codex-session".to_string(),
+            token_breakdown: Some(nori_harness::TranscriptTokenUsage {
+                input_tokens: 69_246,
+                output_tokens: 1_200,
+                cached_tokens: 45_000,
+                last_context_tokens: Some(69_246),
+            }),
+            subagents_used: Vec::new(),
+        }),
+        ..Default::default()
+    });
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with transcript context usage");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("27% / 258k"),
+        "expected transcript usage and agent window size in footer: {contents:?}"
+    );
+}
+
+#[test]
+fn custom_footer_formats_can_compose_context_values_in_footer_and_corner() {
+    let config: nori_config::NoriConfigToml = toml::from_str(
+        r#"
+[tui.footer_layout]
+footer_left = [
+    { format = "{context_used_percent} / {context_window_tokens}" },
+]
+textarea_top_right = [
+    { format = "{context_remaining_percent} remaining" },
+]
+"#,
+    )
+    .expect("custom footer layout should parse");
+    let layout = nori_config::FooterLayoutConfig::from_toml(&config.tui.footer_layout);
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual_with_footer_layout(layout);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
+        nori_protocol::SessionUpdateInfo {
+            kind: nori_protocol::SessionUpdateKind::Usage,
+            message: "Session usage: 42600 / 258400 tokens".into(),
+            hint: None,
+            usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                used_tokens: 42_600,
+                total_tokens: 258_400,
+                cost_display: None,
+            }),
+        },
+    ));
+    assert!(drain_insert_history(&mut rx).is_empty());
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with custom footer layout");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("16% / 258k"),
+        "custom footer should compose used percentage and window size: {contents:?}"
+    );
+    assert!(
+        contents.contains("84% remaining"),
+        "custom corner should compose remaining percentage: {contents:?}"
+    );
+}
+
+#[test]
+fn all_atomic_context_segments_render_session_usage_values() {
+    let config: nori_config::NoriConfigToml = toml::from_str(
+        r#"
+[tui.footer_segments]
+context = false
+token_usage = false
+context_used_percent = true
+context_remaining_percent = true
+context_used_tokens = true
+context_remaining_tokens = true
+context_window_tokens = true
+
+[tui.footer_layout]
+footer_left = [
+    "context_used_percent",
+    "context_remaining_percent",
+    "context_used_tokens",
+    "context_remaining_tokens",
+    "context_window_tokens",
+]
+"#,
+    )
+    .expect("atomic context segments should parse");
+    let segments = nori_config::FooterSegmentConfig::from_toml(&config.tui.footer_segments);
+    let layout = nori_config::FooterLayoutConfig::from_toml(&config.tui.footer_layout);
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual_with_footer_config(segments, layout);
+
+    chat.handle_client_event(nori_protocol::ClientEvent::SessionUpdateInfo(
+        nori_protocol::SessionUpdateInfo {
+            kind: nori_protocol::SessionUpdateKind::Usage,
+            message: "Session usage: 42600 / 258400 tokens".into(),
+            hint: None,
+            usage: Some(nori_protocol::session_runtime::SessionUsageState {
+                used_tokens: 42_600,
+                total_tokens: 258_400,
+                cost_display: None,
+            }),
+        },
+    ));
+    assert!(drain_insert_history(&mut rx).is_empty());
+
+    let height = chat.desired_height(80);
+    let mut terminal =
+        ratatui::Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with atomic context segments");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("16% · 84% · 42.6k · 216k · 258k"),
+        "expected every atomic context value in the footer: {contents:?}"
     );
 }
 
