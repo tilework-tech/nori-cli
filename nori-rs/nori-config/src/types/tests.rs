@@ -802,39 +802,11 @@ fn test_footer_segment_deserialize_all_variants() {
         segment: FooterSegment,
     }
 
-    let w: Wrapper = toml::from_str(r#"segment = "prompt_summary""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::PromptSummary);
-
-    let w: Wrapper = toml::from_str(r#"segment = "vim_mode""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::VimMode);
-
-    let w: Wrapper = toml::from_str(r#"segment = "git_branch""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::GitBranch);
-
-    let w: Wrapper = toml::from_str(r#"segment = "worktree_name""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::WorktreeName);
-
-    let w: Wrapper = toml::from_str(r#"segment = "git_stats""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::GitStats);
-
-    let w: Wrapper = toml::from_str(r#"segment = "context""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::Context);
-
-    let w: Wrapper = toml::from_str(r#"segment = "approval_mode""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::ApprovalMode);
-
-    let w: Wrapper = toml::from_str(r#"segment = "skillset""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::Skillset);
-
-    let w: Wrapper = toml::from_str(r#"segment = "nori_version""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::NoriVersion);
-
-    let w: Wrapper = toml::from_str(r#"segment = "token_usage""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::TokenUsage);
-    let w: Wrapper = toml::from_str(r#"segment = "mode_indicator""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::ModeIndicator);
-    let w: Wrapper = toml::from_str(r#"segment = "cloud_session""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::CloudSession);
+    for expected in FooterSegment::all_variants() {
+        let source = format!(r#"segment = "{}""#, expected.toml_key());
+        let parsed: Wrapper = toml::from_str(&source).unwrap();
+        assert_eq!(parsed.segment, *expected);
+    }
 }
 
 #[test]
@@ -864,6 +836,26 @@ fn test_footer_segment_display_name() {
     assert_eq!(FooterSegment::WorktreeName.display_name(), "Worktree Name");
     assert_eq!(FooterSegment::GitStats.display_name(), "Git Stats");
     assert_eq!(FooterSegment::Context.display_name(), "Context Window");
+    assert_eq!(
+        FooterSegment::ContextUsedPercent.display_name(),
+        "Context Used %"
+    );
+    assert_eq!(
+        FooterSegment::ContextRemainingPercent.display_name(),
+        "Context Remaining %"
+    );
+    assert_eq!(
+        FooterSegment::ContextUsedTokens.display_name(),
+        "Context Used Tokens"
+    );
+    assert_eq!(
+        FooterSegment::ContextRemainingTokens.display_name(),
+        "Context Remaining Tokens"
+    );
+    assert_eq!(
+        FooterSegment::ContextWindowTokens.display_name(),
+        "Context Window Tokens"
+    );
     assert_eq!(FooterSegment::ApprovalMode.display_name(), "Approvals");
     assert_eq!(FooterSegment::Skillset.display_name(), "Skillset");
     assert_eq!(
@@ -890,6 +882,11 @@ fn test_footer_segment_all_variants() {
             FooterSegment::WorktreeName,
             FooterSegment::GitStats,
             FooterSegment::Context,
+            FooterSegment::ContextUsedPercent,
+            FooterSegment::ContextRemainingPercent,
+            FooterSegment::ContextUsedTokens,
+            FooterSegment::ContextRemainingTokens,
+            FooterSegment::ContextWindowTokens,
             FooterSegment::ApprovalMode,
             FooterSegment::Skillset,
             FooterSegment::NoriVersion,
@@ -927,6 +924,11 @@ fn test_footer_segment_config_default_is_lean_subset() {
     let expected_disabled = [
         FooterSegment::PromptSummary,
         FooterSegment::GitStats,
+        FooterSegment::ContextUsedPercent,
+        FooterSegment::ContextRemainingPercent,
+        FooterSegment::ContextUsedTokens,
+        FooterSegment::ContextRemainingTokens,
+        FooterSegment::ContextWindowTokens,
         FooterSegment::Skillset,
         FooterSegment::NoriVersion,
     ];
@@ -1007,17 +1009,17 @@ fn test_footer_segment_config_from_toml_some_disabled() {
 fn test_footer_layout_default_puts_mode_in_footer_right() {
     assert_eq!(
         FooterLayoutConfig::default().footer_right,
-        vec![FooterSegment::ModeIndicator]
+        vec![FooterSegment::ModeIndicator.into()]
     );
     assert!(
         FooterLayoutConfig::default()
             .footer_left
-            .contains(&FooterSegment::GitBranch)
+            .contains(&FooterSegment::GitBranch.into())
     );
     assert!(
         !FooterLayoutConfig::default()
             .footer_left
-            .contains(&FooterSegment::ModeIndicator)
+            .contains(&FooterSegment::ModeIndicator.into())
     );
 }
 
@@ -1034,9 +1036,70 @@ textarea_top_right = ["mode_indicator"]
     let layout = FooterLayoutConfig::from_toml(&config.footer_layout);
     assert_eq!(
         layout.textarea_top_right,
-        vec![FooterSegment::ModeIndicator]
+        vec![FooterSegment::ModeIndicator.into()]
     );
     assert!(layout.footer_right.is_empty());
+}
+
+#[test]
+fn test_footer_layout_rejects_unknown_custom_format_placeholder() {
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = [{ format = "{not_a_footer_segment}" }]
+"#,
+    )
+    .expect_err("unknown placeholders should be configuration errors");
+
+    assert!(
+        error.to_string().contains("not_a_footer_segment"),
+        "error should name the unknown placeholder: {error}"
+    );
+}
+
+#[test]
+fn test_footer_layout_rejects_unbalanced_custom_format_braces() {
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = [{ format = "{git_branch" }]
+"#,
+    )
+    .expect_err("unbalanced braces should be configuration errors");
+
+    assert!(
+        error.to_string().contains("git_branch"),
+        "error should identify the invalid format: {error}"
+    );
+
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = [{ format = "git_branch}" }]
+"#,
+    )
+    .expect_err("stray closing braces should be configuration errors");
+
+    assert!(
+        error.to_string().contains("git_branch"),
+        "error should identify the invalid format: {error}"
+    );
+}
+
+#[test]
+fn test_footer_layout_rejects_unknown_builtin_segment() {
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = ["git_barnch"]
+"#,
+    )
+    .expect_err("misspelled built-ins should be configuration errors");
+
+    assert!(
+        error.to_string().contains("git_barnch"),
+        "error should name the unknown built-in: {error}"
+    );
 }
 
 #[test]
@@ -1081,7 +1144,7 @@ textarea_top_right = ["mode_indicator"]
     assert_eq!(config.tui.footer_segments.git_branch, None);
     assert_eq!(
         config.tui.footer_layout.textarea_top_right,
-        Some(vec![FooterSegment::ModeIndicator])
+        Some(vec![FooterSegment::ModeIndicator.into()])
     );
 }
 

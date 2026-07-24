@@ -179,6 +179,13 @@ state. It assembles streaming messages and tools, tracks live phase/config/
 usage, and supports persistence and product behavior. It is neither exported
 from `nori-protocol` nor delivered as a second public event vocabulary.
 
+ACP `UsageUpdate` values retain both current and maximum context tokens for
+consumers such as the TUI footer. Transcript discovery remains a provider
+fallback: `TranscriptTokenUsage.last_context_tokens` reports the latest context
+fill, while the detected `AgentKind` supplies the maximum window size. The TUI
+uses live ACP usage when present and otherwise combines those transcript values;
+the default and atomic footer context segments share that resolved state.
+
 Transcript schema v3 records:
 
 - session metadata;

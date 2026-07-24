@@ -84,10 +84,10 @@ impl ChatComposer {
                 })
             })
         });
-        let (context_tokens, context_window_percent) =
+        let (context_tokens, context_window_percent, context_window_tokens) =
             if let Some(session_usage) = &self.session_usage {
                 (
-                    Some(session_usage.used_tokens).filter(|&tokens| tokens > 0),
+                    Some(session_usage.used_tokens).filter(|&tokens| tokens >= 0),
                     (session_usage.total_tokens > 0).then(|| {
                         session_usage
                             .used_tokens
@@ -95,9 +95,14 @@ impl ChatComposer {
                             .saturating_div(session_usage.total_tokens)
                             .clamp(0, 100)
                     }),
+                    Some(session_usage.total_tokens).filter(|&tokens| tokens > 0),
                 )
             } else {
-                (context_tokens, context_window_percent)
+                (
+                    context_tokens,
+                    context_window_percent,
+                    context_window_size.filter(|&tokens| tokens > 0),
+                )
             };
 
         FooterProps {
@@ -108,6 +113,7 @@ impl ChatComposer {
             vertical_footer: self.vertical_footer,
             context_window_percent,
             context_tokens,
+            context_window_tokens,
             git_branch,
             approval_mode_label: self.approval_mode_label.clone(),
             active_skillsets,

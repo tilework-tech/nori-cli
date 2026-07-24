@@ -188,7 +188,7 @@ fn composer_can_render_mode_segment_in_textarea_top_right() {
     snapshot_composer_state("composer_acp_mode_textarea_top_right", false, |composer| {
         composer.set_footer_layout_config(nori_config::FooterLayoutConfig::from_toml(
             &nori_config::FooterLayoutConfigToml {
-                textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator]),
+                textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator.into()]),
                 ..Default::default()
             },
         ));

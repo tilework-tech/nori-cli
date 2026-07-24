@@ -47,6 +47,33 @@ pub(crate) fn make_chatwidget_manual() -> (
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
     tokio::sync::mpsc::UnboundedReceiver<()>,
 ) {
+    make_chatwidget_manual_with_footer_config(
+        nori_config::FooterSegmentConfig::default(),
+        nori_config::FooterLayoutConfig::default(),
+    )
+}
+
+pub(crate) fn make_chatwidget_manual_with_footer_layout(
+    footer_layout_config: nori_config::FooterLayoutConfig,
+) -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<()>,
+) {
+    make_chatwidget_manual_with_footer_config(
+        nori_config::FooterSegmentConfig::default(),
+        footer_layout_config,
+    )
+}
+
+pub(crate) fn make_chatwidget_manual_with_footer_config(
+    footer_segment_config: nori_config::FooterSegmentConfig,
+    footer_layout_config: nori_config::FooterLayoutConfig,
+) -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<()>,
+) {
     let (event_tx, event_rx) = unbounded_channel();
     let app_event_tx = AppEventSender::new(event_tx);
     let config = test_config();
@@ -59,8 +86,8 @@ pub(crate) fn make_chatwidget_manual() -> (
         enhanced_keys_supported: false,
         auth_manager: AuthManager::from_auth_for_testing(CodexAuth::from_api_key("test")),
         vertical_footer: false,
-        footer_segment_config: nori_config::FooterSegmentConfig::default(),
-        footer_layout_config: nori_config::FooterLayoutConfig::default(),
+        footer_segment_config,
+        footer_layout_config,
         deferred_spawn: true,
         fork_context: None,
     });

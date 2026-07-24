@@ -84,6 +84,44 @@ Cloud sessions use standard ACP `session/list`, `session/resume`, and
 `session/close`. Quitting detaches through connection teardown; `/close` is the
 explicit agent-side release action.
 
+#### Footer configuration
+
+`[tui.footer_layout]` accepts the same layout entries in `footer_left`,
+`footer_right`, and all four `textarea_*` corners. An entry is either a built-in
+segment name or an inline custom chunk:
+
+```toml
+[tui.footer_layout]
+footer_left = [
+  "git_branch",
+  { format = "{context_used_percent} / {context_window_tokens}" },
+  "approval_mode",
+]
+```
+
+Built-in names are `prompt_summary`, `vim_mode`, `git_branch`,
+`worktree_name`, `git_stats`, `context`, `context_used_percent`,
+`context_remaining_percent`, `context_used_tokens`,
+`context_remaining_tokens`, `context_window_tokens`, `approval_mode`,
+`skillset`, `nori_version`, `token_usage`, `mode_indicator`, and
+`cloud_session`. The default `context` segment renders used percentage and
+maximum window size, such as `44% / 272k`. The five atomic context segments are
+off as standalone entries by default so custom chunks can compose only the
+values they need.
+
+Custom formats are deliberately limited to literal text and built-in
+placeholders. `{{` and `}}` emit literal braces. Unknown placeholders,
+unbalanced braces, expressions, conditions, and format specifiers are rejected
+when configuration loads. Referenced segments keep their styles and ignore
+their standalone `[tui.footer_segments]` toggle; if any referenced runtime value
+is unavailable, the complete custom chunk is hidden.
+
+`FooterLayoutItem` and the load-time parser live in
+`@/nori-rs/nori-config/src/types/mod.rs`. Composition and context formatting
+live in `@/nori-rs/tui/src/bottom_pane/footer.rs`; resolved ACP or transcript
+usage reaches it through
+`@/nori-rs/tui/src/bottom_pane/chat_composer/rendering.rs`.
+
 #### Transcripts and view-only mode
 
 Between `ReplayStarted` and `ReplayFinished`, replayed user and assistant

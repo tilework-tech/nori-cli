@@ -5,7 +5,9 @@ use crate::system_info::NoriVersionSource;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use crate::ui_types::format_si_suffix;
 use crossterm::event::KeyCode;
+use nori_config::FooterFormatPart;
 use nori_config::FooterLayoutConfig;
+use nori_config::FooterLayoutItem;
 use nori_config::FooterSegment;
 use nori_config::FooterSegmentConfig;
 use ratatui::buffer::Buffer;
@@ -26,8 +28,10 @@ pub(crate) struct FooterProps {
     pub(crate) vertical_footer: bool,
     /// Context window percentage used (0-100).
     pub(crate) context_window_percent: Option<i64>,
-    /// Total tokens in context window (for "Context: 34K (27%)" display).
+    /// Tokens currently used in the context window.
     pub(crate) context_tokens: Option<i64>,
+    /// Maximum tokens available in the context window.
+    pub(crate) context_window_tokens: Option<i64>,
     pub(crate) git_branch: Option<String>,
     /// The approval mode label to display (e.g., "Read Only", "Agent", "Full Access").
     pub(crate) approval_mode_label: Option<String>,
@@ -422,20 +426,36 @@ fn footer_segment_groups(props: &FooterProps) -> FooterSegmentGroups {
     }
 }
 
-fn segments_for(props: &FooterProps, segment_order: &[FooterSegment]) -> Vec<Line<'static>> {
+fn segments_for(props: &FooterProps, segment_order: &[FooterLayoutItem]) -> Vec<Line<'static>> {
     segment_order
         .iter()
-        .filter_map(|segment| footer_segment(props, *segment))
+        .filter_map(|item| footer_layout_item(props, item))
         .collect()
 }
 
-fn footer_segment(props: &FooterProps, segment: FooterSegment) -> Option<Line<'static>> {
-    let config = &props.footer_segment_config;
-
-    if !config.is_enabled(segment) {
-        return None;
+fn footer_layout_item(props: &FooterProps, item: &FooterLayoutItem) -> Option<Line<'static>> {
+    match item {
+        FooterLayoutItem::Builtin(segment) if props.footer_segment_config.is_enabled(*segment) => {
+            builtin_footer_segment(props, *segment)
+        }
+        FooterLayoutItem::Builtin(_) => None,
+        FooterLayoutItem::Custom(format) => {
+            let mut line = Line::from("");
+            for part in format.parts() {
+                match part {
+                    FooterFormatPart::Text(text) => line.push_span(text.clone()),
+                    FooterFormatPart::Segment(segment) => {
+                        let segment = builtin_footer_segment(props, *segment)?;
+                        line.extend(segment.spans);
+                    }
+                }
+            }
+            (!line.spans.is_empty()).then_some(line)
+        }
     }
+}
 
+fn builtin_footer_segment(props: &FooterProps, segment: FooterSegment) -> Option<Line<'static>> {
     match segment {
         FooterSegment::PromptSummary => props
             .prompt_summary
@@ -472,6 +492,11 @@ fn footer_segment(props: &FooterProps, segment: FooterSegment) -> Option<Line<'s
         }),
         FooterSegment::GitStats => git_stats_segment(props),
         FooterSegment::Context => context_segment(props),
+        FooterSegment::ContextUsedPercent => context_used_percent_segment(props),
+        FooterSegment::ContextRemainingPercent => context_remaining_percent_segment(props),
+        FooterSegment::ContextUsedTokens => context_used_tokens_segment(props),
+        FooterSegment::ContextRemainingTokens => context_remaining_tokens_segment(props),
+        FooterSegment::ContextWindowTokens => context_window_tokens_segment(props),
         FooterSegment::ApprovalMode => props.approval_mode_label.as_ref().map(|label| {
             Line::from(vec![
                 Span::from("Approvals: ").magenta(),
@@ -548,17 +573,78 @@ fn git_stats_segment(props: &FooterProps) -> Option<Line<'static>> {
 }
 
 fn context_segment(props: &FooterProps) -> Option<Line<'static>> {
-    let formatted_tokens = props
+    let formatted_used_tokens = props
         .context_tokens
         .filter(|&tokens| tokens > 0)
-        .map(format_si_suffix);
-    let context_text = match (props.context_window_percent, formatted_tokens) {
-        (Some(pct), Some(tokens)) => Some(format!("Context {pct}% ({tokens})")),
-        (Some(pct), None) => Some(format!("Context {pct}%")),
-        (None, Some(tokens)) => Some(format!("Context {tokens}")),
-        (None, None) => None,
+        .map(format_context_tokens);
+    let formatted_window_tokens = props
+        .context_window_tokens
+        .filter(|&tokens| tokens > 0)
+        .map(format_context_tokens);
+    let context_text = match (
+        props.context_window_percent.map(clamp_percent),
+        formatted_window_tokens,
+        formatted_used_tokens,
+    ) {
+        (Some(percent), Some(window), _) => Some(format!("{percent}% / {window}")),
+        (Some(percent), None, _) => Some(format!("{percent}%")),
+        (None, _, Some(used)) => Some(used),
+        (None, _, None) => None,
     };
     context_text.map(Line::from)
+}
+
+fn context_used_percent_segment(props: &FooterProps) -> Option<Line<'static>> {
+    props
+        .context_window_percent
+        .map(clamp_percent)
+        .map(|percent| Line::from(format!("{percent}%")))
+}
+
+fn context_remaining_percent_segment(props: &FooterProps) -> Option<Line<'static>> {
+    props
+        .context_window_percent
+        .map(clamp_percent)
+        .map(|percent| Line::from(format!("{}%", 100 - percent)))
+}
+
+fn context_used_tokens_segment(props: &FooterProps) -> Option<Line<'static>> {
+    props
+        .context_tokens
+        .filter(|&tokens| tokens >= 0)
+        .map(format_context_tokens)
+        .map(Line::from)
+}
+
+fn context_remaining_tokens_segment(props: &FooterProps) -> Option<Line<'static>> {
+    props
+        .context_window_tokens
+        .zip(props.context_tokens)
+        .filter(|(window, used)| *window > 0 && *used >= 0)
+        .map(|(window, used)| window.saturating_sub(used).max(0))
+        .map(format_context_tokens)
+        .map(Line::from)
+}
+
+fn context_window_tokens_segment(props: &FooterProps) -> Option<Line<'static>> {
+    props
+        .context_window_tokens
+        .filter(|&tokens| tokens > 0)
+        .map(format_context_tokens)
+        .map(Line::from)
+}
+
+fn clamp_percent(percent: i64) -> i64 {
+    percent.clamp(0, 100)
+}
+
+fn format_context_tokens(tokens: i64) -> String {
+    let mut formatted = format_si_suffix(tokens);
+    if formatted.ends_with('K') {
+        formatted.pop();
+        formatted.push('k');
+    }
+    formatted
 }
 
 fn skillset_segment(props: &FooterProps) -> Option<Line<'static>> {
@@ -782,10 +868,10 @@ mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    /// Test baseline: every segment enabled. Snapshot tests opt out
-    /// individual segments rather than depending on production defaults so
-    /// renderings stay stable when shipped defaults change.
-    fn fully_enabled_segments() -> FooterSegmentConfig {
+    /// Test baseline for established status segments. Atomic context variants
+    /// stay off here because their dedicated integration test covers them
+    /// without duplicating values across unrelated snapshots.
+    fn snapshot_segment_config() -> FooterSegmentConfig {
         FooterSegmentConfig {
             prompt_summary: true,
             vim_mode: true,
@@ -793,6 +879,11 @@ mod tests {
             worktree_name: true,
             git_stats: true,
             context: true,
+            context_used_percent: false,
+            context_remaining_percent: false,
+            context_used_tokens: false,
+            context_remaining_tokens: false,
+            context_window_tokens: false,
             approval_mode: true,
             skillset: true,
             nori_version: true,
@@ -811,6 +902,7 @@ mod tests {
             vertical_footer: false,
             context_window_percent: None,
             context_tokens: None,
+            context_window_tokens: None,
             git_branch: None,
             approval_mode_label: None,
             active_skillsets: Vec::new(),
@@ -826,7 +918,7 @@ mod tests {
             vim_mode_state: None,
             prompt_summary: None,
             worktree_name: None,
-            footer_segment_config: fully_enabled_segments(),
+            footer_segment_config: snapshot_segment_config(),
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
             acp_mode_label: None,
             cloud_session: None,
@@ -864,6 +956,12 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    fn layout_from_toml(source: &str) -> FooterLayoutConfig {
+        let config: nori_config::NoriConfigToml =
+            toml::from_str(source).expect("footer layout should deserialize");
+        FooterLayoutConfig::from_toml(&config.tui.footer_layout)
     }
 
     #[test]
@@ -1249,14 +1347,149 @@ mod tests {
     }
 
     #[test]
-    fn footer_context_renders_percent_before_tokens() {
+    fn footer_context_falls_back_to_percent_when_window_size_is_unavailable() {
         let rendered = render_footer_text(FooterProps {
             context_window_percent: Some(16),
             context_tokens: Some(42_600),
+            footer_segment_config: FooterSegmentConfig::default(),
             ..default_props()
         });
 
-        assert_eq!(rendered.trim(), "Context 16% (42.6K)");
+        assert_eq!(rendered.trim(), "16%");
+    }
+
+    #[test]
+    fn footer_context_uses_percentage_and_window_size_by_default() {
+        let rendered = render_footer_text(FooterProps {
+            context_window_percent: Some(44),
+            context_tokens: Some(116_000),
+            context_window_tokens: Some(272_000),
+            footer_segment_config: FooterSegmentConfig::default(),
+            ..default_props()
+        });
+
+        assert_eq!(rendered.trim(), "44% / 272k");
+    }
+
+    #[test]
+    fn custom_footer_segments_work_in_every_layout_placement() {
+        for placement in [
+            "footer_left",
+            "footer_right",
+            "textarea_top_left",
+            "textarea_top_right",
+            "textarea_bottom_left",
+            "textarea_bottom_right",
+        ] {
+            let layout = layout_from_toml(&format!(
+                r#"
+[tui.footer_layout]
+{placement} = [{{ format = "{{git_branch}}" }}]
+"#
+            ));
+            let props = FooterProps {
+                git_branch: Some("main".to_string()),
+                footer_segment_config: FooterSegmentConfig {
+                    git_branch: false,
+                    ..snapshot_segment_config()
+                },
+                footer_layout_config: layout,
+                ..default_props()
+            };
+            let rendered = match placement {
+                "footer_left" | "footer_right" => render_footer_text(props),
+                "textarea_top_left" => textarea_corner_segments(&props).top_left.to_string(),
+                "textarea_top_right" => textarea_corner_segments(&props).top_right.to_string(),
+                "textarea_bottom_left" => textarea_corner_segments(&props).bottom_left.to_string(),
+                "textarea_bottom_right" => {
+                    textarea_corner_segments(&props).bottom_right.to_string()
+                }
+                _ => unreachable!("all placements are covered"),
+            };
+
+            assert!(
+                rendered.contains("⎇ main"),
+                "custom segment should render in {placement}: {rendered:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_footer_segment_composes_text_and_builtin_segments() {
+        let layout = layout_from_toml(
+            r#"
+[tui.footer_layout]
+footer_left = [
+    { format = "{git_branch} — {approval_mode}" },
+]
+"#,
+        );
+        let rendered = render_footer_text(FooterProps {
+            git_branch: Some("main".to_string()),
+            approval_mode_label: Some("Agent".to_string()),
+            footer_segment_config: FooterSegmentConfig {
+                git_branch: false,
+                approval_mode: false,
+                ..snapshot_segment_config()
+            },
+            footer_layout_config: layout,
+            ..default_props()
+        });
+
+        assert_eq!(rendered.trim(), "⎇ main — Approvals: Agent");
+    }
+
+    #[test]
+    fn custom_footer_segment_preserves_builtin_styles_and_literal_braces() {
+        let layout = layout_from_toml(
+            r#"
+[tui.footer_layout]
+footer_left = [
+    { format = "{git_branch} {{ready}} {approval_mode}" },
+]
+"#,
+        );
+        let props = FooterProps {
+            git_branch: Some("main".to_string()),
+            approval_mode_label: Some("Agent".to_string()),
+            footer_layout_config: layout,
+            ..default_props()
+        };
+        let segment = segments_for(&props, &props.footer_layout_config.footer_left)
+            .into_iter()
+            .next()
+            .expect("custom segment should render");
+
+        assert_eq!(segment.to_string(), "⎇ main {ready} Approvals: Agent");
+        assert_eq!(
+            segment.spans[0].style.fg,
+            Some(ratatui::style::Color::Yellow)
+        );
+        assert_eq!(segment.spans[2].style.fg, None);
+        assert_eq!(
+            segment.spans[3].style.fg,
+            Some(ratatui::style::Color::Magenta)
+        );
+    }
+
+    #[test]
+    fn custom_footer_segment_hides_when_a_referenced_segment_is_unavailable() {
+        let layout = layout_from_toml(
+            r#"
+[tui.footer_layout]
+footer_left = [
+    { format = "{git_branch} — {approval_mode}" },
+]
+"#,
+        );
+        let rendered = render_footer_text(FooterProps {
+            git_branch: Some("main".to_string()),
+            approval_mode_label: None,
+            footer_layout_config: layout,
+            ..default_props()
+        });
+
+        assert_eq!(rendered.trim(), "");
     }
 
     #[test]
@@ -1313,7 +1546,7 @@ mod tests {
     fn footer_with_worktree_name_disabled() {
         let segment_config = FooterSegmentConfig {
             worktree_name: false,
-            ..fully_enabled_segments()
+            ..snapshot_segment_config()
         };
 
         snapshot_footer(
@@ -1374,7 +1607,7 @@ mod tests {
     fn footer_with_git_branch_disabled() {
         let segment_config = FooterSegmentConfig {
             git_branch: false,
-            ..fully_enabled_segments()
+            ..snapshot_segment_config()
         };
 
         snapshot_footer(
@@ -1395,7 +1628,7 @@ mod tests {
             git_branch: false,
             git_stats: false,
             token_usage: false,
-            ..fully_enabled_segments()
+            ..snapshot_segment_config()
         };
 
         snapshot_footer(
@@ -1425,6 +1658,11 @@ mod tests {
             worktree_name: false,
             git_stats: false,
             context: false,
+            context_used_percent: false,
+            context_remaining_percent: false,
+            context_used_tokens: false,
+            context_remaining_tokens: false,
+            context_window_tokens: false,
             approval_mode: false,
             skillset: false,
             nori_version: false,
@@ -1502,7 +1740,7 @@ mod tests {
         let segment_config = FooterSegmentConfig {
             skillset: false,
             nori_version: false,
-            ..fully_enabled_segments()
+            ..snapshot_segment_config()
         };
 
         snapshot_footer(
