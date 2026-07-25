@@ -262,13 +262,32 @@ impl ChatWidget {
             .update_selection_item(session_id, name, description, search_value);
     }
 
-    /// Open the Nori CLI settings popup.
-    pub(crate) fn open_settings_popup(&mut self, nori_config: &nori_config::NoriConfig) {
+    /// Open the Nori CLI settings popup, optionally selecting `focus`'s row.
+    ///
+    /// Applies the ephemeral per-session loop-count override so the panel
+    /// reflects the current in-session value rather than the persisted one.
+    pub(crate) fn open_settings_popup(
+        &mut self,
+        focus: Option<crate::nori::config_picker::SettingsItem>,
+    ) {
+        let mut config = self.config.clone();
+        if let Some(overridden) = self.loop_count_override {
+            config.loop_count = overridden;
+        }
         let params = crate::nori::config_picker::config_picker_params(
-            nori_config,
+            &config,
             self.app_event_tx.clone(),
+            focus,
         );
         self.bottom_pane.show_selection_view(params);
+    }
+
+    /// Reopen the settings popup with the cursor on the just-changed setting.
+    pub(crate) fn reopen_settings_focused(
+        &mut self,
+        focus: crate::nori::config_picker::SettingsItem,
+    ) {
+        self.open_settings_popup(Some(focus));
     }
 
     /// Open the file manager sub-picker.
@@ -280,10 +299,18 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
-    /// Open the vim mode sub-picker.
-    pub(crate) fn open_vim_mode_picker(&mut self, current: nori_config::VimEnterBehavior) {
-        let params =
-            crate::nori::config_picker::vim_mode_picker_params(current, self.app_event_tx.clone());
+    /// Open the vim mode sub-picker. `from_settings` is true when opened from
+    /// the `/settings` panel (so it should return there afterward).
+    pub(crate) fn open_vim_mode_picker(
+        &mut self,
+        current: nori_config::VimEnterBehavior,
+        from_settings: bool,
+    ) {
+        let params = crate::nori::config_picker::vim_mode_picker_params(
+            current,
+            self.app_event_tx.clone(),
+            from_settings,
+        );
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -651,22 +678,30 @@ impl ChatWidget {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
                 let config_options = handle.get_session_config().await.unwrap_or_default();
-                app_event_tx.send(AppEvent::OpenAcpSessionConfigPicker { config_options });
+                app_event_tx.send(AppEvent::OpenAcpSessionConfigPicker {
+                    config_options,
+                    focus_config_id: None,
+                });
             });
             return;
         }
 
-        let params = crate::nori::session_config_picker::acp_session_config_picker_params(&[]);
+        let params =
+            crate::nori::session_config_picker::acp_session_config_picker_params(&[], None);
         self.bottom_pane.show_selection_view(params);
     }
 
-    /// Open the top-level ACP session-config picker with the current config snapshot.
+    /// Open the top-level ACP session-config picker with the current config
+    /// snapshot, optionally selecting the row named by `focus_config_id`.
     pub(crate) fn open_acp_session_config_picker(
         &mut self,
         config_options: Vec<nori_protocol::acp::v1::SessionConfigOption>,
+        focus_config_id: Option<String>,
     ) {
-        let params =
-            crate::nori::session_config_picker::acp_session_config_picker_params(&config_options);
+        let params = crate::nori::session_config_picker::acp_session_config_picker_params(
+            &config_options,
+            focus_config_id.as_deref(),
+        );
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -704,6 +739,13 @@ impl ChatWidget {
                             mode: crate::nori::session_config_mode::acp_mode_config_from_options(
                                 &config_options,
                             ),
+                        });
+                        // Return the user to the session config panel with the
+                        // just-edited option selected, so they can adjust
+                        // several settings without reopening `/config`.
+                        app_event_tx.send(AppEvent::OpenAcpSessionConfigPicker {
+                            config_options: config_options.clone(),
+                            focus_config_id: Some(config_id_for_result.clone()),
                         });
                         app_event_tx.send(AppEvent::AcpSessionConfigSetResult {
                             success: true,

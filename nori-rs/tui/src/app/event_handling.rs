@@ -706,9 +706,12 @@ impl App {
             AppEvent::OpenAcpModelPickerUnsupported => {
                 self.chat_widget.open_model_unsupported_popup();
             }
-            AppEvent::OpenAcpSessionConfigPicker { config_options } => {
+            AppEvent::OpenAcpSessionConfigPicker {
+                config_options,
+                focus_config_id,
+            } => {
                 self.chat_widget
-                    .open_acp_session_config_picker(config_options);
+                    .open_acp_session_config_picker(config_options, focus_config_id);
             }
             AppEvent::OpenAcpSessionConfigValuePicker { option } => {
                 self.chat_widget
@@ -841,7 +844,8 @@ impl App {
                 self.set_session_loop_count(value);
             }
             AppEvent::OpenVimModePicker => {
-                self.chat_widget.open_vim_mode_picker(self.config.vim_mode);
+                self.chat_widget
+                    .open_vim_mode_picker(self.config.vim_mode, true);
             }
             AppEvent::OpenAutoWorktreePicker => {
                 self.chat_widget
@@ -907,8 +911,11 @@ impl App {
                 self.chat_widget
                     .add_info_message(format!("Loop iteration {iteration} of {total}"), None);
             }
-            AppEvent::SetConfigVimMode(value) => {
-                self.persist_vim_mode_setting(value).await;
+            AppEvent::SetConfigVimMode {
+                value,
+                from_settings,
+            } => {
+                self.persist_vim_mode_setting(value, from_settings).await;
             }
             AppEvent::SkillsetListResult {
                 names,

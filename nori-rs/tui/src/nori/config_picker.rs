@@ -21,14 +21,36 @@ use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::nori::skillset_picker;
 
+/// Identifies a row in the `/settings` panel so the panel can be reopened with
+/// the cursor on the setting that was just changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SettingsItem {
+    PinnedPlanDrawer,
+    CustomWorkingMessages,
+    VerticalFooter,
+    TerminalNotifications,
+    OsNotifications,
+    VimMode,
+    AutoWorktree,
+    PerSessionSkillsets,
+    NotifyAfterIdle,
+    Hotkeys,
+    ScriptTimeout,
+    LoopCount,
+    FooterSegments,
+    FileManager,
+}
+
 /// Create selection view parameters for the config picker.
 ///
 /// # Arguments
 /// * `config` - The current Nori configuration
 /// * `app_event_tx` - The app event sender for triggering config change events
+/// * `focus` - Optional setting whose row should be selected when the panel opens
 pub fn config_picker_params(
     config: &NoriConfig,
     app_event_tx: AppEventSender,
+    focus: Option<SettingsItem>,
 ) -> SelectionViewParams {
     let vertical_footer_enabled = config.vertical_footer;
     let terminal_notifications_enabled =
@@ -45,68 +67,83 @@ pub fn config_picker_params(
         )
     };
 
-    let items: Vec<SelectionItem> = vec![
-        build_toggle_item(
-            "Pinned Plan Drawer",
-            "Pin plan updates to a drawer in the viewport instead of history",
-            pinned_plan_drawer_enabled,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !pinned_plan_drawer_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigPinnedPlanDrawer(new_value));
-                }
-            },
+    let entries: Vec<(SettingsItem, SelectionItem)> = vec![
+        (
+            SettingsItem::PinnedPlanDrawer,
+            build_toggle_item(
+                "Pinned Plan Drawer",
+                "Pin plan updates to a drawer in the viewport instead of history",
+                pinned_plan_drawer_enabled,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !pinned_plan_drawer_enabled;
+                    move || {
+                        tx.send(AppEvent::SetConfigPinnedPlanDrawer(new_value));
+                    }
+                },
+            ),
         ),
-        build_toggle_item(
-            "Custom Working Messages",
-            &custom_working_messages_description,
-            custom_working_messages_enabled,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !custom_working_messages_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigCustomWorkingMessages(new_value));
-                }
-            },
+        (
+            SettingsItem::CustomWorkingMessages,
+            build_toggle_item(
+                "Custom Working Messages",
+                &custom_working_messages_description,
+                custom_working_messages_enabled,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !custom_working_messages_enabled;
+                    move || {
+                        tx.send(AppEvent::SetConfigCustomWorkingMessages(new_value));
+                    }
+                },
+            ),
         ),
-        build_toggle_item(
-            "Vertical Footer",
-            "Stack footer segments vertically instead of horizontally",
-            vertical_footer_enabled,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !vertical_footer_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigVerticalFooter(new_value));
-                }
-            },
+        (
+            SettingsItem::VerticalFooter,
+            build_toggle_item(
+                "Vertical Footer",
+                "Stack footer segments vertically instead of horizontally",
+                vertical_footer_enabled,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !vertical_footer_enabled;
+                    move || {
+                        tx.send(AppEvent::SetConfigVerticalFooter(new_value));
+                    }
+                },
+            ),
         ),
-        build_toggle_item(
-            "Terminal Notifications",
-            "Send OSC 9 escape sequences to notify the terminal on events",
-            terminal_notifications_enabled,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !terminal_notifications_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigTerminalNotifications(new_value));
-                }
-            },
+        (
+            SettingsItem::TerminalNotifications,
+            build_toggle_item(
+                "Terminal Notifications",
+                "Send OSC 9 escape sequences to notify the terminal on events",
+                terminal_notifications_enabled,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !terminal_notifications_enabled;
+                    move || {
+                        tx.send(AppEvent::SetConfigTerminalNotifications(new_value));
+                    }
+                },
+            ),
         ),
-        build_toggle_item(
-            "OS Notifications",
-            "Send native desktop notifications on events",
-            os_notifications_enabled,
-            {
-                let tx = app_event_tx.clone();
-                let new_value = !os_notifications_enabled;
-                move || {
-                    tx.send(AppEvent::SetConfigOsNotifications(new_value));
-                }
-            },
+        (
+            SettingsItem::OsNotifications,
+            build_toggle_item(
+                "OS Notifications",
+                "Send native desktop notifications on events",
+                os_notifications_enabled,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !os_notifications_enabled;
+                    move || {
+                        tx.send(AppEvent::SetConfigOsNotifications(new_value));
+                    }
+                },
+            ),
         ),
-        {
+        (SettingsItem::VimMode, {
             let current_mode = config.vim_mode;
             let display_name = format!("Vim Mode ({})", current_mode.display_name().to_lowercase());
             let actions: Vec<SelectionAction> = vec![Box::new({
@@ -125,8 +162,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::AutoWorktree, {
             let current_mode = config.auto_worktree;
             let display_name = format!(
                 "Auto Worktree ({})",
@@ -145,8 +182,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::PerSessionSkillsets, {
             let skillset_per_session = config.skillset_per_session;
             let status = if skillset_per_session { "on" } else { "off" };
             let display_name = format!("Per Session Skillsets ({status})");
@@ -175,8 +212,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::NotifyAfterIdle, {
             let current_idle = config.notify_after_idle;
             let display_name = format!("Notify After Idle ({})", current_idle.display_name());
             let actions: Vec<SelectionAction> = vec![Box::new({
@@ -194,8 +231,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::Hotkeys, {
             let actions: Vec<SelectionAction> = vec![Box::new({
                 move |tx| {
                     tx.send(AppEvent::OpenHotkeyPicker);
@@ -209,8 +246,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::ScriptTimeout, {
             let current_timeout = config.script_timeout.clone();
             let display_name = format!("Script Timeout ({})", current_timeout.display_name());
             let actions: Vec<SelectionAction> = vec![Box::new({
@@ -226,8 +263,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::LoopCount, {
             let current_loop = config.loop_count;
             let display_name = match current_loop {
                 Some(n) => format!("Loop Count ({n})"),
@@ -248,8 +285,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::FooterSegments, {
             let actions: Vec<SelectionAction> = vec![Box::new({
                 move |tx| {
                     tx.send(AppEvent::OpenFooterSegmentsPicker);
@@ -263,8 +300,8 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
-        {
+        }),
+        (SettingsItem::FileManager, {
             let current_fm = config.file_manager;
             let display_name = match current_fm {
                 Some(fm) => format!("File Manager ({})", fm.display_name()),
@@ -283,15 +320,18 @@ pub fn config_picker_params(
                 dismiss_on_select: true,
                 ..Default::default()
             }
-        },
+        }),
     ];
+
+    let focus_idx = focus.and_then(|focus| entries.iter().position(|(id, _)| *id == focus));
+    let items: Vec<SelectionItem> = entries.into_iter().map(|(_, item)| item).collect();
 
     SelectionViewParams {
         title: Some("Configuration".to_string()),
         subtitle: Some("Toggle TUI settings (changes saved to config.toml)".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
-        initial_selected_idx: Some(0),
+        initial_selected_idx: Some(focus_idx.unwrap_or(0)),
         ..Default::default()
     }
 }
@@ -380,6 +420,7 @@ where
 pub fn vim_mode_picker_params(
     current: VimEnterBehavior,
     _app_event_tx: AppEventSender,
+    from_settings: bool,
 ) -> SelectionViewParams {
     let items: Vec<SelectionItem> = VimEnterBehavior::all_variants()
         .iter()
@@ -399,7 +440,10 @@ pub fn vim_mode_picker_params(
             };
             let actions: Vec<SelectionAction> = vec![Box::new({
                 move |tx| {
-                    tx.send(AppEvent::SetConfigVimMode(variant));
+                    tx.send(AppEvent::SetConfigVimMode {
+                        value: variant,
+                        from_settings,
+                    });
                 }
             })];
             SelectionItem {
@@ -658,7 +702,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         assert_eq!(params.items.len(), 14);
         assert!(params.title.is_some());
@@ -671,7 +715,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(true);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         // Vertical Footer follows Pinned Plan Drawer and Custom Working Messages.
         assert!(params.items[2].name.contains("(on)"));
@@ -683,7 +727,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         // Vertical Footer follows Pinned Plan Drawer and Custom Working Messages.
         assert!(params.items[2].name.contains("(off)"));
@@ -695,7 +739,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         assert_eq!(params.items.len(), 14);
         // The 1st item should be Pinned Plan Drawer
@@ -716,7 +760,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let item = params
             .items
@@ -744,7 +788,7 @@ mod tests {
         let mut config = make_test_config(false);
         config.custom_working_message_list = vec!["alpha".to_string(), "beta".to_string()];
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         let item = params
             .items
@@ -767,7 +811,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         // Default config has FiveSeconds, so should show "5 seconds"
         let idle_item = &params.items[8];
@@ -784,7 +828,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let idle_item = &params.items[8];
         for action in &idle_item.actions {
@@ -804,7 +848,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let vertical_footer_item = &params.items[2];
         assert!(vertical_footer_item.name.contains("Vertical Footer"));
@@ -829,7 +873,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let hotkeys_item = &params.items[9];
         assert!(hotkeys_item.name.contains("Hotkeys"));
@@ -907,7 +951,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         assert_eq!(params.items.len(), 14);
         // Find the vim mode item
@@ -928,7 +972,7 @@ mod tests {
         let mut config = make_test_config(false);
         config.vim_mode = VimEnterBehavior::Submit;
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         let vim_mode_item = params
             .items
@@ -948,7 +992,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let vim_mode_item = params
             .items
@@ -975,7 +1019,7 @@ mod tests {
             .iter()
             .find(|behavior| behavior.toml_value() == "always_submit")
             .expect("always-submit Vim behavior should be available");
-        let params = vim_mode_picker_params(always_submit, AppEventSender::new(tx_raw));
+        let params = vim_mode_picker_params(always_submit, AppEventSender::new(tx_raw), false);
 
         let choices: Vec<_> = params
             .items
@@ -1012,12 +1056,68 @@ mod tests {
     }
 
     #[test]
+    fn vim_mode_selection_carries_settings_origin() {
+        for from_settings in [true, false] {
+            let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+            let tx = AppEventSender::new(tx_raw);
+            let params = vim_mode_picker_params(VimEnterBehavior::Off, tx.clone(), from_settings);
+
+            let item = params
+                .items
+                .iter()
+                .find(|item| !item.is_current)
+                .expect("a non-current vim option should be selectable");
+            for action in &item.actions {
+                action(&tx);
+            }
+
+            let event = rx.try_recv().expect("selecting a vim mode emits an event");
+            assert!(
+                matches!(
+                    event,
+                    AppEvent::SetConfigVimMode { from_settings: origin, .. } if origin == from_settings
+                ),
+                "a vim selection should report whether it came from the settings panel"
+            );
+        }
+    }
+
+    #[test]
+    fn config_picker_focuses_the_requested_setting() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx, Some(SettingsItem::ScriptTimeout));
+
+        let focused = params
+            .initial_selected_idx
+            .expect("the panel should have a selected row");
+        assert!(
+            params.items[focused].name.starts_with("Script Timeout"),
+            "reopening the settings panel should land the cursor on the edited setting, got {:?}",
+            params.items[focused].name
+        );
+    }
+
+    #[test]
+    fn config_picker_defaults_focus_to_first_row() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx, None);
+
+        assert_eq!(params.initial_selected_idx, Some(0));
+    }
+
+    #[test]
     fn config_picker_script_timeout_shows_current_value() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         // Default config has 30s timeout
         let timeout_item = &params.items[10];
@@ -1034,7 +1134,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let timeout_item = &params.items[10];
         assert!(timeout_item.name.contains("Script Timeout"));
@@ -1110,7 +1210,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         let loop_item = params
             .items
@@ -1128,7 +1228,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         let loop_item = params
             .items
@@ -1149,7 +1249,7 @@ mod tests {
         let mut config = make_test_config(false);
         config.loop_count = Some(5);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         let loop_item = params
             .items
@@ -1169,7 +1269,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let loop_item = params
             .items
@@ -1195,7 +1295,7 @@ mod tests {
         let mut config = make_test_config(false);
         config.auto_worktree = nori_config::AutoWorktree::Automatic;
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let auto_worktree_item = params
             .items
@@ -1272,7 +1372,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let per_session_item = params
             .items
@@ -1299,7 +1399,7 @@ mod tests {
         let mut config = make_test_config(false);
         config.skillset_per_session = true;
 
-        let params = config_picker_params(&config, tx.clone());
+        let params = config_picker_params(&config, tx.clone(), None);
 
         let per_session_item = params
             .items
@@ -1378,7 +1478,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let config = make_test_config(false);
 
-        let params = config_picker_params(&config, tx);
+        let params = config_picker_params(&config, tx, None);
 
         let per_session_item = params
             .items
