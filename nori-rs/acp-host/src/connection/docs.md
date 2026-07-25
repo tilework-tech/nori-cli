@@ -28,12 +28,19 @@ signals:
 - `ChildExited` reports process status and a bounded stderr tail.
 
 `AcpConnection` exposes ACP initialize/session creation or loading, prompt,
-cancel, session config, list, resume, close, and shutdown behavior. Method
+cancel, session config, list, resume, fork, close, and shutdown behavior. Method
 responses are published as raw `AcpEvent::Response` values; request IDs are
 assigned by the SDK transport and retained end to end. Each call to `prompt`
 issues one `session/prompt` request. A later response is never swallowed to
 justify resending the prompt after cancellation; a successful empty `EndTurn`
 is returned as that prompt's terminal result.
+
+`fork_session` issues the unstable ACP `session/fork` request to branch a
+session at its current head. Unlike `session/load` and `session/resume`, which
+echo the input session id, fork returns the NEW forked session id taken from the
+response body; the harness swaps its active session to it via
+`swap_active_session` (see `@/nori-rs/harness/src/backend/session_swap.rs`). This
+method requires the SDK `unstable` feature, enabled in `acp-host/Cargo.toml`.
 
 The default spawn path publishes initialize on the ordered connection inbox.
 The harness uses the opt-in initialize sink so the same raw response survives a

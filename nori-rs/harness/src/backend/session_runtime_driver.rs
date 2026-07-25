@@ -121,6 +121,16 @@ impl SessionDriver {
         self.runtime.queue.len()
     }
 
+    /// Whether the connected agent currently advertises a slash command with
+    /// the given name.
+    pub(crate) fn advertises_command(&self, name: &str) -> bool {
+        self.runtime
+            .persisted
+            .available_commands
+            .iter()
+            .any(|command| command.name == name)
+    }
+
     pub(crate) fn public_phase(&self) -> nori_protocol::SessionPhase {
         match &self.runtime.phase {
             SessionPhase::Idle => nori_protocol::SessionPhase::Idle,
@@ -288,6 +298,10 @@ impl AcpBackend {
 
     async fn dispatch_reducer_actions(&self, actions: ReducerActions) {
         match actions.completed_turn.as_ref().map(|turn| turn.prompt.kind) {
+            // Summarize-and-swap compaction defers `PromptCompleted` until after
+            // the session swap, so the new session is active before the UI sees
+            // completion. Native compaction (below) does no swap and flows like
+            // an ordinary turn, emitting its divider after completion.
             Some(QueuedPromptKind::Compact) => {
                 let mut completion_event = None;
                 let mut non_completion_events = Vec::new();
@@ -326,7 +340,7 @@ impl AcpBackend {
         }
     }
 
-    async fn forward_client_event(&self, client_event: ClientEvent) {
+    pub(super) async fn forward_client_event(&self, client_event: ClientEvent) {
         match &client_event {
             ClientEvent::SessionPhaseChanged(phase) => {
                 debug!(
@@ -507,72 +521,11 @@ impl AcpBackend {
                 };
                 *self.pending_compact_summary.lock().await = Some(summary.clone());
 
-                let cwd = self.cwd.clone();
-                let mut mcp_servers = crate::connection::mcp::to_acp_mcp_servers(
-                    &self.mcp_servers,
-                    self.mcp_oauth_credentials_store_mode,
-                );
-                let previous_goal_mcp_connected = {
-                    let goal_mcp_http_server = self.goal_mcp_http_server.lock().await;
-                    if let Some(server) = goal_mcp_http_server.as_ref() {
-                        mcp_servers.push(server.as_mcp_server());
-                        Some(
-                            self.goal_mcp_connected
-                                .swap(false, std::sync::atomic::Ordering::Relaxed),
-                        )
-                    } else {
-                        None
-                    }
-                };
-                let pending_nori_client_server = if previous_goal_mcp_connected.is_some() {
-                    None
-                } else {
-                    match nori_client_mcp::register_for_session(
-                        &self.connection,
-                        &mut mcp_servers,
-                        Arc::clone(&self.thread_goal_state),
-                        self.backend_event_tx.clone(),
-                        Arc::clone(&self.goal_mcp_connected),
-                    )
+                if let Err(err) = self
+                    .swap_active_session(session_swap::SessionSwapMode::NewAfterCompact)
                     .await
-                    {
-                        Ok(server) => server,
-                        Err(err) => {
-                            warn!("Failed to register goal MCP server after compact: {err}");
-                            None
-                        }
-                    }
-                };
-                let nori_client_advertised = mcp_servers.iter().any(|server| {
-                    matches!(
-                        server,
-                        acp::McpServer::Http(http) if http.name == "nori-client"
-                    )
-                });
-                match self.connection.create_session(&cwd, mcp_servers).await {
-                    Ok(new_session_id) => {
-                        if let Some(server) = pending_nori_client_server {
-                            server.commit(&self.goal_mcp_http_server).await;
-                        }
-                        debug!("Created new session after compact: {:?}", new_session_id);
-                        *self.session_id.write().await = new_session_id;
-                        self.forward_client_event(ClientEvent::SessionCapabilitiesChanged(
-                            nori_client_mcp::capabilities_update_for_nori_client(
-                                &self.connection,
-                                nori_client_advertised,
-                                self.goal_mcp_connected
-                                    .load(std::sync::atomic::Ordering::Relaxed),
-                            ),
-                        ))
-                        .await;
-                    }
-                    Err(err) => {
-                        if let Some(previous) = previous_goal_mcp_connected {
-                            self.goal_mcp_connected
-                                .store(previous, std::sync::atomic::Ordering::Relaxed);
-                        }
-                        warn!("Failed to create new session after compact: {err}");
-                    }
+                {
+                    warn!("Failed to create new session after compact: {err}");
                 }
 
                 self.forward_client_event(ClientEvent::ContextCompacted(
@@ -590,6 +543,14 @@ impl AcpBackend {
                         }),
                     )))
                     .await;
+            }
+            QueuedPromptKind::NativeCompact => {
+                // Native compaction is an ordinary in-session turn: no session
+                // swap and no summary re-injection. Emit the divider only.
+                self.forward_client_event(ClientEvent::ContextCompacted(
+                    crate::normalized::ContextCompacted { summary: None },
+                ))
+                .await;
             }
         }
     }
@@ -612,7 +573,9 @@ impl AcpBackend {
         match completed_turn.prompt.kind {
             QueuedPromptKind::User => {}
             QueuedPromptKind::GoalContinuation if can_chain_continuation => {}
-            QueuedPromptKind::GoalContinuation | QueuedPromptKind::Compact => return,
+            QueuedPromptKind::GoalContinuation
+            | QueuedPromptKind::Compact
+            | QueuedPromptKind::NativeCompact => return,
         }
 
         self.submit_goal_continuation_if_idle().await;
@@ -824,7 +787,9 @@ impl AcpBackend {
         err: &anyhow::Error,
     ) -> crate::normalized::TurnFailure {
         let (message, retryable) = match prompt_kind {
-            QueuedPromptKind::Compact => (format!("Compact failed: {err}"), false),
+            QueuedPromptKind::Compact | QueuedPromptKind::NativeCompact => {
+                (format!("Compact failed: {err}"), false)
+            }
             QueuedPromptKind::GoalContinuation => {
                 (format!("Goal continuation failed: {err}"), false)
             }

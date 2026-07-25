@@ -183,6 +183,10 @@ pub enum TranscriptRole {
 pub enum QueuedPromptKind {
     User,
     Compact,
+    /// A `/compact` forwarded to an agent that advertises a native `compact`
+    /// slash command. Sent as an ordinary in-session turn: no summarize-and-swap
+    /// and no summary re-injection.
+    NativeCompact,
     GoalContinuation,
 }
 

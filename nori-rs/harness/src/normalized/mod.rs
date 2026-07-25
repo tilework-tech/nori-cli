@@ -119,6 +119,10 @@ pub struct AgentCapabilitiesView {
     /// Whether the agent advertises the ACP `session/close` capability.
     #[serde(default)]
     pub session_close: bool,
+    /// Whether the agent advertises the ACP `session/fork` capability
+    /// (branch-at-head — the `/fork` "Branch from current point" path).
+    #[serde(default)]
+    pub session_fork: bool,
 }
 
 impl AgentCapabilitiesView {

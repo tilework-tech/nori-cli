@@ -343,6 +343,7 @@ mod session;
 mod session_defaults;
 pub(crate) mod session_reducer;
 mod session_runtime_driver;
+mod session_swap;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod thread_goal;

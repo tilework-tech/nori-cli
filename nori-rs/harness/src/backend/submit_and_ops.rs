@@ -109,6 +109,12 @@ impl AcpBackend {
         self.handle_compact(&generate_id()).await
     }
 
+    /// Whether the connected agent advertises a slash command with the given
+    /// name in the active session runtime.
+    pub(super) async fn advertises_command(&self, name: &str) -> bool {
+        self.session_driver.lock().await.advertises_command(name)
+    }
+
     pub(crate) async fn undo(&self) -> Result<()> {
         self.connection
             .cancel(&*self.session_id.read().await)
@@ -205,16 +211,40 @@ impl AcpBackend {
         }
     }
 
-    /// Handle the /compact operation by sending a summarization prompt to the agent,
-    /// capturing the summary, and storing it for the next user prompt.
+    /// Handle the /compact operation.
     ///
-    /// This implements Option 3 (Prompt-Based Approach) from the implementation plan:
-    /// 1. Send the summarization prompt to the agent
-    /// 2. Capture the agent's summary response
-    /// 3. Store it in pending_compact_summary
-    /// 4. Emit ContextCompacted and Warning events
+    /// If the agent advertises a native `compact` slash command, forward
+    /// `/compact` as an ordinary in-session turn: the agent compacts its own
+    /// context with no session swap and no summary re-injection.
+    ///
+    /// Otherwise fall back to summarize-and-swap: send a summarization prompt,
+    /// capture the agent's summary into `pending_compact_summary` (prepended to
+    /// the next prompt), create a fresh session, and swap to it.
     pub(super) async fn handle_compact(&self, id: &str) -> Result<()> {
         use crate::compact::SUMMARIZATION_PROMPT;
+
+        // If the agent advertises a native `compact` command, forward `/compact`
+        // as an ordinary in-session turn instead of summarize-and-swap.
+        if self.advertises_command("compact").await {
+            let _ = self
+                .session_event_tx
+                .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                    session_reducer::InboundEvent::PromptSubmit(
+                        crate::normalized::session_runtime::QueuedPrompt {
+                            event_id: id.to_string(),
+                            kind:
+                                crate::normalized::session_runtime::QueuedPromptKind::NativeCompact,
+                            text: "/compact".to_string(),
+                            content: vec![acp::ContentBlock::Text(acp::TextContent::new(
+                                "/compact",
+                            ))],
+                            display_text: None,
+                        },
+                    ),
+                ))
+                .await;
+            return Ok(());
+        }
 
         let _ = self
             .session_event_tx

@@ -24,6 +24,7 @@ pub(crate) enum HarnessAction {
     Cancel,
     Shutdown,
     Compact,
+    Branch,
     UndoTo(i64),
     LoadUndoSnapshots,
     RunUserShell(String),
@@ -593,6 +594,10 @@ pub(crate) enum AppEvent {
 
     /// Open the fork picker modal showing previous user messages.
     OpenForkPicker,
+
+    /// Branch the conversation at its current head via ACP `session/fork`,
+    /// swapping the active session to the forked one.
+    BranchFromCurrent,
 
     /// Fork the conversation to just before the selected user message.
     ForkToMessage {

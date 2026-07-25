@@ -478,6 +478,7 @@ pub(crate) fn agent_capabilities_view(
         session_list: capabilities.session_capabilities.list.is_some(),
         session_resume: capabilities.session_capabilities.resume.is_some(),
         session_close: capabilities.session_capabilities.close.is_some(),
+        session_fork: capabilities.session_capabilities.fork.is_some(),
     }
 }
 
@@ -550,6 +551,7 @@ mod tests {
             session_list: false,
             session_resume: false,
             session_close: false,
+            session_fork: false,
         }
     }
 

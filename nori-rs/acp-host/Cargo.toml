@@ -17,7 +17,7 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
-agent-client-protocol = { workspace = true }
+agent-client-protocol = { workspace = true, features = ["unstable"] }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 codex-rmcp-client = { workspace = true }

@@ -735,6 +735,42 @@ impl AcpConnection {
         Ok(acp::SessionId::from(session_id.to_string()))
     }
 
+    /// Fork an existing session at its current head via ACP `session/fork`.
+    ///
+    /// Unlike `session/load` and `session/resume`, fork returns a NEW session
+    /// id (the forked session), so the returned `SessionId` comes from the
+    /// response rather than echoing the input.
+    pub async fn fork_session(
+        &self,
+        session_id: &str,
+        cwd: &Path,
+        mcp_servers: Vec<acp::McpServer>,
+    ) -> Result<acp::SessionId> {
+        let request = self.cx.send_request(
+            acp::ForkSessionRequest::new(session_id.to_string(), cwd).mcp_servers(mcp_servers),
+        );
+        let request_id = schema_request_id(request.id());
+        let response = request.block_task().await;
+        let _ = self
+            .event_tx
+            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
+                request_id,
+                response: response
+                    .clone()
+                    .map(acp::AgentResponse::ForkSessionResponse),
+            })))
+            .await;
+        let response = response.context("Failed to fork ACP session")?;
+
+        if let Some(config_options) = response.config_options
+            && let Ok(mut state) = self.session_config_state.write()
+        {
+            state.config_options = config_options;
+        }
+
+        Ok(response.session_id)
+    }
+
     /// Close (release) a session via ACP `session/close`.
     pub async fn close_session(&self, session_id: &str) -> Result<()> {
         let request = self
