@@ -286,6 +286,47 @@ async fn test_event_receiver_forwards_session_updates() {
 
 #[tokio::test]
 #[serial]
+async fn test_event_receiver_forwards_observed_turn_end() {
+    let Some(mut config) = mock_agent_config() else {
+        return;
+    };
+    config
+        .env
+        .insert("MOCK_AGENT_SEND_NORI_TURN_END".to_string(), "1".to_string());
+    let temp_dir = tempdir().expect("temp dir");
+
+    let mut conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn");
+    let mut event_rx = conn.take_event_receiver();
+    let session_id = conn
+        .create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    conn.prompt(
+        session_id.clone(),
+        vec![acp::ContentBlock::Text(acp::TextContent::new("Hello"))],
+    )
+    .await
+    .expect("prompt");
+
+    let events = std::iter::from_fn(|| event_rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(events.iter().any(|event| matches!(
+        event,
+        ConnectionEvent::ObservedTurnEnd {
+            session_id: observed_session_id,
+            stop_reason,
+        } if observed_session_id == &session_id && stop_reason == "end_turn"
+    )));
+}
+
+#[tokio::test]
+#[serial]
 async fn test_tool_call_prompt_delivers_final_text_update() {
     use std::time::Duration;
 
@@ -520,6 +561,7 @@ async fn test_event_receiver_preserves_update_then_approval_order() {
             ConnectionEvent::Acp(_)
             | ConnectionEvent::SessionClosed
             | ConnectionEvent::SessionUpdate(_)
+            | ConnectionEvent::ObservedTurnEnd { .. }
             | ConnectionEvent::ChildExited { .. } => {}
         }
     };
@@ -997,6 +1039,7 @@ async fn test_child_exit_emits_event_with_stderr_tail() {
             ConnectionEvent::Acp(_)
             | ConnectionEvent::SessionClosed
             | ConnectionEvent::SessionUpdate(_)
+            | ConnectionEvent::ObservedTurnEnd { .. }
             | ConnectionEvent::DelegatedRequest(_) => {}
         }
     };

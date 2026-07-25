@@ -24,6 +24,8 @@ use tracing::debug;
 pub enum InboundEvent {
     /// A `session/update` notification from the agent.
     Notification(Box<acp::SessionUpdate>),
+    /// The broker-projected terminal boundary for a turn owned by another client.
+    ObservedTurnEnd { stop_reason: String },
     /// The response to an active `session/prompt` request.
     PromptResponse { stop_reason: acp::StopReason },
     /// A transport/protocol failure for the active `session/prompt` request.
@@ -49,6 +51,7 @@ pub enum InboundEvent {
 pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
     match event {
         InboundEvent::Notification(update) => crate::connection::session_update_kind(update),
+        InboundEvent::ObservedTurnEnd { .. } => "observed_turn_end",
         InboundEvent::PromptResponse { .. } => "prompt_response",
         InboundEvent::PromptFailed { .. } => "prompt_failed",
         InboundEvent::LoadResponse => "load_response",
@@ -120,6 +123,29 @@ pub fn reduce(
         }
         InboundEvent::Notification(update) => {
             reduce_notification(runtime, *update, normalizer, &mut out);
+        }
+        InboundEvent::ObservedTurnEnd { stop_reason } => {
+            if !matches!(runtime.phase, SessionPhase::Prompt { .. })
+                || runtime
+                    .active
+                    .as_ref()
+                    .is_none_or(|active| active.prompt.is_some())
+            {
+                out.events.push(ClientEvent::Warning(WarningInfo {
+                    message: "Received observed turn end while no observed turn is active"
+                        .to_string(),
+                }));
+            } else {
+                let stop_reason = match stop_reason.as_str() {
+                    "end_turn" => acp::StopReason::EndTurn,
+                    "max_tokens" => acp::StopReason::MaxTokens,
+                    "max_turn_requests" => acp::StopReason::MaxTurnRequests,
+                    "refusal" => acp::StopReason::Refusal,
+                    "cancelled" => acp::StopReason::Cancelled,
+                    _ => acp::StopReason::EndTurn,
+                };
+                reduce_prompt_response(runtime, stop_reason, &mut out);
+            }
         }
         InboundEvent::PromptResponse { stop_reason } => {
             reduce_prompt_response(runtime, stop_reason, &mut out);
@@ -451,6 +477,18 @@ fn reduce_notification(
     if is_session_metadata_update(&update) {
         reduce_metadata_update(runtime, &update, normalizer, out);
         return;
+    }
+
+    if runtime.active.is_none() && matches!(update, acp::SessionUpdate::UserMessageChunk(_)) {
+        let request_id = acp::RequestId::Str("nori-observed-turn".to_string());
+        runtime.phase = SessionPhase::Prompt {
+            request_id: request_id.clone(),
+            cancelling: false,
+        };
+        runtime.active = Some(ActiveRequestState::new_loading(request_id));
+        runtime.orphan_update_warning_emitted = false;
+        out.events
+            .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
     }
 
     // Request-owned content requires an active request.

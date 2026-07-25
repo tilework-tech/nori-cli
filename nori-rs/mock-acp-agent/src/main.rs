@@ -258,6 +258,20 @@ impl MockAgent {
         self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
 
+        if std::env::var("MOCK_AGENT_SEND_NORI_TURN_END").is_ok() {
+            self.send_text_chunk(session_id.clone(), "Observed response")
+                .await?;
+            self.cx
+                .send_notification(agent_client_protocol::UntypedMessage::new(
+                    "nori/turn_end",
+                    serde_json::json!({
+                        "sessionId": session_id,
+                        "stopReason": "end_turn",
+                    }),
+                )?)?;
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         // Advertise a native `compact` slash command so the harness forwards
         // `/compact` as an ordinary turn instead of summarize-and-swap.
         if std::env::var("MOCK_AGENT_ADVERTISE_COMPACT").is_ok() {

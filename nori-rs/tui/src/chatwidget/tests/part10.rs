@@ -130,6 +130,71 @@ fn replay_text_chunk(
 }
 
 #[test]
+fn observed_user_message_renders_without_echoing_local_prompts() {
+    let (mut observer, mut observer_rx, _op_rx) = make_chatwidget_manual();
+    let observer_generation = observer.session_generation;
+    observer.handle_session_event(
+        observer_generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::User,
+            "observed-user",
+            "what's the status here so far?",
+        ),
+    );
+    observer.handle_session_event(
+        observer_generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "observed-answer",
+            "No implementation work has started.",
+        ),
+    );
+    observer.handle_session_event(
+        observer_generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ObservedTurnCompleted(
+            nori_protocol::ObservedTurnCompleted {
+                stop_reason: nori_protocol::acp::v1::StopReason::EndTurn,
+                last_agent_message: Some("No implementation work has started.".to_string()),
+            },
+        )),
+    );
+
+    let observer_history = drain_insert_history(&mut observer_rx)
+        .into_iter()
+        .map(|lines| lines_to_single_string(&lines))
+        .collect::<String>();
+    insta::assert_snapshot!(observer_history, @r"
+› what's the status here so far?
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+• No implementation work has started.
+");
+
+    let (mut initiator, mut initiator_rx, _op_rx) = make_chatwidget_manual();
+    let initiator_generation = initiator.session_generation;
+    initiator.handle_session_event(
+        initiator_generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionPhaseChanged(
+            nori_protocol::SessionPhase::Prompting {
+                request_id: nori_protocol::acp::v1::RequestId::Str("local-prompt".to_string()),
+            },
+        )),
+    );
+    initiator.handle_session_event(
+        initiator_generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::User,
+            "local-user",
+            "do not echo this prompt",
+        ),
+    );
+
+    assert!(drain_insert_history(&mut initiator_rx).is_empty());
+}
+
+#[test]
 fn replayed_turns_render_as_separate_ordered_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;

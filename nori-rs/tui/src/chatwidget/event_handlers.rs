@@ -119,6 +119,14 @@ impl ChatWidget {
                 };
                 self.handle_client_phase_changed(phase);
             }
+            nori_protocol::NoriEvent::ObservedTurnCompleted(completed) => {
+                self.active_prompt_request_id = None;
+                self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
+                    stop_reason: completed.stop_reason,
+                    last_agent_message: completed.last_agent_message,
+                    failure: None,
+                });
+            }
             nori_protocol::NoriEvent::SessionEnded(ended) => match ended.reason {
                 nori_protocol::SessionEndReason::Shutdown => {
                     self.app_event_tx.send(AppEvent::ExitRequest);
@@ -645,7 +653,13 @@ impl ChatWidget {
 
     fn handle_client_message_delta(&mut self, message_delta: crate::presentation::MessageDelta) {
         match message_delta.stream {
-            crate::presentation::MessageStream::User => {}
+            crate::presentation::MessageStream::User => {
+                if self.active_prompt_request_id.is_none() && !message_delta.delta.is_empty() {
+                    self.session_stats.record_user_message();
+                    self.add_to_history(history_cell::new_user_prompt(message_delta.delta));
+                    self.request_redraw();
+                }
+            }
             crate::presentation::MessageStream::Answer => {
                 self.assistant_stream_seen_for_stats = true;
                 self.on_agent_message_delta(message_delta.delta)

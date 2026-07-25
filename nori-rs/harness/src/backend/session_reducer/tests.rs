@@ -372,6 +372,92 @@ fn open_messages_finalized_into_transcript_on_completion() {
 // =========================================================================
 
 #[test]
+fn observed_turn_activates_and_completes_without_an_orphan_warning() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    let prompt = acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
+        acp::ContentBlock::Text(acp::TextContent::new("what's the status here so far?")),
+    ));
+    let start = reduce(&mut rt, notification(prompt), &mut norm);
+
+    assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
+    assert!(start.side_effects.is_empty());
+    assert_eq!(count_orphan_warnings(&start.events), 0);
+    assert!(has_event(&start.events, |event| matches!(
+        event,
+        ClientEvent::MessageDelta(delta)
+            if delta.stream == crate::normalized::MessageStream::User
+                && delta.delta == "what's the status here so far?"
+    )));
+
+    let response = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+        acp::ContentBlock::Text(acp::TextContent::new("No implementation work has started.")),
+    ));
+    let update = reduce(&mut rt, notification(response), &mut norm);
+    assert_eq!(count_orphan_warnings(&update.events), 0);
+
+    let end = reduce(
+        &mut rt,
+        InboundEvent::ObservedTurnEnd {
+            stop_reason: "end_turn".to_string(),
+        },
+        &mut norm,
+    );
+
+    assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
+    assert_eq!(
+        rt.persisted.transcript,
+        vec![
+            crate::normalized::session_runtime::TranscriptMessage {
+                role: crate::normalized::session_runtime::TranscriptRole::User,
+                content: "what's the status here so far?".to_string(),
+            },
+            crate::normalized::session_runtime::TranscriptMessage {
+                role: crate::normalized::session_runtime::TranscriptRole::Agent,
+                content: "No implementation work has started.".to_string(),
+            },
+        ]
+    );
+    assert!(has_event(&end.events, |event| matches!(
+        event,
+        ClientEvent::PromptCompleted(completed)
+            if completed.stop_reason == acp::StopReason::EndTurn
+                && completed.last_agent_message.as_deref()
+                    == Some("No implementation work has started.")
+    )));
+}
+
+#[test]
+fn observed_error_boundary_still_releases_the_observer() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        notification(acp::SessionUpdate::UserMessageChunk(
+            acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(
+                "remote prompt",
+            ))),
+        )),
+        &mut norm,
+    );
+    let end = reduce(
+        &mut rt,
+        InboundEvent::ObservedTurnEnd {
+            stop_reason: "error".to_string(),
+        },
+        &mut norm,
+    );
+
+    assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
+    assert!(has_event(&end.events, |event| matches!(
+        event,
+        ClientEvent::PromptCompleted(_)
+    )));
+}
+
+#[test]
 fn notification_while_idle_emits_warning() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
