@@ -264,7 +264,7 @@ impl ChatWidget {
         // Get optional status card fields from bottom_pane
         let prompt_summary = self.bottom_pane.prompt_summary();
         let token_breakdown = self.bottom_pane.transcript_token_breakdown();
-        let context_window_percent = self.bottom_pane.context_window_percent();
+        let status_info = self.bottom_pane.status_card_info();
 
         // Calculate approval mode label from config
         let approval_mode_label =
@@ -276,8 +276,9 @@ impl ChatWidget {
             prompt_summary,
             approval_mode_label,
             token_breakdown,
-            context_window_percent,
             self.cloud_session_identity(),
+            self.conversation_id(),
+            status_info,
         ));
     }
 }

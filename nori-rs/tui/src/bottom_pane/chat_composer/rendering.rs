@@ -143,6 +143,26 @@ impl ChatComposer {
         }
     }
 
+    /// Status-relevant footer values for the `/status` card, so the card stays
+    /// a superset of the footer's information categories.
+    pub(crate) fn status_card_info(&self) -> crate::nori::session_header::StatusCardInfo {
+        let props = self.footer_props();
+        crate::nori::session_header::StatusCardInfo {
+            git_branch: props.git_branch,
+            is_worktree: props.is_worktree,
+            worktree_name: props.worktree_name,
+            git_lines_added: props.git_lines_added,
+            git_lines_removed: props.git_lines_removed,
+            git_has_untracked: props.git_has_untracked,
+            acp_mode_label: props.acp_mode_label,
+            nori_version: props.nori_version,
+            nori_version_source: props.nori_version_source,
+            context_tokens: props.context_tokens,
+            context_window_tokens: props.context_window_tokens,
+            context_window_percent: props.context_window_percent,
+        }
+    }
+
     pub(super) fn footer_mode(&self) -> FooterMode {
         match self.footer_mode {
             FooterMode::EscHint => FooterMode::EscHint,

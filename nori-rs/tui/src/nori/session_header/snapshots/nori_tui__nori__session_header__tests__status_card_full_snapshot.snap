@@ -1,23 +1,26 @@
 ---
-source: tui/src/nori/session_header.rs
+source: tui/src/nori/session_header/tests.rs
 expression: rendered
 ---
 /status
 
-╭─────────────────────────────────────╮
-│ Nori CLI v0.0.0                     │
-│                                     │
-│ Task: Fix auth bug                  │
-│                                     │
-│ directory: /home/user/project       │
-│ agent:     claude-sonnet            │
-│ skillset:  (none)                   │
-│ approvals: Agent                    │
-│                                     │
-│ Instruction Files                   │
-│   ~/.claude/CLAUDE.md               │
-│                                     │
-│ Tokens                              │
-│   Context: 77.0K (27%)              │
-│   Tokens: 123K total (32.0K cached) │
-╰─────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────╮
+│ Nori CLI v0.0.0                                                       │
+│                                                                       │
+│ Task: Fix auth bug                                                    │
+│                                                                       │
+│ directory: /home/user/project                                         │
+│ session:   11111111-2222-3333-4444-555555555555                       │
+│ agent:     claude-sonnet                                              │
+│ skillset:  (none)                                                     │
+│ approvals: Agent                                                      │
+│ mode:      Plan                                                       │
+│ git:       ⎇ feat/status-card (worktree: good-ash-20260205) +120 -8 ! │
+│                                                                       │
+│ Instruction Files                                                     │
+│   ~/.claude/CLAUDE.md                                                 │
+│                                                                       │
+│ Tokens                                                                │
+│   Context: 73% left (43.0K used / 272K)                               │
+│   Tokens: 123K total (32.0K cached)                                   │
+╰───────────────────────────────────────────────────────────────────────╯

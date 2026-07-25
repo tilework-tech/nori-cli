@@ -18,16 +18,25 @@ use crate::history_cell::with_border;
 use crate::nori::token_count::TokenCount;
 use crate::nori::token_count::count_tokens;
 use crate::nori::token_count::format_token_count;
+use crate::system_info::NoriVersionSource;
 use crate::system_info::read_active_skillset;
 use crate::ui_types::format_si_suffix;
 use crate::version::CODEX_CLI_VERSION;
 use nori_config::NoriConfig;
+use nori_harness::ConversationId;
 use nori_harness::TranscriptTokenUsage;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use std::path::Path;
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
+
+mod status_card;
+use status_card::STATUS_LABEL_WIDTH;
+pub(crate) use status_card::StatusCardInfo;
+use status_card::context_value;
+use status_card::git_row_spans;
+use status_card::status_row;
 
 /// Maximum inner width for the Nori session header card.
 const NORI_HEADER_MAX_INNER_WIDTH: usize = 60;
@@ -387,11 +396,16 @@ pub(crate) struct NoriSessionHeaderCell {
     approval_mode_label: Option<String>,
     /// Optional token usage breakdown from transcript.
     token_breakdown: Option<TranscriptTokenUsage>,
-    /// Optional context window percentage (0-100).
-    context_window_percent: Option<i64>,
+    /// Footer-derived values (git, ACP mode, skillset version, context window)
+    /// so the `/status` card is a superset of the footer's categories.
+    status_info: StatusCardInfo,
+    /// The local conversation id, rendered on the `session:` row for every
+    /// agent. Absent on the session-start welcome card before it is assigned.
+    conversation_id: Option<ConversationId>,
     /// Cloud session identity when attached to a cloud (live-reattach) session.
-    /// When present, the card shows a `session:` line and drops the misleading
-    /// local `directory:` value (the cwd is on the remote VM, not local).
+    /// When present, the `session:` line appends the broker title; on the
+    /// compact welcome card it also suppresses the misleading local `directory:`
+    /// value (the cwd is on the remote VM, not local).
     cloud_session: Option<CloudSessionInfo>,
 }
 
@@ -413,7 +427,8 @@ impl NoriSessionHeaderCell {
             prompt_summary: None,
             approval_mode_label: None,
             token_breakdown: None,
-            context_window_percent: None,
+            status_info: StatusCardInfo::default(),
+            conversation_id: None,
             cloud_session: None,
         }
     }
@@ -429,14 +444,16 @@ impl NoriSessionHeaderCell {
     }
 
     /// Create a new header cell with optional status card fields.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new_with_status_info(
         agent: String,
         directory: PathBuf,
         prompt_summary: Option<String>,
         approval_mode_label: Option<String>,
         token_breakdown: Option<TranscriptTokenUsage>,
-        context_window_percent: Option<i64>,
         cloud_session: Option<CloudSessionInfo>,
+        conversation_id: Option<ConversationId>,
+        status_info: StatusCardInfo,
     ) -> Self {
         let skillset = read_active_skillset(&directory);
         let agent_kind = detect_agent_kind(&agent);
@@ -451,7 +468,8 @@ impl NoriSessionHeaderCell {
             prompt_summary,
             approval_mode_label,
             token_breakdown,
-            context_window_percent,
+            status_info,
+            conversation_id,
             cloud_session,
         }
     }
@@ -484,49 +502,69 @@ impl HistoryCell for NoriSessionHeaderCell {
             lines.push(Line::from(""));
         }
 
-        // Session line (cloud) or directory line (local). On a cloud session
-        // the cwd lives on the remote VM, so the local cwd would be misleading
-        // — show the cloud session identity instead.
-        if let Some(cloud) = &self.cloud_session {
-            let session_display = match &cloud.title {
-                Some(title) => format!("{} ({title})", cloud.id),
-                None => cloud.id.clone(),
-            };
-            lines.push(Line::from(vec![
-                Span::from("session:   ").dim(),
-                Span::from(session_display),
-            ]));
-        } else {
-            let dir_max_width = inner_width.saturating_sub(11); // "directory: " is 11 chars
+        // Directory line. The `/status` (Full) card always shows the local cwd.
+        // The compact welcome card suppresses it on a cloud session because the
+        // cwd lives on the remote VM and would be misleading.
+        let show_directory =
+            matches!(self.display_mode, DisplayMode::Full) || self.cloud_session.is_none();
+        if show_directory {
+            let dir_max_width = inner_width.saturating_sub(STATUS_LABEL_WIDTH);
             let dir = format_directory(&self.directory, Some(dir_max_width));
-            lines.push(Line::from(vec![
-                Span::from("directory: ").dim(),
-                Span::from(dir),
-            ]));
+            lines.push(status_row("directory:", vec![Span::from(dir)]));
+        }
+
+        // Session line: the local conversation id (or the cloud id when the
+        // conversation id is not yet known), with the broker title in parens on
+        // a cloud session.
+        let session_base = match (self.conversation_id, &self.cloud_session) {
+            (Some(id), _) => Some(id.to_string()),
+            (None, Some(cloud)) => Some(cloud.id.clone()),
+            (None, None) => None,
+        };
+        if let Some(base) = session_base {
+            let session_display = match self.cloud_session.as_ref().and_then(|c| c.title.as_ref()) {
+                Some(title) => format!("{base} ({title})"),
+                None => base,
+            };
+            lines.push(status_row("session:", vec![Span::from(session_display)]));
         }
 
         // Agent line
-        lines.push(Line::from(vec![
-            Span::from("agent:     ").dim(),
-            Span::from(self.agent.clone()),
-        ]));
+        lines.push(status_row("agent:", vec![Span::from(self.agent.clone())]));
 
-        // Skillset line
-        let skillset_display = self
-            .skillset
-            .clone()
-            .unwrap_or_else(|| "(none)".to_string());
-        lines.push(Line::from(vec![
-            Span::from("skillset:  ").dim(),
-            Span::from(skillset_display),
-        ]));
+        // Skillset line, with the detected skillsets version appended when known.
+        let skillset_display = match &self.skillset {
+            Some(name) => match &self.status_info.nori_version {
+                Some(version) => {
+                    let label = self
+                        .status_info
+                        .nori_version_source
+                        .map(NoriVersionSource::label)
+                        .unwrap_or("Skillsets");
+                    format!("{name} ({label} v{version})")
+                }
+                None => name.clone(),
+            },
+            None => "(none)".to_string(),
+        };
+        lines.push(status_row("skillset:", vec![Span::from(skillset_display)]));
 
         // Approval mode line (if provided)
         if let Some(approval_mode) = &self.approval_mode_label {
-            lines.push(Line::from(vec![
-                Span::from("approvals: ").dim(),
-                Span::from(approval_mode.clone()).magenta(),
-            ]));
+            lines.push(status_row(
+                "approvals:",
+                vec![Span::from(approval_mode.clone()).magenta()],
+            ));
+        }
+
+        // ACP mode line (plan/build) when the agent exposes a mode.
+        if let Some(mode) = &self.status_info.acp_mode_label {
+            lines.push(status_row("mode:", vec![Span::from(mode.clone())]));
+        }
+
+        // Git line: branch, worktree, stats, and untracked marker on one row.
+        if let Some(git_spans) = git_row_spans(&self.status_info) {
+            lines.push(status_row("git:", git_spans));
         }
 
         // Instruction Files section
@@ -592,29 +630,18 @@ impl HistoryCell for NoriSessionHeaderCell {
 
         // Tokens section: show if we have token data or context window percentage
         let has_tokens = self.token_breakdown.as_ref().is_some_and(|t| t.total() > 0);
-        let has_context = self.context_window_percent.is_some();
+        let has_context = self.status_info.context_window_percent.is_some();
 
         if has_tokens || has_context {
             lines.push(Line::from(""));
             lines.push(Line::from(Span::from("Tokens").bold()));
 
-            // Context window line
-            if let Some(pct) = self.context_window_percent {
-                if let Some(token_breakdown) = &self.token_breakdown {
-                    let context_tokens = token_breakdown
-                        .input_tokens
-                        .saturating_add(token_breakdown.cached_tokens);
-                    let context_fmt = format_si_suffix(context_tokens);
-                    lines.push(Line::from(vec![
-                        Span::from("  Context: ").dim(),
-                        Span::from(format!("{context_fmt} ({pct}%)")),
-                    ]));
-                } else {
-                    lines.push(Line::from(vec![
-                        Span::from("  Context: ").dim(),
-                        Span::from(format!("{pct}%")),
-                    ]));
-                }
+            // Consolidated, codex-style context window line.
+            if let Some(context) = context_value(&self.status_info) {
+                lines.push(Line::from(vec![
+                    Span::from("  Context: ").dim(),
+                    Span::from(context),
+                ]));
             }
 
             // Total tokens line (only if we have token data)
@@ -682,14 +709,16 @@ pub(crate) fn active_instruction_file_contents(agent: &str, cwd: &Path) -> Vec<(
 /// - Nori branding with version
 /// - Directory, agent, and skillset info
 /// - Optional: task summary, approval mode, token usage
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn new_nori_status_output(
     agent: &str,
     directory: PathBuf,
     prompt_summary: Option<String>,
     approval_mode_label: Option<String>,
     token_breakdown: Option<TranscriptTokenUsage>,
-    context_window_percent: Option<i64>,
     cloud_session: Option<CloudSessionInfo>,
+    conversation_id: Option<ConversationId>,
+    status_info: StatusCardInfo,
 ) -> CompositeHistoryCell {
     let command = PlainHistoryCell::new(vec!["/status".magenta().into()]);
     let header = NoriSessionHeaderCell::new_with_status_info(
@@ -698,8 +727,9 @@ pub(crate) fn new_nori_status_output(
         prompt_summary,
         approval_mode_label,
         token_breakdown,
-        context_window_percent,
         cloud_session,
+        conversation_id,
+        status_info,
     );
 
     CompositeHistoryCell::new(vec![Box::new(command), Box::new(header)])

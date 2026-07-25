@@ -145,7 +145,8 @@ fn nori_header_renders_instruction_files() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -202,7 +203,8 @@ fn skillset_shows_none_when_not_set() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -227,7 +229,8 @@ fn skillset_shows_value_when_set() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -266,7 +269,8 @@ fn nori_header_snapshot() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -286,6 +290,7 @@ fn nori_status_output_shows_status_command_and_nori_branding() {
         None,
         None,
         None,
+        StatusCardInfo::default(),
     );
 
     let lines = status_cell.display_lines(80);
@@ -651,7 +656,8 @@ fn header_renders_instruction_files_section() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -709,7 +715,8 @@ fn header_renders_exact_token_counts_without_tilde() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -1002,6 +1009,7 @@ fn status_card_with_task_summary_renders_summary_at_top() {
         None,
         None,
         None,
+        StatusCardInfo::default(),
     );
 
     let lines = status_output.display_lines(80);
@@ -1036,8 +1044,12 @@ fn status_card_with_tokens_renders_tokens_section() {
         None,
         None,
         Some(token_breakdown),
-        Some(27),
         None,
+        None,
+        StatusCardInfo {
+            context_window_percent: Some(27),
+            ..StatusCardInfo::default()
+        },
     );
 
     let lines = status_output.display_lines(80);
@@ -1053,9 +1065,10 @@ fn status_card_with_tokens_renders_tokens_section() {
         rendered.contains("Context:"),
         "Status card should show context window usage"
     );
+    // 27% used is rendered as its complement: 73% left.
     assert!(
-        rendered.contains("27%"),
-        "Status card should show context window percentage"
+        rendered.contains("73%"),
+        "Status card should show context window percentage remaining"
     );
 }
 
@@ -1070,6 +1083,7 @@ fn status_card_with_approval_mode_renders_approval() {
         None,
         None,
         None,
+        StatusCardInfo::default(),
     );
 
     let lines = status_output.display_lines(80);
@@ -1097,6 +1111,7 @@ fn status_card_without_optional_fields_renders_base_only() {
         None,
         None,
         None,
+        StatusCardInfo::default(),
     );
 
     let lines = status_output.display_lines(80);
@@ -1136,6 +1151,7 @@ fn status_card_truncates_long_task_summary() {
         None,
         None,
         None,
+        StatusCardInfo::default(),
     );
 
     let lines = status_output.display_lines(80);
@@ -1178,6 +1194,7 @@ fn status_card_with_zero_tokens_hides_tokens_section() {
         Some(token_breakdown),
         None,
         None,
+        StatusCardInfo::default(),
     );
 
     let lines = status_output.display_lines(80);
@@ -1223,7 +1240,11 @@ fn context_window_percent_renders_without_token_breakdown() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: Some(42),
+        status_info: StatusCardInfo {
+            context_window_percent: Some(42),
+            ..StatusCardInfo::default()
+        },
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -1234,9 +1255,10 @@ fn context_window_percent_renders_without_token_breakdown() {
         rendered.contains("Tokens"),
         "Should show 'Tokens' section header when context_window_percent is set: {rendered}"
     );
+    // 42% used is rendered as its complement: 58% left.
     assert!(
-        rendered.contains("42%"),
-        "Should show context window percentage: {rendered}"
+        rendered.contains("58%"),
+        "Should show context window percentage remaining: {rendered}"
     );
 }
 
@@ -1257,14 +1279,32 @@ fn status_card_full_snapshot() {
         last_context_tokens: None,
     };
 
+    let conversation_id =
+        nori_harness::ConversationId::from_string("11111111-2222-3333-4444-555555555555")
+            .expect("valid conversation id");
+
     let status_output = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/home/user/project"),
         Some("Fix auth bug".to_string()),
         Some("Agent".to_string()),
         Some(token_breakdown),
-        Some(27),
         None,
+        Some(conversation_id),
+        StatusCardInfo {
+            git_branch: Some("feat/status-card".to_string()),
+            is_worktree: true,
+            worktree_name: Some("good-ash-20260205".to_string()),
+            git_lines_added: Some(120),
+            git_lines_removed: Some(8),
+            git_has_untracked: true,
+            acp_mode_label: Some("Plan".to_string()),
+            nori_version: Some("1.2.3".to_string()),
+            nori_version_source: Some(NoriVersionSource::Skillsets),
+            context_tokens: Some(43_000),
+            context_window_tokens: Some(272_000),
+            context_window_percent: Some(27),
+        },
     );
 
     let lines = status_output.display_lines(80);
@@ -1272,6 +1312,197 @@ fn status_card_full_snapshot() {
 
     unsafe { std::env::remove_var("NORI_MOCK_INSTRUCTION_FILES") };
     insta::assert_snapshot!(rendered);
+}
+
+// =========================================================================
+// SUPERSET STATUS CARD ROW TESTS
+// =========================================================================
+
+#[test]
+fn status_card_local_session_shows_conversation_id_and_directory() {
+    // Every agent (including a local, non-cloud session) shows the `session:`
+    // line naming the conversation id, alongside the `directory:` line.
+    let conversation_id =
+        nori_harness::ConversationId::from_string("12345678-90ab-cdef-1234-567890abcdef")
+            .expect("valid conversation id");
+    let status_output = new_nori_status_output(
+        "claude-sonnet",
+        PathBuf::from("/tmp/project"),
+        None,
+        None,
+        None,
+        None,
+        Some(conversation_id),
+        StatusCardInfo::default(),
+    );
+
+    let lines = status_output.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    assert!(
+        rendered.contains("session:"),
+        "local status card must show a 'session:' line, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("12345678-90ab-cdef-1234-567890abcdef"),
+        "local status card session line must show the conversation id, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("directory:"),
+        "local status card must still show the 'directory:' line, got:\n{rendered}"
+    );
+}
+
+#[test]
+fn status_card_renders_git_branch_worktree_and_stats_row() {
+    let status_output = new_nori_status_output(
+        "claude-sonnet",
+        PathBuf::from("/tmp/project"),
+        None,
+        None,
+        None,
+        None,
+        None,
+        StatusCardInfo {
+            git_branch: Some("feat/status-card".to_string()),
+            is_worktree: true,
+            worktree_name: Some("good-ash-20260205".to_string()),
+            git_lines_added: Some(42),
+            git_lines_removed: Some(7),
+            git_has_untracked: true,
+            ..StatusCardInfo::default()
+        },
+    );
+
+    let lines = status_output.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    assert!(
+        rendered.contains("git:"),
+        "status card must show a 'git:' row when a branch is known, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("feat/status-card"),
+        "git row must show the branch name, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("(worktree: good-ash-20260205)"),
+        "git row must show the worktree name, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("+42") && rendered.contains("-7"),
+        "git row must show the added/removed line stats, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains('!'),
+        "git row must show the untracked marker, got:\n{rendered}"
+    );
+}
+
+#[test]
+fn status_card_renders_mode_row_when_acp_mode_present() {
+    let status_output = new_nori_status_output(
+        "claude-sonnet",
+        PathBuf::from("/tmp/project"),
+        None,
+        None,
+        None,
+        None,
+        None,
+        StatusCardInfo {
+            acp_mode_label: Some("Plan".to_string()),
+            ..StatusCardInfo::default()
+        },
+    );
+
+    let lines = status_output.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    assert!(
+        rendered.contains("mode:"),
+        "status card must show a 'mode:' row when an ACP mode label is present, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("Plan"),
+        "mode row must show the ACP mode label, got:\n{rendered}"
+    );
+}
+
+#[test]
+fn status_card_renders_consolidated_context_row() {
+    let status_output = new_nori_status_output(
+        "claude-sonnet",
+        PathBuf::from("/tmp/project"),
+        None,
+        None,
+        None,
+        None,
+        None,
+        StatusCardInfo {
+            context_tokens: Some(43_000),
+            context_window_tokens: Some(272_000),
+            // 16% used of the window is rendered as 84% left.
+            context_window_percent: Some(16),
+            ..StatusCardInfo::default()
+        },
+    );
+
+    let lines = status_output.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    // Single consolidated codex-style row: "X% left (used / window)".
+    assert!(
+        rendered.contains("84% left"),
+        "context row must show the codex-style percent-left form, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("used"),
+        "context row must show the used tokens, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("272K"),
+        "context row must show the context window size, got:\n{rendered}"
+    );
+    // Consolidated: no separate remaining/used-only rows.
+    assert_eq!(
+        rendered.matches("Context:").count(),
+        1,
+        "context should render as a single row, got:\n{rendered}"
+    );
+}
+
+#[test]
+fn status_card_skillset_row_includes_version() {
+    let cell = NoriSessionHeaderCell {
+        version: "test",
+        agent: "claude-sonnet".to_string(),
+        directory: PathBuf::from("/tmp/test"),
+        skillset: Some("senior-swe".to_string()),
+        instruction_files: Vec::new(),
+        display_mode: DisplayMode::Full,
+        prompt_summary: None,
+        approval_mode_label: None,
+        token_breakdown: None,
+        status_info: StatusCardInfo {
+            nori_version: Some("1.2.3".to_string()),
+            nori_version_source: Some(NoriVersionSource::Skillsets),
+            ..StatusCardInfo::default()
+        },
+        conversation_id: None,
+        cloud_session: None,
+    };
+
+    let lines = cell.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    assert!(
+        rendered.contains("skillset:"),
+        "status card must show a 'skillset:' row, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("senior-swe (Skillsets v1.2.3)"),
+        "skillset row must append the skillsets version, got:\n{rendered}"
+    );
 }
 
 // =========================================================================
@@ -1316,7 +1547,8 @@ fn compact_mode_hides_inactive_files() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -1352,7 +1584,8 @@ fn compact_mode_hides_per_file_token_counts() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -1388,7 +1621,8 @@ fn full_mode_shows_inactive_files_and_per_file_counts() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -1444,7 +1678,8 @@ fn compact_mode_snapshot() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: None,
     };
 
@@ -1843,15 +2078,17 @@ fn discover_managed_policy_inactive_for_gemini() {
 // =========================================================================
 
 #[test]
-fn status_card_with_cloud_session_shows_session_line_not_local_cwd() {
-    // On a cloud (live-reattach) session the local cwd is on a remote VM, so
-    // presenting it as the session's `directory:` is misleading. The status
-    // card must instead show a `session:` line naming the id (and the broker
-    // title in parens when known), and must NOT print the local cwd value.
+fn status_card_with_cloud_session_shows_session_and_directory() {
+    // The `/status` card is now a superset: it shows BOTH the `session:` line
+    // (the conversation id, with the broker title in parens on a cloud session)
+    // AND the local `directory:` line. The session value is the conversation id,
+    // not the friendly cloud id.
+    let conversation_id =
+        nori_harness::ConversationId::from_string("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+            .expect("valid conversation id");
     let status_output = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/home/user/local-only-checkout"),
-        None,
         None,
         None,
         None,
@@ -1859,6 +2096,8 @@ fn status_card_with_cloud_session_shows_session_line_not_local_cwd() {
             id: "nori-fast-kazunoko-aac8".to_string(),
             title: Some("Fix login flakes".to_string()),
         }),
+        Some(conversation_id),
+        StatusCardInfo::default(),
     );
 
     let lines = status_output.display_lines(80);
@@ -1869,16 +2108,16 @@ fn status_card_with_cloud_session_shows_session_line_not_local_cwd() {
         "cloud status card must show a 'session:' line, got:\n{rendered}"
     );
     assert!(
-        rendered.contains("nori-fast-kazunoko-aac8"),
-        "cloud status card must name the cloud session id, got:\n{rendered}"
+        rendered.contains("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+        "cloud status card session line must name the conversation id, got:\n{rendered}"
     );
     assert!(
         rendered.contains("Fix login flakes"),
         "cloud status card must name the broker title when known, got:\n{rendered}"
     );
     assert!(
-        !rendered.contains("local-only-checkout"),
-        "cloud status card must not present the local cwd as the session directory, got:\n{rendered}"
+        rendered.contains("directory:") && rendered.contains("local-only-checkout"),
+        "cloud status card must now also show the local directory, got:\n{rendered}"
     );
 }
 
@@ -1896,7 +2135,8 @@ fn welcome_card_with_cloud_session_shows_session_line_not_local_cwd() {
         prompt_summary: None,
         approval_mode_label: None,
         token_breakdown: None,
-        context_window_percent: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
         cloud_session: Some(CloudSessionInfo {
             id: "nori-fast-kazunoko-aac8".to_string(),
             title: Some("Fix login flakes".to_string()),
