@@ -1,4 +1,5 @@
 use super::*;
+use crate::nori::config_picker::SettingsItem;
 use nori_config::NoriConfigEdits as ConfigEditsBuilder;
 use std::path::Path;
 
@@ -99,6 +100,8 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("{setting_name} {status}"), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::VerticalFooter);
     }
 
     pub(super) async fn persist_notify_after_idle_setting(
@@ -127,6 +130,8 @@ impl App {
             format!("Notify after idle set to {}.", value.display_name()),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::NotifyAfterIdle);
     }
 
     pub(super) async fn persist_script_timeout_setting(
@@ -155,6 +160,8 @@ impl App {
             format!("Script timeout set to {}.", value.display_name()),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::ScriptTimeout);
     }
 
     /// Store the loop count as an ephemeral per-session override (not persisted
@@ -170,9 +177,15 @@ impl App {
         };
         self.chat_widget
             .add_info_message(format!("Loop count set to {display} (this session)."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::LoopCount);
     }
 
-    pub(super) async fn persist_vim_mode_setting(&mut self, value: nori_config::VimEnterBehavior) {
+    pub(super) async fn persist_vim_mode_setting(
+        &mut self,
+        value: nori_config::VimEnterBehavior,
+        from_settings: bool,
+    ) {
         if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
             .set_path(&["tui", "vim_mode"], value.toml_value())
             .apply()
@@ -196,6 +209,13 @@ impl App {
         let display = value.display_name();
         self.chat_widget
             .add_info_message(format!("Vim mode: {display}."), None);
+
+        // Only return to the settings panel when the change came from it; the
+        // standalone `/vim` command should just close.
+        if from_settings {
+            self.chat_widget
+                .reopen_settings_focused(SettingsItem::VimMode);
+        }
     }
 
     pub(super) async fn persist_auto_worktree_setting(&mut self, value: nori_config::AutoWorktree) {
@@ -224,6 +244,8 @@ impl App {
             ),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::AutoWorktree);
     }
 
     pub(super) async fn persist_pinned_plan_drawer_setting(&mut self, enabled: bool) {
@@ -249,6 +271,8 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Pinned plan drawer {status}."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::PinnedPlanDrawer);
     }
 
     pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
@@ -286,6 +310,8 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Custom working messages {status}."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::CustomWorkingMessages);
     }
 
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
@@ -305,6 +331,8 @@ impl App {
             format!("Per Session Skillsets {status}. Changes will take effect on next session."),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::PerSessionSkillsets);
     }
 
     pub(super) async fn persist_footer_segment_setting(
@@ -360,6 +388,8 @@ impl App {
             format!("File manager set to {}.", value.display_name()),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::FileManager);
     }
 
     pub(super) async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
@@ -406,6 +436,12 @@ impl App {
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("{setting_name} {status}"), None);
+        let focus = match setting_name {
+            "terminal_notifications" => SettingsItem::TerminalNotifications,
+            "os_notifications" => SettingsItem::OsNotifications,
+            _ => unreachable!("notification setting was validated before persistence"),
+        };
+        self.chat_widget.reopen_settings_focused(focus);
     }
 
     pub(super) async fn persist_hotkey_setting(

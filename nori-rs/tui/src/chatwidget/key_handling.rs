@@ -194,15 +194,9 @@ impl ChatWidget {
                 self.open_approvals_popup();
             }
             SlashCommand::Settings => {
-                // Apply ephemeral session overrides so the picker shows the
-                // current in-session value rather than the persisted one.
-                let mut config = self.config.clone();
-                if let Some(overridden) = self.loop_count_override {
-                    config.loop_count = overridden;
-                }
-                self.open_settings_popup(&config);
+                self.open_settings_popup(None);
             }
-            SlashCommand::Vim => self.open_vim_mode_picker(self.config.vim_mode),
+            SlashCommand::Vim => self.open_vim_mode_picker(self.config.vim_mode, false),
             SlashCommand::Goal => {
                 self.request_thread_goal_status();
             }

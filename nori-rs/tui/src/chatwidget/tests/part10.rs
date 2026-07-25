@@ -371,31 +371,7 @@ fn stale_session_events_do_not_reach_the_current_widget() {
 
 #[tokio::test]
 async fn session_shutdown_uses_live_handle_without_a_conversation_id() {
-    let temp = tempfile::tempdir().expect("create session directory");
-    let config = nori_config::NoriConfig {
-        active_agent: "mock-model".to_string(),
-        cwd: temp.path().to_path_buf(),
-        nori_home: temp.path().to_path_buf(),
-        ..Default::default()
-    };
-    let mut session =
-        nori_harness::runtime::launch_session(nori_harness::runtime::SessionLaunchSpec {
-            config: std::sync::Arc::new(config),
-            cli_version: "tui-test".to_string(),
-            session_context: None,
-            initial_context: None,
-            resume: None,
-        });
-    tokio::time::timeout(std::time::Duration::from_secs(10), async {
-        while !matches!(
-            session.events.recv().await,
-            Some(nori_protocol::SessionEvent::Nori(
-                nori_protocol::NoriEvent::SessionStarted(_)
-            ))
-        ) {}
-    })
-    .await
-    .expect("mock session should start");
+    let mut session = start_mock_session().await;
 
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
     assert_eq!(chat.conversation_id(), None);
@@ -639,4 +615,117 @@ fn user_cancellation_adds_interrupted_cell() {
         history_text(&mut rx).contains("Conversation interrupted"),
         "a clean user cancellation should add the interrupted cell"
     );
+}
+
+/// Launch a live mock-agent session and wait for it to start, returning its
+/// handle for driving session-config operations.
+async fn start_mock_session() -> nori_harness::runtime::LaunchedSession {
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = nori_config::NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session =
+        nori_harness::runtime::launch_session(nori_harness::runtime::SessionLaunchSpec {
+            config: std::sync::Arc::new(config),
+            cli_version: "tui-test".to_string(),
+            session_context: None,
+            initial_context: None,
+            resume: None,
+        });
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while !matches!(
+            session.events.recv().await,
+            Some(nori_protocol::SessionEvent::Nori(
+                nori_protocol::NoriEvent::SessionStarted(_)
+            ))
+        ) {}
+    })
+    .await
+    .expect("mock session should start");
+    session
+}
+
+/// Selecting a value in the `/config` picker returns the user to the config
+/// panel with the just-edited option selected.
+#[tokio::test]
+async fn config_value_selection_reopens_panel_focused_on_edited_option() {
+    let session = start_mock_session().await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.harness_handle = Some(session.handle.clone());
+
+    chat.set_acp_session_config_option(
+        "thought_level".to_string(),
+        "high".to_string(),
+        "Thought Level".to_string(),
+        "High".to_string(),
+    );
+
+    let focus = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            if let Some(AppEvent::OpenAcpSessionConfigPicker {
+                focus_config_id, ..
+            }) = rx.recv().await
+            {
+                break focus_config_id;
+            }
+        }
+    })
+    .await
+    .expect("the config panel should reopen after a value is chosen");
+
+    assert_eq!(focus, Some("thought_level".to_string()));
+}
+
+/// Cycling the agent mode via its hotkey performs a real config set but must
+/// NOT pop the `/config` panel open (that reopen is exclusive to the picker).
+#[tokio::test]
+async fn mode_cycle_does_not_reopen_config_panel() {
+    let session = start_mock_session().await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.harness_handle = Some(session.handle.clone());
+
+    // Seed a Mode-category option the mock accepts as settable so cycling
+    // actually performs a set instead of the no-op "no mode available" branch.
+    let mode_option = nori_protocol::acp::v1::SessionConfigOption::select(
+        "thought_level",
+        "Thought Level",
+        "medium",
+        vec![
+            nori_protocol::acp::v1::SessionConfigSelectOption::new("low", "Low"),
+            nori_protocol::acp::v1::SessionConfigSelectOption::new("medium", "Medium"),
+            nori_protocol::acp::v1::SessionConfigSelectOption::new("high", "High"),
+        ],
+    )
+    .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Mode);
+    chat.acp_mode_config =
+        crate::nori::session_config_mode::acp_mode_config_from_options(&[mode_option]);
+    assert!(
+        chat.acp_mode_config.is_some(),
+        "seeded mode config should parse"
+    );
+
+    chat.cycle_acp_mode_config();
+
+    // Stream events through the successful set result and assert that no
+    // config-panel reopen was requested along the way.
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            match rx.recv().await {
+                Some(AppEvent::AcpSessionConfigSetResult { success, .. }) => {
+                    assert!(success, "mode cycle set should succeed against the mock");
+                    break;
+                }
+                Some(AppEvent::OpenAcpSessionConfigPicker { .. }) => {
+                    panic!("cycling mode must not reopen the /config panel");
+                }
+                Some(_) => continue,
+                None => panic!("event channel closed before the set completed"),
+            }
+        }
+    })
+    .await
+    .expect("mode cycle should complete");
 }

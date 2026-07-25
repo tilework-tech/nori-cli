@@ -248,9 +248,12 @@ pub(crate) enum AppEvent {
     /// expose a Model session config option.
     OpenAcpModelPickerUnsupported,
 
-    /// Open the generic ACP session config picker.
+    /// Open the generic ACP session config picker. `focus_config_id` optionally
+    /// names the option whose row should be selected when the panel opens (used
+    /// to return the cursor to the just-edited option).
     OpenAcpSessionConfigPicker {
         config_options: Vec<SessionConfigOption>,
+        focus_config_id: Option<String>,
     },
 
     /// Open the value picker for a specific ACP session config option.
@@ -330,8 +333,14 @@ pub(crate) enum AppEvent {
     /// Open the vim mode sub-picker.
     OpenVimModePicker,
 
-    /// Set the TUI vim mode config setting.
-    SetConfigVimMode(nori_config::VimEnterBehavior),
+    /// Set the TUI vim mode config setting. `from_settings` is true when the
+    /// change originated from the `/settings` panel (so the panel should be
+    /// reopened afterward) and false when it came from the standalone `/vim`
+    /// command.
+    SetConfigVimMode {
+        value: nori_config::VimEnterBehavior,
+        from_settings: bool,
+    },
 
     /// Open the notify-after-idle sub-picker.
     OpenNotifyAfterIdlePicker,
