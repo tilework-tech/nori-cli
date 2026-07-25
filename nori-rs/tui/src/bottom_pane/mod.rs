@@ -79,7 +79,6 @@ pub(crate) struct BottomPane {
     status: Option<StatusIndicatorWidget>,
     /// Queued user messages to show above the composer while a turn is running.
     queued_user_messages: QueuedUserMessages,
-    context_window_percent: Option<i64>,
     /// Display name of the current agent for use in approval dialogs.
     agent_display_name: String,
     /// Agent slug (e.g., "claude-code") used as prefix for agent commands.
@@ -163,7 +162,6 @@ impl BottomPane {
             animations_enabled,
             custom_working_messages,
             custom_working_message_list,
-            context_window_percent: None,
             agent_display_name,
             agent_slug,
             vim_mode_enabled: false,
@@ -182,10 +180,6 @@ impl BottomPane {
 
     pub fn status_widget(&self) -> Option<&StatusIndicatorWidget> {
         self.status.as_ref()
-    }
-
-    pub(crate) fn context_window_percent(&self) -> Option<i64> {
-        self.context_window_percent
     }
 
     fn active_view(&self) -> Option<&dyn BottomPaneView> {
@@ -640,6 +634,12 @@ impl BottomPane {
     /// Get the token breakdown from transcript location (for status card display).
     pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_harness::TranscriptTokenUsage> {
         self.composer.transcript_token_breakdown()
+    }
+
+    /// Footer-derived values (git, ACP mode, skillset version, context window)
+    /// for the `/status` card.
+    pub(crate) fn status_card_info(&self) -> crate::nori::session_header::StatusCardInfo {
+        self.composer.status_card_info()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {
