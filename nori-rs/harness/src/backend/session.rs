@@ -72,7 +72,6 @@ fn drain_setup_session_events(
             // The exact notification is the preceding ACP event. The private
             // reducer projection starts after setup completes.
             crate::connection::ConnectionEvent::SessionUpdate(_) => {}
-            crate::connection::ConnectionEvent::ObservedTurnEnd { .. } => {}
             crate::connection::ConnectionEvent::DelegatedRequest(request) => {
                 let _ =
                     request
@@ -227,7 +226,6 @@ impl AcpBackend {
                                             .events,
                                     ));
                                 }
-                                Some(crate::connection::ConnectionEvent::ObservedTurnEnd { .. }) => {}
                                 Some(crate::connection::ConnectionEvent::SessionClosed) => break,
                                 Some(crate::connection::ConnectionEvent::DelegatedRequest(request)) => {
                                     let _ = request.response_tx.send(Ok(
@@ -261,7 +259,6 @@ impl AcpBackend {
                                                 .events,
                                         ));
                                     }
-                                    crate::connection::ConnectionEvent::ObservedTurnEnd { .. } => {}
                                     crate::connection::ConnectionEvent::SessionClosed => {}
                                     crate::connection::ConnectionEvent::DelegatedRequest(request) => {
                                         let _ = request.response_tx.send(Ok(

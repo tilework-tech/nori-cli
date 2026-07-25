@@ -391,19 +391,20 @@ fn observed_turn_activates_and_completes_without_an_orphan_warning() {
                 && delta.delta == "what's the status here so far?"
     )));
 
+    let working = reduce(
+        &mut rt,
+        notification(nori_status_update("working")),
+        &mut norm,
+    );
+    assert!(working.events.is_empty());
+
     let response = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
         acp::ContentBlock::Text(acp::TextContent::new("No implementation work has started.")),
     ));
     let update = reduce(&mut rt, notification(response), &mut norm);
     assert_eq!(count_orphan_warnings(&update.events), 0);
 
-    let end = reduce(
-        &mut rt,
-        InboundEvent::ObservedTurnEnd {
-            stop_reason: "end_turn".to_string(),
-        },
-        &mut norm,
-    );
+    let end = reduce(&mut rt, notification(nori_status_update("idle")), &mut norm);
 
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
     assert_eq!(
@@ -429,32 +430,20 @@ fn observed_turn_activates_and_completes_without_an_orphan_warning() {
 }
 
 #[test]
-fn observed_error_boundary_still_releases_the_observer() {
+fn observer_status_updates_are_silent_while_idle() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
 
-    reduce(
-        &mut rt,
-        notification(acp::SessionUpdate::UserMessageChunk(
-            acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(
-                "remote prompt",
-            ))),
-        )),
-        &mut norm,
-    );
-    let end = reduce(
-        &mut rt,
-        InboundEvent::ObservedTurnEnd {
-            stop_reason: "error".to_string(),
-        },
-        &mut norm,
-    );
+    let update = reduce(&mut rt, notification(nori_status_update("idle")), &mut norm);
 
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
-    assert!(has_event(&end.events, |event| matches!(
-        event,
-        ClientEvent::PromptCompleted(_)
-    )));
+    assert!(update.events.is_empty());
+}
+
+fn nori_status_update(status: &str) -> acp::SessionUpdate {
+    let mut meta = serde_json::Map::new();
+    meta.insert("nori".to_string(), serde_json::json!({ "status": status }));
+    acp::SessionUpdate::SessionInfoUpdate(acp::SessionInfoUpdate::new().meta(meta))
 }
 
 #[test]

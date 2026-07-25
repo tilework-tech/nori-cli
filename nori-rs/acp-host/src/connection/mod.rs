@@ -24,11 +24,6 @@ pub enum ConnectionEvent {
     SessionClosed,
     /// Private reducer input paired with the preceding raw notification.
     SessionUpdate(acp::SessionUpdate),
-    /// A broker-projected terminal boundary for a turn owned by another client.
-    ObservedTurnEnd {
-        session_id: acp::SessionId,
-        stop_reason: String,
-    },
     DelegatedRequest(DelegatedRequest),
     /// The agent subprocess exited on its own. `status` is the exit code
     /// (`None` when killed by a signal); `stderr_tail` carries the child's

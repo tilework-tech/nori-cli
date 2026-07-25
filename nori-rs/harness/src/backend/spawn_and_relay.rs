@@ -1,22 +1,5 @@
 use super::*;
 
-fn reducer_input_from_connection_event(
-    event: crate::connection::ConnectionEvent,
-) -> Option<session_reducer::InboundEvent> {
-    match event {
-        crate::connection::ConnectionEvent::SessionUpdate(update) => Some(
-            session_reducer::InboundEvent::Notification(Box::new(update)),
-        ),
-        crate::connection::ConnectionEvent::ObservedTurnEnd { stop_reason, .. } => {
-            Some(session_reducer::InboundEvent::ObservedTurnEnd { stop_reason })
-        }
-        crate::connection::ConnectionEvent::Acp(_)
-        | crate::connection::ConnectionEvent::SessionClosed
-        | crate::connection::ConnectionEvent::DelegatedRequest(_)
-        | crate::connection::ConnectionEvent::ChildExited { .. } => None,
-    }
-}
-
 async fn forward_public_acp_event(
     backend_event_tx: &mpsc::Sender<BackendEvent>,
     event: nori_protocol::AcpEvent,
@@ -66,7 +49,6 @@ async fn forward_setup_event(
         // The public ACP notification immediately precedes this private
         // reducer projection. Reducer processing starts after setup.
         crate::connection::ConnectionEvent::SessionUpdate(_) => Ok(false),
-        crate::connection::ConnectionEvent::ObservedTurnEnd { .. } => Ok(false),
         crate::connection::ConnectionEvent::DelegatedRequest(request) => {
             let _ = request
                 .response_tx
@@ -384,26 +366,20 @@ impl AcpBackend {
                 biased;
                 maybe_event = event_rx.recv() => {
                     match maybe_event {
-                        Some(event @ (
-                            crate::connection::ConnectionEvent::SessionUpdate(_)
-                            | crate::connection::ConnectionEvent::ObservedTurnEnd { .. }
-                        )) => {
+                        Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
                             backend.wait_for_prompt_phase().await;
                             relay_seq += 1;
-                            let Some(input) = reducer_input_from_connection_event(event) else {
-                                continue;
-                            };
                             debug!(
                                 target: "acp_event_flow",
                                 relay_seq,
                                 relay_source = "transport_event_rx",
-                                inbound_event = session_reducer::inbound_event_kind(&input),
-                                "Relaying connection event into serialized session runtime"
+                                update_kind = crate::connection::session_update_kind(&update),
+                                "Relaying session/update into serialized session runtime"
                             );
                             let _ = backend
                                 .session_event_tx
                                 .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                                    input,
+                                    session_reducer::InboundEvent::Notification(Box::new(update)),
                                 ))
                                 .await;
                         }
@@ -545,27 +521,19 @@ impl AcpBackend {
                                             ))
                                             .await;
                                     }
-                                    event @ (
-                                        crate::connection::ConnectionEvent::SessionUpdate(_)
-                                        | crate::connection::ConnectionEvent::ObservedTurnEnd { .. }
-                                    ) => {
+                                    crate::connection::ConnectionEvent::SessionUpdate(update) => {
                                         relay_seq += 1;
-                                        let Some(input) =
-                                            reducer_input_from_connection_event(event)
-                                        else {
-                                            continue;
-                                        };
                                         debug!(
                                             target: "acp_event_flow",
                                             relay_seq,
                                             relay_source = "transport_event_rx_drain",
-                                            inbound_event = session_reducer::inbound_event_kind(&input),
-                                            "Draining connection event after prompt result channel closed"
+                                            update_kind = crate::connection::session_update_kind(&update),
+                                            "Draining session/update after prompt result channel closed"
                                         );
                                         let _ = backend
                                             .session_event_tx
                                             .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                                                input,
+                                                session_reducer::InboundEvent::Notification(Box::new(update)),
                                             ))
                                             .await;
                                     }

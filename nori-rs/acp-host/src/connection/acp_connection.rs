@@ -10,7 +10,6 @@ use std::process::Stdio;
 use agent_client_protocol::Agent;
 use agent_client_protocol::Client;
 use agent_client_protocol::ConnectionTo;
-use agent_client_protocol::JsonRpcNotification;
 use agent_client_protocol::Lines;
 use anyhow::Context;
 use anyhow::Result;
@@ -18,8 +17,6 @@ use futures::AsyncBufReadExt;
 use futures::AsyncWriteExt;
 use futures::StreamExt;
 use futures::io::BufReader;
-use serde::Deserialize;
-use serde::Serialize;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -46,14 +43,6 @@ use nori_protocol::acp::v1::RequestId;
 
 /// Minimum supported ACP protocol version.
 const MINIMUM_SUPPORTED_VERSION: ProtocolVersion = ProtocolVersion::V1;
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
-#[notification(method = "nori/turn_end")]
-#[serde(rename_all = "camelCase")]
-struct ObservedTurnEndNotification {
-    session_id: acp::SessionId,
-    stop_reason: String,
-}
 
 fn schema_request_id(id: serde_json::Value) -> RequestId {
     match id {
@@ -120,7 +109,6 @@ async fn establish_connection(
 ) -> Result<AcpConnection> {
     let connection_event_tx = event_tx.clone();
     let event_tx_for_notifications = event_tx.clone();
-    let event_tx_for_observed_turns = event_tx.clone();
     let event_tx_for_initialize = event_tx.clone();
     let session_config_state =
         std::sync::Arc::new(std::sync::RwLock::new(AcpSessionConfigState::new()));
@@ -167,25 +155,6 @@ async fn establish_connection(
                             .is_err()
                         {
                             warn!("Notification channel closed, dropping reducer update");
-                        }
-                        Ok(())
-                    }
-                },
-                agent_client_protocol::on_receive_notification!(),
-            )
-            .on_receive_notification(
-                {
-                    let event_tx = event_tx_for_observed_turns;
-                    async move |notification: ObservedTurnEndNotification, _connection| {
-                        if event_tx
-                            .send(ConnectionEvent::ObservedTurnEnd {
-                                session_id: notification.session_id,
-                                stop_reason: notification.stop_reason,
-                            })
-                            .await
-                            .is_err()
-                        {
-                            warn!("Notification channel closed, dropping observed turn end");
                         }
                         Ok(())
                     }
