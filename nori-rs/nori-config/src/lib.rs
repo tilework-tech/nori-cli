@@ -32,6 +32,7 @@ pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;
 pub use types::AgentDistributionToml;
 pub use types::AutoWorktree;
+pub use types::BrowserProfileMode;
 pub use types::CloudConfigToml;
 pub use types::DEFAULT_AGENT;
 pub use types::FeaturesToml;
