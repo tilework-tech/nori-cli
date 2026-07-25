@@ -47,6 +47,7 @@ pub enum NoriEvent {
     ReplayStarted(ReplayStarted),
     ReplayFinished,
     ContextCompacted(ContextCompactedEvent),
+    SessionForked(SessionForked),
     GoalChanged(Option<ThreadGoal>),
     CapabilitiesChanged(NoriCapabilities),
     Undo(UndoEvent),
@@ -114,6 +115,16 @@ pub enum ReplaySource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextCompactedEvent {
     pub summary: Option<String>,
+}
+
+/// Emitted when branch-at-head `/fork` forks the transcript: the previous
+/// conversation is frozen and a fresh conversation is seeded from it and made
+/// active.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionForked {
+    pub previous_conversation_id: String,
+    pub new_conversation_id: String,
+    pub new_acp_session_id: acp::v1::SessionId,
 }
 
 /// Capabilities implemented by Nori around the ACP agent.

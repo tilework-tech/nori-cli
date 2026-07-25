@@ -278,6 +278,7 @@ impl ChatWidget {
             token_breakdown,
             self.cloud_session_identity(),
             self.conversation_id(),
+            self.forked_from,
             status_info,
         ));
     }

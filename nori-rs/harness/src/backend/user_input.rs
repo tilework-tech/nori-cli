@@ -128,7 +128,7 @@ impl AcpBackend {
         }
 
         // Record user message to transcript
-        if let Some(ref recorder) = self.transcript_recorder
+        if let Some(recorder) = self.transcript_recorder.read().await.clone()
             && let Err(e) = recorder
                 .record_user_message(id, &display_text, vec![])
                 .await

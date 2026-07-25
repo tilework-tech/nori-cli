@@ -654,3 +654,32 @@ async fn mode_cycle_does_not_reopen_config_panel() {
     .await
     .expect("mode cycle should complete");
 }
+
+#[test]
+fn session_forked_shows_resume_hint_for_previous_conversation() {
+    let (mut chat, mut rx, _unused) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionForked(
+            nori_protocol::SessionForked {
+                previous_conversation_id: "11111111-1111-1111-1111-111111111111".to_string(),
+                new_conversation_id: "22222222-2222-2222-2222-222222222222".to_string(),
+                new_acp_session_id: nori_protocol::acp::v1::SessionId::from(
+                    "acp-forked".to_string(),
+                ),
+            },
+        )),
+    );
+
+    let rendered = history_text(&mut rx);
+    assert!(
+        rendered.contains("Session forked. To resume previous:"),
+        "fork should add the resume-hint cell, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("nori resume 11111111-1111-1111-1111-111111111111"),
+        "fork hint should offer a copy-pasteable resume command for the previous conversation, got:\n{rendered}"
+    );
+}

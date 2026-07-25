@@ -60,9 +60,10 @@ impl AcpBackend {
     }
 
     pub(crate) async fn add_history(&self, text: String) -> Result<()> {
+        let conversation_id = *self.conversation_id.read().await;
         crate::message_history::append_entry(
             &text,
-            &self.conversation_id,
+            &conversation_id,
             &self.nori_home,
             self.history_persistence,
         )

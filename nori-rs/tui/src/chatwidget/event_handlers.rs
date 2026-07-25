@@ -200,7 +200,30 @@ impl ChatWidget {
                 self.replay_in_progress = false;
             }
             nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
+            // TODO(#557): render forked-transcript lineage in the TUI history.
+            nori_protocol::NoriEvent::SessionForked(forked) => {
+                self.on_session_forked(forked);
+            }
         }
+    }
+
+    fn on_session_forked(&mut self, forked: nori_protocol::SessionForked) {
+        // The active conversation is now the forked child; the parent stays
+        // resumable and is surfaced as `forked from:` on the status card.
+        self.conversation_id =
+            nori_harness::ConversationId::from_string(&forked.new_conversation_id).ok();
+        self.forked_from =
+            nori_harness::ConversationId::from_string(&forked.previous_conversation_id).ok();
+
+        let mut lines: Vec<Line<'static>> = vec!["Session forked. To resume previous:".into()];
+        if let Some(previous) = &self.forked_from {
+            lines.push(
+                crate::resume_command_for_conversation(previous)
+                    .cyan()
+                    .into(),
+            );
+        }
+        self.add_plain_history_lines(lines);
     }
 
     fn on_session_started(&mut self, event: nori_protocol::SessionStarted) {
