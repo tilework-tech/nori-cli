@@ -54,6 +54,9 @@ The host is the only client-side product crate that directly uses the
 - Terminal and extension request families are not advertised by the current
   host. Adding them requires an explicit host-policy decision, not a generic
   protocol mirror.
+- The `agent-client-protocol` SDK is built with the `unstable` feature so the
+  host can call `session/fork` (branch-at-head). See `fork_session` in
+  `@/nori-rs/acp-host/src/connection/docs.md`.
 - Shutdown closes stdin, waits for a grace period, then kills the process group
   only as a backstop. This ordering is required for cloud detach behavior.
 - The removed ACP-to-Codex translator must not be recreated. Display-friendly

@@ -54,8 +54,19 @@ lossy and UI-specific; they are not fed back into the harness or exported from
 #### Commands and approvals
 
 User actions call typed `HarnessHandle` methods for prompting, cancellation,
-history, prompt discovery, compaction, undo, shell, goals, session config,
-session listing, close, and shutdown. The old generic operation bus is gone.
+history, prompt discovery, compaction, branching, undo, shell, goals, session
+config, session listing, close, and shutdown. The old generic operation bus is
+gone.
+
+The `/fork` picker (`tui/src/nori/fork_picker.rs`) offers a "Branch from current
+point" entry as its first item when the agent advertises ACP `session/fork`
+(`AgentCapabilitiesView.session_fork`, sourced from the `InitializeResponse`);
+with fork support it opens even with no earlier user messages. Selecting it
+dispatches `AppEvent::BranchFromCurrent` -> `HarnessAction::Branch` ->
+`handle.branch()`, which forks the current head via ACP `session/fork` and swaps
+the active session. The remaining picker entries are the earlier user messages
+and drive the unchanged rewind-to-message local fork path; agents without fork
+support see only those.
 
 When an ACP permission request arrives, the overlay renders the ACP subject and
 options, then calls `respond_to_agent(request_id, response)` with the exact ID

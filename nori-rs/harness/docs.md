@@ -97,6 +97,7 @@ async fn history_entry(i64, i64) -> Result<Option<HistoryEntry>>;
 async fn search_history(i64) -> Result<Vec<HistoryEntry>>;
 async fn custom_prompts() -> Result<Vec<CustomPrompt>>;
 async fn compact() -> Result<()>;
+async fn branch() -> Result<()>;
 async fn undo() -> Result<()>;
 async fn undo_snapshots() -> Result<Vec<UndoSnapshot>>;
 async fn undo_to(i64) -> Result<()>;
@@ -171,6 +172,39 @@ exact ACP wire request ID. The relay then stops and aborts the private reducer
 task. A frontend may remain open to show the terminal state.
 Explicit `shutdown()` aborts the retained reducer and relay tasks during
 teardown so those session-owned tasks cannot outlive the harness.
+
+#### Compaction, branching, and session swap
+
+`compact()` has two paths, chosen in `harness/src/backend/submit_and_ops.rs`. If
+the connected agent advertises a native `compact` slash command (checked against
+the reducer's `available_commands`), `/compact` is forwarded as an ordinary
+in-session turn under `QueuedPromptKind::NativeCompact`: the agent compacts its
+own context with no session swap and no summary re-injection, and turn
+completion emits only the `ContextCompacted { summary: None }` divider. Native
+detection depends on the agent re-advertising `compact` after the session
+bootstrap window, because setup drops bootstrap-time `SessionUpdate`s. When no
+native command is advertised, `/compact` falls back to summarize-and-swap: a
+hidden summarization prompt captures the agent's summary into
+`pending_compact_summary` (prepended to the next prompt), then the active
+session is replaced with a brand-new one.
+
+The session-replacement machinery is shared in
+`harness/src/backend/session_swap.rs`. `swap_active_session(SessionSwapMode)`
+re-assembles MCP servers, re-registers the backend-owned `nori-client` MCP
+server, obtains a replacement session id, commits, swaps the active
+`session_id`, rebroadcasts capabilities, and rolls back the goal-MCP connected
+flag on failure. The mode selects how the replacement id is obtained:
+`NewAfterCompact` calls `connection.create_session` (summarize-and-swap
+fallback), while `ForkFromHead { from }` calls `connection.fork_session` in
+`nori-acp-host`.
+
+`branch()` implements branch-at-head. It is capability-gated on
+`session_capabilities.fork` (errors "This agent does not support branching"
+otherwise), requires the session to be idle, then forks the current head and
+swaps the active session to the forked id. The original session stays
+resumable. `HarnessCommand::Branch` and `handle.branch()` expose it on the
+runtime; `AgentCapabilitiesView.session_fork` surfaces the fork capability to
+consumers.
 
 #### Private reduction and transcripts
 

@@ -1,0 +1,12 @@
+---
+source: tui/src/nori/fork_picker.rs
+expression: "render_lines(&view, 60)"
+---
+                                                            
+  Fork Conversation                                         
+  Branch at the current point, or select a message to rewi  
+                                                            
+› 1. ⎇ Branch from current point                            
+  2. an earlier message                                     
+                                                            
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

@@ -257,6 +257,40 @@ impl MockAgent {
         }
         self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
+
+        // Advertise a native `compact` slash command so the harness forwards
+        // `/compact` as an ordinary turn instead of summarize-and-swap.
+        if std::env::var("MOCK_AGENT_ADVERTISE_COMPACT").is_ok() {
+            self.send_update(
+                session_id.clone(),
+                acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(
+                    vec![acp::AvailableCommand::new(
+                        "compact",
+                        "Summarize conversation",
+                    )],
+                )),
+            )
+            .await?;
+        }
+
+        // Reply to the summarize-and-swap compaction prompt with a summary
+        // message so the fallback path has a `last_agent_message` to stash.
+        let prompt_text = arguments
+            .prompt
+            .iter()
+            .filter_map(|block| match block {
+                acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        if prompt_text.contains("CONTEXT CHECKPOINT COMPACTION") {
+            eprintln!("Mock agent: replying to compaction prompt with a summary");
+            self.send_text_chunk(session_id.clone(), "MOCK COMPACT SUMMARY")
+                .await?;
+            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
+        }
+
         let request_permission = arguments.prompt.iter().any(|block| {
             matches!(
                 block,
@@ -1378,6 +1412,13 @@ async fn main() -> acp::Result<()> {
                     has_session_capabilities = true;
                 }
 
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_FORK").is_ok() {
+                    eprintln!("Mock agent: advertising session/fork capability");
+                    session_capabilities =
+                        session_capabilities.fork(acp::SessionForkCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
                 if has_session_capabilities {
                     capabilities = capabilities.session_capabilities(session_capabilities);
                     has_capabilities = true;
@@ -1543,6 +1584,43 @@ async fn main() -> acp::Result<()> {
                 }
                 eprintln!("Mock agent: close_session id={}", arguments.session_id);
                 responder.respond(acp::CloseSessionResponse::new())
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |arguments: acp::ForkSessionRequest,
+                            responder: Responder<acp::ForkSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    if std::env::var("MOCK_AGENT_FORK_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating fork_session failure");
+                        return responder
+                            .respond_with_error(acp::Error::new(-32002, "session not found"));
+                    }
+                    let forked_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
+                    eprintln!(
+                        "Mock agent: fork_session from={} new_id={forked_id}",
+                        arguments.session_id
+                    );
+                    let forked_key = forked_id.to_string();
+                    let session_config = state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .entry(arguments.session_id.to_string())
+                        .or_insert_with(default_session_config)
+                        .clone();
+                    state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .insert(forked_key.clone(), session_config.clone());
+                    responder.respond(
+                        acp::ForkSessionResponse::new(acp::SessionId::new(forked_key))
+                            .config_options(config_options_for_state(&session_config)),
+                    )
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
