@@ -753,6 +753,7 @@ mod tests {
         let params = crate::nori::config_picker::vim_mode_picker_params(
             nori_config::VimEnterBehavior::AlwaysSubmit,
             tx.clone(),
+            false,
         );
         let view = ListSelectionView::new(params, tx);
 
