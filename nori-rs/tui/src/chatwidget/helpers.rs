@@ -340,6 +340,7 @@ impl ChatWidget {
                     result
                 }
                 HarnessAction::Compact => handle.compact().await,
+                HarnessAction::Branch => handle.branch().await,
                 HarnessAction::UndoTo(index) => handle.undo_to(index).await,
                 HarnessAction::LoadUndoSnapshots => match handle.undo_snapshots().await {
                     Ok(snapshots) => {

@@ -183,6 +183,11 @@ impl App {
                                             .session_capabilities
                                             .close
                                             .is_some(),
+                                        session_fork: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .fork
+                                            .is_some(),
                                     },
                                     ..Default::default()
                                 },
@@ -1161,17 +1166,25 @@ impl App {
             AppEvent::OpenForkPicker => {
                 let messages =
                     crate::app_backtrack::collect_all_user_messages(&self.transcript_cells);
-                if messages.is_empty() {
+                // Only agents that advertise ACP `session/fork` can branch at the
+                // current head; without it, the picker only rewinds to a message.
+                let supports_fork = self.chat_widget.agent_capabilities().session_fork;
+                if !supports_fork && messages.is_empty() {
                     self.chat_widget
                         .add_info_message("No messages to fork from.".to_string(), None);
                 } else {
                     let params = crate::nori::fork_picker::fork_picker_params(
                         messages,
+                        supports_fork,
                         self.app_event_tx.clone(),
                     );
                     self.chat_widget.show_selection_view(params);
                 }
                 tui.frame_requester().schedule_frame();
+            }
+            AppEvent::BranchFromCurrent => {
+                self.chat_widget
+                    .submit_harness_action(crate::app_event::HarnessAction::Branch);
             }
             AppEvent::ForkToMessage {
                 cell_index,

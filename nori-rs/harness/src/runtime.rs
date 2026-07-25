@@ -108,6 +108,9 @@ enum HarnessCommand {
     Compact {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
+    Branch {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
     Undo {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
@@ -262,6 +265,12 @@ impl HarnessHandle {
 
     pub async fn compact(&self) -> anyhow::Result<()> {
         self.request(|response_tx| HarnessCommand::Compact { response_tx })
+            .await
+    }
+
+    /// Branch the conversation at its current head via ACP `session/fork`.
+    pub async fn branch(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::Branch { response_tx })
             .await
     }
 
@@ -687,6 +696,9 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                     }
                     HarnessCommand::Compact { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.compact().await);
+                    }
+                    HarnessCommand::Branch { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.branch().await);
                     }
                     HarnessCommand::Undo { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.undo().await);

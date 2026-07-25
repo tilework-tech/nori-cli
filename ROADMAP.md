@@ -25,7 +25,7 @@ session lifecycle             message queue                                     
 | Local agent registry  | `✅ done`  | custom agents can be registered    | keep local config registration simple                          | ACP Registry should complement this, not replace it yet                 |
 | Session lifecycle     | `✅ done`  | navigate previous sessions         | keep behavior stable while forking work continues              | `load`, `list`, `resume`, lazy indexing, and `undo` are already working |
 | Session continuity    | `✅ done`  | users can continue prior work      | keep resume listing, speed, and metadata stable                | context/usage metadata and `session_info_update` are finished           |
-| Session forking       | `🔵 now`   | sessions can branch and form trees | finish `fork` and tree-oriented flows                          | keep native ACP behavior ahead of local stand-ins                       |
+| Session forking       | `🔵 now`   | sessions can branch and form trees | fork-at-message and tree-oriented flows (needs upstream ACP PR #629) | branch-at-head shipped via native `session/fork`, capability-gated (claude-code adapter supports it; codex/gemini do not advertise fork yet) |
 | Image attachments     | `🔵 now`   | users can send visual context      | capability-aware image routing and transcript fidelity         | images reach ACP, but the path needs polish                             |
 | Queued messages       | `🔵 now`   | users can keep typing during work  | finish backend handling for queued turns                       | TUI support exists, but ACP backend behavior needs tightening           |
 | Session configuration | `✅ done`  | agents can expose useful controls  | custom options like thinking/effort level and plan/build modes | keep this driven by agent-provided config, not hardcoding               |
@@ -45,7 +45,7 @@ This table keeps the roadmap grounded in the current ACP spec and draft surface.
 | Session lifecycle     | `session/load`                                | stable baseline              | done                  |
 | Session lifecycle     | `session/list`                                | stable                       | done                  |
 | Session lifecycle     | `session/resume`                              | unstable landed              | done                  |
-| Session lifecycle     | `session/fork`                                | unstable landed              | todo                  |
+| Session lifecycle     | `session/fork`                                | unstable landed              | branch-at-head done; fork-at-message blocked on upstream PR #629 |
 | Session lifecycle     | `session/close`                               | unstable landed              | handled               |
 | Session lifecycle     | `session/delete`                              | draft only                   | not planned near term |
 | Session lifecycle     | undo, rewind, checkpoints                     | not first-class ACP today    | local only            |
