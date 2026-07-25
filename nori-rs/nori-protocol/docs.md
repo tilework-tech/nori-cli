@@ -50,31 +50,29 @@ pub enum AcpEvent {
 `NoriEvent` carries harness-owned lifecycle and product behavior that has no
 ACP event of its own. This includes session phase and termination, queue and
 replay boundaries, compaction, goals, undo, user-shell and hook output,
-notices, classified failures, and completion of a turn observed through a
-shared broker session.
-
-`ObservedTurnCompleted` contains the ACP `StopReason` and the last assembled
-agent message. It completes a turn initiated by another attached client after
-the harness receives the broker's idle status metadata; locally initiated turns
-continue to complete through their raw ACP prompt response. The source-owned
-event boundary is defined in [`session_event.rs`](src/session_event.rs).
+notices, and classified failures. A `session/update` received without a locally
+owned request remains a schema-native, unowned update; no synthetic request ID
+or source attribution is added. `ObservedTurnCompleted` is the current
+transitional presentation bridge when an optional Nori status hint supplies a
+definite proactive boundary, not ACP semantics or a correctness requirement.
+Owned prompts complete through their correlated raw ACP prompt response. The
+source-owned event boundary is defined in
+[`session_event.rs`](src/session_event.rs).
 
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the
 original `RequestId`; consumers do not correlate requests from content or from
 Nori-generated IDs. `SessionPhase::{Loading, Prompting, Cancelling}` carries the
-exact ACP wire `RequestId` for harness-issued operations. An observed turn has
-no request from the observing client, so its `Prompting` phase uses a stable
-harness-owned synthetic ID only to preserve the phase shape.
+exact ACP wire `RequestId` for harness-issued operations.
 
 ### Things to Know
 
 - ACP owns messages, thoughts, plans, tools, permissions, filesystem and
   terminal requests, modes, config options, capabilities, usage, and method
   responses. Do not mirror them into Nori types.
-- Nori owns only behavior around the ACP session: lifecycle, observed-turn
-  completion, queueing, replay, compaction, goals, undo, user-shell output,
-  hooks, summaries, notices, and failures that have no ACP response.
+- Nori owns only behavior around the ACP session: lifecycle, queueing, replay,
+  compaction, goals, undo, user-shell output, hooks, summaries, notices, and
+  failures that have no ACP response.
 - The crate contains no reducer, normalizer, parser, formatter, transcript
   compatibility decoder, or presentation state.
 - `ReplayStarted` and `ReplayFinished` bracket historical ACP notifications

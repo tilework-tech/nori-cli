@@ -41,6 +41,26 @@ The protocol rules that matter most here are:
 
 This design follows those boundaries exactly.
 
+## Ownership Vocabulary
+
+- An **owned turn** is initiated by this client with `session/prompt`; its
+  lifecycle is correlated to that request and ends with its response.
+- A **proactive turn** is agent or session activity received while this client
+  has no locally owned request. It may originate from a stdio agent process,
+  another attached client, or another transport.
+- An **unowned update** is an individual `session/update` received while this
+  client has no locally owned request. It is the input used to recognize
+  proactive activity, not a protocol error and not evidence of ownership by
+  some other known party.
+
+- while a local request is active, request-scoped updates belong to that
+  request
+- without a local request, request-scoped updates are proactive, unowned
+  activity; accept, preserve, and render them without warning or dropping them
+  merely because ownership is absent
+- never invent a request ID or assign proactive activity to an earlier or later
+  local request
+
 ## Proposed Runtime Model
 
 Per ACP session, the backend owns exactly one runtime object:
@@ -232,9 +252,9 @@ Rules:
 - patch `PersistedSessionState`
 - never treat them as turn boundaries
 
-### 2. Request-owned content updates
+### 2. Request-scoped content updates
 
-The following updates require an active request:
+The following updates ordinarily belong to an active request:
 
 - `user_message_chunk`
 - `agent_message_chunk`
@@ -245,7 +265,7 @@ The following updates require an active request:
 Rules:
 
 - if `active.is_some()`, patch `ActiveRequestState` or create request-owned state
-- if `active.is_none()`, handle the update as out-of-phase content
+- if `active.is_none()`, handle the update as proactive activity
 
 More specifically:
 
@@ -259,27 +279,29 @@ More specifically:
 
 The client never invents a turn owner when ACP did not provide one.
 
-### 3. Out-of-phase request content
+### 3. Proactive unowned updates
 
-The NDJSON event stream can contain well-formed request-shaped content outside
-an active `session/prompt` or `session/load`. The backend therefore has to
-handle that path anyway, even if only to log and drop it.
+Well-formed request-scoped content received with `active.is_none()` is an
+unowned update and valid proactive activity. Accept, preserve, and render it
+without warning or dropping it merely because no local request owns it. Do not
+reopen `active`, fabricate a request ID or completion signal, or attribute the
+content to an earlier or later local request.
 
-The observable behavior should be:
+Lifecycle hints may sharpen presentation boundaries but are optional. Without
+one, continue rendering unowned updates and wait for a definite later boundary
+such as explicit idle or session termination; keep proactive presentation
+separate when a local request begins.
 
-- if a request-owned content update arrives with `active.is_none()`, emit
-  `UiEvent::Warning` once per burst — only the first such update since the
-  last active request emits the warning, subsequent updates in the same
-  idle window do not. The flag resets when a new prompt or load begins.
-- forward the well-formed content to the TUI as standalone between-turn output
-  (every update, regardless of whether the warning fired)
-- do not attribute that content to a prior or future request
-- do not reopen `active`
-- if the update is malformed or unrecognizable, log a warning and drop it
+Nori's brokered Sessions product may send status-only `SessionInfoUpdate`
+notifications with `_meta.nori.status`:
 
-This keeps the protocol handling honest without adding attribution heuristics to
-the core reducer, and prevents post-cancel update bursts from spamming the
-history with identical warning cells.
+- `working` explicitly starts or confirms proactive work when no local request
+  is active
+- `idle` explicitly completes that proactive work
+
+This Nori product extension is not the definition of proactive turns and is not
+required for correctness. Session metadata otherwise remains session metadata
+and does not imply a turn.
 
 ### 4. Attributed tool updates
 
@@ -484,7 +506,8 @@ design.
 Future changes should be rejected if they introduce any of these smells:
 
 - the TUI and backend both track whether a prompt is active
-- turn completion is inferred from anything other than the request response
+- owned-turn completion is inferred from anything other than the request
+  response
 - open message buffers survive across request completion
 - tool ownership is inferred from timing instead of stored explicitly
 - cancel is treated as immediate idle

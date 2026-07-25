@@ -40,13 +40,6 @@ ACP agent facade. The facade preserves ACP request/response semantics where the
 shell caller participates, rather than serializing the private reducer or
 inventing a second public event vocabulary.
 
-Nori Sessions can attach multiple clients to one brokered ACP session. The
-broker represents a turn submitted by another client with ordinary
-`session/update` notifications: a user-message chunk, Nori status metadata,
-the streamed turn updates, and a final idle status. The harness uses that
-sequence to give observers a coherent turn lifecycle without introducing
-another transport method.
-
 ### Core Implementation
 
 #### Launch and event stream
@@ -156,16 +149,14 @@ or delegated request attributable to the prompt. It does not resend the next
 prompt to absorb a cancel-tail response. A successful empty `EndTurn` response
 is terminal for that one prompt.
 
-An observed turn has no local `session/prompt` response to provide its
-boundaries. While the reducer is idle, a `UserMessageChunk` starts a synthetic
-active turn and emits `Prompting` without sending anything to the agent. The
-broker's status-only `SessionInfoUpdate` values at `_meta.nori.status` are
-consumed as lifecycle metadata rather than normalized into session-info
-messages: `working` preserves the active turn, and `idle` finalizes an active
-turn that has no local queued prompt. Finalization records the streamed
-messages, returns the phase to `Idle`, and emits
-`NoriEvent::ObservedTurnCompleted` with `EndTurn` and the last assembled agent
-message. An idle status received without an observed turn is silent. This logic
+An active local prompt or load owns request-scoped updates until its response.
+Without one, the reducer accepts, preserves, and projects each update as
+unowned proactive activity without fabricating a request ID or attribution.
+This applies to stdio agents, attached clients, and other transports. Ordinary
+metadata does not imply a turn; the Nori Sessions broker's optional
+`_meta.nori.status` values sharpen proactive presentation, with `working`
+starting or confirming activity and `idle` completing it. Without those hints,
+updates remain valid and render without an invented completion. This logic
 lives in
 [`session_reducer.rs`](src/backend/session_reducer.rs) and
 [`session_runtime_driver.rs`](src/backend/session_runtime_driver.rs).
@@ -234,13 +225,6 @@ ACP update reduction in `harness/src/normalized/` is private implementation
 state. It assembles streaming messages and tools, tracks live phase/config/
 usage, and supports persistence and product behavior. It is neither exported
 from `nori-protocol` nor delivered as a second public event vocabulary.
-
-The raw ACP notification is published before its private reducer projection.
-For an observed turn, this lets consumers see the user-message chunk while
-idle before the harness publishes its synthetic `Prompting` phase. Locally
-submitted prompts already have an active phase before their first notification,
-so consumers can distinguish observed input from the notification echo of
-their own prompt.
 
 ACP `UsageUpdate` values retain both current and maximum context tokens for
 consumers such as the TUI footer. Transcript discovery remains a provider

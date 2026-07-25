@@ -34,17 +34,16 @@ The application event loop matches `SessionEvent::Acp` and
 
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
-- In a shared Sessions connection, a user-message chunk received while no local
-  prompt request is active is rendered as the observed prompt and counted in
-  session statistics. Local prompts already have an active request ID before
-  their echoed user-message notification arrives, so that notification is not
-  rendered a second time. This distinction is owned by
-  [`event_handlers.rs`](src/chatwidget/event_handlers.rs).
-- Status-only `SessionInfoUpdate` notifications carrying `_meta.nori.status`
-  are observer lifecycle frames, not displayable session information. The
-  presentation normalizer drops both `working` and `idle` frames so they do not
-  create history noise; ordinary session-info updates still follow the normal
-  presentation path in
+- Request-scoped updates belong to the active local prompt or load when one
+  exists; otherwise the TUI preserves and renders each update as unowned
+  proactive activity without warning, dropping, or invented attribution,
+  regardless of source or transport. Ordinary metadata does not imply a turn.
+  The Nori broker's optional `_meta.nori.status` values sharpen presentation:
+  `working` starts or confirms proactive activity and `idle` completes it;
+  without them, the TUI does not invent completion. `ObservedTurnCompleted` is
+  the current bridge for that hinted boundary pending simplification. This
+  distinction lives in
+  [`event_handlers.rs`](src/chatwidget/event_handlers.rs) and
   [`presentation/mod.rs`](src/presentation/mod.rs).
 - ACP requests drive the permission overlay and retain their raw `RequestId`.
 - Initialize responses and prompt responses matching the active request update
@@ -56,10 +55,7 @@ The application event loop matches `SessionEvent::Acp` and
   `HarnessHandle` return values while their raw responses remain observable on
   the stream.
 - Nori events drive lifecycle, queue, replay, compaction, goals, undo,
-  user-shell output, hooks, summaries, notices, classified failures, and
-  observed-turn completion. `ObservedTurnCompleted` clears the synthetic active
-  prompt and runs the same task-completion rendering used by a local prompt
-  response, including finalizing the streamed assistant answer.
+  user-shell output, hooks, summaries, notices, and classified failures.
 
 The private modules under `tui/src/presentation/` assemble ACP streaming values
 into display cells and friendly labels. These view models are allowed to be
