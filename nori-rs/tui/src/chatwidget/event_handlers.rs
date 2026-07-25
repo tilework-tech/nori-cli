@@ -28,7 +28,7 @@ impl ChatWidget {
                     .client_event_normalizer
                     .push_session_update(&notification.update);
                 for event in events {
-                    if self.replay_in_progress {
+                    if self.replay_source.is_some() {
                         self.handle_replay_client_event(event);
                     } else {
                         self.handle_client_event(event);
@@ -56,6 +56,8 @@ impl ChatWidget {
                 response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
                 ..
             } => {
+                self.session_agent_info = response.agent_info;
+                self.session_info_state.reset();
                 let capabilities = response.agent_capabilities;
                 self.session_agent_capabilities = crate::presentation::AgentCapabilitiesView {
                     http_mcp: capabilities.mcp_capabilities.http,
@@ -190,14 +192,14 @@ impl ChatWidget {
                 nori_protocol::HookOutputLevel::Warn => self.on_warning(output.message),
                 nori_protocol::HookOutputLevel::Error => self.on_error(output.message),
             },
-            nori_protocol::NoriEvent::ReplayStarted(_) => {
+            nori_protocol::NoriEvent::ReplayStarted(started) => {
                 self.flush_answer_stream_with_separator();
                 self.flush_replay_message();
-                self.replay_in_progress = true;
+                self.replay_source = Some(started.source);
             }
             nori_protocol::NoriEvent::ReplayFinished => {
                 self.flush_replay_message();
-                self.replay_in_progress = false;
+                self.replay_source = None;
             }
             nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
             // TODO(#557): render forked-transcript lineage in the TUI history.
@@ -639,7 +641,19 @@ impl ChatWidget {
                     return;
                 }
                 self.clear_pending_goal_edit_if_no_goal(&update);
-                if update.kind == crate::presentation::SessionUpdateKind::Usage
+                if let Some(patch) = update.session_info_patch.as_ref() {
+                    let origin = crate::nori::session_info::SessionInfoOrigin::from_replay_source(
+                        self.replay_source,
+                    );
+                    self.session_info_state.apply(patch, origin);
+                    let display = crate::nori::session_info::display(
+                        self.session_agent_info.as_ref(),
+                        self.bottom_pane.agent_display_name(),
+                        patch,
+                        origin,
+                    );
+                    self.add_to_history(display.history_cell());
+                } else if update.kind == crate::presentation::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
                 {
                     self.bottom_pane.set_session_usage(Some(usage));

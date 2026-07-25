@@ -64,6 +64,8 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
     let mut entries = Vec::new();
     let mut normalizer = crate::presentation::ClientEventNormalizer::default();
     let mut pending_raw_message = None;
+    let mut agent_info: Option<nori_protocol::acp::v1::Implementation> = None;
+    let mut replay_source = None;
 
     // Add session info header
     entries.push(ViewonlyEntry::Info {
@@ -101,6 +103,24 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
                 });
             }
             TranscriptRecord::SessionEvent(event) => {
+                match event {
+                    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+                        response:
+                            Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
+                        ..
+                    }) => {
+                        agent_info = response.agent_info.clone();
+                    }
+                    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayStarted(
+                        started,
+                    )) => {
+                        replay_source = Some(started.source);
+                    }
+                    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayFinished) => {
+                        replay_source = None;
+                    }
+                    _ => {}
+                }
                 if let nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
                     nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
                 )) = event
@@ -127,7 +147,11 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
                     }
                     flush_raw_message(&mut entries, &mut pending_raw_message);
                     for event in normalizer.push_session_update(&notification.update) {
-                        entries.extend(viewonly_entries_from_client_event(&event));
+                        entries.extend(viewonly_entries_from_client_event(
+                            &event,
+                            agent_info.as_ref(),
+                            replay_source,
+                        ));
                     }
                 } else {
                     flush_raw_message(&mut entries, &mut pending_raw_message);
@@ -143,6 +167,8 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
 
 fn viewonly_entries_from_client_event(
     event: &crate::presentation::ClientEvent,
+    agent_info: Option<&nori_protocol::acp::v1::Implementation>,
+    replay_source: Option<nori_protocol::ReplaySource>,
 ) -> Vec<ViewonlyEntry> {
     match event {
         // Raw v3 message chunks are accumulated before normalization; v1/v2
@@ -150,6 +176,22 @@ fn viewonly_entries_from_client_event(
         crate::presentation::ClientEvent::MessageDelta(_) => vec![],
         crate::presentation::ClientEvent::ReplayEntry(replay_entry) => {
             viewonly_entries_from_replay_entry(replay_entry)
+        }
+        crate::presentation::ClientEvent::SessionUpdateInfo(
+            crate::presentation::SessionUpdateInfo {
+                session_info_patch: Some(patch),
+                ..
+            },
+        ) => {
+            vec![ViewonlyEntry::Info {
+                content: crate::nori::session_info::display(
+                    agent_info,
+                    "Agent",
+                    patch,
+                    crate::nori::session_info::SessionInfoOrigin::from_replay_source(replay_source),
+                )
+                .text(),
+            }]
         }
         _ => format_client_event(event)
             .map(|content| vec![ViewonlyEntry::Info { content }])
@@ -480,5 +522,63 @@ mod tests {
         assert!(entries.iter().any(|entry| {
             matches!(entry, ViewonlyEntry::Info { content } if content.contains("Read README.md"))
         }));
+    }
+
+    #[tokio::test]
+    async fn renders_structured_session_info_from_the_raw_v3_boundary() {
+        let initialize = nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            request_id: nori_protocol::acp::v1::RequestId::Str("initialize".to_string()),
+            response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(
+                nori_protocol::acp::v1::InitializeResponse::new(
+                    nori_protocol::acp::ProtocolVersion::LATEST,
+                )
+                .agent_info(
+                    nori_protocol::acp::v1::Implementation::new("codex-acp", "1.1.4")
+                        .title("Codex ACP"),
+                ),
+            )),
+        });
+        let meta = serde_json::json!({
+            "codex": {
+                "threadStatus": {
+                    "type": "active",
+                    "activeFlags": ["waitingOnUserInput"]
+                },
+                "newDiagnostic": "private-value"
+            },
+            "other": {
+                "counter": 9
+            }
+        })
+        .as_object()
+        .expect("metadata object")
+        .clone();
+        let update = nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+            nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                nori_protocol::acp::v1::SessionNotification::new(
+                    "acp-session",
+                    nori_protocol::acp::v1::SessionUpdate::SessionInfoUpdate(
+                        nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta),
+                    ),
+                ),
+            ),
+        ));
+        let transcript = transcript(vec![initialize, update]).await;
+
+        let entries = transcript_to_entries(&transcript);
+        let info = entries
+            .iter()
+            .filter_map(|entry| match entry {
+                ViewonlyEntry::Info { content } => Some(content.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(info.contains("Codex ACP 1.1.4 session updated"), "{info}");
+        assert!(info.contains("status=active"), "{info}");
+        assert!(info.contains("waiting=user_input"), "{info}");
+        assert!(info.contains("codex.newDiagnostic=<string>"), "{info}");
+        assert!(info.contains("other.counter=<number>"), "{info}");
+        assert!(!info.contains("private-value"), "{info}");
     }
 }

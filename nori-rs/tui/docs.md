@@ -51,6 +51,33 @@ into display cells and friendly labels. These view models are allowed to be
 lossy and UI-specific; they are not fed back into the harness or exported from
 `nori-protocol`.
 
+#### Structured session information
+
+ACP `SessionInfoUpdate` normalization retains `title`, `updatedAt`, and the
+complete `_meta` object as a private `SessionInfoPatch` alongside the legacy
+text projection. The chat widget captures the agent identity reported by ACP
+initialization and whether the current emission is live, agent replay, or
+transcript replay, then sends every patch to two presentation consumers:
+
+- The history renderer emits a visible entry for every update. Known Codex
+  status, goal, error, archived, and closed fields receive friendly labels only
+  when the initialized agent identity is `codex-acp`. Unknown fields, fields
+  from other agents, and malformed known fields are rendered recursively in
+  deterministic path order as path/type pairs; their values are never
+  displayed. Agent identity and other header components are sanitized and
+  length-bounded, while fallback depth, assignment work, path length, and
+  output count are capped with an explicit omission marker.
+- The latest-state reducer recursively merges partial metadata for future
+  footer and status-card consumers. Live values outrank agent replay, which
+  outranks transcript replay. Empty metadata objects are merge no-ops and only
+  an explicit nested `null` clears a path. Patch traversal, retained field
+  count, and retained values are bounded; a new ACP initialization resets the
+  accumulated state and its provenance.
+
+This projection remains TUI-private. Raw ACP notifications continue to be the
+only transcript records for these updates, so rendering session information
+does not create derived transcript events or change the persisted schema.
+
 #### Commands and approvals
 
 User actions call typed `HarnessHandle` methods for prompting, cancellation,
@@ -185,6 +212,9 @@ stays resumable.
 Between `ReplayStarted` and `ReplayFinished`, replayed user and assistant
 messages are assembled in event order and rendered as static conversation
 history with turn boundaries. They are not handled as live output streams.
+View-only rendering recovers initialization identity and replay source from the
+stored lifecycle events, then runs raw session-information notifications
+through the same private normalizer and renderer as the live TUI.
 
 Transcript schema v3 contains lifecycle events even before
 a prompt, so session pickers determine whether a transcript is empty by its

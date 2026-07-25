@@ -106,6 +106,371 @@ fn replay_message_update(
     ))
 }
 
+fn initialize_agent_event(name: &str, title: &str, version: &str) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+        request_id: nori_protocol::acp::v1::RequestId::Str("initialize".to_string()),
+        response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(
+            nori_protocol::acp::v1::InitializeResponse::new(
+                nori_protocol::acp::ProtocolVersion::LATEST,
+            )
+            .agent_info(nori_protocol::acp::v1::Implementation::new(name, version).title(title)),
+        )),
+    })
+}
+
+fn session_info_update(
+    update: nori_protocol::acp::v1::SessionInfoUpdate,
+) -> nori_protocol::SessionEvent {
+    replay_message_update(nori_protocol::acp::v1::SessionUpdate::SessionInfoUpdate(
+        update,
+    ))
+}
+
+#[test]
+fn session_info_updates_render_known_codex_fields() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let meta = serde_json::json!({
+        "codex": {
+            "threadStatus": {
+                "type": "active",
+                "activeFlags": ["waitingOnApproval"]
+            },
+            "goal": {
+                "objective": "Ship metadata visibility",
+                "status": "active",
+                "tokenBudget": 20000,
+                "timeUsedSeconds": 42,
+                "createdAt": 1784977200,
+                "controlMethod": "_codex/session/goal_control"
+            },
+            "error": {
+                "message": "temporary overload",
+                "turnId": "turn-7",
+                "willRetry": true
+            },
+            "archived": false,
+            "closed": false
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("codex-acp", "Codex ACP", "1.1.4"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(
+            nori_protocol::acp::v1::SessionInfoUpdate::new()
+                .title("Metadata work")
+                .updated_at("2026-07-25T12:00:00Z")
+                .meta(meta),
+        ),
+    );
+
+    let rendered = history_text(&mut rx);
+    for expected in [
+        "Codex ACP 1.1.4 session updated",
+        "title=Metadata work",
+        "updated_at=2026-07-25T12:00:00Z",
+        "status=active",
+        "waiting=approval",
+        "goal.objective=Ship metadata visibility",
+        "goal.status=active",
+        "goal.token_budget=20,000",
+        "goal.time_used=42s",
+        "error.message=temporary overload",
+        "error.turn_id=turn-7",
+        "error.will_retry=true",
+        "archived=false",
+        "closed=false",
+    ] {
+        assert!(
+            rendered.contains(expected),
+            "expected {expected:?} in session-info history:\n{rendered}"
+        );
+    }
+    insta::assert_snapshot!("session_info_update_rich_history", rendered);
+}
+
+#[test]
+fn unknown_session_info_fields_render_types_without_values_in_stable_order() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let meta = serde_json::json!({
+        "codex": {
+            "futureField": "must-not-leak"
+        },
+        "vendor": {
+            "empty": {},
+            "flag": true,
+            "items": ["also-private"],
+            "nothing": null,
+            "payload": {
+                "count": 7
+            },
+            "secret": "also-must-not-leak"
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("codex-acp", "Codex ACP", "1.1.4"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+    );
+
+    let rendered = history_text(&mut rx);
+    let expected = [
+        "codex.futureField=<string>",
+        "vendor.empty=<object>",
+        "vendor.flag=<boolean>",
+        "vendor.items=<array>",
+        "vendor.nothing=<null>",
+        "vendor.payload.count=<number>",
+        "vendor.secret=<string>",
+    ];
+    let positions = expected
+        .iter()
+        .map(|field| {
+            rendered
+                .find(field)
+                .unwrap_or_else(|| panic!("expected {field:?} in:\n{rendered}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        positions.windows(2).all(|window| window[0] < window[1]),
+        "unknown paths should be sorted:\n{rendered}"
+    );
+    for private_value in ["must-not-leak", "also-private", "also-must-not-leak"] {
+        assert!(!rendered.contains(private_value), "{rendered}");
+    }
+}
+
+#[test]
+fn codex_metadata_from_a_custom_agent_uses_the_unknown_fallback() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let meta = serde_json::json!({
+        "codex": {
+            "threadStatus": {
+                "type": "active",
+                "activeFlags": ["waitingOnApproval"]
+            }
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("custom-agent", "Custom Agent", "2.0.0"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+    );
+
+    let rendered = history_text(&mut rx);
+    assert!(
+        rendered.contains("codex.threadStatus.activeFlags=<array>"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("codex.threadStatus.type=<string>"),
+        "{rendered}"
+    );
+    assert!(!rendered.contains("status=active"), "{rendered}");
+    assert!(!rendered.contains("waiting=approval"), "{rendered}");
+}
+
+#[test]
+fn malformed_known_codex_fields_use_the_unknown_fallback() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let excessive_flags = vec!["waitingOnApproval"; 100];
+    let meta = serde_json::json!({
+        "codex": {
+            "threadStatus": {
+                "type": {"unexpected": "must-not-leak"},
+                "activeFlags": excessive_flags
+            },
+            "archived": "must-not-leak"
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("codex-acp", "Codex ACP", "1.1.4"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+    );
+
+    let rendered = history_text(&mut rx);
+    for expected in [
+        "codex.archived=<string>",
+        "codex.threadStatus.activeFlags=<array>",
+        "codex.threadStatus.type.unexpected=<string>",
+    ] {
+        assert!(rendered.contains(expected), "{rendered}");
+    }
+    assert!(!rendered.contains("must-not-leak"), "{rendered}");
+}
+
+#[test]
+fn session_info_headers_sanitize_and_bound_agent_identity() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let oversized_version = "v".repeat(500);
+    let oversized_name = "n".repeat(100_000);
+    let meta = serde_json::json!({"vendor": {"field": true}})
+        .as_object()
+        .expect("metadata object")
+        .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event(
+            &oversized_name,
+            "Unsafe\nAgent\u{1b}[31m",
+            &oversized_version,
+        ),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(
+            nori_protocol::acp::v1::SessionInfoUpdate::new()
+                .title("Safe field")
+                .meta(meta),
+        ),
+    );
+
+    let rendered = history_text(&mut rx);
+    assert!(!rendered.contains('\u{1b}'), "{rendered:?}");
+    assert_eq!(
+        rendered.lines().count(),
+        2,
+        "agent identity must not inject history lines: {rendered:?}"
+    );
+    assert!(
+        rendered.lines().all(|line| line.chars().count() <= 240),
+        "agent identity must be bounded: {rendered:?}"
+    );
+}
+
+#[test]
+fn deeply_nested_unknown_metadata_stops_at_a_bounded_path() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let mut nested = serde_json::json!("private-value");
+    for depth in (0..40).rev() {
+        nested = serde_json::json!({format!("level{depth}"): nested});
+    }
+    let meta = serde_json::json!({"vendor": nested})
+        .as_object()
+        .expect("metadata object")
+        .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("custom-agent", "Custom Agent", "2.0.0"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+    );
+
+    let rendered = history_text(&mut rx);
+    assert!(rendered.contains("=<object>"), "{rendered}");
+    assert!(!rendered.contains("level39=<string>"), "{rendered}");
+    assert!(!rendered.contains("private-value"), "{rendered}");
+}
+
+#[test]
+fn replayed_session_info_updates_identify_the_replay_source() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("claude-agent-acp", "Claude Agent ACP", "0.62.0"),
+    );
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayStarted(
+            nori_protocol::ReplayStarted {
+                source: nori_protocol::ReplaySource::Agent,
+            },
+        )),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(
+            nori_protocol::acp::v1::SessionInfoUpdate::new().title("Recovered title"),
+        ),
+    );
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayFinished),
+    );
+
+    let replayed = history_text(&mut rx);
+    assert!(
+        replayed.contains("Claude Agent ACP 0.62.0 session updated (agent replay)"),
+        "{replayed}"
+    );
+    assert!(replayed.contains("title=Recovered title"), "{replayed}");
+
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayStarted(
+            nori_protocol::ReplayStarted {
+                source: nori_protocol::ReplaySource::Transcript,
+            },
+        )),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(
+            nori_protocol::acp::v1::SessionInfoUpdate::new().title("Transcript title"),
+        ),
+    );
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayFinished),
+    );
+    let transcript_replay = history_text(&mut rx);
+    assert!(
+        transcript_replay.contains("Claude Agent ACP 0.62.0 session updated (transcript replay)"),
+        "{transcript_replay}"
+    );
+
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().title("Live title")),
+    );
+    let live = history_text(&mut rx);
+    assert!(
+        live.contains("Claude Agent ACP 0.62.0 session updated"),
+        "{live}"
+    );
+    assert!(!live.contains("(agent replay)"), "{live}");
+    assert!(!live.contains("(transcript replay)"), "{live}");
+}
+
 fn replay_text_chunk(
     stream: crate::presentation::MessageStream,
     message_id: &str,
