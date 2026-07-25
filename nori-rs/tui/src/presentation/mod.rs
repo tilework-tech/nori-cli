@@ -469,9 +469,13 @@ impl ClientEventNormalizer {
                 })]
             }
             acp::SessionUpdate::SessionInfoUpdate(update) => {
-                vec![ClientEvent::SessionUpdateInfo(
-                    session_update_info_from_session_info(update),
-                )]
+                if nori_observer_status(update).is_some() {
+                    Vec::new()
+                } else {
+                    vec![ClientEvent::SessionUpdateInfo(
+                        session_update_info_from_session_info(update),
+                    )]
+                }
             }
             acp::SessionUpdate::UsageUpdate(update) => vec![ClientEvent::SessionUpdateInfo(
                 session_update_info_from_usage(update),
@@ -1072,6 +1076,10 @@ fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> Ses
         hint: None,
         usage: None,
     }
+}
+
+fn nori_observer_status(update: &acp::SessionInfoUpdate) -> Option<&str> {
+    update.meta.as_ref()?.get("nori")?.get("status")?.as_str()
 }
 
 fn format_maybe_undefined_field(label: &str, value: &MaybeUndefined<String>) -> Option<String> {

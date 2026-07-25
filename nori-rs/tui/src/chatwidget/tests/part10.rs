@@ -129,6 +129,14 @@ fn replay_text_chunk(
     replay_message_update(update)
 }
 
+fn nori_status_update(status: &str) -> nori_protocol::SessionEvent {
+    let mut meta = serde_json::Map::new();
+    meta.insert("nori".to_string(), serde_json::json!({ "status": status }));
+    replay_message_update(nori_protocol::acp::v1::SessionUpdate::SessionInfoUpdate(
+        nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta),
+    ))
+}
+
 #[test]
 fn observed_user_message_renders_without_echoing_local_prompts() {
     let (mut observer, mut observer_rx, _op_rx) = make_chatwidget_manual();
@@ -141,6 +149,7 @@ fn observed_user_message_renders_without_echoing_local_prompts() {
             "what's the status here so far?",
         ),
     );
+    observer.handle_session_event(observer_generation, nori_status_update("working"));
     observer.handle_session_event(
         observer_generation,
         replay_text_chunk(
@@ -149,6 +158,7 @@ fn observed_user_message_renders_without_echoing_local_prompts() {
             "No implementation work has started.",
         ),
     );
+    observer.handle_session_event(observer_generation, nori_status_update("idle"));
     observer.handle_session_event(
         observer_generation,
         nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ObservedTurnCompleted(
