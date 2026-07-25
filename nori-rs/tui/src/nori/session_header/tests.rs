@@ -147,6 +147,7 @@ fn nori_header_renders_instruction_files() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -205,6 +206,7 @@ fn skillset_shows_none_when_not_set() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -231,6 +233,7 @@ fn skillset_shows_value_when_set() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -271,6 +274,7 @@ fn nori_header_snapshot() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -285,6 +289,7 @@ fn nori_status_output_shows_status_command_and_nori_branding() {
     let status_cell = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/tmp/project"),
+        None,
         None,
         None,
         None,
@@ -658,6 +663,7 @@ fn header_renders_instruction_files_section() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -717,6 +723,7 @@ fn header_renders_exact_token_counts_without_tilde() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -1009,6 +1016,7 @@ fn status_card_with_task_summary_renders_summary_at_top() {
         None,
         None,
         None,
+        None,
         StatusCardInfo::default(),
     );
 
@@ -1044,6 +1052,7 @@ fn status_card_with_tokens_renders_tokens_section() {
         None,
         None,
         Some(token_breakdown),
+        None,
         None,
         None,
         StatusCardInfo {
@@ -1083,6 +1092,7 @@ fn status_card_with_approval_mode_renders_approval() {
         None,
         None,
         None,
+        None,
         StatusCardInfo::default(),
     );
 
@@ -1106,6 +1116,7 @@ fn status_card_without_optional_fields_renders_base_only() {
     let status_output = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/tmp/project"),
+        None,
         None,
         None,
         None,
@@ -1151,6 +1162,7 @@ fn status_card_truncates_long_task_summary() {
         None,
         None,
         None,
+        None,
         StatusCardInfo::default(),
     );
 
@@ -1192,6 +1204,7 @@ fn status_card_with_zero_tokens_hides_tokens_section() {
         None,
         None,
         Some(token_breakdown),
+        None,
         None,
         None,
         StatusCardInfo::default(),
@@ -1245,6 +1258,7 @@ fn context_window_percent_renders_without_token_breakdown() {
             ..StatusCardInfo::default()
         },
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -1291,6 +1305,10 @@ fn status_card_full_snapshot() {
         Some(token_breakdown),
         None,
         Some(conversation_id),
+        Some(
+            nori_harness::ConversationId::from_string("22222222-2222-2222-2222-222222222222")
+                .expect("valid conversation id"),
+        ),
         StatusCardInfo {
             git_branch: Some("feat/status-card".to_string()),
             is_worktree: true,
@@ -1333,6 +1351,7 @@ fn status_card_local_session_shows_conversation_id_and_directory() {
         None,
         None,
         Some(conversation_id),
+        None,
         StatusCardInfo::default(),
     );
 
@@ -1354,10 +1373,54 @@ fn status_card_local_session_shows_conversation_id_and_directory() {
 }
 
 #[test]
+fn status_card_renders_forked_from_row() {
+    // A forked session shows BOTH the new session's `session:` line and a
+    // `forked from:` line naming the parent conversation id it branched off.
+    let conversation_id =
+        nori_harness::ConversationId::from_string("11111111-1111-1111-1111-111111111111")
+            .expect("valid conversation id");
+    let forked_from =
+        nori_harness::ConversationId::from_string("22222222-2222-2222-2222-222222222222")
+            .expect("valid conversation id");
+    let status_output = new_nori_status_output(
+        "claude-sonnet",
+        PathBuf::from("/tmp/project"),
+        None,
+        None,
+        None,
+        None,
+        Some(conversation_id),
+        Some(forked_from),
+        StatusCardInfo::default(),
+    );
+
+    let lines = status_output.display_lines(80);
+    let rendered = render_lines(&lines).join("\n");
+
+    assert!(
+        rendered.contains("session:"),
+        "forked status card must show a 'session:' line, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("11111111-1111-1111-1111-111111111111"),
+        "forked status card session line must show the new conversation id, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("forked from:"),
+        "forked status card must show a 'forked from:' line, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("22222222-2222-2222-2222-222222222222"),
+        "forked status card must name the parent conversation id, got:\n{rendered}"
+    );
+}
+
+#[test]
 fn status_card_renders_git_branch_worktree_and_stats_row() {
     let status_output = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/tmp/project"),
+        None,
         None,
         None,
         None,
@@ -1409,6 +1472,7 @@ fn status_card_renders_mode_row_when_acp_mode_present() {
         None,
         None,
         None,
+        None,
         StatusCardInfo {
             acp_mode_label: Some("Plan".to_string()),
             ..StatusCardInfo::default()
@@ -1433,6 +1497,7 @@ fn status_card_renders_consolidated_context_row() {
     let status_output = new_nori_status_output(
         "claude-sonnet",
         PathBuf::from("/tmp/project"),
+        None,
         None,
         None,
         None,
@@ -1489,6 +1554,7 @@ fn status_card_skillset_row_includes_version() {
             ..StatusCardInfo::default()
         },
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -1549,6 +1615,7 @@ fn compact_mode_hides_inactive_files() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -1586,6 +1653,7 @@ fn compact_mode_hides_per_file_token_counts() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -1623,6 +1691,7 @@ fn full_mode_shows_inactive_files_and_per_file_counts() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -1680,6 +1749,7 @@ fn compact_mode_snapshot() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: None,
     };
 
@@ -2097,6 +2167,7 @@ fn status_card_with_cloud_session_shows_session_and_directory() {
             title: Some("Fix login flakes".to_string()),
         }),
         Some(conversation_id),
+        None,
         StatusCardInfo::default(),
     );
 
@@ -2137,6 +2208,7 @@ fn welcome_card_with_cloud_session_shows_session_line_not_local_cwd() {
         token_breakdown: None,
         status_info: StatusCardInfo::default(),
         conversation_id: None,
+        forked_from: None,
         cloud_session: Some(CloudSessionInfo {
             id: "nori-fast-kazunoko-aac8".to_string(),
             title: Some("Fix login flakes".to_string()),

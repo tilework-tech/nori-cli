@@ -172,10 +172,13 @@ untracked), instruction files, a single consolidated context row (`% left
 (used / window)`), and cumulative token usage. The footer-derived values are
 pulled in one shot via `ChatComposer::status_card_info()` (a `StatusCardInfo`
 built from `footer_props()`); the aligned row helpers and the git/context
-formatting live in `@/nori-rs/tui/src/nori/session_header/status_card.rs`. The
-`session:` row currently shows only the current conversation id; surfacing a
-forked lineage (a `forked from:` row) is a planned follow-up gated on the
-harness forking the transcript, not just the ACP session.
+formatting live in `@/nori-rs/tui/src/nori/session_header/status_card.rs`. After a
+branch-at-head fork the card also shows a `forked from:` row (the parent
+conversation id): the harness emits `NoriEvent::SessionForked` when it forks the
+transcript, and `on_session_forked` (`@/nori-rs/tui/src/chatwidget/event_handlers.rs`)
+updates `conversation_id`, records `forked_from`, and drops a copy-pasteable
+`nori resume <previous>` hint cell so the previous (now frozen) conversation
+stays resumable.
 
 #### Transcripts and view-only mode
 

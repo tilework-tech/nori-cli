@@ -634,7 +634,10 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
             }
         };
 
-        let transcript_recorder = backend.transcript_recorder();
+        // Hold the shared recorder cell (not a one-time clone) so a branch-at-head
+        // fork swap redirects recording to the new transcript; otherwise post-fork
+        // events would keep landing in the frozen parent transcript.
+        let transcript_recorder_cell = backend.transcript_recorder_cell();
         let backend_for_agent = Arc::clone(&backend);
         tokio::spawn(async move {
             loop {
@@ -778,7 +781,7 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
 
         while let Some(BackendEvent::Public(event)) = backend_event_rx.recv().await {
             let session_ended = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
-            if let Some(recorder) = transcript_recorder.as_ref()
+            if let Some(recorder) = transcript_recorder_cell.read().await.clone()
                 && let Err(error) = recorder.record_session_event(&event).await
             {
                 tracing::warn!(%error, "failed to record public session event");
@@ -790,7 +793,7 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                 break;
             }
         }
-        if let Some(recorder) = transcript_recorder.as_ref()
+        if let Some(recorder) = transcript_recorder_cell.read().await.clone()
             && let Err(error) = recorder.shutdown().await
         {
             tracing::warn!(%error, "failed to shut down transcript recorder");

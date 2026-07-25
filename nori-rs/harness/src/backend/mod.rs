@@ -241,8 +241,11 @@ pub struct AcpBackend {
     history_persistence: crate::config::HistoryPersistence,
     /// ACP wire proxy logging settings
     acp_proxy: crate::config::AcpProxyConfig,
-    /// Conversation ID for this session (used for history entries)
-    conversation_id: ConversationId,
+    /// Conversation ID for this session (used for history entries).
+    ///
+    /// Interior-mutable so branch-at-head `/fork` can swap the active
+    /// conversation to the forked transcript.
+    conversation_id: Arc<RwLock<ConversationId>>,
     /// Sender for broadcasting approval policy updates to the handler
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
@@ -258,8 +261,12 @@ pub struct AcpBackend {
     /// recorder's session ID is known.
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
     pending_hook_context: Arc<Mutex<Option<String>>>,
-    /// Transcript recorder for session persistence
-    transcript_recorder: Option<Arc<TranscriptRecorder>>,
+    /// Transcript recorder for session persistence.
+    ///
+    /// Interior-mutable so branch-at-head `/fork` can swap the active recorder
+    /// to a freshly forked transcript. The event-forwarding task reads this
+    /// cell per event so post-fork entries never land in the frozen parent.
+    transcript_recorder: Arc<RwLock<Option<Arc<TranscriptRecorder>>>>,
     /// Internal queue for prompt result events that need reducer processing.
     session_event_tx: mpsc::Sender<session_runtime_driver::SessionRuntimeInput>,
     /// Prompt result channel bridged with ACP notifications to preserve ordering.
@@ -277,6 +284,8 @@ pub struct AcpBackend {
     prompt_summary_enabled: bool,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
+    /// CLI version recorded in transcript metadata (including forked transcripts)
+    cli_version: String,
     /// Auto-worktree mode (whether a worktree was created at startup)
     auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming
@@ -318,8 +327,13 @@ pub struct AcpBackend {
 }
 
 impl AcpBackend {
-    pub(crate) fn transcript_recorder(&self) -> Option<Arc<TranscriptRecorder>> {
-        self.transcript_recorder.clone()
+    /// The shared cell holding the active transcript recorder.
+    ///
+    /// The event-forwarding task holds this cell and re-reads the recorder per
+    /// event so a branch-at-head fork swap immediately redirects recording to
+    /// the new transcript instead of the frozen parent.
+    pub(crate) fn transcript_recorder_cell(&self) -> Arc<RwLock<Option<Arc<TranscriptRecorder>>>> {
+        Arc::clone(&self.transcript_recorder)
     }
 }
 

@@ -206,6 +206,17 @@ resumable. `HarnessCommand::Branch` and `handle.branch()` expose it on the
 runtime; `AgentCapabilitiesView.session_fork` surfaces the fork capability to
 consumers.
 
+`ForkFromHead` (and only that mode) also forks the transcript via
+`fork_transcript`: the active recorder is flushed and left frozen on disk, and a
+fresh conversation is created with `TranscriptRecorder::new_forked`, seeded from
+the parent's entries (via `read_seed_entries`) and stamped with
+`SessionMeta.forked_from = <parent conversation id>` and the new ACP session id.
+The backend's `transcript_recorder` and `conversation_id` are interior-mutable
+cells (`Arc<RwLock<…>>`); the fork swaps both to the child before emitting
+`NoriEvent::SessionForked`. The event-forwarding task in `runtime.rs` re-reads
+the recorder cell per event rather than capturing it once, so post-fork entries
+record into the child and never corrupt the frozen parent.
+
 #### Private reduction and transcripts
 
 ACP update reduction in `harness/src/normalized/` is private implementation

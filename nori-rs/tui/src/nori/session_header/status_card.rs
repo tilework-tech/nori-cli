@@ -11,7 +11,8 @@ use ratatui::prelude::*;
 use ratatui::style::Stylize;
 
 /// Width of the aligned label column shared by every labelled card row.
-pub(super) const STATUS_LABEL_WIDTH: usize = 11;
+/// Sized to fit the widest label (`forked from:`).
+pub(super) const STATUS_LABEL_WIDTH: usize = 13;
 
 /// Footer-derived values surfaced on the `/status` card so it stays a superset
 /// of the footer's information categories regardless of the user's footer

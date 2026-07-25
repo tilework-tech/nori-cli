@@ -105,6 +105,10 @@ pub struct SessionMetaEntry {
     /// The ACP agent's session ID, used for resuming sessions via `session/load`.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub acp_session_id: Option<String>,
+    /// Conversation id of the parent transcript when this session was created by
+    /// forking the parent at its head (branch-at-head `/fork`).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub forked_from: Option<String>,
 }
 
 /// Attachment type for user messages (images, files, etc.)
@@ -232,6 +236,7 @@ mod tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: None,
+            forked_from: None,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
@@ -298,6 +303,7 @@ mod tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: Some("acp-sess-abc123".to_string()),
+            forked_from: None,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
@@ -349,6 +355,7 @@ mod tests {
             cli_version: "0.1.0".to_string(),
             git: None,
             acp_session_id: None,
+            forked_from: None,
         };
 
         let json = serde_json::to_string(&entry).unwrap();

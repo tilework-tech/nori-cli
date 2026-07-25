@@ -47,7 +47,7 @@ pub enum AcpEvent {
 }
 ```
 
-`NoriEvent` has exactly fifteen outer variants:
+`NoriEvent` has exactly sixteen outer variants:
 
 ```rust
 pub enum NoriEvent {
@@ -58,6 +58,7 @@ pub enum NoriEvent {
     ReplayStarted(ReplayStarted),
     ReplayFinished,
     ContextCompacted(ContextCompactedEvent),
+    SessionForked(SessionForked),
     GoalChanged(Option<ThreadGoal>),
     CapabilitiesChanged(NoriCapabilities),
     Undo(UndoEvent),
@@ -68,6 +69,12 @@ pub enum NoriEvent {
     RequestFailed(RequestFailure),
 }
 ```
+
+`SessionForked` is emitted when branch-at-head `/fork` forks the transcript. It
+carries `previous_conversation_id` (the now-frozen parent conversation),
+`new_conversation_id` (the fresh conversation seeded from the parent and made
+active), and `new_acp_session_id` (the forked ACP session). It is recorded into
+the new conversation, not the parent.
 
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the

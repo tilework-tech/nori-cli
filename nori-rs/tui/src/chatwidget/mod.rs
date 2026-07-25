@@ -189,6 +189,9 @@ pub(crate) struct ChatWidget {
     current_status_header: String,
     // Previous status header to restore after a transient stream retry.
     conversation_id: Option<ConversationId>,
+    // The parent conversation id after a branch-at-head fork, shown as the
+    // `forked from:` row on the status card.
+    forked_from: Option<ConversationId>,
     frame_requester: FrameRequester,
     // Whether to include the initial welcome banner on session configured
     show_welcome_banner: bool,
