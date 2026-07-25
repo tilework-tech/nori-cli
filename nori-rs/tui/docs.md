@@ -34,6 +34,18 @@ The application event loop matches `SessionEvent::Acp` and
 
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
+- In a shared Sessions connection, a user-message chunk received while no local
+  prompt request is active is rendered as the observed prompt and counted in
+  session statistics. Local prompts already have an active request ID before
+  their echoed user-message notification arrives, so that notification is not
+  rendered a second time. This distinction is owned by
+  [`event_handlers.rs`](src/chatwidget/event_handlers.rs).
+- Status-only `SessionInfoUpdate` notifications carrying `_meta.nori.status`
+  are observer lifecycle frames, not displayable session information. The
+  presentation normalizer drops both `working` and `idle` frames so they do not
+  create history noise; ordinary session-info updates still follow the normal
+  presentation path in
+  [`presentation/mod.rs`](src/presentation/mod.rs).
 - ACP requests drive the permission overlay and retain their raw `RequestId`.
 - Initialize responses and prompt responses matching the active request update
   UI lifecycle. For prompt errors, the correlated `NoriEvent::RequestFailed`
@@ -44,7 +56,10 @@ The application event loop matches `SessionEvent::Acp` and
   `HarnessHandle` return values while their raw responses remain observable on
   the stream.
 - Nori events drive lifecycle, queue, replay, compaction, goals, undo,
-  user-shell output, hooks, summaries, notices, and classified failures.
+  user-shell output, hooks, summaries, notices, classified failures, and
+  observed-turn completion. `ObservedTurnCompleted` clears the synthetic active
+  prompt and runs the same task-completion rendering used by a local prompt
+  response, including finalizing the streamed assistant answer.
 
 The private modules under `tui/src/presentation/` assemble ACP streaming values
 into display cells and friendly labels. These view models are allowed to be
