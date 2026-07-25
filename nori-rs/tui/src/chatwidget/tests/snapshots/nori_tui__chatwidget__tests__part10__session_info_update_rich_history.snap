@@ -1,0 +1,7 @@
+---
+source: tui/src/chatwidget/tests/part10.rs
+assertion_line: 204
+expression: rendered
+---
+• Codex ACP 1.1.4 session updated:
+  title=Metadata work, updated_at=2026-07-25T12:00:00Z, status=active, waiting=approval, goal.objective=Ship metadata visibility, goal.status=active, goal.token_budget=20,000, goal.time_used=42s, goal.created_at=1784977200, goal.control_method=_codex/session/goal_control, error.message=temporary overload, error.turn_id=turn-7, error.will_retry=true, archived=false, closed=false
