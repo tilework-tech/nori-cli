@@ -74,6 +74,33 @@ from the request. Filesystem requests do not enter this path because the host
 handles them. Terminal and extension request families are not advertised by
 the current host.
 
+#### Settings and session-config pickers
+
+The `/settings` picker (TUI config, in `@/nori-rs/tui/src/nori/config_picker.rs`)
+and the `/config` picker (ACP session config, in
+`@/nori-rs/tui/src/nori/session_config_picker.rs`) return to their parent panel
+after a value is applied, landing the cursor on the just-edited row. This lets a
+user change several settings in one visit instead of reopening the slash command
+after every change. Each panel re-derives its `initial_selected_idx` from a row
+identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
+`/config`.
+
+- For `/settings`, each `App::persist_*` success path in
+  `@/nori-rs/tui/src/app/config_persistence.rs` calls
+  `ChatWidget::reopen_settings_focused` (in
+  `@/nori-rs/tui/src/chatwidget/pickers.rs`), which rebuilds the panel from the
+  current config while preserving the ephemeral per-session loop-count override.
+- For `/config`, a successful set in `@/nori-rs/tui/src/chatwidget/pickers.rs`
+  re-emits `OpenAcpSessionConfigPicker` with the refreshed options and the edited
+  `focus_config_id`.
+- The Vim sub-picker is reachable from both `/settings` and the standalone
+  `/vim` command, so `AppEvent::SetConfigVimMode` carries a `from_settings` flag;
+  only settings-originated changes reopen the panel, while `/vim` just closes.
+- Excluded from auto-reopen: the mode-cycle hotkey (Shift+Tab must not pop
+  `/config` open), the multi-toggle Footer Segments sub-picker (which already
+  stays open by replacing itself), and the bespoke Hotkeys view. Failed persists
+  never reopen.
+
 #### Lifecycle behavior
 
 An orderly ACP close completes the typed close call, leaves the raw close
