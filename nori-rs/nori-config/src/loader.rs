@@ -200,6 +200,9 @@ impl NoriConfig {
             history_persistence: toml
                 .history_persistence
                 .unwrap_or(super::types::HistoryPersistence::SaveAll),
+            browser_profile: toml
+                .browser_profile
+                .unwrap_or(super::types::BrowserProfileMode::Throwaway),
             notify: toml.notify,
             acp_proxy,
             animations: toml.tui.animations.unwrap_or(true),

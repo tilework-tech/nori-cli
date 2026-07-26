@@ -1170,6 +1170,14 @@ impl App {
                 self.chat_widget
                     .add_error_message(format!("Failed to launch browser: {err}"));
             }
+            #[cfg(unix)]
+            AppEvent::SetBrowserProfile(mode) => {
+                // Persist the choice as the new default, then launch with it.
+                self.persist_browser_profile_setting(mode).await;
+                self.chat_widget.launch_browser_session(mode);
+            }
+            #[cfg(not(unix))]
+            AppEvent::SetBrowserProfile(_mode) => {}
             AppEvent::OpenForkPicker => {
                 let messages =
                     crate::app_backtrack::collect_all_user_messages(&self.transcript_cells);

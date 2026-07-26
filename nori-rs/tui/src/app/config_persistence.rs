@@ -134,6 +134,34 @@ impl App {
             .reopen_settings_focused(SettingsItem::NotifyAfterIdle);
     }
 
+    /// Persist the chosen `/browser` profile as the new default.
+    ///
+    /// The `/browser` picker resolves the current default fresh from disk on
+    /// every launch, so this only records the choice; the caller launches with
+    /// it separately.
+    #[cfg(unix)]
+    pub(super) async fn persist_browser_profile_setting(
+        &mut self,
+        value: nori_config::BrowserProfileMode,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["browser_profile"], value.toml_value())
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist browser_profile setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save browser_profile setting: {err}"));
+            return;
+        }
+
+        self.config.browser_profile = value;
+        self.sync_runtime_config();
+    }
+
     pub(super) async fn persist_script_timeout_setting(
         &mut self,
         value: nori_config::ScriptTimeout,

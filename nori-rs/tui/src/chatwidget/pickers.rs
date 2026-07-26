@@ -332,6 +332,16 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    /// Open the `/browser` profile picker, pre-selected on the saved default.
+    #[cfg(unix)]
+    pub(crate) fn open_browser_profile_picker(&mut self, current: nori_config::BrowserProfileMode) {
+        let params = crate::nori::config_picker::browser_profile_picker_params(
+            current,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     /// Open the script timeout sub-picker.
     pub(crate) fn open_script_timeout_picker(&mut self, current: nori_config::ScriptTimeout) {
         let params = crate::nori::config_picker::script_timeout_picker_params(
