@@ -592,6 +592,9 @@ pub(crate) enum AppEvent {
     /// Browser launch failed with an error message.
     BrowserLaunchFailed(String),
 
+    /// Persist the chosen `/browser` profile as the default and launch with it.
+    SetBrowserProfile(nori_config::BrowserProfileMode),
+
     /// Open the fork picker modal showing previous user messages.
     OpenForkPicker,
 

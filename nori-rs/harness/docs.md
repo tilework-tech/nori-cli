@@ -249,6 +249,44 @@ fallback batch; it never combines two sources under one marker. Private v2
 compatibility types remain in the transcript loader; storage enums are not
 exported. Public readers use `Transcript::records()` and `TranscriptRecord`.
 
+#### Browser sessions and profile tiers
+
+`backend/browser_session.rs` (`#[cfg(unix)]`) launches a headed Chrome browser
+with CDP (Chrome DevTools Protocol) remote debugging enabled so the ACP agent
+can script it via the shell tool. It is invoked by the TUI's `/browser` slash
+command. `BrowserSession::launch_and_store(mode)` finds a Chrome/Chromium binary
+via the `which` crate (searching `google-chrome-stable`, `google-chrome`,
+`chromium-browser`, `chromium`), then spawns it with `--remote-debugging-port=0`
+(OS-assigned port) against a `--user-data-dir` resolved from the requested
+`BrowserProfileMode`. It parses the CDP WebSocket URL from Chrome's stderr (the
+`DevTools listening on ws://...` line) with a 15-second timeout. Helpers
+`parse_cdp_ws_url()` and `extract_cdp_port()` handle stderr parsing and port
+extraction; `compose_agent_prompt()` builds the CDP endpoint message sent to the
+agent.
+
+`BrowserProfileMode` (defined in `nori-config`, persisted as the top-level
+`browser_profile` key and defaulting to `Throwaway`) selects which profile to
+launch against. `backend/browser_profile.rs::resolve_profile_dir()` turns that
+choice into a concrete directory and owns its lifetime:
+
+- **`Throwaway`** (the secure default): a fresh `tempfile::TempDir`, wiped on
+  shutdown. Shares no cookies/logins/settings with the user's real Chrome.
+- **`Persistent`**: a nori-owned `<nori_home>/browser-profile` directory,
+  created if absent and left on disk so logins survive across launches, while
+  staying isolated from the user's real Chrome.
+- **`System`**: the user's real default Chrome (or Chromium) profile —
+  `~/.config/google-chrome` on Linux, `~/Library/Application Support/Google/Chrome`
+  on macOS — with all their logins and cookies. Because this reuses the real
+  profile, an already-running Chrome silently hands the launch off and never
+  exposes CDP; the launch detects that failure and returns a precise
+  "fully quit Chrome, then run `/browser` again" hint (`SYSTEM_PROFILE_BUSY_HINT`).
+
+Only `Throwaway` owns a `TempDir`; `Persistent` and `System` resolve to
+`ProfileDir::Keep(PathBuf)` and are never deleted. The `ProfileDir` is stored as
+the `BrowserSession`'s last field so, on drop, the child is killed (the manual
+`Drop` SIGTERMs Chrome, and `kill_on_drop` backs it) before a throwaway profile's
+temp dir is removed.
+
 ### Things to Know
 
 - All public ACP types are reached through `nori_protocol::acp`.

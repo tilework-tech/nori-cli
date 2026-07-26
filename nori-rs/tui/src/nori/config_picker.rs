@@ -4,6 +4,7 @@
 //! that are persisted to ~/.nori/cli/config.toml.
 
 use nori_config::AutoWorktree;
+use nori_config::BrowserProfileMode;
 use nori_config::FooterSegment;
 use nori_config::FooterSegmentConfig;
 use nori_config::NoriConfig;
@@ -549,6 +550,42 @@ pub fn notify_after_idle_picker_params(
     }
 }
 
+/// Create selection view parameters for the `/browser` profile picker.
+///
+/// Pre-highlights the saved default (`current`); selecting a tier emits
+/// [`AppEvent::SetBrowserProfile`], which persists it as the new default and
+/// launches the browser with it.
+pub fn browser_profile_picker_params(
+    current: BrowserProfileMode,
+    _app_event_tx: AppEventSender,
+) -> SelectionViewParams {
+    let items: Vec<SelectionItem> = BrowserProfileMode::all_variants()
+        .iter()
+        .map(|&variant| {
+            let is_current = variant == current;
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                tx.send(AppEvent::SetBrowserProfile(variant));
+            })];
+            SelectionItem {
+                name: variant.display_name().to_string(),
+                description: Some(variant.description().to_string()),
+                is_current,
+                actions,
+                dismiss_on_select: true,
+                ..Default::default()
+            }
+        })
+        .collect();
+
+    SelectionViewParams {
+        title: Some("Browser Profile".to_string()),
+        subtitle: Some("Choose which Chrome profile /browser launches".to_string()),
+        footer_hint: Some(standard_popup_hint_line()),
+        items,
+        ..Default::default()
+    }
+}
+
 /// Create selection view parameters for the script timeout sub-picker.
 ///
 /// # Arguments
@@ -693,6 +730,52 @@ mod tests {
             nori_home: PathBuf::from("/tmp/test-nori"),
             cwd: PathBuf::from("/tmp"),
             ..NoriConfig::default()
+        }
+    }
+
+    #[test]
+    fn browser_profile_picker_lists_all_tiers_and_marks_current() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = browser_profile_picker_params(BrowserProfileMode::Persistent, tx);
+
+        let names: Vec<&str> = params.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "Throwaway",
+                "Persistent nori profile",
+                "Real Chrome profile"
+            ]
+        );
+        // The saved default is pre-highlighted, and every row has a description.
+        assert!(params.items.iter().all(|i| i.description.is_some()));
+        assert_eq!(
+            params.items.iter().position(|i| i.is_current),
+            Some(1),
+            "the current tier (Persistent) should be marked"
+        );
+    }
+
+    #[test]
+    fn browser_profile_selection_emits_set_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = browser_profile_picker_params(BrowserProfileMode::Throwaway, tx.clone());
+
+        // Select "Real Chrome profile" (index 2).
+        let system_item = &params.items[2];
+        for action in &system_item.actions {
+            action(&tx);
+        }
+
+        match rx.try_recv().expect("should receive event") {
+            AppEvent::SetBrowserProfile(value) => {
+                assert_eq!(value, BrowserProfileMode::System);
+            }
+            other => panic!("expected SetBrowserProfile event, got: {other:?}"),
         }
     }
 
