@@ -151,6 +151,21 @@ identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
   stays open by replacing itself), and the bespoke Hotkeys view. Failed persists
   never reopen.
 
+#### The `/browser` profile picker
+
+On Unix, `/browser` (in `@/nori-rs/tui/src/chatwidget/key_handling.rs`) reuses a
+running browser if one is active; otherwise it loads the saved default
+`browser_profile` from config and opens a three-tier picker
+(`browser_profile_picker_params` in `@/nori-rs/tui/src/nori/config_picker.rs`)
+pre-selected on it. The tiers are `Throwaway` (fresh temp profile, the secure
+default), `Persistent nori profile` (nori-owned, logins persist), and `Real
+Chrome profile` (the user's real Chrome, danger-noted). Selecting a tier emits
+`AppEvent::SetBrowserProfile`, whose handler persists the choice as the new
+default (`persist_browser_profile_setting`, writing the top-level
+`browser_profile` key) and then launches Chrome with it via
+`launch_browser_session`, which spawns `BrowserSession::launch_and_store(mode)`
+in `nori-harness`.
+
 #### Lifecycle behavior
 
 An orderly ACP close completes the typed close call, leaves the raw close

@@ -25,6 +25,60 @@ pub enum HistoryPersistence {
     None,
 }
 
+/// Which Chrome profile the `/browser` command launches against.
+///
+/// Secure-by-default: `Throwaway` shares no cookies, logins, or settings with
+/// the user's real Chrome. The other tiers are explicit power-user opt-ins that
+/// trade isolation for persistence or real credentials.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BrowserProfileMode {
+    /// Fresh throwaway profile per launch, wiped on shutdown. No shared state.
+    #[default]
+    Throwaway,
+    /// Persistent nori-owned profile (`<nori_home>/browser-profile`) reused
+    /// across launches. Logins survive, but it stays isolated from real Chrome.
+    Persistent,
+    /// The user's real default Chrome profile, with all their logins/cookies.
+    System,
+}
+
+impl BrowserProfileMode {
+    /// Human-readable name for display in the TUI picker.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "Throwaway",
+            Self::Persistent => "Persistent nori profile",
+            Self::System => "Real Chrome profile",
+        }
+    }
+
+    /// One-line description shown beneath each picker row.
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "Fresh profile, no logins or cookies (secure default)",
+            Self::Persistent => {
+                "Reuses a nori-owned profile; logins persist, isolated from your Chrome"
+            }
+            Self::System => "Your real Chrome logins & cookies — only use on trusted pages",
+        }
+    }
+
+    /// TOML string representation for persistence.
+    pub fn toml_value(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "throwaway",
+            Self::Persistent => "persistent",
+            Self::System => "system",
+        }
+    }
+
+    /// All variants in order, for building picker UIs.
+    pub fn all_variants() -> &'static [BrowserProfileMode] {
+        &[Self::Throwaway, Self::Persistent, Self::System]
+    }
+}
+
 /// Default agent for ACP-only mode
 pub const DEFAULT_AGENT: &str = "claude-code";
 
@@ -208,6 +262,9 @@ pub struct NoriConfigToml {
 
     /// History persistence policy
     pub history_persistence: Option<HistoryPersistence>,
+
+    /// Which Chrome profile the `/browser` command launches against.
+    pub browser_profile: Option<BrowserProfileMode>,
 
     /// External notifier command and arguments.
     pub notify: Option<Vec<String>>,
@@ -1975,6 +2032,9 @@ pub struct NoriConfig {
     /// History persistence policy
     pub history_persistence: HistoryPersistence,
 
+    /// Which Chrome profile the `/browser` command launches against.
+    pub browser_profile: BrowserProfileMode,
+
     /// External notifier command and arguments.
     pub notify: Option<Vec<String>>,
 
@@ -2120,6 +2180,7 @@ impl Default for NoriConfig {
             check_for_update_on_startup: true,
             disable_paste_burst: false,
             history_persistence: HistoryPersistence::default(),
+            browser_profile: BrowserProfileMode::default(),
             notify: None,
             acp_proxy: AcpProxyConfig {
                 enabled: false,

@@ -55,6 +55,41 @@ fn test_history_persistence_default() {
 }
 
 #[test]
+fn test_browser_profile_deserialize() {
+    #[derive(Deserialize)]
+    struct Wrapper {
+        browser_profile: BrowserProfileMode,
+    }
+
+    let w: Wrapper = toml::from_str(r#"browser_profile = "throwaway""#).unwrap();
+    assert_eq!(w.browser_profile, BrowserProfileMode::Throwaway);
+
+    let w: Wrapper = toml::from_str(r#"browser_profile = "persistent""#).unwrap();
+    assert_eq!(w.browser_profile, BrowserProfileMode::Persistent);
+
+    let w: Wrapper = toml::from_str(r#"browser_profile = "system""#).unwrap();
+    assert_eq!(w.browser_profile, BrowserProfileMode::System);
+}
+
+#[test]
+fn test_browser_profile_default() {
+    assert_eq!(BrowserProfileMode::default(), BrowserProfileMode::Throwaway);
+}
+
+#[test]
+fn test_browser_profile_toml_value_matches_variants() {
+    for &variant in BrowserProfileMode::all_variants() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            browser_profile: BrowserProfileMode,
+        }
+        let toml_str = format!(r#"browser_profile = "{}""#, variant.toml_value());
+        let w: Wrapper = toml::from_str(&toml_str).unwrap();
+        assert_eq!(w.browser_profile, variant);
+    }
+}
+
+#[test]
 fn test_notify_after_idle_deserialize_all_variants() {
     #[derive(Deserialize)]
     struct Wrapper {

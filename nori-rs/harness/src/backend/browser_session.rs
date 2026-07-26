@@ -4,8 +4,19 @@ use std::sync::Mutex;
 use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
+use nori_config::BrowserProfileMode;
+use nori_config::find_nori_home;
 use tokio::io::AsyncBufReadExt as _;
 use tokio::io::BufReader;
+
+use super::browser_profile::ProfileDir;
+use super::browser_profile::resolve_profile_dir;
+
+/// Remedy shown when the `System` tier can't get a CDP endpoint because the
+/// user's real Chrome is already running and silently hands off the launch.
+const SYSTEM_PROFILE_BUSY_HINT: &str = "Chrome is already running with your real profile, so it handed off the launch and never \
+     exposed a debugging endpoint. Fully quit Chrome, then run /browser again — or pick a \
+     different profile tier that does not reuse your real Chrome.";
 
 const CHROME_CANDIDATES: &[&str] = &[
     "google-chrome-stable",
@@ -82,12 +93,17 @@ pub struct BrowserSession {
     child: tokio::process::Child,
     ws_url: String,
     cdp_port: i32,
+    /// Resolved Chrome profile. Declared last so it is cleaned up (when
+    /// throwaway) only after the child has been dropped, and thus killed,
+    /// above it.
+    _profile_dir: ProfileDir,
 }
 
 impl BrowserSession {
-    /// Launch Chrome in headed mode with a random CDP port, storing
-    /// it as the active session. Closes any previous session.
-    pub async fn launch_and_store() -> Result<(String, i32)> {
+    /// Launch Chrome in headed mode with a random CDP port, storing it as the
+    /// active session. Closes any previous session. `mode` selects which Chrome
+    /// profile to launch against (see [`BrowserProfileMode`]).
+    pub async fn launch_and_store(mode: BrowserProfileMode) -> Result<(String, i32)> {
         if is_browser_active()
             && let Some((ws_url, cdp_port)) = active_session_info()
         {
@@ -96,8 +112,16 @@ impl BrowserSession {
 
         let chrome = find_chrome_binary()?;
 
+        // Resolve the profile per the requested tier. Throwaway (the secure
+        // default) shares nothing with the user's Chrome; persistent/system are
+        // explicit opt-ins for durable logins.
+        let nori_home =
+            find_nori_home().context("failed to locate nori home for browser profile")?;
+        let profile_dir = resolve_profile_dir(mode, &chrome, &nori_home)?;
+
         let mut child = tokio::process::Command::new(&chrome)
             .arg("--remote-debugging-port=0")
+            .arg(format!("--user-data-dir={}", profile_dir.path().display()))
             .arg("--no-first-run")
             .arg("--no-default-browser-check")
             .arg("--disable-gpu")
@@ -114,13 +138,24 @@ impl BrowserSession {
             .take()
             .context("failed to capture Chrome stderr")?;
 
-        let ws_url = tokio::time::timeout(
+        let ws_url_result = tokio::time::timeout(
             std::time::Duration::from_secs(15),
             Self::read_ws_url_from_stderr(stderr),
         )
         .await
-        .context("timed out waiting for Chrome CDP URL")?
-        .context("failed to read CDP URL from Chrome stderr")?;
+        .context("timed out waiting for Chrome CDP URL")
+        .and_then(|inner| inner.context("failed to read CDP URL from Chrome stderr"));
+
+        let ws_url = match ws_url_result {
+            Ok(ws_url) => ws_url,
+            // The `System` tier reuses the real profile, so an already-running
+            // Chrome hands our launch off and never prints a CDP URL. Surface a
+            // precise remedy instead of a generic timeout.
+            Err(err) if mode == BrowserProfileMode::System => {
+                return Err(err.context(SYSTEM_PROFILE_BUSY_HINT));
+            }
+            Err(err) => return Err(err),
+        };
 
         let cdp_port =
             extract_cdp_port(&ws_url).context("failed to extract port from CDP WebSocket URL")?;
@@ -131,6 +166,7 @@ impl BrowserSession {
             child,
             ws_url: ws_url.clone(),
             cdp_port,
+            _profile_dir: profile_dir,
         };
 
         store_session(session);
