@@ -453,18 +453,12 @@ fn reduce_notification(
         return;
     }
 
-    // Request-owned content requires an active request.
-    if runtime.active.is_none() {
-        if !runtime.orphan_update_warning_emitted {
-            out.events.push(ClientEvent::Warning(WarningInfo {
-                message: "Received request-owned content update while no request is active"
-                    .to_string(),
-            }));
-            runtime.orphan_update_warning_emitted = true;
-        }
-        let client_events = normalizer.push_session_update(&update);
-        out.events.extend(client_events);
-        return;
+    // Warn once for content that no local prompt or load owns.
+    if runtime.active.is_none() && !runtime.orphan_update_warning_emitted {
+        out.events.push(ClientEvent::Warning(WarningInfo {
+            message: "Received update with no active local request".to_string(),
+        }));
+        runtime.orphan_update_warning_emitted = true;
     }
 
     // Route to specific handlers.

@@ -141,14 +141,34 @@ and extension families are not currently advertised.
 
 #### Lifecycle and failures
 
-Harness phases are `Idle`, `Loading`, `Prompting`, and `Cancelling`, with the
-exact ACP wire request ID on non-idle phases. A prompt call is one ACP
-`session/prompt` request: the returned ID, the `Prompting`/`Cancelling` phase
-ID, and the final `AcpEvent::Response` ID are the same schema value. The host
-emits that `Prompting` phase before the first ACP notification, response, or
-delegated request attributable to the prompt. It does not resend the next
+Harness phases are `Idle`, `Loading`, `Prompting`, and `Cancelling`. For a
+locally submitted prompt, the returned ID, the `Prompting`/`Cancelling` phase
+ID, and the final `AcpEvent::Response` ID are the same ACP wire request ID. The
+host emits that `Prompting` phase before the first ACP notification, response,
+or delegated request attributable to the prompt. It does not resend the next
 prompt to absorb a cancel-tail response. A successful empty `EndTurn` response
-is terminal for that one prompt. Session end reasons are:
+is terminal for that one prompt.
+
+An active local prompt or load owns request-scoped updates until its response.
+Without one, the reducer accepts, preserves, and projects each update as
+unowned activity. The first non-metadata update in an unowned burst emits
+`Received update with no active local request`; later updates do not repeat the
+warning until a local prompt or load starts. The warning does not create a
+synthetic request or `Prompting` phase, invent attribution, or prevent
+projection. User, agent, thought, plan, and tool updates all follow that rule;
+unowned tool snapshots retain `owner_request_id = None`, and an unknown tool
+update is normalized from a default tool call rather than discarded. This
+logic lives in
+[`session_reducer.rs`](src/backend/session_reducer.rs) and
+[`session_runtime_driver.rs`](src/backend/session_runtime_driver.rs).
+
+The public stream forwards raw ACP session metadata unchanged. The harness does
+not interpret metadata as prompt completion or publish a proactive-completion
+event, so proactive presentation cannot drain the queue, end cancellation, or
+change request state. Optional presentation hints are interpreted only by the
+TUI, as described in [`nori-tui`](../tui/docs.md).
+
+Session end reasons are:
 
 - `Shutdown` for an explicit harness shutdown;
 - `Closed` after a successful ACP close response;

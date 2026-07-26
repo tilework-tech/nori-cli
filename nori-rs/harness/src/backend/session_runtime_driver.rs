@@ -69,7 +69,7 @@ impl SessionDriver {
 
     pub(crate) fn apply(&mut self, event: InboundEvent) -> ReducerActions {
         let completed_prompt = matches!(
-            event,
+            &event,
             InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed { .. }
         )
         .then(|| {
@@ -79,7 +79,6 @@ impl SessionDriver {
                 .and_then(|active| active.prompt.clone())
         })
         .flatten();
-
         let out = reduce(&mut self.runtime, event, &mut self.normalizer);
         let completed_turn = completed_prompt.and_then(|prompt| {
             out.events.iter().find_map(|event| match event {
@@ -164,16 +163,6 @@ const CANCEL_FORCE_SECS: u64 = 10;
 
 impl AcpBackend {
     pub(super) async fn apply_session_event(&self, event: InboundEvent) {
-        let is_prompt_terminal = matches!(
-            event,
-            InboundEvent::PromptResponse { .. } | InboundEvent::PromptFailed { .. }
-        );
-        if is_prompt_terminal {
-            if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
-                abort.abort();
-            }
-            *self.prompt_task_abort.lock().await = None;
-        }
         let event_kind = session_reducer::inbound_event_kind(&event);
         let actions = {
             let mut driver = self.session_driver.lock().await;
@@ -196,6 +185,13 @@ impl AcpBackend {
             );
             actions
         };
+        let is_prompt_terminal = actions.completed_turn.is_some();
+        if is_prompt_terminal {
+            if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
+                abort.abort();
+            }
+            *self.prompt_task_abort.lock().await = None;
+        }
         self.dispatch_reducer_actions(actions).await;
         if is_prompt_terminal {
             self.maybe_start_idle_timer().await;

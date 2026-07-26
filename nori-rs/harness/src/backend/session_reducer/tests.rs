@@ -368,28 +368,74 @@ fn open_messages_finalized_into_transcript_on_completion() {
 }
 
 // =========================================================================
-// 4. Out-of-phase content
+// 4. Proactive content
 // =========================================================================
 
 #[test]
-fn notification_while_idle_emits_warning() {
+fn notification_while_idle_warns_and_remains_unowned() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
 
     let chunk = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
-        acp::ContentBlock::Text(acp::TextContent::new("stray content")),
+        acp::ContentBlock::Text(acp::TextContent::new("proactive content")),
     ));
     let out = reduce(&mut rt, notification(chunk), &mut norm);
 
-    // Should emit a warning
-    assert!(has_event(&out.events, |e| matches!(
-        e,
-        ClientEvent::Warning(_)
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::Warning(warning)
+            if warning.message == "Received update with no active local request"
     )));
-
-    // Should NOT create an active request
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::MessageDelta(delta) if delta.delta == "proactive content"
+    )));
     assert!(rt.active.is_none());
     assert_eq!(rt.phase, SessionPhase::Idle);
+}
+
+#[test]
+fn known_nori_status_updates_do_not_affect_an_owned_prompt() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+    let owned_request_id = rt
+        .active
+        .as_ref()
+        .expect("prompt should be active")
+        .request_id
+        .clone();
+
+    let working = reduce(
+        &mut rt,
+        notification(nori_status_update("working")),
+        &mut norm,
+    );
+    let idle = reduce(&mut rt, notification(nori_status_update("idle")), &mut norm);
+
+    assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
+    assert_eq!(
+        rt.active.as_ref().map(|active| &active.request_id),
+        Some(&owned_request_id)
+    );
+    for events in [&working.events, &idle.events] {
+        assert!(!has_event(events, |event| matches!(
+            event,
+            ClientEvent::SessionPhaseChanged(_)
+                | ClientEvent::PromptCompleted(_)
+                | ClientEvent::Warning(_)
+        )));
+    }
+}
+
+fn nori_status_update(status: &str) -> acp::SessionUpdate {
+    let mut meta = serde_json::Map::new();
+    meta.insert("nori".to_string(), serde_json::json!({ "status": status }));
+    acp::SessionUpdate::SessionInfoUpdate(acp::SessionInfoUpdate::new().meta(meta))
 }
 
 // =========================================================================
@@ -920,6 +966,34 @@ fn session_info_update_is_accepted_while_idle_and_emits_info_event() {
 }
 
 #[test]
+fn unknown_nori_status_remains_visible_session_metadata() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+    let mut meta = serde_json::Map::new();
+    meta.insert(
+        "nori".to_string(),
+        serde_json::json!({ "status": "paused" }),
+    );
+
+    let update = acp::SessionUpdate::SessionInfoUpdate(
+        acp::SessionInfoUpdate::new()
+            .title("Paused session")
+            .meta(meta),
+    );
+    let out = reduce(&mut rt, notification(update), &mut norm);
+
+    assert_eq!(
+        rt.persisted.session_info.title.as_deref(),
+        Some("Paused session")
+    );
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::SessionUpdateInfo(info)
+            if info.message.contains("Paused session")
+    )));
+}
+
+#[test]
 fn usage_update_is_accepted_while_idle_and_emits_info_event() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
@@ -1007,7 +1081,7 @@ fn prompt_failed_carries_failure_disposition_onto_completion() {
 }
 
 // =========================================================================
-// Orphan-update warning de-duplication
+// Unowned-update warning de-duplication
 // =========================================================================
 
 fn orphan_tool_update(call_id: &'static str) -> acp::SessionUpdate {
@@ -1024,10 +1098,10 @@ fn orphan_tool_update(call_id: &'static str) -> acp::SessionUpdate {
 fn count_orphan_warnings(events: &[ClientEvent]) -> usize {
     events
         .iter()
-        .filter(|e| match e {
-            ClientEvent::Warning(w) => w
-                .message
-                .contains("Received request-owned content update while no request is active"),
+        .filter(|event| match event {
+            ClientEvent::Warning(warning) => {
+                warning.message == "Received update with no active local request"
+            }
             _ => false,
         })
         .count()
@@ -1036,7 +1110,7 @@ fn count_orphan_warnings(events: &[ClientEvent]) -> usize {
 fn count_tool_snapshots(events: &[ClientEvent]) -> usize {
     events
         .iter()
-        .filter(|e| matches!(e, ClientEvent::ToolSnapshot(_)))
+        .filter(|event| matches!(event, ClientEvent::ToolSnapshot(_)))
         .count()
 }
 
@@ -1066,7 +1140,7 @@ fn orphan_warning_is_emitted_only_once_per_burst() {
         + count_orphan_warnings(&third.events);
     assert_eq!(
         warnings, 1,
-        "expected exactly one orphan warning across the burst"
+        "expected exactly one unowned-update warning across the burst"
     );
 
     let snapshots = count_tool_snapshots(&first.events)
@@ -1074,7 +1148,7 @@ fn orphan_warning_is_emitted_only_once_per_burst() {
         + count_tool_snapshots(&third.events);
     assert_eq!(
         snapshots, 3,
-        "every orphan update should still produce a tool snapshot"
+        "every unowned update should still produce a tool snapshot"
     );
 }
 
@@ -1114,7 +1188,7 @@ fn orphan_warning_resets_when_a_new_prompt_starts() {
     );
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
 
-    // Second burst after the new request — warning should fire again.
+    // A later unowned burst warns once again.
     let third = reduce(
         &mut rt,
         notification(orphan_tool_update("call-3")),
