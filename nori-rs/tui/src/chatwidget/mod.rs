@@ -180,7 +180,7 @@ pub(crate) struct ChatWidget {
     unpaired_prompt_error_ids: HashSet<nori_protocol::acp::v1::RequestId>,
     completed_client_tool_calls: HashSet<String>,
     client_event_normalizer: crate::presentation::ClientEventNormalizer,
-    replay_in_progress: bool,
+    replay_source: Option<nori_protocol::ReplaySource>,
     replay_message: Option<ReplayMessage>,
     // Accumulates the current reasoning block text to extract a header
     reasoning_buffer: String,
@@ -190,6 +190,9 @@ pub(crate) struct ChatWidget {
     current_status_header: String,
     // Previous status header to restore after a transient stream retry.
     conversation_id: Option<ConversationId>,
+    // The parent conversation id after a branch-at-head fork, shown as the
+    // `forked from:` row on the status card.
+    forked_from: Option<ConversationId>,
     frame_requester: FrameRequester,
     // Whether to include the initial welcome banner on session configured
     show_welcome_banner: bool,
@@ -239,6 +242,10 @@ pub(crate) struct ChatWidget {
     current_goal: Option<nori_protocol::ThreadGoal>,
     // Latest ACP capability snapshot projected into Nori client concepts.
     session_agent_capabilities: crate::presentation::AgentCapabilitiesView,
+    // Identity reported by the active agent during ACP initialization.
+    session_agent_info: Option<nori_protocol::acp::v1::Implementation>,
+    // Latest structured session metadata for status/footer consumers.
+    session_info_state: crate::nori::session_info::SessionInfoState,
     /// The agent-assigned ACP session id of the active session, when known
     /// (seeded by the resume path, refreshed by SessionConfigured).
     acp_session_id: Option<String>,

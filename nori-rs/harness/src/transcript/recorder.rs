@@ -111,10 +111,89 @@ impl TranscriptRecorder {
             cli_version: cli_version.to_string(),
             git: git_info,
             acp_session_id,
+            forked_from: None,
         };
 
         // Spawn background writer
         tokio::spawn(transcript_writer(file, rx, session_meta));
+
+        Ok(Self {
+            tx,
+            session_id,
+            project_id: project_id_info.id,
+            transcript_path,
+        })
+    }
+
+    /// Initialize a forked session seeded from a parent transcript.
+    ///
+    /// Mints a fresh session UUID, opens a new transcript file, and writes the
+    /// `SessionMeta` (recording `forked_from` lineage and the new ACP session
+    /// id) followed by `seed_entries` in a single batched write before
+    /// returning, so the fork does not incur a per-line fsync storm on large
+    /// parents.
+    pub async fn new_forked(
+        nori_home: &Path,
+        cwd: &Path,
+        agent: Option<String>,
+        cli_version: &str,
+        new_acp_session_id: String,
+        forked_from: String,
+        seed_entries: Vec<TranscriptEntry>,
+    ) -> io::Result<Self> {
+        let project_id_info = compute_project_id(cwd).await?;
+        let session_id = generate_session_id();
+
+        let project_dir = nori_home
+            .join(TRANSCRIPTS_DIR)
+            .join(BY_PROJECT_DIR)
+            .join(&project_id_info.id);
+        let sessions_dir = project_dir.join(SESSIONS_DIR);
+        tokio::fs::create_dir_all(&sessions_dir).await?;
+
+        let project_meta_path = project_dir.join(PROJECT_METADATA_FILE);
+        write_project_metadata(&project_meta_path, &project_id_info).await?;
+
+        let transcript_path = sessions_dir.join(format!("{session_id}.jsonl"));
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&transcript_path)
+            .await?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            tokio::fs::set_permissions(&transcript_path, perms).await?;
+        }
+
+        let git_info = collect_git_info(cwd).await;
+        let session_meta = SessionMetaEntry {
+            session_id: session_id.clone(),
+            project_id: project_id_info.id.clone(),
+            started_at: now_iso8601(),
+            cwd: cwd.to_path_buf(),
+            agent,
+            cli_version: cli_version.to_string(),
+            git: git_info,
+            acp_session_id: Some(new_acp_session_id),
+            forked_from: Some(forked_from),
+        };
+
+        // Batch the metadata line plus every seeded entry into a single write.
+        let mut batch = serialize_line(&TranscriptLine::new(TranscriptEntry::SessionMeta(
+            session_meta,
+        )))?;
+        for entry in seed_entries {
+            batch.push_str(&serialize_line(&TranscriptLine::new(entry))?);
+        }
+        file.write_all(batch.as_bytes()).await?;
+        file.flush().await?;
+
+        let (tx, rx) = mpsc::channel::<TranscriptCmd>(256);
+        tokio::spawn(run_writer_loop(file, rx));
 
         Ok(Self {
             tx,
@@ -199,7 +278,7 @@ impl TranscriptRecorder {
 /// Background writer task that processes commands and writes to file.
 async fn transcript_writer(
     mut file: File,
-    mut rx: mpsc::Receiver<TranscriptCmd>,
+    rx: mpsc::Receiver<TranscriptCmd>,
     session_meta: SessionMetaEntry,
 ) -> io::Result<()> {
     // Write session metadata as the first line
@@ -207,7 +286,11 @@ async fn transcript_writer(
     let line = TranscriptLine::new(meta_entry);
     write_line(&mut file, &line).await?;
 
-    // Process commands
+    run_writer_loop(file, rx).await
+}
+
+/// Process writer commands against an already-opened, already-seeded file.
+async fn run_writer_loop(mut file: File, mut rx: mpsc::Receiver<TranscriptCmd>) -> io::Result<()> {
     while let Some(cmd) = rx.recv().await {
         match cmd {
             TranscriptCmd::Write(entry) => {
@@ -232,10 +315,16 @@ async fn transcript_writer(
     Ok(())
 }
 
-/// Write a single JSONL line to the file.
-async fn write_line(file: &mut File, line: &TranscriptLine) -> io::Result<()> {
+/// Serialize a transcript line into its newline-terminated JSONL form.
+fn serialize_line(line: &TranscriptLine) -> io::Result<String> {
     let mut json = serde_json::to_string(line)?;
     json.push('\n');
+    Ok(json)
+}
+
+/// Write a single JSONL line to the file.
+async fn write_line(file: &mut File, line: &TranscriptLine) -> io::Result<()> {
+    let json = serialize_line(line)?;
     file.write_all(json.as_bytes()).await?;
     file.flush().await?;
     Ok(())

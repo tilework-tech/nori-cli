@@ -47,15 +47,42 @@ pub enum AcpEvent {
 }
 ```
 
+`NoriEvent` has exactly sixteen outer variants:
+
+```rust
+pub enum NoriEvent {
+    SessionStarted(SessionStarted),
+    SessionPhaseChanged(SessionPhase),
+    SessionEnded(SessionEnded),
+    QueueChanged(QueueSnapshot),
+    ReplayStarted(ReplayStarted),
+    ReplayFinished,
+    ContextCompacted(ContextCompactedEvent),
+    SessionForked(SessionForked),
+    GoalChanged(Option<ThreadGoal>),
+    CapabilitiesChanged(NoriCapabilities),
+    Undo(UndoEvent),
+    UserShell(UserShellEvent),
+    HookOutput(HookOutput),
+    PromptSummaryUpdated(PromptSummary),
+    Notice(Notice),
+    RequestFailed(RequestFailure),
+}
+```
+
 `NoriEvent` carries harness-owned lifecycle and product behavior that has no
-ACP event of its own. This includes session phase and termination, queue and
-replay boundaries, compaction, goals, undo, user-shell and hook output,
-notices, and classified failures. A `session/update` received without a locally
-owned request remains a schema-native, unowned update; no synthetic request ID
-or source attribution is added. Proactive presentation has no public Nori
+ACP event of its own. A `session/update` received without a locally owned
+request remains a schema-native, unowned update; no synthetic request ID or
+source attribution is added. Proactive presentation has no public Nori
 completion event; owned prompts complete through their correlated raw ACP
 prompt response. The source-owned event boundary is defined in
 [`session_event.rs`](src/session_event.rs).
+
+`SessionForked` is emitted when branch-at-head `/fork` forks the transcript. It
+carries `previous_conversation_id` (the now-frozen parent conversation),
+`new_conversation_id` (the fresh conversation seeded from the parent and made
+active), and `new_acp_session_id` (the forked ACP session). It is recorded into
+the new conversation, not the parent.
 
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the

@@ -155,6 +155,19 @@ pub struct SessionUpdateInfo {
     pub hint: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<session_runtime::SessionUsageState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_info_patch: Option<SessionInfoPatch>,
+}
+
+/// Structured ACP session metadata retained alongside the legacy text
+/// projection so UI consumers can render it without parsing a message.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SessionInfoPatch {
+    pub title: MaybeUndefined<String>,
+    pub updated_at: MaybeUndefined<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<acp::Meta>,
 }
 
 /// Emitted when the agent reports its active mode has changed.
@@ -1076,6 +1089,11 @@ fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> Ses
         message,
         hint: None,
         usage: None,
+        session_info_patch: Some(SessionInfoPatch {
+            title: update.title.clone(),
+            updated_at: update.updated_at.clone(),
+            meta: update.meta.clone(),
+        }),
     }
 }
 
@@ -1128,6 +1146,7 @@ fn session_update_info_from_usage(update: &acp::UsageUpdate) -> SessionUpdateInf
                 .as_ref()
                 .map(|cost| format!("{:.2} {}", cost.amount, cost.currency)),
         }),
+        session_info_patch: None,
     }
 }
 

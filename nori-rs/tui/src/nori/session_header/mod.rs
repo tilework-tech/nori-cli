@@ -402,6 +402,9 @@ pub(crate) struct NoriSessionHeaderCell {
     /// The local conversation id, rendered on the `session:` row for every
     /// agent. Absent on the session-start welcome card before it is assigned.
     conversation_id: Option<ConversationId>,
+    /// The parent conversation id after a branch-at-head fork, rendered on the
+    /// `forked from:` row so the previous (resumable) session stays visible.
+    forked_from: Option<ConversationId>,
     /// Cloud session identity when attached to a cloud (live-reattach) session.
     /// When present, the `session:` line appends the broker title; on the
     /// compact welcome card it also suppresses the misleading local `directory:`
@@ -429,6 +432,7 @@ impl NoriSessionHeaderCell {
             token_breakdown: None,
             status_info: StatusCardInfo::default(),
             conversation_id: None,
+            forked_from: None,
             cloud_session: None,
         }
     }
@@ -453,6 +457,7 @@ impl NoriSessionHeaderCell {
         token_breakdown: Option<TranscriptTokenUsage>,
         cloud_session: Option<CloudSessionInfo>,
         conversation_id: Option<ConversationId>,
+        forked_from: Option<ConversationId>,
         status_info: StatusCardInfo,
     ) -> Self {
         let skillset = read_active_skillset(&directory);
@@ -470,6 +475,7 @@ impl NoriSessionHeaderCell {
             token_breakdown,
             status_info,
             conversation_id,
+            forked_from,
             cloud_session,
         }
     }
@@ -527,6 +533,15 @@ impl HistoryCell for NoriSessionHeaderCell {
                 None => base,
             };
             lines.push(status_row("session:", vec![Span::from(session_display)]));
+        }
+
+        // Forked-from line: the parent conversation after a branch-at-head fork,
+        // which stays resumable via `nori resume <id>`.
+        if let Some(forked_from) = self.forked_from {
+            lines.push(status_row(
+                "forked from:",
+                vec![Span::from(forked_from.to_string())],
+            ));
         }
 
         // Agent line
@@ -718,6 +733,7 @@ pub(crate) fn new_nori_status_output(
     token_breakdown: Option<TranscriptTokenUsage>,
     cloud_session: Option<CloudSessionInfo>,
     conversation_id: Option<ConversationId>,
+    forked_from: Option<ConversationId>,
     status_info: StatusCardInfo,
 ) -> CompositeHistoryCell {
     let command = PlainHistoryCell::new(vec!["/status".magenta().into()]);
@@ -729,6 +745,7 @@ pub(crate) fn new_nori_status_output(
         token_breakdown,
         cloud_session,
         conversation_id,
+        forked_from,
         status_info,
     );
 

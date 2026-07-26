@@ -251,6 +251,7 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
                 total_tokens: 258_400,
                 cost_display: None,
             }),
+            session_info_patch: None,
         },
     ));
 
@@ -331,6 +332,7 @@ textarea_top_right = [
                 total_tokens: 258_400,
                 cost_display: None,
             }),
+            session_info_patch: None,
         },
     ));
     assert!(drain_insert_history(&mut rx).is_empty());
@@ -391,6 +393,7 @@ footer_left = [
                 total_tokens: 258_400,
                 cost_display: None,
             }),
+            session_info_patch: None,
         },
     ));
     assert!(drain_insert_history(&mut rx).is_empty());

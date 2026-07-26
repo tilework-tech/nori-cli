@@ -87,6 +87,9 @@ impl AcpBackend {
                 }
                 debug!("Swapped active ACP session: {:?}", new_session_id);
                 *self.session_id.write().await = new_session_id.clone();
+                if matches!(mode, SessionSwapMode::ForkFromHead { .. }) {
+                    self.fork_transcript(&new_session_id).await;
+                }
                 self.forward_client_event(ClientEvent::SessionCapabilitiesChanged(
                     nori_client_mcp::capabilities_update_for_nori_client(
                         &self.connection,
@@ -104,6 +107,72 @@ impl AcpBackend {
                 Err(err)
             }
         }
+    }
+
+    /// Fork the active transcript into a fresh conversation seeded from the
+    /// parent, freezing the parent on disk and swapping the active recorder +
+    /// conversation id to the child.
+    ///
+    /// Best-effort: transcript persistence is non-fatal, so any failure is
+    /// logged and the ACP session swap still stands. Emits the public
+    /// `SessionForked` event after the swap so the event and all subsequent
+    /// entries record into the child transcript.
+    async fn fork_transcript(&self, new_acp_session_id: &acp::SessionId) {
+        let Some(parent_recorder) = self.transcript_recorder.read().await.clone() else {
+            return;
+        };
+        let previous_conversation_id = parent_recorder.session_id().to_string();
+
+        // Freeze the parent before seeding from its file on disk.
+        if let Err(error) = parent_recorder.flush().await {
+            warn!("Failed to flush parent transcript before fork: {error}");
+            return;
+        }
+        let seed_entries =
+            match crate::transcript::read_seed_entries(parent_recorder.transcript_path()).await {
+                Ok(entries) => entries,
+                Err(error) => {
+                    warn!("Failed to read parent transcript for fork: {error}");
+                    return;
+                }
+            };
+
+        let forked = match TranscriptRecorder::new_forked(
+            &self.nori_home,
+            &self.cwd,
+            Some(self.agent_name.clone()),
+            &self.cli_version,
+            new_acp_session_id.to_string(),
+            previous_conversation_id.clone(),
+            seed_entries,
+        )
+        .await
+        {
+            Ok(recorder) => recorder,
+            Err(error) => {
+                warn!("Failed to create forked transcript: {error}");
+                return;
+            }
+        };
+        let new_conversation_id = forked.session_id().to_string();
+
+        // Swap the active recorder + conversation id BEFORE emitting the event
+        // so the event and every later entry record into the child.
+        *self.transcript_recorder.write().await = Some(Arc::new(forked));
+        if let Ok(conversation_id) = ConversationId::from_string(&new_conversation_id) {
+            *self.conversation_id.write().await = conversation_id;
+        }
+
+        self.backend_event_tx
+            .send(BackendEvent::Public(SessionEvent::Nori(
+                nori_protocol::NoriEvent::SessionForked(nori_protocol::SessionForked {
+                    previous_conversation_id,
+                    new_conversation_id,
+                    new_acp_session_id: new_acp_session_id.clone(),
+                }),
+            )))
+            .await
+            .ok();
     }
 
     /// Branch the conversation at its current head via ACP `session/fork`,

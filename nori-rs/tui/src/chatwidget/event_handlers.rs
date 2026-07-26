@@ -25,14 +25,14 @@ impl ChatWidget {
                 nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
             ) => {
                 // Classify live proactive activity before projecting the same update for display.
-                if !self.replay_in_progress {
+                if self.replay_source.is_none() {
                     self.handle_proactive_session_update(&notification.update);
                 }
                 let events = self
                     .client_event_normalizer
                     .push_session_update(&notification.update);
                 for event in events {
-                    if self.replay_in_progress {
+                    if self.replay_source.is_some() {
                         self.handle_replay_client_event(event);
                     } else {
                         self.handle_client_event(event);
@@ -60,6 +60,8 @@ impl ChatWidget {
                 response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
                 ..
             } => {
+                self.session_agent_info = response.agent_info;
+                self.session_info_state.reset();
                 let capabilities = response.agent_capabilities;
                 self.session_agent_capabilities = crate::presentation::AgentCapabilitiesView {
                     http_mcp: capabilities.mcp_capabilities.http,
@@ -265,17 +267,40 @@ impl ChatWidget {
                 nori_protocol::HookOutputLevel::Warn => self.on_warning(output.message),
                 nori_protocol::HookOutputLevel::Error => self.on_error(output.message),
             },
-            nori_protocol::NoriEvent::ReplayStarted(_) => {
+            nori_protocol::NoriEvent::ReplayStarted(started) => {
                 self.flush_answer_stream_with_separator();
                 self.flush_replay_message();
-                self.replay_in_progress = true;
+                self.replay_source = Some(started.source);
             }
             nori_protocol::NoriEvent::ReplayFinished => {
                 self.flush_replay_message();
-                self.replay_in_progress = false;
+                self.replay_source = None;
             }
             nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
+            // TODO(#557): render forked-transcript lineage in the TUI history.
+            nori_protocol::NoriEvent::SessionForked(forked) => {
+                self.on_session_forked(forked);
+            }
         }
+    }
+
+    fn on_session_forked(&mut self, forked: nori_protocol::SessionForked) {
+        // The active conversation is now the forked child; the parent stays
+        // resumable and is surfaced as `forked from:` on the status card.
+        self.conversation_id =
+            nori_harness::ConversationId::from_string(&forked.new_conversation_id).ok();
+        self.forked_from =
+            nori_harness::ConversationId::from_string(&forked.previous_conversation_id).ok();
+
+        let mut lines: Vec<Line<'static>> = vec!["Session forked. To resume previous:".into()];
+        if let Some(previous) = &self.forked_from {
+            lines.push(
+                crate::resume_command_for_conversation(previous)
+                    .cyan()
+                    .into(),
+            );
+        }
+        self.add_plain_history_lines(lines);
     }
 
     fn on_session_started(&mut self, event: nori_protocol::SessionStarted) {
@@ -706,7 +731,19 @@ impl ChatWidget {
                     return;
                 }
                 self.clear_pending_goal_edit_if_no_goal(&update);
-                if update.kind == crate::presentation::SessionUpdateKind::Usage
+                if let Some(patch) = update.session_info_patch.as_ref() {
+                    let origin = crate::nori::session_info::SessionInfoOrigin::from_replay_source(
+                        self.replay_source,
+                    );
+                    self.session_info_state.apply(patch, origin);
+                    let display = crate::nori::session_info::display(
+                        self.session_agent_info.as_ref(),
+                        self.bottom_pane.agent_display_name(),
+                        patch,
+                        origin,
+                    );
+                    self.add_to_history(display.history_cell());
+                } else if update.kind == crate::presentation::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
                 {
                     self.bottom_pane.set_session_usage(Some(usage));

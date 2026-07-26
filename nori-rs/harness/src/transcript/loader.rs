@@ -497,6 +497,27 @@ impl TranscriptLoader {
     }
 }
 
+/// Read a transcript file's entries for seeding a forked transcript.
+///
+/// Drops the leading `SessionMeta` line (the fork mints its own metadata) and
+/// returns the remaining entries in order. Reuses the tolerant transcript
+/// loader so unrecognized legacy entries are skipped rather than aborting the
+/// fork.
+pub(crate) async fn read_seed_entries(path: &Path) -> io::Result<Vec<TranscriptEntry>> {
+    let transcript = load_transcript_from_path(path).await?;
+    Ok(transcript
+        .entries
+        .into_iter()
+        .filter_map(|line| {
+            if let TranscriptEntry::SessionMeta(_) = line.entry {
+                None
+            } else {
+                Some(line.entry)
+            }
+        })
+        .collect())
+}
+
 /// Count the number of session files in a directory.
 async fn count_sessions(sessions_path: &Path) -> io::Result<usize> {
     if !sessions_path.exists() {

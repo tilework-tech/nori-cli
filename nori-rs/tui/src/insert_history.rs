@@ -40,7 +40,8 @@ fn merged_line_spans(line: &Line<'_>) -> Vec<Span<'static>> {
 /// (avoids direct stdout references).
 ///
 /// Returns `true` if lines were actually inserted, `false` if there was no
-/// room above the viewport (area.top() == 0).
+/// usable room above the viewport (area.top() <= 1; scroll-region insertion
+/// needs at least two rows above the viewport to form a valid DECSTBM region).
 pub fn insert_history_lines<B>(
     terminal: &mut crate::custom_terminal::Terminal<B>,
     lines: Vec<Line>,
@@ -87,13 +88,25 @@ where
         area.top().saturating_sub(1)
     };
 
-    // No room above the viewport for history lines.
-    if area.top() == 0 {
+    // No usable room above the viewport for history lines. Scroll-region
+    // insertion needs a region spanning at least rows 1..2 (1-based): DECSTBM
+    // requires the bottom margin to exceed the top margin, so a region ending
+    // at row 1 (area.top() <= 1) is degenerate and terminals fall back to a
+    // full-screen scroll region, scrolling the viewport itself.
+    if area.top() <= 1 {
         tracing::warn!(
-            "insert_history_lines: no room above viewport (area.top()==0), skipping {} lines",
+            "insert_history_lines: no usable room above viewport (area.top()=={}), skipping {} lines",
+            area.top(),
             lines.len()
         );
-        let _ = writer;
+        // The scroll-down branch above may have moved the viewport and the
+        // cursor; keep the call cursor-position-neutral and persist the moved
+        // viewport so terminal state stays consistent. Without that branch
+        // nothing was queued, so stay byte-silent.
+        if should_update_area {
+            queue!(writer, MoveTo(last_cursor_pos.x, last_cursor_pos.y))?;
+            terminal.set_viewport_area(area);
+        }
         return Ok(false);
     }
 
@@ -518,6 +531,202 @@ mod tests {
             after,
             "viewport content was corrupted by insert_history_lines when area.top()==0"
         );
+    }
+
+    /// When exactly one row exists above the viewport (area.top() == 1), the
+    /// insertion scroll region degenerates to a single row. DECSTBM requires
+    /// the bottom margin to exceed the top margin, so terminals (and the vt100
+    /// parser used here) ignore the degenerate region and fall back to a
+    /// full-screen scroll region — every inserted line then scrolls the
+    /// viewport itself. The viewport content must survive insertion.
+    #[test]
+    fn single_row_above_viewport_does_not_corrupt_display() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Viewport occupies rows 1..10, leaving exactly one row above.
+        let viewport = Rect::new(0, 1, width, height - 1);
+        term.set_viewport_area(viewport);
+
+        term.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for i in 0..area.height {
+                let text = format!("Viewport row {i}");
+                buf.set_string(area.x, area.y + i, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let before: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        assert!(
+            before[1].contains("Viewport row 0"),
+            "draw did not reach the vt100 screen; test would be vacuous, got: {before:?}"
+        );
+
+        // Insert a batch larger than the single row above the viewport.
+        let lines: Vec<Line> = (0..8).map(|i| Line::from(format!("History {i}"))).collect();
+        insert_history_lines(&mut term, lines).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let after: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+
+        // Insertion is a no-op here (no usable room), so the whole screen —
+        // including the single free row above the viewport — must be unchanged.
+        pretty_assertions::assert_eq!(
+            before,
+            after,
+            "screen content was corrupted by insert_history_lines when area.top()==1"
+        );
+    }
+
+    /// With only one row above the viewport, a multi-line batch cannot be
+    /// inserted through a scroll region. insert_history_lines must report
+    /// that the lines were NOT inserted so callers retain them.
+    #[test]
+    fn single_row_above_viewport_returns_false() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        let viewport = Rect::new(0, 1, width, height - 1);
+        term.set_viewport_area(viewport);
+
+        let lines: Vec<Line> = (0..8).map(|i| Line::from(format!("History {i}"))).collect();
+        let inserted = insert_history_lines(&mut term, lines).expect("insert");
+        assert!(
+            !inserted,
+            "insert_history_lines should return false when area.top() == 1"
+        );
+    }
+
+    /// A viewport at y == 0 that leaves room below is first scrolled down to
+    /// make space. When that scroll amount is 1, the viewport lands at y == 1
+    /// and the subsequent insertion hits the same degenerate scroll region.
+    /// The viewport content must survive.
+    #[test]
+    fn viewport_scrolled_down_to_row_one_does_not_corrupt_display() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Viewport at the very top with room below; a 1-line insert scrolls
+        // it down by exactly one row.
+        let viewport_h: u16 = 5;
+        let viewport = Rect::new(0, 0, width, viewport_h);
+        term.set_viewport_area(viewport);
+
+        term.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for i in 0..area.height {
+                let text = format!("Viewport row {i}");
+                buf.set_string(area.x, area.y + i, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let inserted =
+            insert_history_lines(&mut term, vec![Line::from("History entry")]).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // With the viewport scrolled down to row 1, there is still no usable
+        // scroll region, so the line must be reported as not inserted.
+        assert!(
+            !inserted,
+            "insert_history_lines should return false when the scroll-down lands the viewport at y==1"
+        );
+
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+
+        // The 1-line insert scrolls the viewport down by exactly one row, and
+        // the early return must persist that move on the terminal.
+        let vp_start = rows
+            .iter()
+            .position(|r| r.contains("Viewport row 0"))
+            .unwrap_or_else(|| panic!("viewport content lost after insertion, rows: {rows:?}"));
+        pretty_assertions::assert_eq!(
+            vp_start,
+            1,
+            "viewport should have been scrolled down exactly one row"
+        );
+        pretty_assertions::assert_eq!(
+            term.viewport_area.y,
+            1,
+            "moved viewport position should be persisted on early return"
+        );
+        for i in 0..viewport_h as usize {
+            let row_text = &rows[vp_start + i];
+            assert!(
+                row_text.contains(&format!("Viewport row {i}")),
+                "viewport row {i} corrupted after scroll-down insertion, got: {row_text:?}"
+            );
+        }
+    }
+
+    /// The deferral at y == 1 is self-healing: retrying the same insert (as
+    /// Tui::draw does with retained pending lines) scrolls the viewport
+    /// further down, succeeds, and places the line above the viewport.
+    #[test]
+    fn insertion_retry_succeeds_after_deferral_at_row_one() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        let viewport_h: u16 = 5;
+        term.set_viewport_area(Rect::new(0, 0, width, viewport_h));
+
+        term.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for i in 0..area.height {
+                let text = format!("Viewport row {i}");
+                buf.set_string(area.x, area.y + i, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // First attempt: the viewport scrolls down to y=1 and the insert is
+        // deferred (degenerate region).
+        let first =
+            insert_history_lines(&mut term, vec![Line::from("History entry")]).expect("insert");
+        assert!(!first, "first insert should be deferred at y==1");
+
+        // Retry with the same line, as Tui::draw does with retained pending
+        // lines. The viewport scrolls to y=2, opening a valid region.
+        let second =
+            insert_history_lines(&mut term, vec![Line::from("History entry")]).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+        assert!(second, "retried insert should succeed once room exists");
+
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        let history_row = rows
+            .iter()
+            .position(|r| r.contains("History entry"))
+            .unwrap_or_else(|| panic!("history line should appear after retry, rows: {rows:?}"));
+        let vp_start = rows
+            .iter()
+            .position(|r| r.contains("Viewport row 0"))
+            .unwrap_or_else(|| panic!("viewport content lost after retry, rows: {rows:?}"));
+        assert!(
+            history_row < vp_start,
+            "history (row {history_row}) should sit above the viewport (row {vp_start})"
+        );
+        for i in 0..viewport_h as usize {
+            let row_text = &rows[vp_start + i];
+            assert!(
+                row_text.contains(&format!("Viewport row {i}")),
+                "viewport row {i} corrupted after retry, got: {row_text:?}"
+            );
+        }
     }
 
     /// insert_history_lines must return false when area.top() == 0

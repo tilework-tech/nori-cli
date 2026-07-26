@@ -34,6 +34,7 @@ pub use loader::SessionMetadata;
 pub use loader::Transcript;
 pub use loader::TranscriptLoader;
 pub use loader::TranscriptRecord;
+pub(crate) use loader::read_seed_entries;
 pub use project::ProjectId;
 pub use project::compute_project_id;
 pub use recorder::TranscriptRecorder;

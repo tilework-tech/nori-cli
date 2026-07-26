@@ -1,14 +1,13 @@
 ---
-source: tui/src/nori/session_header.rs
-assertion_line: 2117
+source: tui/src/nori/session_header/tests.rs
 expression: rendered
 ---
 ╭──────────────────────────────────────────────────────────────╮
 │ Nori CLI v0.1.0                                              │
 │                                                              │
-│ directory: /home/user/project                                │
-│ agent:     claude-sonnet                                     │
-│ skillset:  senior-swe                                        │
+│ directory:   /home/user/project                              │
+│ agent:       claude-sonnet                                   │
+│ skillset:    senior-swe                                      │
 │                                                              │
 │ Instruction Files                                            │
 │   /home/user/project/.claude/settings.md                     │
