@@ -138,36 +138,27 @@ fn nori_status_update(status: &str) -> nori_protocol::SessionEvent {
 }
 
 #[test]
-fn observed_user_message_renders_without_echoing_local_prompts() {
+fn proactive_turn_status_bounds_unowned_output_without_echoing_owned_prompts() {
     let (mut observer, mut observer_rx, _op_rx) = make_chatwidget_manual();
     let observer_generation = observer.session_generation;
-    observer.handle_session_event(
-        observer_generation,
-        replay_text_chunk(
-            crate::presentation::MessageStream::User,
-            "observed-user",
-            "what's the status here so far?",
-        ),
-    );
     observer.handle_session_event(observer_generation, nori_status_update("working"));
     observer.handle_session_event(
         observer_generation,
         replay_text_chunk(
+            crate::presentation::MessageStream::User,
+            "proactive-user",
+            "what's the status here so far?",
+        ),
+    );
+    observer.handle_session_event(
+        observer_generation,
+        replay_text_chunk(
             crate::presentation::MessageStream::Answer,
-            "observed-answer",
+            "proactive-answer",
             "No implementation work has started.",
         ),
     );
     observer.handle_session_event(observer_generation, nori_status_update("idle"));
-    observer.handle_session_event(
-        observer_generation,
-        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ObservedTurnCompleted(
-            nori_protocol::ObservedTurnCompleted {
-                stop_reason: nori_protocol::acp::v1::StopReason::EndTurn,
-                last_agent_message: Some("No implementation work has started.".to_string()),
-            },
-        )),
-    );
 
     let observer_history = drain_insert_history(&mut observer_rx)
         .into_iter()
@@ -177,7 +168,7 @@ fn observed_user_message_renders_without_echoing_local_prompts() {
 › what's the status here so far?
 
 
-────────────────────────────────────────────────────────────────────────────────
+─ Worked for 0s ────────────────────────────────────────────────────────────────
 
 • No implementation work has started.
 ");
@@ -202,6 +193,88 @@ fn observed_user_message_renders_without_echoing_local_prompts() {
     );
 
     assert!(drain_insert_history(&mut initiator_rx).is_empty());
+}
+
+#[test]
+fn proactive_turn_does_not_enable_owned_request_controls() {
+    let (mut cancel_chat, mut cancel_rx, _op_rx) = make_chatwidget_manual();
+    let cancel_generation = cancel_chat.session_generation;
+
+    cancel_chat.handle_session_event(cancel_generation, nori_status_update("working"));
+    cancel_chat.on_ctrl_c();
+
+    let cancel_actions = std::iter::from_fn(|| cancel_rx.try_recv().ok())
+        .filter_map(|event| match event {
+            AppEvent::HarnessAction(action) => Some(action),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        !cancel_actions
+            .iter()
+            .any(|action| matches!(action, crate::app_event::HarnessAction::Cancel)),
+        "{cancel_actions:#?}"
+    );
+
+    let (mut command_chat, mut command_rx, _op_rx) = make_chatwidget_manual();
+    let command_generation = command_chat.session_generation;
+    command_chat.handle_session_event(command_generation, nori_status_update("working"));
+    command_chat.dispatch_command(SlashCommand::New);
+
+    assert!(std::iter::from_fn(|| command_rx.try_recv().ok())
+        .any(|event| matches!(event, AppEvent::NewSession)));
+}
+
+#[test]
+fn owned_prompt_start_separates_statusless_proactive_output() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let request_id = nori_protocol::acp::v1::RequestId::Str("local-prompt".to_string());
+
+    chat.handle_session_event(
+        generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "proactive-answer",
+            "Agent-initiated update.",
+        ),
+    );
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionPhaseChanged(
+            nori_protocol::SessionPhase::Prompting {
+                request_id: request_id.clone(),
+            },
+        )),
+    );
+    chat.handle_session_event(
+        generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "owned-answer",
+            "Owned response.",
+        ),
+    );
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            request_id,
+            response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(
+                nori_protocol::acp::v1::PromptResponse::new(
+                    nori_protocol::acp::v1::StopReason::EndTurn,
+                ),
+            )),
+        }),
+    );
+
+    let answers = drain_insert_history(&mut rx)
+        .into_iter()
+        .map(|lines| lines_to_single_string(&lines))
+        .filter(|cell| cell.contains("Agent-initiated update.") || cell.contains("Owned response."))
+        .collect::<Vec<_>>();
+    assert_eq!(answers.len(), 2, "{answers:#?}");
+    assert!(answers[0].contains("Agent-initiated update."));
+    assert!(answers[1].contains("Owned response."));
 }
 
 #[test]

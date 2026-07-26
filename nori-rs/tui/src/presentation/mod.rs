@@ -469,7 +469,8 @@ impl ClientEventNormalizer {
                 })]
             }
             acp::SessionUpdate::SessionInfoUpdate(update) => {
-                if nori_observer_status(update).is_some() {
+                // Hide only exact Nori lifecycle frames; preserve all displayable metadata.
+                if is_nori_turn_status_only(update) {
                     Vec::new()
                 } else {
                     vec![ClientEvent::SessionUpdateInfo(
@@ -1078,8 +1079,24 @@ fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> Ses
     }
 }
 
-fn nori_observer_status(update: &acp::SessionInfoUpdate) -> Option<&str> {
-    update.meta.as_ref()?.get("nori")?.get("status")?.as_str()
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoriTurnStatus {
+    Working,
+    Idle,
+}
+
+pub(crate) fn nori_turn_status(update: &acp::SessionInfoUpdate) -> Option<NoriTurnStatus> {
+    match update.meta.as_ref()?.get("nori")?.get("status")?.as_str()? {
+        "working" => Some(NoriTurnStatus::Working),
+        "idle" => Some(NoriTurnStatus::Idle),
+        _ => None,
+    }
+}
+
+fn is_nori_turn_status_only(update: &acp::SessionInfoUpdate) -> bool {
+    nori_turn_status(update).is_some()
+        && update.title.is_undefined()
+        && update.updated_at.is_undefined()
 }
 
 fn format_maybe_undefined_field(label: &str, value: &MaybeUndefined<String>) -> Option<String> {

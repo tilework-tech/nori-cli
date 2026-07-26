@@ -42,7 +42,6 @@ pub enum AcpEvent {
 pub enum NoriEvent {
     SessionStarted(SessionStarted),
     SessionPhaseChanged(SessionPhase),
-    ObservedTurnCompleted(ObservedTurnCompleted),
     SessionEnded(SessionEnded),
     QueueChanged(QueueSnapshot),
     ReplayStarted(ReplayStarted),
@@ -77,12 +76,6 @@ pub enum SessionPhase {
     Loading { request_id: RequestId },
     Prompting { request_id: RequestId },
     Cancelling { request_id: RequestId },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ObservedTurnCompleted {
-    pub stop_reason: acp::v1::StopReason,
-    pub last_agent_message: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

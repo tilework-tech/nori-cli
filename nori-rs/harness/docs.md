@@ -151,15 +151,19 @@ is terminal for that one prompt.
 
 An active local prompt or load owns request-scoped updates until its response.
 Without one, the reducer accepts, preserves, and projects each update as
-unowned proactive activity without fabricating a request ID or attribution.
-This applies to stdio agents, attached clients, and other transports. Ordinary
-metadata does not imply a turn; the Nori Sessions broker's optional
-`_meta.nori.status` values sharpen proactive presentation, with `working`
-starting or confirming activity and `idle` completing it. Without those hints,
-updates remain valid and render without an invented completion. This logic
-lives in
+unowned activity without warning, a synthetic request or `Prompting` phase, or
+invented attribution. User, agent, thought, plan, and tool updates all follow
+that rule; unowned tool snapshots retain `owner_request_id = None`, and an
+unknown tool update is normalized from a default tool call rather than
+discarded. This logic lives in
 [`session_reducer.rs`](src/backend/session_reducer.rs) and
 [`session_runtime_driver.rs`](src/backend/session_runtime_driver.rs).
+
+The public stream forwards raw ACP session metadata unchanged. The harness does
+not interpret metadata as prompt completion or publish a proactive-completion
+event, so proactive presentation cannot drain the queue, end cancellation, or
+change request state. Optional presentation hints are interpreted only by the
+TUI, as described in [`nori-tui`](../tui/docs.md).
 
 Session end reasons are:
 

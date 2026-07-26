@@ -179,7 +179,6 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
         request_id.clone(),
         prompt.clone(),
     ));
-    runtime.orphan_update_warning_emitted = false;
 
     // Add user message to transcript.
     if let Some(display_text) = &prompt.display_text
@@ -404,7 +403,6 @@ fn reduce_load_submit(
         request_id: request_id.clone(),
     };
     runtime.active = Some(ActiveRequestState::new_loading(request_id));
-    runtime.orphan_update_warning_emitted = false;
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
 }
@@ -447,47 +445,9 @@ fn reduce_notification(
         "Reducer received session/update"
     );
 
-    if let Some(status) = nori_observer_status(&update) {
-        if status == "idle"
-            && runtime
-                .active
-                .as_ref()
-                .is_some_and(|active| active.prompt.is_none())
-        {
-            reduce_prompt_response(runtime, acp::StopReason::EndTurn, out);
-        }
-        return;
-    }
-
     // Session metadata updates are accepted in any phase.
     if is_session_metadata_update(&update) {
         reduce_metadata_update(runtime, &update, normalizer, out);
-        return;
-    }
-
-    if runtime.active.is_none() && matches!(update, acp::SessionUpdate::UserMessageChunk(_)) {
-        let request_id = acp::RequestId::Str("nori-observed-turn".to_string());
-        runtime.phase = SessionPhase::Prompt {
-            request_id: request_id.clone(),
-            cancelling: false,
-        };
-        runtime.active = Some(ActiveRequestState::new_loading(request_id));
-        runtime.orphan_update_warning_emitted = false;
-        out.events
-            .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
-    }
-
-    // Request-owned content requires an active request.
-    if runtime.active.is_none() {
-        if !runtime.orphan_update_warning_emitted {
-            out.events.push(ClientEvent::Warning(WarningInfo {
-                message: "Received request-owned content update while no request is active"
-                    .to_string(),
-            }));
-            runtime.orphan_update_warning_emitted = true;
-        }
-        let client_events = normalizer.push_session_update(&update);
-        out.events.extend(client_events);
         return;
     }
 
@@ -552,13 +512,6 @@ fn reduce_notification(
     }
 
     out.events.extend(client_events);
-}
-
-fn nori_observer_status(update: &acp::SessionUpdate) -> Option<&str> {
-    let acp::SessionUpdate::SessionInfoUpdate(update) = update else {
-        return None;
-    };
-    update.meta.as_ref()?.get("nori")?.get("status")?.as_str()
 }
 
 fn reduce_metadata_update(

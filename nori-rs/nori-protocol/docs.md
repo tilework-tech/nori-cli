@@ -52,11 +52,9 @@ ACP event of its own. This includes session phase and termination, queue and
 replay boundaries, compaction, goals, undo, user-shell and hook output,
 notices, and classified failures. A `session/update` received without a locally
 owned request remains a schema-native, unowned update; no synthetic request ID
-or source attribution is added. `ObservedTurnCompleted` is the current
-transitional presentation bridge when an optional Nori status hint supplies a
-definite proactive boundary, not ACP semantics or a correctness requirement.
-Owned prompts complete through their correlated raw ACP prompt response. The
-source-owned event boundary is defined in
+or source attribution is added. Proactive presentation has no public Nori
+completion event; owned prompts complete through their correlated raw ACP
+prompt response. The source-owned event boundary is defined in
 [`session_event.rs`](src/session_event.rs).
 
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
@@ -73,6 +71,9 @@ exact ACP wire `RequestId` for harness-issued operations.
 - Nori owns only behavior around the ACP session: lifecycle, queueing, replay,
   compaction, goals, undo, user-shell output, hooks, summaries, notices, and
   failures that have no ACP response.
+- Proactive output remains raw `SessionEvent::Acp` traffic. Presentation
+  grouping and optional lifecycle hints stay private to consumers such as
+  [`nori-tui`](../tui/docs.md).
 - The crate contains no reducer, normalizer, parser, formatter, transcript
   compatibility decoder, or presentation state.
 - `ReplayStarted` and `ReplayFinished` bracket historical ACP notifications

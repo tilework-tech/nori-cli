@@ -37,11 +37,23 @@ The application event loop matches `SessionEvent::Acp` and
 - Request-scoped updates belong to the active local prompt or load when one
   exists; otherwise the TUI preserves and renders each update as unowned
   proactive activity without warning, dropping, or invented attribution,
-  regardless of source or transport. Ordinary metadata does not imply a turn.
-  The Nori broker's optional `_meta.nori.status` values sharpen presentation:
-  `working` starts or confirms proactive activity and `idle` completes it;
-  without them, the TUI does not invent completion. `ObservedTurnCompleted` is
-  the current bridge for that hinted boundary pending simplification. This
+  regardless of source or transport. Any unowned user, agent, thought, plan,
+  tool-call, or tool-update content starts or confirms proactive presentation.
+  Without a status hint, a later locally owned prompt or load start flushes and
+  separates that output without inventing completion.
+- The chat widget tracks local prompt ownership as
+  `owned_prompt_request_id` and keeps a separate private
+  `proactive_turn_active` presentation bit. The latter groups output,
+  display-only status, statistics, and explicit-idle notifications. It does not
+  set the bottom pane's operational task-running flag, so Ctrl-C cancellation,
+  interrupt hints, and in-task command gating remain tied to locally owned
+  requests. It never drives queue, cancel, loop, ACP phase, or request state.
+- Ordinary metadata does not imply a turn. The Nori Sessions broker's optional
+  `_meta.nori.status` extension sharpens presentation only when no locally
+  owned prompt or load is active: exact `working` starts or confirms proactive
+  presentation and exact `idle` completes it. Unknown values remain ordinary
+  session metadata. Known status-only frames are hidden; a known status
+  combined with `title` or `updated_at` still displays those fields. This
   distinction lives in
   [`event_handlers.rs`](src/chatwidget/event_handlers.rs) and
   [`presentation/mod.rs`](src/presentation/mod.rs).

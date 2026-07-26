@@ -2,7 +2,6 @@ use super::*;
 
 use crate::normalized::ClientEvent;
 use crate::normalized::ClientEventNormalizer;
-use crate::normalized::PromptCompleted;
 use crate::normalized::session_runtime::QueuedPrompt;
 use crate::normalized::session_runtime::QueuedPromptKind;
 use crate::normalized::session_runtime::SessionPhase;
@@ -35,7 +34,6 @@ pub(crate) struct ReducerActions {
     pub events: Vec<ClientEvent>,
     pub side_effects: Vec<SideEffect>,
     pub completed_turn: Option<CompletedTurn>,
-    pub observed_turn_completed: Option<PromptCompleted>,
 }
 
 fn client_event_kind(event: &ClientEvent) -> &'static str {
@@ -81,17 +79,7 @@ impl SessionDriver {
                 .and_then(|active| active.prompt.clone())
         })
         .flatten();
-        let is_local_completion = completed_prompt.is_some();
-
         let out = reduce(&mut self.runtime, event, &mut self.normalizer);
-        let observed_turn_completed = if is_local_completion {
-            None
-        } else {
-            out.events.iter().find_map(|event| match event {
-                ClientEvent::PromptCompleted(completed) => Some(completed.clone()),
-                _ => None,
-            })
-        };
         let completed_turn = completed_prompt.and_then(|prompt| {
             out.events.iter().find_map(|event| match event {
                 ClientEvent::PromptCompleted(completed) => Some(CompletedTurn {
@@ -107,7 +95,6 @@ impl SessionDriver {
             events: out.events,
             side_effects: out.side_effects,
             completed_turn,
-            observed_turn_completed,
         }
     }
 
@@ -198,8 +185,7 @@ impl AcpBackend {
             );
             actions
         };
-        let is_prompt_terminal =
-            actions.completed_turn.is_some() || actions.observed_turn_completed.is_some();
+        let is_prompt_terminal = actions.completed_turn.is_some();
         if is_prompt_terminal {
             if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
                 abort.abort();
@@ -307,7 +293,6 @@ impl AcpBackend {
     }
 
     async fn dispatch_reducer_actions(&self, actions: ReducerActions) {
-        let observed_turn_completed = actions.observed_turn_completed.clone();
         match actions.completed_turn.as_ref().map(|turn| turn.prompt.kind) {
             // Summarize-and-swap compaction defers `PromptCompleted` until after
             // the session swap, so the new session is active before the UI sees
@@ -338,20 +323,6 @@ impl AcpBackend {
                     self.handle_completed_turn(&completed_turn).await;
                 }
             }
-        }
-
-        if let Some(completed) = observed_turn_completed {
-            let _ = self
-                .backend_event_tx
-                .send(BackendEvent::Public(SessionEvent::Nori(
-                    nori_protocol::NoriEvent::ObservedTurnCompleted(
-                        nori_protocol::ObservedTurnCompleted {
-                            stop_reason: completed.stop_reason,
-                            last_agent_message: completed.last_agent_message,
-                        },
-                    ),
-                )))
-                .await;
         }
 
         for side_effect in actions.side_effects {

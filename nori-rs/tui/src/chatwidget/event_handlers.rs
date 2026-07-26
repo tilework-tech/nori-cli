@@ -24,6 +24,10 @@ impl ChatWidget {
             nori_protocol::AcpEvent::Notification(
                 nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
             ) => {
+                // Classify live proactive activity before projecting the same update for display.
+                if !self.replay_in_progress {
+                    self.handle_proactive_session_update(&notification.update);
+                }
                 let events = self
                     .client_event_normalizer
                     .push_session_update(&notification.update);
@@ -69,8 +73,8 @@ impl ChatWidget {
             nori_protocol::AcpEvent::Response {
                 request_id,
                 response: Ok(nori_protocol::acp::v1::AgentResponse::PromptResponse(response)),
-            } if self.active_prompt_request_id.as_ref() == Some(&request_id) => {
-                self.active_prompt_request_id = None;
+            } if self.owned_prompt_request_id.as_ref() == Some(&request_id) => {
+                self.owned_prompt_request_id = None;
                 self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
                     stop_reason: response.stop_reason,
                     last_agent_message: None,
@@ -81,7 +85,7 @@ impl ChatWidget {
                 request_id,
                 response: Err(error),
             } => {
-                if self.active_prompt_request_id.as_ref() == Some(&request_id) {
+                if self.owned_prompt_request_id.as_ref() == Some(&request_id) {
                     if !self.unpaired_prompt_error_ids.remove(&request_id) {
                         self.unpaired_prompt_error_ids.insert(request_id);
                     }
@@ -95,12 +99,83 @@ impl ChatWidget {
         }
     }
 
+    fn handle_proactive_session_update(&mut self, update: &nori_protocol::acp::v1::SessionUpdate) {
+        // Known Nori statuses refine presentation only when no local request owns the turn.
+        if let nori_protocol::acp::v1::SessionUpdate::SessionInfoUpdate(info) = update
+            && let Some(status) = crate::presentation::nori_turn_status(info)
+        {
+            if self.locally_owned_request_active() {
+                return;
+            }
+            match status {
+                crate::presentation::NoriTurnStatus::Working => self.start_proactive_turn(),
+                crate::presentation::NoriTurnStatus::Idle => self.complete_proactive_turn(),
+            }
+            return;
+        }
+
+        // Any unowned turn content is valid proactive activity, even without status hints.
+        if !self.locally_owned_request_active() && is_turn_content_update(update) {
+            self.start_proactive_turn();
+        }
+    }
+
+    fn locally_owned_request_active(&self) -> bool {
+        self.owned_prompt_request_id.is_some()
+            || matches!(
+                self.acp_session_phase,
+                Some(
+                    crate::presentation::session_runtime::SessionPhaseView::Loading
+                        | crate::presentation::session_runtime::SessionPhaseView::Prompt
+                        | crate::presentation::session_runtime::SessionPhaseView::Cancelling
+                )
+            )
+    }
+
+    fn start_proactive_turn(&mut self) {
+        if !self.proactive_turn_active {
+            self.proactive_turn_active = true;
+            self.start_task_presentation(false);
+        }
+    }
+
+    fn separate_proactive_turn(&mut self) {
+        self.record_proactive_assistant_message();
+        self.proactive_turn_active = false;
+        self.flush_answer_stream_with_separator();
+    }
+
+    fn complete_proactive_turn(&mut self) {
+        if self.proactive_turn_active {
+            self.record_proactive_assistant_message();
+            self.proactive_turn_active = false;
+            self.finish_task_presentation(None, true);
+        }
+    }
+
+    fn record_proactive_assistant_message(&mut self) {
+        if self.assistant_stream_seen_for_stats {
+            self.session_stats.record_assistant_message();
+        }
+        self.assistant_stream_seen_for_stats = false;
+    }
+
     fn handle_nori_event(&mut self, event: nori_protocol::NoriEvent) {
         match event {
             nori_protocol::NoriEvent::SessionStarted(started) => {
                 self.on_session_started(started);
             }
             nori_protocol::NoriEvent::SessionPhaseChanged(phase) => {
+                // A local request boundary separates statusless proactive output without completing it.
+                if self.proactive_turn_active
+                    && matches!(
+                        phase,
+                        nori_protocol::SessionPhase::Loading { .. }
+                            | nori_protocol::SessionPhase::Prompting { .. }
+                    )
+                {
+                    self.separate_proactive_turn();
+                }
                 let phase = match phase {
                     nori_protocol::SessionPhase::Idle => {
                         crate::presentation::session_runtime::SessionPhaseView::Idle
@@ -109,23 +184,15 @@ impl ChatWidget {
                         crate::presentation::session_runtime::SessionPhaseView::Loading
                     }
                     nori_protocol::SessionPhase::Prompting { request_id } => {
-                        self.active_prompt_request_id = Some(request_id);
+                        self.owned_prompt_request_id = Some(request_id);
                         crate::presentation::session_runtime::SessionPhaseView::Prompt
                     }
                     nori_protocol::SessionPhase::Cancelling { request_id } => {
-                        self.active_prompt_request_id = Some(request_id);
+                        self.owned_prompt_request_id = Some(request_id);
                         crate::presentation::session_runtime::SessionPhaseView::Cancelling
                     }
                 };
                 self.handle_client_phase_changed(phase);
-            }
-            nori_protocol::NoriEvent::ObservedTurnCompleted(completed) => {
-                self.active_prompt_request_id = None;
-                self.handle_client_prompt_completed(crate::presentation::PromptCompleted {
-                    stop_reason: completed.stop_reason,
-                    last_agent_message: completed.last_agent_message,
-                    failure: None,
-                });
             }
             nori_protocol::NoriEvent::SessionEnded(ended) => match ended.reason {
                 nori_protocol::SessionEndReason::Shutdown => {
@@ -165,7 +232,7 @@ impl ChatWidget {
             nori_protocol::NoriEvent::RequestFailed(failure) => {
                 let completes_active_prompt =
                     failure.request_id.as_ref().is_some_and(|request_id| {
-                        self.active_prompt_request_id.as_ref() == Some(request_id)
+                        self.owned_prompt_request_id.as_ref() == Some(request_id)
                     });
                 if completes_active_prompt
                     && let Some(request_id) = failure.request_id.as_ref()
@@ -175,7 +242,7 @@ impl ChatWidget {
                 }
                 if completes_active_prompt {
                     self.on_error(failure.message);
-                    self.active_prompt_request_id = None;
+                    self.owned_prompt_request_id = None;
                     let failure = match failure.kind {
                         nori_protocol::RequestFailureKind::Retryable => {
                             crate::presentation::TurnFailure::Retryable
@@ -317,9 +384,18 @@ impl ChatWidget {
     // Raw reasoning uses the same flow as summarized reasoning
 
     pub(super) fn on_task_started(&mut self) {
+        self.start_task_presentation(true);
+    }
+
+    fn start_task_presentation(&mut self, owned: bool) {
         self.bottom_pane.clear_ctrl_c_quit_hint();
-        self.bottom_pane.set_task_running(true);
-        self.bottom_pane.set_interrupt_hint_visible(true);
+        // Owned requests enable task controls; proactive work gets display-only status.
+        if owned {
+            self.bottom_pane.set_task_running(true);
+        } else {
+            self.bottom_pane.ensure_status_indicator();
+        }
+        self.bottom_pane.set_interrupt_hint_visible(owned);
         self.set_status_header(crate::status_indicator_widget::pick_status_message(
             self.config.custom_working_messages,
             &self.config.custom_working_message_list,
@@ -333,6 +409,23 @@ impl ChatWidget {
     }
 
     pub(super) fn on_task_complete(&mut self, last_agent_message: Option<String>) {
+        self.finish_task_presentation(last_agent_message, true);
+
+        // Loop mode: if iterations remain, fire the next iteration.
+        if let Some(remaining) = self.loop_remaining
+            && remaining > 0
+            && let Some(prompt) = self.first_prompt_text.clone()
+        {
+            let total = self.loop_total.unwrap_or(0);
+            self.app_event_tx.send(AppEvent::LoopIteration {
+                prompt,
+                remaining: remaining - 1,
+                total,
+            });
+        }
+    }
+
+    fn finish_task_presentation(&mut self, last_agent_message: Option<String>, notify: bool) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
 
@@ -353,21 +446,10 @@ impl ChatWidget {
                 agent: Some(self.config.active_agent.clone()),
             });
 
-        // Emit a notification when the turn completes (suppressed if focused).
-        self.notify(Notification::AgentTurnComplete {
-            response: last_agent_message.unwrap_or_default(),
-        });
-
-        // Loop mode: if iterations remain, fire the next iteration.
-        if let Some(remaining) = self.loop_remaining
-            && remaining > 0
-            && let Some(prompt) = self.first_prompt_text.clone()
-        {
-            let total = self.loop_total.unwrap_or(0);
-            self.app_event_tx.send(AppEvent::LoopIteration {
-                prompt,
-                remaining: remaining - 1,
-                total,
+        if notify {
+            // Emit a notification when the turn completes (suppressed if focused).
+            self.notify(Notification::AgentTurnComplete {
+                response: last_agent_message.unwrap_or_default(),
             });
         }
     }
@@ -654,7 +736,8 @@ impl ChatWidget {
     fn handle_client_message_delta(&mut self, message_delta: crate::presentation::MessageDelta) {
         match message_delta.stream {
             crate::presentation::MessageStream::User => {
-                if self.active_prompt_request_id.is_none() && !message_delta.delta.is_empty() {
+                // A user chunk is an echo only while a local prompt owns the turn.
+                if self.owned_prompt_request_id.is_none() && !message_delta.delta.is_empty() {
                     self.session_stats.record_user_message();
                     self.add_to_history(history_cell::new_user_prompt(message_delta.delta));
                     self.request_redraw();
@@ -1009,6 +1092,19 @@ impl ChatWidget {
             self.flush_active_cell();
         }
     }
+}
+
+fn is_turn_content_update(update: &nori_protocol::acp::v1::SessionUpdate) -> bool {
+    // Session metadata and capability changes do not by themselves begin a proactive turn.
+    matches!(
+        update,
+        nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(_)
+            | nori_protocol::acp::v1::SessionUpdate::AgentMessageChunk(_)
+            | nori_protocol::acp::v1::SessionUpdate::AgentThoughtChunk(_)
+            | nori_protocol::acp::v1::SessionUpdate::Plan(_)
+            | nori_protocol::acp::v1::SessionUpdate::ToolCall(_)
+            | nori_protocol::acp::v1::SessionUpdate::ToolCallUpdate(_)
+    )
 }
 
 fn approval_request_from_client_event(

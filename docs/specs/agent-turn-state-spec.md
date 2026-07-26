@@ -103,7 +103,9 @@ Properties:
 - `cancelling` means `session/cancel` has been sent for the active prompt, but
   the prompt still remains in flight until its response arrives.
 
-There is no second TUI-owned turn FSM beyond this.
+There is no second request-lifecycle FSM beyond this. The TUI may retain
+presentation-only state for grouping proactive output, but that state does not
+own ACP requests or change this phase.
 
 ### `PersistedSessionState`
 
@@ -168,12 +170,12 @@ The buffer exists only inside the active request. It must never survive into
 
 ### `ToolSnapshot`
 
-Tool snapshots persist across turns, but each one records which request created
-it.
+Tool snapshots persist across turns. They record a local owner when a request
+created them, while unowned updates remain ownerless.
 
 ```rust
 struct ToolSnapshot {
-    owner_request_id: JsonRpcId,
+    owner_request_id: Option<JsonRpcId>,
     status: ToolStatus,
     title: String,
     kind: ToolKind,
@@ -184,8 +186,9 @@ struct ToolSnapshot {
 }
 ```
 
-`owner_request_id` is required so that cancellation, stale updates, and
-request-local rendering stay precise without heuristics.
+`owner_request_id` is `Some(active.request_id)` for locally owned tool activity
+and `None` for unowned activity. The client never invents ownership from
+timing.
 
 ### `OutgoingQueue`
 
@@ -225,8 +228,10 @@ This is not an optimization. It is a correctness requirement. ACP explicitly
 calls out that unordered handling can allow a request response to overtake a
 prior `session/update`, which makes turn completion ambiguous in practice.
 
-The backend reduces state first, then emits derived UI events. The TUI consumes
-those projections. It does not race the backend for authority.
+The harness reducer maintains private phase, persisted state, and local request
+ownership while separately forwarding raw ACP traffic. The TUI builds its own
+private display projections from that public traffic; neither projection
+changes ACP ownership or semantics.
 
 ## Routing Rules
 
@@ -273,35 +278,40 @@ More specifically:
 - `agent_message_chunk` appends only to `active.open_agent_message`
 - `agent_thought_chunk` appends only to `active.open_thought_message`
 - `plan` patches `persisted.plan`
-- `tool_call` creates or replaces `persisted.tool_calls[toolCallId]`, sets
-  `owner_request_id = active.request_id`, and adds the id to
-  `active.tool_call_ids`
+- `tool_call` creates or replaces `persisted.tool_calls[toolCallId]`; when
+  active, it records that request as owner and adds the id to
+  `active.tool_call_ids`, otherwise ownership remains `None`
 
 The client never invents a turn owner when ACP did not provide one.
 
 ### 3. Proactive unowned updates
 
-Well-formed request-scoped content received with `active.is_none()` is an
-unowned update and valid proactive activity. Accept, preserve, and render it
-without warning or dropping it merely because no local request owns it. Do not
-reopen `active`, fabricate a request ID or completion signal, or attribute the
-content to an earlier or later local request.
+Well-formed user, agent, thought, plan, or tool content received with
+`active.is_none()` is an unowned update and valid proactive activity. The
+harness normalizes and projects it without warning, reopening `active`,
+fabricating a request ID or completion signal, or attributing it to an earlier
+or later local request. An idle user chunk therefore does not create a
+synthetic prompt phase.
 
-Lifecycle hints may sharpen presentation boundaries but are optional. Without
-one, continue rendering unowned updates and wait for a definite later boundary
-such as explicit idle or session termination; keep proactive presentation
-separate when a local request begins.
+The harness forwards schema-native ACP metadata and does not use it to complete
+a prompt or proactive turn. Proactive boundaries are private TUI presentation:
+any unowned user, agent, thought, plan, or tool update starts or confirms that
+presentation. Without a lifecycle hint, content still renders, and a later
+local prompt or load start flushes and separates the proactive output without
+fabricating completion.
 
 Nori's brokered Sessions product may send status-only `SessionInfoUpdate`
 notifications with `_meta.nori.status`:
 
-- `working` explicitly starts or confirms proactive work when no local request
-  is active
-- `idle` explicitly completes that proactive work
+- exact `working` starts or confirms proactive presentation when no local
+  prompt or load is active
+- exact `idle` completes proactive presentation under the same condition
 
-This Nori product extension is not the definition of proactive turns and is not
-required for correctness. Session metadata otherwise remains session metadata
-and does not imply a turn.
+The TUI hides a known status-only frame. If the same frame also carries
+`title` or `updated_at`, those fields remain visible. Unknown status values are
+ordinary session metadata. This optional Nori product extension is not the
+definition of proactive turns and never drives harness queue, cancellation,
+loop, or request state.
 
 ### 4. Attributed tool updates
 
@@ -310,10 +320,11 @@ and does not imply a turn.
 Rules:
 
 - if `persisted.tool_calls` already contains the id, patch that snapshot
-- if the id is unknown, emit `UiEvent::Warning` and ignore the update
+- if the id is unknown, normalize it from a default `ToolCall`, apply the
+  update, and persist the resulting snapshot
 
-Tool snapshots are persisted session state. Their ownership is explicit via
-`owner_request_id`, not inferred from timing.
+Tool snapshots are persisted session state. Their optional ownership is
+explicit via `owner_request_id`, not inferred from timing.
 
 ### 5. Permission requests
 
@@ -381,7 +392,9 @@ active until the response to the original `session/prompt` arrives.
 
 ### Prompt response handling
 
-The response to `session/prompt` is the only prompt-turn boundary.
+The response to `session/prompt` is the only locally owned prompt-turn
+boundary. Proactive presentation does not create an active backend prompt and
+does not publish a separate Nori completion event.
 
 When the response to the active prompt arrives, the reducer performs one ordered
 completion step:
@@ -454,8 +467,9 @@ between "continue immediately" and "surface the next queued draft for editing."
 
 ## UI Event Surface
 
-The backend may project reduced state into UI events, but those events are not a
-second source of truth.
+The harness may project reduced state into private client events for its own
+behavior, but those events are not a public protocol or a second source of
+truth.
 
 A flat event model is sufficient:
 
@@ -485,9 +499,10 @@ enum SessionPhaseView {
 }
 ```
 
-The TUI reads these events as projections of backend-owned state. If a piece of
-logic needs to know whether a prompt is active, it should ask the backend-owned
-session runtime, not infer it from timing or event order.
+The TUI instead normalizes raw public ACP traffic for display and observes Nori
+phase events for locally owned lifecycle. Its proactive presentation bit may
+group unowned output, but it cannot complete a prompt or mutate harness-owned
+request state.
 
 ## Non-Goals
 
@@ -505,7 +520,7 @@ design.
 
 Future changes should be rejected if they introduce any of these smells:
 
-- the TUI and backend both track whether a prompt is active
+- TUI presentation state becomes an authority for ACP request lifecycle
 - owned-turn completion is inferred from anything other than the request
   response
 - open message buffers survive across request completion
