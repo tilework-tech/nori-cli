@@ -179,6 +179,7 @@ fn start_prompt(runtime: &mut SessionRuntime, prompt: QueuedPrompt, out: &mut Re
         request_id.clone(),
         prompt.clone(),
     ));
+    runtime.orphan_update_warning_emitted = false;
 
     // Add user message to transcript.
     if let Some(display_text) = &prompt.display_text
@@ -403,6 +404,7 @@ fn reduce_load_submit(
         request_id: request_id.clone(),
     };
     runtime.active = Some(ActiveRequestState::new_loading(request_id));
+    runtime.orphan_update_warning_emitted = false;
     out.events
         .push(ClientEvent::SessionPhaseChanged(runtime.phase_view()));
 }
@@ -449,6 +451,14 @@ fn reduce_notification(
     if is_session_metadata_update(&update) {
         reduce_metadata_update(runtime, &update, normalizer, out);
         return;
+    }
+
+    // Warn once for content that no local prompt or load owns.
+    if runtime.active.is_none() && !runtime.orphan_update_warning_emitted {
+        out.events.push(ClientEvent::Warning(WarningInfo {
+            message: "Received update with no active local request".to_string(),
+        }));
+        runtime.orphan_update_warning_emitted = true;
     }
 
     // Route to specific handlers.

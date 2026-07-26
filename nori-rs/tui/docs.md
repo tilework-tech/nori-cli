@@ -36,11 +36,12 @@ The application event loop matches `SessionEvent::Acp` and
   live config, capability, and available-command presentation.
 - Request-scoped updates belong to the active local prompt or load when one
   exists; otherwise the TUI preserves and renders each update as unowned
-  proactive activity without warning, dropping, or invented attribution,
-  regardless of source or transport. Any unowned user, agent, thought, plan,
-  tool-call, or tool-update content starts or confirms proactive presentation.
-  Without a status hint, a later locally owned prompt or load start flushes and
-  separates that output without inventing completion.
+  proactive activity without dropping or invented attribution, regardless of
+  source or transport. The harness also emits one warning for the unowned
+  burst without changing that presentation. Any unowned user, agent, thought,
+  plan, tool-call, or tool-update content starts or confirms proactive
+  presentation. Without a status hint, a later locally owned prompt or load
+  start flushes and separates that output without inventing completion.
 - The chat widget tracks local prompt ownership as
   `owned_prompt_request_id` and keeps a separate private
   `proactive_turn_active` presentation bit. The latter groups output,

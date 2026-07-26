@@ -56,8 +56,8 @@ This design follows those boundaries exactly.
 - while a local request is active, request-scoped updates belong to that
   request
 - without a local request, request-scoped updates are proactive, unowned
-  activity; accept, preserve, and render them without warning or dropping them
-  merely because ownership is absent
+  activity; warn once per unowned burst, but accept, preserve, and render the
+  updates without dropping them merely because ownership is absent
 - never invent a request ID or assign proactive activity to an earlier or later
   local request
 
@@ -288,10 +288,12 @@ The client never invents a turn owner when ACP did not provide one.
 
 Well-formed user, agent, thought, plan, or tool content received with
 `active.is_none()` is an unowned update and valid proactive activity. The
-harness normalizes and projects it without warning, reopening `active`,
-fabricating a request ID or completion signal, or attributing it to an earlier
-or later local request. An idle user chunk therefore does not create a
-synthetic prompt phase.
+harness normalizes and projects it after emitting `Received update with no
+active local request` for the first non-metadata update in the unowned burst.
+Later updates do not repeat the warning until a local prompt or load starts.
+The warning does not reopen `active`, fabricate a request ID or completion
+signal, or attribute the update to an earlier or later local request. An idle
+user chunk therefore does not create a synthetic prompt phase.
 
 The harness forwards schema-native ACP metadata and does not use it to complete
 a prompt or proactive turn. Proactive boundaries are private TUI presentation:

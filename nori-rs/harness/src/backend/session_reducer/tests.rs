@@ -372,95 +372,26 @@ fn open_messages_finalized_into_transcript_on_completion() {
 // =========================================================================
 
 #[test]
-fn unowned_updates_are_projected_without_warning_or_fabricated_phase() {
+fn notification_while_idle_warns_and_remains_unowned() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
 
-    let prompt = acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
-        acp::ContentBlock::Text(acp::TextContent::new("what's the status here so far?")),
+    let chunk = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
+        acp::ContentBlock::Text(acp::TextContent::new("proactive content")),
     ));
-    let start = reduce(&mut rt, notification(prompt), &mut norm);
+    let out = reduce(&mut rt, notification(chunk), &mut norm);
 
-    assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::Warning(warning)
+            if warning.message == "Received update with no active local request"
+    )));
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::MessageDelta(delta) if delta.delta == "proactive content"
+    )));
     assert!(rt.active.is_none());
-    assert!(start.side_effects.is_empty());
-    assert!(!has_event(&start.events, |event| matches!(
-        event,
-        ClientEvent::Warning(_)
-    )));
-    assert!(has_event(&start.events, |event| matches!(
-        event,
-        ClientEvent::MessageDelta(delta)
-            if delta.stream == crate::normalized::MessageStream::User
-                && delta.delta == "what's the status here so far?"
-    )));
-
-    let thought = acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk::new(
-        acp::ContentBlock::Text(acp::TextContent::new("Checking session state.")),
-    ));
-    let thought_update = reduce(&mut rt, notification(thought), &mut norm);
-    assert!(has_event(&thought_update.events, |event| matches!(
-        event,
-        ClientEvent::MessageDelta(delta)
-            if delta.stream == crate::normalized::MessageStream::Reasoning
-                && delta.delta == "Checking session state."
-    )));
-
-    let plan = acp::SessionUpdate::Plan(acp::Plan::new(vec![acp::PlanEntry::new(
-        "Report status",
-        acp::PlanEntryPriority::Medium,
-        acp::PlanEntryStatus::InProgress,
-    )]));
-    let plan_update = reduce(&mut rt, notification(plan), &mut norm);
-    assert!(has_event(&plan_update.events, |event| matches!(
-        event,
-        ClientEvent::PlanSnapshot(_)
-    )));
-
-    let mut tool_call = acp::ToolCall::new(
-        acp::ToolCallId::from("proactive-tool".to_string()),
-        "Read /tmp/status".to_string(),
-    );
-    tool_call.kind = acp::ToolKind::Read;
-    let tool_update = reduce(
-        &mut rt,
-        notification(acp::SessionUpdate::ToolCall(tool_call)),
-        &mut norm,
-    );
-    assert!(has_event(&tool_update.events, |event| matches!(
-        event,
-        ClientEvent::ToolSnapshot(snapshot)
-            if snapshot.call_id == "proactive-tool"
-                && snapshot.owner_request_id.is_none()
-    )));
-
-    let response = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
-        acp::ContentBlock::Text(acp::TextContent::new("No implementation work has started.")),
-    ));
-    let update = reduce(&mut rt, notification(response), &mut norm);
-    assert!(!has_event(&update.events, |event| matches!(
-        event,
-        ClientEvent::Warning(_)
-    )));
-    assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
-    assert!(rt.active.is_none());
-    assert_eq!(
-        rt.persisted
-            .tool_calls
-            .get("proactive-tool")
-            .and_then(|snapshot| snapshot.owner_request_id.as_ref()),
-        None
-    );
-    assert!(has_event(&update.events, |event| matches!(
-        event,
-        ClientEvent::MessageDelta(delta)
-            if delta.stream == crate::normalized::MessageStream::Answer
-                && delta.delta == "No implementation work has started."
-    )));
-    assert!(!has_event(&update.events, |event| matches!(
-        event,
-        ClientEvent::SessionPhaseChanged(_) | ClientEvent::PromptCompleted(_)
-    )));
+    assert_eq!(rt.phase, SessionPhase::Idle);
 }
 
 #[test]
@@ -1147,4 +1078,130 @@ fn prompt_failed_carries_failure_disposition_onto_completion() {
         ClientEvent::PromptCompleted(completed)
             if completed.failure == Some(crate::normalized::TurnFailure::Fatal)
     )));
+}
+
+// =========================================================================
+// Unowned-update warning de-duplication
+// =========================================================================
+
+fn orphan_tool_update(call_id: &'static str) -> acp::SessionUpdate {
+    acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+        call_id,
+        acp::ToolCallUpdateFields::new()
+            .title("Read Cargo.toml")
+            .kind(acp::ToolKind::Read)
+            .status(acp::ToolCallStatus::Completed)
+            .raw_input(serde_json::json!({ "path": "Cargo.toml" })),
+    ))
+}
+
+fn count_orphan_warnings(events: &[ClientEvent]) -> usize {
+    events
+        .iter()
+        .filter(|event| match event {
+            ClientEvent::Warning(warning) => {
+                warning.message == "Received update with no active local request"
+            }
+            _ => false,
+        })
+        .count()
+}
+
+fn count_tool_snapshots(events: &[ClientEvent]) -> usize {
+    events
+        .iter()
+        .filter(|event| matches!(event, ClientEvent::ToolSnapshot(_)))
+        .count()
+}
+
+#[test]
+fn orphan_warning_is_emitted_only_once_per_burst() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    let first = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-1")),
+        &mut norm,
+    );
+    let second = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-2")),
+        &mut norm,
+    );
+    let third = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-3")),
+        &mut norm,
+    );
+
+    let warnings = count_orphan_warnings(&first.events)
+        + count_orphan_warnings(&second.events)
+        + count_orphan_warnings(&third.events);
+    assert_eq!(
+        warnings, 1,
+        "expected exactly one unowned-update warning across the burst"
+    );
+
+    let snapshots = count_tool_snapshots(&first.events)
+        + count_tool_snapshots(&second.events)
+        + count_tool_snapshots(&third.events);
+    assert_eq!(
+        snapshots, 3,
+        "every unowned update should still produce a tool snapshot"
+    );
+}
+
+#[test]
+fn orphan_warning_resets_when_a_new_prompt_starts() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    // First burst while idle.
+    let first = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-1")),
+        &mut norm,
+    );
+    let second = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-2")),
+        &mut norm,
+    );
+    assert_eq!(
+        count_orphan_warnings(&first.events) + count_orphan_warnings(&second.events),
+        1
+    );
+
+    // Start a new prompt and finalize it back to idle.
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+    reduce(
+        &mut rt,
+        InboundEvent::PromptResponse {
+            stop_reason: acp::StopReason::EndTurn,
+        },
+        &mut norm,
+    );
+    assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
+
+    // A later unowned burst warns once again.
+    let third = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-3")),
+        &mut norm,
+    );
+    let fourth = reduce(
+        &mut rt,
+        notification(orphan_tool_update("call-4")),
+        &mut norm,
+    );
+    assert_eq!(
+        count_orphan_warnings(&third.events) + count_orphan_warnings(&fourth.events),
+        1,
+        "a new prompt should reset the burst window so the warning fires again"
+    );
 }

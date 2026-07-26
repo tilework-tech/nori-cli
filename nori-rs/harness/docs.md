@@ -151,11 +151,14 @@ is terminal for that one prompt.
 
 An active local prompt or load owns request-scoped updates until its response.
 Without one, the reducer accepts, preserves, and projects each update as
-unowned activity without warning, a synthetic request or `Prompting` phase, or
-invented attribution. User, agent, thought, plan, and tool updates all follow
-that rule; unowned tool snapshots retain `owner_request_id = None`, and an
-unknown tool update is normalized from a default tool call rather than
-discarded. This logic lives in
+unowned activity. The first non-metadata update in an unowned burst emits
+`Received update with no active local request`; later updates do not repeat the
+warning until a local prompt or load starts. The warning does not create a
+synthetic request or `Prompting` phase, invent attribution, or prevent
+projection. User, agent, thought, plan, and tool updates all follow that rule;
+unowned tool snapshots retain `owner_request_id = None`, and an unknown tool
+update is normalized from a default tool call rather than discarded. This
+logic lives in
 [`session_reducer.rs`](src/backend/session_reducer.rs) and
 [`session_runtime_driver.rs`](src/backend/session_runtime_driver.rs).
 
