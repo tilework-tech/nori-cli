@@ -7,67 +7,66 @@
 | **Client** | An ACP client, such as the Nori CLI or a webchat, that communicates with an **agent**. | Harness, peer, observer |
 | **Agent** | An ACP server that performs work and emits requests, responses, and **session updates**. | Model, provider, backend |
 | **Agent session** | One persistent ACP conversation between an **agent** and one or more clients. | Chat, thread, broker session |
+| **Client connection** | One client's protocol relationship to an **agent session** and the perspective from which ownership is classified. | Peer, socket, observer |
 
 ## Turn ownership
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
-| **Turn** | A client-visible interval of agent work classified by which side controls its local lifecycle. | Request, task, conversation |
-| **Client-owned turn** | The ACP v1 turn initiated by this client with a **prompt request** and bounded by its correlated response. | Local turn, owned turn, normal turn |
-| **Agent-owned turn** | Agent work received without an **active client request**, modeled locally until ACP exposes agent-initiated turns directly. | Proactive turn, observed turn, remote turn, agent-led turn |
-| **Active client request** | An outstanding prompt or load request issued by this client that owns related updates. | Active turn, local request |
-| **Unowned update** | A non-metadata **session update** received without an **active client request**. | Orphan update, stray update, request-owned update |
-| **Agent-owned presentation** | TUI-only state that groups and renders an **agent-owned turn** without changing ACP request state. | Proactive presentation, synthetic turn |
+| **Prompt turn** | The ACP v1 turn that begins with `session/prompt` and ends with its correlated response. | Request, task, conversation |
+| **Client-owned turn** | A **prompt turn** viewed from the **client connection** that sent its prompt request. | Local turn, owned turn, normal turn |
+| **Agent-owned turn** | A Nori extension turn established on a **client connection** by explicit agent-turn metadata rather than a local prompt request. | Proactive turn, observed turn, remote turn, agent-led turn |
+| **Turn ownership** | The connection-relative classification of a turn as client-owned or agent-owned. | Initiator, authority, control |
+| **Unowned update** | A non-metadata **session update** received outside a locally active prompt turn. | Orphan update, stray update, agent-owned turn |
+| **Unowned presentation** | TUI-only grouping used to render **unowned updates** without asserting that an ACP turn exists. | Proactive presentation, synthetic turn |
 
-## Protocol and diagnostics
-
-| Term | Definition | Aliases to avoid |
-| --- | --- | --- |
-| **Prompt request** | The ACP `session/prompt` request that starts a **client-owned turn**. | Prompt, user message |
-| **Session update** | An ACP `session/update` notification carrying content or session metadata. | Event, message, chunk |
-| **Unowned-update warning window** | The interval in which only the first **unowned update** emits the no-active-client-request warning. | Proactive turn, warning burst |
-
-The warning text is `Received update with no active local request`. It is
-diagnostic: the update is still accepted, preserved, and rendered.
-
-## Nori Sessions metadata
+## Protocol
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
-| **Session broker** | The Nori service that shares an **agent session** across clients and may supply Nori-specific metadata. | Turn owner, agent |
-| **Nori agent-turn status** | An optional `working` or `idle` value in `_meta.nori.status` that sharpens **agent-owned presentation**. | Session status, lifecycle event |
-| **Status-only frame** | Session metadata containing a recognized **Nori agent-turn status** but no displayable title or timestamp. | Turn event, completion event |
+| **Prompt request** | The ACP `session/prompt` request that starts a **prompt turn**. | Prompt, user message |
+| **Session update** | An ACP `session/update` notification carrying content or session metadata. | Turn, message, chunk |
+| **Prompt response** | The response to `session/prompt` that ends its **prompt turn** with a stop reason. | Completion event, idle event |
+
+ACP v1 defines prompt turns but no agent-initiated turn primitive.
+
+## Nori extension
+
+| Term | Definition | Aliases to avoid |
+| --- | --- | --- |
+| **Agent-turn metadata** | Nori metadata that establishes an **agent-owned turn** on the receiving connection. | Broker projection, synthetic request |
+| **Nori agent-turn status** | The `working` or `idle` value in `_meta.nori.status` carried by **agent-turn metadata**. | Session status, ACP lifecycle event |
+| **Status-only frame** | Session metadata containing a recognized **Nori agent-turn status** but no displayable title or timestamp. | Prompt response, completion event |
+| **Session broker** | The Nori service that shares an **agent session** across client connections and may relay **agent-turn metadata**. | Turn owner, agent |
 
 ## Relationships
 
-- Every **client-owned turn** has one local **prompt request** and one correlated response.
-- An **agent-owned turn** has no local **prompt request**, synthetic request ID, or inferred client owner.
-- An **unowned update** starts or extends **agent-owned presentation** and remains unowned.
-- `working` starts or confirms **agent-owned presentation**; `idle` ends that presentation.
-- Nori agent-turn statuses are optional presentation hints, not ACP lifecycle authority.
-- Without a status hint, a later **active client request** separates agent-owned output.
-- Agent-owned presentation never drives cancellation, queue draining, command gating, or ACP phase.
-- Only a client-owned prompt response completes a **client-owned turn** and may drain its queue.
-- A **status-only frame** is hidden; other metadata on the same frame remains visible.
-- An **unowned-update warning window** is rearmed by a new local prompt or load, not by `idle`.
-- A **session broker** may relay agent-owned activity, but agent-owned turns do not require one.
+- **Turn ownership** is always relative to one **client connection**.
+- A **prompt turn** is client-owned only on the connection that sent its **prompt request**.
+- With agent-turn metadata, the same work may be client-owned on one connection and agent-owned on another.
+- `working` establishes an **agent-owned turn**; `idle` ends it on that connection.
+- Without **agent-turn metadata**, **unowned updates** do not constitute a turn in ACP language.
+- **Unowned presentation** may render statusless updates without inventing a turn or request ID.
+- Ownership names provenance, not authority, controls, cancellation rights, or future protocol behavior.
+- A **session broker** may relay agent-turn metadata, but broker mediation is not part of the definition.
+- Supporting a future ACP agent-initiated turn primitive will require an explicit terminology migration.
 
 ## Example dialogue
 
-> **Dev:** "A stdio agent sent content even though this client never sent a prompt request. What owns the turn?"
+> **Dev:** "A webchat sent the prompt, but the CLI received the resulting updates. Who owns the turn?"
 >
-> **Domain expert:** "It is an **agent-owned turn**. The **unowned update** emits one diagnostic warning, then renders normally."
+> **Domain expert:** "Ownership is connection-relative. It is **client-owned** on the webchat connection."
 >
-> **Dev:** "Do `working` and `idle` make it a client request that I can cancel?"
+> **Dev:** "Is it automatically **agent-owned** on the CLI connection?"
 >
-> **Domain expert:** "No. They only bound **agent-owned presentation**. A **client-owned turn** starts with this client's **prompt request** and ends with its correlated response."
+> **Domain expert:** "Only if **agent-turn metadata** establishes that turn. Otherwise the CLI received **unowned updates**, not an ACP turn."
 
 ## Flagged ambiguities
 
-- "Owned turn" omits the owner; always say **client-owned turn** or **agent-owned turn**.
-- **Agent-owned** describes the local ACP control relationship, not the human or transport that ultimately initiated the work.
-- An **unowned update** is unowned by the local client but may belong to an **agent-owned turn**.
-- "Completion" conflates a client prompt response with an agent presentation boundary; name the specific boundary.
-- "Prompt" conflates text, a user-message update, and a request; use **prompt request** only for `session/prompt`.
-- "Session status" conflates durable metadata with `_meta.nori.status`; use **Nori agent-turn status** for the latter.
+- "Owned turn" omits both owner and connection; say **client-owned turn** or **agent-owned turn**.
+- **Agent-owned turn** is Nori extension language, not an ACP v1 protocol primitive.
+- **Unowned update** and **agent-owned turn** are not synonyms: metadata is required to establish the turn.
+- "Ownership" must not imply authority, cancellation, permission, or queue semantics.
+- "Prompt" conflates text, a user-message update, and an ACP request; use **prompt request** for `session/prompt`.
+- "Completion" conflates a **prompt response** with `idle` agent-turn metadata; name the exact boundary.
 - Use **session broker** only for broker-specific behavior; it does not define turn ownership.
