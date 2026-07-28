@@ -1,13 +1,4 @@
-# Ubiquitous Language
-
-## Actors
-
-| Term | Definition | Aliases to avoid |
-| --- | --- | --- |
-| **Client** | An ACP client, such as the Nori CLI or a webchat, that communicates with an **agent**. | Harness, peer, observer |
-| **Agent** | An ACP server that performs work and emits requests, responses, and **session updates**. | Model, provider, backend |
-| **Agent session** | One persistent ACP conversation between an **agent** and one or more clients. | Chat, thread, broker session |
-| **Client connection** | One client's protocol relationship to an **agent session** and the perspective from which ownership is classified. | Peer, socket, observer |
+# Turns and Ownership
 
 ## Turn ownership
 
@@ -25,7 +16,7 @@
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
 | **Prompt request** | The ACP `session/prompt` request that starts a **prompt turn**. | Prompt, user message |
-| **Session update** | An ACP `session/update` notification carrying content or session metadata. | Turn, message, chunk |
+| **Session update** | An ACP `session/update` notification carrying agent output or session state. | Turn, message, chunk |
 | **Prompt response** | The response to `session/prompt` that ends its **prompt turn** with a stop reason. | Completion event, idle event |
 
 ACP v1 defines prompt turns but no agent-initiated turn primitive.
@@ -37,7 +28,6 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | **Agent-turn metadata** | Nori metadata that establishes an **agent-owned turn** on the receiving connection. | Broker projection, synthetic request |
 | **Nori agent-turn status** | The `working` or `idle` value in `_meta.nori.status` carried by **agent-turn metadata**. | Session status, ACP lifecycle event |
 | **Status-only frame** | Session metadata containing a recognized **Nori agent-turn status** but no displayable title or timestamp. | Prompt response, completion event |
-| **Session broker** | The Nori service that shares an **agent session** across client connections and may relay **agent-turn metadata**. | Turn owner, agent |
 
 ## Relationships
 
@@ -48,7 +38,6 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - Without **agent-turn metadata**, **unowned updates** do not constitute a turn in ACP language.
 - **Unowned presentation** may render statusless updates without inventing a turn or request ID.
 - Ownership names provenance, not authority, controls, cancellation rights, or future protocol behavior.
-- A **session broker** may relay agent-turn metadata, but broker mediation is not part of the definition.
 - Supporting a future ACP agent-initiated turn primitive will require an explicit terminology migration.
 
 ## Example dialogue
@@ -69,4 +58,3 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - "Ownership" must not imply authority, cancellation, permission, or queue semantics.
 - "Prompt" conflates text, a user-message update, and an ACP request; use **prompt request** for `session/prompt`.
 - "Completion" conflates a **prompt response** with `idle` agent-turn metadata; name the exact boundary.
-- Use **session broker** only for broker-specific behavior; it does not define turn ownership.
