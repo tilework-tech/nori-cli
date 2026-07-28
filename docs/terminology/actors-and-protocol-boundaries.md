@@ -15,7 +15,7 @@
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | **ACP host**        | Nori's low-level client-side boundary that owns the ACP SDK connection, agent process, wire lifecycle, and delegated-request routing. | Client, harness, agent           |
 | **Session harness** | Nori's headless runtime that composes the **ACP host** with product lifecycle and one ordered event stream.                           | ACP host, client, session broker |
-| **Session broker**  | The Nori service that shares a **session** across client connections and may relay agent-turn metadata.                               | Agent, turn owner, transport     |
+| **Session broker**  | The Nori service that shares a **session**, acting as agent downstream and client toward the upstream agent.                          | Provider, turn owner, transport  |
 
 ## Protocol boundaries
 
@@ -28,9 +28,9 @@
 
 - A **user** acts through a **client** and is not an ACP protocol participant.
 - A **client** and an **agent** exchange ACP messages over a **transport**.
-- A **client connection** relates one client to one **session**, which belongs to one agent.
+- On each **client connection**, one client communicates with one agent about a **session**.
 - A **session harness** composes an **ACP host**, which owns the active connection and transport.
-- A **session broker** may share one session across multiple client connections without becoming the agent.
+- A **session broker** is the agent on downstream connections and the client on its upstream connection.
 - An **agent** may call a **provider**, but provider-internal work crosses no ACP boundary unless the agent exposes it through ACP.
 
 ## Example dialogue
@@ -41,7 +41,7 @@
 >
 > **Dev:** "Where do the **ACP host**, **session harness**, and **session broker** fit?"
 >
-> **Domain expert:** "The harness composes the host inside the client; the host owns its connection and transport, while the broker may share the agent session."
+> **Domain expert:** "The harness composes the host inside the client. The broker is agent toward downstream clients and client toward the upstream agent."
 
 ## Flagged ambiguities
 
@@ -49,4 +49,4 @@
 - "Agent" names the ACP server, not its model or **provider**.
 - **ACP host** and **session harness** are internal parts of Nori's client implementation, not additional ACP actors.
 - **Transport**, **client connection**, and **session** mean channel, relationship, and conversation respectively.
-- A **session broker** may act in the client role at an ACP boundary, but its product role remains broker mediation.
+- A **session broker** has no single ACP role; its role depends on the connection boundary.

@@ -73,9 +73,10 @@ pub enum NoriEvent {
 `NoriEvent` carries harness-owned lifecycle and product behavior that has no
 ACP event of its own. A `session/update` received without a locally owned
 request remains a schema-native, unowned update; no synthetic request ID or
-source attribution is added. Proactive presentation has no public Nori
-completion event; owned prompts complete through their correlated raw ACP
-prompt response. The source-owned event boundary is defined in
+source attribution is added. Presentation of unowned updates or an agent-owned
+turn has no public Nori completion event; client-owned prompt turns complete
+through their correlated raw ACP prompt response. The source-owned event
+boundary is defined in
 [`session_event.rs`](src/session_event.rs).
 
 `SessionForked` is emitted when branch-at-head `/fork` forks the transcript. It
@@ -98,9 +99,9 @@ exact ACP wire `RequestId` for harness-issued operations.
 - Nori owns only behavior around the ACP session: lifecycle, queueing, replay,
   compaction, goals, undo, user-shell output, hooks, summaries, notices, and
   failures that have no ACP response.
-- Proactive output remains raw `SessionEvent::Acp` traffic. Presentation
-  grouping and optional lifecycle hints stay private to consumers such as
-  [`nori-tui`](../tui/docs.md).
+- Output without an active local request remains raw `SessionEvent::Acp`
+  traffic. Presentation grouping and optional lifecycle hints stay private to
+  consumers such as [`nori-tui`](../tui/docs.md).
 - The crate contains no reducer, normalizer, parser, formatter, transcript
   compatibility decoder, or presentation state.
 - `ReplayStarted` and `ReplayFinished` bracket historical ACP notifications

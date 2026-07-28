@@ -8,16 +8,17 @@
 | **Client-owned turn**    | A **prompt turn** viewed from the **client connection** that sent its prompt request.                                            | Local turn, owned turn, normal turn                        |
 | **Agent-owned turn**     | A Nori extension turn established on a **client connection** by explicit agent-turn metadata rather than a local prompt request. | Proactive turn, observed turn, remote turn, agent-led turn |
 | **Turn ownership**       | The connection-relative classification of a turn as client-owned or agent-owned.                                                 | Initiator, authority, control                              |
-| **Unowned update**       | A non-metadata **session update** received outside a locally active prompt turn.                                                 | Orphan update, stray update, agent-owned turn              |
+| **Unowned update**       | A non-metadata **session update** received without an **active local request**.                                                  | Orphan update, stray update, agent-owned turn              |
 | **Unowned presentation** | TUI-only grouping used to render **unowned updates** without asserting that an ACP turn exists.                                  | Proactive presentation, synthetic turn                     |
 
 ## Protocol
 
-| Term                | Definition                                                                         | Aliases to avoid             |
-| ------------------- | ---------------------------------------------------------------------------------- | ---------------------------- |
-| **Prompt request**  | The ACP `session/prompt` request that starts a **prompt turn**.                    | Prompt, user message         |
-| **Session update**  | An ACP `session/update` notification carrying agent output or session state.       | Turn, message, chunk         |
-| **Prompt response** | The response to `session/prompt` that ends its **prompt turn** with a stop reason. | Completion event, idle event |
+| Term                     | Definition                                                                           | Aliases to avoid             |
+| ------------------------ | ------------------------------------------------------------------------------------ | ---------------------------- |
+| **Prompt request**       | The ACP `session/prompt` request that starts a **prompt turn**.                      | Prompt, user message         |
+| **Active local request** | A prompt or load request sent by this connection that has not received its response. | Active turn, working state   |
+| **Session update**       | An ACP `session/update` notification carrying agent output or session state.         | Turn, message, chunk         |
+| **Prompt response**      | The response to `session/prompt` that ends its **prompt turn** with a stop reason.   | Completion event, idle event |
 
 ACP v1 defines prompt turns but no agent-initiated turn primitive.
 

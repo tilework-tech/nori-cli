@@ -18,7 +18,7 @@
 | **Load**        | ACP v1 `session/load` restores a session and replays its conversation history before responding.                           | Resume, transcript replay |
 | **Resume**      | ACP v1 `session/resume` restores a session without replaying prior messages.                                               | Load, Nori resume         |
 | **Nori resume** | Nori's user action chooses **Load**, **Resume**, or **New** plus transcript fallback from identity and agent capabilities. | `session/resume`, reload  |
-| **Close**       | ACP `session/close` cancels in-flight work and releases active agent resources without deleting the session.               | Quit, detach, delete      |
+| **Close**       | ACP `session/close` cancels ongoing work and frees resources associated with an active session.                            | Quit, detach, delete      |
 
 ## History and continuity operations
 
@@ -38,7 +38,7 @@
 - One **Conversation ID** may outlive multiple **ACP session IDs**, notably after fallback **compaction**.
 - **Load** produces agent-sourced **replay**; Nori's fallback uses transcript-sourced replay after **New**.
 - A **Transcript** records selected session traffic but is not the agent-maintained **conversation history**.
-- **Close** releases an active session; quitting may only detach, and neither operation means delete.
+- **Close** ends an active session; later resumability is agent-specific, while quitting may only detach.
 - **Undo** changes files, not conversation state; **Rewind to message** changes conversation direction, not files.
 
 ## Example dialogue
