@@ -2,27 +2,27 @@
 
 ## Actors
 
-| Term | Definition | Aliases to avoid |
-| --- | --- | --- |
-| **User** | The person whose intent and authorization a **client** mediates during agent work. | Client, account, ACP peer |
-| **Client** | An ACP client, such as Nori CLI or webchat, that mediates between a **user** and an **agent**. | Harness, peer, observer |
-| **Agent** | An ACP server that performs work and emits requests, responses, and session updates. | Model, provider, backend |
-| **Provider** | The external organization or service from which an **agent** obtains models or credentials. | Agent, model, ACP server |
+| Term         | Definition                                                                                     | Aliases to avoid          |
+| ------------ | ---------------------------------------------------------------------------------------------- | ------------------------- |
+| **User**     | The person whose intent and authorization a **client** mediates during agent work.             | Client, account, ACP peer |
+| **Client**   | An ACP client, such as Nori CLI or webchat, that mediates between a **user** and an **agent**. | Harness, peer, observer   |
+| **Agent**    | An ACP server that performs work and emits requests, responses, and session updates.           | Model, provider, backend  |
+| **Provider** | The external organization or service from which an **agent** obtains models or credentials.    | Agent, model, ACP server  |
 
 ## Nori runtime boundaries
 
-| Term | Definition | Aliases to avoid |
-| --- | --- | --- |
-| **ACP host** | Nori's low-level client-side boundary that owns the ACP SDK connection, agent process, wire lifecycle, and delegated-request routing. | Client, harness, agent |
-| **Session harness** | Nori's headless runtime that composes the **ACP host** with product lifecycle and one ordered event stream. | ACP host, client, session broker |
-| **Session broker** | The Nori service that shares a **session** across client connections and may relay agent-turn metadata. | Agent, turn owner, transport |
+| Term                | Definition                                                                                                                            | Aliases to avoid                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **ACP host**        | Nori's low-level client-side boundary that owns the ACP SDK connection, agent process, wire lifecycle, and delegated-request routing. | Client, harness, agent           |
+| **Session harness** | Nori's headless runtime that composes the **ACP host** with product lifecycle and one ordered event stream.                           | ACP host, client, session broker |
+| **Session broker**  | The Nori service that shares a **session** across client connections and may relay agent-turn metadata.                               | Agent, turn owner, transport     |
 
 ## Protocol boundaries
 
-| Term | Definition | Aliases to avoid |
-| --- | --- | --- |
-| **Client connection** | One **client's** protocol relationship to a **session** and the perspective from which ownership is classified. | Transport, socket, observer |
-| **Transport** | The bidirectional channel that carries ACP JSON-RPC messages between a **client** and an **agent** without defining their semantics. | Protocol, connection, session |
+| Term                  | Definition                                                                                                                           | Aliases to avoid              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| **Client connection** | One **client's** protocol relationship to a **session** and the perspective from which ownership is classified.                      | Transport, socket, observer   |
+| **Transport**         | The bidirectional channel that carries ACP JSON-RPC messages between a **client** and an **agent** without defining their semantics. | Protocol, connection, session |
 
 ## Relationships
 
