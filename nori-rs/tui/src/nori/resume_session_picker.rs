@@ -2,9 +2,9 @@
 //!
 //! This module provides the UI for selecting a previous session to resume.
 //! Selected sessions are resumed over ACP via `session/load` (history replay)
-//! or `session/resume` (live reattach, the nori cloud path), depending on
-//! which capability the agent advertises; agents with neither fall back to a
-//! fresh session plus client-side transcript replay.
+//! or `session/resume` (live reattach), depending on which capability the
+//! agent advertises; agents with neither fall back to a fresh session plus
+//! client-side transcript replay.
 
 use std::path::Path;
 use std::path::PathBuf;

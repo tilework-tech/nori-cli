@@ -1295,7 +1295,7 @@ pub enum FooterSegment {
     /// ACP mode indicator: "[ Plan ]"
     ModeIndicator,
     /// Cloud session identity: "☁ nori-fast-kazunoko-aac8". Only rendered when
-    /// attached to a cloud (live-reattach) session; self-hides otherwise.
+    /// attached to a cloud-mode session; self-hides otherwise.
     CloudSession,
 }
 

@@ -317,10 +317,7 @@ impl ChatWidget {
             .as_deref()
             .and_then(|id| nori_harness::ConversationId::from_string(id).ok());
         self.current_rollout_path = event.transcript_path;
-        self.acp_session_id = self
-            .session_agent_capabilities
-            .live_reattach()
-            .then(|| event.acp_session_id.to_string());
+        self.acp_session_id = self.cloud_mode.then(|| event.acp_session_id.to_string());
         self.refresh_cloud_session_indicator();
         self.add_to_history(history_cell::new_session_info(
             &self.config,

@@ -701,8 +701,8 @@ impl AcpConnection {
     /// Resume (reattach to) an existing session via ACP `session/resume`.
     ///
     /// Unlike `session/load`, resume is a live reattach with no history
-    /// replay — the path for agents that advertise
-    /// `sessionCapabilities.resume` with `loadSession: false` (nori cloud).
+    /// replay. Capability combinations describe the ACP facade, not whether
+    /// its session runs locally or in the cloud.
     /// The returned `SessionId` is the input id (the response carries none).
     pub async fn resume_session(
         &self,

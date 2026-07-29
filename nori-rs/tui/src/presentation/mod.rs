@@ -112,8 +112,7 @@ pub struct AgentCapabilitiesView {
     /// Whether the agent advertises the ACP `session/list` capability.
     #[serde(default)]
     pub session_list: bool,
-    /// Whether the agent advertises the ACP `session/resume` capability
-    /// (live reattach without history replay — the cloud agent's resume path).
+    /// Whether the agent advertises the ACP `session/resume` capability.
     #[serde(default)]
     pub session_resume: bool,
     /// Whether the agent advertises the ACP `session/close` capability.
@@ -123,15 +122,6 @@ pub struct AgentCapabilitiesView {
     /// (branch-at-head — the `/fork` "Branch from current point" path).
     #[serde(default)]
     pub session_fork: bool,
-}
-
-impl AgentCapabilitiesView {
-    /// The cloud reattach shape: resuming reattaches live over
-    /// `session/resume` with no history replay (`loadSession: false`).
-    /// Frontends use this to word detach/reattach messaging.
-    pub fn live_reattach(&self) -> bool {
-        self.session_resume && !self.load_session
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]

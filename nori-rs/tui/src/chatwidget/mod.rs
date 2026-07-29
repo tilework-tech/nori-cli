@@ -145,6 +145,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_config::FooterSegmentConfig,
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
+    /// Whether the top-level CLI launched the handroll-backed cloud mode.
+    pub(crate) cloud_mode: bool,
     /// When true, skip spawning the agent in `new()`. The caller must later
     /// call `spawn_deferred_agent()` once pre-session setup (e.g., skillset
     /// switch) is complete.
@@ -242,6 +244,8 @@ pub(crate) struct ChatWidget {
     current_goal: Option<nori_protocol::ThreadGoal>,
     // Latest ACP capability snapshot projected into Nori client concepts.
     session_agent_capabilities: crate::presentation::AgentCapabilitiesView,
+    /// Whether the top-level CLI launched the handroll-backed cloud mode.
+    cloud_mode: bool,
     // Identity reported by the active agent during ACP initialization.
     session_agent_info: Option<nori_protocol::acp::v1::Implementation>,
     // Latest structured session metadata for status/footer consumers.

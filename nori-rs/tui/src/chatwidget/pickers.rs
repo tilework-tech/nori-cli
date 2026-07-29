@@ -81,10 +81,9 @@ impl ChatWidget {
         // When the live agent advertises ACP `session/list`, source the picker
         // from the agent itself (and resume over ACP) instead of the local
         // transcript store. Resuming a listed session goes over ACP via
-        // `session/load` (history replay) or `session/resume` (live reattach —
-        // the nori cloud contract, `loadSession: false`), so the agent must
-        // advertise at least one of the two; without either, fall back to the
-        // local-transcript picker.
+        // `session/load` (history replay) or `session/resume` (live reattach),
+        // so the agent must advertise at least one of the two; without either,
+        // fall back to the local-transcript picker.
         if self.session_agent_capabilities.session_list
             && (self.session_agent_capabilities.load_session
                 || self.session_agent_capabilities.session_resume)
