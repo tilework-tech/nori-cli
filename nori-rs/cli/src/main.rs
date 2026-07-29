@@ -443,7 +443,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             )];
             // Cloud entry is picker-first: list live sessions before
             // anything can claim a VM; creating one is an explicit pick.
-            interactive.cloud_session_picker = true;
+            interactive.cloud_mode = true;
 
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;

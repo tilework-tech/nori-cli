@@ -64,7 +64,7 @@ pub(crate) struct FooterProps {
     /// ACP agent mode label to display when the agent exposes a mode option.
     pub(crate) acp_mode_label: Option<String>,
     /// Cloud session identifier (e.g. `nori-fast-kazunoko-aac8`) when attached
-    /// to a cloud (live-reattach) session. Renders the `CloudSession` segment.
+    /// through cloud mode. Renders the `CloudSession` segment.
     pub(crate) cloud_session: Option<String>,
 }
 

@@ -1120,12 +1120,6 @@ impl App {
                     crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
                         .map(|info| info.display_name)
                         .unwrap_or_else(|| self.config.active_agent.clone());
-                // Capture the outgoing widget's capability view: the same
-                // agent is respawned, and live-reattach (session/resume,
-                // no loadSession) means no history replay — say so.
-                let agent_caps = self.chat_widget.agent_capabilities();
-                let live_reattach = agent_caps.session_resume && !agent_caps.load_session;
-
                 self.deferred_spawn_pending = false;
                 self.shutdown_current_conversation();
 
@@ -1149,7 +1143,7 @@ impl App {
                     reattach_info_message(
                         &acp_session_id,
                         title.as_deref(),
-                        live_reattach,
+                        self.cloud_mode,
                         &display_name,
                     ),
                     None,
@@ -1422,25 +1416,34 @@ impl App {
 
 /// Compose the info-cell message shown when resuming/reattaching to a session.
 ///
-/// On a live-reattach (cloud) session the earlier transcript stays in the cloud
-/// and is not replayed locally, so the wording differs from a plain resume.
-/// When the broker title is known it names the session so the user can tell
-/// which session they reattached to.
+/// Cloud reattach wording names the selected broker session. It deliberately
+/// makes no claim about replay: that depends on the facade's capabilities.
 pub(super) fn reattach_info_message(
     acp_session_id: &str,
     title: Option<&str>,
-    live_reattach: bool,
+    cloud_mode: bool,
     display_name: &str,
 ) -> String {
-    if live_reattach {
+    if cloud_mode {
         let session_label = match title {
             Some(title) => format!("{acp_session_id} ({title})"),
             None => acp_session_id.to_string(),
         };
-        format!(
-            "Reattaching to {session_label} — earlier messages stay in the cloud session (not replayed here)."
-        )
+        format!("Reattaching to {session_label}...")
     } else {
         format!("Resuming session with {display_name}...")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reattach_info_message;
+
+    #[test]
+    fn cloud_reattach_info_message_snapshot() {
+        insta::assert_snapshot!(
+            "cloud_reattach_info_message",
+            reattach_info_message("session-123", Some("Fix reconnect"), true, "Nori Cloud")
+        );
     }
 }

@@ -1150,8 +1150,8 @@ async fn test_list_sessions_preserves_session_meta() {
 }
 
 /// `resume_session` reattaches to an agent-side session over ACP
-/// `session/resume` — the reattach path for agents (like nori cloud) that
-/// advertise `sessionCapabilities.resume` with `loadSession: false`.
+/// `session/resume` — the live reattach path for agents that advertise
+/// `sessionCapabilities.resume` without `loadSession`.
 /// `MOCK_AGENT_FAIL_NEW_SESSION_FROM=0` makes any silent `session/new`
 /// fallback fail loudly.
 #[tokio::test]

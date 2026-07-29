@@ -504,7 +504,7 @@ async fn run_ratatui_app(
     let Cli {
         prompt,
         images,
-        cloud_session_picker,
+        cloud_mode,
         ..
     } = cli;
     let vertical_footer = config.vertical_footer;
@@ -517,7 +517,7 @@ async fn run_ratatui_app(
         images,
         resume_selection,
         vertical_footer,
-        cloud_session_picker,
+        cloud_mode,
     )
     .await;
 

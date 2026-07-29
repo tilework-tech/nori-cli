@@ -1293,6 +1293,85 @@ async fn failed_load_preserves_response_order_and_separates_replay_sources() {
 
 #[tokio::test]
 #[serial]
+async fn failed_load_without_transcript_does_not_start_a_replacement_session() {
+    // SAFETY: this test is serialized with every other environment-mutating test.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        std::env::set_var("MOCK_AGENT_LOAD_SESSION_FAIL", "1");
+    }
+    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let _fail_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_FAIL");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: Some(SessionResume {
+            acp_session_id: Some("missing-session".to_string()),
+            transcript: None,
+        }),
+    });
+
+    let events = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("resume event stream closed");
+            let bootstrap_finished = matches!(
+                event,
+                SessionEvent::Nori(NoriEvent::SessionStarted(_) | NoriEvent::SessionEnded(_))
+            );
+            events.push(event);
+            if bootstrap_finished {
+                return events;
+            }
+        }
+    })
+    .await
+    .expect("failed resume should finish bootstrap");
+
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Err(_),
+                ..
+            })
+        )),
+        "the session/load error must remain visible"
+    );
+    assert!(
+        events.iter().all(|event| !matches!(
+            event,
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::NewSessionResponse(_)),
+                ..
+            }) | SessionEvent::Nori(NoriEvent::SessionStarted(_))
+        )),
+        "a failed reattach without replayable history must not create a session"
+    );
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            SessionEvent::Nori(NoriEvent::SessionEnded(ended))
+                if ended.reason == nori_protocol::SessionEndReason::SpawnFailed
+        )),
+        "the failed reattach must end instead of silently starting over"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn prompt_error_emits_a_correlated_classified_request_failure() {
     // SAFETY: tests that mutate the mock-agent environment run serially.
     unsafe { std::env::set_var("MOCK_AGENT_PROMPT_FAIL", "1") };

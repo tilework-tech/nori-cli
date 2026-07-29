@@ -44,11 +44,9 @@ impl ChatWidget {
         self.session_agent_capabilities.clone()
     }
 
-    /// The cloud session identity. Id presence IS the cloud signal: the
-    /// harness populates `SessionConfiguredEvent.acp_session_id` only for
-    /// cloud (live-reattach) agents and sends `None` for local agents, so no
-    /// capability gate is needed here — gating on capabilities raced their
-    /// delivery against SessionConfigured and could miss the welcome card.
+    /// The cloud session identity. Id presence IS the cloud signal inside the
+    /// widget: `on_session_started` retains it only when the top-level CLI
+    /// launched handroll in cloud mode.
     pub(crate) fn cloud_session_identity(&self) -> Option<CloudSessionInfo> {
         self.acp_session_id.as_ref().map(|id| CloudSessionInfo {
             id: id.clone(),
@@ -74,9 +72,9 @@ impl ChatWidget {
     /// shutdown requested, and a hard-exit watchdog so the old 25s child-exit
     /// grace can never hold the user hostage. Idempotent.
     ///
-    /// On agents with the cloud lifecycle (live reattach, no history replay),
-    /// exit is a *detach*: the connection drop is non-terminal and the session
-    /// keeps running server-side, so the feedback says exactly that.
+    /// In cloud mode, exit is a *detach*: the connection drop is non-terminal
+    /// and the session keeps running server-side, so the feedback says exactly
+    /// that.
     pub(crate) fn begin_exit(&mut self) {
         if self.exiting {
             return;
@@ -84,9 +82,7 @@ impl ChatWidget {
         self.exiting = true;
         self.bottom_pane.show_exit_in_progress();
 
-        let is_detach = self.session_agent_capabilities.session_resume
-            && !self.session_agent_capabilities.load_session;
-        if is_detach {
+        if self.cloud_mode && self.acp_session_id.is_some() {
             self.add_to_history(history_cell::new_info_event(
                 "This session keeps running in the cloud.".to_string(),
                 Some("reattach later from the `nori cloud` picker".to_string()),

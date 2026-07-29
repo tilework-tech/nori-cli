@@ -184,9 +184,19 @@ flight followed by `SessionEnded(ConnectionLost)`. The TUI stays open so the
 user can read the failure and choose the next action; connection loss is not
 treated as a successful quit.
 
-Cloud sessions use standard ACP `session/list`, `session/resume`, and
-`session/close`. Quitting detaches through connection teardown; `/close` is the
-explicit agent-side release action.
+Cloud sessions use standard ACP `session/list`, `session/resume`,
+`session/load`, and `session/close`. Capabilities describe what the active ACP
+facade supports; they are not a sound test for whether its process represents a
+remote VM. The top-level `nori cloud` launch supplies explicit `cloud_mode`
+state through `TuiCli`, `App`, and `ChatWidget`.
+
+That launch-origin state retains the cloud ACP session id for footer and
+welcome-card identity, rejects local-only commands, and selects cloud
+detach/reattach wording. Reattach copy does not promise whether history is
+replayed because that is selected independently from ACP capabilities.
+Quitting an attached cloud session detaches through connection teardown;
+`/close` is available only in cloud mode and remains gated by the facade's
+`session/close` support.
 
 #### Footer configuration
 
