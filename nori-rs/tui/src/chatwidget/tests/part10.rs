@@ -340,6 +340,71 @@ fn session_info_updates_render_known_codex_fields() {
 }
 
 #[test]
+fn nori_connection_status_updates_render_clear_messages() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    for status in ["reconnecting", "connected"] {
+        let meta = serde_json::json!({
+            "nori": {
+                "connection": {
+                    "status": status
+                }
+            }
+        })
+        .as_object()
+        .expect("metadata object")
+        .clone();
+        chat.handle_session_event(
+            generation,
+            session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+        );
+    }
+
+    let rendered = history_text(&mut rx);
+    insta::assert_snapshot!(rendered, @r"
+• Cloud connection lost. Reconnecting…
+
+• Cloud connection restored.
+");
+}
+
+#[test]
+fn nori_connection_status_with_other_metadata_uses_standard_rendering() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let meta = serde_json::json!({
+        "nori": {
+            "connection": {
+                "status": "reconnecting"
+            }
+        },
+        "vendor": {
+            "field": true
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+    );
+
+    let rendered = history_text(&mut rx);
+    assert!(
+        rendered.contains("nori.connection.status=<string>"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("vendor.field=<boolean>"), "{rendered}");
+    assert!(
+        !rendered.contains("Cloud connection lost. Reconnecting…"),
+        "{rendered}"
+    );
+}
+
+#[test]
 fn unknown_session_info_fields_render_types_without_values_in_stable_order() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;

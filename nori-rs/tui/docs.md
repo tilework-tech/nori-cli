@@ -58,6 +58,11 @@ The application event loop matches `SessionEvent::Acp` and
   distinction lives in
   [`event_handlers.rs`](src/chatwidget/event_handlers.rs) and
   [`presentation/mod.rs`](src/presentation/mod.rs).
+- Handroll's `_meta.nori.connection.status` extension is also presentation
+  only. Exact `reconnecting` and `connected` status-only frames render as
+  “Cloud connection lost. Reconnecting…” and “Cloud connection restored.”
+  info entries instead of generic redacted metadata. They do not change turn
+  ownership, replay ACP methods, or enter the session-info state reducer.
 - ACP requests drive the permission overlay and retain their raw `RequestId`.
 - Initialize responses and prompt responses matching the active request update
   UI lifecycle. For prompt errors, the correlated `NoriEvent::RequestFailed`
@@ -77,11 +82,12 @@ lossy and UI-specific; they are not fed back into the harness or exported from
 
 #### Structured session information
 
-ACP `SessionInfoUpdate` normalization retains `title`, `updatedAt`, and the
-complete `_meta` object as a private `SessionInfoPatch` alongside the legacy
-text projection. The chat widget captures the agent identity reported by ACP
-initialization and whether the current emission is live, agent replay, or
-transcript replay, then sends every patch to two presentation consumers:
+Ordinary ACP `SessionInfoUpdate` normalization retains `title`, `updatedAt`,
+and the complete `_meta` object as a private `SessionInfoPatch` alongside the
+legacy text projection. The chat widget captures the agent identity reported
+by ACP initialization and whether the current emission is live, agent replay,
+or transcript replay, then sends every retained patch to two presentation
+consumers:
 
 - The history renderer emits a visible entry for every update. Known Codex
   status, goal, error, archived, and closed fields receive friendly labels only
