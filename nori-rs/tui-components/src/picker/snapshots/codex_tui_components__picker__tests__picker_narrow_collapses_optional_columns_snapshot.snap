@@ -1,0 +1,17 @@
+---
+source: tui-components/src/picker/tests.rs
+expression: "snapshot(&session_picker(), 48, 13)"
+---
+"┌ Resume a session ────────────────────────────┐"
+"│Search ACP sessions or start fresh            │"
+"│All  Local  Cloud                             │"
+"│/ Title, project, or session id               │"
+"│  Session                           Updated   │"
+"│› Start a new session               now       │"
+"│  Fix parser recovery (current)     2m ago    │"
+"│  Improve Markdown tables           18m ago   │"
+"│  Legacy unavailable session        3d ago    │"
+"│                                              │"
+"│                                              │"
+"│↑↓ move  enter select  esc close              │"
+"└──────────────────────────────────────────────┘"

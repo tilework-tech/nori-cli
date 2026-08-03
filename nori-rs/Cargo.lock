@@ -1128,6 +1128,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex-tui-components"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "insta",
+ "nucleo-matcher",
+ "pretty_assertions",
+ "pulldown-cmark",
+ "ratatui",
+ "textwrap 0.16.2",
+ "unicode-width 0.2.1",
+]
+
+[[package]]
 name = "codex-utils-cache"
 version = "0.0.0"
 dependencies = [
@@ -3628,6 +3643,7 @@ dependencies = [
  "codex-login",
  "codex-rmcp-client",
  "codex-sandbox",
+ "codex-tui-components",
  "codex-utils-pty",
  "codex-windows-sandbox",
  "color-eyre",

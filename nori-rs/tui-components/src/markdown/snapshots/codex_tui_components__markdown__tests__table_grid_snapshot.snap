@@ -1,0 +1,20 @@
+---
+source: tui-components/src/markdown/tests.rs
+expression: "snapshot(source, 86, 16)"
+---
+"## Active sessions                                                                    "
+"                                                                                      "
+"Session                    Project            Updated  Turn status                    "
+"━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━  ━━━━━━━  ━━━━━━━━━━━━━━━━━              "
+"Fix parser recovery        nori-cli                2m  Working                        "
+"─────────────────────────  ─────────────────  ───────  ─────────────────              "
+"Improve Markdown tables    external-codex         18m  Waiting for input              "
+"─────────────────────────  ─────────────────  ───────  ─────────────────              "
+"Handroll picker migration  sessions/handroll       1h  Ready                          "
+"                                                                                      "
+"                                                                                      "
+"                                                                                      "
+"                                                                                      "
+"                                                                                      "
+"                                                                                      "
+"                                                                                      "

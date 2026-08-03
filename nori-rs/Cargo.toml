@@ -21,6 +21,7 @@ members = [
     "rmcp-client",
     "stdio-to-uds",
     "tui",
+    "tui-components",
     "utils/git",
     "utils/cache",
     "utils/image",
@@ -68,6 +69,7 @@ codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
 nori-protocol = { path = "nori-protocol" }
 nori-tui = { path = "tui" }
+codex-tui-components = { path = "tui-components" }
 codex-utils-cache = { path = "utils/cache" }
 codex-utils-image = { path = "utils/image" }
 codex-utils-json-to-toml = { path = "utils/json-to-toml" }

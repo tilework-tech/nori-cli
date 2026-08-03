@@ -1,0 +1,17 @@
+---
+source: tui-components/src/picker/tests.rs
+expression: "snapshot(&state, 86, 13)"
+---
+"┌ Resume a session ──────────────────────────────────────────────────────────────────┐"
+"│Search ACP sessions or start fresh                  │ Details                       │"
+"│All  Local  Cloud                                   │Agent: Codex                   │"
+"│/ mdtab                                             │Waiting for user input.        │"
+"│  Session                     Project     Updated   │                               │"
+"│› Improve Markdown tables     codex       18m ago   │                               │"
+"│                                                    │                               │"
+"│                                                    │                               │"
+"│                                                    │                               │"
+"│                                                    │                               │"
+"│                                                    │                               │"
+"│↑↓ move  enter select  esc close                    │                               │"
+"└────────────────────────────────────────────────────────────────────────────────────┘"

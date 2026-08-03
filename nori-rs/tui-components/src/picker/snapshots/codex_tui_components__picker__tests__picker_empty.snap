@@ -1,0 +1,14 @@
+---
+source: tui-components/src/picker/tests.rs
+expression: "snapshot(&state, 62, 10)"
+---
+"┌ Resume a session ──────────────────────────────────────────┐"
+"│Search ACP sessions or start fresh                          │"
+"│All  Local  Cloud                                           │"
+"│/ Title, project, or session id                             │"
+"│◇ No options available                                      │"
+"│  The caller has not supplied any rows.                     │"
+"│                                                            │"
+"│                                                            │"
+"│↑↓ move  enter select  esc close                            │"
+"└────────────────────────────────────────────────────────────┘"

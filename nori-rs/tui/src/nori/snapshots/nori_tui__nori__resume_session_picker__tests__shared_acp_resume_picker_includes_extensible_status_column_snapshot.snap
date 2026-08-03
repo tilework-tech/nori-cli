@@ -1,0 +1,19 @@
+---
+source: tui/src/nori/resume_session_picker.rs
+expression: "component_picker_snapshot(&params, 124, 15)"
+---
+"┌ Sessions ────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+"│Resume a live session or start a new one                                    │ Details                                     │"
+"│/ Title, path, status, or session id                                        │Create a fresh ACP session.                  │"
+"│  Session              Working directory    Updated           Turn status   │No existing session will be claimed          │"
+"│› Start a new session  —                    now               ready         │implicitly.                                  │"
+"│  Build TUI componen…  /workspace/nori/cli  2020-01-15 10:30  working       │                                             │"
+"│  slack · claude       —                    2020-01-14 10:30  waiting       │                                             │"
+"│                                                                            │                                             │"
+"│                                                                            │                                             │"
+"│                                                                            │                                             │"
+"│                                                                            │                                             │"
+"│                                                                            │                                             │"
+"│                                                                            │                                             │"
+"│↑↓ move  enter select  esc close                                            │                                             │"
+"└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
