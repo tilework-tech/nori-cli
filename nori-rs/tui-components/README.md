@@ -11,10 +11,19 @@ The v0 surface contains:
   single/toggle/multi modes, and explicit loading/empty/error states;
 - width-aware Markdown rendering with adaptive table layouts;
 - semantic themes, messages, empty states, and key hints;
-- three fullscreen examples under `examples/` that serve as an interactive
-  TUI storybook.
+- one canonical fullscreen design storybook plus focused component examples.
+
+The enforceable visual contract lives in [`DESIGN.md`](DESIGN.md).
 
 Run the storybook examples from `nori-rs/`:
+
+```console
+cargo run -p codex-tui-components --example nori_storybook
+```
+
+The canonical storybook contains Picker, Markdown, Primitives, and States
+pages. Use `1-4` to change page and `d` to switch picker density. The focused
+examples remain useful while developing one component:
 
 ```console
 cargo run -p codex-tui-components --example picker_storybook

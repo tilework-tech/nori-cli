@@ -12,10 +12,10 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
+use ratatui::layout::Margin;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 use support::StorybookTerminal;
@@ -26,11 +26,14 @@ fn main() -> Result<()> {
     loop {
         terminal.terminal.draw(|frame| {
             let outer = Block::default()
-                .borders(Borders::ALL)
-                .title(Span::styled(" Component storybook ", theme.title));
-            let inner = outer.inner(frame.area());
+                .style(theme.surface);
             frame.render_widget(outer, frame.area());
+            let inner = frame.area().inner(Margin {
+                horizontal: 2,
+                vertical: 1,
+            });
             let chunks = Layout::vertical([
+                Constraint::Length(2),
                 Constraint::Length(3),
                 Constraint::Length(9),
                 Constraint::Length(4),
@@ -38,6 +41,10 @@ fn main() -> Result<()> {
                 Constraint::Length(1),
             ])
             .split(inner);
+            frame.render_widget(
+                Paragraph::new(Line::styled("Component storybook", theme.title)),
+                chunks[0],
+            );
             frame.render_widget(
                 Paragraph::new(vec![
                     Line::styled("Semantic tokens", theme.title),
@@ -49,7 +56,7 @@ fn main() -> Result<()> {
                         Span::styled("muted", theme.muted),
                     ]),
                 ]),
-                chunks[0],
+                chunks[1],
             );
             let messages = [
                 SemanticMessage::new(MessageLevel::Info, "Connected to the agent"),
@@ -63,9 +70,9 @@ fn main() -> Result<()> {
                 frame.render_widget(
                     message,
                     ratatui::layout::Rect::new(
-                        chunks[1].x,
-                        chunks[1].y + index as u16 * 2,
-                        chunks[1].width,
+                        chunks[2].x,
+                        chunks[2].y + index as u16 * 2,
+                        chunks[2].width,
                         2,
                     ),
                 );
@@ -73,15 +80,15 @@ fn main() -> Result<()> {
             frame.render_widget(
                 EmptyState::new("No matching sessions")
                     .detail("Try a title, project path, or session id."),
-                chunks[2],
-            );
-            frame.render_widget(
-                Paragraph::new("These primitives are intentionally small. Applications compose them around caller-owned state and translate their own events."),
                 chunks[3],
             );
             frame.render_widget(
-                KeyHints::new([KeyHint::new("q / esc", "close storybook")]),
+                Paragraph::new("These primitives are intentionally small. Applications compose them around caller-owned state and translate their own events."),
                 chunks[4],
+            );
+            frame.render_widget(
+                KeyHints::new([KeyHint::new("q / esc", "close storybook")]),
+                chunks[5],
             );
         })?;
         let Some(Event::Key(key)) = terminal.next_event()? else {

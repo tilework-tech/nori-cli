@@ -23,10 +23,10 @@ use crate::nori::viewonly_session_picker::format_relative_time;
 use crate::nori::viewonly_session_picker::format_session_name;
 use codex_tui_components::PickerColumn;
 use codex_tui_components::PickerColumnWidth;
+use codex_tui_components::PickerDetail;
 use codex_tui_components::PickerItem;
 use codex_tui_components::PickerState;
 use codex_tui_components::SearchMode;
-use ratatui::text::Line;
 
 /// Build the local transcript resume screen with the shared component picker.
 /// Domain actions remain in this adapter; the reusable crate only returns the
@@ -84,19 +84,27 @@ pub fn resume_session_component_picker_params(
                     session
                         .user_turn_count
                         .map(|turns| turns.to_string())
-                        .unwrap_or_else(|| "—".to_string()),
+                        .unwrap_or_else(|| "Not reported".to_string()),
                 )
                 .cell("updated", timestamp)
                 .search_text(search_text)
-                .detail([
-                    Line::from(format!("Session: {session_id}")),
-                    Line::from(format!("Project: {project_id}")),
-                    Line::from(format!("Started: {}", session.started_at)),
-                    Line::from(if preview.is_empty() {
-                        "First message: unavailable".to_string()
-                    } else {
-                        format!("First message: {preview}")
-                    }),
+                .description(if preview.is_empty() {
+                    "First message unavailable".to_string()
+                } else {
+                    preview.clone()
+                })
+                .details([
+                    PickerDetail::new("Session", session_id),
+                    PickerDetail::new("Project", project_id),
+                    PickerDetail::new("Started", session.started_at),
+                    PickerDetail::new(
+                        "First message",
+                        if preview.is_empty() {
+                            "Unavailable".to_string()
+                        } else {
+                            preview
+                        },
+                    ),
                 ])
         })
         .collect::<Vec<_>>();
@@ -155,14 +163,15 @@ pub fn acp_resume_session_component_picker_params(
         Box::new(|tx: &AppEventSender| tx.send(AppEvent::NewSession)) as SelectionAction,
     );
     let create_new = PickerItem::new("__new__".to_string(), "title", "Start a new session")
-        .cell("cwd", "—")
+        .cell("cwd", "Not reported")
         .cell("updated", "now")
         .cell("status", "ready")
         .search_text("start a new session create")
         .pinned(true)
-        .detail([
-            Line::from("Create a fresh ACP session."),
-            Line::from("No existing session will be claimed implicitly."),
+        .description("Create a fresh ACP session")
+        .details([
+            PickerDetail::new("Action", "Create a fresh ACP session"),
+            PickerDetail::new("Existing session", "No session will be claimed implicitly"),
         ]);
     let session_items = sessions.into_iter().map(|session| {
         let is_cloud_origin = session
@@ -197,7 +206,7 @@ pub fn acp_resume_session_component_picker_params(
                     .or_else(|| nori.get("current_turn_status"))
             })
             .and_then(serde_json::Value::as_str)
-            .unwrap_or("—")
+            .unwrap_or("Not reported")
             .to_string();
         let session_id = session.session_id.to_string();
         let search_text = [
@@ -207,7 +216,7 @@ pub fn acp_resume_session_component_picker_params(
             turn_status.as_str(),
         ]
         .into_iter()
-        .filter(|value| !value.is_empty() && *value != "—")
+        .filter(|value| !value.is_empty() && *value != "Not reported")
         .collect::<Vec<_>>()
         .join(" ");
         let action_session_id = session_id.clone();
@@ -227,21 +236,35 @@ pub fn acp_resume_session_component_picker_params(
             .and_then(|meta| serde_json::to_string(meta).ok())
             .unwrap_or_else(|| "none".to_string());
         PickerItem::new(session_id.clone(), "title", title)
-            .cell("cwd", if cwd.is_empty() { "—" } else { &cwd })
+            .cell("cwd", if cwd.is_empty() { "Not reported" } else { &cwd })
             .cell("updated", updated)
-            .cell("status", turn_status)
+            .cell("status", &turn_status)
             .search_text(search_text)
-            .detail([
-                Line::from(format!("Session id: {session_id}")),
-                Line::from(format!(
-                    "Working directory: {}",
-                    if cwd.is_empty() { "not reported" } else { &cwd }
-                )),
-                Line::from(format!(
-                    "Updated at: {}",
-                    session.updated_at.as_deref().unwrap_or("not reported")
-                )),
-                Line::from(format!("ACP _meta: {meta}")),
+            .description(format!(
+                "{} · {turn_status}",
+                if cwd.is_empty() {
+                    "Remote session"
+                } else {
+                    &cwd
+                }
+            ))
+            .details([
+                PickerDetail::new("Session id", session_id),
+                PickerDetail::new(
+                    "Working directory",
+                    if cwd.is_empty() {
+                        "Not reported".to_string()
+                    } else {
+                        cwd
+                    },
+                ),
+                PickerDetail::new(
+                    "Updated at",
+                    session
+                        .updated_at
+                        .unwrap_or_else(|| "Not reported".to_string()),
+                ),
+                PickerDetail::new("ACP _meta", meta),
             ])
     });
     let items = std::iter::once(create_new)
@@ -250,7 +273,7 @@ pub fn acp_resume_session_component_picker_params(
     let on_dismiss = Box::new(|tx: &AppEventSender| {
         tx.send(AppEvent::InsertHistoryCell(Box::new(
             crate::history_cell::new_info_event(
-                "No session selected — /resume reopens the picker, /new starts a fresh session."
+                "No session selected. /resume reopens the picker; /new starts a fresh session."
                     .to_string(),
                 None,
             ),
@@ -627,7 +650,7 @@ mod tests {
         let params = acp_resume_session_component_picker_params(sessions);
 
         assert_eq!(item_cell(&params, 1, "title"), "slack · claude");
-        assert_eq!(item_cell(&params, 1, "cwd"), "—");
+        assert_eq!(item_cell(&params, 1, "cwd"), "Not reported");
         assert_eq!(
             params.state.items[1].search_text,
             "cloud-sess-1 slack · claude"
@@ -650,7 +673,7 @@ mod tests {
 
         let params = acp_resume_session_component_picker_params(sessions);
 
-        assert_eq!(item_cell(&params, 1, "cwd"), "—");
+        assert_eq!(item_cell(&params, 1, "cwd"), "Not reported");
         assert_eq!(
             params.state.items[1].search_text,
             "cloud-sess-1 slack · claude"

@@ -2,11 +2,11 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
+use ratatui::layout::Margin;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthChar;
@@ -14,6 +14,7 @@ use unicode_width::UnicodeWidthStr;
 
 use super::PickerColumn;
 use super::PickerColumnWidth;
+use super::PickerDensity;
 use super::PickerLoadState;
 use super::PickerMode;
 use super::PickerState;
@@ -29,6 +30,7 @@ use crate::Theme;
 pub struct Picker<'a, K> {
     state: &'a PickerState<K>,
     theme: Theme,
+    density: PickerDensity,
 }
 
 impl<'a, K> Picker<'a, K> {
@@ -36,11 +38,17 @@ impl<'a, K> Picker<'a, K> {
         Self {
             state,
             theme: Theme::default(),
+            density: PickerDensity::default(),
         }
     }
 
     pub fn theme(mut self, theme: Theme) -> Self {
         self.theme = theme;
+        self
+    }
+
+    pub fn density(mut self, density: PickerDensity) -> Self {
+        self.density = density;
         self
     }
 }
@@ -50,36 +58,48 @@ impl<K: Clone + Eq> Widget for Picker<'_, K> {
         if area.width < 8 || area.height < 4 {
             return;
         }
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(self.theme.border)
-            .title(Span::styled(
-                format!(" {} ", self.state.title),
-                self.theme.title,
-            ));
-        let inner = block.inner(area);
-        block.render(area, buf);
+        Block::default().style(self.theme.surface).render(area, buf);
+        let inner = area.inner(Margin {
+            horizontal: 2,
+            vertical: 1,
+        });
+        if inner.width < 4 || inner.height < 3 {
+            return;
+        }
+        let page = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+        Paragraph::new(Line::styled(self.state.title.clone(), self.theme.title))
+            .render(page[0], buf);
 
-        let detail_visible = area.width >= 76
+        let detail_visible = area.width >= 110
             && self
                 .state
                 .selected_item()
-                .is_some_and(|item| !item.detail.is_empty());
+                .is_some_and(|item| !item.details.is_empty() || !item.detail.is_empty());
         let panes = if detail_visible {
             Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
-                .split(inner)
+                .constraints([
+                    Constraint::Length(72),
+                    Constraint::Length(2),
+                    Constraint::Min(24),
+                ])
+                .split(page[1])
         } else {
             Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(100)])
-                .split(inner)
+                .split(page[1])
         };
         self.render_list(panes[0], buf);
-        if let Some(detail_area) = panes.get(1).copied() {
+        if let Some(detail_area) = panes.get(2).copied() {
             self.render_detail(detail_area, buf);
         }
+        self.render_footer(page[2], buf);
     }
 }
 
@@ -88,15 +108,13 @@ impl<K: Clone + Eq> Picker<'_, K> {
         let subtitle_height = u16::from(self.state.subtitle.is_some());
         let category_height = u16::from(!self.state.categories.is_empty());
         let search_height = u16::from(!matches!(self.state.search_mode, SearchMode::None));
-        let footer_height = 1;
-        let fixed_height = subtitle_height + category_height + search_height + footer_height;
+        let fixed_height = subtitle_height + category_height + search_height;
         let content_height = area.height.saturating_sub(fixed_height);
         let chunks = Layout::vertical([
             Constraint::Length(subtitle_height),
             Constraint::Length(category_height),
             Constraint::Length(search_height),
             Constraint::Length(content_height),
-            Constraint::Length(footer_height),
         ])
         .split(area);
 
@@ -106,7 +124,6 @@ impl<K: Clone + Eq> Picker<'_, K> {
         self.render_categories(chunks[1], buf);
         self.render_search(chunks[2], buf);
         self.render_rows(chunks[3], buf);
-        self.render_footer(chunks[4], buf);
     }
 
     fn render_categories(&self, area: Rect, buf: &mut Buffer) {
@@ -146,14 +163,22 @@ impl<K: Clone + Eq> Picker<'_, K> {
         } else {
             Span::styled(self.state.query.clone(), self.theme.text)
         };
+        buf.set_style(area, self.theme.surface_alt);
+        let inner = area.inner(Margin {
+            horizontal: 1,
+            vertical: 0,
+        });
         Paragraph::new(Line::from(vec![
             Span::styled("/ ", self.theme.accent),
             query,
         ]))
-        .render(area, buf);
+        .render(inner, buf);
     }
 
     fn render_rows(&self, area: Rect, buf: &mut Buffer) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
         match &self.state.load_state {
             PickerLoadState::Loading(message) => {
                 EmptyState::new(message.clone())
@@ -195,7 +220,11 @@ impl<K: Clone + Eq> Picker<'_, K> {
 
         let columns = visible_columns(&self.state.columns, area.width);
         let widths = column_widths(&columns, self.state, &visible, area.width);
-        let header_height = u16::from(area.height > 2);
+        let row_height = match self.density {
+            PickerDensity::Compact => 1,
+            PickerDensity::Normal => 2,
+        };
+        let header_height = u16::from(area.height > row_height);
         if header_height > 0 {
             self.render_row(
                 Rect::new(area.x, area.y, area.width, 1),
@@ -209,16 +238,20 @@ impl<K: Clone + Eq> Picker<'_, K> {
         }
 
         let rows_height = area.height.saturating_sub(header_height);
+        if rows_height < row_height {
+            return;
+        }
+        let visible_row_count = (rows_height / row_height).max(1) as usize;
         let selected_position = self
             .state
             .selected_index
             .and_then(|selected| visible.iter().position(|index| *index == selected))
             .unwrap_or(0);
-        let start = selected_position.saturating_sub(rows_height.saturating_sub(1) as usize);
+        let start = selected_position.saturating_sub(visible_row_count.saturating_sub(1));
         for (row_offset, item_index) in visible
             .iter()
             .skip(start)
-            .take(rows_height as usize)
+            .take(visible_row_count)
             .enumerate()
         {
             let item = &self.state.items[*item_index];
@@ -240,12 +273,17 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     }
                 }
             };
-            let style = if item.disabled {
-                self.theme.disabled
-            } else if selected {
-                self.theme.selected
+            let surface = if (start + row_offset).is_multiple_of(2) {
+                self.theme.surface_alt
             } else {
-                self.theme.text
+                self.theme.surface
+            };
+            let style = if selected {
+                self.theme.selected
+            } else if item.disabled {
+                surface.patch(self.theme.disabled)
+            } else {
+                surface.patch(self.theme.text)
             };
             let badges = [
                 item.current.then_some("current"),
@@ -269,12 +307,13 @@ impl<K: Clone + Eq> Picker<'_, K> {
             }
             let row_area = Rect::new(
                 area.x,
-                area.y + header_height + row_offset as u16,
+                area.y + header_height + row_offset as u16 * row_height,
                 area.width,
-                1,
+                row_height,
             );
+            buf.set_style(row_area, style);
             self.render_row(
-                row_area,
+                Rect::new(row_area.x, row_area.y, row_area.width, 1),
                 buf,
                 &columns,
                 &widths,
@@ -282,8 +321,23 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 style,
                 marker,
             );
-            if selected {
-                buf.set_style(row_area, style);
+            if row_height > 1
+                && let Some(description) = &item.description
+            {
+                let description_area = Rect::new(
+                    row_area.x.saturating_add(2),
+                    row_area.y.saturating_add(1),
+                    row_area.width.saturating_sub(2),
+                    1,
+                );
+                let description_style = if selected {
+                    self.theme.selected
+                } else {
+                    surface.patch(self.theme.muted)
+                };
+                Paragraph::new(truncate(description, description_area.width as usize))
+                    .style(description_style)
+                    .render(description_area, buf);
             }
         }
     }
@@ -321,15 +375,65 @@ impl<K: Clone + Eq> Picker<'_, K> {
         let Some(item) = self.state.selected_item() else {
             return;
         };
-        let block = Block::default()
-            .borders(Borders::LEFT)
-            .border_style(self.theme.border)
-            .title(Span::styled(" Details ", self.theme.title));
-        let inner = block.inner(area);
-        block.render(area, buf);
-        Paragraph::new(item.detail.clone())
-            .wrap(ratatui::widgets::Wrap { trim: false })
-            .render(inner, buf);
+        Block::default()
+            .style(self.theme.detail_surface)
+            .render(area, buf);
+        let inner = area.inner(Margin {
+            horizontal: 1,
+            vertical: 1,
+        });
+        if inner.height == 0 {
+            return;
+        }
+        Paragraph::new(Line::styled("Details", self.theme.title))
+            .render(Rect::new(inner.x, inner.y, inner.width, 1), buf);
+        let content = Rect::new(
+            inner.x,
+            inner.y.saturating_add(2),
+            inner.width,
+            inner.height.saturating_sub(2),
+        );
+        if item.details.is_empty() {
+            Paragraph::new(item.detail.clone())
+                .style(self.theme.text)
+                .wrap(ratatui::widgets::Wrap { trim: false })
+                .render(content, buf);
+            return;
+        }
+        let label_width = item
+            .details
+            .iter()
+            .map(|detail| detail.label.width() as u16)
+            .max()
+            .unwrap_or(0)
+            .min(14)
+            .min(content.width.saturating_sub(4) / 2);
+        for (index, detail) in item
+            .details
+            .iter()
+            .take(content.height as usize)
+            .enumerate()
+        {
+            let y = content.y.saturating_add(index as u16);
+            let label = pad_left(
+                &truncate(&detail.label, label_width as usize),
+                label_width as usize,
+            );
+            buf.set_string(content.x, y, label, self.theme.muted);
+            let separator_x = content.x.saturating_add(label_width).saturating_add(1);
+            buf.set_string(separator_x, y, "│", self.theme.separator);
+            let value_area = Rect::new(
+                separator_x.saturating_add(2),
+                y,
+                content
+                    .right()
+                    .saturating_sub(separator_x.saturating_add(2)),
+                1,
+            );
+            Paragraph::new(truncate_line(&detail.value, value_area.width as usize))
+                .style(self.theme.text)
+                .render(value_area, buf);
+        }
     }
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
@@ -444,4 +548,58 @@ fn truncate(value: &str, width: usize) -> String {
     }
     result.push('…');
     result
+}
+
+fn pad_left(value: &str, width: usize) -> String {
+    let padding = width.saturating_sub(value.width());
+    format!("{}{value}", " ".repeat(padding))
+}
+
+fn truncate_line(line: &Line<'_>, width: usize) -> Line<'static> {
+    if width == 0 {
+        return Line::default();
+    }
+    let line_width = line
+        .spans
+        .iter()
+        .map(|span| span.content.width())
+        .sum::<usize>();
+    if line_width <= width {
+        return Line::from(
+            line.spans
+                .iter()
+                .map(|span| Span::styled(span.content.to_string(), span.style))
+                .collect::<Vec<_>>(),
+        );
+    }
+    if width == 1 {
+        return Line::from("…");
+    }
+
+    let mut remaining = width - 1;
+    let mut spans = Vec::new();
+    let mut ellipsis_style = ratatui::style::Style::default();
+    for span in &line.spans {
+        if remaining == 0 {
+            break;
+        }
+        let mut content = String::new();
+        for character in span.content.chars() {
+            let character_width = character.width().unwrap_or(0);
+            if character_width > remaining {
+                break;
+            }
+            content.push(character);
+            remaining -= character_width;
+        }
+        if !content.is_empty() {
+            ellipsis_style = span.style;
+            spans.push(Span::styled(content, span.style));
+        }
+        if remaining == 0 {
+            break;
+        }
+    }
+    spans.push(Span::styled("…", ellipsis_style));
+    Line::from(spans)
 }

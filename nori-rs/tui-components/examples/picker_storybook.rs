@@ -5,6 +5,7 @@ use codex_tui_components::Picker;
 use codex_tui_components::PickerAction;
 use codex_tui_components::PickerColumn;
 use codex_tui_components::PickerColumnWidth;
+use codex_tui_components::PickerDetail;
 use codex_tui_components::PickerItem;
 use codex_tui_components::PickerMode;
 use codex_tui_components::PickerOutcome;
@@ -14,6 +15,7 @@ use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use ratatui::layout::Alignment;
 use ratatui::text::Line;
 
 use support::StorybookTerminal;
@@ -29,10 +31,11 @@ fn main() -> Result<()> {
             frame.render_widget(Picker::new(&state), frame.area());
             if frame.area().height > 2 {
                 frame.render_widget(
-                    Line::from(notice.clone()),
+                    Line::styled(notice.clone(), codex_tui_components::Theme::default().muted)
+                        .alignment(Alignment::Center),
                     ratatui::layout::Rect::new(
                         frame.area().x + 2,
-                        frame.area().bottom() - 2,
+                        frame.area().bottom() - 3,
                         frame.area().width.saturating_sub(4),
                         1,
                     ),
@@ -112,15 +115,16 @@ fn story_state() -> PickerState<String> {
     ];
     let items = [
         PickerItem::new("new".to_string(), "title", "Start a new session")
-            .cell("project", "—")
+            .cell("project", "Not reported")
             .cell("updated", "now")
             .cell("status", "ready")
             .search_text("start create new")
             .pinned(true)
             .category("Local")
-            .detail([
-                Line::from("Create a fresh ACP session."),
-                Line::from("No transcript will be loaded."),
+            .description("Create a fresh ACP session")
+            .details([
+                PickerDetail::new("Action", "Create a fresh ACP session"),
+                PickerDetail::new("Transcript", "No transcript will be loaded"),
             ]),
         PickerItem::new("parser".to_string(), "title", "Fix parser recovery")
             .cell("project", "nori-cli")
@@ -129,10 +133,11 @@ fn story_state() -> PickerState<String> {
             .search_text("fix parser recovery nori cli session 019f")
             .current(true)
             .category("Local")
-            .detail([
-                Line::from("Agent: Codex"),
-                Line::from("Path: /workspace/nori/cli"),
-                Line::from("Current turn: implementing parser recovery"),
+            .description("Codex is implementing parser recovery")
+            .details([
+                PickerDetail::new("Agent", "Codex"),
+                PickerDetail::new("Path", "/workspace/nori/cli"),
+                PickerDetail::new("Current turn", "Implementing parser recovery"),
             ]),
         PickerItem::new("markdown".to_string(), "title", "Improve Markdown tables")
             .cell("project", "external-codex")
@@ -140,9 +145,10 @@ fn story_state() -> PickerState<String> {
             .cell("status", "waiting")
             .search_text("markdown tables codex waiting")
             .category("Local")
-            .detail([
-                Line::from("Agent: Codex"),
-                Line::from("Waiting for user input."),
+            .description("Waiting for user input")
+            .details([
+                PickerDetail::new("Agent", "Codex"),
+                PickerDetail::new("Turn", "Waiting for user input"),
             ]),
         PickerItem::new("cloud".to_string(), "title", "Slack · Claude")
             .cell("project", "Nori Sessions")
@@ -150,9 +156,10 @@ fn story_state() -> PickerState<String> {
             .cell("status", "ready")
             .search_text("slack claude cloud sessions")
             .category("Cloud")
-            .detail([
-                Line::from("Origin: Nori cloud"),
-                Line::from("The broker owns the remote session."),
+            .description("The broker owns this remote session")
+            .details([
+                PickerDetail::new("Origin", "Nori cloud"),
+                PickerDetail::new("Ownership", "The broker owns the remote session"),
             ]),
         PickerItem::new("offline".to_string(), "title", "Unavailable legacy session")
             .cell("project", "handroll")

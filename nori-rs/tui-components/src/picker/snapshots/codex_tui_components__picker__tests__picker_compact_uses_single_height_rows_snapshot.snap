@@ -1,6 +1,6 @@
 ---
 source: tui-components/src/picker/tests.rs
-expression: "snapshot(&state, 86, 13)"
+expression: "snapshot_with_density(&session_picker(), 86, 13, PickerDensity::Compact,)"
 ---
 "                                                                                      "
 "  Resume a session                                                                    "
@@ -8,10 +8,10 @@ expression: "snapshot(&state, 86, 13)"
 "  All  Local  Cloud                                                                   "
 "   / Title, project, or session id                                                    "
 "    Session                              Project             Updated     Turn         "
-"  ● Fix parser recovery (current)        nori-cli            2m ago      working      "
-"    Codex is implementing parser recovery                                             "
-"  ● Improve Markdown tables              codex               18m ago     waiting      "
-"    Waiting for user input                                                            "
+"  › Start a new session                  Not reported        now         ready        "
+"    Fix parser recovery (current)        nori-cli            2m ago      working      "
+"    Improve Markdown tables              codex               18m ago     waiting      "
+"    Legacy unavailable session           handroll            3d ago      offline      "
 "                                                                                      "
-"                           ↑↓ move  enter toggle  esc close                           "
+"                           ↑↓ move  enter select  esc close                           "
 "                                                                                      "

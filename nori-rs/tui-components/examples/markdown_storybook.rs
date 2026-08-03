@@ -9,8 +9,9 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
+use ratatui::layout::Margin;
+use ratatui::text::Line;
 use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 use support::StorybookTerminal;
@@ -63,24 +64,36 @@ fn main() -> Result<()> {
     let mut scroll = 0;
     loop {
         terminal.terminal.draw(|frame| {
-            let chunks =
-                Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(frame.area());
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .title(format!(" Markdown storybook · page {} of 3 ", document + 1));
-            let inner = block.inner(chunks[0]);
-            frame.render_widget(block, chunks[0]);
+            let theme = codex_tui_components::Theme::default();
+            frame.render_widget(Block::default().style(theme.surface), frame.area());
+            let page = frame.area().inner(Margin {
+                horizontal: 2,
+                vertical: 1,
+            });
+            let chunks = Layout::vertical([
+                Constraint::Length(2),
+                Constraint::Min(1),
+                Constraint::Length(1),
+            ])
+            .split(page);
+            frame.render_widget(
+                Paragraph::new(Line::styled(
+                    format!("Markdown storybook · page {} of 3", document + 1),
+                    theme.title,
+                )),
+                chunks[0],
+            );
             let text = Markdown::new(DOCUMENTS[document])
-                .width(inner.width)
+                .width(chunks[1].width)
                 .render_text();
-            frame.render_widget(Paragraph::new(text).scroll((scroll, 0)), inner);
+            frame.render_widget(Paragraph::new(text).scroll((scroll, 0)), chunks[1]);
             frame.render_widget(
                 KeyHints::new([
                     KeyHint::new("1-3", "page"),
                     KeyHint::new("↑↓", "scroll"),
                     KeyHint::new("q", "close"),
                 ]),
-                chunks[1],
+                chunks[2],
             );
         })?;
         let Some(Event::Key(key)) = terminal.next_event()? else {

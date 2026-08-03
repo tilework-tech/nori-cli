@@ -72,6 +72,8 @@ pub struct PickerItem<K> {
     pub search_text: String,
     pub category: Option<String>,
     pub detail: Vec<Line<'static>>,
+    pub details: Vec<PickerDetail>,
+    pub description: Option<String>,
     pub disabled: bool,
     pub current: bool,
     pub default: bool,
@@ -88,6 +90,8 @@ impl<K> PickerItem<K> {
             search_text: label,
             category: None,
             detail: Vec::new(),
+            details: Vec::new(),
+            description: None,
             disabled: false,
             current: false,
             default: false,
@@ -116,6 +120,21 @@ impl<K> PickerItem<K> {
         self
     }
 
+    /// Add structured metadata for the detail pane.
+    ///
+    /// Prefer this to [`Self::detail`]. Labels are aligned by the renderer and
+    /// must not contain trailing colons.
+    pub fn details(mut self, details: impl IntoIterator<Item = PickerDetail>) -> Self {
+        self.details = details.into_iter().collect();
+        self
+    }
+
+    /// Add the secondary row shown in normal density.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
@@ -140,6 +159,30 @@ impl<K> PickerItem<K> {
         self.pinned = pinned;
         self
     }
+}
+
+/// One label/value entry in a picker's aligned metadata pane.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PickerDetail {
+    pub label: String,
+    pub value: Line<'static>,
+}
+
+impl PickerDetail {
+    pub fn new(label: impl Into<String>, value: impl Into<Line<'static>>) -> Self {
+        Self {
+            label: label.into().trim_end_matches(':').to_string(),
+            value: value.into(),
+        }
+    }
+}
+
+/// Vertical anatomy used to render picker rows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PickerDensity {
+    Compact,
+    #[default]
+    Normal,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

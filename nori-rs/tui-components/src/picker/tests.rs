@@ -3,7 +3,7 @@ use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use ratatui::text::Line;
+use ratatui::style::Color;
 
 fn session_picker() -> PickerState<String> {
     let columns = [
@@ -24,14 +24,15 @@ fn session_picker() -> PickerState<String> {
     ];
     let items = [
         PickerItem::new("new".to_string(), "title", "Start a new session")
-            .cell("project", "—")
+            .cell("project", "Not reported")
             .cell("updated", "now")
             .cell("status", "ready")
             .search_text("start a new session create")
             .pinned(true)
-            .detail([
-                Line::from("Create a fresh ACP session."),
-                Line::from("No existing transcript will be loaded."),
+            .description("Create a fresh ACP session")
+            .details([
+                PickerDetail::new("Action", "Create a fresh ACP session"),
+                PickerDetail::new("Transcript", "No existing transcript will be loaded"),
             ]),
         PickerItem::new("parser".to_string(), "title", "Fix parser recovery")
             .cell("project", "nori-cli")
@@ -39,19 +40,21 @@ fn session_picker() -> PickerState<String> {
             .cell("status", "working")
             .search_text("parser recovery nori-cli session-019f")
             .current(true)
-            .detail([
-                Line::from("Agent: Codex"),
-                Line::from("Path: /workspace/nori/cli"),
-                Line::from("Turn: implementing parser recovery"),
+            .description("Codex is implementing parser recovery")
+            .details([
+                PickerDetail::new("Agent", "Codex"),
+                PickerDetail::new("Path", "/workspace/nori/cli"),
+                PickerDetail::new("Turn", "Implementing parser recovery"),
             ]),
         PickerItem::new("tables".to_string(), "title", "Improve Markdown tables")
             .cell("project", "codex")
             .cell("updated", "18m ago")
             .cell("status", "waiting")
             .search_text("markdown tables codex session-018a")
-            .detail([
-                Line::from("Agent: Codex"),
-                Line::from("Waiting for user input."),
+            .description("Waiting for user input")
+            .details([
+                PickerDetail::new("Agent", "Codex"),
+                PickerDetail::new("Turn", "Waiting for user input"),
             ]),
         PickerItem::new("legacy".to_string(), "title", "Legacy unavailable session")
             .cell("project", "handroll")
@@ -67,22 +70,57 @@ fn session_picker() -> PickerState<String> {
 }
 
 fn snapshot(state: &PickerState<String>, width: u16, height: u16) -> String {
+    snapshot_with_density(state, width, height, PickerDensity::Normal)
+}
+
+fn snapshot_with_density(
+    state: &PickerState<String>,
+    width: u16,
+    height: u16,
+    density: PickerDensity,
+) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
-        .draw(|frame| frame.render_widget(Picker::new(state), frame.area()))
+        .draw(|frame| frame.render_widget(Picker::new(state).density(density), frame.area()))
         .expect("draw picker");
     terminal.backend().to_string()
 }
 
 #[test]
 fn picker_wide_with_columns_and_detail_snapshot() {
-    assert_snapshot!(snapshot(&session_picker(), 100, 16));
+    assert_snapshot!(snapshot(&session_picker(), 124, 16));
 }
 
 #[test]
 fn picker_narrow_collapses_optional_columns_snapshot() {
     assert_snapshot!(snapshot(&session_picker(), 48, 13));
+}
+
+#[test]
+fn picker_compact_uses_single_height_rows_snapshot() {
+    assert_snapshot!(snapshot_with_density(
+        &session_picker(),
+        86,
+        13,
+        PickerDensity::Compact,
+    ));
+}
+
+#[test]
+fn picker_applies_zebra_surfaces_and_full_width_selection() {
+    let backend = TestBackend::new(100, 16);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| frame.render_widget(Picker::new(&session_picker()), frame.area()))
+        .expect("draw picker");
+    let buffer = terminal.backend().buffer();
+
+    for x in 2..56 {
+        assert_eq!(buffer[(x, 6)].bg, Color::Cyan);
+    }
+    assert_eq!(buffer[(3, 8)].bg, Color::Reset);
+    assert_eq!(buffer[(3, 10)].bg, Color::DarkGray);
 }
 
 #[test]

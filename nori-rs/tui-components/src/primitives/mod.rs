@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use ratatui::buffer::Buffer;
+use ratatui::layout::Alignment;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -191,6 +192,7 @@ impl Widget for KeyHints<'_> {
             })
             .collect::<Vec<_>>();
         Paragraph::new(Line::from(spans))
+            .alignment(Alignment::Center)
             .wrap(ratatui::widgets::Wrap { trim: true })
             .render(area, buf);
     }
