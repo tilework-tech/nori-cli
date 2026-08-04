@@ -201,8 +201,11 @@ claim a VM, with "Start a new session" as an explicit pick. The clap-skipped
 that picker and immediately spawns the deferred agent instead — the handroll
 child was configured with `cloud-acp --onboard`, so the broker
 acquires-or-resumes the org's single onboarding session server-side and the
-TUI needs no session choice. Initial positional prompts still auto-send on
-`SessionConfigured` for all entry paths.
+TUI needs no session choice. Because the `--onboard` argv is part of the
+process-wide agent registry entry, every later spawn in that process (`/new`,
+the post-`/close` picker's "start new" row) also reattaches to the onboarding
+session. Initial positional prompts still auto-send on `SessionConfigured`
+for all entry paths.
 
 That launch-origin state retains the cloud ACP session id for footer and
 welcome-card identity, rejects local-only commands, and selects cloud

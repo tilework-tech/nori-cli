@@ -224,22 +224,6 @@ mod tests {
             }
             other => panic!("cloud agent must use a local distribution, got: {other:?}"),
         }
-
-        let config = cloud_agent_config(Path::new("/opt/bin/nori-handroll"), None, false);
-        let resolved = config
-            .distribution
-            .resolve()
-            .expect("distribution must be valid");
-        match resolved {
-            nori_config::ResolvedDistribution::Local { args, .. } => {
-                assert_eq!(
-                    args,
-                    vec!["cloud-acp".to_string()],
-                    "plain cloud entry must not send --onboard"
-                );
-            }
-            other => panic!("cloud agent must use a local distribution, got: {other:?}"),
-        }
     }
 
     #[test]

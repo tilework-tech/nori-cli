@@ -292,9 +292,10 @@ impl App {
                 // onboarding session. The handroll child was configured with
                 // `cloud-acp --onboard`, and the broker acquires-or-resumes
                 // the single onboarding session behind its own mutex.
-                app.deferred_spawn_pending = false;
-                app.chat_widget
-                    .spawn_deferred_agent(app.config.clone(), app.app_event_tx.clone());
+                if app.take_deferred_spawn() {
+                    app.chat_widget
+                        .spawn_deferred_agent(app.config.clone(), app.app_event_tx.clone());
+                }
             } else {
                 // Picker-first entry: list live sessions before anything can
                 // claim one; "start new" is an explicit row in the picker.
