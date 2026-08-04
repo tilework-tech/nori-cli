@@ -175,6 +175,7 @@ impl App {
         resume_selection: ResumeSelection,
         vertical_footer: bool,
         cloud_mode: bool,
+        cloud_onboard: bool,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -286,9 +287,19 @@ impl App {
         // `SkillsetPickerDismissed` event triggers the deferred spawn without a
         // skillset.
         if cloud_mode {
-            // Picker-first entry: list live sessions before anything can
-            // claim one; "start new" is an explicit row in the picker.
-            app.begin_agent_session_picker(true);
+            if cloud_onboard {
+                // `--onboard`: no picker — spawn straight into the org's
+                // onboarding session. The handroll child was configured with
+                // `cloud-acp --onboard`, and the broker acquires-or-resumes
+                // the single onboarding session behind its own mutex.
+                app.deferred_spawn_pending = false;
+                app.chat_widget
+                    .spawn_deferred_agent(app.config.clone(), app.app_event_tx.clone());
+            } else {
+                // Picker-first entry: list live sessions before anything can
+                // claim one; "start new" is an explicit row in the picker.
+                app.begin_agent_session_picker(true);
+            }
         } else if app.config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
         }
