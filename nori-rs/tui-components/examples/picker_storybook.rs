@@ -22,17 +22,17 @@ use support::StorybookTerminal;
 
 fn main() -> Result<()> {
     let mut terminal = StorybookTerminal::enter()?;
+    let theme = terminal.theme;
     let mut state = story_state();
     let mut notice =
         "Resize the terminal to see columns collapse and the detail pane move.".to_string();
 
     loop {
         terminal.terminal.draw(|frame| {
-            frame.render_widget(Picker::new(&state), frame.area());
+            frame.render_widget(Picker::new(&state).theme(theme), frame.area());
             if frame.area().height > 2 {
                 frame.render_widget(
-                    Line::styled(notice.clone(), codex_tui_components::Theme::default().muted)
-                        .alignment(Alignment::Center),
+                    Line::styled(notice.clone(), theme.muted).alignment(Alignment::Center),
                     ratatui::layout::Rect::new(
                         frame.area().x + 2,
                         frame.area().bottom() - 3,

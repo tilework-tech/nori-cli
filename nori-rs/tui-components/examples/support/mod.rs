@@ -2,6 +2,7 @@ use std::io::Stdout;
 use std::time::Duration;
 
 use anyhow::Result;
+use codex_tui_components::Theme;
 use crossterm::event;
 use crossterm::execute;
 use crossterm::terminal::EnterAlternateScreen;
@@ -13,6 +14,7 @@ use ratatui::backend::CrosstermBackend;
 
 pub struct StorybookTerminal {
     pub terminal: Terminal<CrosstermBackend<Stdout>>,
+    pub theme: Theme,
 }
 
 impl StorybookTerminal {
@@ -21,7 +23,8 @@ impl StorybookTerminal {
         let mut stdout = std::io::stdout();
         execute!(stdout, EnterAlternateScreen)?;
         let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
-        Ok(Self { terminal })
+        let theme = Theme::for_terminal_background(relative_terminal_background());
+        Ok(Self { terminal, theme })
     }
 
     pub fn next_event(&mut self) -> Result<Option<event::Event>> {
@@ -31,6 +34,23 @@ impl StorybookTerminal {
             Ok(None)
         }
     }
+}
+
+#[cfg(unix)]
+fn relative_terminal_background() -> Option<(u8, u8, u8)> {
+    use crossterm::style::Color;
+    use crossterm::style::query_background_color;
+
+    supports_color::on_cached(supports_color::Stream::Stdout).filter(|level| level.has_16m)?;
+    match query_background_color().ok().flatten()? {
+        Color::Rgb { r, g, b } => Some((r, g, b)),
+        _ => None,
+    }
+}
+
+#[cfg(not(unix))]
+fn relative_terminal_background() -> Option<(u8, u8, u8)> {
+    None
 }
 
 impl Drop for StorybookTerminal {

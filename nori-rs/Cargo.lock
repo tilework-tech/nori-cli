@@ -1138,6 +1138,7 @@ dependencies = [
  "pretty_assertions",
  "pulldown-cmark",
  "ratatui",
+ "supports-color",
  "textwrap 0.16.2",
  "unicode-width 0.2.1",
 ]

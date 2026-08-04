@@ -6,7 +6,6 @@ use codex_tui_components::KeyHint;
 use codex_tui_components::KeyHints;
 use codex_tui_components::MessageLevel;
 use codex_tui_components::SemanticMessage;
-use codex_tui_components::Theme;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
@@ -22,7 +21,7 @@ use support::StorybookTerminal;
 
 fn main() -> Result<()> {
     let mut terminal = StorybookTerminal::enter()?;
-    let theme = Theme::default();
+    let theme = terminal.theme;
     loop {
         terminal.terminal.draw(|frame| {
             let outer = Block::default()
@@ -68,7 +67,7 @@ fn main() -> Result<()> {
             ];
             for (index, message) in messages.into_iter().enumerate() {
                 frame.render_widget(
-                    message,
+                    message.theme(theme),
                     ratatui::layout::Rect::new(
                         chunks[2].x,
                         chunks[2].y + index as u16 * 2,
@@ -79,7 +78,8 @@ fn main() -> Result<()> {
             }
             frame.render_widget(
                 EmptyState::new("No matching sessions")
-                    .detail("Try a title, project path, or session id."),
+                    .detail("Try a title, project path, or session id.")
+                    .theme(theme),
                 chunks[3],
             );
             frame.render_widget(
@@ -87,7 +87,7 @@ fn main() -> Result<()> {
                 chunks[4],
             );
             frame.render_widget(
-                KeyHints::new([KeyHint::new("q / esc", "close storybook")]),
+                KeyHints::new([KeyHint::new("q / esc", "close storybook")]).theme(theme),
                 chunks[5],
             );
         })?;

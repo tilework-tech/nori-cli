@@ -62,6 +62,7 @@ enum Page {
 
 fn main() -> Result<()> {
     let mut terminal = StorybookTerminal::enter()?;
+    let theme = terminal.theme;
     let mut page = Page::default();
     let mut density = PickerDensity::Normal;
     let mut state = picker_state();
@@ -69,7 +70,7 @@ fn main() -> Result<()> {
 
     loop {
         terminal.terminal.draw(|frame| {
-            render_navigation(frame.area(), frame.buffer_mut(), page);
+            render_navigation(frame.area(), frame.buffer_mut(), page, theme);
             let content = Rect::new(
                 frame.area().x,
                 frame.area().y.saturating_add(1),
@@ -78,12 +79,12 @@ fn main() -> Result<()> {
             );
             match page {
                 Page::Picker => {
-                    frame.render_widget(Picker::new(&state).density(density), content);
-                    render_storybook_footer(content, frame.buffer_mut(), density, &notice);
+                    frame.render_widget(Picker::new(&state).theme(theme).density(density), content);
+                    render_storybook_footer(content, frame.buffer_mut(), density, &notice, theme);
                 }
-                Page::Markdown => render_markdown(content, frame.buffer_mut()),
-                Page::Primitives => render_primitives(content, frame.buffer_mut()),
-                Page::States => render_states(content, frame.buffer_mut()),
+                Page::Markdown => render_markdown(content, frame.buffer_mut(), theme),
+                Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
+                Page::States => render_states(content, frame.buffer_mut(), theme),
             }
         })?;
 
@@ -146,8 +147,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page) {
-    let theme = Theme::default();
+fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, theme: Theme) {
     Block::default().style(theme.surface).render(area, buf);
     let labels = [
         (Page::Picker, "1 Picker"),
@@ -178,6 +178,7 @@ fn render_storybook_footer(
     buf: &mut ratatui::buffer::Buffer,
     density: PickerDensity,
     notice: &str,
+    theme: Theme,
 ) {
     let footer = Rect::new(
         area.x.saturating_add(2),
@@ -185,17 +186,18 @@ fn render_storybook_footer(
         area.width.saturating_sub(4),
         1,
     );
-    buf.set_style(footer, Theme::default().surface);
+    buf.set_style(footer, theme.surface);
     KeyHints::new([
         KeyHint::new("d", format!("{:?} density", density).to_lowercase()),
         KeyHint::new("m", "selection mode"),
         KeyHint::new("s", "content state"),
         KeyHint::new("q", "close"),
     ])
+    .theme(theme)
     .render(footer, buf);
     if area.height > 4 {
         Paragraph::new(notice.to_string())
-            .style(Theme::default().muted)
+            .style(theme.muted)
             .alignment(Alignment::Center)
             .render(
                 Rect::new(
@@ -209,18 +211,18 @@ fn render_storybook_footer(
     }
 }
 
-fn render_markdown(area: Rect, buf: &mut ratatui::buffer::Buffer) {
-    let inner = page_frame(area, buf, "Markdown");
+fn render_markdown(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
+    let inner = page_frame(area, buf, "Markdown", theme);
     let text = Markdown::new(MARKDOWN_SAMPLE)
+        .theme(theme)
         .width(inner.width)
         .render_text();
     Paragraph::new(text).render(inner, buf);
-    render_page_footer(area, buf);
+    render_page_footer(area, buf, theme);
 }
 
-fn render_primitives(area: Rect, buf: &mut ratatui::buffer::Buffer) {
-    let theme = Theme::default();
-    let inner = page_frame(area, buf, "Primitives");
+fn render_primitives(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
+    let inner = page_frame(area, buf, "Primitives", theme);
     let sections = Layout::vertical([
         Constraint::Length(3),
         Constraint::Length(9),
@@ -247,7 +249,7 @@ fn render_primitives(area: Rect, buf: &mut ratatui::buffer::Buffer) {
             .detail("The agent no longer reports that session id"),
     ];
     for (index, message) in messages.into_iter().enumerate() {
-        message.render(
+        message.theme(theme).render(
             Rect::new(
                 sections[1].x,
                 sections[1].y.saturating_add(index as u16 * 2),
@@ -259,13 +261,13 @@ fn render_primitives(area: Rect, buf: &mut ratatui::buffer::Buffer) {
     }
     EmptyState::new("No matching sessions")
         .detail("Try a title, project path, or session id")
+        .theme(theme)
         .render(sections[2], buf);
-    render_page_footer(area, buf);
+    render_page_footer(area, buf, theme);
 }
 
-fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer) {
-    let theme = Theme::default();
-    let inner = page_frame(area, buf, "States");
+fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
+    let inner = page_frame(area, buf, "States", theme);
     let rows = Layout::vertical([
         Constraint::Percentage(34),
         Constraint::Percentage(33),
@@ -286,7 +288,7 @@ fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer) {
             theme.row
         };
         Block::default().style(style).render(rows[index], buf);
-        example.render(
+        example.theme(theme).render(
             rows[index].inner(Margin {
                 horizontal: 1,
                 vertical: 1,
@@ -294,11 +296,10 @@ fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer) {
             buf,
         );
     }
-    render_page_footer(area, buf);
+    render_page_footer(area, buf, theme);
 }
 
-fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str) -> Rect {
-    let theme = Theme::default();
+fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str, theme: Theme) -> Rect {
     Block::default().style(theme.surface).render(area, buf);
     let inner = area.inner(Margin {
         horizontal: 2,
@@ -314,16 +315,18 @@ fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str) -> Rec
     )
 }
 
-fn render_page_footer(area: Rect, buf: &mut ratatui::buffer::Buffer) {
-    KeyHints::new([KeyHint::new("1-4", "page"), KeyHint::new("q", "close")]).render(
-        Rect::new(
-            area.x.saturating_add(2),
-            area.bottom().saturating_sub(2),
-            area.width.saturating_sub(4),
-            1,
-        ),
-        buf,
-    );
+fn render_page_footer(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
+    KeyHints::new([KeyHint::new("1-4", "page"), KeyHint::new("q", "close")])
+        .theme(theme)
+        .render(
+            Rect::new(
+                area.x.saturating_add(2),
+                area.bottom().saturating_sub(2),
+                area.width.saturating_sub(4),
+                1,
+            ),
+            buf,
+        );
 }
 
 fn picker_action(key: KeyEvent) -> Option<PickerAction> {

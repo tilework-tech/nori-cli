@@ -20,8 +20,10 @@ as they move into this crate.
 7. Use one primary accent for focus, navigation, titles, and hint keys.
 8. Reserve additional colors for semantic state or identity only.
 9. Keep primary copy in the terminal foreground and supporting copy muted.
-10. Derive neutral surface layers from the terminal background when the
-    consumer can inspect it. Keep the relative contrast between layers small.
+10. Derive neutral surface layers by blending a small contrasting tint into
+    the reported terminal background. Use this only when the
+    consumer has both the RGB background and true-color support. Otherwise,
+    leave backgrounds unset; never substitute absolute indexed shades.
 11. Never use a widget-local selection color. Selection is a theme token.
 
 ## Lists and pickers

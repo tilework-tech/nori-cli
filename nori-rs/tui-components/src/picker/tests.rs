@@ -1,4 +1,5 @@
 use super::*;
+use crate::Theme;
 use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 use ratatui::Terminal;
@@ -110,22 +111,25 @@ fn picker_compact_uses_single_height_rows_snapshot() {
 #[test]
 #[allow(clippy::disallowed_methods)]
 fn picker_applies_density_surfaces_search_input_and_selection() {
+    let theme = Theme::for_terminal_background(Some((20, 20, 20)));
     let backend = TestBackend::new(100, 16);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
-        .draw(|frame| frame.render_widget(Picker::new(&session_picker()), frame.area()))
+        .draw(|frame| {
+            frame.render_widget(Picker::new(&session_picker()).theme(theme), frame.area())
+        })
         .expect("draw picker");
     let buffer = terminal.backend().buffer();
 
     for x in 2..56 {
-        assert_eq!(buffer[(x, 6)].bg, Color::Indexed(237));
+        assert_eq!(buffer[(x, 6)].bg, Color::Rgb(43, 43, 43));
     }
     assert_eq!(buffer[(10, 6)].fg, Color::Cyan);
     assert_eq!(buffer[(3, 8)].bg, Color::Reset);
     assert_eq!(buffer[(3, 10)].bg, Color::Reset);
     assert_eq!(buffer[(2, 4)].symbol(), "⌕");
     assert_eq!(buffer[(2, 4)].bg, Color::Reset);
-    assert_eq!(buffer[(4, 4)].bg, Color::Indexed(235));
+    assert_eq!(buffer[(4, 4)].bg, Color::Rgb(38, 38, 38));
     assert_eq!(buffer[(3, 5)].bg, Color::Reset);
     assert_eq!(buffer[(3, 14)].bg, Color::Reset);
 
@@ -134,14 +138,16 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
     terminal
         .draw(|frame| {
             frame.render_widget(
-                Picker::new(&session_picker()).density(PickerDensity::Compact),
+                Picker::new(&session_picker())
+                    .theme(theme)
+                    .density(PickerDensity::Compact),
                 frame.area(),
             )
         })
         .expect("draw compact picker");
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(3, 7)].bg, Color::Indexed(236));
-    assert_eq!(buffer[(3, 8)].bg, Color::Indexed(235));
+    assert_eq!(buffer[(3, 7)].bg, Color::Rgb(36, 36, 36));
+    assert_eq!(buffer[(3, 8)].bg, Color::Rgb(29, 29, 29));
 }
 
 #[test]

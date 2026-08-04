@@ -60,11 +60,11 @@ buffer on each frame. Incomplete syntax remains safe; later chunks refine it.
 
 fn main() -> Result<()> {
     let mut terminal = StorybookTerminal::enter()?;
+    let theme = terminal.theme;
     let mut document = 0;
     let mut scroll = 0;
     loop {
         terminal.terminal.draw(|frame| {
-            let theme = codex_tui_components::Theme::default();
             frame.render_widget(Block::default().style(theme.surface), frame.area());
             let page = frame.area().inner(Margin {
                 horizontal: 2,
@@ -84,6 +84,7 @@ fn main() -> Result<()> {
                 chunks[0],
             );
             let text = Markdown::new(DOCUMENTS[document])
+                .theme(theme)
                 .width(chunks[1].width)
                 .render_text();
             frame.render_widget(Paragraph::new(text).scroll((scroll, 0)), chunks[1]);
@@ -92,7 +93,8 @@ fn main() -> Result<()> {
                     KeyHint::new("1-3", "page"),
                     KeyHint::new("↑↓", "scroll"),
                     KeyHint::new("q", "close"),
-                ]),
+                ])
+                .theme(theme),
                 chunks[2],
             );
         })?;

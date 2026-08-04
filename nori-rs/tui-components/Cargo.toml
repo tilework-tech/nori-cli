@@ -25,3 +25,4 @@ anyhow = { workspace = true }
 crossterm = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
+supports-color = { workspace = true }

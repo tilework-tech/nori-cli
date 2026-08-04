@@ -31,7 +31,6 @@ pub struct Theme {
     pub table_rule: Style,
 }
 
-#[allow(clippy::disallowed_methods)]
 impl Default for Theme {
     fn default() -> Self {
         Self {
@@ -39,14 +38,11 @@ impl Default for Theme {
             muted: Style::new().fg(Color::DarkGray),
             accent: Style::new().fg(Color::Cyan),
             surface: Style::new(),
-            input: Style::new().bg(Color::Indexed(235)),
-            row: Style::new().bg(Color::Indexed(235)),
-            row_alt: Style::new().bg(Color::Indexed(236)),
-            detail_surface: Style::new().bg(Color::Indexed(235)),
-            selected: Style::new()
-                .fg(Color::Cyan)
-                .bg(Color::Indexed(237))
-                .add_modifier(Modifier::BOLD),
+            input: Style::new(),
+            row: Style::new(),
+            row_alt: Style::new(),
+            detail_surface: Style::new(),
+            selected: Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             disabled: Style::new().fg(Color::DarkGray),
             border: Style::new().fg(Color::DarkGray),
             separator: Style::new().fg(Color::DarkGray),
@@ -63,6 +59,48 @@ impl Default for Theme {
             table_rule: Style::new().fg(Color::DarkGray),
         }
     }
+}
+
+impl Theme {
+    /// Builds the default theme with neutral surfaces derived from the terminal background.
+    ///
+    /// Consumers should pass a background only when the terminal reports both its RGB
+    /// background and true-color support. `None` deliberately leaves every neutral
+    /// background unset rather than substituting fixed palette indices.
+    #[allow(clippy::disallowed_methods)]
+    pub fn for_terminal_background(terminal_bg: Option<(u8, u8, u8)>) -> Self {
+        let mut theme = Self::default();
+        let Some(background) = terminal_bg else {
+            return theme;
+        };
+
+        theme.row = theme.row.bg(relative_surface(background, 4));
+        theme.row_alt = theme.row_alt.bg(relative_surface(background, 7));
+        theme.input = theme.input.bg(relative_surface(background, 8));
+        theme.detail_surface = theme.detail_surface.bg(relative_surface(background, 8));
+        theme.selected = theme.selected.bg(relative_surface(background, 10));
+        theme
+    }
+}
+
+#[allow(clippy::disallowed_methods)]
+fn relative_surface(background: (u8, u8, u8), strength: u16) -> Color {
+    let target = if is_light(background) { 0 } else { 255 };
+    Color::Rgb(
+        mix_channel(background.0, target, strength),
+        mix_channel(background.1, target, strength),
+        mix_channel(background.2, target, strength),
+    )
+}
+
+fn is_light((red, green, blue): (u8, u8, u8)) -> bool {
+    let luma = u32::from(red) * 299 + u32::from(green) * 587 + u32::from(blue) * 114;
+    luma > 128_000
+}
+
+fn mix_channel(channel: u8, target: u8, strength: u16) -> u8 {
+    let mixed = (u16::from(channel) * (100 - strength) + u16::from(target) * strength) / 100;
+    u8::try_from(mixed).unwrap_or(target)
 }
 
 #[cfg(test)]

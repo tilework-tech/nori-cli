@@ -206,6 +206,7 @@ impl BottomPaneView for ComponentPickerView {
 impl Renderable for ComponentPickerView {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         Picker::new(&self.state)
+            .theme(crate::style::component_theme())
             .density(self.density)
             .render(area, buf);
     }
