@@ -12,7 +12,9 @@ pub struct Theme {
     pub muted: Style,
     pub accent: Style,
     pub surface: Style,
-    pub surface_alt: Style,
+    pub input: Style,
+    pub row: Style,
+    pub row_alt: Style,
     pub detail_surface: Style,
     pub selected: Style,
     pub disabled: Style,
@@ -29,6 +31,7 @@ pub struct Theme {
     pub table_rule: Style,
 }
 
+#[allow(clippy::disallowed_methods)]
 impl Default for Theme {
     fn default() -> Self {
         Self {
@@ -36,11 +39,13 @@ impl Default for Theme {
             muted: Style::new().fg(Color::DarkGray),
             accent: Style::new().fg(Color::Cyan),
             surface: Style::new(),
-            surface_alt: Style::new().bg(Color::DarkGray),
-            detail_surface: Style::new().bg(Color::DarkGray),
+            input: Style::new().bg(Color::Indexed(235)),
+            row: Style::new().bg(Color::Indexed(235)),
+            row_alt: Style::new().bg(Color::Indexed(236)),
+            detail_surface: Style::new().bg(Color::Indexed(235)),
             selected: Style::new()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
+                .fg(Color::Cyan)
+                .bg(Color::Indexed(237))
                 .add_modifier(Modifier::BOLD),
             disabled: Style::new().fg(Color::DarkGray),
             border: Style::new().fg(Color::DarkGray),

@@ -26,9 +26,12 @@ as they move into this crate.
 
 ## Lists and pickers
 
-12. Alternate the neutral backgrounds of adjacent unselected rows.
-13. Fill the complete content row with the selected background, including
-    padding. Preserve semantic status foregrounds inside that row.
+12. Alternate close neutral background shades only in compact, data-dense
+    lists. Normal lists use the page background and vertical spacing.
+13. Highlight the selected row with primary-accent text and a neutral
+    background only slightly brighter than compact row shades. Fill the
+    complete data row, including padding, but do not extend row backgrounds
+    into titles, headers, search controls, or footer space.
 14. Give lists explicit `Compact` and `Normal` density modes.
 15. Render compact items as one row. Render normal items as a primary row plus
     an indented description row or equivalent vertical space.
@@ -38,22 +41,24 @@ as they move into this crate.
 18. Truncate structured cells with `...` or `…`; wrap prose, errors, and logs.
 19. Keep selection and filtering in caller-owned state. Components do not own
     terminal setup, event loops, commands, or application actions.
+20. Mark search with a text magnifying-glass character, not an emoji. Shade
+    only the editable input region after the marker.
 
 ## Details and copy
 
-20. Render metadata as an aligned definition list: right-aligned label gutter,
+21. Render metadata as an aligned definition list: right-aligned label gutter,
     structural separator, then value. Do not use trailing colons.
-21. Group related metadata with spacing or a subtle rule, not another box.
-22. Never use em dashes in user-visible TUI copy. Use a hyphen, middot, blank
+22. Group related metadata with spacing or a subtle rule, not another box.
+23. Never use em dashes in user-visible TUI copy. Use a hyphen, middot, blank
     value, or explicit phrase such as `Not reported`.
-23. Use sentence case and concise action labels.
+24. Use sentence case and concise action labels.
 
 ## Verification
 
-24. Snapshot every component at representative wide and narrow widths.
-25. Snapshot both densities and loading, empty, error, disabled, and selected
+25. Snapshot every component at representative wide and narrow widths.
+26. Snapshot both densities and loading, empty, error, disabled, and selected
     states where they apply.
-26. Pair text snapshots with direct buffer assertions for backgrounds,
+27. Pair text snapshots with direct buffer assertions for backgrounds,
     foregrounds, and modifiers. Text snapshots do not preserve Ratatui styles.
 
 ## Canonical reference

@@ -281,9 +281,9 @@ fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer) {
     ];
     for (index, example) in examples.into_iter().enumerate() {
         let style = if index % 2 == 0 {
-            theme.surface_alt
+            theme.row_alt
         } else {
-            theme.surface
+            theme.row
         };
         Block::default().style(style).render(rows[index], buf);
         example.render(

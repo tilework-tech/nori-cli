@@ -31,6 +31,7 @@ pub struct Picker<'a, K> {
     state: &'a PickerState<K>,
     theme: Theme,
     density: PickerDensity,
+    footer_hints: Option<Vec<KeyHint<'static>>>,
 }
 
 impl<'a, K> Picker<'a, K> {
@@ -39,6 +40,7 @@ impl<'a, K> Picker<'a, K> {
             state,
             theme: Theme::default(),
             density: PickerDensity::default(),
+            footer_hints: None,
         }
     }
 
@@ -49,6 +51,11 @@ impl<'a, K> Picker<'a, K> {
 
     pub fn density(mut self, density: PickerDensity) -> Self {
         self.density = density;
+        self
+    }
+
+    pub fn footer_hints(mut self, hints: impl IntoIterator<Item = KeyHint<'static>>) -> Self {
+        self.footer_hints = Some(hints.into_iter().collect());
         self
     }
 }
@@ -163,16 +170,19 @@ impl<K: Clone + Eq> Picker<'_, K> {
         } else {
             Span::styled(self.state.query.clone(), self.theme.text)
         };
-        buf.set_style(area, self.theme.surface_alt);
-        let inner = area.inner(Margin {
+        buf.set_string(area.x, area.y, "⌕", self.theme.accent);
+        let input = Rect::new(
+            area.x.saturating_add(2),
+            area.y,
+            area.width.saturating_sub(2),
+            1,
+        );
+        buf.set_style(input, self.theme.input);
+        let inner = input.inner(Margin {
             horizontal: 1,
             vertical: 0,
         });
-        Paragraph::new(Line::from(vec![
-            Span::styled("/ ", self.theme.accent),
-            query,
-        ]))
-        .render(inner, buf);
+        Paragraph::new(Line::from(query)).render(inner, buf);
     }
 
     fn render_rows(&self, area: Rect, buf: &mut Buffer) {
@@ -273,10 +283,10 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     }
                 }
             };
-            let surface = if (start + row_offset).is_multiple_of(2) {
-                self.theme.surface_alt
-            } else {
-                self.theme.surface
+            let surface = match self.density {
+                PickerDensity::Compact if (start + row_offset).is_multiple_of(2) => self.theme.row,
+                PickerDensity::Compact => self.theme.row_alt,
+                PickerDensity::Normal => self.theme.surface,
             };
             let style = if selected {
                 self.theme.selected
@@ -442,13 +452,14 @@ impl<K: Clone + Eq> Picker<'_, K> {
         } else {
             "toggle"
         };
-        KeyHints::new([
-            KeyHint::new("↑↓", "move"),
-            KeyHint::new("enter", select_action),
-            KeyHint::new("esc", "close"),
-        ])
-        .theme(self.theme)
-        .render(area, buf);
+        let hints = self.footer_hints.clone().unwrap_or_else(|| {
+            vec![
+                KeyHint::new("↑↓", "move"),
+                KeyHint::new("enter", select_action),
+                KeyHint::new("esc", "close"),
+            ]
+        });
+        KeyHints::new(hints).theme(self.theme).render(area, buf);
     }
 }
 

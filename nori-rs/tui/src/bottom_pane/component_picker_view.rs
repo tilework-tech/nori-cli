@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use codex_tui_components::Picker;
 use codex_tui_components::PickerAction;
+use codex_tui_components::PickerDensity;
 use codex_tui_components::PickerOutcome;
 use codex_tui_components::PickerState;
 use crossterm::event::KeyCode;
@@ -24,6 +25,7 @@ pub(crate) struct ComponentPickerParams {
     pub on_dismiss: Option<SelectionAction>,
     pub primary_column: String,
     pub detail_column: Option<String>,
+    pub density: PickerDensity,
 }
 
 pub(crate) struct ComponentPickerView {
@@ -34,6 +36,7 @@ pub(crate) struct ComponentPickerView {
     complete: bool,
     primary_column: String,
     detail_column: Option<String>,
+    density: PickerDensity,
 }
 
 impl ComponentPickerView {
@@ -46,6 +49,7 @@ impl ComponentPickerView {
             complete: false,
             primary_column: params.primary_column,
             detail_column: params.detail_column,
+            density: params.density,
         }
     }
 
@@ -201,12 +205,20 @@ impl BottomPaneView for ComponentPickerView {
 
 impl Renderable for ComponentPickerView {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        Picker::new(&self.state).render(area, buf);
+        Picker::new(&self.state)
+            .density(self.density)
+            .render(area, buf);
     }
 
     fn desired_height(&self, _width: u16) -> u16 {
         let rows = self.state.visible_indices().len().clamp(1, 10) as u16;
-        rows.saturating_add(7).clamp(9, 18)
+        let row_height = match self.density {
+            PickerDensity::Compact => 1,
+            PickerDensity::Normal => 2,
+        };
+        rows.saturating_mul(row_height)
+            .saturating_add(7)
+            .clamp(9, 18)
     }
 }
 
@@ -228,6 +240,7 @@ mod tests {
             on_dismiss: None,
             primary_column: "session".to_string(),
             detail_column: None,
+            density: PickerDensity::Compact,
         }
     }
 

@@ -6,7 +6,7 @@ expression: "snapshot_with_density(&session_picker(), 86, 13, PickerDensity::Com
 "  Resume a session                                                                    "
 "  Search ACP sessions or start fresh                                                  "
 "  All  Local  Cloud                                                                   "
-"   / Title, project, or session id                                                    "
+"  ⌕  Title, project, or session id                                                    "
 "    Session                              Project             Updated     Turn         "
 "  › Start a new session                  Not reported        now         ready        "
 "    Fix parser recovery (current)        nori-cli            2m ago      working      "

@@ -23,6 +23,7 @@ use crate::nori::viewonly_session_picker::format_relative_time;
 use crate::nori::viewonly_session_picker::format_session_name;
 use codex_tui_components::PickerColumn;
 use codex_tui_components::PickerColumnWidth;
+use codex_tui_components::PickerDensity;
 use codex_tui_components::PickerDetail;
 use codex_tui_components::PickerItem;
 use codex_tui_components::PickerState;
@@ -122,6 +123,7 @@ pub fn resume_session_component_picker_params(
         on_dismiss: None,
         primary_column: "session".to_string(),
         detail_column: Some("preview".to_string()),
+        density: PickerDensity::Compact,
     }
 }
 
@@ -292,6 +294,7 @@ pub fn acp_resume_session_component_picker_params(
         on_dismiss: Some(on_dismiss),
         primary_column: "title".to_string(),
         detail_column: None,
+        density: PickerDensity::Compact,
     }
 }
 
@@ -463,7 +466,12 @@ mod tests {
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         terminal
-            .draw(|frame| frame.render_widget(Picker::new(&params.state), frame.area()))
+            .draw(|frame| {
+                frame.render_widget(
+                    Picker::new(&params.state).density(params.density),
+                    frame.area(),
+                )
+            })
             .expect("draw shared resume picker");
         terminal.backend().to_string()
     }

@@ -108,7 +108,8 @@ fn picker_compact_uses_single_height_rows_snapshot() {
 }
 
 #[test]
-fn picker_applies_zebra_surfaces_and_full_width_selection() {
+#[allow(clippy::disallowed_methods)]
+fn picker_applies_density_surfaces_search_input_and_selection() {
     let backend = TestBackend::new(100, 16);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
@@ -117,10 +118,30 @@ fn picker_applies_zebra_surfaces_and_full_width_selection() {
     let buffer = terminal.backend().buffer();
 
     for x in 2..56 {
-        assert_eq!(buffer[(x, 6)].bg, Color::Cyan);
+        assert_eq!(buffer[(x, 6)].bg, Color::Indexed(237));
     }
+    assert_eq!(buffer[(10, 6)].fg, Color::Cyan);
     assert_eq!(buffer[(3, 8)].bg, Color::Reset);
-    assert_eq!(buffer[(3, 10)].bg, Color::DarkGray);
+    assert_eq!(buffer[(3, 10)].bg, Color::Reset);
+    assert_eq!(buffer[(2, 4)].symbol(), "⌕");
+    assert_eq!(buffer[(2, 4)].bg, Color::Reset);
+    assert_eq!(buffer[(4, 4)].bg, Color::Indexed(235));
+    assert_eq!(buffer[(3, 5)].bg, Color::Reset);
+    assert_eq!(buffer[(3, 14)].bg, Color::Reset);
+
+    let backend = TestBackend::new(86, 13);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            frame.render_widget(
+                Picker::new(&session_picker()).density(PickerDensity::Compact),
+                frame.area(),
+            )
+        })
+        .expect("draw compact picker");
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(3, 7)].bg, Color::Indexed(236));
+    assert_eq!(buffer[(3, 8)].bg, Color::Indexed(235));
 }
 
 #[test]
