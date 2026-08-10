@@ -1,0 +1,20 @@
+---
+source: tui-components/src/picker/tests.rs
+expression: "snapshot(&session_picker(), 124, 16)"
+---
+"                                                                                                                            "
+"  Resume a session                                                                                                          "
+"  Search ACP sessions or start fresh                                                                                        "
+"  All  Local  Cloud                                                          Details                                        "
+"  ⌕  Title, project, or session id                                                                                          "
+"    Session                        Project         Updated     Turn              Action │ Create a fresh ACP session        "
+"  › Start a new session            Not reported    now         ready         Transcript │ No existing transcript will be…   "
+"    Create a fresh ACP session                                                                                              "
+"    Fix parser recovery (current)  nori-cli        2m ago      working                                                      "
+"    Codex is implementing parser recovery                                                                                   "
+"    Improve Markdown tables        codex           18m ago     waiting                                                      "
+"    Waiting for user input                                                                                                  "
+"    Legacy unavailable session     handroll        3d ago      offline                                                      "
+"                                                                                                                            "
+"                                              ↑↓ move  enter select  esc close                                              "
+"                                                                                                                            "

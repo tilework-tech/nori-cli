@@ -210,11 +210,11 @@ impl ChatWidget {
 
     pub(crate) fn show_resume_session_picker(
         &mut self,
-        params: SelectionViewParams,
+        params: crate::bottom_pane::ComponentPickerParams,
         generation: u64,
     ) {
         self.active_resume_picker_generation = Some(generation);
-        self.bottom_pane.show_selection_view(params);
+        self.bottom_pane.show_component_picker(params);
     }
 
     /// Show the resume picker populated from the agent's ACP `session/list`.
@@ -222,8 +222,10 @@ impl ChatWidget {
         &mut self,
         sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
     ) {
-        let params = crate::nori::resume_session_picker::acp_resume_session_picker_params(sessions);
-        self.bottom_pane.show_selection_view(params);
+        let params = crate::nori::resume_session_picker::acp_resume_session_component_picker_params(
+            sessions,
+        );
+        self.bottom_pane.show_component_picker(params);
     }
 
     pub(crate) fn update_resume_session_picker_item(

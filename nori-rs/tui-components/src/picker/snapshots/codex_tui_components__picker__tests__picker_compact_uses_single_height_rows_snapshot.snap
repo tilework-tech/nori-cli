@@ -1,0 +1,17 @@
+---
+source: tui-components/src/picker/tests.rs
+expression: "snapshot_with_density(&session_picker(), 86, 13, PickerDensity::Compact,)"
+---
+"                                                                                      "
+"  Resume a session                                                                    "
+"  Search ACP sessions or start fresh                                                  "
+"  All  Local  Cloud                                                                   "
+"  ⌕  Title, project, or session id                                                    "
+"    Session                              Project             Updated     Turn         "
+"  › Start a new session                  Not reported        now         ready        "
+"    Fix parser recovery (current)        nori-cli            2m ago      working      "
+"    Improve Markdown tables              codex               18m ago     waiting      "
+"    Legacy unavailable session           handroll            3d ago      offline      "
+"                                                                                      "
+"                           ↑↓ move  enter select  esc close                           "
+"                                                                                      "

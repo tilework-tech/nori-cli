@@ -4,6 +4,8 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use insta::assert_snapshot;
+use ratatui::layout::Rect;
+use ratatui::widgets::Widget;
 use std::future::Future;
 use std::path::PathBuf;
 
@@ -179,8 +181,6 @@ fn page_navigation_uses_view_rows() {
 fn resume_table_snapshot() {
     use crate::custom_terminal::Terminal;
     use crate::test_backend::VT100Backend;
-    use ratatui::layout::Constraint;
-    use ratatui::layout::Layout;
 
     let now = Utc::now();
     let rows = vec![
@@ -205,23 +205,26 @@ fn resume_table_snapshot() {
     state.view_rows = Some(2);
     state.selected = 1;
 
-    let metrics = rendering::calculate_column_metrics(&state.filtered_rows, state.show_all);
-
     let width: u16 = 80;
-    let height: u16 = 5;
+    let height: u16 = 13;
     let backend = VT100Backend::new(width, height);
     let mut terminal = Terminal::with_options(backend).expect("terminal");
     terminal.set_viewport_area(Rect::new(0, 0, width, height));
 
     {
         let mut frame = terminal.get_frame();
+        let component_state = rendering::component_state(&state);
         let area = frame.area();
-        let segments = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(area);
-        rendering::render_column_headers(&mut frame, segments[0], &metrics);
-        rendering::render_list(&mut frame, segments[1], &state, &metrics);
+        rendering::picker(&component_state).render(area, frame.buffer_mut());
     }
     terminal.flush().expect("flush");
 
-    let snapshot = terminal.backend().to_string();
+    let snapshot = terminal
+        .backend()
+        .to_string()
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
     assert_snapshot!("resume_picker_table", snapshot);
 }

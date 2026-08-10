@@ -10,18 +10,8 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use nori_harness::transcript::SessionMetadata;
 use nori_harness::transcript::TranscriptLoader;
-use ratatui::layout::Constraint;
-use ratatui::layout::Layout;
-use ratatui::layout::Rect;
-use ratatui::style::Stylize as _;
-use ratatui::text::Line;
-use ratatui::text::Span;
 use tokio_stream::StreamExt;
-use unicode_width::UnicodeWidthStr;
 
-use crate::diff_render::display_path_for;
-use crate::key_hint;
-use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
@@ -97,7 +87,7 @@ pub async fn run_resume_picker(
             }
             TuiEvent::Draw => {
                 if let Ok(size) = alt.tui.terminal.size() {
-                    let list_height = size.height.saturating_sub(4) as usize;
+                    let list_height = size.height.saturating_sub(7) as usize;
                     state.update_view_rows(list_height);
                 }
                 rendering::draw_picker(alt.tui, &state)?;

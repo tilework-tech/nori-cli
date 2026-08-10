@@ -25,11 +25,13 @@ mod bottom_pane_view;
 mod chat_composer;
 mod chat_composer_history;
 mod command_popup;
+mod component_picker_view;
 mod file_search_popup;
 mod footer;
 mod history_search_popup;
 mod list_selection_view;
 mod prompt_args;
+pub(crate) use component_picker_view::ComponentPickerParams;
 #[cfg(test)]
 pub(crate) use list_selection_view::ListSelectionView;
 pub(crate) use list_selection_view::SelectionViewParams;
@@ -508,6 +510,14 @@ impl BottomPane {
             params.vim_mode = self.vim_mode_enabled;
         }
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
+        self.push_view(Box::new(view));
+    }
+
+    /// Show a domain-free picker from the shared component crate, adapting
+    /// typed outcomes into this application's event callbacks.
+    pub(crate) fn show_component_picker(&mut self, params: ComponentPickerParams) {
+        let view =
+            component_picker_view::ComponentPickerView::new(params, self.app_event_tx.clone());
         self.push_view(Box::new(view));
     }
 

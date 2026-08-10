@@ -26,6 +26,7 @@ pub(crate) fn append_markdown_with_cwd(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
     use ratatui::text::Line;
 
@@ -39,6 +40,14 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    fn lines_to_snapshot(lines: &[Line<'static>]) -> String {
+        lines_to_strings(lines)
+            .into_iter()
+            .map(|line| line.trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]
@@ -116,5 +125,17 @@ mod tests {
                 .any(|w| w[0].trim_end() == "1." && w[1] == "Tight item"),
             "did not expect a split into ['1.', 'Tight item']; got: {lines:?}"
         );
+    }
+
+    #[test]
+    fn append_markdown_uses_shared_adaptive_table_renderer() {
+        let src = "| Session | Project | Turn status |\n| :-- | :-- | :-- |\n| Improve Markdown tables | external-codex | Waiting for input |\n";
+        let mut wide = Vec::new();
+        append_markdown(src, Some(72), &mut wide);
+        assert_snapshot!("shared_markdown_table_wide", lines_to_snapshot(&wide));
+
+        let mut narrow = Vec::new();
+        append_markdown(src, Some(34), &mut narrow);
+        assert_snapshot!("shared_markdown_table_narrow", lines_to_snapshot(&narrow));
     }
 }

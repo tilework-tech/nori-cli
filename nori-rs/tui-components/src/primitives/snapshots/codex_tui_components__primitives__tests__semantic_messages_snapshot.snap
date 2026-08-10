@@ -1,0 +1,14 @@
+---
+source: tui-components/src/primitives/tests.rs
+expression: terminal.backend().to_string()
+---
+"i Connected to the agent                                  "
+"                                                          "
+"✓ Snapshot accepted                                       "
+"                                                          "
+"! Two sessions are still running                          "
+"  Open the session picker to inspect them.                "
+"× Could not resume the session                            "
+"  The agent no longer reports that session id.            "
+"                                                          "
+"                                                          "

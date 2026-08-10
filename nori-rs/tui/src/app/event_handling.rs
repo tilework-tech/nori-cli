@@ -1042,11 +1042,10 @@ impl App {
                 nori_home,
                 generation,
             } => {
-                let params = crate::nori::resume_session_picker::resume_session_picker_params(
-                    sessions,
-                    nori_home,
-                    self.app_event_tx.clone(),
-                );
+                let params =
+                    crate::nori::resume_session_picker::resume_session_component_picker_params(
+                        sessions, nori_home,
+                    );
                 self.chat_widget
                     .show_resume_session_picker(params, generation);
             }
