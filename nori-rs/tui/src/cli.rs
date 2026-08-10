@@ -115,6 +115,9 @@ mod tests {
         );
     }
 
+    /// `-p` is no longer a profile selector. The top-level CLI now owns it as
+    /// `--print` (see the `cli` crate); it must not resurface here as a `Cli`
+    /// flag, and the long form stays rejected outright.
     #[test]
     fn legacy_profile_flags_are_rejected() {
         for args in [["nori", "--profile", "focused"], ["nori", "-p", "focused"]] {

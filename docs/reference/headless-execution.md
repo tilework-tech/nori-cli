@@ -16,6 +16,19 @@ Or pipe it on stdin:
 printf '%s\n' "Explain the failing tests" | nori exec
 ```
 
+`nori -p` (`--print`) is an alias for `nori exec`, matching the flag other agent
+CLIs use to select non-interactive output:
+
+```sh
+nori -p "Summarize this repository"
+git diff | nori -p "Review this change"
+```
+
+When both an argument and piped stdin are present, the argument is the
+instruction and the piped text is the context it operates on. The two are joined
+into one prompt, instruction first, separated by a blank line. Supplying neither
+is an error.
+
 The complete assistant response is the only content written to stdout. Diagnostics and failures are written to stderr, so stdout can be redirected or piped without filtering terminal rendering or progress messages.
 
 Plaintext mode never displays an interactive approval prompt. If an ACP-visible permission request occurs, Nori immediately selects a reject option supplied by the agent, or cancels the request when none exists. The agent may still return a final explanation; Nori prints that text but exits unsuccessfully to distinguish the run from fully authorized completion.
@@ -53,4 +66,24 @@ Closing stdin cancels active work, resolves outstanding downstream activity safe
 -c <KEY=VALUE>   Apply a normal Nori configuration override
 ```
 
-The interactive `nori` command is unchanged. Headless behavior is enabled only through the explicit `exec` subcommand.
+Headless behavior is enabled only through the explicit `exec` subcommand or its `-p` / `--print` alias. Piping into bare `nori` does not make the run headless — see below.
+
+## Piping into an interactive session
+
+Bare `nori` is always interactive, whether or not stdin is a pipe. Piped text
+seeds the first turn and the terminal UI then starts normally, so the
+conversation continues from there:
+
+```sh
+echo "Explain this repository" | nori
+git diff | nori "Review this change"
+```
+
+The same composition rule applies: the argument is the instruction, the piped
+text is the context. Unlike `exec`, supplying neither is fine — that is just an
+ordinary interactive session with an empty composer.
+
+This requires a controlling terminal, because the UI reads keys from it once
+stdin is consumed. Stdout must still be a terminal. In an environment with
+neither — a CI job or a detached process — use `nori exec` or `nori -p`, which
+never open a UI.

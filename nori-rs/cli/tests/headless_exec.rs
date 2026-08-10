@@ -72,6 +72,81 @@ fn exec_reads_the_prompt_from_stdin() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
+fn exec_composes_the_argument_and_piped_stdin() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .env("MOCK_AGENT_ECHO_PROMPT", "1")
+        .args(["exec", "review this"])
+        .write_stdin("diff --git a/x b/x\n")
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout)?,
+        "review this\n\ndiff --git a/x b/x\n"
+    );
+    Ok(())
+}
+
+#[test]
+fn print_flag_is_an_alias_for_exec() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .env("MOCK_AGENT_ECHO_PROMPT", "1")
+        .args(["-p", "explain this repository"])
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout)?,
+        "explain this repository\n"
+    );
+    Ok(())
+}
+
+#[test]
+fn print_flag_reads_the_prompt_from_stdin() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .env("MOCK_AGENT_ECHO_PROMPT", "1")
+        .arg("--print")
+        .write_stdin("prompt from a pipe")
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8(output.stdout)?, "prompt from a pipe\n");
+    Ok(())
+}
+
+#[test]
+fn exec_requires_a_prompt_from_some_source() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .arg("exec")
+        .write_stdin("   \n")
+        .output()?;
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("a prompt argument or piped stdin is required")
+    );
+    Ok(())
+}
+
+#[test]
 fn exec_fails_closed_without_waiting_for_an_approval() -> Result<(), Box<dyn std::error::Error>> {
     let nori_home = TempDir::new()?;
     let output = nori_command(&nori_home)?
