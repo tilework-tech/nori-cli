@@ -1,0 +1,7 @@
+---
+source: tui-components/src/primitives/tests.rs
+expression: "snapshot_widget(EmptyState::new(\"No matching sessions\").detail(\"Try a title, project path, or session id.\"),\n52, 3,)"
+---
+"◇ No matching sessions                              "
+"  Try a title, project path, or session id.         "
+"                                                    "

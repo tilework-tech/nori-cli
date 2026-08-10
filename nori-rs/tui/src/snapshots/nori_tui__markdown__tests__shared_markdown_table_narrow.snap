@@ -1,0 +1,8 @@
+---
+source: tui/src/markdown.rs
+expression: "lines_to_strings(&narrow).join(\"\\n\")"
+---
+Session      Improve Markdown
+             tables
+Project      external-codex
+Turn status  Waiting for input

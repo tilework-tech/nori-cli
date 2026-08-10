@@ -1,0 +1,28 @@
+[package]
+name = "codex-tui-components"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reusable, domain-free Ratatui components for Nori applications"
+
+[lib]
+name = "codex_tui_components"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+nucleo-matcher = { workspace = true }
+pulldown-cmark = { workspace = true }
+ratatui = { workspace = true }
+textwrap = { workspace = true }
+unicode-width = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+crossterm = { workspace = true }
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+supports-color = { workspace = true }

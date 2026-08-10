@@ -165,10 +165,11 @@ logic lives in
 [`session_runtime_driver.rs`](src/backend/session_runtime_driver.rs).
 
 The public stream forwards raw ACP session metadata unchanged. The harness does
-not interpret metadata as prompt completion or publish a proactive-completion
-event, so proactive presentation cannot drain the queue, end cancellation, or
-change request state. Optional presentation hints are interpreted only by the
-TUI, as described in [`nori-tui`](../tui/docs.md).
+not interpret metadata as prompt completion or publish an agent-turn completion
+event, so presentation of unowned updates or an agent-owned turn cannot drain
+the queue, end cancellation, or change request state. Optional presentation
+hints are interpreted only by the TUI, as described in
+[`nori-tui`](../tui/docs.md).
 
 Session end reasons are:
 

@@ -1,0 +1,14 @@
+---
+source: tui-components/src/markdown/tests.rs
+expression: "snapshot(source, 64, 10)"
+---
+"Component  State                                                "
+"━━━━━━━━━  ━━━━━                                                "
+"Picker     Ready                                                "
+"                                                                "
+"This sentence immediately follows the table without a blank     "
+"line.                                                           "
+"                                                                "
+"                                                                "
+"                                                                "
+"                                                                "

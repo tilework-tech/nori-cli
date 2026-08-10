@@ -2,6 +2,14 @@
 source: tui/src/resume_picker/tests.rs
 expression: snapshot
 ---
-  Updated         Branch  CWD  Conversation
-  42 seconds ago  -       -    session-a
-> 35 minutes ago  -       -    session-b
+  Resume a previous session
+  All saved sessions
+  ⌕  Session id or conversation
+    Conversation                          Updated           Branch
+    session-a                             42 seconds ago    Not reported
+  › session-b                             35 minutes ago    Not reported
+
+
+
+
+               ↑↓ browse  enter resume  esc start new  ctrl+c quit
