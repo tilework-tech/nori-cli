@@ -179,7 +179,10 @@ in `nori-harness`.
 An orderly ACP close completes the typed close call, leaves the raw close
 response observable on the stream, observes `SessionEnded(Closed)`, and then
 handles stream closure. The TUI does not render a successful close-response
-message. Explicit application shutdown uses `SessionEnded(Shutdown)`.
+message. Explicit application shutdown uses `SessionEnded(Shutdown)`. Local
+exit requests immediate owned ACP process-group cleanup; cloud exit allows a
+short detach grace. The TUI exits when cleanup publishes `SessionEnded`, rather
+than using an independent timer that can abandon reaping.
 
 Events entering the application are tagged with their session generation. When
 a session is replaced, events from older generations are discarded.

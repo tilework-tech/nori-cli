@@ -10,8 +10,8 @@ impl AcpBackend {
             .map_err(|_| anyhow::anyhow!("session runtime closed"))
     }
 
-    pub(crate) async fn shutdown(&self) -> Result<()> {
-        self.teardown(true).await;
+    pub(crate) async fn shutdown(&self, child_grace: std::time::Duration) -> Result<()> {
+        self.teardown(true, Some(child_grace)).await;
         let _ = self
             .backend_event_tx
             .send(BackendEvent::Public(SessionEvent::Nori(
@@ -24,7 +24,11 @@ impl AcpBackend {
         Ok(())
     }
 
-    pub(super) async fn teardown(&self, cancel_session: bool) {
+    pub(super) async fn teardown(
+        &self,
+        cancel_session: bool,
+        child_grace: Option<std::time::Duration>,
+    ) {
         self.is_shutting_down
             .store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(abort) = self.cancel_timeout_abort.lock().await.take() {
@@ -53,7 +57,11 @@ impl AcpBackend {
         {
             warn!("Async session_end hook task panicked: {error}");
         }
-        self.connection.shutdown().await;
+        if let Some(child_grace) = child_grace {
+            self.connection.shutdown_with_grace(child_grace).await;
+        } else {
+            self.connection.shutdown().await;
+        }
         if cancel_session && let Some(abort) = self.relay_task_abort.lock().await.take() {
             abort.abort();
         }

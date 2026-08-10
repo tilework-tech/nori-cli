@@ -57,8 +57,10 @@ The host is the only client-side product crate that directly uses the
 - The `agent-client-protocol` SDK is built with the `unstable` feature so the
   host can call `session/fork` (branch-at-head). See `fork_session` in
   `@/nori-rs/acp-host/src/connection/docs.md`.
-- Shutdown closes stdin, waits for a grace period, then kills the process group
-  only as a backstop. This ordering is required for cloud detach behavior.
+- Shutdown closes stdin and optionally waits for a caller-selected grace period.
+  The child owner then kills the process group before reaping its leader, so
+  MCP servers and other descendants cannot survive a cooperative agent exit.
+  A nonzero grace is reserved for flows such as cloud detach.
 - The removed ACP-to-Codex translator must not be recreated. Display-friendly
   projection belongs privately in a consumer such as the TUI.
 
