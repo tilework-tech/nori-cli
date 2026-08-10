@@ -112,8 +112,7 @@ pub struct AgentCapabilitiesView {
     /// Whether the agent advertises the ACP `session/list` capability.
     #[serde(default)]
     pub session_list: bool,
-    /// Whether the agent advertises the ACP `session/resume` capability
-    /// (live reattach without history replay — the cloud agent's resume path).
+    /// Whether the agent advertises the ACP `session/resume` capability.
     #[serde(default)]
     pub session_resume: bool,
     /// Whether the agent advertises the ACP `session/close` capability.
@@ -123,15 +122,6 @@ pub struct AgentCapabilitiesView {
     /// (branch-at-head — the `/fork` "Branch from current point" path).
     #[serde(default)]
     pub session_fork: bool,
-}
-
-impl AgentCapabilitiesView {
-    /// The cloud reattach shape: resuming reattaches live over
-    /// `session/resume` with no history replay (`loadSession: false`).
-    /// Frontends use this to word detach/reattach messaging.
-    pub fn live_reattach(&self) -> bool {
-        self.session_resume && !self.load_session
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -482,8 +472,16 @@ impl ClientEventNormalizer {
                 })]
             }
             acp::SessionUpdate::SessionInfoUpdate(update) => {
+                if let Some(message) = nori_connection_message(update) {
+                    vec![ClientEvent::SessionUpdateInfo(SessionUpdateInfo {
+                        kind: SessionUpdateKind::SessionInfo,
+                        message: message.to_string(),
+                        hint: None,
+                        usage: None,
+                        session_info_patch: None,
+                    })]
                 // Hide only exact Nori lifecycle frames; preserve all displayable metadata.
-                if is_nori_turn_status_only(update) {
+                } else if is_nori_turn_status_only(update) {
                     Vec::new()
                 } else {
                     vec![ClientEvent::SessionUpdateInfo(
@@ -1094,6 +1092,25 @@ fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> Ses
             updated_at: update.updated_at.clone(),
             meta: update.meta.clone(),
         }),
+    }
+}
+
+fn nori_connection_message(update: &acp::SessionInfoUpdate) -> Option<&'static str> {
+    if !update.title.is_undefined() || !update.updated_at.is_undefined() {
+        return None;
+    }
+
+    let meta = update.meta.as_ref()?;
+    let nori = meta.get("nori")?.as_object()?;
+    let connection = nori.get("connection")?.as_object()?;
+    if meta.len() != 1 || nori.len() != 1 || connection.len() != 1 {
+        return None;
+    }
+
+    match connection.get("status")?.as_str()? {
+        "reconnecting" => Some("Cloud connection lost. Reconnecting…"),
+        "connected" => Some("Cloud connection restored."),
+        _ => None,
     }
 }
 

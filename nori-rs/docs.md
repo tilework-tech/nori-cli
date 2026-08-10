@@ -60,6 +60,9 @@ product crates.
 - ACP `session/list`, `session/resume`, and `session/close` power cloud and
   agent-sourced session lifecycle behavior; Nori does not mirror those
   responses into another protocol.
+- ACP capabilities describe an agent facade's operations, not whether the
+  deployment is local or cloud. The top-level `nori cloud` launch carries that
+  identity explicitly into the TUI.
 - Rust 2024 and strict workspace lints apply. Add only the derive traits a
   public boundary type actually needs.
 

@@ -59,6 +59,11 @@ The application event loop matches `SessionEvent::Acp` and
   displays those fields. This distinction lives in
   [`event_handlers.rs`](src/chatwidget/event_handlers.rs) and
   [`presentation/mod.rs`](src/presentation/mod.rs).
+- Handroll's `_meta.nori.connection.status` extension is also presentation
+  only. Exact `reconnecting` and `connected` status-only frames render as
+  “Cloud connection lost. Reconnecting…” and “Cloud connection restored.”
+  info entries instead of generic redacted metadata. They do not change turn
+  ownership, replay ACP methods, or enter the session-info state reducer.
 - ACP requests drive the permission overlay and retain their raw `RequestId`.
 - Initialize responses and prompt responses matching the active request update
   UI lifecycle. For prompt errors, the correlated `NoriEvent::RequestFailed`
@@ -78,11 +83,12 @@ lossy and UI-specific; they are not fed back into the harness or exported from
 
 #### Structured session information
 
-ACP `SessionInfoUpdate` normalization retains `title`, `updatedAt`, and the
-complete `_meta` object as a private `SessionInfoPatch` alongside the legacy
-text projection. The chat widget captures the agent identity reported by ACP
-initialization and whether the current emission is live, agent replay, or
-transcript replay, then sends every patch to two presentation consumers:
+Ordinary ACP `SessionInfoUpdate` normalization retains `title`, `updatedAt`,
+and the complete `_meta` object as a private `SessionInfoPatch` alongside the
+legacy text projection. The chat widget captures the agent identity reported
+by ACP initialization and whether the current emission is live, agent replay,
+or transcript replay, then sends every retained patch to two presentation
+consumers:
 
 - The history renderer emits a visible entry for every update. Known Codex
   status, goal, error, archived, and closed fields receive friendly labels only
@@ -185,9 +191,19 @@ flight followed by `SessionEnded(ConnectionLost)`. The TUI stays open so the
 user can read the failure and choose the next action; connection loss is not
 treated as a successful quit.
 
-Cloud sessions use standard ACP `session/list`, `session/resume`, and
-`session/close`. Quitting detaches through connection teardown; `/close` is the
-explicit agent-side release action.
+Cloud sessions use standard ACP `session/list`, `session/resume`,
+`session/load`, and `session/close`. Capabilities describe what the active ACP
+facade supports; they are not a sound test for whether its process represents a
+remote VM. The top-level `nori cloud` launch supplies explicit `cloud_mode`
+state through `TuiCli`, `App`, and `ChatWidget`.
+
+That launch-origin state retains the cloud ACP session id for footer and
+welcome-card identity, rejects local-only commands, and selects cloud
+detach/reattach wording. Reattach copy does not promise whether history is
+replayed because that is selected independently from ACP capabilities.
+Quitting an attached cloud session detaches through connection teardown;
+`/close` is available only in cloud mode and remains gated by the facade's
+`session/close` support.
 
 #### Footer configuration
 

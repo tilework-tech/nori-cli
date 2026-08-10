@@ -118,6 +118,149 @@ fn initialize_agent_event(name: &str, title: &str, version: &str) -> nori_protoc
     })
 }
 
+fn initialize_agent_with_load_and_resume() -> nori_protocol::SessionEvent {
+    let capabilities = nori_protocol::acp::v1::AgentCapabilities::new()
+        .load_session(true)
+        .session_capabilities(
+            nori_protocol::acp::v1::SessionCapabilities::new()
+                .resume(nori_protocol::acp::v1::SessionResumeCapabilities::new()),
+        );
+    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+        request_id: nori_protocol::acp::v1::RequestId::Str("initialize".to_string()),
+        response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(
+            nori_protocol::acp::v1::InitializeResponse::new(
+                nori_protocol::acp::ProtocolVersion::LATEST,
+            )
+            .agent_capabilities(capabilities),
+        )),
+    })
+}
+
+fn initialize_agent_with_session_close() -> nori_protocol::SessionEvent {
+    let capabilities = nori_protocol::acp::v1::AgentCapabilities::new().session_capabilities(
+        nori_protocol::acp::v1::SessionCapabilities::new()
+            .close(nori_protocol::acp::v1::SessionCloseCapabilities::new()),
+    );
+    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+        request_id: nori_protocol::acp::v1::RequestId::Str("initialize".to_string()),
+        response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(
+            nori_protocol::acp::v1::InitializeResponse::new(
+                nori_protocol::acp::ProtocolVersion::LATEST,
+            )
+            .agent_capabilities(capabilities),
+        )),
+    })
+}
+
+fn session_started_event(acp_session_id: &str) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionStarted(
+        nori_protocol::SessionStarted {
+            transcript_id: None,
+            acp_session_id: nori_protocol::acp::v1::SessionId::new(acp_session_id),
+            cwd: std::path::PathBuf::from("/workspace"),
+            transcript_path: None,
+            history_log_id: 0,
+            history_entry_count: 0,
+        },
+    ))
+}
+
+#[test]
+fn cloud_identity_survives_load_session_capability() {
+    let (mut chat, _rx, _op_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(generation, initialize_agent_with_load_and_resume());
+    chat.handle_session_event(generation, session_started_event("cloud-session"));
+
+    let identity = chat
+        .cloud_session_identity()
+        .expect("cloud launch should retain the ACP session identity");
+    assert_eq!(identity.id, "cloud-session");
+}
+
+#[test]
+fn local_mode_does_not_become_cloud_from_capabilities() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(generation, initialize_agent_with_load_and_resume());
+    chat.handle_session_event(generation, session_started_event("local-session"));
+
+    assert!(chat.cloud_session_identity().is_none());
+    assert!(
+        chat.ensure_builtin_command_enabled(crate::slash_command::SlashCommand::Browse),
+        "agent capabilities must not disable local commands"
+    );
+}
+
+#[test]
+fn cloud_mode_disables_local_commands_when_load_session_is_supported() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(generation, initialize_agent_with_load_and_resume());
+
+    assert!(
+        !chat.ensure_builtin_command_enabled(crate::slash_command::SlashCommand::Browse),
+        "cloud launch origin must disable local-only commands"
+    );
+    let rendered = history_text(&mut rx);
+    assert!(
+        rendered
+            .contains("/browse runs on the local machine and is unavailable in cloud sessions."),
+        "the command error should explain the cloud boundary"
+    );
+    insta::assert_snapshot!("cloud_local_command_error_with_load_session", rendered);
+}
+
+#[test]
+fn local_mode_rejects_cloud_close_even_when_the_agent_supports_it() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(generation, initialize_agent_with_session_close());
+
+    assert!(
+        !chat.ensure_builtin_command_enabled(crate::slash_command::SlashCommand::Close),
+        "session/close support must not turn a local launch into a cloud session"
+    );
+    assert!(
+        history_text(&mut rx).contains("/close is available only in cloud sessions."),
+        "the command error should explain the explicit cloud boundary"
+    );
+}
+
+#[test]
+fn cloud_quit_remains_a_detach_when_load_session_is_supported() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(generation, initialize_agent_with_load_and_resume());
+    chat.handle_session_event(generation, session_started_event("cloud-session"));
+    let _ = history_text(&mut rx);
+    chat.begin_exit();
+
+    let rendered = history_text(&mut rx);
+    assert!(
+        rendered.contains("This session keeps running in the cloud."),
+        "quitting cloud mode should explain that it detaches"
+    );
+    insta::assert_snapshot!("cloud_quit_detach_feedback_with_load_session", rendered);
+}
+
+#[test]
+fn cloud_picker_exit_does_not_claim_an_unattached_session_keeps_running() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+
+    chat.begin_exit();
+
+    assert!(
+        !history_text(&mut rx).contains("This session keeps running in the cloud."),
+        "cloud launch origin alone does not mean a session was attached"
+    );
+}
+
 fn session_info_update(
     update: nori_protocol::acp::v1::SessionInfoUpdate,
 ) -> nori_protocol::SessionEvent {
@@ -194,6 +337,71 @@ fn session_info_updates_render_known_codex_fields() {
         );
     }
     insta::assert_snapshot!("session_info_update_rich_history", rendered);
+}
+
+#[test]
+fn nori_connection_status_updates_render_clear_messages() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    for status in ["reconnecting", "connected"] {
+        let meta = serde_json::json!({
+            "nori": {
+                "connection": {
+                    "status": status
+                }
+            }
+        })
+        .as_object()
+        .expect("metadata object")
+        .clone();
+        chat.handle_session_event(
+            generation,
+            session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+        );
+    }
+
+    let rendered = history_text(&mut rx);
+    insta::assert_snapshot!(rendered, @r"
+• Cloud connection lost. Reconnecting…
+
+• Cloud connection restored.
+");
+}
+
+#[test]
+fn nori_connection_status_with_other_metadata_uses_standard_rendering() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    let meta = serde_json::json!({
+        "nori": {
+            "connection": {
+                "status": "reconnecting"
+            }
+        },
+        "vendor": {
+            "field": true
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+    );
+
+    let rendered = history_text(&mut rx);
+    assert!(
+        rendered.contains("nori.connection.status=<string>"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("vendor.field=<boolean>"), "{rendered}");
+    assert!(
+        !rendered.contains("Cloud connection lost. Reconnecting…"),
+        "{rendered}"
+    );
 }
 
 #[test]

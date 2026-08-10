@@ -90,6 +90,7 @@ pub(crate) struct App {
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: NoriConfig,
     pub(crate) vertical_footer: bool,
+    pub(crate) cloud_mode: bool,
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
 
     pub(crate) file_search: FileSearchManager,
@@ -173,7 +174,7 @@ impl App {
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
         vertical_footer: bool,
-        cloud_session_picker: bool,
+        cloud_mode: bool,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -186,7 +187,7 @@ impl App {
         // after the user picks a skillset and the switch writes
         // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
         // agent spawns without a skillset.
-        let needs_deferred_spawn = cloud_session_picker || config.skillset_per_session;
+        let needs_deferred_spawn = cloud_mode || config.skillset_per_session;
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -199,6 +200,7 @@ impl App {
                 vertical_footer,
                 footer_segment_config: config.footer_segment_config.clone(),
                 footer_layout_config: config.footer_layout_config.clone(),
+                cloud_mode,
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
             };
@@ -233,6 +235,7 @@ impl App {
             auth_manager: auth_manager.clone(),
             config,
             vertical_footer,
+            cloud_mode,
             file_search,
             enhanced_keys_supported,
             transcript_cells: Vec::new(),
@@ -282,7 +285,7 @@ impl App {
         // `spawn_deferred_agent()`. If the user dismisses the picker, the
         // `SkillsetPickerDismissed` event triggers the deferred spawn without a
         // skillset.
-        if cloud_session_picker {
+        if cloud_mode {
             // Picker-first entry: list live sessions before anything can
             // claim one; "start new" is an explicit row in the picker.
             app.begin_agent_session_picker(true);
@@ -377,6 +380,7 @@ impl App {
             vertical_footer: self.vertical_footer,
             footer_segment_config: self.footer_segment_config.clone(),
             footer_layout_config: self.footer_layout_config.clone(),
+            cloud_mode: self.cloud_mode,
             deferred_spawn,
             fork_context,
         }

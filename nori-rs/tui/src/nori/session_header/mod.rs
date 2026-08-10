@@ -371,8 +371,8 @@ pub(crate) enum DisplayMode {
     Full,
 }
 
-/// Identity of the cloud session the TUI is attached to, when running against
-/// a cloud (live-reattach) agent. Absent for local sessions.
+/// Identity of the cloud session the TUI is attached to. The top-level cloud
+/// launch path supplies this identity; ACP capabilities do not.
 #[derive(Debug, Clone)]
 pub(crate) struct CloudSessionInfo {
     /// The human-readable session id, e.g. `nori-fast-kazunoko-aac8`.
@@ -405,7 +405,7 @@ pub(crate) struct NoriSessionHeaderCell {
     /// The parent conversation id after a branch-at-head fork, rendered on the
     /// `forked from:` row so the previous (resumable) session stays visible.
     forked_from: Option<ConversationId>,
-    /// Cloud session identity when attached to a cloud (live-reattach) session.
+    /// Cloud session identity when attached through cloud mode.
     /// When present, the `session:` line appends the broker title; on the
     /// compact welcome card it also suppresses the misleading local `directory:`
     /// value (the cwd is on the remote VM, not local).
@@ -753,9 +753,8 @@ pub(crate) fn new_nori_status_output(
 }
 
 /// Create the Nori session info cell to be displayed at session start.
-/// `cloud_session` carries the cloud identity when the session is a cloud
-/// (live-reattach) session; the welcome card then shows it in place of the
-/// local cwd.
+/// `cloud_session` carries the identity supplied by cloud mode; the welcome
+/// card then shows it in place of the local cwd.
 pub(crate) fn new_nori_session_info(
     config: &NoriConfig,
     model: String,

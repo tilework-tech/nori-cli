@@ -15,6 +15,7 @@ impl ChatWidget {
             vertical_footer,
             footer_segment_config,
             footer_layout_config,
+            cloud_mode,
             deferred_spawn,
             fork_context,
         } = common;
@@ -105,6 +106,7 @@ impl ChatWidget {
             first_prompt_text,
             current_goal: None,
             session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
+            cloud_mode,
             session_agent_info: None,
             session_info_state: Default::default(),
             acp_session_id: None,
@@ -148,6 +150,7 @@ impl ChatWidget {
             vertical_footer,
             footer_segment_config,
             footer_layout_config,
+            cloud_mode,
             deferred_spawn: _,
             fork_context: _,
         } = common;
@@ -235,6 +238,7 @@ impl ChatWidget {
             first_prompt_text,
             current_goal: None,
             session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
+            cloud_mode,
             session_agent_info: None,
             session_info_state: Default::default(),
             acp_session_id,

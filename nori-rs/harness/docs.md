@@ -68,9 +68,11 @@ harness buffers bootstrap events until the consumer can receive them,
 preserving current-response order without making construction depend on a
 concurrently draining UI. Historical load notifications preserve their own
 relative order inside replay. Current setup responses always precede
-`SessionStarted`. On a failed-load fallback this means initialize, failed
-`session/load`, and successful fallback `session/new` responses are all
-observable before the Nori session-start event; none is labeled as replay.
+`SessionStarted`. When a local transcript permits failed-load fallback, this
+means initialize, failed `session/load`, and successful fallback `session/new`
+responses are all observable before the Nori session-start event; none is
+labeled as replay. Without a transcript, a failed `session/load` is surfaced
+and session setup ends without creating an empty replacement session.
 Setup follows the actual method response rather than assuming a fixed event
 count, so interleaved notifications and a configured default-model response
 also retain their transport order before session start. A raw ACP setup error
@@ -264,11 +266,15 @@ for inspection, but the public replay body contains only historical ACP
 notifications in source order. Explicit v3 user records are projected to ACP
 user-message notifications at their recorded positions. Replay never
 re-executes a historical request or completes a live request from a historical
-response. When a failed server-side load has already emitted partial history,
-the harness emits an Agent replay batch followed by a distinct Transcript
-fallback batch; it never combines two sources under one marker. Private v2
-compatibility types remain in the transcript loader; storage enums are not
-exported. Public readers use `Transcript::records()` and `TranscriptRecord`.
+response. Client-side fallback after a failed server-side load is available
+only when `SessionResume` carries a local transcript. If the failed load has
+already emitted partial history, the harness emits an Agent replay batch
+followed by a distinct Transcript fallback batch; it never combines two
+sources under one marker. A resume without a local transcript must preserve
+the requested remote session identity, so load failure is terminal rather than
+calling `session/new`. Private v2 compatibility types remain in the transcript
+loader; storage enums are not exported. Public readers use
+`Transcript::records()` and `TranscriptRecord`.
 
 #### Browser sessions and profile tiers
 

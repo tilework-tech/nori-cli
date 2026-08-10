@@ -1,0 +1,5 @@
+---
+source: tui/src/chatwidget/tests/part10.rs
+expression: rendered
+---
+■ /browse is unavailable. /browse runs on the local machine and is unavailable in cloud sessions.

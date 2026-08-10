@@ -168,9 +168,10 @@ impl AcpBackend {
         // Either load the session server-side or create a fresh session for
         // client-side replay.
         //
-        // If server-side load_session fails at runtime, we fall back to
-        // client-side replay rather than propagating the error. This ensures
-        // /resume works even when the agent's load_session is broken.
+        // If server-side load_session fails at runtime and a local transcript
+        // is available, fall back to client-side replay. Without a transcript,
+        // propagate the failure: creating an empty replacement session would
+        // abandon the session the user asked to reattach to.
         // The sixth tuple element carries buffered replay events from
         // server-side session/load.  We must NOT spawn a relay task for
         // these events until *after* resume_session has finished sending
@@ -362,9 +363,7 @@ impl AcpBackend {
                     )
                 }
                 Err(e) => {
-                    warn!(
-                        "Server-side session/load failed, falling back to client-side replay: {e}"
-                    );
+                    warn!("Server-side session/load failed: {e}");
                     let _ = load_done_tx.send(());
                     let (_failed_driver, mut recovered_rx, _, buffered_session_events) =
                         collect_handle.await.map_err(|err| {
@@ -397,6 +396,14 @@ impl AcpBackend {
                         ),
                     ));
 
+                    let Some(transcript) = transcript else {
+                        setup_session_events.extend(drain_setup_session_events(&mut recovered_rx)?);
+                        forward_setup_session_events(&backend_event_tx, setup_session_events)
+                            .await?;
+                        return Err(enhance_agent_error(e, &agent_config));
+                    };
+                    warn!("Falling back to client-side transcript replay");
+
                     let mcp_servers = session_mcp_servers(
                         config,
                         &connection,
@@ -427,20 +434,14 @@ impl AcpBackend {
                     }
                     setup_session_events.extend(drain_setup_session_events(&mut recovered_rx)?);
 
-                    let (replay_events, replay_session_events, summary) =
-                        if let Some(t) = transcript {
-                            let client_events = transcript_to_replay_client_events(t);
-                            let session_events = transcript_to_replay_session_events(t);
-                            let summary_text = transcript_to_summary(t);
-                            let summary_opt = if summary_text.is_empty() {
-                                None
-                            } else {
-                                Some(summary_text)
-                            };
-                            (client_events, session_events, summary_opt)
-                        } else {
-                            (Vec::new(), Vec::new(), None)
-                        };
+                    let replay_events = transcript_to_replay_client_events(transcript);
+                    let replay_session_events = transcript_to_replay_session_events(transcript);
+                    let summary_text = transcript_to_summary(transcript);
+                    let summary = if summary_text.is_empty() {
+                        None
+                    } else {
+                        Some(summary_text)
+                    };
                     let mut replay_batches =
                         ReplayBatch::new(nori_protocol::ReplaySource::Agent, agent_replay_events)
                             .into_iter()
@@ -468,12 +469,9 @@ impl AcpBackend {
         } else if let Some(sid) = acp_session_id.filter(|_| supports_session_resume) {
             debug!("Agent supports session/resume — using live reattach");
 
-            // Live reattach with no history replay (`session/resume`), for
-            // agents that advertise `sessionCapabilities.resume` with
-            // `loadSession: false` — the nori cloud contract. Failures
-            // propagate instead of falling back to `session/new`: on a cloud
-            // agent that fallback would silently claim a brand-new VM the
-            // user never asked for.
+            // Live reattach with no history replay (`session/resume`).
+            // Failures propagate instead of falling back to `session/new`,
+            // which would abandon the session the user selected.
             let mcp_servers = session_mcp_servers(
                 config,
                 &connection,
@@ -620,10 +618,6 @@ impl AcpBackend {
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
         let pending_hook_context = fallback_session_context_for_connection(config, &connection);
-        // Cloud identity contract: only a cloud-shaped agent (live reattach —
-        // `session/resume` without `session/load`) gets its session named in
-        // SessionConfigured. Local agents get None so the TUI never renders a
-        // local session id as a cloud badge.
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),

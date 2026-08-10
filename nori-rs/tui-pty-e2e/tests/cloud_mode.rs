@@ -320,15 +320,16 @@ fn test_plain_nori_does_not_boot_into_the_agent_session_picker() {
     );
 }
 
-/// Picking a listed session from the entry picker reattaches to it live via
-/// `session/resume` (never `session/new` — enforced by the fail-new guard),
-/// tells the user earlier messages are not replayed, and round-trips a
-/// prompt on the reattached session.
+/// Picking a listed session from the entry picker reattaches to it via
+/// `session/load` when the cloud facade advertises replay support (never
+/// `session/new` — enforced by the fail-new guard), identifies the reattached
+/// session, and round-trips a prompt on it.
 #[test]
 #[cfg(target_os = "linux")]
 fn test_cloud_entry_picker_resume_row_reattaches_live() {
     let fake = FakeHandroll::new();
     let config = cloud_lifecycle_config(&fake)
+        .with_agent_env("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1")
         .with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0")
         .with_mock_response("hello from the reattached session");
 
@@ -346,8 +347,8 @@ fn test_cloud_entry_picker_resume_row_reattaches_live() {
     session.send_key(Key::Enter).unwrap();
 
     session
-        .wait_for_text("not replayed", TIMEOUT)
-        .expect("reattach must explain that earlier messages are not replayed");
+        .wait_for_text("Reattaching to mock-session-1", TIMEOUT)
+        .expect("reattach must identify the selected cloud session");
     session
         .wait_for_text("›", TIMEOUT)
         .expect("the composer should be ready after reattach");

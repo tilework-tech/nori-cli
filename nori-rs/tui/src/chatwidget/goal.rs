@@ -99,11 +99,8 @@ impl ChatWidget {
 
     /// Merged availability verdict for a builtin command: an explicit server
     /// disable (with its reason) wins; otherwise the client-side session-type
-    /// scope applies. Consulting the live agent capabilities here (rather than
-    /// only at SessionCapabilitiesChanged time) makes the cold-start state
-    /// correct too: before any capabilities arrive, `session_close` defaults
-    /// to false so /close is unavailable, while `live_reattach()` is false so
-    /// local-only commands stay usable.
+    /// scope applies. Cloud mode comes from the launch path; capabilities are
+    /// consulted only for capability-gated commands such as `/close`.
     fn builtin_command_availability(
         &self,
         command: SlashCommand,
@@ -113,7 +110,9 @@ impl ChatWidget {
         {
             return server.clone();
         }
-        if let Some(reason) = scope_unavailable_reason(command, &self.session_agent_capabilities) {
+        if let Some(reason) =
+            scope_unavailable_reason(command, self.cloud_mode, &self.session_agent_capabilities)
+        {
             return nori_protocol::CommandAvailability {
                 enabled: false,
                 reason: Some(reason),
@@ -266,17 +265,21 @@ fn default_command_unavailable_reason(command: SlashCommand) -> String {
 /// Client-side session-type scope verdict: Some(reason) when `command` is
 /// unavailable for the current session shape. LocalOnly commands operate on
 /// the local machine and are meaningless in a cloud session (agent on a
-/// remote VM, detected via `live_reattach()`); /close (CloudOnly) needs the
-/// agent's `session/close` capability.
+/// remote VM); /close (CloudOnly) needs both cloud mode and the agent's
+/// `session/close` capability.
 fn scope_unavailable_reason(
     command: SlashCommand,
+    cloud_mode: bool,
     agent: &crate::presentation::AgentCapabilitiesView,
 ) -> Option<String> {
     match command.scope() {
-        CommandScope::LocalOnly if agent.live_reattach() => Some(format!(
+        CommandScope::LocalOnly if cloud_mode => Some(format!(
             "/{} runs on the local machine and is unavailable in cloud sessions.",
             command.command()
         )),
+        CommandScope::CloudOnly if !cloud_mode => {
+            Some("/close is available only in cloud sessions.".to_string())
+        }
         CommandScope::CloudOnly if !agent.session_close => Some(
             "/close releases a cloud session and needs the agent's session/close capability."
                 .to_string(),
