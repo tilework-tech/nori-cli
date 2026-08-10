@@ -1,5 +1,8 @@
 # ACP Turn State and Session Update Model
 
+Canonical terms live in [Turns and Ownership](../terminology/turns-and-ownership.md).
+Existing `proactive_*` identifiers name presentation state only.
+
 ## Goal
 
 Define a minimal, ACP-faithful model for turn state and `session/update`
@@ -43,22 +46,22 @@ This design follows those boundaries exactly.
 
 ## Ownership Vocabulary
 
-- An **owned turn** is initiated by this client with `session/prompt`; its
-  lifecycle is correlated to that request and ends with its response.
-- A **proactive turn** is agent or session activity received while this client
-  has no locally owned request. It may originate from a stdio agent process,
-  another attached client, or another transport.
+- A **client-owned turn** is initiated by this connection with
+  `session/prompt`; its lifecycle is correlated to that request and ends with
+  its response.
+- An **agent-owned turn** is established on this connection by explicit Nori
+  agent-turn metadata. ACP v1 has no corresponding primitive.
 - An **unowned update** is an individual `session/update` received while this
-  client has no locally owned request. It is the input used to recognize
-  proactive activity, not a protocol error and not evidence of ownership by
-  some other known party.
+  client has no active local request. It is not a protocol error or evidence
+  of a turn.
+- **Unowned presentation** groups unowned updates without creating a turn or
+  request.
 
 - while a local request is active, request-scoped updates belong to that
   request
-- without a local request, request-scoped updates are proactive, unowned
-  activity; warn once per unowned burst, but accept, preserve, and render the
-  updates without dropping them merely because ownership is absent
-- never invent a request ID or assign proactive activity to an earlier or later
+- without a local request, request-scoped updates are unowned activity; warn
+  once per unowned burst, but accept, preserve, and render them
+- never invent a request ID or assign unowned activity to an earlier or later
   local request
 
 ## Proposed Runtime Model
@@ -104,7 +107,7 @@ Properties:
   the prompt still remains in flight until its response arrives.
 
 There is no second request-lifecycle FSM beyond this. The TUI may retain
-presentation-only state for grouping proactive output, but that state does not
+presentation-only state for grouping unowned output, but that state does not
 own ACP requests or change this phase.
 
 ### `PersistedSessionState`
@@ -270,7 +273,7 @@ The following updates ordinarily belong to an active request:
 Rules:
 
 - if `active.is_some()`, patch `ActiveRequestState` or create request-owned state
-- if `active.is_none()`, handle the update as proactive activity
+- if `active.is_none()`, handle the update as unowned activity
 
 More specifically:
 
@@ -284,10 +287,10 @@ More specifically:
 
 The client never invents a turn owner when ACP did not provide one.
 
-### 3. Proactive unowned updates
+### 3. Unowned updates and agent-owned turns
 
 Well-formed user, agent, thought, plan, or tool content received with
-`active.is_none()` is an unowned update and valid proactive activity. The
+`active.is_none()` is a valid unowned update. The
 harness normalizes and projects it after emitting `Received update with no
 active local request` for the first non-metadata update in the unowned burst.
 Later updates do not repeat the warning until a local prompt or load starts.
@@ -296,24 +299,23 @@ signal, or attribute the update to an earlier or later local request. An idle
 user chunk therefore does not create a synthetic prompt phase.
 
 The harness forwards schema-native ACP metadata and does not use it to complete
-a prompt or proactive turn. Proactive boundaries are private TUI presentation:
-any unowned user, agent, thought, plan, or tool update starts or confirms that
-presentation. Without a lifecycle hint, content still renders, and a later
-local prompt or load start flushes and separates the proactive output without
-fabricating completion.
+a prompt. Any unowned user, agent, thought, plan, or tool update starts or
+confirms unowned presentation. Without a lifecycle hint, content still renders,
+and a later local prompt or load start separates it without fabricating
+completion.
 
 Nori's brokered Sessions product may send status-only `SessionInfoUpdate`
 notifications with `_meta.nori.status`:
 
-- exact `working` starts or confirms proactive presentation when no local
-  prompt or load is active
-- exact `idle` completes proactive presentation under the same condition
+- exact `working` establishes or confirms an agent-owned turn and starts its
+  presentation when no local prompt or load is active
+- exact `idle` ends that turn and completes its presentation under the same
+  condition
 
 The TUI hides a known status-only frame. If the same frame also carries
 `title` or `updated_at`, those fields remain visible. Unknown status values are
-ordinary session metadata. This optional Nori product extension is not the
-definition of proactive turns and never drives harness queue, cancellation,
-loop, or request state.
+ordinary session metadata. Agent ownership implies no queue, cancellation,
+loop, permission, or request semantics.
 
 ### 4. Attributed tool updates
 
@@ -395,8 +397,8 @@ active until the response to the original `session/prompt` arrives.
 ### Prompt response handling
 
 The response to `session/prompt` is the only locally owned prompt-turn
-boundary. Proactive presentation does not create an active backend prompt and
-does not publish a separate Nori completion event.
+boundary. Presentation of unowned updates or an agent-owned turn does not
+create an active backend prompt or publish a separate Nori completion event.
 
 When the response to the active prompt arrives, the reducer performs one ordered
 completion step:
@@ -502,7 +504,7 @@ enum SessionPhaseView {
 ```
 
 The TUI instead normalizes raw public ACP traffic for display and observes Nori
-phase events for locally owned lifecycle. Its proactive presentation bit may
+phase events for locally owned lifecycle. Its unowned presentation bit may
 group unowned output, but it cannot complete a prompt or mutate harness-owned
 request state.
 
