@@ -43,6 +43,11 @@ pub struct Cli {
     #[clap(skip)]
     pub cloud_mode: bool,
 
+    /// Internal: `nori cloud --onboard` — skip the picker and spawn straight
+    /// into the org's onboarding session. Not exposed as a public flag.
+    #[clap(skip)]
+    pub cloud_onboard: bool,
+
     /// Agent the CLI should use (e.g., "claude-code", "gemini", "codex").
     #[arg(long, short = 'a')]
     pub agent: Option<String>,

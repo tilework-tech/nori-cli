@@ -218,7 +218,18 @@ Cloud sessions use standard ACP `session/list`, `session/resume`,
 `session/load`, and `session/close`. Capabilities describe what the active ACP
 facade supports; they are not a sound test for whether its process represents a
 remote VM. The top-level `nori cloud` launch supplies explicit `cloud_mode`
-state through `TuiCli`, `App`, and `ChatWidget`.
+state through `TuiCli`, `App`, and `ChatWidget`. Cloud entry is normally
+picker-first: `App::run` opens the agent session picker before anything can
+claim a VM, with "Start a new session" as an explicit pick. The clap-skipped
+`cloud_onboard` flag (`nori cloud --onboard`, for customer onboarding) skips
+that picker and immediately spawns the deferred agent instead — the handroll
+child was configured with `cloud-acp --onboard`, so the broker
+acquires-or-resumes the org's single onboarding session server-side and the
+TUI needs no session choice. Because the `--onboard` argv is part of the
+process-wide agent registry entry, every later spawn in that process (`/new`,
+the post-`/close` picker's "start new" row) also reattaches to the onboarding
+session. Initial positional prompts still auto-send on `SessionConfigured`
+for all entry paths.
 
 That launch-origin state retains the cloud ACP session id for footer and
 welcome-card identity, rejects local-only commands, and selects cloud

@@ -66,11 +66,21 @@ fn is_executable_file(path: &Path) -> bool {
 
 /// Build the `[[agents]]`-equivalent registry entry for the cloud agent:
 /// the resolved handroll binary running `cloud-acp`, with the CLI's
-/// configured broker URL (if any) translated to `NORI_BROKER_URL`.
-pub fn cloud_agent_config(handroll_bin: &Path, broker_url: Option<&str>) -> AgentConfigToml {
+/// configured broker URL (if any) translated to `NORI_BROKER_URL`. With
+/// `onboard`, the child acquires the org's onboarding session instead of
+/// claiming a fresh one.
+pub fn cloud_agent_config(
+    handroll_bin: &Path,
+    broker_url: Option<&str>,
+    onboard: bool,
+) -> AgentConfigToml {
     let mut env = std::collections::HashMap::new();
     if let Some(url) = broker_url {
         env.insert("NORI_BROKER_URL".to_string(), url.to_string());
+    }
+    let mut args = vec!["cloud-acp".to_string()];
+    if onboard {
+        args.push("--onboard".to_string());
     }
     AgentConfigToml {
         name: "Nori Cloud".to_string(),
@@ -78,7 +88,7 @@ pub fn cloud_agent_config(handroll_bin: &Path, broker_url: Option<&str>) -> Agen
         distribution: nori_config::AgentDistributionToml {
             local: Some(nori_config::LocalDistribution {
                 command: handroll_bin.to_string_lossy().into_owned(),
-                args: vec!["cloud-acp".to_string()],
+                args,
                 env,
             }),
             ..Default::default()
@@ -169,7 +179,7 @@ mod tests {
 
     #[test]
     fn cloud_agent_pins_handroll_cloud_acp() {
-        let config = cloud_agent_config(Path::new("/opt/bin/nori-handroll"), None);
+        let config = cloud_agent_config(Path::new("/opt/bin/nori-handroll"), None, false);
 
         assert_eq!(config.slug, CLOUD_AGENT_SLUG);
         let resolved = config
@@ -198,10 +208,30 @@ mod tests {
     }
 
     #[test]
+    fn onboard_appends_the_cloud_acp_onboard_flag() {
+        let config = cloud_agent_config(Path::new("/opt/bin/nori-handroll"), None, true);
+        let resolved = config
+            .distribution
+            .resolve()
+            .expect("distribution must be valid");
+        match resolved {
+            nori_config::ResolvedDistribution::Local { args, .. } => {
+                assert_eq!(
+                    args,
+                    vec!["cloud-acp".to_string(), "--onboard".to_string()],
+                    "[cloud --onboard] handroll must acquire the onboarding session"
+                );
+            }
+            other => panic!("cloud agent must use a local distribution, got: {other:?}"),
+        }
+    }
+
+    #[test]
     fn cloud_agent_translates_broker_url_to_env() {
         let config = cloud_agent_config(
             Path::new("/opt/bin/nori-handroll"),
             Some("http://broker.test:19400"),
+            false,
         );
 
         let resolved = config

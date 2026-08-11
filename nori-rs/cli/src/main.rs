@@ -115,6 +115,11 @@ struct ResumeCommand {
 
 #[derive(Debug, Parser)]
 struct CloudCommand {
+    /// Attach to the org's onboarding session (agent-led first-run setup)
+    /// instead of opening the session picker.
+    #[arg(long)]
+    onboard: bool,
+
     #[clap(flatten)]
     config_overrides: TuiCli,
 }
@@ -491,10 +496,14 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             interactive.extra_agents = vec![nori_cli::cloud::cloud_agent_config(
                 &handroll_bin,
                 nori_config.cloud_broker_url.as_deref(),
+                cloud_cmd.onboard,
             )];
             // Cloud entry is picker-first: list live sessions before
             // anything can claim a VM; creating one is an explicit pick.
+            // `--onboard` skips the picker: the broker serializes onboarding
+            // acquires and resumes the active onboarding session itself.
             interactive.cloud_mode = true;
+            interactive.cloud_onboard = cloud_cmd.onboard;
 
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
@@ -1032,6 +1041,21 @@ mod tests {
         merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
         prepend_config_flags(&mut interactive.config_overrides, root_overrides);
         interactive
+    }
+
+    #[test]
+    fn cloud_onboard_flag_parses_and_defaults_off() {
+        let cli = MultitoolCli::try_parse_from(["nori", "cloud", "--onboard"]).expect("parse");
+        let Some(Subcommand::Cloud(cloud_cmd)) = cli.subcommand else {
+            panic!("expected cloud subcommand");
+        };
+        assert!(cloud_cmd.onboard);
+
+        let cli = MultitoolCli::try_parse_from(["nori", "cloud"]).expect("parse");
+        let Some(Subcommand::Cloud(cloud_cmd)) = cli.subcommand else {
+            panic!("expected cloud subcommand");
+        };
+        assert!(!cloud_cmd.onboard);
     }
 
     #[test]
