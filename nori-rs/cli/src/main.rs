@@ -643,6 +643,7 @@ mod tests {
         let MultitoolCli {
             interactive,
             config_overrides: root_overrides,
+            print: _,
             subcommand,
         } = cli;
 
@@ -999,6 +1000,7 @@ mod tests {
         let MultitoolCli {
             mut interactive,
             config_overrides: root_overrides,
+            print: _,
             subcommand,
         } = cli;
 
