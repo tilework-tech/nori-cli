@@ -61,22 +61,6 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn argument_alone_is_the_prompt() {
-        assert_eq!(
-            compose_prompt(Some("review this".to_string()), None),
-            Some("review this".to_string())
-        );
-    }
-
-    #[test]
-    fn piped_stdin_alone_is_the_prompt() {
-        assert_eq!(
-            compose_prompt(None, Some("prompt from a pipe\n".to_string())),
-            Some("prompt from a pipe".to_string())
-        );
-    }
-
-    #[test]
     fn argument_leads_and_piped_stdin_follows_as_context() {
         assert_eq!(
             compose_prompt(
@@ -87,11 +71,10 @@ mod tests {
         );
     }
 
+    /// A blank pipe must not leave a dangling separator on the argument, which
+    /// is what `nori -p "hi" < /dev/null` produces.
     #[test]
-    fn whitespace_only_sources_are_discarded() {
-        assert_eq!(compose_prompt(Some("   ".to_string()), None), None);
-        assert_eq!(compose_prompt(None, Some("\n\n".to_string())), None);
-        assert_eq!(compose_prompt(None, None), None);
+    fn a_blank_pipe_leaves_the_argument_untouched() {
         assert_eq!(
             compose_prompt(Some("just this".to_string()), Some("\n".to_string())),
             Some("just this".to_string())

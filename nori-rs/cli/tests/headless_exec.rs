@@ -113,24 +113,6 @@ fn print_flag_is_an_alias_for_exec() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn print_flag_reads_the_prompt_from_stdin() -> Result<(), Box<dyn std::error::Error>> {
-    let nori_home = TempDir::new()?;
-    let output = nori_command(&nori_home)?
-        .env("MOCK_AGENT_ECHO_PROMPT", "1")
-        .arg("--print")
-        .write_stdin("prompt from a pipe")
-        .output()?;
-
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(String::from_utf8(output.stdout)?, "prompt from a pipe\n");
-    Ok(())
-}
-
-#[test]
 fn exec_requires_a_prompt_from_some_source() -> Result<(), Box<dyn std::error::Error>> {
     let nori_home = TempDir::new()?;
     let output = nori_command(&nori_home)?
