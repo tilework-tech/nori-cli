@@ -121,9 +121,13 @@ struct CloudCommand {
 
 #[derive(Debug, Parser)]
 struct ExecCommand {
-    /// Prompt to send. Reads stdin when omitted.
+    /// Prompt to send. Reads stdin when omitted, or when set to `-`.
     #[arg(value_name = "PROMPT", conflicts_with = "acp")]
     prompt: Option<String>,
+
+    /// Read piped stdin and append it to PROMPT as context.
+    #[arg(long = "stdin", default_value_t = false, conflicts_with = "acp")]
+    stdin: bool,
 
     /// Serve a bounded ACP agent facade over stdio.
     #[arg(long)]
@@ -351,12 +355,27 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
     }
 
+    // `-p` selects a mode, so a subcommand that selects a different one is a
+    // contradiction. Falling through would silently drop `print` and open the
+    // TUI for someone who asked for printed output.
+    if print && subcommand.is_some() {
+        anyhow::bail!("--print cannot be combined with a subcommand; use `nori exec` instead");
+    }
+
     match subcommand {
         None if print => {
+            // `run_exec` has no way to attach images, so accepting them here
+            // would silently answer without the attachment.
+            if !interactive.images.is_empty() {
+                anyhow::bail!(
+                    "--print does not support --image; use the interactive CLI to attach images"
+                );
+            }
             // `-p` is an alias for `exec`; the remaining flags are resolved from
             // `interactive` inside `run_exec`, which also ingests piped stdin.
             let cmd = ExecCommand {
                 prompt: interactive.prompt.take(),
+                stdin: interactive.stdin,
                 acp: false,
                 agent: None,
                 cwd: None,
@@ -378,10 +397,12 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             );
             // A piped prompt seeds the session; the TUI still starts normally so
             // the user keeps the conversation going after the first turn.
-            interactive.prompt = stdin_prompt::compose_prompt(
-                interactive.prompt.take(),
-                stdin_prompt::read_piped_stdin()?,
-            );
+            let prompt = interactive.prompt.take();
+            let consumed_stdin = prompt.is_none() || interactive.stdin;
+            interactive.prompt = stdin_prompt::resolve_prompt(prompt, interactive.stdin)?;
+            if consumed_stdin {
+                stdin_prompt::restore_stdin_from_terminal();
+            }
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
         }
@@ -508,6 +529,7 @@ async fn run_exec(
 ) -> anyhow::Result<()> {
     let ExecCommand {
         prompt,
+        stdin,
         acp,
         agent,
         cwd,
@@ -553,8 +575,7 @@ async fn run_exec(
     }
 
     // Read stdin only after the ACP facade has had its chance to claim it.
-    let piped = stdin_prompt::read_piped_stdin()?;
-    let Some(prompt) = stdin_prompt::compose_prompt(prompt, piped) else {
+    let Some(prompt) = stdin_prompt::resolve_prompt(prompt, stdin)? else {
         anyhow::bail!("a prompt argument or piped stdin is required");
     };
     let outcome = nori_exec::run_plaintext(config, cli_version, prompt).await?;

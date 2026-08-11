@@ -6,9 +6,15 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(version)]
 pub struct Cli {
-    /// Optional user prompt to start the session.
+    /// Optional user prompt to start the session. Pass `-` to read the prompt
+    /// from piped stdin instead.
     #[arg(value_name = "PROMPT", value_hint = clap::ValueHint::Other)]
     pub prompt: Option<String>,
+
+    /// Read piped stdin and append it to PROMPT as context. Without this (or a
+    /// `-` prompt), a prompt argument is used as-is and stdin is left alone.
+    #[arg(long = "stdin", default_value_t = false)]
+    pub stdin: bool,
 
     /// Optional image(s) to attach to the initial prompt.
     #[arg(long = "image", short = 'i', value_name = "FILE", value_delimiter = ',', num_args = 1..)]

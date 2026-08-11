@@ -72,11 +72,12 @@ fn exec_reads_the_prompt_from_stdin() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn exec_composes_the_argument_and_piped_stdin() -> Result<(), Box<dyn std::error::Error>> {
+fn exec_composes_the_argument_and_piped_stdin_when_asked() -> Result<(), Box<dyn std::error::Error>>
+{
     let nori_home = TempDir::new()?;
     let output = nori_command(&nori_home)?
         .env("MOCK_AGENT_ECHO_PROMPT", "1")
-        .args(["exec", "review this"])
+        .args(["exec", "--stdin", "review this"])
         .write_stdin("diff --git a/x b/x\n")
         .output()?;
 
@@ -89,6 +90,71 @@ fn exec_composes_the_argument_and_piped_stdin() -> Result<(), Box<dyn std::error
         String::from_utf8(output.stdout)?,
         "review this\n\ndiff --git a/x b/x\n"
     );
+    Ok(())
+}
+
+/// A prompt argument on its own must leave stdin completely alone, or `nori
+/// exec` inside a `while read` loop swallows the loop's input.
+#[test]
+fn exec_leaves_stdin_alone_when_given_a_prompt() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .env("MOCK_AGENT_ECHO_PROMPT", "1")
+        .args(["exec", "say hi"])
+        .write_stdin("this text must not be consumed")
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8(output.stdout)?, "say hi\n");
+    Ok(())
+}
+
+#[test]
+fn exec_reads_the_prompt_from_the_stdin_sentinel() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .env("MOCK_AGENT_ECHO_PROMPT", "1")
+        .args(["exec", "-"])
+        .write_stdin("prompt from a pipe")
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8(output.stdout)?, "prompt from a pipe\n");
+    Ok(())
+}
+
+#[test]
+fn print_rejects_a_subcommand() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .args(["-p", "resume", "--last"])
+        .output()?;
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("--print cannot be combined with a subcommand")
+    );
+    Ok(())
+}
+
+#[test]
+fn print_rejects_images_it_cannot_attach() -> Result<(), Box<dyn std::error::Error>> {
+    let nori_home = TempDir::new()?;
+    let output = nori_command(&nori_home)?
+        .args(["-p", "--image", "/tmp/example.png", "describe this"])
+        .output()?;
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--print does not support --image"));
     Ok(())
 }
 

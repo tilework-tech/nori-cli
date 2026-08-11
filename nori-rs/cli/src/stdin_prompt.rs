@@ -5,34 +5,100 @@
 //! the context it operates on, so `git diff | nori "review this"` reads the way
 //! it looks.
 
+use anyhow::Context;
 use std::io::IsTerminal;
 use std::io::Read;
 
-/// Reads stdin to EOF when it is a pipe or a redirect.
+/// Prompt argument that means "the prompt is on stdin", matching the `-`
+/// convention the upstream Codex CLI uses for the same purpose.
+pub const STDIN_SENTINEL: &str = "-";
+
+/// Upper bound on a piped prompt. Nothing legitimate approaches this, and
+/// without it an unbounded producer (`yes | nori`) grows a `String` until the
+/// process is killed. `u64` because that is what [`Read::take`] takes.
+const MAX_PIPED_BYTES: u64 = 10 * 1024 * 1024;
+
+/// Resolves the prompt from the argument and, only when asked, from piped stdin.
 ///
-/// Returns `None` when stdin is a terminal, meaning the caller was invoked
-/// normally and nothing was piped in. The raw text is returned as-is;
-/// [`compose_prompt`] is responsible for normalizing it and discarding pipes
-/// that carried only whitespace.
+/// Stdin is consumed in exactly three cases: there is no prompt argument at all,
+/// the argument is the `-` sentinel, or the caller passed `--stdin`. A plain
+/// prompt argument never touches stdin, so `nori exec "..."` cannot swallow a
+/// pipe it merely inherited from a parent (a `while read` loop, a git hook, a
+/// `curl | bash` script).
 ///
 /// Callers must not invoke this when stdin is reserved for another protocol
 /// (notably `nori exec --acp`, which speaks JSON-RPC over stdin).
-pub fn read_piped_stdin() -> std::io::Result<Option<String>> {
-    let mut stdin = std::io::stdin();
+pub fn resolve_prompt(
+    argument: Option<String>,
+    stdin_requested: bool,
+) -> anyhow::Result<Option<String>> {
+    let is_sentinel = argument.as_deref() == Some(STDIN_SENTINEL);
+    let instruction = if is_sentinel { None } else { argument };
+    let wants_stdin = is_sentinel || stdin_requested || instruction.is_none();
+    let piped = if wants_stdin {
+        read_piped_stdin()?
+    } else {
+        None
+    };
+    Ok(compose_prompt(instruction, piped))
+}
+
+/// Reads stdin to EOF when it is a pipe or a redirect, capped at
+/// [`MAX_PIPED_BYTES`].
+///
+/// Returns `None` when stdin is a terminal, meaning nothing was piped in.
+fn read_piped_stdin() -> anyhow::Result<Option<String>> {
+    let stdin = std::io::stdin();
     if stdin.is_terminal() {
         return Ok(None);
     }
     let mut piped = String::new();
-    stdin.read_to_string(&mut piped)?;
+    let read = stdin
+        .lock()
+        .take(MAX_PIPED_BYTES)
+        .read_to_string(&mut piped)
+        .context("failed to read the prompt from stdin")?;
+    if read as u64 == MAX_PIPED_BYTES {
+        anyhow::bail!("piped prompt exceeded the {MAX_PIPED_BYTES} byte limit");
+    }
     Ok(Some(piped))
 }
+
+/// Re-points file descriptor 0 at the controlling terminal after a pipe has
+/// been drained, for the interactive path only.
+///
+/// Everything the TUI spawns with inherited stdin -- `$EDITOR`, the file
+/// browser -- would otherwise get an EOF'd pipe and exit immediately with
+/// "input is not from a terminal". Fixing the descriptor once here covers every
+/// such child instead of patching each spawn site.
+///
+/// Best effort: if there is no controlling terminal, `tui::init` reports that
+/// with a clearer message than this could.
+#[cfg(unix)]
+pub fn restore_stdin_from_terminal() {
+    use std::os::fd::AsRawFd;
+
+    let Ok(tty) = std::fs::File::open("/dev/tty") else {
+        return;
+    };
+    // Safety: both descriptors are valid for the duration of the call, and
+    // stdin is not borrowed elsewhere this early in startup.
+    unsafe {
+        libc::dup2(tty.as_raw_fd(), libc::STDIN_FILENO);
+    }
+}
+
+/// Windows consoles resolve their input handle through `CONIN$` rather than the
+/// process's stdin handle, so a drained pipe on stdin does not need repointing.
+#[cfg(windows)]
+pub fn restore_stdin_from_terminal() {}
 
 /// Combines an argument prompt with piped stdin into the single prompt slot.
 ///
 /// Returns `None` when neither source carried anything but whitespace, which
 /// callers translate into either "start an empty interactive session" or "a
 /// prompt is required" depending on the mode.
-pub fn compose_prompt(argument: Option<String>, piped: Option<String>) -> Option<String> {
+fn compose_prompt(argument: Option<String>, piped: Option<String>) -> Option<String> {
     let instruction = argument.as_deref().and_then(normalize);
     let context = piped.as_deref().and_then(normalize);
     match (instruction, context) {

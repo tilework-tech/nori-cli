@@ -189,6 +189,11 @@ so it seeds the first turn and nothing downstream distinguishes it from an
 argument prompt (see `@/nori-rs/cli/docs.md`). A pipe never selects headless
 behavior; that requires `nori exec` or `nori -p`, which never open a UI.
 
+Having drained the pipe, the CLI re-points file descriptor 0 at the controlling
+terminal before the UI starts. This matters to every child the TUI spawns with
+inherited stdin -- the external editor and the file browser -- which would
+otherwise be handed an EOF'd pipe and exit immediately.
+
 #### Lifecycle behavior
 
 An orderly ACP close completes the typed close call, leaves the raw close
