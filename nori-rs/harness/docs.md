@@ -179,6 +179,10 @@ Session end reasons are:
 - `SpawnFailed` when no session could be established; and
 - `TimedOut` when a lifecycle watchdog owns the terminal outcome.
 
+Explicit local shutdown uses immediate ACP process-group cleanup. Cloud exit
+supplies a short child grace so `nori-handroll cloud-acp` can process stdin EOF
+as a detach before the same forced-cleanup path runs.
+
 ACP method errors remain `AcpEvent::Response { response: Err(..) }`. A failed
 prompt additionally emits a correlated `NoriEvent::RequestFailed` with the same
 transport-assigned wire request ID and a `Retryable` or `Fatal` disposition.

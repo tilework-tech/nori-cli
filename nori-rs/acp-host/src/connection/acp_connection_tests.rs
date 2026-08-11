@@ -840,6 +840,22 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
     }
 }
 
+#[cfg(unix)]
+async fn wait_for_process_to_disappear(pid: libc::pid_t) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        let exists = unsafe { libc::kill(pid, 0) } == 0
+            || std::io::Error::last_os_error().kind() == std::io::ErrorKind::PermissionDenied;
+        if !exists {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
 /// Shutdown must close the child's stdin and wait for it to exit on its own —
 /// not SIGKILL the process group. The script writes a marker after the mock
 /// agent exits (which it does on stdin EOF); a killed group never writes it.
@@ -885,11 +901,55 @@ async fn test_shutdown_closes_stdin_and_waits_for_child_exit() {
     );
 }
 
+/// A cooperative agent can still leave a server or tool subprocess behind.
+/// The watcher must preserve the exited group leader until it has killed that
+/// descendant, then reap the leader and complete shutdown.
+#[tokio::test]
+#[cfg(unix)]
+async fn test_shutdown_sweeps_descendant_after_group_leader_exits() {
+    let Some(mock) = mock_agent_config() else {
+        return;
+    };
+    let temp_dir = tempdir().expect("temp dir");
+    let descendant_pidfile = temp_dir.path().join("descendant-pid");
+    let config = script_agent_config(
+        temp_dir.path(),
+        &format!(
+            "#!/bin/sh\n'{mock}'\nsleep 600 &\necho $! > '{descendant_pidfile}'\n",
+            mock = mock.command,
+            descendant_pidfile = descendant_pidfile.display(),
+        ),
+    );
+
+    let conn = AcpConnection::spawn(
+        &config,
+        temp_dir.path(),
+        nori_config::AcpProxyConfig::disabled(),
+    )
+    .await
+    .expect("spawn script agent");
+    conn.create_session(temp_dir.path(), vec![])
+        .await
+        .expect("create session");
+
+    conn.shutdown().await;
+
+    let descendant_pid: libc::pid_t = std::fs::read_to_string(&descendant_pidfile)
+        .expect("wrapper should record its descendant pid before exiting")
+        .trim()
+        .parse()
+        .expect("descendant pid parses");
+    assert!(
+        wait_for_process_to_disappear(descendant_pid).await,
+        "descendant process {descendant_pid} survived its ACP group leader"
+    );
+}
+
 /// A child that ignores stdin EOF is killed after the grace period — shutdown
 /// must wait out the full grace first (not kill instantly), must not hang
 /// forever, and the child must actually die.
 #[tokio::test]
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 async fn test_shutdown_kills_child_that_outlives_grace() {
     let Some(mock) = mock_agent_config() else {
         return;
@@ -934,13 +994,8 @@ async fn test_shutdown_kills_child_that_outlives_grace() {
         .trim()
         .parse()
         .expect("pid parses");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    let proc_path = format!("/proc/{pid}");
-    while std::path::Path::new(&proc_path).exists() && std::time::Instant::now() < deadline {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
     assert!(
-        !std::path::Path::new(&proc_path).exists(),
+        wait_for_process_to_disappear(pid).await,
         "the hung child (pid {pid}) must be killed after the grace period"
     );
 }

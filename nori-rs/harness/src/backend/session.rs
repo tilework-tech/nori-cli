@@ -818,7 +818,7 @@ impl AcpBackend {
                 Ok(agent_config) => enhance_agent_error(e, &agent_config),
                 Err(_) => e,
             })?;
-        self.teardown(false).await;
+        self.teardown(false, None).await;
         Ok(())
     }
 }

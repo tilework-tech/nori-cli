@@ -56,8 +56,9 @@ remain unrestricted. Host-handled requests do not leak duplicate public
 
 - All event producers share one ordered inbox, including child exit. Do not
   split public ACP traffic into racing channels.
-- The child watcher owns and reaps the `Child`; the connection retains only
-  teardown handles.
+- The child watcher owns the `Child`. On Unix it observes exit with
+  `waitid(WNOWAIT)`, sweeps the still-pinned process group, and then reaps the
+  leader; the connection retains only teardown handles.
 - Startup races initialization against early child exit so authentication and
   spawn failures retain the child's stderr explanation.
 - Orderly `session/close` is distinct from connection loss. The harness maps

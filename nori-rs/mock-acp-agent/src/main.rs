@@ -54,8 +54,8 @@ impl<R: AsyncRead + Unpin> AsyncRead for ExitOnEof<R> {
             Poll::Ready(Ok(0)) if !buf.is_empty() => {
                 // MOCK_AGENT_IGNORE_EOF simulates an agent whose EOF teardown
                 // stalls (e.g. a hung broker release): stay alive instead of
-                // exiting, so tests can prove the client's hard-exit watchdog
-                // never waits on a stuck child.
+                // exiting, so tests can prove the client's bounded child
+                // lifecycle never waits indefinitely on a stuck child.
                 if std::env::var("MOCK_AGENT_IGNORE_EOF").is_ok() {
                     eprintln!("Mock agent: ignoring stdin EOF (MOCK_AGENT_IGNORE_EOF is set)");
                     std::thread::sleep(std::time::Duration::from_secs(60));

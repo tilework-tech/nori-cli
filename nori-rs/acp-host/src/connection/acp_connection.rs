@@ -32,6 +32,7 @@ use super::child_lifecycle::ChildHandle;
 use super::child_lifecycle::SHUTDOWN_GRACE;
 use super::child_lifecycle::STDERR_TAIL_LINES;
 use super::child_lifecycle::collect_stderr_tail;
+use super::child_lifecycle::wait_for_child_exit;
 use super::wire_log::WireDirection;
 use super::wire_log::WireLogger;
 use crate::registry::AcpAgentConfig;
@@ -506,25 +507,23 @@ impl AcpConnection {
             }
         });
 
-        // The exit watcher owns the `Child`: it reaps the process, publishes
-        // the exit status, and reports unexpected deaths into the ordered
-        // event stream. Without it, a dead child is a silent EOF that the
-        // ACP layer treats as non-terminal — pending requests hang forever.
+        // The exit watcher owns the `Child`: it observes exit, sweeps the
+        // process group before reaping, publishes the exit status, and reports
+        // unexpected deaths into the ordered event stream. Without it, a dead
+        // child is a silent EOF that the ACP layer treats as non-terminal —
+        // pending requests hang forever.
         let (event_tx, event_rx) = mpsc::channel::<ConnectionEvent>(1024);
         let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
         let kill_notify = std::sync::Arc::new(tokio::sync::Notify::new());
+        let group_cleanup_complete = std::sync::Arc::new(std::sync::Mutex::new(false));
         tokio::spawn({
             let event_tx = event_tx.clone();
             let stderr_tail = std::sync::Arc::clone(&stderr_tail);
             let kill_notify = std::sync::Arc::clone(&kill_notify);
+            let group_cleanup_complete = std::sync::Arc::clone(&group_cleanup_complete);
             async move {
-                let status = tokio::select! {
-                    status = child.wait() => status.ok(),
-                    _ = kill_notify.notified() => {
-                        let _ = child.start_kill();
-                        child.wait().await.ok()
-                    }
-                };
+                let status =
+                    wait_for_child_exit(child, pid, kill_notify, group_cleanup_complete).await;
                 debug!("ACP agent exited: {status:?}");
                 let _ = exit_tx.send(status);
                 // Give the stderr reader a moment to drain the pipe before
@@ -619,6 +618,7 @@ impl AcpConnection {
             pid,
             exit_rx,
             kill: kill_notify,
+            group_cleanup_complete,
         });
         connection.stderr_task = Some(stderr_task);
         Ok(connection)
