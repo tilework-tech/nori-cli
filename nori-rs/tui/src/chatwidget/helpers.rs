@@ -1,7 +1,8 @@
 use super::*;
 
-/// How long quit waits for a graceful backend shutdown before forcing exit.
-const EXIT_HARD_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+/// Cloud detach gets a short opportunity to finish its stdin-EOF path. Local
+/// agents are torn down immediately; they have no remote detach work to flush.
+const CLOUD_EXIT_CHILD_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
 
 impl ChatWidget {
     /// Set the vertical footer layout flag for the TUI.
@@ -68,9 +69,8 @@ impl ChatWidget {
         self.add_error_message(format!("Failed to close the session: {message}"));
     }
 
-    /// Begin exiting: immediate feedback, input refused, graceful backend
-    /// shutdown requested, and a hard-exit watchdog so the old 25s child-exit
-    /// grace can never hold the user hostage. Idempotent.
+    /// Begin exiting: immediate feedback, input refused, and bounded backend
+    /// cleanup. Idempotent.
     ///
     /// In cloud mode, exit is a *detach*: the connection drop is non-terminal
     /// and the session keeps running server-side, so the feedback says exactly
@@ -90,19 +90,12 @@ impl ChatWidget {
         }
         self.request_redraw();
 
-        self.submit_harness_action(crate::app_event::HarnessAction::Shutdown);
-
-        // Hard-exit watchdog: ExitRequest fires unconditionally after the
-        // deadline; a faster ShutdownComplete simply exits sooner. Skipped
-        // when no runtime exists (sync unit tests) — the real app always
-        // runs inside tokio.
-        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-            let tx = self.app_event_tx.clone();
-            runtime.spawn(async move {
-                tokio::time::sleep(EXIT_HARD_DEADLINE).await;
-                tx.send(AppEvent::ExitRequest);
-            });
-        }
+        let child_grace = if self.cloud_mode {
+            CLOUD_EXIT_CHILD_GRACE
+        } else {
+            std::time::Duration::ZERO
+        };
+        self.submit_harness_action(crate::app_event::HarnessAction::Shutdown { child_grace });
     }
 
     pub(crate) fn handle_acp_session_config_update(
@@ -308,13 +301,18 @@ impl ChatWidget {
 
     pub(crate) fn shutdown_harness_session(&self) {
         if self.harness_handle.is_some() {
-            self.submit_harness_action(crate::app_event::HarnessAction::Shutdown);
+            let child_grace = if self.cloud_mode {
+                CLOUD_EXIT_CHILD_GRACE
+            } else {
+                std::time::Duration::ZERO
+            };
+            self.submit_harness_action(crate::app_event::HarnessAction::Shutdown { child_grace });
         }
     }
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
         let Some(handle) = self.harness_handle.clone() else {
-            if matches!(action, crate::app_event::HarnessAction::Shutdown) {
+            if matches!(action, crate::app_event::HarnessAction::Shutdown { .. }) {
                 self.app_event_tx.send(AppEvent::ExitRequest);
             } else {
                 self.app_event_tx.send(AppEvent::HarnessActionFailed(
@@ -328,8 +326,8 @@ impl ChatWidget {
             use crate::app_event::HarnessAction;
             let result = match action {
                 HarnessAction::Cancel => handle.cancel().await,
-                HarnessAction::Shutdown => {
-                    let result = handle.shutdown().await;
+                HarnessAction::Shutdown { child_grace } => {
+                    let result = handle.shutdown_with_grace(child_grace).await;
                     if result.is_err() {
                         app_event_tx.send(AppEvent::ExitRequest);
                     }

@@ -10,7 +10,8 @@ Path: @/nori-rs/exec
 
 ### How it fits into the larger codebase
 
-- `nori-cli` resolves configuration, selects the mode, and owns process stdin, stdout, stderr, and exit status.
+- `nori-cli` resolves configuration, selects the mode (`nori exec` or its `-p` / `--print` alias), and owns process stdin, stdout, stderr, and exit status.
+- Prompt ingestion is entirely a `nori-cli` concern: it composes the argument prompt and any piped stdin into one string and hands `run_plaintext` a fully resolved prompt. `nori-exec` never reads a prompt from the process itself.
 - `nori-exec` launches and controls sessions through `nori-harness`; it does not spawn agents or reduce ACP state independently.
 - `nori-harness` supplies the ordered `SessionEvent` stream and preserves exact ACP request IDs used for prompt and permission correlation.
 - Plaintext mode projects text `agent_message_chunk` updates into one final answer.
@@ -30,7 +31,7 @@ Path: @/nori-rs/exec
 - Caller-provided MCP servers and additional directories are rejected in the first version because Nori cannot merge those inputs into an already resolved client configuration safely.
 - ACP mode is a facade, not a transport trace: internal notifications and Nori-owned lifecycle events are not passed through wholesale.
 - Only assistant text is projected into the final facade update. The prompt response retains the downstream ACP stop reason.
-- Stdin EOF cancels active work and shuts down the downstream harness. Machine-readable stdout is owned exclusively by the ACP connection writer.
+- ACP mode owns process stdin exclusively, in both directions of the contract: stdin EOF cancels active work and shuts down the downstream harness, and machine-readable stdout is owned exclusively by the ACP connection writer. The caller must therefore not consume stdin before dispatching into the facade -- any eager read (piped-prompt ingestion, in particular) belongs strictly after the ACP branch is ruled out, or the JSON-RPC stream is silently corrupted.
 - The dangerous approval bypass can govern only permission requests that cross an ACP boundary; it cannot constrain or approve provider-internal tools.
 
 Created and maintained by Nori.

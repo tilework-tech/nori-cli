@@ -174,12 +174,35 @@ default (`persist_browser_profile_setting`, writing the top-level
 `launch_browser_session`, which spawns `BrowserSession::launch_and_store(mode)`
 in `nori-harness`.
 
+#### Terminal requirements
+
+Initialization requires stdout to be a terminal. It does not require the same of
+stdin: crossterm reads keys from the controlling terminal whenever stdin is
+redirected, so the guard only checks that a controlling terminal (`/dev/tty`, or
+`CONIN$` on Windows) can actually be opened. The older stdin-must-be-a-tty rule
+was nori's own policy rather than a crossterm limitation, and dropping it does
+not change where input comes from.
+
+This is what lets `echo "..." | nori` run as an ordinary interactive session. The
+CLI composes the piped text into the normal `TuiCli` prompt field before launch,
+so it seeds the first turn and nothing downstream distinguishes it from an
+argument prompt (see `@/nori-rs/cli/docs.md`). A pipe never selects headless
+behavior; that requires `nori exec` or `nori -p`, which never open a UI.
+
+Having drained the pipe, the CLI re-points file descriptor 0 at the controlling
+terminal before the UI starts. This matters to every child the TUI spawns with
+inherited stdin -- the external editor and the file browser -- which would
+otherwise be handed an EOF'd pipe and exit immediately.
+
 #### Lifecycle behavior
 
 An orderly ACP close completes the typed close call, leaves the raw close
 response observable on the stream, observes `SessionEnded(Closed)`, and then
 handles stream closure. The TUI does not render a successful close-response
-message. Explicit application shutdown uses `SessionEnded(Shutdown)`.
+message. Explicit application shutdown uses `SessionEnded(Shutdown)`. Local
+exit requests immediate owned ACP process-group cleanup; cloud exit allows a
+short detach grace. The TUI exits when cleanup publishes `SessionEnded`, rather
+than using an independent timer that can abandon reaping.
 
 Events entering the application are tagged with their session generation. When
 a session is replaced, events from older generations are discarded.
@@ -303,5 +326,8 @@ part of the public harness protocol.
   selection.
 - `nori-config` is the source of approval and sandbox policy; ACP session config
   options remain ACP schema values.
+- `-p` belongs to the top-level CLI as `--print`. The TUI's own flag set must not
+  claim it, and the legacy Codex `--profile` / `-p` selector stays rejected
+  outright.
 
 Created and maintained by Nori.

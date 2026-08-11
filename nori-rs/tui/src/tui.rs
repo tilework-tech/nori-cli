@@ -126,13 +126,30 @@ pub fn restore() -> Result<()> {
     Ok(())
 }
 
+/// Path to the controlling terminal, used for input when stdin is redirected.
+#[cfg(unix)]
+const CONTROLLING_TERMINAL: &str = "/dev/tty";
+#[cfg(windows)]
+const CONTROLLING_TERMINAL: &str = "CONIN$";
+
 /// Initialize the terminal (inline viewport; history stays in normal scrollback)
 pub fn init() -> Result<Terminal> {
-    if !stdin().is_terminal() {
-        return Err(std::io::Error::other("stdin is not a terminal"));
-    }
     if !stdout().is_terminal() {
         return Err(std::io::Error::other("stdout is not a terminal"));
+    }
+    // stdin is allowed to be a pipe so `echo "prompt" | nori` can seed a session.
+    // crossterm reads keys from the controlling terminal whenever stdin is not a
+    // tty, so the only hard requirement is that one is actually attached.
+    if !stdin().is_terminal() {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(CONTROLLING_TERMINAL)
+            .map_err(|error| {
+                std::io::Error::other(format!(
+                    "stdin is not a terminal and no controlling terminal is available: {error}"
+                ))
+            })?;
     }
     set_modes()?;
 

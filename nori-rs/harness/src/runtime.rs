@@ -78,6 +78,7 @@ enum HarnessCommand {
     },
     /// Shut down the active harness session.
     Shutdown {
+        child_grace: std::time::Duration,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
     /// Respond to a delegated agent-to-client ACP request.
@@ -191,9 +192,21 @@ impl HarnessHandle {
 
     /// Shut down the active harness session.
     pub async fn shutdown(&self) -> anyhow::Result<()> {
+        self.shutdown_with_grace(std::time::Duration::ZERO).await
+    }
+
+    /// Shut down the active harness session after allowing the ACP child to
+    /// process stdin EOF for `child_grace`.
+    pub async fn shutdown_with_grace(
+        &self,
+        child_grace: std::time::Duration,
+    ) -> anyhow::Result<()> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
-            .send(HarnessCommand::Shutdown { response_tx })
+            .send(HarnessCommand::Shutdown {
+                child_grace,
+                response_tx,
+            })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
         response_rx
             .await
@@ -596,7 +609,7 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
             }
             command = agent_cmd_rx.recv() => {
                 match command {
-                    Some(HarnessCommand::Shutdown { response_tx }) => {
+                    Some(HarnessCommand::Shutdown { response_tx, .. }) => {
                         let _ = response_tx.send(Ok(()));
                         let _ = event_tx.send(SessionEvent::Nori(NoriEvent::SessionEnded(
                             SessionEnded {
@@ -655,8 +668,11 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                     } => {
                         backend_for_agent.submit_prompt(content, response_tx).await;
                     }
-                    HarnessCommand::Shutdown { response_tx } => {
-                        let result = backend_for_agent.shutdown().await;
+                    HarnessCommand::Shutdown {
+                        child_grace,
+                        response_tx,
+                    } => {
+                        let result = backend_for_agent.shutdown(child_grace).await;
                         let shutdown_complete = result.is_ok();
                         let _ = response_tx.send(result);
                         if shutdown_complete {

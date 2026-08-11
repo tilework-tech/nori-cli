@@ -22,7 +22,9 @@ pub(crate) struct ConversationPathResponseEvent {
 #[derive(Debug)]
 pub(crate) enum HarnessAction {
     Cancel,
-    Shutdown,
+    Shutdown {
+        child_grace: std::time::Duration,
+    },
     Compact,
     Branch,
     UndoTo(i64),
@@ -85,7 +87,7 @@ pub(crate) enum AppEvent {
     /// /resume on a deferred widget that has no live agent connection).
     OpenAgentSessionPicker,
 
-    /// Begin the quit flow (feedback, input freeze, watchdog) on the chat
+    /// Begin the quit flow (feedback, input freeze, bounded cleanup) on the chat
     /// widget — used by input surfaces that don't own the widget (Ctrl+D).
     BeginExit,
 

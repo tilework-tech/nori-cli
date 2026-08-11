@@ -485,8 +485,9 @@ fn test_cloud_close_probe_failure_does_not_claim_a_new_session() {
     );
 }
 
-/// Quit must hard-exit within the deadline even when the child ignores stdin
-/// EOF entirely — the old 25s shutdown grace held the whole TUI hostage.
+/// Quit must force cleanup after the cloud detach grace even when the child
+/// ignores stdin EOF entirely — the old 25s shutdown grace held the whole TUI
+/// hostage.
 #[test]
 #[cfg(target_os = "linux")]
 fn test_cloud_quit_exits_fast_even_if_child_ignores_eof() {
@@ -505,11 +506,12 @@ fn test_cloud_quit_exits_fast_even_if_child_ignores_eof() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // The watchdog caps teardown at ~1s; 5s here is CI slack. The old
-    // behavior waited out a 25s child-exit grace, which this must never do.
+    // The owned child lifecycle caps detach grace at ~1s; 5s here is CI slack.
+    // The old behavior waited out a 25s child-exit grace, which this must never
+    // do.
     assert!(
         session.wait_for_process_exit(Duration::from_secs(5)),
-        "the TUI must exit within the hard deadline even when the agent child ignores EOF"
+        "the TUI must finish bounded cleanup even when the agent child ignores EOF"
     );
 }
 
