@@ -10,11 +10,38 @@ Pass the prompt as an argument:
 nori exec "Summarize this repository"
 ```
 
-Or pipe it on stdin:
+Or pipe it on stdin, either by omitting the argument or by passing `-`:
 
 ```sh
 printf '%s\n' "Explain the failing tests" | nori exec
+printf '%s\n' "Explain the failing tests" | nori exec -
 ```
+
+`nori -p` (`--print`) selects the same non-interactive mode without the
+subcommand, matching the flag other agent CLIs use:
+
+```sh
+nori -p "Summarize this repository"
+```
+
+To use piped text as *context* for an instruction, ask for it with `--stdin`:
+
+```sh
+git diff | nori -p --stdin "Review this change"
+```
+
+The argument is the instruction and the piped text is the context it operates
+on. The two are joined into one prompt, instruction first, separated by a blank
+line.
+
+**A prompt argument on its own never reads stdin.** Only an omitted prompt, a `-`
+prompt, or `--stdin` does. This matters because a process inherits its parent's
+stdin: without that rule, `nori exec "..."` inside a `while read` loop, a git
+hook, or a CI step would consume input intended for something else, or block
+until an unrelated pipe closed. Supplying no prompt from any source is an error.
+
+A piped prompt is capped at 10 MiB; anything larger is rejected rather than
+buffered.
 
 The complete assistant response is the only content written to stdout. Diagnostics and failures are written to stderr, so stdout can be redirected or piped without filtering terminal rendering or progress messages.
 
@@ -53,4 +80,30 @@ Closing stdin cancels active work, resolves outstanding downstream activity safe
 -c <KEY=VALUE>   Apply a normal Nori configuration override
 ```
 
-The interactive `nori` command is unchanged. Headless behavior is enabled only through the explicit `exec` subcommand.
+Headless behavior is enabled only through the explicit `exec` subcommand or its `-p` / `--print` alias. Piping into bare `nori` does not make the run headless — see below.
+
+## Piping into an interactive session
+
+Bare `nori` is always interactive, whether or not stdin is a pipe. Piped text
+seeds the first turn and the terminal UI then starts normally, so the
+conversation continues from there:
+
+```sh
+echo "Explain this repository" | nori
+git diff | nori --stdin "Review this change"
+```
+
+The same rules apply as for `exec`: a prompt argument on its own leaves stdin
+alone, and piped text is read only when the prompt is omitted, is `-`, or
+`--stdin` is passed. Unlike `exec`, supplying no prompt at all is fine — that is
+just an ordinary interactive session with an empty composer.
+
+Because the piped prompt is submitted as the first turn, be deliberate about
+what you pipe in. Redirecting a file you did not intend to send (`nori < notes`)
+sends it to the provider.
+
+This requires a controlling terminal, because the UI reads keys from it once
+stdin is consumed. Stdout must still be a terminal. In an environment with
+neither — a CI job or a detached process — use `nori exec` or `nori -p`, which
+never open a UI. After the pipe is drained Nori re-points its stdin at the
+controlling terminal, so `$EDITOR` and the file browser still work normally.

@@ -4,7 +4,7 @@ Path: @/nori-rs/cli
 
 ### Overview
 
-The `nori-cli` crate is the main binary that provides the `nori` command. It serves as the entry point for the interactive TUI mode, sandbox debugging tools, and utility subcommands. The crate handles CLI argument parsing, subcommand routing, and process-level concerns.
+The `nori-cli` crate is the main binary that provides the `nori` command. It serves as the entry point for the interactive TUI mode, sandbox debugging tools, and utility subcommands. The crate handles CLI argument parsing, subcommand routing, and process-level concerns -- including how a prompt reaches the session and which of the process's standard streams each mode is allowed to touch.
 
 ### How it fits into the larger codebase
 
@@ -35,6 +35,7 @@ This crate is the primary entry point that ties together the core crates:
 
 ```rust
 match subcommand {
+    None if print => run_exec(...),            // `-p` / `--print`: same path as `exec`
     None => nori_tui::run_main(...),           // Interactive TUI
     Some(Subcommand::Resume(cmd)) => nori_tui::run_main(...),
     Some(Subcommand::Cloud(cmd)) => nori_tui::run_main(...),  // Pinned nori-handroll agent
@@ -47,10 +48,20 @@ match subcommand {
 ```
 
 **ExecCommand**: Provides two terminal-independent execution surfaces:
-- `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. If the positional prompt is omitted, the command reads it from stdin. Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
+- `nori exec [PROMPT]` runs one prompt through the selected ACP agent and writes only the complete assistant text to stdout. The prompt may come from the positional argument, from piped stdin, or from both (see **Prompt Sources**). Diagnostics and failures remain on stderr so the answer can be piped or redirected directly.
 - `nori exec --acp` serves Nori itself as a bounded ACP agent over stdio. The caller uses standard ACP JSON-RPC methods and notifications; Nori does not add a JSONL envelope or a second event schema.
+- `nori -p` / `--print` is a top-level boolean flag rather than a subcommand, matching the flag other agent CLIs use to select non-interactive output. It synthesizes an `ExecCommand` from the already-parsed interactive flags and routes into the same plaintext path, so it is an alias in behavior and not a second implementation. It cannot reach the ACP facade; that stays behind the explicit `exec --acp`.
 - Both modes use the same resolved configuration and `nori-harness` runtime as the TUI. `--agent`, `--cwd`, and raw `-c` overrides remain available without initializing Ratatui.
 - The explicit `--dangerously-bypass-approvals-and-sandbox` flag is the only unattended auto-approval path and applies only to permission boundaries visible through ACP.
+
+**Prompt Sources** (`stdin_prompt.rs`): A prompt can arrive as a positional argument, on piped stdin, or as both. Resolution is shared by the interactive and non-interactive entry points so the two never drift:
+- **Stdin is consumed only when the caller asked for it**: the prompt argument is absent, the argument is the `-` sentinel, or `--stdin` was passed. A plain prompt argument leaves stdin untouched. This is a correctness requirement rather than ergonomics -- a process inherits its parent's stdin, so a prompt argument that also drained stdin would let `nori exec "..."` swallow a `while read` loop's input or block until an unrelated pipe closed.
+- When both sources are present they compose into a single prompt: the argument is the instruction and the piped text is the context it operates on, joined instruction-first with a blank line between, so `git diff | nori --stdin "review this"` reads the way it looks. Line endings are normalized and a source that carried only whitespace is treated as absent, so composition never emits stray separators. The read is capped so an unbounded producer is rejected rather than buffered until the process dies.
+- The interactive path re-points file descriptor 0 at the controlling terminal once it has drained a pipe. Children the TUI spawns with inherited stdin (`$EDITOR`, the file browser) would otherwise receive an EOF'd pipe and exit immediately; repairing the descriptor once covers all of them.
+- `-p` selects a mode, so it is rejected alongside a subcommand or `--image` rather than silently ignoring either.
+- The two modes differ only in what "no prompt from any source" means. `exec` (and `-p`) requires one and fails otherwise; interactive treats it as an ordinary empty session.
+- **Stdin is read only after `exec --acp` has taken its early return into the facade.** The ACP stdio facade speaks JSON-RPC over stdin and must keep exclusive ownership of it, so the CLI must never ingest stdin during dispatch or anywhere upstream of the mode decision. This ordering is the load-bearing constraint of the piped-prompt path; violating it silently corrupts the ACP protocol rather than failing loudly.
+- Piping into bare `nori` does not select headless behavior. The piped text seeds the first turn and the TUI starts normally, which requires only that a controlling terminal is reachable for key input (see `@/nori-rs/tui/docs.md`). Environments with no terminal at all must use `exec` or `-p`.
 
 **CloudCommand** (`cloud.rs`): Runs a TUI session backed by Nori Sessions by delegating everything cloud-related to the external `nori-handroll` binary (from the nori-sessions repo). The CLI no longer contains any broker client, OAuth flow, or WebSocket transport -- it does not know the word "broker" beyond translating one config value:
 - `resolve_handroll_bin()` resolves the `nori-handroll` binary. A `NORI_HANDROLL_BIN` env override wins when set and must point at an existing file (a dangling override is an error, not a fallback); otherwise the first `nori-handroll` on `PATH` is used. A missing binary fails with an actionable "install Nori Sessions" error before the TUI starts

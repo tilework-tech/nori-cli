@@ -18,13 +18,12 @@ use nori_tui::RESUME_HINT_LEAD;
 use nori_tui::resume_command_for_conversation;
 use nori_tui::update_action::UpdateAction;
 use owo_colors::OwoColorize;
-use std::io::IsTerminal;
-use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use supports_color::Stream;
 
+mod stdin_prompt;
 #[cfg(not(windows))]
 mod wsl_paths;
 
@@ -47,6 +46,11 @@ mod wsl_paths;
 struct MultitoolCli {
     #[clap(flatten)]
     pub config_overrides: CliConfigOverrides,
+
+    /// Print the response and exit instead of starting the terminal UI.
+    /// Equivalent to `nori exec`.
+    #[arg(short = 'p', long = "print", default_value_t = false)]
+    print: bool,
 
     #[clap(flatten)]
     interactive: TuiCli,
@@ -117,9 +121,13 @@ struct CloudCommand {
 
 #[derive(Debug, Parser)]
 struct ExecCommand {
-    /// Prompt to send. Reads stdin when omitted.
+    /// Prompt to send. Reads stdin when omitted, or when set to `-`.
     #[arg(value_name = "PROMPT", conflicts_with = "acp")]
     prompt: Option<String>,
+
+    /// Read piped stdin and append it to PROMPT as context.
+    #[arg(long = "stdin", default_value_t = false, conflicts_with = "acp")]
+    stdin: bool,
 
     /// Serve a bounded ACP agent facade over stdio.
     #[arg(long)]
@@ -333,6 +341,7 @@ fn main() -> anyhow::Result<()> {
 async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
     let MultitoolCli {
         config_overrides: root_config_overrides,
+        print,
         mut interactive,
         subcommand,
     } = MultitoolCli::parse();
@@ -346,12 +355,54 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
     }
 
+    // `-p` selects a mode, so a subcommand that selects a different one is a
+    // contradiction. Falling through would silently drop `print` and open the
+    // TUI for someone who asked for printed output.
+    if print && subcommand.is_some() {
+        anyhow::bail!("--print cannot be combined with a subcommand; use `nori exec` instead");
+    }
+
     match subcommand {
+        None if print => {
+            // `run_exec` has no way to attach images, so accepting them here
+            // would silently answer without the attachment.
+            if !interactive.images.is_empty() {
+                anyhow::bail!(
+                    "--print does not support --image; use the interactive CLI to attach images"
+                );
+            }
+            // `-p` is an alias for `exec`; the remaining flags are resolved from
+            // `interactive` inside `run_exec`, which also ingests piped stdin.
+            let cmd = ExecCommand {
+                prompt: interactive.prompt.take(),
+                stdin: interactive.stdin,
+                acp: false,
+                agent: None,
+                cwd: None,
+                dangerously_bypass_approvals_and_sandbox: false,
+                config_overrides: CliConfigOverrides::default(),
+            };
+            run_exec(
+                cmd,
+                interactive,
+                root_config_overrides,
+                env!("CARGO_PKG_VERSION").to_string(),
+            )
+            .await?;
+        }
         None => {
             prepend_config_flags(
                 &mut interactive.config_overrides,
                 root_config_overrides.clone(),
             );
+            // A piped prompt seeds the session; the TUI still starts normally so
+            // the user keeps the conversation going after the first turn.
+            let prompt = interactive.prompt.take();
+            let consumed_stdin = prompt.is_none() || interactive.stdin;
+            interactive.prompt = stdin_prompt::resolve_prompt(prompt, interactive.stdin)?;
+            if consumed_stdin {
+                stdin_prompt::restore_stdin_from_terminal();
+            }
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
         }
@@ -478,6 +529,7 @@ async fn run_exec(
 ) -> anyhow::Result<()> {
     let ExecCommand {
         prompt,
+        stdin,
         acp,
         agent,
         cwd,
@@ -522,20 +574,9 @@ async fn run_exec(
         return nori_exec::run_acp(config, cli_version).await;
     }
 
-    let prompt = match prompt {
-        Some(prompt) => prompt,
-        None => {
-            let mut stdin = std::io::stdin();
-            if stdin.is_terminal() {
-                anyhow::bail!("a prompt argument or piped stdin is required");
-            }
-            let mut prompt = String::new();
-            stdin.read_to_string(&mut prompt)?;
-            if prompt.is_empty() {
-                anyhow::bail!("a prompt argument or piped stdin is required");
-            }
-            prompt
-        }
+    // Read stdin only after the ACP facade has had its chance to claim it.
+    let Some(prompt) = stdin_prompt::resolve_prompt(prompt, stdin)? else {
+        anyhow::bail!("a prompt argument or piped stdin is required");
     };
     let outcome = nori_exec::run_plaintext(config, cli_version, prompt).await?;
     {
@@ -623,6 +664,7 @@ mod tests {
         let MultitoolCli {
             interactive,
             config_overrides: root_overrides,
+            print: _,
             subcommand,
         } = cli;
 
@@ -979,6 +1021,7 @@ mod tests {
         let MultitoolCli {
             mut interactive,
             config_overrides: root_overrides,
+            print: _,
             subcommand,
         } = cli;
 
