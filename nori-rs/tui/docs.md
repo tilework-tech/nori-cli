@@ -234,6 +234,17 @@ lifecycle. Because the `--onboard` argv is part of the process-wide agent
 registry entry, every fallback acquisition remains onboarding-only. Initial
 positional prompts still auto-send on `SessionConfigured` for all entry paths.
 
+The shared ACP resume picker treats session source as first-class presentation
+instead of requiring users to inspect raw metadata. Cloud rows with a typed
+`_meta.nori.sessionType` are labeled `Slack`, `CLI`, or `Web`; typed internal
+sources are excluded from this user-facing picker, while untyped legacy cloud
+rows remain available as `Unknown`. When every listed session is cloud-backed,
+the table drops local-only working-directory and turn-status columns and gives
+the session title most of the row width. The reusable picker renderer follows
+the same priority at wide terminal sizes: once its detail pane becomes visible,
+the list and detail panes receive a responsive 2:1 share of the available
+width rather than fixed list sizing.
+
 That launch-origin state retains the cloud ACP session id for footer and
 welcome-card identity, rejects local-only commands, and selects cloud
 detach/reattach wording. Reattach copy does not promise whether history is
