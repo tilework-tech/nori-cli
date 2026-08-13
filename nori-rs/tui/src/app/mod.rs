@@ -103,6 +103,7 @@ pub(crate) struct App {
     has_emitted_history_lines: bool,
 
     pub(crate) enhanced_keys_supported: bool,
+    cloud_onboard: bool,
 
     /// Controls the animation thread that sends CommitTick events.
     pub(crate) commit_anim_running: Arc<AtomicBool>,
@@ -239,6 +240,7 @@ impl App {
             cloud_mode,
             file_search,
             enhanced_keys_supported,
+            cloud_onboard,
             transcript_cells: Vec::new(),
             overlay: None,
             deferred_history_lines: Vec::new(),
@@ -288,18 +290,15 @@ impl App {
         // skillset.
         if cloud_mode {
             if cloud_onboard {
-                // `--onboard`: no picker — spawn straight into the org's
-                // onboarding session. The handroll child was configured with
-                // `cloud-acp --onboard`, and the broker acquires-or-resumes
-                // the single onboarding session behind its own mutex.
-                if app.take_deferred_spawn() {
-                    app.chat_widget
-                        .spawn_deferred_agent(app.config.clone(), app.app_event_tx.clone());
-                }
+                app.begin_agent_session_probe(
+                    crate::app_event::AgentSessionProbeIntent::Onboarding,
+                );
             } else {
                 // Picker-first entry: list live sessions before anything can
                 // claim one; "start new" is an explicit row in the picker.
-                app.begin_agent_session_picker(true);
+                app.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                    fallback_to_spawn: true,
+                });
             }
         } else if app.config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();

@@ -222,14 +222,17 @@ state through `TuiCli`, `App`, and `ChatWidget`. Cloud entry is normally
 picker-first: `App::run` opens the agent session picker before anything can
 claim a VM, with "Start a new session" as an explicit pick. The clap-skipped
 `cloud_onboard` flag (`nori cloud --onboard`, for customer onboarding) skips
-that picker and immediately spawns the deferred agent instead — the handroll
-child was configured with `cloud-acp --onboard`, so the broker
-acquires-or-resumes the org's single onboarding session server-side and the
-TUI needs no session choice. Because the `--onboard` argv is part of the
-process-wide agent registry entry, every later spawn in that process (`/new`,
-the post-`/close` picker's "start new" row) also reattaches to the onboarding
-session. Initial positional prompts still auto-send on `SessionConfigured`
-for all entry paths.
+the picker but runs the same bounded `session/list` probe. The broker projects
+the config-pinned onboarding session as `_meta.nori.purpose = "onboarding"`;
+when that tag is present, the TUI emits the existing resume action and the
+harness uses `session/load`, including recorded-history replay. If no tagged
+session is present, or listing is unsupported or fails, the deferred handroll
+child still spawns as `cloud-acp --onboard`, preserving the broker's serialized
+acquire-or-resume behavior and compatibility with older components. `/new`
+repeats this onboarding probe; `/close` retains its ordinary picker-first
+lifecycle. Because the `--onboard` argv is part of the process-wide agent
+registry entry, every fallback acquisition remains onboarding-only. Initial
+positional prompts still auto-send on `SessionConfigured` for all entry paths.
 
 That launch-origin state retains the cloud ACP session id for footer and
 welcome-card identity, rejects local-only commands, and selects cloud
