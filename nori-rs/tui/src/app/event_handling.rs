@@ -100,7 +100,7 @@ impl App {
     ) -> Result<bool> {
         match event {
             AppEvent::NewSession => {
-                self.deferred_spawn_pending = false;
+                self.deferred_spawn_pending = self.cloud_onboard;
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
@@ -112,11 +112,16 @@ impl App {
                     None,
                     Vec::new(),
                     None,
-                    false,
+                    self.cloud_onboard,
                     None,
                 );
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
+                if self.cloud_onboard {
+                    self.begin_agent_session_probe(
+                        crate::app_event::AgentSessionProbeIntent::Onboarding,
+                    );
+                }
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = Vec::new();
                     if let Some(usage_line) = summary.usage_line {
@@ -148,13 +153,12 @@ impl App {
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
                 self.deferred_spawn_pending = true;
-                self.begin_agent_session_picker(false);
+                self.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                    fallback_to_spawn: false,
+                });
                 tui.frame_requester().schedule_frame();
             }
-            AppEvent::AgentSessionListProbed {
-                probe,
-                fallback_to_spawn,
-            } => {
+            AppEvent::AgentSessionListProbed { probe, intent } => {
                 self.agent_session_probe_in_flight = false;
                 match probe {
                     Ok(probe) => {
@@ -193,11 +197,26 @@ impl App {
                                 },
                             ),
                         );
-                        self.chat_widget
-                            .show_acp_resume_session_picker(probe.sessions);
+                        match intent {
+                            crate::app_event::AgentSessionProbeIntent::Onboarding => {
+                                if let Some(event) =
+                                    super::session_setup::onboarding_resume_event(probe.sessions)
+                                {
+                                    self.app_event_tx.send(event);
+                                } else if self.take_deferred_spawn() {
+                                    self.chat_widget.spawn_deferred_agent(
+                                        self.config.clone(),
+                                        self.app_event_tx.clone(),
+                                    );
+                                }
+                            }
+                            crate::app_event::AgentSessionProbeIntent::Picker { .. } => self
+                                .chat_widget
+                                .show_acp_resume_session_picker(probe.sessions),
+                        }
                     }
                     Err(nori_harness::ProbeError::SessionListUnsupported(message))
-                        if fallback_to_spawn =>
+                        if intent.fallback_to_spawn() =>
                     {
                         // Expected for agents without the session lifecycle
                         // (older handroll, local agents): fall through to the
@@ -211,7 +230,7 @@ impl App {
                             );
                         }
                     }
-                    Err(error) if fallback_to_spawn => {
+                    Err(error) if intent.fallback_to_spawn() => {
                         // Entry-path failure: surface it, then fall back to
                         // the plain spawn — that surface owns the full error
                         // handling (auth hints, retry wording).
@@ -243,7 +262,9 @@ impl App {
                 tui.frame_requester().schedule_frame();
             }
             AppEvent::OpenAgentSessionPicker => {
-                self.begin_agent_session_picker(false);
+                self.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                    fallback_to_spawn: false,
+                });
             }
             AppEvent::BeginExit => {
                 self.chat_widget.begin_exit();
@@ -1119,13 +1140,14 @@ impl App {
                     crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
                         .map(|info| info.display_name)
                         .unwrap_or_else(|| self.config.active_agent.clone());
+                let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
                 self.deferred_spawn_pending = false;
                 self.shutdown_current_conversation();
 
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
-                    None,
-                    Vec::new(),
+                    initial_prompt,
+                    initial_images,
                     None,
                     false,
                     None,

@@ -91,9 +91,9 @@ impl<K: Clone + Eq> Widget for Picker<'_, K> {
             Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Length(72),
+                    Constraint::Ratio(2, 3),
                     Constraint::Length(2),
-                    Constraint::Min(24),
+                    Constraint::Ratio(1, 3),
                 ])
                 .split(page[1])
         } else {

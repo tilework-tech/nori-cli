@@ -266,6 +266,13 @@ impl ChatWidget {
         self.first_prompt_text.clone()
     }
 
+    pub(crate) fn take_initial_input(&mut self) -> (Option<String>, Vec<PathBuf>) {
+        let Some(message) = self.initial_user_message.take() else {
+            return (None, Vec::new());
+        };
+        (self.first_prompt_text.take(), message.image_paths)
+    }
+
     /// Returns true if a popup or custom view is currently active in the bottom pane.
     pub(crate) fn has_active_popup(&self) -> bool {
         self.bottom_pane.has_active_view()

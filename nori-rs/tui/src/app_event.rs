@@ -80,7 +80,7 @@ pub(crate) enum AppEvent {
     /// claiming a fresh one is forbidden.
     AgentSessionListProbed {
         probe: Result<nori_harness::AgentSessionsProbe, nori_harness::ProbeError>,
-        fallback_to_spawn: bool,
+        intent: AgentSessionProbeIntent,
     },
 
     /// Re-run the pre-session probe and reopen the session picker (e.g.
@@ -611,4 +611,19 @@ pub(crate) enum AppEvent {
         /// The text of the selected message, to prefill the composer.
         prefill: String,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AgentSessionProbeIntent {
+    Picker { fallback_to_spawn: bool },
+    Onboarding,
+}
+
+impl AgentSessionProbeIntent {
+    pub(crate) fn fallback_to_spawn(self) -> bool {
+        match self {
+            Self::Picker { fallback_to_spawn } => fallback_to_spawn,
+            Self::Onboarding => true,
+        }
+    }
 }

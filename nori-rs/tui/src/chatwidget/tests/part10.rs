@@ -1,5 +1,37 @@
 use super::*;
 
+#[test]
+fn deferred_startup_input_preserves_prompt_and_image_only_semantics_for_resume() {
+    let (mut chat, _rx, _unused_rx) = make_cloud_chatwidget_manual();
+    chat.first_prompt_text = Some("Continue onboarding".to_string());
+    chat.initial_user_message = Some(UserMessage {
+        text: "Continue onboarding".to_string(),
+        image_paths: vec![PathBuf::from("diagram.png")],
+    });
+
+    let (prompt, images) = chat.take_initial_input();
+
+    assert_eq!(prompt.as_deref(), Some("Continue onboarding"));
+    assert_eq!(images, vec![PathBuf::from("diagram.png")]);
+    assert!(chat.initial_user_message.is_none());
+
+    chat.initial_user_message = Some(UserMessage {
+        text: String::new(),
+        image_paths: vec![PathBuf::from("screenshot.png")],
+    });
+    let (prompt, images) = chat.take_initial_input();
+
+    assert_eq!(prompt, None);
+    assert_eq!(images, vec![PathBuf::from("screenshot.png")]);
+
+    chat.first_prompt_text = Some("Already submitted".to_string());
+    let (prompt, images) = chat.take_initial_input();
+
+    assert_eq!(prompt, None);
+    assert!(images.is_empty());
+    assert_eq!(chat.first_prompt_text.as_deref(), Some("Already submitted"));
+}
+
 /// Deliver a prompt completion through the real client-event entry point.
 fn deliver_completion(chat: &mut ChatWidget, failure: Option<crate::presentation::TurnFailure>) {
     chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(

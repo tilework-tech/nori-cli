@@ -188,7 +188,7 @@ fn render_storybook_footer(
     );
     buf.set_style(footer, theme.surface);
     KeyHints::new([
-        KeyHint::new("d", format!("{:?} density", density).to_lowercase()),
+        KeyHint::new("d", format!("{density:?} density").to_lowercase()),
         KeyHint::new("m", "selection mode"),
         KeyHint::new("s", "content state"),
         KeyHint::new("q", "close"),

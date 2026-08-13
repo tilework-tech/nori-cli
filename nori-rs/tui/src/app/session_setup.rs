@@ -1,5 +1,23 @@
 use super::*;
 
+pub(super) fn onboarding_resume_event(
+    sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
+) -> Option<AppEvent> {
+    sessions.into_iter().find_map(|session| {
+        let is_onboarding = session
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("nori"))
+            .and_then(|nori| nori.get("purpose"))
+            .and_then(serde_json::Value::as_str)
+            == Some("onboarding");
+        is_onboarding.then(|| AppEvent::ResumeAcpSession {
+            acp_session_id: session.session_id.to_string(),
+            title: session.title.filter(|title| !title.is_empty()),
+        })
+    })
+}
+
 impl App {
     /// Kick off the pre-session agent probe (spawn → initialize →
     /// `session/list` → teardown; never `session/new`) and report the result
@@ -7,7 +25,10 @@ impl App {
     /// (`nori cloud`), the post-`/close` return to the picker, and /resume
     /// retries on a deferred widget. Bounded by a wall-clock timeout so a
     /// hung broker can never wedge the boot with no way forward.
-    pub(crate) fn begin_agent_session_picker(&mut self, fallback_to_spawn: bool) {
+    pub(crate) fn begin_agent_session_probe(
+        &mut self,
+        intent: crate::app_event::AgentSessionProbeIntent,
+    ) {
         if self.agent_session_probe_in_flight {
             return;
         }
@@ -34,10 +55,7 @@ impl App {
                     PROBE_TIMEOUT.as_secs()
                 ))),
             };
-            tx.send(AppEvent::AgentSessionListProbed {
-                probe,
-                fallback_to_spawn,
-            });
+            tx.send(AppEvent::AgentSessionListProbed { probe, intent });
         });
     }
 
@@ -287,5 +305,41 @@ impl App {
                 });
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use nori_protocol::acp::v1::SessionInfo;
+
+    use super::onboarding_resume_event;
+    use crate::app_event::AppEvent;
+
+    #[test]
+    fn tagged_onboarding_session_emits_the_existing_resume_action() {
+        let ordinary = SessionInfo::new("ordinary", PathBuf::from("/"));
+        let mut onboarding = SessionInfo::new("onboarding", PathBuf::from("/"));
+        onboarding.title = Some("Set up Nori".to_string());
+        onboarding.meta = Some(
+            serde_json::from_value(serde_json::json!({
+                "nori": { "purpose": "onboarding" }
+            }))
+            .expect("valid metadata"),
+        );
+
+        assert!(matches!(
+            onboarding_resume_event(vec![ordinary, onboarding]),
+            Some(AppEvent::ResumeAcpSession { acp_session_id, title })
+                if acp_session_id == "onboarding" && title.as_deref() == Some("Set up Nori")
+        ));
+    }
+
+    #[test]
+    fn no_tagged_onboarding_session_leaves_the_fresh_fallback_available() {
+        let ordinary = SessionInfo::new("ordinary", PathBuf::from("/"));
+
+        assert!(onboarding_resume_event(vec![ordinary]).is_none());
     }
 }

@@ -134,7 +134,13 @@ pub fn resume_session_component_picker_params(
 pub fn acp_resume_session_component_picker_params(
     mut sessions: Vec<SessionInfo>,
 ) -> ComponentPickerParams {
+    sessions.retain(|session| {
+        !is_cloud_session(session)
+            || cloud_session_type(session)
+                .is_none_or(|source| matches!(source, "slack" | "cli" | "web"))
+    });
     let has_sessions = !sessions.is_empty();
+    let cloud_picker = has_sessions && sessions.iter().all(is_cloud_session);
     sessions.sort_by_cached_key(|session| {
         std::cmp::Reverse(
             session
@@ -143,28 +149,35 @@ pub fn acp_resume_session_component_picker_params(
                 .and_then(|timestamp| chrono::DateTime::parse_from_rfc3339(timestamp).ok()),
         )
     });
-    let columns = vec![
+    let mut columns = vec![
         PickerColumn::flexible("title", "Session").width(PickerColumnWidth::Flexible {
             min: 18,
-            max: 40,
-            weight: 3,
+            max: 72,
+            weight: 6,
         }),
-        PickerColumn::flexible("cwd", "Working directory")
-            .hide_below(68)
-            .width(PickerColumnWidth::Flexible {
-                min: 14,
-                max: 36,
-                weight: 2,
-            }),
-        PickerColumn::fixed("updated", "Updated", 16),
-        PickerColumn::fixed("status", "Turn status", 14).hide_below(72),
+        PickerColumn::fixed("source", "Source", 9).hide_below(31),
+        PickerColumn::fixed("updated", "Updated", 16).hide_below(49),
     ];
+    if !cloud_picker {
+        columns.insert(
+            2,
+            PickerColumn::flexible("cwd", "Working directory")
+                .hide_below(68)
+                .width(PickerColumnWidth::Flexible {
+                    min: 14,
+                    max: 24,
+                    weight: 1,
+                }),
+        );
+        columns.push(PickerColumn::fixed("status", "Turn status", 14).hide_below(81));
+    }
     let mut actions = BTreeMap::new();
     actions.insert(
         "__new__".to_string(),
         Box::new(|tx: &AppEventSender| tx.send(AppEvent::NewSession)) as SelectionAction,
     );
     let create_new = PickerItem::new("__new__".to_string(), "title", "Start a new session")
+        .cell("source", "CLI")
         .cell("cwd", "Not reported")
         .cell("updated", "now")
         .cell("status", "ready")
@@ -176,14 +189,16 @@ pub fn acp_resume_session_component_picker_params(
             PickerDetail::new("Existing session", "No session will be claimed implicitly"),
         ]);
     let session_items = sessions.into_iter().map(|session| {
-        let is_cloud_origin = session
-            .meta
-            .as_ref()
-            .and_then(|meta| meta.get("nori"))
-            .and_then(|nori| nori.get("origin"))
-            .and_then(serde_json::Value::as_str)
-            == Some("cloud")
-            || session.cwd == Path::new("/");
+        let is_cloud_origin = is_cloud_session(&session);
+        let session_type = cloud_session_type(&session);
+        let source = match session_type {
+            Some("slack") => "Slack".to_string(),
+            Some("cli") => "CLI".to_string(),
+            Some("web") => "Web".to_string(),
+            Some(_) | None if is_cloud_origin => "Unknown".to_string(),
+            Some(other) => other.to_string(),
+            None => "Local".to_string(),
+        };
         let cwd = if !is_cloud_origin {
             session.cwd.display().to_string()
         } else {
@@ -214,6 +229,7 @@ pub fn acp_resume_session_component_picker_params(
         let search_text = [
             session_id.as_str(),
             title.as_str(),
+            source.as_str(),
             cwd.as_str(),
             turn_status.as_str(),
         ]
@@ -238,6 +254,7 @@ pub fn acp_resume_session_component_picker_params(
             .and_then(|meta| serde_json::to_string(meta).ok())
             .unwrap_or_else(|| "none".to_string());
         PickerItem::new(session_id.clone(), "title", title)
+            .cell("source", source.clone())
             .cell("cwd", if cwd.is_empty() { "Not reported" } else { &cwd })
             .cell("updated", updated)
             .cell("status", &turn_status)
@@ -252,6 +269,7 @@ pub fn acp_resume_session_component_picker_params(
             ))
             .details([
                 PickerDetail::new("Session id", session_id),
+                PickerDetail::new("Source", source),
                 PickerDetail::new(
                     "Working directory",
                     if cwd.is_empty() {
@@ -296,6 +314,26 @@ pub fn acp_resume_session_component_picker_params(
         detail_column: None,
         density: PickerDensity::Compact,
     }
+}
+
+fn is_cloud_session(session: &SessionInfo) -> bool {
+    session
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("nori"))
+        .and_then(|nori| nori.get("origin"))
+        .and_then(serde_json::Value::as_str)
+        == Some("cloud")
+        || session.cwd == Path::new("/")
+}
+
+fn cloud_session_type(session: &SessionInfo) -> Option<&str> {
+    session
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("nori"))
+        .and_then(|nori| nori.get("sessionType"))
+        .and_then(serde_json::Value::as_str)
 }
 
 pub(crate) fn resume_session_item_update(
@@ -544,9 +582,110 @@ mod tests {
                 .iter()
                 .map(|column| column.key.as_str())
                 .collect::<Vec<_>>(),
-            vec!["title", "cwd", "updated", "status"]
+            vec!["title", "source", "cwd", "updated", "status"]
         );
         assert_snapshot!(component_picker_snapshot(&params, 124, 15));
+    }
+
+    #[test]
+    fn cloud_resume_picker_shows_user_facing_sources_and_hides_internal_sources() {
+        let cloud = |session_id: &str, source: Option<&str>, title: &str| {
+            acp_session_info(
+                session_id,
+                "/",
+                Some(title),
+                Some("2020-01-15T10:30:00Z"),
+                Some(match source {
+                    Some(source) => serde_json::json!({
+                        "nori": { "origin": "cloud", "sessionType": source }
+                    }),
+                    None => serde_json::json!({ "nori": { "origin": "cloud" } }),
+                }),
+            )
+        };
+        let params = acp_resume_session_component_picker_params(vec![
+            cloud("slack-session", Some("slack"), "Investigate deploy alerts"),
+            cloud("cli-session", Some("cli"), "Fix the session picker"),
+            cloud("web-session", Some("web"), "Review onboarding"),
+            cloud("trigger-session", Some("trigger"), "Nightly maintenance"),
+            cloud("legacy-session", None, "Legacy handroll session"),
+        ]);
+        let rendered = component_picker_snapshot(&params, 180, 14);
+
+        assert!(rendered.contains("Slack"));
+        assert!(rendered.contains("Web"));
+        assert!(rendered.contains("Unknown"));
+        assert!(rendered.contains("Investigate deploy alerts"));
+        assert!(rendered.contains("Fix the session picker"));
+        assert!(rendered.contains("Review onboarding"));
+        assert!(rendered.contains("Legacy handroll session"));
+        assert!(!rendered.contains("Nightly maintenance"));
+        assert!(!rendered.contains("trigger-session"));
+        let cli_item = params
+            .state
+            .items
+            .iter()
+            .find(|item| item.key == "cli-session")
+            .expect("CLI session should remain visible");
+        assert_eq!(
+            cli_item.cells.get("source").map(String::as_str),
+            Some("CLI")
+        );
+    }
+
+    #[test]
+    fn cloud_resume_picker_gives_titles_most_of_the_wide_viewport() {
+        let params = acp_resume_session_component_picker_params(vec![acp_session_info(
+            "cli-session",
+            "/",
+            Some("Fix cloud session discovery and make the complete user prompt visible"),
+            Some("2020-01-15T10:30:00Z"),
+            Some(serde_json::json!({
+                "nori": { "origin": "cloud", "sessionType": "cli" }
+            })),
+        )]);
+
+        let rendered = component_picker_snapshot(&params, 180, 12);
+        assert!(
+            rendered
+                .contains("Fix cloud session discovery and make the complete user prompt visible")
+        );
+        assert!(rendered.contains("CLI"));
+    }
+
+    #[test]
+    fn mixed_resume_picker_hides_columns_that_do_not_fit_beside_details() {
+        let params = acp_resume_session_component_picker_params(vec![acp_session_info(
+            "local-session",
+            "/workspace/nori/cli",
+            Some("Fix the picker layout"),
+            Some("2020-01-15T10:30:00Z"),
+            None,
+        )]);
+
+        let rendered = component_picker_snapshot(&params, 124, 12);
+        assert!(!rendered.contains("Turn status"));
+        assert!(rendered.contains("Working direc"));
+        assert!(rendered.contains("Details"));
+    }
+
+    #[test]
+    fn all_internal_cloud_sessions_use_the_empty_picker_copy() {
+        let params = acp_resume_session_component_picker_params(vec![acp_session_info(
+            "trigger-session",
+            "/",
+            Some("Nightly maintenance"),
+            Some("2020-01-15T10:30:00Z"),
+            Some(serde_json::json!({
+                "nori": { "origin": "cloud", "sessionType": "trigger" }
+            })),
+        )]);
+
+        assert_eq!(params.state.items.len(), 1);
+        assert_eq!(
+            params.state.subtitle.as_deref(),
+            Some("The agent reported no resumable sessions")
+        );
     }
 
     #[test]
@@ -661,7 +800,7 @@ mod tests {
         assert_eq!(item_cell(&params, 1, "cwd"), "Not reported");
         assert_eq!(
             params.state.items[1].search_text,
-            "cloud-sess-1 slack · claude"
+            "cloud-sess-1 slack · claude Unknown"
         );
     }
 
@@ -684,7 +823,7 @@ mod tests {
         assert_eq!(item_cell(&params, 1, "cwd"), "Not reported");
         assert_eq!(
             params.state.items[1].search_text,
-            "cloud-sess-1 slack · claude"
+            "cloud-sess-1 slack · claude Unknown"
         );
     }
 
@@ -716,12 +855,12 @@ mod tests {
         assert_eq!(item_cell(&params, 1, "cwd"), "/home/x/proj");
         assert_eq!(
             params.state.items[1].search_text,
-            "local-sess-1 Fix the parser /home/x/proj"
+            "local-sess-1 Fix the parser Local /home/x/proj"
         );
         assert_eq!(item_cell(&params, 2, "cwd"), "/home/x/other");
         assert_eq!(
             params.state.items[2].search_text,
-            "local-sess-2 Tune the linter /home/x/other"
+            "local-sess-2 Tune the linter Local /home/x/other"
         );
     }
 

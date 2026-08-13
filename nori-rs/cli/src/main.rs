@@ -500,8 +500,8 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             )];
             // Cloud entry is picker-first: list live sessions before
             // anything can claim a VM; creating one is an explicit pick.
-            // `--onboard` skips the picker: the broker serializes onboarding
-            // acquires and resumes the active onboarding session itself.
+            // `--onboard` skips the picker, resuming a tagged onboarding
+            // session or falling back to the broker's serialized acquisition.
             interactive.cloud_mode = true;
             interactive.cloud_onboard = cloud_cmd.onboard;
 
