@@ -202,11 +202,20 @@ pub struct AcpBackendConfig {
     /// Optional session context injected into the first prompt without
     /// `SUMMARY_PREFIX` framing. Used to provide product-level context
     /// (e.g. "you are running inside the nori CLI").
-    pub session_context: Option<String>,
+    pub session_context: Option<SessionContext>,
     /// MCP server configuration for listing via /mcp command
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
+}
+
+/// First-prompt product context selected from the agent's actual MCP support.
+#[derive(Debug, Clone)]
+pub struct SessionContext {
+    /// Context for agents that support Nori's HTTP MCP affordances.
+    pub with_http_mcp: String,
+    /// Context for agents that need the non-MCP fallback guidance.
+    pub without_http_mcp: String,
 }
 
 #[derive(Debug, Clone)]
@@ -337,14 +346,20 @@ impl AcpBackend {
     }
 }
 
-fn fallback_session_context_for_connection(
+fn session_context_for_connection(
     config: &AcpBackendConfig,
     connection: &AcpConnection,
 ) -> Option<String> {
     if connection.capabilities().mcp_capabilities.http {
-        None
+        config
+            .session_context
+            .as_ref()
+            .map(|context| context.with_http_mcp.clone())
     } else {
-        config.session_context.clone()
+        config
+            .session_context
+            .as_ref()
+            .map(|context| context.without_http_mcp.clone())
     }
 }
 

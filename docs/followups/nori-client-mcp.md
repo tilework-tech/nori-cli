@@ -20,16 +20,19 @@ capabilities that ACP does not yet provide directly.
 
 `nori-client` should be the single structured way an MCP-capable ACP agent
 learns about Nori-owned client context. The prompt stream should carry user
-work, goal context when goal automation is valid, and one-time fallback context
-only when MCP is unavailable. It should not carry repeated product explanation
-that an MCP-capable agent could discover through `nori-client`.
+work, goal context when goal automation is valid, and a one-time source envelope
+that identifies Nori CLI consistently across client surfaces. Only agents
+without HTTP MCP support should receive fallback operating guidance in that
+envelope. MCP-capable agents should not receive product explanation they can
+discover through `nori-client`.
 
 The boundary is:
 
 - MCP tools mutate or read Nori-owned live state.
 - MCP resources expose durable read-only facts.
 - MCP prompts package reusable workflows for the agent.
-- Prompt fallback is reserved for agents that cannot receive the MCP server.
+- Every agent receives first-prompt source attribution; prompt fallback is
+  reserved for agents that cannot receive the MCP server.
 
 ## MCP-Capable Agent Behavior
 
@@ -55,8 +58,18 @@ The server should expose:
 
 The agent should be able to discover this context through MCP list/read/get
 requests. Nori may include short MCP server instructions that point agents
-toward the resources and prompts, but ordinary user prompts should not be
-prefixed with the same static Nori operating text for MCP-capable agents.
+toward the resources and prompts. Its first ordinary user prompt still receives
+the shared source-only envelope:
+
+```text
+<context>
+Source: this message is from Nori CLI.
+</context>
+```
+
+This source attribution is distinct from the static Nori operating guidance
+that MCP-capable agents can discover through `nori-client`, and it is consumed
+once rather than repeated on later prompts.
 
 Resources and prompts should be curated guidance, not an arbitrary filesystem
 read API. Tools should remain reserved for Nori-owned state changes.
@@ -68,7 +81,8 @@ advertise `nori-client`.
 
 Non-MCP agents should receive a concise first-prompt-only `<context>` block that:
 
-- says the agent is operating inside Nori CLI over ACP,
+- identifies the source as Nori CLI, matching the MCP-capable envelope,
+- says the agent is operating over ACP,
 - includes `https://github.com/tilework-tech/nori-cli` as the stable source
   reference for implementation questions,
 - says MCP-backed Nori affordances are unavailable in this session, and
@@ -141,8 +155,10 @@ The behavior is correct when tests prove:
 - MCP clients can list and read the Nori context resources.
 - MCP clients can list and get the Nori workflow prompts.
 - non-MCP agents do not receive `nori-client`.
-- non-MCP first prompts receive the fallback `<context>` block exactly once.
-- MCP-capable first prompts do not receive the fallback block once the MCP
+- every agent's first prompt receives the Nori CLI source envelope exactly once.
+- non-MCP first prompts additionally receive fallback guidance inside that
+  envelope.
+- MCP-capable first prompts do not receive fallback guidance once the MCP
   context surface exists.
 - `/goal` is disabled in the TUI and inert in the backend when `nori-client` is
   unavailable.

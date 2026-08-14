@@ -47,6 +47,7 @@ pub use message_history::search_entries;
 pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
 pub use backend::BackendEvent;
+pub use backend::SessionContext;
 pub use backend::probe::AgentSessionsProbe;
 pub use backend::probe::ProbeError;
 pub use backend::probe::probe_agent_sessions;
