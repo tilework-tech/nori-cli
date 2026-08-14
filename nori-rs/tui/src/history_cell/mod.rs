@@ -10,6 +10,7 @@ use crate::ui_types::StepStatus;
 use crate::update_action::UpdateAction;
 use crate::version::CODEX_CLI_VERSION;
 use crate::wrapping::RtOptions;
+use crate::wrapping::adaptive_wrap_lines;
 use crate::wrapping::word_wrap_lines;
 use nori_config::NoriConfig as Config;
 use ratatui::prelude::*;
@@ -188,7 +189,7 @@ impl AgentMessageCell {
 
 impl HistoryCell for AgentMessageCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        word_wrap_lines(
+        adaptive_wrap_lines(
             &self.lines,
             RtOptions::new(width as usize)
                 .initial_indent(if self.is_first_line {

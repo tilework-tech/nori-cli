@@ -370,13 +370,7 @@ where
 {
     let opts: RtOptions<'a> = width_or_options.into();
 
-    // Check if any span contains a URL-like token.
-    let has_url = line.spans.iter().any(|s| {
-        let c = s.content.as_ref();
-        c.contains("://") || c.starts_with("www.")
-    });
-
-    if has_url {
+    if line_contains_url_like(line) {
         // Disable word-breaking, hyphen splitting, and use ASCII-only word
         // separation so URLs (which contain `/`, `-`, etc.) stay intact.
         let opts = opts
@@ -387,6 +381,76 @@ where
     } else {
         word_wrap_line(line, opts)
     }
+}
+
+pub(crate) fn line_contains_url_like(line: &Line<'_>) -> bool {
+    line.spans.iter().any(|span| {
+        let c = span.content.as_ref();
+        c.contains("://") || c.starts_with("www.")
+    })
+}
+
+pub(crate) fn line_has_mixed_url_and_non_url_tokens(line: &Line<'_>) -> bool {
+    let text = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    let mut saw_url = false;
+    let mut saw_non_url = false;
+
+    for raw_token in text.split_ascii_whitespace() {
+        let token = raw_token.trim_matches(|character: char| {
+            matches!(
+                character,
+                '(' | ')'
+                    | '['
+                    | ']'
+                    | '{'
+                    | '}'
+                    | '<'
+                    | '>'
+                    | ','
+                    | '.'
+                    | ';'
+                    | ':'
+                    | '!'
+                    | '\''
+                    | '"'
+            )
+        });
+        if token.contains("://") || token.starts_with("www.") {
+            saw_url = true;
+        } else if token.chars().any(char::is_alphanumeric)
+            && !(token.chars().all(|character| character.is_ascii_digit())
+                && (raw_token.ends_with('.') || raw_token.ends_with(')')))
+        {
+            saw_non_url = true;
+        }
+    }
+
+    saw_url && saw_non_url
+}
+
+#[allow(private_bounds)]
+pub(crate) fn adaptive_wrap_lines<'a, I, L>(lines: I, options: RtOptions<'a>) -> Vec<Line<'static>>
+where
+    I: IntoIterator<Item = L>,
+    L: IntoLineInput<'a>,
+{
+    let mut out = Vec::new();
+    for (index, line) in lines.into_iter().enumerate() {
+        let line = line.into_line_input();
+        let options = if index == 0 {
+            options.clone()
+        } else {
+            options
+                .clone()
+                .initial_indent(options.subsequent_indent.clone())
+        };
+        push_owned_lines(&adaptive_wrap_line(line.as_ref(), options), &mut out);
+    }
+    out
 }
 
 fn slice_line_spans<'a>(

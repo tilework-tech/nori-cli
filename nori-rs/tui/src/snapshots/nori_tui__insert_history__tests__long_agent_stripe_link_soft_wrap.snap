@@ -1,0 +1,9 @@
+---
+source: tui/src/insert_history.rs
+expression: "rows.join(\"\\n\")"
+---
+• Open Stripe Checkout
+  (https://checkout.stripe.com/c/pay/cs_
+live_abcdefghijklmnopqrstuvwxyzABCDEFGHI
+JKLMNOPQRSTUVWXYZ0123456789#fidkdWxOYHwn
+Pyd1blpxYHZxWjA0V1dH%2FJ2FgY2Rw)
