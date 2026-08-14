@@ -25,6 +25,14 @@ The TUI depends on `nori-harness`, `nori-config`, and `nori-protocol`; it does
 not import the ACP host or ACP schema crate directly. Its ACP types arrive
 through `nori_protocol::acp`.
 
+At launch, the TUI supplies the harness with two Nori CLI context-envelope
+variants. Both identify the first prompt as coming from Nori CLI; the
+non-HTTP-MCP variant also explains the ACP fallback and unavailable MCP-backed
+affordances. The harness chooses between them from the connected agent's
+reported HTTP MCP capability and injects the selected envelope once. The CLI
+does not add a user identity because authenticated Nori Sessions identity is
+owned outside this layer.
+
 ### Core Implementation
 
 #### Source-first event dispatch

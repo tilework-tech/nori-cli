@@ -6,6 +6,7 @@
 //! resolved Nori config and maps session events onto [`AppEvent`]s.
 
 use nori_config::NoriConfig as Config;
+use nori_harness::SessionContext;
 use nori_harness::get_agent_display_name;
 use nori_harness::list_available_agents;
 pub(crate) use nori_harness::runtime::HarnessHandle;
@@ -112,7 +113,10 @@ fn launch_acp_agent(
     let spec = SessionLaunchSpec {
         config: Arc::new(config),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
-        session_context: Some(include_str!("../../session_context.md").to_string()),
+        session_context: Some(SessionContext {
+            with_http_mcp: include_str!("../../session_context_http_mcp.md").to_string(),
+            without_http_mcp: include_str!("../../session_context.md").to_string(),
+        }),
         initial_context: fork_context,
         resume,
     };

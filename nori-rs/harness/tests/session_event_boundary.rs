@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nori_config::NoriConfig;
+use nori_harness::SessionContext;
 use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionResume;
 use nori_harness::runtime::launch_session;
@@ -631,6 +632,140 @@ async fn ordered_prompt_content_reaches_the_acp_agent_unchanged() {
     assert_eq!(
         recorded_prompt["message"]["params"]["prompt"],
         serde_json::to_value(prompt).expect("serialize expected prompt")
+    );
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "this helper turns missing ACP wire records into focused test failures"
+)]
+async fn record_cli_context_prompts(http_mcp: bool) -> Vec<String> {
+    let _mcp_guard = http_mcp.then(|| {
+        // SAFETY: callers are serialized with every other environment-mutating test.
+        unsafe { std::env::set_var("MOCK_AGENT_MCP_HTTP", "1") };
+        EnvGuard("MOCK_AGENT_MCP_HTTP")
+    });
+    let temp = tempfile::tempdir().expect("create session directory");
+    let wire_log_dir = temp.path().join("acp-wire");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        acp_proxy: nori_config::AcpProxyConfig {
+            enabled: true,
+            log_dir: wire_log_dir.clone(),
+        },
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: Some(SessionContext {
+            with_http_mcp: include_str!("../../tui/session_context_http_mcp.md").to_string(),
+            without_http_mcp: include_str!("../../tui/session_context.md").to_string(),
+        }),
+        initial_context: None,
+        resume: None,
+    });
+
+    tokio::time::timeout(Duration::from_secs(10), session.handle.get_session_config())
+        .await
+        .expect("session bootstrap should complete")
+        .expect("session config should be available");
+
+    let first_request_id = session
+        .handle
+        .prompt(vec![acp::v1::ContentBlock::Text(
+            acp::v1::TextContent::new("first prompt"),
+        )])
+        .await
+        .expect("submit first prompt");
+    let second_request_id = session
+        .handle
+        .prompt(vec![acp::v1::ContentBlock::Text(
+            acp::v1::TextContent::new("second prompt"),
+        )])
+        .await
+        .expect("submit second prompt");
+
+    let mut completed = std::collections::HashSet::new();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while completed.len() < 2 {
+            if let Some(SessionEvent::Acp(AcpEvent::Response {
+                request_id,
+                response: Ok(acp::v1::AgentResponse::PromptResponse(_)),
+            })) = session.events.recv().await
+                && (request_id == first_request_id || request_id == second_request_id)
+            {
+                completed.insert(request_id);
+            }
+        }
+    })
+    .await
+    .expect("both prompts should complete");
+
+    session.handle.shutdown().await.expect("shutdown session");
+    collect_until_session_ended(&mut session).await;
+
+    let wire_log = std::fs::read_dir(&wire_log_dir)
+        .expect("wire log directory")
+        .map(|entry| entry.expect("wire log entry").path())
+        .find(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "jsonl")
+        })
+        .expect("ACP wire log");
+    std::fs::read_to_string(wire_log)
+        .expect("read ACP wire log")
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("valid wire log line"))
+        .filter(|record| {
+            record["direction"] == "client_to_agent"
+                && record["message"]["method"] == "session/prompt"
+        })
+        .map(|record| {
+            record["message"]["params"]["prompt"]
+                .as_array()
+                .expect("prompt content blocks")
+                .iter()
+                .filter_map(|block| block["text"].as_str())
+                .collect::<String>()
+        })
+        .collect()
+}
+
+#[tokio::test]
+#[serial]
+async fn http_mcp_agent_receives_cli_source_context_once_without_fallback_guidance() {
+    assert_eq!(
+        record_cli_context_prompts(true).await,
+        vec![
+            "<context>\nSource: this message is from Nori CLI.\n</context>\n\nfirst prompt",
+            "second prompt",
+        ]
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn non_mcp_agent_receives_full_cli_fallback_context_once() {
+    assert_eq!(
+        record_cli_context_prompts(false).await,
+        vec![
+            [
+                "<context>",
+                "Source: this message is from Nori CLI.",
+                "",
+                "You are operating over ACP.",
+                "For Nori CLI implementation questions, use https://github.com/tilework-tech/nori-cli as the stable source reference.",
+                "MCP-backed Nori affordances, including /goal completion tools such as update_goal, are unavailable in this session.",
+                "</context>",
+                "",
+                "first prompt",
+            ]
+            .join("\n"),
+            "second prompt".to_string(),
+        ]
     );
 }
 

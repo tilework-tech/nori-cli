@@ -46,6 +46,11 @@ inventing a second public event vocabulary.
 
 A frontend constructs `SessionLaunchSpec` with one resolved `Arc<NoriConfig>`,
 CLI version, optional product/session context, and optional `SessionResume`.
+Product context has HTTP-MCP and non-HTTP-MCP variants. After ACP
+initialization reveals the connected agent's capabilities, the harness selects
+the matching variant and prepends it to the first locally submitted prompt
+only. This keeps source identity common across ACP agents while reserving MCP
+fallback guidance for agents that cannot use Nori's HTTP MCP affordances.
 `launch_session(spec)` returns `LaunchedSession`, containing a `HarnessHandle`
 and the session event receiver.
 

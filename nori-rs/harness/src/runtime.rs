@@ -24,6 +24,7 @@ use tokio::sync::oneshot;
 use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
+use crate::backend::SessionContext;
 use crate::transcript::Transcript;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
@@ -449,7 +450,7 @@ pub struct SessionLaunchSpec {
     /// Frontend version recorded in transcript metadata.
     pub cli_version: String,
     /// Product-level context injected into the first prompt.
-    pub session_context: Option<String>,
+    pub session_context: Option<SessionContext>,
     /// Conversation history injected into the first prompt (used by fork).
     pub initial_context: Option<String>,
     /// When set, resume the given session instead of starting fresh.

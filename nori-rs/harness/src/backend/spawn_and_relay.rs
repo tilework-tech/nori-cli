@@ -230,7 +230,7 @@ impl AcpBackend {
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
-        let pending_hook_context = fallback_session_context_for_connection(config, &connection);
+        let pending_hook_context = session_context_for_connection(config, &connection);
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
