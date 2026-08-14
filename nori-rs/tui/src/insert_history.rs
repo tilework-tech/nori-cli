@@ -2,10 +2,15 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 
-use crate::wrapping::word_wrap_lines;
-use crate::wrapping::word_wrap_lines_borrowed;
+use crate::wrapping::adaptive_wrap_line;
+use crate::wrapping::line_contains_url_like;
+use crate::wrapping::line_has_mixed_url_and_non_url_tokens;
 use crossterm::Command;
+use crossterm::cursor::MoveDown;
 use crossterm::cursor::MoveTo;
+use crossterm::cursor::MoveToColumn;
+use crossterm::cursor::RestorePosition;
+use crossterm::cursor::SavePosition;
 use crossterm::queue;
 use crossterm::style::Color as CColor;
 use crossterm::style::Print;
@@ -36,6 +41,18 @@ fn merged_line_spans(line: &Line<'_>) -> Vec<Span<'static>> {
         .collect()
 }
 
+fn wrap_history_line<'a>(line: &'a Line<'a>, width: usize) -> Vec<Line<'a>> {
+    if line_contains_url_like(line) && !line_has_mixed_url_and_non_url_tokens(line) {
+        vec![line.clone()]
+    } else {
+        adaptive_wrap_line(line, width)
+    }
+}
+
+fn physical_row_count(line: &Line<'_>, width: usize) -> usize {
+    line.width().max(1).div_ceil(width.max(1))
+}
+
 /// Insert `lines` above the viewport using the terminal's backend writer
 /// (avoids direct stdout references).
 ///
@@ -56,10 +73,18 @@ where
     let last_cursor_pos = terminal.last_known_cursor_pos;
     let writer = terminal.backend_mut();
 
-    // Pre-wrap lines using word-aware wrapping so terminal scrollback sees the same
-    // formatting as the TUI. This avoids character-level hard wrapping by the terminal.
-    let wrapped = word_wrap_lines_borrowed(&lines, area.width.max(1) as usize);
-    let wrapped_lines = wrapped.len() as u16;
+    let wrap_width = area.width.max(1) as usize;
+    let mut wrapped = Vec::new();
+    let mut wrapped_rows = 0usize;
+    for line in &lines {
+        let line_wrapped = wrap_history_line(line, wrap_width);
+        wrapped_rows += line_wrapped
+            .iter()
+            .map(|line| physical_row_count(line, wrap_width))
+            .sum::<usize>();
+        wrapped.extend(line_wrapped);
+    }
+    let wrapped_lines = wrapped_rows as u16;
     let cursor_top = if area.bottom() < screen_size.height {
         // If the viewport is not at the bottom of the screen, scroll it down to make room.
         // Don't scroll it past the bottom of the screen.
@@ -134,6 +159,15 @@ where
 
     for line in wrapped {
         queue!(writer, Print("\r\n"))?;
+        let physical_rows = physical_row_count(&line, wrap_width);
+        if physical_rows > 1 {
+            queue!(writer, SavePosition)?;
+            for _ in 1..physical_rows {
+                queue!(writer, MoveDown(1), MoveToColumn(0))?;
+                queue!(writer, Clear(ClearType::UntilNewLine))?;
+            }
+            queue!(writer, RestorePosition)?;
+        }
         queue_colors(
             writer,
             line.style.fg.unwrap_or(Color::Reset),
@@ -183,12 +217,17 @@ where
 
     let width = terminal.viewport_area.width.max(1) as usize;
 
-    // First pass: figure out how many original lines fit by wrapping each
-    // individually and counting screen rows.
+    // First pass: figure out how many original lines fit, including terminal
+    // soft-wrap rows used to preserve long URL tokens.
     let mut total_rows: u16 = 0;
     let mut lines_consumed: usize = 0;
     for line in lines.iter() {
-        let wrapped_count = word_wrap_lines(std::iter::once(line.clone()), width).len() as u16;
+        let wrapped_count = wrap_history_line(line, width)
+            .iter()
+            .map(|line| physical_row_count(line, width))
+            .sum::<usize>()
+            .try_into()
+            .unwrap_or(u16::MAX);
         if total_rows + wrapped_count > available_rows {
             break;
         }
@@ -200,9 +239,12 @@ where
         return Ok(0);
     }
 
-    // Drain consumed lines and wrap them as a batch for writing.
+    // Drain consumed lines and wrap them for writing.
     let consumed: Vec<Line<'static>> = lines.drain(..lines_consumed).collect();
-    let wrapped = word_wrap_lines(consumed, width);
+    let wrapped = consumed
+        .iter()
+        .flat_map(|line| wrap_history_line(line, width))
+        .collect::<Vec<_>>();
 
     // Bottom-align: start writing from (available_rows - total_rows).
     let start_row = available_rows - total_rows;
@@ -217,8 +259,13 @@ where
     }
 
     // Write the wrapped lines directly to their target positions.
-    for (i, line) in wrapped.iter().enumerate() {
-        let row = start_row + i as u16;
+    let mut row = start_row;
+    for line in &wrapped {
+        let physical_rows = physical_row_count(line, width) as u16;
+        for offset in 0..physical_rows {
+            queue!(writer, MoveTo(0, row + offset))?;
+            queue!(writer, Clear(ClearType::UntilNewLine))?;
+        }
         queue!(writer, MoveTo(0, row))?;
         queue_colors(
             writer,
@@ -228,6 +275,7 @@ where
         queue!(writer, Clear(ClearType::UntilNewLine))?;
         let merged_spans = merged_line_spans(line);
         write_spans(writer, merged_spans.iter())?;
+        row += physical_rows;
     }
 
     // Restore cursor position.
@@ -384,6 +432,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::history_cell::AgentMessageCell;
+    use crate::history_cell::HistoryCell;
     use crate::markdown_render::render_markdown_text;
     use crate::test_backend::VT100Backend;
     use ratatui::layout::Rect;
@@ -457,6 +507,138 @@ mod tests {
         let spans = merged_line_spans(&line);
         assert_eq!(spans[0].style.fg, Some(Color::LightBlue));
         assert_eq!(spans[1].style.fg, None);
+    }
+
+    #[test]
+    fn long_agent_link_continuation_rows_have_no_padding() {
+        let width: u16 = 40;
+        let height: u16 = 12;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+        term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+
+        let url = "https://checkout.stripe.com/c/pay/cs_live_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#fidkdWxOYHwnPyd1blpxYHZxWjA0V1dH%2FJ2FgY2Rw";
+        let markdown = format!("[Open Stripe Checkout]({url})");
+        let cell = AgentMessageCell::new(render_markdown_text(&markdown).lines, true);
+        let display_lines = cell.display_lines(width);
+
+        assert!(
+            display_lines.iter().any(|line| line
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+                .contains(url)),
+            "agent history must keep the complete Stripe URL in one logical line: {display_lines:?}",
+        );
+
+        insert_history_lines(&mut term, display_lines).expect("insert link history");
+
+        let rows = term
+            .backend()
+            .vt100()
+            .screen()
+            .rows(0, width)
+            .map(|row| row.trim_end().to_string())
+            .collect::<Vec<_>>();
+        let first_url_row = rows
+            .iter()
+            .position(|row| row.contains("https://"))
+            .unwrap_or_else(|| panic!("expected URL start in rows: {rows:?}"));
+        let last_url_row = rows
+            .iter()
+            .position(|row| row.contains("%2FJ2FgY2Rw)"))
+            .unwrap_or_else(|| panic!("expected URL tail in rows: {rows:?}"));
+
+        assert!(
+            last_url_row > first_url_row,
+            "expected URL to wrap: {rows:?}"
+        );
+        assert!(
+            rows[first_url_row + 1..=last_url_row]
+                .iter()
+                .all(|row| !row.starts_with(' ')),
+            "terminal-wrapped URL continuation rows must start at column zero: {rows:?}",
+        );
+        assert!(
+            (first_url_row..last_url_row).all(|row| term
+                .backend()
+                .vt100()
+                .screen()
+                .row_wrapped(row as u16)),
+            "Stripe URL must use terminal soft-wraps rather than inserted newlines: {rows:?}",
+        );
+        insta::assert_snapshot!("long_agent_stripe_link_soft_wrap", rows.join("\n"));
+    }
+
+    #[test]
+    fn direct_write_keeps_long_agent_link_soft_wrapped() {
+        let width: u16 = 40;
+        let height: u16 = 12;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+        term.set_viewport_area(Rect::new(0, 8, width, 4));
+
+        let url = "https://checkout.stripe.com/c/pay/cs_live_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#fidkdWxOYHwnPyd1blpxYHZxWjA0V1dH%2FJ2FgY2Rw";
+        let markdown = format!("[Open Stripe Checkout]({url})");
+        let cell = AgentMessageCell::new(render_markdown_text(&markdown).lines, true);
+        let mut lines = cell.display_lines(width);
+
+        write_pending_lines_directly(&mut term, &mut lines, 8).expect("write pending link");
+
+        let screen = term.backend().vt100().screen();
+        let rows = screen
+            .rows(0, width)
+            .map(|row| row.trim_end().to_string())
+            .collect::<Vec<_>>();
+        let first_url_row = rows
+            .iter()
+            .position(|row| row.contains("https://"))
+            .unwrap_or_else(|| panic!("expected URL start in rows: {rows:?}"));
+        let last_url_row = rows
+            .iter()
+            .position(|row| row.contains("%2FJ2FgY2Rw)"))
+            .unwrap_or_else(|| panic!("expected URL tail in rows: {rows:?}"));
+
+        assert!(
+            last_url_row > first_url_row,
+            "expected URL to wrap: {rows:?}"
+        );
+        assert!(
+            (first_url_row..last_url_row).all(|row| screen.row_wrapped(row as u16)),
+            "direct history writes must preserve terminal soft-wraps: {rows:?}",
+        );
+    }
+
+    #[test]
+    fn mixed_url_history_wraps_prose_before_the_url() {
+        let width: u16 = 20;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+        term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+
+        let line = Line::from(
+            "see phrase before https://example.test/abcdefghijklmnopqrstuvwxyz tail words",
+        );
+        insert_history_lines(&mut term, vec![line]).expect("insert mixed URL history");
+
+        let rows = term
+            .backend()
+            .vt100()
+            .screen()
+            .rows(0, width)
+            .map(|row| row.trim_end().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(
+            rows.iter().any(|row| row == "see phrase before"),
+            "prose should wrap at a word boundary before the URL: {rows:?}",
+        );
+        assert!(
+            rows.iter().any(|row| row.starts_with("https://")),
+            "URL should begin as an intact token: {rows:?}",
+        );
     }
 
     #[test]
