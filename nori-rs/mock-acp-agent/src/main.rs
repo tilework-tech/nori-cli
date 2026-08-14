@@ -875,7 +875,25 @@ impl MockAgent {
 
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
-            self.send_text_chunk(session_id.clone(), &response).await?;
+            // MOCK_AGENT_RESPONSE_CHUNK_CHARS splits the response into small chunks the way a real
+            // model streams it, so tests can cover incremental rendering instead of a single chunk
+            // that always parses as complete markdown.
+            match std::env::var("MOCK_AGENT_RESPONSE_CHUNK_CHARS")
+                .ok()
+                .and_then(|chars| chars.parse::<usize>().ok())
+                .filter(|chars| *chars > 0)
+            {
+                Some(chunk_chars) => {
+                    let characters = response.chars().collect::<Vec<_>>();
+                    for chunk in characters.chunks(chunk_chars) {
+                        self.send_text_chunk(session_id.clone(), &chunk.iter().collect::<String>())
+                            .await?;
+                    }
+                }
+                None => {
+                    self.send_text_chunk(session_id.clone(), &response).await?;
+                }
+            }
         } else {
             // Default behavior
             self.send_text_chunk(session_id.clone(), "Test message 1")

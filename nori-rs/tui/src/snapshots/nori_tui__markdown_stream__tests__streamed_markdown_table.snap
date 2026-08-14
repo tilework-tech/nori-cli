@@ -1,0 +1,17 @@
+---
+source: tui/src/markdown_stream.rs
+expression: transcript
+---
+Here is a table:
+Situation                            Commit strategy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Streaming/tail append                Existing incremental insertion
+───────────────────────────────────  ──────────────────────────────────────────
+Width changes                        Debounced full replay
+───────────────────────────────────  ──────────────────────────────────────────
+Height-only changes                  Replay only when viewport bookkeeping
+                                     requires it
+───────────────────────────────────  ──────────────────────────────────────────
+Rollback/session replacement/resume  Full replay
+───────────────────────────────────  ──────────────────────────────────────────
+Change above writable viewport       Full replay
