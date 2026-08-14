@@ -774,6 +774,24 @@ impl SessionConfig {
         self
     }
 
+    /// Stream `response` in `chunk_chars`-sized pieces instead of one chunk.
+    ///
+    /// Markdown that is complete only after several chunks (a table gains rows, a fence closes)
+    /// renders differently while it streams, which a single-chunk response never exercises.
+    pub fn with_mock_response_streamed(
+        mut self,
+        response: impl Into<String>,
+        chunk_chars: usize,
+    ) -> Self {
+        self.mock_agent_env
+            .insert("MOCK_AGENT_RESPONSE".to_string(), response.into());
+        self.mock_agent_env.insert(
+            "MOCK_AGENT_RESPONSE_CHUNK_CHARS".to_string(),
+            chunk_chars.to_string(),
+        );
+        self
+    }
+
     pub fn with_stream_until_cancel(mut self) -> Self {
         self.mock_agent_env.insert(
             "MOCK_AGENT_STREAM_UNTIL_CANCEL".to_string(),
