@@ -736,12 +736,21 @@ async fn record_cli_context_prompts(http_mcp: bool) -> Vec<String> {
 
 #[tokio::test]
 #[serial]
-async fn http_mcp_agent_receives_cli_source_context_once_without_fallback_guidance() {
+async fn http_mcp_agent_receives_goal_routing_context_once_without_fallback_guidance() {
     assert_eq!(
         record_cli_context_prompts(true).await,
         vec![
-            "<context>\nSource: this message is from Nori CLI.\n</context>\n\nfirst prompt",
-            "second prompt",
+            [
+                "<context>",
+                "Source: this message is from Nori CLI.",
+                "",
+                "When <goal_context> is present, Nori CLI is its authoritative owner. Do not use native or unqualified goal tools. Read it with `get_goal` from the `nori-client` MCP server, and update it with `update_goal` from the `nori-client` MCP server.",
+                "</context>",
+                "",
+                "first prompt",
+            ]
+            .join("\n"),
+            "second prompt".to_string(),
         ]
     );
 }

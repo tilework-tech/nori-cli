@@ -13,6 +13,7 @@
 //! - `openai` - OpenAI
 //! - `google` - Google
 
+use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -27,6 +28,25 @@ use nori_config::ResolvedDistribution;
 
 /// Default idle timeout for ACP streaming (5 minutes)
 const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
+
+fn codex_config_with_native_goals_disabled(config: Option<&str>) -> Result<String> {
+    let mut config = match config {
+        Some(config) => serde_json::from_str::<serde_json::Value>(config)
+            .context("CODEX_CONFIG must be valid JSON")?,
+        None => serde_json::json!({}),
+    };
+    let config = config
+        .as_object_mut()
+        .context("CODEX_CONFIG must contain a JSON object")?;
+    let features = config
+        .entry("features")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .context("CODEX_CONFIG features must contain a JSON object")?;
+    features.insert("goals".to_string(), false.into());
+
+    serde_json::to_string(config).context("failed to serialize CODEX_CONFIG")
+}
 
 // =============================================================================
 // Core Enums
@@ -100,8 +120,7 @@ impl AgentKind {
             // @latest forces bunx to resolve the new scope instead of a stale
             // @zed-industries cache entry with the same unscoped package name.
             AgentKind::ClaudeCode => "@agentclientprotocol/claude-agent-acp@latest",
-            // Codex uses Zed's ACP adapter
-            AgentKind::Codex => "@zed-industries/codex-acp",
+            AgentKind::Codex => "@agentclientprotocol/codex-acp@latest",
             // Gemini has native ACP support
             AgentKind::Gemini => "@google/gemini-cli",
         }
@@ -735,6 +754,13 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
                 path.to_string_lossy().to_string(),
             );
         }
+        if agent == AgentKind::Codex {
+            let ambient_config = std::env::var("CODEX_CONFIG").ok();
+            env.insert(
+                "CODEX_CONFIG".to_string(),
+                codex_config_with_native_goals_disabled(ambient_config.as_deref())?,
+            );
+        }
 
         return Ok(AcpAgentConfig {
             agent,
@@ -1036,13 +1062,49 @@ mod tests {
             "Command should be npx or bunx, got: {}",
             config.command
         );
-        // Uses Zed's ACP adapter
-        assert!(
-            config
-                .args
-                .contains(&"@zed-industries/codex-acp".to_string())
+        // Uses the actively maintained Agent Client Protocol adapter.
+        assert_eq!(
+            config.args,
+            vec!["@agentclientprotocol/codex-acp@latest".to_string()]
         );
+        let codex_config = config
+            .env
+            .get("CODEX_CONFIG")
+            .and_then(|config| serde_json::from_str::<serde_json::Value>(config).ok())
+            .expect("Codex config should be valid JSON");
+        assert_eq!(codex_config["features"]["goals"], false);
         assert_eq!(config.provider_info.name, "Codex ACP");
+    }
+
+    #[test]
+    fn codex_config_preserves_existing_settings_while_disabling_native_goals() {
+        let config = codex_config_with_native_goals_disabled(Some(
+            r#"{"model":"gpt-test","features":{"goals":true,"other":true}}"#,
+        ))
+        .expect("valid CODEX_CONFIG should merge");
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&config).expect("merged JSON"),
+            serde_json::json!({
+                "model": "gpt-test",
+                "features": {
+                    "goals": false,
+                    "other": true
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn codex_config_rejects_invalid_ambient_json() {
+        let error = codex_config_with_native_goals_disabled(Some("not-json"))
+            .expect_err("invalid CODEX_CONFIG should remain visible");
+
+        assert!(
+            error
+                .to_string()
+                .contains("CODEX_CONFIG must be valid JSON")
+        );
     }
 
     #[test]
