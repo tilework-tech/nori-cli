@@ -27,6 +27,24 @@ use tokio::time::sleep;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
+#[cfg(unix)]
+fn spawn_descendant_if_requested() {
+    let Some(pid_file) = std::env::var_os("MOCK_AGENT_DESCENDANT_PID_FILE") else {
+        return;
+    };
+
+    let child = std::process::Command::new("sleep")
+        .arg("600")
+        .spawn()
+        .expect("spawn mock descendant");
+    let child_pid = child.id();
+    // The ACP host owns this process through the agent's process group. Leave
+    // the descendant alive after the mock exits so the lifecycle test can
+    // prove that the host sweeps it.
+    std::mem::forget(child);
+    std::fs::write(pid_file, child_pid.to_string()).expect("write mock descendant pid");
+}
+
 /// Incoming byte stream that exits the process when the peer closes stdin.
 ///
 /// The SDK's connection future never resolves on a clean stdin EOF: its
@@ -1339,6 +1357,9 @@ Connection: close\r\n\r\n\
 #[tokio::main]
 async fn main() -> acp::Result<()> {
     env_logger::init();
+
+    #[cfg(unix)]
+    spawn_descendant_if_requested();
 
     let state = Arc::new(MockState::default());
 

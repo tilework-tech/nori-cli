@@ -43,6 +43,9 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   forward responses to the mock's own pending client requests.
 - `ExitOnEof` preserves the host's stdin-EOF shutdown contract. A dedicated
   scenario can ignore EOF to test the hard-exit watchdog.
+- A Unix lifecycle fixture can leave a descendant running after the mock agent
+  exits and record its PID for the host integration test. This proves the host
+  sweeps the inherited process group without relying on a shell wrapper.
 - Local tests expect `target/debug/mock_acp_agent` unless
   `MOCK_ACP_AGENT_BIN` is set.
 

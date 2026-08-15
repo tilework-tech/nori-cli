@@ -64,7 +64,7 @@ fn process_exists_and_not_zombie(pid: u32) -> bool {
 /// wait for the former global one-second TUI watchdog when an agent ignores
 /// stdin EOF.
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent() {
     let config = SessionConfig::new()
         .with_agent("mock-model".to_string())

@@ -841,12 +841,30 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
 }
 
 #[cfg(unix)]
-async fn wait_for_process_to_disappear(pid: libc::pid_t) -> bool {
+fn process_is_running(pid: libc::pid_t) -> bool {
+    let exists = unsafe { libc::kill(pid, 0) } == 0
+        || std::io::Error::last_os_error().kind() == std::io::ErrorKind::PermissionDenied;
+    if !exists {
+        return false;
+    }
+
+    std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .is_none_or(|output| {
+            !String::from_utf8_lossy(&output.stdout)
+                .trim_start()
+                .starts_with('Z')
+        })
+}
+
+#[cfg(unix)]
+async fn wait_for_process_to_stop(pid: libc::pid_t) -> bool {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
     loop {
-        let exists = unsafe { libc::kill(pid, 0) } == 0
-            || std::io::Error::last_os_error().kind() == std::io::ErrorKind::PermissionDenied;
-        if !exists {
+        if !process_is_running(pid) {
             return true;
         }
         if std::time::Instant::now() >= deadline {
@@ -907,18 +925,14 @@ async fn test_shutdown_closes_stdin_and_waits_for_child_exit() {
 #[tokio::test]
 #[cfg(unix)]
 async fn test_shutdown_sweeps_descendant_after_group_leader_exits() {
-    let Some(mock) = mock_agent_config() else {
+    let Some(mut config) = mock_agent_config() else {
         return;
     };
     let temp_dir = tempdir().expect("temp dir");
     let descendant_pidfile = temp_dir.path().join("descendant-pid");
-    let config = script_agent_config(
-        temp_dir.path(),
-        &format!(
-            "#!/bin/sh\n'{mock}'\nsleep 600 &\necho $! > '{descendant_pidfile}'\n",
-            mock = mock.command,
-            descendant_pidfile = descendant_pidfile.display(),
-        ),
+    config.env.insert(
+        "MOCK_AGENT_DESCENDANT_PID_FILE".to_string(),
+        descendant_pidfile.to_string_lossy().into_owned(),
     );
 
     let conn = AcpConnection::spawn(
@@ -935,13 +949,13 @@ async fn test_shutdown_sweeps_descendant_after_group_leader_exits() {
     conn.shutdown().await;
 
     let descendant_pid: libc::pid_t = std::fs::read_to_string(&descendant_pidfile)
-        .expect("wrapper should record its descendant pid before exiting")
+        .expect("mock agent should record its descendant pid before exiting")
         .trim()
         .parse()
         .expect("descendant pid parses");
     assert!(
-        wait_for_process_to_disappear(descendant_pid).await,
-        "descendant process {descendant_pid} survived its ACP group leader"
+        wait_for_process_to_stop(descendant_pid).await,
+        "descendant process {descendant_pid} remained running after its ACP group leader exited"
     );
 }
 
@@ -995,8 +1009,8 @@ async fn test_shutdown_kills_child_that_outlives_grace() {
         .parse()
         .expect("pid parses");
     assert!(
-        wait_for_process_to_disappear(pid).await,
-        "the hung child (pid {pid}) must be killed after the grace period"
+        wait_for_process_to_stop(pid).await,
+        "the hung child (pid {pid}) must stop after the grace period"
     );
 }
 

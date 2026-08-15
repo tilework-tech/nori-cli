@@ -20,18 +20,19 @@ const MAX_PIPED_BYTES: u64 = 10 * 1024 * 1024;
 
 /// Resolves the prompt from the argument and, only when asked, from piped stdin.
 ///
-/// Stdin is consumed in exactly three cases: there is no prompt argument at all,
-/// the argument is the `-` sentinel, or the caller passed `--stdin`. A plain
-/// prompt argument never touches stdin, so `nori exec "..."` cannot swallow a
-/// pipe it merely inherited from a parent (a `while read` loop, a git hook, a
-/// `curl | bash` script).
+/// Stdin is considered in exactly three cases: there is no prompt argument at
+/// all, the argument is the `-` sentinel, or the caller passed `--stdin`. It is
+/// consumed only when it is not a terminal. A plain prompt argument never
+/// touches stdin, so `nori exec "..."` cannot swallow a pipe it merely inherited
+/// from a parent (a `while read` loop, a git hook, a `curl | bash` script).
 ///
 /// Callers must not invoke this when stdin is reserved for another protocol
 /// (notably `nori exec --acp`, which speaks JSON-RPC over stdin).
+/// Returns the resolved prompt and whether piped stdin was consumed.
 pub fn resolve_prompt(
     argument: Option<String>,
     stdin_requested: bool,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<(Option<String>, bool)> {
     let is_sentinel = argument.as_deref() == Some(STDIN_SENTINEL);
     let instruction = if is_sentinel { None } else { argument };
     let wants_stdin = is_sentinel || stdin_requested || instruction.is_none();
@@ -40,7 +41,8 @@ pub fn resolve_prompt(
     } else {
         None
     };
-    Ok(compose_prompt(instruction, piped))
+    let consumed_stdin = piped.is_some();
+    Ok((compose_prompt(instruction, piped), consumed_stdin))
 }
 
 /// Reads stdin to EOF when it is a pipe or a redirect, capped at

@@ -182,19 +182,12 @@ fn observe_exit_without_reaping(pid: u32) -> std::io::Result<()> {
 
 /// Kill the entire process group to ensure grandchildren are terminated.
 #[cfg(unix)]
-fn kill_process_group(pid: u32) -> std::io::Result<()> {
+fn kill_process_group(pgid: u32) -> std::io::Result<()> {
     use std::io::ErrorKind;
 
-    let pid = pid as libc::pid_t;
-
-    let pgid = unsafe { libc::getpgid(pid) };
-    if pgid == -1 {
-        let err = std::io::Error::last_os_error();
-        if err.kind() != ErrorKind::NotFound {
-            return Err(err);
-        }
-        return Ok(());
-    }
+    // `spawn_inner` establishes the child as its process-group leader before
+    // exec, so its PID is the stable group ID even after the leader exits.
+    let pgid = pgid as libc::pid_t;
 
     let result = unsafe { libc::killpg(pgid, libc::SIGKILL) };
     if result == -1 {

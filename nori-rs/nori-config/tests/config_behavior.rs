@@ -53,6 +53,7 @@ sandbox_mode = "read-only"
     let extra_root = home.path().join("shared");
     std::fs::create_dir_all(&cwd).expect("create cwd");
     std::fs::create_dir_all(&extra_root).expect("create extra root");
+    let expected_extra_root = std::fs::canonicalize(&extra_root).expect("canonicalize extra root");
 
     let config = NoriConfig::load_from_path_with_overrides(
         &config_path,
@@ -61,7 +62,7 @@ sandbox_mode = "read-only"
             approval_policy: Some(AskForApproval::OnFailure),
             sandbox_mode: Some(SandboxMode::WorkspaceWrite),
             cwd: Some(cwd),
-            additional_writable_roots: vec![extra_root.clone()],
+            additional_writable_roots: vec![extra_root],
             raw_overrides: vec![
                 (
                     "agent".to_string(),
@@ -81,7 +82,7 @@ sandbox_mode = "read-only"
     let SandboxPolicy::WorkspaceWrite { writable_roots, .. } = config.sandbox_policy else {
         panic!("expected workspace-write sandbox policy");
     };
-    assert_eq!(writable_roots, vec![extra_root]);
+    assert_eq!(writable_roots, vec![expected_extra_root]);
 }
 
 #[test]
