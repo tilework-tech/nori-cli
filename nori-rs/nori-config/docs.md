@@ -28,6 +28,11 @@ The crate owns:
 Resolution applies typed CLI overrides, raw dotted overrides, then the user
 file. Project trust resolves against the effective cwd and primary git root.
 
+`[tui] resize_reflow` controls whether the inline TUI rebuilds terminal
+scrollback after width changes. It defaults to `true`; the `/settings` toggle
+persists to this same key, so startup configuration and runtime changes share
+one source of truth.
+
 ### Things to Know
 
 - These policy types are configuration semantics, not ACP session events; they

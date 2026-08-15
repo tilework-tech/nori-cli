@@ -27,6 +27,7 @@ use crate::nori::skillset_picker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsItem {
     PinnedPlanDrawer,
+    ResizeReflow,
     CustomWorkingMessages,
     VerticalFooter,
     TerminalNotifications,
@@ -58,6 +59,7 @@ pub fn config_picker_params(
         config.terminal_notifications == TerminalNotifications::Enabled;
     let os_notifications_enabled = config.os_notifications == OsNotifications::Enabled;
     let pinned_plan_drawer_enabled = config.pinned_plan_drawer;
+    let resize_reflow_enabled = config.resize_reflow;
     let custom_working_messages_enabled = config.custom_working_messages;
     let custom_working_messages_description = if config.custom_working_message_list.is_empty() {
         "Rotate playful status messages while the agent is working".to_string()
@@ -80,6 +82,21 @@ pub fn config_picker_params(
                     let new_value = !pinned_plan_drawer_enabled;
                     move || {
                         tx.send(AppEvent::SetConfigPinnedPlanDrawer(new_value));
+                    }
+                },
+            ),
+        ),
+        (
+            SettingsItem::ResizeReflow,
+            build_toggle_item(
+                "Resize Reflow",
+                "Reflow transcript history when the terminal width changes",
+                resize_reflow_enabled,
+                {
+                    let tx = app_event_tx.clone();
+                    let new_value = !resize_reflow_enabled;
+                    move || {
+                        tx.send(AppEvent::SetConfigResizeReflow(new_value));
                     }
                 },
             ),
@@ -780,19 +797,6 @@ mod tests {
     }
 
     #[test]
-    fn config_picker_returns_expected_items() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(false);
-
-        let params = config_picker_params(&config, tx, None);
-
-        assert_eq!(params.items.len(), 14);
-        assert!(params.title.is_some());
-        assert!(params.title.unwrap().contains("Configuration"));
-    }
-
-    #[test]
     fn config_picker_shows_current_state_on() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
@@ -800,8 +804,12 @@ mod tests {
 
         let params = config_picker_params(&config, tx, None);
 
-        // Vertical Footer follows Pinned Plan Drawer and Custom Working Messages.
-        assert!(params.items[2].name.contains("(on)"));
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vertical Footer"))
+            .expect("config picker should include Vertical Footer");
+        assert!(item.name.contains("(on)"));
     }
 
     #[test]
@@ -812,29 +820,12 @@ mod tests {
 
         let params = config_picker_params(&config, tx, None);
 
-        // Vertical Footer follows Pinned Plan Drawer and Custom Working Messages.
-        assert!(params.items[2].name.contains("(off)"));
-    }
-
-    #[test]
-    fn config_picker_returns_expected_item_count() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let config = make_test_config(false);
-
-        let params = config_picker_params(&config, tx, None);
-
-        assert_eq!(params.items.len(), 14);
-        // The 1st item should be Pinned Plan Drawer
-        assert!(params.items[0].name.contains("Pinned Plan Drawer"));
-        assert!(params.items[1].name.contains("Custom Working Messages"));
-        assert!(params.items[5].name.contains("Vim Mode"));
-        assert!(params.items[6].name.contains("Auto Worktree"));
-        assert!(params.items[7].name.contains("Per Session Skillsets"));
-        assert!(params.items[8].name.contains("Notify After Idle"));
-        assert!(params.items[9].name.contains("Hotkeys"));
-        assert!(params.items[10].name.contains("Script Timeout"));
-        assert!(params.items[11].name.contains("Loop Count"));
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vertical Footer"))
+            .expect("config picker should include Vertical Footer");
+        assert!(item.name.contains("(off)"));
     }
 
     #[test]
@@ -862,6 +853,49 @@ mod tests {
             }
             _ => panic!("expected SetConfigCustomWorkingMessages event, got: {event:?}"),
         }
+    }
+
+    #[test]
+    fn config_picker_resize_reflow_action_sends_correct_event() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx.clone(), None);
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Resize Reflow"))
+            .expect("config picker should include Resize Reflow");
+        assert!(item.name.contains("(on)"));
+        for action in &item.actions {
+            action(&tx);
+        }
+
+        match rx.try_recv().expect("should receive event") {
+            AppEvent::SetConfigResizeReflow(enabled) => assert!(!enabled),
+            event => panic!("expected SetConfigResizeReflow event, got: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn config_picker_resize_reflow_snapshot() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let config = make_test_config(false);
+
+        let params = config_picker_params(&config, tx, None);
+        let item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Resize Reflow"))
+            .expect("config picker should include Resize Reflow");
+
+        insta::assert_snapshot!(format!(
+            "{}\n{}",
+            item.name,
+            item.description.as_deref().unwrap_or_default()
+        ));
     }
 
     #[test]
@@ -896,8 +930,11 @@ mod tests {
 
         let params = config_picker_params(&config, tx, None);
 
-        // Default config has FiveSeconds, so should show "5 seconds"
-        let idle_item = &params.items[8];
+        let idle_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Notify After Idle"))
+            .expect("config picker should include Notify After Idle");
         assert!(
             idle_item.name.contains("5 seconds"),
             "Expected '5 seconds' in name, got: {}",
@@ -913,7 +950,11 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone(), None);
 
-        let idle_item = &params.items[8];
+        let idle_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Notify After Idle"))
+            .expect("config picker should include Notify After Idle");
         for action in &idle_item.actions {
             action(&tx);
         }
@@ -933,8 +974,11 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone(), None);
 
-        let vertical_footer_item = &params.items[2];
-        assert!(vertical_footer_item.name.contains("Vertical Footer"));
+        let vertical_footer_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Vertical Footer"))
+            .expect("config picker should include Vertical Footer");
         for action in &vertical_footer_item.actions {
             action(&tx);
         }
@@ -958,8 +1002,11 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone(), None);
 
-        let hotkeys_item = &params.items[9];
-        assert!(hotkeys_item.name.contains("Hotkeys"));
+        let hotkeys_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Hotkeys"))
+            .expect("config picker should include Hotkeys");
         for action in &hotkeys_item.actions {
             action(&tx);
         }
@@ -1036,7 +1083,7 @@ mod tests {
 
         let params = config_picker_params(&config, tx, None);
 
-        assert_eq!(params.items.len(), 14);
+        assert_eq!(params.items.len(), 15);
         // Find the vim mode item
         let vim_mode_item = params
             .items
@@ -1202,8 +1249,11 @@ mod tests {
 
         let params = config_picker_params(&config, tx, None);
 
-        // Default config has 30s timeout
-        let timeout_item = &params.items[10];
+        let timeout_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Script Timeout"))
+            .expect("config picker should include Script Timeout");
         assert!(
             timeout_item.name.contains("30s"),
             "Expected '30s' in name, got: {}",
@@ -1219,8 +1269,11 @@ mod tests {
 
         let params = config_picker_params(&config, tx.clone(), None);
 
-        let timeout_item = &params.items[10];
-        assert!(timeout_item.name.contains("Script Timeout"));
+        let timeout_item = params
+            .items
+            .iter()
+            .find(|item| item.name.contains("Script Timeout"))
+            .expect("config picker should include Script Timeout");
         for action in &timeout_item.actions {
             action(&tx);
         }

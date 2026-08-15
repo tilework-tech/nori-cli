@@ -138,6 +138,12 @@ pub(crate) enum AppEvent {
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
+    /// Replace the just-finished assistant stream cells with one raw-Markdown cell.
+    ConsolidateAgentMessage {
+        source: String,
+        cwd: PathBuf,
+    },
+
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,
@@ -376,6 +382,9 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI pinned plan drawer config setting.
     SetConfigPinnedPlanDrawer(bool),
+
+    /// Set width-resize transcript reflow.
+    SetConfigResizeReflow(bool),
 
     /// Set ACP wire JSONL recording for future ACP child subprocesses.
     SetConfigAcpWireRecording(bool),

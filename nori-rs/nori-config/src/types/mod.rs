@@ -1821,6 +1821,9 @@ pub struct TuiConfigToml {
     /// Enable animations (shimmer effects, spinners)
     pub animations: Option<bool>,
 
+    /// Rebuild inline transcript scrollback when the terminal width changes.
+    pub resize_reflow: Option<bool>,
+
     /// Terminal notification preference (OSC 9 escape sequences)
     pub terminal_notifications: Option<TerminalNotifications>,
 
@@ -1883,6 +1886,9 @@ pub struct TuiConfig {
     /// Enable animations (shimmer effects, spinners)
     pub animations: bool,
 
+    /// Rebuild inline transcript scrollback when the terminal width changes.
+    pub resize_reflow: bool,
+
     /// Terminal notification preference (OSC 9 escape sequences)
     pub terminal_notifications: TerminalNotifications,
 
@@ -1897,6 +1903,7 @@ impl Default for TuiConfig {
     fn default() -> Self {
         Self {
             animations: true,
+            resize_reflow: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
@@ -2044,6 +2051,9 @@ pub struct NoriConfig {
     /// Enable TUI animations
     pub animations: bool,
 
+    /// Rebuild inline transcript scrollback when the terminal width changes.
+    pub resize_reflow: bool,
+
     /// Terminal notification preference (OSC 9 escape sequences)
     pub terminal_notifications: TerminalNotifications,
 
@@ -2187,6 +2197,7 @@ impl Default for NoriConfig {
                 log_dir: PathBuf::from(".nori/cli/acp-wire"),
             },
             animations: true,
+            resize_reflow: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
