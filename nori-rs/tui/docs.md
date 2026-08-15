@@ -290,19 +290,6 @@ values they need.
 (`Title: Fix login flakes`). It self-hides for agents that never send one, and
 the same value reaches the `title:` row of the `/status` card.
 
-#### Session-info verbosity
-
-ACP session-info updates carry an agent-defined metadata blob. Rendering all of
-it documents what a harness supports and how agents differ, which is worth the
-transcript noise while developing against an agent and not otherwise, so the
-metadata history cell is limited to unstable builds — debug builds and
-`X.Y.Z-next*` prereleases, per `is_unstable_build` in
-`@/nori-rs/tui/src/version.rs`. Stable releases still merge every update into
-`SessionInfoState`, so the session title keeps reaching the footer and the
-`/status` card; only the dump is suppressed. `SessionInfoDetail` in
-`@/nori-rs/tui/src/nori/session_info.rs` carries the decision, and `ChatWidget`
-holds it as a field so tests can exercise the stable path.
-
 Custom formats are deliberately limited to literal text and built-in
 placeholders. `{{` and `}}` emit literal braces. Unknown placeholders,
 unbalanced braces, expressions, conditions, and format specifiers are rejected
@@ -315,6 +302,23 @@ is unavailable, the complete custom chunk is hidden.
 live in `@/nori-rs/tui/src/bottom_pane/footer.rs`; resolved ACP or transcript
 usage reaches it through
 `@/nori-rs/tui/src/bottom_pane/chat_composer/rendering.rs`.
+
+#### Session-info verbosity
+
+ACP session-info updates carry an agent-defined metadata blob. Rendering all of
+it documents what a harness supports and how agents differ, which is worth the
+transcript noise while developing against an agent and not otherwise, so the
+metadata history cell is limited to unstable builds — debug builds and
+`X.Y.Z-next*` prereleases, per `is_unstable_build` in
+`@/nori-rs/tui/src/version.rs`.
+
+`SessionInfoDetail` in `@/nori-rs/tui/src/nori/session_info.rs` carries the
+decision, and `ChatWidget` holds it as a field so tests can exercise the stable
+path. `ErrorsOnly` is not silence: `error.*` assignments still render on every
+build, because this cell is their only surface and dropping them would turn an
+agent-side failure into a silent stall. Every build also merges every update
+into `SessionInfoState`, so the session title keeps reaching the footer and the
+`/status` card; only the dump is suppressed.
 
 #### Status card
 

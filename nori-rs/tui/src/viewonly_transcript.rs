@@ -66,6 +66,7 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
     let mut pending_raw_message = None;
     let mut agent_info: Option<nori_protocol::acp::v1::Implementation> = None;
     let mut replay_source = None;
+    let session_info_detail = crate::nori::session_info::SessionInfoDetail::for_build();
 
     // Add session info header
     entries.push(ViewonlyEntry::Info {
@@ -151,6 +152,7 @@ pub fn transcript_to_entries(transcript: &Transcript) -> Vec<ViewonlyEntry> {
                             &event,
                             agent_info.as_ref(),
                             replay_source,
+                            session_info_detail,
                         ));
                     }
                 } else {
@@ -169,6 +171,7 @@ fn viewonly_entries_from_client_event(
     event: &crate::presentation::ClientEvent,
     agent_info: Option<&nori_protocol::acp::v1::Implementation>,
     replay_source: Option<nori_protocol::ReplaySource>,
+    session_info_detail: crate::nori::session_info::SessionInfoDetail,
 ) -> Vec<ViewonlyEntry> {
     match event {
         // Raw v3 message chunks are accumulated before normalization; v1/v2
@@ -187,7 +190,7 @@ fn viewonly_entries_from_client_event(
             "Agent",
             patch,
             crate::nori::session_info::SessionInfoOrigin::from_replay_source(replay_source),
-            crate::nori::session_info::SessionInfoDetail::for_build(),
+            session_info_detail,
         )
         .map(|display| {
             vec![ViewonlyEntry::Info {

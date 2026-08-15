@@ -534,13 +534,15 @@ impl ChatWidget {
         let title = self
             .session_info_state
             .title()
-            .filter(|title| !title.is_empty())
             .map(|title| {
                 crate::nori::session_info::sanitize(
                     title,
                     crate::nori::session_info::MAX_TITLE_DISPLAY_CHARS,
                 )
-            });
+                .trim()
+                .to_string()
+            })
+            .filter(|title| !title.is_empty());
         self.bottom_pane.set_session_title(title);
     }
 

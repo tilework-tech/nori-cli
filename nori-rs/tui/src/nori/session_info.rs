@@ -28,6 +28,11 @@ const MAX_PATH_SEGMENT_CHARS: usize = 64;
 /// agent-controlled free text and are routinely a whole paragraph long.
 pub(crate) const MAX_TITLE_DISPLAY_CHARS: usize = 48;
 
+/// Prefix of the assignments an agent uses to report a failure. These survive
+/// on every build: this cell is the only surface that renders them, so
+/// suppressing them would turn an agent-side error into a silent stall.
+const ERROR_FIELD_PREFIX: &str = "error.";
+
 /// How much ACP session-info detail reaches the transcript.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SessionInfoDetail {
@@ -35,9 +40,10 @@ pub(crate) enum SessionInfoDetail {
     /// a harness supports and how agents differ, which is worth the noise
     /// while developing against an agent.
     Metadata,
-    /// Render nothing. The merged state still feeds the footer and the
-    /// `/status` card, so the useful part of the update survives.
-    Hidden,
+    /// Render error fields only, and nothing at all without them. The merged
+    /// state still feeds the footer and the `/status` card, so the useful part
+    /// of an ordinary update survives without the dump.
+    ErrorsOnly,
 }
 
 impl SessionInfoDetail {
@@ -45,7 +51,7 @@ impl SessionInfoDetail {
         if crate::version::is_unstable_build() {
             Self::Metadata
         } else {
-            Self::Hidden
+            Self::ErrorsOnly
         }
     }
 }
@@ -121,8 +127,7 @@ impl SessionInfoDisplay {
     }
 }
 
-/// Render one session-info patch, or `None` when the build suppresses the
-/// metadata dump.
+/// Render one session-info patch, or `None` when the build suppresses it.
 pub(crate) fn display(
     agent_info: Option<&acp::Implementation>,
     fallback_agent_name: &str,
@@ -130,11 +135,6 @@ pub(crate) fn display(
     origin: SessionInfoOrigin,
     detail: SessionInfoDetail,
 ) -> Option<SessionInfoDisplay> {
-    match detail {
-        SessionInfoDetail::Metadata => {}
-        SessionInfoDetail::Hidden => return None,
-    }
-
     let agent_name = agent_info
         .and_then(|agent| agent.title.as_deref())
         .filter(|title| !title.is_empty())
@@ -182,6 +182,16 @@ pub(crate) fn display(
                 name: "metadata.omitted".to_string(),
                 value: "<more>".to_string(),
             });
+        }
+    }
+
+    match detail {
+        SessionInfoDetail::Metadata => {}
+        SessionInfoDetail::ErrorsOnly => {
+            assignments.retain(|assignment| assignment.name.starts_with(ERROR_FIELD_PREFIX));
+            if assignments.is_empty() {
+                return None;
+            }
         }
     }
 

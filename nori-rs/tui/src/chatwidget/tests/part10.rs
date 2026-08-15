@@ -375,7 +375,7 @@ fn session_info_updates_render_known_codex_fields() {
 fn stable_builds_drop_the_metadata_cell_but_keep_the_session_title() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;
-    chat.session_info_detail = crate::nori::session_info::SessionInfoDetail::Hidden;
+    chat.session_info_detail = crate::nori::session_info::SessionInfoDetail::ErrorsOnly;
     let meta = serde_json::json!({"codex": {"threadStatus": {"type": "idle"}}})
         .as_object()
         .expect("metadata object")
@@ -400,6 +400,36 @@ fn stable_builds_drop_the_metadata_cell_but_keep_the_session_title() {
         chat.bottom_pane.status_card_info().session_title,
         Some("Metadata work".to_string())
     );
+}
+
+#[test]
+fn stable_builds_still_report_agent_errors() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.session_info_detail = crate::nori::session_info::SessionInfoDetail::ErrorsOnly;
+    let meta = serde_json::json!({
+        "codex": {
+            "threadStatus": {"type": "systemError"},
+            "error": {"message": "temporary overload", "willRetry": true}
+        }
+    })
+    .as_object()
+    .expect("metadata object")
+    .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("codex-acp", "Codex ACP", "1.1.4"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(nori_protocol::acp::v1::SessionInfoUpdate::new().meta(meta)),
+    );
+
+    insta::assert_snapshot!(history_text(&mut rx), @r"
+    • Codex ACP 1.1.4 session updated:
+      error.message=temporary overload, error.will_retry=true
+    ");
 }
 
 #[test]

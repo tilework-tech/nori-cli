@@ -18,6 +18,10 @@ use ratatui::text::Span;
 use ratatui::widgets::Widget;
 
 const MODE_INDICATOR_LABEL_MAX_CHARS: usize = 20;
+/// Session titles are agent-controlled free text and routinely a whole
+/// paragraph. The `/status` card keeps the longer form; the footer row has to
+/// share one line with git, context, and approvals.
+const SESSION_TITLE_MAX_CHARS: usize = 24;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FooterProps {
@@ -464,10 +468,10 @@ fn builtin_footer_segment(props: &FooterProps, segment: FooterSegment) -> Option
             .prompt_summary
             .as_ref()
             .map(|summary| Line::from(vec!["Task: ".dim(), Span::from(summary.clone()).dim()])),
-        FooterSegment::SessionTitle => props
-            .session_title
-            .as_ref()
-            .map(|title| Line::from(vec!["Title: ".dim(), Span::from(title.clone()).dim()])),
+        FooterSegment::SessionTitle => props.session_title.as_ref().map(|title| {
+            let title = truncate_label(title, SESSION_TITLE_MAX_CHARS);
+            Line::from(vec!["Title: ".dim(), Span::from(title).dim()])
+        }),
         FooterSegment::VimMode => props.vim_mode_state.map(|vim_state| {
             let (label, style_fn): (&str, fn(Span<'static>) -> Span<'static>) = match vim_state {
                 VimModeState::Normal => ("NORMAL", |s| s.light_blue().bold()),
@@ -523,7 +527,7 @@ fn builtin_footer_segment(props: &FooterProps, segment: FooterSegment) -> Option
         }),
         FooterSegment::TokenUsage => token_usage_segment(props),
         FooterSegment::ModeIndicator => props.acp_mode_label.as_ref().map(|raw_label| {
-            let label = mode_indicator_label(raw_label);
+            let label = truncate_label(raw_label, MODE_INDICATOR_LABEL_MAX_CHARS);
             let text = format!("[ {label} ]");
             let lower = raw_label.to_lowercase();
             let span = if lower.contains("plan") {
@@ -547,14 +551,14 @@ fn builtin_footer_segment(props: &FooterProps, segment: FooterSegment) -> Option
     }
 }
 
-fn mode_indicator_label(label: &str) -> String {
-    if label.chars().count() <= MODE_INDICATOR_LABEL_MAX_CHARS {
+fn truncate_label(label: &str, max_chars: usize) -> String {
+    if label.chars().count() <= max_chars {
         return label.to_string();
     }
 
     label
         .chars()
-        .take(MODE_INDICATOR_LABEL_MAX_CHARS.saturating_sub(1))
+        .take(max_chars.saturating_sub(1))
         .chain(std::iter::once('…'))
         .collect()
 }

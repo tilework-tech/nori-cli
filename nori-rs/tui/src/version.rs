@@ -13,10 +13,21 @@ pub(crate) fn is_unstable_build() -> bool {
 }
 
 /// Whether a semver string carries a `next` prerelease suffix (`1.4.0-next.2`).
+/// Matches the first prerelease identifier exactly, so an unrelated channel
+/// like `1.4.0-nextgen.1` is not mistaken for one of ours.
 fn is_next_prerelease(version: &str) -> bool {
     version
+        .split_once('+')
+        .map_or(version, |(without_build_metadata, _)| {
+            without_build_metadata
+        })
         .split_once('-')
-        .is_some_and(|(_, prerelease)| prerelease.starts_with("next"))
+        .is_some_and(|(_, prerelease)| {
+            prerelease
+                .split('.')
+                .next()
+                .is_some_and(|identifier| identifier == "next")
+        })
 }
 
 #[cfg(test)]
@@ -27,8 +38,16 @@ mod tests {
     #[test]
     fn only_next_prereleases_are_unstable_versions() {
         assert_eq!(
-            ["1.4.0-next.2", "1.4.0-next", "1.4.0", "1.4.0-alpha.1"].map(is_next_prerelease),
-            [true, true, false, false]
+            [
+                "1.4.0-next.2",
+                "1.4.0-next",
+                "1.4.0",
+                "1.4.0-alpha.1",
+                "1.4.0-nextgen.1",
+                "1.4.0+build-next",
+            ]
+            .map(is_next_prerelease),
+            [true, true, false, false, false, false]
         );
     }
 }
