@@ -8,6 +8,7 @@
 use anyhow::Context;
 use std::io::IsTerminal;
 use std::io::Read;
+use std::io::Write;
 
 /// Prompt argument that means "the prompt is on stdin", matching the `-`
 /// convention the upstream Codex CLI uses for the same purpose.
@@ -99,13 +100,26 @@ fn read_piped_stdin() -> anyhow::Result<Option<String>> {
 pub fn restore_stdin_from_terminal() {
     use std::os::fd::AsRawFd;
 
+    let log_stage = |stage: &str| {
+        if let Ok(nori_home) = std::env::var("NORI_HOME") {
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(std::path::Path::new(&nori_home).join("stdin-debug.log"))
+                .and_then(|mut file| writeln!(file, "[DEBUG-a4f2] {stage}"));
+        }
+    };
+    log_stage("restore stdin entered");
     let Ok(tty) = std::fs::File::open("/dev/tty") else {
+        log_stage("open /dev/tty failed");
         return;
     };
+    log_stage("open /dev/tty succeeded");
     // Safety: both descriptors are valid for the duration of the call, and
     // stdin is not borrowed elsewhere this early in startup.
     unsafe {
-        libc::dup2(tty.as_raw_fd(), libc::STDIN_FILENO);
+        let result = libc::dup2(tty.as_raw_fd(), libc::STDIN_FILENO);
+        log_stage(&format!("dup2 returned {result}"));
     }
 }
 
