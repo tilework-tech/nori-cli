@@ -27,8 +27,14 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 
 fn queue_colors(writer: &mut impl Write, fg: Color, bg: Color) -> io::Result<()> {
-    queue!(writer, SetForegroundColor(fg.into()))?;
-    queue!(writer, SetBackgroundColor(bg.into()))
+    queue!(
+        writer,
+        SetForegroundColor(crate::custom_terminal::crossterm_color(fg))
+    )?;
+    queue!(
+        writer,
+        SetBackgroundColor(crate::custom_terminal::crossterm_color(bg))
+    )
 }
 
 fn merged_line_spans(line: &Line<'_>) -> Vec<Span<'static>> {
@@ -73,7 +79,7 @@ pub fn insert_history_lines<B>(
     lines: Vec<Line>,
 ) -> io::Result<bool>
 where
-    B: Backend + Write,
+    B: Backend<Error = io::Error> + Write,
 {
     let screen_size = terminal.backend().size().unwrap_or(Size::new(0, 0));
 
@@ -218,7 +224,7 @@ pub fn write_pending_lines_directly<B>(
     available_rows: u16,
 ) -> io::Result<u16>
 where
-    B: Backend + Write,
+    B: Backend<Error = io::Error> + Write,
 {
     if available_rows == 0 || lines.is_empty() {
         return Ok(0);

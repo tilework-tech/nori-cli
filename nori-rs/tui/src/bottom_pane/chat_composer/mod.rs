@@ -16,6 +16,7 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::StatefulWidgetRef;
+use ratatui::widgets::Widget;
 use ratatui::widgets::WidgetRef;
 
 use super::chat_composer_history::ChatComposerHistory;
@@ -578,7 +579,7 @@ impl Renderable for ChatComposer {
             // prompt and message over the composer block.
             Block::default()
                 .style(user_message_style())
-                .render_ref(composer_rect, buf);
+                .render(composer_rect, buf);
             if !textarea_rect.is_empty() {
                 let prompt = "›".dim();
                 buf.set_span(
@@ -587,7 +588,7 @@ impl Renderable for ChatComposer {
                     &prompt,
                     textarea_rect.width,
                 );
-                Line::from("Exiting…".dim()).render_ref(textarea_rect, buf);
+                Line::from("Exiting…".dim()).render(textarea_rect, buf);
             }
             return;
         }
@@ -636,7 +637,7 @@ impl Renderable for ChatComposer {
                             custom_rect.x += 2;
                             custom_rect.width = custom_rect.width.saturating_sub(2);
                         }
-                        Line::from(spans).render_ref(custom_rect, buf);
+                        Line::from(spans).render(custom_rect, buf);
                     }
                 } else {
                     render_footer(hint_rect, buf, &footer_props);
@@ -644,7 +645,7 @@ impl Renderable for ChatComposer {
             }
         }
         let style = user_message_style();
-        Block::default().style(style).render_ref(composer_rect, buf);
+        Block::default().style(style).render(composer_rect, buf);
         render_textarea_corner_segments(
             composer_rect,
             buf,
@@ -688,7 +689,7 @@ impl Renderable for ChatComposer {
                 &self.placeholder_text
             };
             let placeholder = Span::from(placeholder_text).dim();
-            Line::from(vec![placeholder]).render_ref(body_rect.inner(Margin::new(0, 0)), buf);
+            Line::from(vec![placeholder]).render(body_rect.inner(Margin::new(0, 0)), buf);
         }
     }
 }

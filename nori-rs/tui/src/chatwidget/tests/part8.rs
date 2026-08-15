@@ -259,7 +259,6 @@ fn session_usage_updates_footer_and_disables_transcript_fallback() {
 
     let height = chat.desired_height(80);
     let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
-    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
     terminal
         .draw(|f| chat.render(f.area(), f.buffer_mut()))
         .expect("draw chat with footer usage");
@@ -293,7 +292,6 @@ fn transcript_usage_supplies_default_context_percentage_and_window_size() {
 
     let height = chat.desired_height(80);
     let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
-    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
     terminal
         .draw(|f| chat.render(f.area(), f.buffer_mut()))
         .expect("draw chat with transcript context usage");
@@ -339,7 +337,6 @@ textarea_top_right = [
 
     let height = chat.desired_height(80);
     let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
-    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
     terminal
         .draw(|f| chat.render(f.area(), f.buffer_mut()))
         .expect("draw chat with custom footer layout");
@@ -400,7 +397,6 @@ footer_left = [
 
     let height = chat.desired_height(80);
     let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
-    terminal.set_viewport_area(Rect::new(0, 0, 80, height));
     terminal
         .draw(|f| chat.render(f.area(), f.buffer_mut()))
         .expect("draw chat with atomic context segments");

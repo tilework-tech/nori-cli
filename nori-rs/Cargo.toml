@@ -85,7 +85,7 @@ nori-installed = { path = "installed" }
 
 # External
 allocative = "0.3.3"
-ansi-to-tui = "7.0.0"
+ansi-to-tui = "8.0.1"
 anyhow = "1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 assert_cmd = "2"
@@ -103,7 +103,7 @@ chrono = "0.4.42"
 clap = "4"
 clap_complete = "4"
 color-eyre = "0.6.3"
-crossterm = "0.28.1"
+crossterm = "0.29.0"
 ctor = "0.5.0"
 derive_more = "2"
 diffy = "0.4.2"
@@ -148,8 +148,12 @@ predicates = "3"
 pretty_assertions = "1.4.1"
 pulldown-cmark = "0.10"
 rand = "0.9"
-ratatui = "0.29.0"
-ratatui-macros = "0.6.0"
+ratatui = { version = "0.30.2", default-features = false, features = [
+    "crossterm",
+    "layout-cache",
+    "underline-color",
+] }
+ratatui-macros = "0.7.2"
 regex = "1.12.2"
 regex-lite = "0.1.7"
 reqwest = "0.12"
@@ -271,8 +275,7 @@ incremental = false
 [patch.crates-io]
 # Uncomment to debug local changes.
 # ratatui = { path = "../../ratatui" }
-crossterm = { git = "https://github.com/nornagon/crossterm", branch = "nornagon/color-query" }
-ratatui = { git = "https://github.com/nornagon/ratatui", branch = "nornagon-v0.29.0-patch" }
+crossterm = { git = "https://github.com/openai-oss-forks/crossterm", rev = "45fecb9508105988f42fe6ff0441783ed3717f92" }
 
 # Uncomment to debug local changes.
 # rmcp = { path = "../../rust-sdk/crates/rmcp" }
