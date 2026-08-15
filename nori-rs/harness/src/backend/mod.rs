@@ -266,13 +266,9 @@ pub struct AcpBackend {
     goal_mcp_connected: Arc<AtomicBool>,
     /// Loopback HTTP server exposing the backend-owned `nori-client` MCP tools.
     goal_mcp_http_server: Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
-    /// True while the agent's native goal loop, driven via the `_session/goal`
-    /// ACP extension, owns continuation for the current goal. While set, the
-    /// harness mirrors agent goal snapshots instead of running its own
-    /// continuation loop.
-    goal_ext_driving: Arc<AtomicBool>,
-    /// Transcript recorder cell used by local MCP tools created before the
-    /// recorder's session ID is known.
+    /// Goal extension capability the agent advertised at initialize, parsed
+    /// once. `Some` enables driving goals via `_session/goal`.
+    goal_ext_capability: Option<goal_ext::GoalExtCapability>,
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
     pending_hook_context: Arc<Mutex<Option<String>>>,
     /// Transcript recorder for session persistence.

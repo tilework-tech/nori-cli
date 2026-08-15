@@ -16,7 +16,7 @@ use super::thread_goal::ThreadGoalSnapshot;
 use super::thread_goal::ThreadGoalState;
 
 /// Wire value of the only extension version this bridge understands.
-const SUPPORTED_GOAL_EXTENSION_VERSION: u64 = 1;
+const SUPPORTED_GOAL_EXTENSION_VERSION: i64 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum GoalExtAction {
@@ -61,7 +61,7 @@ impl GoalExtCapability {
     pub(super) fn from_initialize_meta(meta: Option<&acp::v1::Meta>) -> Option<Self> {
         #[derive(Deserialize)]
         struct WireCapability {
-            version: u64,
+            version: i64,
             #[serde(rename = "controlMethod")]
             control_method: String,
             actions: Vec<String>,
@@ -154,13 +154,26 @@ pub(super) enum GoalMirrorOutcome {
 /// Mirrors an agent-published goal update into the harness goal store.
 /// A status change on the same objective updates the stored goal in place
 /// (preserving time/token accounting); a new objective replaces it.
+///
+/// Guards keep a stale or competing native loop from corrupting the store:
+/// nothing is mirrored while snapshots are blocked (harness stopped driving),
+/// a snapshot for a different objective is ignored unless the extension
+/// already owns the goal, and a null snapshot only clears extension-owned
+/// goals.
 pub(super) fn mirror_update(
     state: &mut ThreadGoalState,
     update: &GoalExtUpdate,
     now: i64,
 ) -> GoalMirrorOutcome {
+    if state.ext_snapshots_blocked() {
+        return GoalMirrorOutcome::Unchanged;
+    }
     match update {
         GoalExtUpdate::Cleared => {
+            if !state.ext_driven() {
+                return GoalMirrorOutcome::Unchanged;
+            }
+            state.ext_cleared_by_agent();
             if state.clear() {
                 GoalMirrorOutcome::Cleared
             } else {
@@ -169,9 +182,17 @@ pub(super) fn mirror_update(
         }
         GoalExtUpdate::Snapshot(snapshot) => {
             let existing = state.snapshot(now);
+            if !state.ext_driven()
+                && existing
+                    .as_ref()
+                    .is_some_and(|existing| existing.objective != snapshot.objective)
+            {
+                return GoalMirrorOutcome::Unchanged;
+            }
             let result = match existing {
                 Some(existing) if existing.objective == snapshot.objective => {
                     if existing.status == snapshot.status {
+                        state.mark_ext_driven();
                         return GoalMirrorOutcome::Unchanged;
                     }
                     state.set_status(snapshot.status, now)
@@ -181,7 +202,10 @@ pub(super) fn mirror_update(
                 }
             };
             match result {
-                Ok(updated) => GoalMirrorOutcome::Updated(updated),
+                Ok(updated) => {
+                    state.mark_ext_driven();
+                    GoalMirrorOutcome::Updated(updated)
+                }
                 Err(error) => {
                     tracing::warn!("ignoring unusable agent goal snapshot: {error}");
                     GoalMirrorOutcome::Unchanged
@@ -402,6 +426,57 @@ mod tests {
         assert!(matches!(
             mirror_update(&mut state, &GoalExtUpdate::Cleared, 170),
             GoalMirrorOutcome::Unchanged
+        ));
+    }
+
+    #[test]
+    fn mirror_blocked_ignores_snapshots_and_clears() {
+        let mut state = ThreadGoalState::default();
+        mirror_update(&mut state, &snapshot("ship it", GoalStatus::Active), 100);
+        state.stop_ext_driving();
+        assert!(matches!(
+            mirror_update(&mut state, &snapshot("ship it", GoalStatus::Complete), 160),
+            GoalMirrorOutcome::Unchanged
+        ));
+        assert!(matches!(
+            mirror_update(&mut state, &GoalExtUpdate::Cleared, 170),
+            GoalMirrorOutcome::Unchanged
+        ));
+        assert!(state.snapshot(170).is_some());
+        assert!(!state.ext_driven());
+    }
+
+    #[test]
+    fn mirror_does_not_hijack_foreign_goal() {
+        let mut state = ThreadGoalState::default();
+        state
+            .set_objective("mcp goal".to_string(), None, 100)
+            .expect("set local goal");
+        // Not ext-driven: a snapshot for a different objective must not steal
+        // the goal, and a null snapshot must not clear it.
+        assert!(matches!(
+            mirror_update(&mut state, &snapshot("other goal", GoalStatus::Active), 160),
+            GoalMirrorOutcome::Unchanged
+        ));
+        assert!(!state.ext_driven());
+        assert!(matches!(
+            mirror_update(&mut state, &GoalExtUpdate::Cleared, 170),
+            GoalMirrorOutcome::Unchanged
+        ));
+        assert!(state.snapshot(170).is_some());
+    }
+
+    #[test]
+    fn mirror_marks_ext_driven_and_agent_clear_reopens() {
+        let mut state = ThreadGoalState::default();
+        mirror_update(&mut state, &snapshot("ship it", GoalStatus::Active), 100);
+        assert!(state.ext_driven());
+        mirror_update(&mut state, &GoalExtUpdate::Cleared, 160);
+        assert!(!state.ext_driven());
+        assert!(!state.ext_snapshots_blocked());
+        assert!(matches!(
+            mirror_update(&mut state, &snapshot("next", GoalStatus::Active), 170),
+            GoalMirrorOutcome::Updated(_)
         ));
     }
 
