@@ -8,6 +8,7 @@ use ratatui::style::Stylize;
 use ratatui::text::Line as RtLine;
 use ratatui::text::Span as RtSpan;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Widget;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -804,7 +805,6 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::text::Text;
     use ratatui::widgets::Paragraph;
-    use ratatui::widgets::WidgetRef;
     use ratatui::widgets::Wrap;
     use unicode_width::UnicodeWidthStr;
 
@@ -818,7 +818,7 @@ mod tests {
             .draw(|f| {
                 Paragraph::new(Text::from(lines))
                     .wrap(Wrap { trim: false })
-                    .render_ref(f.area(), f.buffer_mut())
+                    .render(f.area(), f.buffer_mut())
             })
             .expect("draw");
         assert_snapshot!(name, terminal.backend());
@@ -1128,7 +1128,7 @@ mod tests {
         let lines = prefix_lines(diff_lines, "    ".into(), "    ".into());
 
         let mut buf = Buffer::empty(area);
-        Paragraph::new(Text::from(lines)).render_ref(area, &mut buf);
+        Paragraph::new(Text::from(lines)).render(area, &mut buf);
 
         // Every cell in the row should have the green background
         for col in 0..total_width {

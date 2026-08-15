@@ -26,6 +26,7 @@ use std::io::Write;
 
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
+use crossterm::style::Color as CrosstermColor;
 use crossterm::style::Colors;
 use crossterm::style::Print;
 use crossterm::style::SetAttribute;
@@ -37,12 +38,41 @@ use derive_more::IsVariant;
 use ratatui::backend::Backend;
 use ratatui::backend::ClearType;
 use ratatui::buffer::Buffer;
+use ratatui::buffer::CellDiffOption;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::layout::Size;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::widgets::WidgetRef;
+
+pub(crate) const fn crossterm_color(color: Color) -> CrosstermColor {
+    match color {
+        Color::Reset => CrosstermColor::Reset,
+        Color::Black => CrosstermColor::Black,
+        Color::Red => CrosstermColor::DarkRed,
+        Color::Green => CrosstermColor::DarkGreen,
+        Color::Yellow => CrosstermColor::DarkYellow,
+        Color::Blue => CrosstermColor::DarkBlue,
+        Color::Magenta => CrosstermColor::DarkMagenta,
+        Color::Cyan => CrosstermColor::DarkCyan,
+        Color::Gray => CrosstermColor::Grey,
+        Color::DarkGray => CrosstermColor::DarkGrey,
+        Color::LightRed => CrosstermColor::Red,
+        Color::LightGreen => CrosstermColor::Green,
+        Color::LightYellow => CrosstermColor::Yellow,
+        Color::LightBlue => CrosstermColor::Blue,
+        Color::LightMagenta => CrosstermColor::Magenta,
+        Color::LightCyan => CrosstermColor::Cyan,
+        Color::White => CrosstermColor::White,
+        Color::Rgb(red, green, blue) => CrosstermColor::Rgb {
+            r: red,
+            g: green,
+            b: blue,
+        },
+        Color::Indexed(index) => CrosstermColor::AnsiValue(index),
+    }
+}
 
 #[derive(Debug, Hash)]
 pub struct Frame<'a> {
@@ -103,7 +133,7 @@ impl Frame<'_> {
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct Terminal<B>
 where
-    B: Backend + Write,
+    B: Backend<Error = io::Error> + Write,
 {
     /// The backend used to interface with the terminal
     backend: B,
@@ -125,7 +155,7 @@ where
 
 impl<B> Drop for Terminal<B>
 where
-    B: Backend,
+    B: Backend<Error = io::Error>,
     B: Write,
 {
     #[allow(clippy::print_stderr)]
@@ -141,7 +171,7 @@ where
 
 impl<B> Terminal<B>
 where
-    B: Backend,
+    B: Backend<Error = io::Error>,
     B: Write,
 {
     /// Creates a new [`Terminal`] with the given [`Backend`] and [`TerminalOptions`].
@@ -456,7 +486,10 @@ fn diff_buffers(a: &Buffer, b: &Buffer) -> Vec<DrawCommand> {
     // their place (the skipped cells should be blank anyway), or due to per-cell-skipping:
     let mut to_skip: usize = 0;
     for (i, (current, previous)) in next_buffer.iter().zip(previous_buffer.iter()).enumerate() {
-        if !current.skip && (current != previous || invalidated > 0) && to_skip == 0 {
+        if !matches!(current.diff_option, CellDiffOption::Skip)
+            && (current != previous || invalidated > 0)
+            && to_skip == 0
+        {
             let (x, y) = a.pos_of(i);
             let row = i / a.area.width as usize;
             if x <= last_nonblank_columns[row] {
@@ -507,7 +540,10 @@ where
                 if cell.fg != fg || cell.bg != bg {
                     queue!(
                         writer,
-                        SetColors(Colors::new(cell.fg.into(), cell.bg.into()))
+                        SetColors(Colors::new(
+                            crossterm_color(cell.fg),
+                            crossterm_color(cell.bg)
+                        ))
                     )?;
                     fg = cell.fg;
                     bg = cell.bg;
@@ -518,7 +554,7 @@ where
             DrawCommand::ClearToEnd { bg: clear_bg, .. } => {
                 queue!(writer, SetAttribute(crossterm::style::Attribute::Reset))?;
                 modifier = Modifier::empty();
-                queue!(writer, SetBackgroundColor(clear_bg.into()))?;
+                queue!(writer, SetBackgroundColor(crossterm_color(clear_bg)))?;
                 bg = clear_bg;
                 queue!(writer, Clear(crossterm::terminal::ClearType::UntilNewLine))?;
             }
@@ -611,6 +647,13 @@ mod tests {
     use ratatui::layout::Rect;
     use ratatui::style::Style;
 
+    #[test]
+    fn converts_ratatui_colors_for_crossterm_output() {
+        assert_eq!(crossterm_color(Color::Red), CrosstermColor::DarkRed);
+        assert_eq!(crossterm_color(Color::LightBlue), CrosstermColor::Blue);
+        assert_eq!(crossterm_color(Color::Reset), CrosstermColor::Reset);
+    }
+
     struct RecordingBackend {
         inner: crate::test_backend::VT100Backend,
         bytes: Vec<u8>,
@@ -637,6 +680,8 @@ mod tests {
     }
 
     impl Backend for RecordingBackend {
+        type Error = io::Error;
+
         fn draw<'a, I>(&mut self, content: I) -> io::Result<()>
         where
             I: Iterator<Item = (u16, u16, &'a Cell)>,

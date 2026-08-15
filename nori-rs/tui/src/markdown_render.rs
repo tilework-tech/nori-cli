@@ -41,8 +41,6 @@ struct MarkdownStyles {
 
 impl Default for MarkdownStyles {
     fn default() -> Self {
-        use ratatui::style::Stylize;
-
         Self {
             h1: Style::new().bold().underlined(),
             h2: Style::new().bold(),

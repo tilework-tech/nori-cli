@@ -9,7 +9,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::widgets::WidgetRef;
+use ratatui::widgets::Widget;
 
 use rand::Rng;
 
@@ -228,7 +228,7 @@ impl Renderable for StatusIndicatorWidget {
             spans.push(format!("({pretty_elapsed})").dim());
         }
 
-        Line::from(spans).render_ref(area, buf);
+        Line::from(spans).render(area, buf);
     }
 }
 
