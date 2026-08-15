@@ -43,6 +43,8 @@ pub(crate) struct StatusCardInfo {
     pub(crate) context_window_tokens: Option<i64>,
     /// Context window percentage used (0-100).
     pub(crate) context_window_percent: Option<i64>,
+    /// ACP session/thread title from session-info updates.
+    pub(crate) session_title: Option<String>,
 }
 
 /// Build an aligned label row: a dim, left-padded label followed by the value

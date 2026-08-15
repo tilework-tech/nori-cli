@@ -62,6 +62,7 @@ impl ChatWidget {
             } => {
                 self.session_agent_info = response.agent_info;
                 self.session_info_state.reset();
+                self.bottom_pane.set_session_title(None);
                 let capabilities = response.agent_capabilities;
                 self.session_agent_capabilities = crate::presentation::AgentCapabilitiesView {
                     http_mcp: capabilities.mcp_capabilities.http,
@@ -733,13 +734,19 @@ impl ChatWidget {
                         self.replay_source,
                     );
                     self.session_info_state.apply(patch, origin);
-                    let display = crate::nori::session_info::display(
-                        self.session_agent_info.as_ref(),
-                        self.bottom_pane.agent_display_name(),
-                        patch,
-                        origin,
-                    );
-                    self.add_to_history(display.history_cell());
+                    self.bottom_pane
+                        .set_session_title(self.session_info_state.title().map(str::to_string));
+                    // Verbose session-info dumps are for next-channel / debug
+                    // builds only; stable releases keep the transcript quiet.
+                    if crate::version::show_verbose_session_info_history() {
+                        let display = crate::nori::session_info::display(
+                            self.session_agent_info.as_ref(),
+                            self.bottom_pane.agent_display_name(),
+                            patch,
+                            origin,
+                        );
+                        self.add_to_history(display.history_cell());
+                    }
                 } else if update.kind == crate::presentation::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
                 {

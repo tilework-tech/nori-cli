@@ -372,6 +372,39 @@ fn session_info_updates_render_known_codex_fields() {
 }
 
 #[test]
+fn session_info_title_updates_footer_topic() {
+    use crate::test_backend::VT100Backend;
+    use ratatui::Terminal;
+
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("claude-agent-acp", "Claude Agent", "0.68.0"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(
+            nori_protocol::acp::v1::SessionInfoUpdate::new().title("Fix login flakes"),
+        ),
+    );
+    let _ = history_text(&mut rx);
+
+    let height = chat.desired_height(80);
+    let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal.set_viewport_area(ratatui::layout::Rect::new(0, 0, 80, height));
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with session title footer");
+    let contents = terminal.backend().vt100().screen().contents();
+    assert!(
+        contents.contains("Topic: Fix login flakes"),
+        "session-info title should surface in the footer, got:\n{contents}"
+    );
+}
+
+#[test]
 fn nori_connection_status_updates_render_clear_messages() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;

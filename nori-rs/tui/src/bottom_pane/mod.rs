@@ -627,6 +627,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update the ACP session/thread title displayed in the footer.
+    pub(crate) fn set_session_title(&mut self, title: Option<String>) {
+        self.composer.set_session_title(title);
+        self.request_redraw();
+    }
+
     /// Update ACP-reported session usage displayed in the footer.
     pub(crate) fn set_session_usage(
         &mut self,

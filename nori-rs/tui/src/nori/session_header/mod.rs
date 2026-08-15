@@ -535,6 +535,12 @@ impl HistoryCell for NoriSessionHeaderCell {
             lines.push(status_row("session:", vec![Span::from(session_display)]));
         }
 
+        // ACP thread/session title when the agent publishes one.
+        if let Some(topic) = &self.status_info.session_title {
+            let truncated = truncate_summary(topic, MAX_TASK_SUMMARY_LENGTH);
+            lines.push(status_row("topic:", vec![Span::from(truncated).dim()]));
+        }
+
         // Forked-from line: the parent conversation after a branch-at-head fork,
         // which stays resumable via `nori resume <id>`.
         if let Some(forked_from) = self.forked_from {

@@ -132,6 +132,7 @@ impl ChatComposer {
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
             vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
             prompt_summary: self.prompt_summary.clone(),
+            session_title: self.session_title.clone(),
             worktree_name: self
                 .system_info
                 .as_ref()
@@ -160,6 +161,7 @@ impl ChatComposer {
             context_tokens: props.context_tokens,
             context_window_tokens: props.context_window_tokens,
             context_window_percent: props.context_window_percent,
+            session_title: props.session_title,
         }
     }
 

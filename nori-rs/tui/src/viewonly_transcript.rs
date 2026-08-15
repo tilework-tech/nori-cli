@@ -183,6 +183,9 @@ fn viewonly_entries_from_client_event(
                 ..
             },
         ) => {
+            if !crate::version::show_verbose_session_info_history() {
+                return vec![];
+            }
             vec![ViewonlyEntry::Info {
                 content: crate::nori::session_info::display(
                     agent_info,

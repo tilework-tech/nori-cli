@@ -36,6 +36,13 @@ impl SessionInfoState {
         *self = Self::default();
     }
 
+    /// Latest non-null session/thread title from ACP session-info updates.
+    pub(crate) fn title(&self) -> Option<&str> {
+        self.title
+            .as_ref()
+            .and_then(|stamped| stamped.value.as_deref())
+    }
+
     pub(crate) fn apply(&mut self, patch: &SessionInfoPatch, origin: SessionInfoOrigin) {
         apply_optional_field(&mut self.title, &patch.title, origin);
         apply_optional_field(&mut self.updated_at, &patch.updated_at, origin);

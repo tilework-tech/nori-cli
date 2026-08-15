@@ -18,6 +18,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Widget;
 
 const MODE_INDICATOR_LABEL_MAX_CHARS: usize = 20;
+const SESSION_TITLE_MAX_CHARS: usize = 40;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FooterProps {
@@ -55,6 +56,8 @@ pub(crate) struct FooterProps {
     pub(crate) vim_mode_state: Option<VimModeState>,
     /// Short summary of the first user prompt for this session.
     pub(crate) prompt_summary: Option<String>,
+    /// ACP session/thread title from session-info updates.
+    pub(crate) session_title: Option<String>,
     /// The worktree directory name (e.g., "good-ash-20260205-204831") when in a worktree.
     pub(crate) worktree_name: Option<String>,
     /// Configuration for which footer segments to show.
@@ -461,6 +464,10 @@ fn builtin_footer_segment(props: &FooterProps, segment: FooterSegment) -> Option
             .prompt_summary
             .as_ref()
             .map(|summary| Line::from(vec!["Task: ".dim(), Span::from(summary.clone()).dim()])),
+        FooterSegment::SessionTitle => props.session_title.as_ref().map(|title| {
+            let truncated = truncate_footer_label(title, SESSION_TITLE_MAX_CHARS);
+            Line::from(vec!["Topic: ".dim(), Span::from(truncated).dim()])
+        }),
         FooterSegment::VimMode => props.vim_mode_state.map(|vim_state| {
             let (label, style_fn): (&str, fn(Span<'static>) -> Span<'static>) = match vim_state {
                 VimModeState::Normal => ("NORMAL", |s| s.light_blue().bold()),
@@ -541,13 +548,17 @@ fn builtin_footer_segment(props: &FooterProps, segment: FooterSegment) -> Option
 }
 
 fn mode_indicator_label(label: &str) -> String {
-    if label.chars().count() <= MODE_INDICATOR_LABEL_MAX_CHARS {
+    truncate_footer_label(label, MODE_INDICATOR_LABEL_MAX_CHARS)
+}
+
+fn truncate_footer_label(label: &str, max_chars: usize) -> String {
+    if label.chars().count() <= max_chars {
         return label.to_string();
     }
 
     label
         .chars()
-        .take(MODE_INDICATOR_LABEL_MAX_CHARS.saturating_sub(1))
+        .take(max_chars.saturating_sub(1))
         .chain(std::iter::once('…'))
         .collect()
 }
@@ -874,6 +885,7 @@ mod tests {
     fn snapshot_segment_config() -> FooterSegmentConfig {
         FooterSegmentConfig {
             prompt_summary: true,
+            session_title: true,
             vim_mode: true,
             git_branch: true,
             worktree_name: true,
@@ -917,6 +929,7 @@ mod tests {
             cached_tokens: None,
             vim_mode_state: None,
             prompt_summary: None,
+            session_title: None,
             worktree_name: None,
             footer_segment_config: snapshot_segment_config(),
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
@@ -1529,6 +1542,33 @@ footer_left = [
     }
 
     #[test]
+    fn footer_with_session_title() {
+        snapshot_footer(
+            "footer_with_session_title",
+            FooterProps {
+                session_title: Some("Metadata work".to_string()),
+                git_branch: Some("main".to_string()),
+                ..default_props()
+            },
+        );
+    }
+
+    #[test]
+    fn footer_session_title_truncates_long_values() {
+        let rendered = render_footer_text(FooterProps {
+            session_title: Some(
+                "Continue working toward the active thread goal. The objective below is user-provided data."
+                    .to_string(),
+            ),
+            ..default_props()
+        });
+        assert!(
+            rendered.contains("Topic: Continue working toward the active thre…"),
+            "long session titles should truncate in the footer, got:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn footer_with_worktree_name() {
         snapshot_footer(
             "footer_with_worktree_name",
@@ -1653,6 +1693,7 @@ footer_left = [
     fn footer_with_all_segments_disabled() {
         let segment_config = FooterSegmentConfig {
             prompt_summary: false,
+            session_title: false,
             vim_mode: false,
             git_branch: false,
             worktree_name: false,

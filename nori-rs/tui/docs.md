@@ -276,7 +276,7 @@ footer_left = [
 ]
 ```
 
-Built-in names are `prompt_summary`, `vim_mode`, `git_branch`,
+Built-in names are `prompt_summary`, `session_title`, `vim_mode`, `git_branch`,
 `worktree_name`, `git_stats`, `context`, `context_used_percent`,
 `context_remaining_percent`, `context_used_tokens`,
 `context_remaining_tokens`, `context_window_tokens`, `approval_mode`,
@@ -284,7 +284,8 @@ Built-in names are `prompt_summary`, `vim_mode`, `git_branch`,
 `cloud_session`. The default `context` segment renders used percentage and
 maximum window size, such as `44% / 272k`. The five atomic context segments are
 off as standalone entries by default so custom chunks can compose only the
-values they need.
+values they need. `session_title` is enabled by default and self-hides until
+an ACP session-info update publishes a thread title.
 
 Custom formats are deliberately limited to literal text and built-in
 placeholders. `{{` and `}}` emit literal braces. Unknown placeholders,
@@ -305,10 +306,11 @@ usage reaches it through
 `@/nori-rs/tui/src/nori/session_header/`) as a by-default superset of the
 footer's information categories, independent of the user's footer configuration:
 directory, session id (the conversation id, shown for every agent — cloud
-sessions append the broker title), agent, skillset (with detected skillsets
-version), approvals, ACP mode, a git row (branch / worktree / +added −removed /
-untracked), instruction files, a single consolidated context row (`% left
-(used / window)`), and cumulative token usage. The footer-derived values are
+sessions append the broker title), ACP topic/title when published, agent,
+skillset (with detected skillsets version), approvals, ACP mode, a git row
+(branch / worktree / +added −removed / untracked), instruction files, a single
+consolidated context row (`% left (used / window)`), and cumulative token usage.
+The footer-derived values are
 pulled in one shot via `ChatComposer::status_card_info()` (a `StatusCardInfo`
 built from `footer_props()`); the aligned row helpers and the git/context
 formatting live in `@/nori-rs/tui/src/nori/session_header/status_card.rs`. After a
@@ -318,6 +320,12 @@ transcript, and `on_session_forked` (`@/nori-rs/tui/src/chatwidget/event_handler
 updates `conversation_id`, records `forked_from`, and drops a copy-pasteable
 `nori resume <previous>` hint cell so the previous (now frozen) conversation
 stays resumable.
+
+Verbose ACP `session/info` history cells (full title/status/metadata dumps)
+are gated to debug builds and `X.Y.Z-next*` channel releases via
+`show_verbose_session_info_history()` in `@/nori-rs/tui/src/version.rs`. Stable
+and latest builds still apply the patch for footer/status consumers, but do not
+insert the hefty history cell.
 
 #### Transcripts and view-only mode
 

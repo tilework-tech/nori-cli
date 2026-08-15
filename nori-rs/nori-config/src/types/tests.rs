@@ -866,6 +866,7 @@ fn test_footer_segment_serialize() {
 fn test_footer_segment_display_name() {
     use pretty_assertions::assert_eq;
     assert_eq!(FooterSegment::PromptSummary.display_name(), "Task Summary");
+    assert_eq!(FooterSegment::SessionTitle.display_name(), "Session Title");
     assert_eq!(FooterSegment::VimMode.display_name(), "Vim Mode");
     assert_eq!(FooterSegment::GitBranch.display_name(), "Git Branch");
     assert_eq!(FooterSegment::WorktreeName.display_name(), "Worktree Name");
@@ -912,6 +913,7 @@ fn test_footer_segment_all_variants() {
         FooterSegment::all_variants(),
         &[
             FooterSegment::PromptSummary,
+            FooterSegment::SessionTitle,
             FooterSegment::VimMode,
             FooterSegment::GitBranch,
             FooterSegment::WorktreeName,
@@ -953,6 +955,7 @@ fn test_footer_segment_config_default_is_lean_subset() {
         FooterSegment::WorktreeName,
         FooterSegment::TokenUsage,
         FooterSegment::CloudSession,
+        FooterSegment::SessionTitle,
     ];
     // Segments disabled by default: only meaningful after opting into the
     // related workflow (skillsets, prompt summary, git stats).

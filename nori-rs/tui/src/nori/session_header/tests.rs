@@ -1322,6 +1322,7 @@ fn status_card_full_snapshot() {
             context_tokens: Some(43_000),
             context_window_tokens: Some(272_000),
             context_window_percent: Some(27),
+            ..StatusCardInfo::default()
         },
     );
 
