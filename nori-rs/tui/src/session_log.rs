@@ -175,11 +175,11 @@ fn app_event_variant(event: &AppEvent) -> std::borrow::Cow<'static, str> {
     let debug = format!("{event:?}");
     std::borrow::Cow::Owned(
         debug
-        .split(['(', '{'])
-        .next()
-        .unwrap_or("app_event")
-        .trim()
-        .to_string(),
+            .split(['(', '{'])
+            .next()
+            .unwrap_or("app_event")
+            .trim()
+            .to_string(),
     )
 }
 

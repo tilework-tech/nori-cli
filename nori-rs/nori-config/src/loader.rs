@@ -465,11 +465,7 @@ args = ["@example/not-allowed"]
     fn resize_reflow_can_be_disabled_in_tui_config() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
-        std::fs::write(
-            &config_path,
-            "[tui]\nresize_reflow = false\n",
-        )
-        .unwrap();
+        std::fs::write(&config_path, "[tui]\nresize_reflow = false\n").unwrap();
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
 

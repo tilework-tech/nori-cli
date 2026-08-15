@@ -21,8 +21,7 @@ impl App {
             if self.chat_widget.has_active_agent_stream()
                 || has_unconsolidated_agent_message(&self.transcript_cells)
             {
-                self.transcript_reflow
-                    .mark_resize_requested_during_stream();
+                self.transcript_reflow.mark_resize_requested_during_stream();
             }
             tui.frame_requester().schedule_frame_in(REFLOW_DEBOUNCE);
         }
@@ -47,8 +46,7 @@ impl App {
         if self.chat_widget.has_active_agent_stream()
             || has_unconsolidated_agent_message(&self.transcript_cells)
         {
-            self.transcript_reflow
-                .mark_resize_requested_during_stream();
+            self.transcript_reflow.mark_resize_requested_during_stream();
             return Ok(());
         }
         if self.transcript_cells.is_empty() {

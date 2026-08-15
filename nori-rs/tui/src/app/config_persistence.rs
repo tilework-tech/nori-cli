@@ -707,8 +707,8 @@ mod tests {
             .await
             .expect("persist resize reflow");
 
-        let config = std::fs::read_to_string(temp.path().join("config.toml"))
-            .expect("read config.toml");
+        let config =
+            std::fs::read_to_string(temp.path().join("config.toml")).expect("read config.toml");
         assert!(config.contains("[tui]"));
         assert!(config.contains("resize_reflow = false"));
     }

@@ -793,19 +793,20 @@ mod tests {
                 false,
             )),
         ]);
-        let replacement: Arc<dyn HistoryCell> = Arc::new(
-            crate::history_cell::AgentMarkdownCell::new(
+        let replacement: Arc<dyn HistoryCell> =
+            Arc::new(crate::history_cell::AgentMarkdownCell::new(
                 "first\nsecond".to_string(),
                 std::path::Path::new("/tmp"),
-            ),
-        );
+            ));
 
         overlay.replace_cells(1..3, replacement);
 
         assert_eq!(overlay.cells.len(), 2);
-        assert!(overlay.cells[1]
-            .as_any()
-            .is::<crate::history_cell::AgentMarkdownCell>());
+        assert!(
+            overlay.cells[1]
+                .as_any()
+                .is::<crate::history_cell::AgentMarkdownCell>()
+        );
     }
 
     #[test]

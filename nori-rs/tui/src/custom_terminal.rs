@@ -769,5 +769,4 @@ mod tests {
         let history = output.find("history after clear").expect("history bytes");
         assert!(clear < history);
     }
-
 }

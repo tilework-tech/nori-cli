@@ -115,9 +115,7 @@ pub(crate) fn consolidate_agent_message_cells(
     Some((range, replacement))
 }
 
-pub(crate) fn has_unconsolidated_agent_message(
-    transcript_cells: &[Arc<dyn HistoryCell>],
-) -> bool {
+pub(crate) fn has_unconsolidated_agent_message(transcript_cells: &[Arc<dyn HistoryCell>]) -> bool {
     transcript_cells
         .last()
         .is_some_and(|cell| cell.as_any().is::<AgentMessageCell>())
@@ -127,12 +125,7 @@ pub(crate) fn render_transcript_tail(
     transcript_cells: &[Arc<dyn HistoryCell>],
     width: u16,
 ) -> Vec<Line<'static>> {
-    render_transcript_tail_with_limits(
-        transcript_cells,
-        width,
-        MAX_REFLOW_CELLS,
-        MAX_REFLOW_ROWS,
-    )
+    render_transcript_tail_with_limits(transcript_cells, width, MAX_REFLOW_CELLS, MAX_REFLOW_ROWS)
 }
 
 fn render_transcript_tail_with_limits(
@@ -282,13 +275,7 @@ mod tests {
 
         assert_eq!(
             line_text(&rendered),
-            vec![
-                "… history truncated",
-                "",
-                "four",
-                "five",
-                "six",
-            ]
+            vec!["… history truncated", "", "four", "five", "six",]
         );
     }
 
@@ -360,7 +347,10 @@ mod tests {
         let narrow = line_text(&render_transcript_tail(&cells, 28));
         assert_eq!(wide.iter().filter(|line| line.contains("tool")).count(), 1);
         assert_eq!(wide.iter().filter(|line| line.contains("first")).count(), 1);
-        assert_eq!(wide.iter().filter(|line| line.contains("second")).count(), 1);
+        assert_eq!(
+            wide.iter().filter(|line| line.contains("second")).count(),
+            1
+        );
         assert_eq!(wide.first().map(String::as_str), Some("tool"));
         assert!(narrow.len() > wide.len());
     }
