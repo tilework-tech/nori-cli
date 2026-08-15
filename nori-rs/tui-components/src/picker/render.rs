@@ -19,6 +19,8 @@ use super::PickerLoadState;
 use super::PickerMode;
 use super::PickerState;
 use super::SearchMode;
+use crate::DetailEntry;
+use crate::DetailPane;
 use crate::EmptyState;
 use crate::KeyHint;
 use crate::KeyHints;
@@ -385,9 +387,6 @@ impl<K: Clone + Eq> Picker<'_, K> {
         let Some(item) = self.state.selected_item() else {
             return;
         };
-        Block::default()
-            .style(self.theme.detail_surface)
-            .render(area, buf);
         let inner = area.inner(Margin {
             horizontal: 1,
             vertical: 1,
@@ -395,8 +394,6 @@ impl<K: Clone + Eq> Picker<'_, K> {
         if inner.height == 0 {
             return;
         }
-        Paragraph::new(Line::styled("Details", self.theme.title))
-            .render(Rect::new(inner.x, inner.y, inner.width, 1), buf);
         let content = Rect::new(
             inner.x,
             inner.y.saturating_add(2),
@@ -410,40 +407,15 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 .render(content, buf);
             return;
         }
-        let label_width = item
+        let entries = item
             .details
             .iter()
-            .map(|detail| detail.label.width() as u16)
-            .max()
-            .unwrap_or(0)
-            .min(14)
-            .min(content.width.saturating_sub(4) / 2);
-        for (index, detail) in item
-            .details
-            .iter()
-            .take(content.height as usize)
-            .enumerate()
-        {
-            let y = content.y.saturating_add(index as u16);
-            let label = pad_left(
-                &truncate(&detail.label, label_width as usize),
-                label_width as usize,
-            );
-            buf.set_string(content.x, y, label, self.theme.muted);
-            let separator_x = content.x.saturating_add(label_width).saturating_add(1);
-            buf.set_string(separator_x, y, "│", self.theme.separator);
-            let value_area = Rect::new(
-                separator_x.saturating_add(2),
-                y,
-                content
-                    .right()
-                    .saturating_sub(separator_x.saturating_add(2)),
-                1,
-            );
-            Paragraph::new(truncate_line(&detail.value, value_area.width as usize))
-                .style(self.theme.text)
-                .render(value_area, buf);
-        }
+            .map(|detail| DetailEntry::key_value(detail.label.clone(), detail.value.clone()))
+            .collect::<Vec<_>>();
+        DetailPane::new(&entries)
+            .heading("Details")
+            .theme(self.theme)
+            .render(Rect::new(inner.x, inner.y, inner.width, inner.height), buf);
     }
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
@@ -559,58 +531,4 @@ fn truncate(value: &str, width: usize) -> String {
     }
     result.push('…');
     result
-}
-
-fn pad_left(value: &str, width: usize) -> String {
-    let padding = width.saturating_sub(value.width());
-    format!("{}{value}", " ".repeat(padding))
-}
-
-fn truncate_line(line: &Line<'_>, width: usize) -> Line<'static> {
-    if width == 0 {
-        return Line::default();
-    }
-    let line_width = line
-        .spans
-        .iter()
-        .map(|span| span.content.width())
-        .sum::<usize>();
-    if line_width <= width {
-        return Line::from(
-            line.spans
-                .iter()
-                .map(|span| Span::styled(span.content.to_string(), span.style))
-                .collect::<Vec<_>>(),
-        );
-    }
-    if width == 1 {
-        return Line::from("…");
-    }
-
-    let mut remaining = width - 1;
-    let mut spans = Vec::new();
-    let mut ellipsis_style = ratatui::style::Style::default();
-    for span in &line.spans {
-        if remaining == 0 {
-            break;
-        }
-        let mut content = String::new();
-        for character in span.content.chars() {
-            let character_width = character.width().unwrap_or(0);
-            if character_width > remaining {
-                break;
-            }
-            content.push(character);
-            remaining -= character_width;
-        }
-        if !content.is_empty() {
-            ellipsis_style = span.style;
-            spans.push(Span::styled(content, span.style));
-        }
-        if remaining == 0 {
-            break;
-        }
-    }
-    spans.push(Span::styled("…", ellipsis_style));
-    Line::from(spans)
 }
