@@ -77,6 +77,7 @@ mod system_info;
 mod terminal_palette;
 mod terminal_title;
 mod text_formatting;
+mod transcript_reflow;
 mod tui;
 mod ui_consts;
 mod ui_types;

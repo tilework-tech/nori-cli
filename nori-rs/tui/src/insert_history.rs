@@ -49,6 +49,15 @@ fn wrap_history_line<'a>(line: &'a Line<'a>, width: usize) -> Vec<Line<'a>> {
     }
 }
 
+pub(crate) fn wrap_history_lines_for_width(lines: &[Line<'_>], width: u16) -> Vec<Line<'static>> {
+    let mut wrapped = Vec::new();
+    let width = usize::from(width.max(1));
+    for line in lines {
+        crate::render::line_utils::push_owned_lines(&wrap_history_line(line, width), &mut wrapped);
+    }
+    wrapped
+}
+
 fn physical_row_count(line: &Line<'_>, width: usize) -> usize {
     line.width().max(1).div_ceil(width.max(1))
 }

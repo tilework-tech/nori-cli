@@ -1,0 +1,6 @@
+---
+source: tui/src/nori/config_picker.rs
+expression: "format!(\"{}\\n{}\", item.name, item.description.as_deref().unwrap_or_default())"
+---
+Resize Reflow (on)
+Reflow transcript history when the terminal width changes
