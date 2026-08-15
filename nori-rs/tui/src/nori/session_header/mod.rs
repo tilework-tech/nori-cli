@@ -544,6 +544,11 @@ impl HistoryCell for NoriSessionHeaderCell {
             ));
         }
 
+        // Agent-supplied session title, when the agent reports one over ACP.
+        if let Some(title) = &self.status_info.session_title {
+            lines.push(status_row("title:", vec![Span::from(title.clone())]));
+        }
+
         // Agent line
         lines.push(status_row("agent:", vec![Span::from(self.agent.clone())]));
 

@@ -250,6 +250,8 @@ pub(crate) struct ChatWidget {
     session_agent_info: Option<nori_protocol::acp::v1::Implementation>,
     // Latest structured session metadata for status/footer consumers.
     session_info_state: crate::nori::session_info::SessionInfoState,
+    // How much session-info metadata this build writes to the transcript.
+    session_info_detail: crate::nori::session_info::SessionInfoDetail,
     /// The agent-assigned ACP session id of the active session, when known
     /// (seeded by the resume path, refreshed by SessionConfigured).
     acp_session_id: Option<String>,

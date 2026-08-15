@@ -912,6 +912,7 @@ fn test_footer_segment_all_variants() {
         FooterSegment::all_variants(),
         &[
             FooterSegment::PromptSummary,
+            FooterSegment::SessionTitle,
             FooterSegment::VimMode,
             FooterSegment::GitBranch,
             FooterSegment::WorktreeName,
@@ -945,6 +946,7 @@ fn test_footer_segment_config_default_is_lean_subset() {
 
     // Segments enabled by default: broadly useful or cheap-when-absent.
     let expected_enabled = [
+        FooterSegment::SessionTitle,
         FooterSegment::Context,
         FooterSegment::GitBranch,
         FooterSegment::ApprovalMode,

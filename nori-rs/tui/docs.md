@@ -276,7 +276,7 @@ footer_left = [
 ]
 ```
 
-Built-in names are `prompt_summary`, `vim_mode`, `git_branch`,
+Built-in names are `prompt_summary`, `session_title`, `vim_mode`, `git_branch`,
 `worktree_name`, `git_stats`, `context`, `context_used_percent`,
 `context_remaining_percent`, `context_used_tokens`,
 `context_remaining_tokens`, `context_window_tokens`, `approval_mode`,
@@ -285,6 +285,23 @@ Built-in names are `prompt_summary`, `vim_mode`, `git_branch`,
 maximum window size, such as `44% / 272k`. The five atomic context segments are
 off as standalone entries by default so custom chunks can compose only the
 values they need.
+
+`session_title` shows the title the agent reports over ACP session-info updates
+(`Title: Fix login flakes`). It self-hides for agents that never send one, and
+the same value reaches the `title:` row of the `/status` card.
+
+#### Session-info verbosity
+
+ACP session-info updates carry an agent-defined metadata blob. Rendering all of
+it documents what a harness supports and how agents differ, which is worth the
+transcript noise while developing against an agent and not otherwise, so the
+metadata history cell is limited to unstable builds — debug builds and
+`X.Y.Z-next*` prereleases, per `is_unstable_build` in
+`@/nori-rs/tui/src/version.rs`. Stable releases still merge every update into
+`SessionInfoState`, so the session title keeps reaching the footer and the
+`/status` card; only the dump is suppressed. `SessionInfoDetail` in
+`@/nori-rs/tui/src/nori/session_info.rs` carries the decision, and `ChatWidget`
+holds it as a field so tests can exercise the stable path.
 
 Custom formats are deliberately limited to literal text and built-in
 placeholders. `{{` and `}}` emit literal braces. Unknown placeholders,

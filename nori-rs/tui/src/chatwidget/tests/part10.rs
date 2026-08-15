@@ -372,6 +372,56 @@ fn session_info_updates_render_known_codex_fields() {
 }
 
 #[test]
+fn stable_builds_drop_the_metadata_cell_but_keep_the_session_title() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.session_info_detail = crate::nori::session_info::SessionInfoDetail::Hidden;
+    let meta = serde_json::json!({"codex": {"threadStatus": {"type": "idle"}}})
+        .as_object()
+        .expect("metadata object")
+        .clone();
+
+    chat.handle_session_event(
+        generation,
+        initialize_agent_event("codex-acp", "Codex ACP", "1.1.4"),
+    );
+    chat.handle_session_event(
+        generation,
+        session_info_update(
+            nori_protocol::acp::v1::SessionInfoUpdate::new()
+                .title("Metadata work")
+                .updated_at("2026-07-25T12:00:00Z")
+                .meta(meta),
+        ),
+    );
+
+    assert_eq!(history_text(&mut rx), String::new());
+    assert_eq!(
+        chat.bottom_pane.status_card_info().session_title,
+        Some("Metadata work".to_string())
+    );
+}
+
+#[test]
+fn session_titles_are_bounded_and_stripped_of_control_characters() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(
+        generation,
+        session_info_update(
+            nori_protocol::acp::v1::SessionInfoUpdate::new()
+                .title("Fix the login flake\nin the auth integration test suite before release"),
+        ),
+    );
+
+    assert_eq!(
+        chat.bottom_pane.status_card_info().session_title,
+        Some("Fix the login flake in the auth integration test…".to_string())
+    );
+}
+
+#[test]
 fn nori_connection_status_updates_render_clear_messages() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;

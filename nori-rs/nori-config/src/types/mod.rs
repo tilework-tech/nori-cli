@@ -1264,6 +1264,8 @@ impl HotkeyConfig {
 pub enum FooterSegment {
     /// Task summary: "Task: <summary>"
     PromptSummary,
+    /// Agent-supplied session title: "Title: Fix login flakes"
+    SessionTitle,
     /// Vim mode indicator: "NORMAL" or "INSERT"
     VimMode,
     /// Git branch: "⎇ branch-name"
@@ -1304,6 +1306,7 @@ impl FooterSegment {
     pub fn display_name(&self) -> &'static str {
         match self {
             Self::PromptSummary => "Task Summary",
+            Self::SessionTitle => "Session Title",
             Self::VimMode => "Vim Mode",
             Self::GitBranch => "Git Branch",
             Self::WorktreeName => "Worktree Name",
@@ -1327,6 +1330,7 @@ impl FooterSegment {
     pub fn toml_key(&self) -> &'static str {
         match self {
             Self::PromptSummary => "prompt_summary",
+            Self::SessionTitle => "session_title",
             Self::VimMode => "vim_mode",
             Self::GitBranch => "git_branch",
             Self::WorktreeName => "worktree_name",
@@ -1350,6 +1354,7 @@ impl FooterSegment {
     pub fn all_variants() -> &'static [FooterSegment] {
         &[
             Self::PromptSummary,
+            Self::SessionTitle,
             Self::VimMode,
             Self::GitBranch,
             Self::WorktreeName,
@@ -1395,6 +1400,8 @@ impl fmt::Display for FooterSegment {
 pub struct FooterSegmentConfigToml {
     /// Enable/disable task summary segment.
     pub prompt_summary: Option<bool>,
+    /// Enable/disable agent-supplied session title segment.
+    pub session_title: Option<bool>,
     /// Enable/disable vim mode indicator.
     pub vim_mode: Option<bool>,
     /// Enable/disable git branch segment.
@@ -1434,6 +1441,8 @@ pub struct FooterSegmentConfigToml {
 pub struct FooterSegmentConfig {
     /// Enable/disable task summary segment.
     pub prompt_summary: bool,
+    /// Enable/disable agent-supplied session title segment.
+    pub session_title: bool,
     /// Enable/disable vim mode indicator.
     pub vim_mode: bool,
     /// Enable/disable git branch segment.
@@ -1476,6 +1485,7 @@ impl Default for FooterSegmentConfig {
         // never ambiguous.
         Self {
             prompt_summary: false,
+            session_title: true,
             vim_mode: true,
             git_branch: true,
             worktree_name: true,
@@ -1502,6 +1512,7 @@ impl FooterSegmentConfig {
         let defaults = Self::default();
         Self {
             prompt_summary: toml.prompt_summary.unwrap_or(defaults.prompt_summary),
+            session_title: toml.session_title.unwrap_or(defaults.session_title),
             vim_mode: toml.vim_mode.unwrap_or(defaults.vim_mode),
             git_branch: toml.git_branch.unwrap_or(defaults.git_branch),
             worktree_name: toml.worktree_name.unwrap_or(defaults.worktree_name),
@@ -1535,6 +1546,7 @@ impl FooterSegmentConfig {
     pub fn is_enabled(&self, segment: FooterSegment) -> bool {
         match segment {
             FooterSegment::PromptSummary => self.prompt_summary,
+            FooterSegment::SessionTitle => self.session_title,
             FooterSegment::VimMode => self.vim_mode,
             FooterSegment::GitBranch => self.git_branch,
             FooterSegment::WorktreeName => self.worktree_name,
@@ -1558,6 +1570,7 @@ impl FooterSegmentConfig {
     pub fn set_enabled(&mut self, segment: FooterSegment, enabled: bool) {
         match segment {
             FooterSegment::PromptSummary => self.prompt_summary = enabled,
+            FooterSegment::SessionTitle => self.session_title = enabled,
             FooterSegment::VimMode => self.vim_mode = enabled,
             FooterSegment::GitBranch => self.git_branch = enabled,
             FooterSegment::WorktreeName => self.worktree_name = enabled,
@@ -1742,6 +1755,7 @@ impl Default for FooterLayoutConfig {
             footer_left: vec![
                 FooterSegment::CloudSession.into(),
                 FooterSegment::PromptSummary.into(),
+                FooterSegment::SessionTitle.into(),
                 FooterSegment::VimMode.into(),
                 FooterSegment::GitBranch.into(),
                 FooterSegment::WorktreeName.into(),

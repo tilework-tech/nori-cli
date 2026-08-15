@@ -132,6 +132,7 @@ impl ChatComposer {
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
             vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
             prompt_summary: self.prompt_summary.clone(),
+            session_title: self.session_title.clone(),
             worktree_name: self
                 .system_info
                 .as_ref()
@@ -155,6 +156,7 @@ impl ChatComposer {
             git_lines_removed: props.git_lines_removed,
             git_has_untracked: props.git_has_untracked,
             acp_mode_label: props.acp_mode_label,
+            session_title: props.session_title,
             nori_version: props.nori_version,
             nori_version_source: props.nori_version_source,
             context_tokens: props.context_tokens,

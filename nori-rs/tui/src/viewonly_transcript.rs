@@ -182,17 +182,19 @@ fn viewonly_entries_from_client_event(
                 session_info_patch: Some(patch),
                 ..
             },
-        ) => {
+        ) => crate::nori::session_info::display(
+            agent_info,
+            "Agent",
+            patch,
+            crate::nori::session_info::SessionInfoOrigin::from_replay_source(replay_source),
+            crate::nori::session_info::SessionInfoDetail::for_build(),
+        )
+        .map(|display| {
             vec![ViewonlyEntry::Info {
-                content: crate::nori::session_info::display(
-                    agent_info,
-                    "Agent",
-                    patch,
-                    crate::nori::session_info::SessionInfoOrigin::from_replay_source(replay_source),
-                )
-                .text(),
+                content: display.text(),
             }]
-        }
+        })
+        .unwrap_or_default(),
         _ => format_client_event(event)
             .map(|content| vec![ViewonlyEntry::Info { content }])
             .unwrap_or_default(),
