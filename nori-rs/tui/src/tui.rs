@@ -365,6 +365,14 @@ impl Tui {
         self.frame_requester().schedule_frame();
     }
 
+    pub(crate) fn clear_pending_history_lines(&mut self) {
+        self.pending_history_lines.clear();
+    }
+
+    pub(crate) fn is_alt_screen_active(&self) -> bool {
+        self.alt_screen_active.load(Ordering::Relaxed)
+    }
+
     pub fn draw(
         &mut self,
         height: u16,
@@ -468,7 +476,7 @@ impl Tui {
             if !self.pending_history_lines.is_empty() {
                 // Cap pending lines to avoid unbounded growth if insertion
                 // is blocked for an extended period (e.g., full-screen widget).
-                const MAX_PENDING_LINES: usize = 1000;
+                const MAX_PENDING_LINES: usize = crate::transcript_reflow::MAX_REFLOW_ROWS;
                 if self.pending_history_lines.len() > MAX_PENDING_LINES {
                     let excess = self.pending_history_lines.len() - MAX_PENDING_LINES;
                     self.pending_history_lines.drain(..excess);

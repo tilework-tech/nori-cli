@@ -278,6 +278,10 @@ impl ChatWidget {
         self.bottom_pane.has_active_view()
     }
 
+    pub(crate) fn has_active_overlay_or_popup(&self) -> bool {
+        self.bottom_pane.has_active_overlay_or_popup()
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.bottom_pane.composer_is_empty()
     }

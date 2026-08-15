@@ -266,6 +266,11 @@ pub struct AcpBackend {
     goal_mcp_connected: Arc<AtomicBool>,
     /// Loopback HTTP server exposing the backend-owned `nori-client` MCP tools.
     goal_mcp_http_server: Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
+    /// True while the agent's native goal loop, driven via the `_session/goal`
+    /// ACP extension, owns continuation for the current goal. While set, the
+    /// harness mirrors agent goal snapshots instead of running its own
+    /// continuation loop.
+    goal_ext_driving: Arc<AtomicBool>,
     /// Transcript recorder cell used by local MCP tools created before the
     /// recorder's session ID is known.
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
@@ -367,6 +372,7 @@ fn session_context_for_connection(
 pub mod browser_profile;
 #[cfg(unix)]
 pub mod browser_session;
+mod goal_ext;
 mod nori_client_context;
 mod nori_client_mcp;
 pub mod probe;
@@ -391,7 +397,10 @@ fn public_nori_capabilities(
     view: crate::normalized::SessionCapabilitiesView,
 ) -> nori_protocol::NoriCapabilities {
     nori_protocol::NoriCapabilities {
-        goal_management: view.nori_client.advertised,
+        goal_management: view
+            .builtin_commands
+            .get("goal")
+            .is_some_and(|command| command.enabled),
         builtin_commands: view.builtin_commands,
     }
 }
