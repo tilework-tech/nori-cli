@@ -618,6 +618,8 @@ impl AcpBackend {
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
             .unwrap_or_default();
         let pending_hook_context = session_context_for_connection(config, &connection);
+        let goal_ext_capability =
+            goal_ext::GoalExtCapability::from_initialize_meta(connection.initialize_meta());
         let backend = Self {
             connection,
             session_id: Arc::new(RwLock::new(session_id)),
@@ -636,7 +638,7 @@ impl AcpBackend {
             thread_goal_state,
             goal_mcp_connected,
             goal_mcp_http_server,
-            goal_ext_driving: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            goal_ext_capability,
             pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder: Arc::new(RwLock::new(transcript_recorder)),
             session_event_tx: session_event_tx.clone(),

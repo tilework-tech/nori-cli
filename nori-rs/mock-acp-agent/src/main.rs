@@ -1777,8 +1777,11 @@ async fn main() -> acp::Result<()> {
                 async move |arguments: agent_client_protocol::UntypedMessage,
                             responder: Responder<serde_json::Value>,
                             cx: ConnectionTo<Client>| {
-                    // The crate strips the leading underscore from ext methods
-                    // on some parse paths; accept both spellings.
+                    // Direct `UntypedMessage` dispatch preserves the wire
+                    // method (`_session/goal`); the crate's enum-fallback path
+                    // (agent-client-protocol schema/mod.rs `parse_message`)
+                    // strips the leading underscore instead. Accept both so
+                    // the mock does not depend on which path dispatched it.
                     let is_goal_method =
                         matches!(arguments.method(), "_session/goal" | "session/goal");
                     if !is_goal_method || std::env::var("MOCK_AGENT_GOAL_EXT").is_err() {

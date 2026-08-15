@@ -86,6 +86,12 @@ impl AcpBackend {
                     server.commit(&self.goal_mcp_http_server).await;
                 }
                 debug!("Swapped active ACP session: {:?}", new_session_id);
+                // An extension-driven goal belongs to the previous ACP
+                // session; its native loop cannot follow the swap. Stop
+                // mirroring (and best-effort clear the old loop, while
+                // `session_id` still names the old session) so the
+                // nori-client loop can take the local goal back over.
+                self.stop_stale_ext_goal().await;
                 *self.session_id.write().await = new_session_id.clone();
                 if matches!(mode, SessionSwapMode::ForkFromHead { .. }) {
                     self.fork_transcript(&new_session_id).await;

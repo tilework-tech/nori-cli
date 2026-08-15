@@ -558,10 +558,7 @@ impl AcpBackend {
 
         // The agent's native goal loop owns continuation while the
         // `_session/goal` extension drives this goal.
-        if self
-            .goal_ext_driving
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if self.thread_goal_state.lock().await.ext_driven() {
             return;
         }
 
@@ -587,10 +584,7 @@ impl AcpBackend {
     }
 
     pub(super) async fn submit_goal_continuation_if_idle(&self) {
-        if self
-            .goal_ext_driving
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if self.thread_goal_state.lock().await.ext_driven() {
             return;
         }
         if self.goal_mcp_http_server.lock().await.is_none() {
