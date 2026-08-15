@@ -1446,6 +1446,20 @@ async fn main() -> acp::Result<()> {
                     response = response.agent_capabilities(capabilities);
                 }
 
+                if std::env::var("MOCK_AGENT_GOAL_EXT").is_ok() {
+                    eprintln!("Mock agent: advertising the _session/goal goal extension");
+                    let mut meta = serde_json::Map::new();
+                    meta.insert(
+                        "goal".to_string(),
+                        serde_json::json!({
+                            "version": 1,
+                            "controlMethod": "_session/goal",
+                            "actions": ["set", "pause", "resume", "clear"],
+                        }),
+                    );
+                    response.meta = Some(meta);
+                }
+
                 responder.respond(response)
             },
             agent_client_protocol::on_receive_request!(),
@@ -1749,6 +1763,81 @@ async fn main() -> acp::Result<()> {
                             .respond(acp::SetSessionConfigOptionResponse::new(options)),
                         Err(error) => responder.respond_with_error(error),
                     }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                // Native goal store for the `_session/goal` extension. Matches
+                // any method (untyped fallback), so it must stay registered
+                // after every typed request handler.
+                let goal_objective: Arc<std::sync::Mutex<Option<String>>> =
+                    Arc::new(std::sync::Mutex::new(None));
+                async move |arguments: agent_client_protocol::UntypedMessage,
+                            responder: Responder<serde_json::Value>,
+                            cx: ConnectionTo<Client>| {
+                    // The crate strips the leading underscore from ext methods
+                    // on some parse paths; accept both spellings.
+                    let is_goal_method =
+                        matches!(arguments.method(), "_session/goal" | "session/goal");
+                    if !is_goal_method || std::env::var("MOCK_AGENT_GOAL_EXT").is_err() {
+                        return responder.respond_with_error(acp::Error::method_not_found());
+                    }
+                    let params = arguments.params.clone();
+                    let session_id = params
+                        .get("sessionId")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    let action = params
+                        .get("action")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    eprintln!("Mock agent: _session/goal action={action}");
+                    if action == "set" {
+                        *goal_objective.lock().unwrap() = params
+                            .get("objective")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string);
+                    }
+                    let objective = goal_objective.lock().unwrap().clone().unwrap_or_default();
+                    let goal_value = match action.as_str() {
+                        "set" | "resume" => {
+                            serde_json::json!({ "objective": objective, "status": "active" })
+                        }
+                        "pause" => {
+                            serde_json::json!({ "objective": objective, "status": "paused" })
+                        }
+                        "clear" => {
+                            goal_objective.lock().unwrap().take();
+                            serde_json::Value::Null
+                        }
+                        _ => return responder.respond_with_error(acp::Error::invalid_params()),
+                    };
+                    let snapshot_update = |goal: serde_json::Value| {
+                        let mut meta = serde_json::Map::new();
+                        meta.insert("goal".to_string(), goal);
+                        let mut info = acp::SessionInfoUpdate::new();
+                        info.meta = Some(meta);
+                        acp::SessionUpdate::SessionInfoUpdate(info)
+                    };
+                    let _ = cx.send_notification(acp::SessionNotification::new(
+                        acp::SessionId::new(session_id.clone()),
+                        snapshot_update(goal_value),
+                    ));
+                    if action == "set" && std::env::var("MOCK_AGENT_GOAL_EXT_AUTOCOMPLETE").is_ok()
+                    {
+                        eprintln!("Mock agent: auto-completing goal");
+                        let _ = cx.send_notification(acp::SessionNotification::new(
+                            acp::SessionId::new(session_id),
+                            snapshot_update(
+                                serde_json::json!({ "objective": objective, "status": "complete" }),
+                            ),
+                        ));
+                    }
+                    responder.respond(serde_json::json!({}))
                 }
             },
             agent_client_protocol::on_receive_request!(),

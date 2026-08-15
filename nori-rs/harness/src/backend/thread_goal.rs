@@ -406,17 +406,55 @@ impl AcpBackend {
         objective: String,
         status: Option<nori_protocol::ThreadGoalStatus>,
     ) -> Result<nori_protocol::ThreadGoal> {
-        if !self.goal_automation_available().await {
+        let status = status.map(status_from_client);
+        // A non-active initial status cannot be expressed over the goal
+        // extension, so such goals always use the nori-client loop.
+        let ext = match status {
+            None | Some(GoalStatus::Active) => self.goal_ext_capability(),
+            Some(_) => None,
+        };
+        let mcp_available = self.goal_automation_available().await;
+        if ext.is_none() && !mcp_available {
             anyhow::bail!("goal management is unavailable for this session");
         }
-        let status = status.map(status_from_client);
-        let goal = self
-            .thread_goal_state
-            .lock()
-            .await
-            .set_objective(objective, status, now_seconds())
-            .map_err(anyhow::Error::msg)?;
-        let should_start = goal.status == GoalStatus::Active;
+        let mut ext_driving = false;
+        if let Some(capability) = &ext {
+            match self
+                .drive_goal_ext(capability, goal_ext::GoalExtAction::Set, Some(&objective))
+                .await
+            {
+                Ok(()) => ext_driving = true,
+                Err(error) if mcp_available => {
+                    tracing::warn!(
+                        "goal extension set failed; falling back to the nori-client goal loop: {error:#}"
+                    );
+                }
+                Err(error) => {
+                    return Err(error.context(
+                        "the agent rejected the goal extension request and the nori-client fallback is unavailable",
+                    ));
+                }
+            }
+        }
+        self.goal_ext_driving
+            .store(ext_driving, std::sync::atomic::Ordering::Relaxed);
+        let goal = {
+            let mut state = self.thread_goal_state.lock().await;
+            let mirrored = ext_driving
+                .then(|| state.snapshot(now_seconds()))
+                .flatten()
+                .filter(|existing| existing.objective == objective);
+            match mirrored {
+                // The agent already published a snapshot for this goal while
+                // the extension request was in flight; that mirror is
+                // authoritative, so don't clobber its status.
+                Some(existing) => existing,
+                None => state
+                    .set_objective(objective, status, now_seconds())
+                    .map_err(anyhow::Error::msg)?,
+            }
+        };
+        let should_start = goal.status == GoalStatus::Active && !ext_driving;
         let goal = goal.into_client_goal();
         self.emit_goal_changed(Some(goal.clone())).await;
         if should_start {
@@ -426,8 +464,22 @@ impl AcpBackend {
     }
 
     pub(crate) async fn clear_goal(&self) -> Result<()> {
-        if !self.goal_automation_available().await {
+        let ext = self.goal_ext_capability();
+        if ext.is_none() && !self.goal_automation_available().await {
             anyhow::bail!("goal management is unavailable for this session");
+        }
+        if self
+            .goal_ext_driving
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+            && let Some(capability) = &ext
+            && let Err(error) = self
+                .drive_goal_ext(capability, goal_ext::GoalExtAction::Clear, None)
+                .await
+        {
+            // The local clear still proceeds: the mirrored goal is gone either
+            // way, and a failed native clear only leaves the agent loop to
+            // wind down on its own.
+            tracing::warn!("goal extension clear failed: {error:#}");
         }
         if self.thread_goal_state.lock().await.clear() {
             self.emit_goal_changed(None).await;
@@ -439,22 +491,111 @@ impl AcpBackend {
         &self,
         status: nori_protocol::ThreadGoalStatus,
     ) -> Result<nori_protocol::ThreadGoal> {
-        if !self.goal_automation_available().await {
+        let internal_status = status_from_client(status);
+        let ext = self.goal_ext_capability();
+        if ext.is_none() && !self.goal_automation_available().await {
             anyhow::bail!("goal management is unavailable for this session");
+        }
+        let ext_driving = self
+            .goal_ext_driving
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if ext_driving {
+            let action = match internal_status {
+                GoalStatus::Paused => Some(goal_ext::GoalExtAction::Pause),
+                GoalStatus::Active => Some(goal_ext::GoalExtAction::Resume),
+                GoalStatus::Blocked
+                | GoalStatus::UsageLimited
+                | GoalStatus::BudgetLimited
+                | GoalStatus::Complete => None,
+            };
+            match (&ext, action) {
+                (Some(capability), Some(action)) if capability.supports(action) => {
+                    // Failing hard keeps the harness mirror from silently
+                    // diverging from the agent's native goal loop.
+                    self.drive_goal_ext(capability, action, None).await?;
+                }
+                (Some(_), Some(_)) | (Some(_), None) | (None, _) => {
+                    anyhow::bail!(
+                        "the active agent's goal extension does not support this status change"
+                    );
+                }
+            }
         }
         let goal = self
             .thread_goal_state
             .lock()
             .await
-            .set_status(status_from_client(status), now_seconds())
+            .set_status(internal_status, now_seconds())
             .map_err(anyhow::Error::msg)?;
-        let should_start = goal.status == GoalStatus::Active;
+        let should_start = goal.status == GoalStatus::Active && !ext_driving;
         let goal = goal.into_client_goal();
         self.emit_goal_changed(Some(goal.clone())).await;
         if should_start {
             self.submit_goal_continuation_if_idle().await;
         }
         Ok(goal)
+    }
+
+    /// Parses the goal extension capability the agent advertised at
+    /// initialize, if any.
+    pub(super) fn goal_ext_capability(&self) -> Option<goal_ext::GoalExtCapability> {
+        goal_ext::GoalExtCapability::from_initialize_meta(self.connection.initialize_meta())
+    }
+
+    async fn drive_goal_ext(
+        &self,
+        capability: &goal_ext::GoalExtCapability,
+        action: goal_ext::GoalExtAction,
+        objective: Option<&str>,
+    ) -> Result<()> {
+        let session_id = self.session_id.read().await.clone();
+        let mut params = serde_json::json!({
+            "sessionId": session_id,
+            "action": action.wire_name(),
+        });
+        if let Some(objective) = objective {
+            params["objective"] = serde_json::Value::String(objective.to_string());
+        }
+        self.connection
+            .send_ext_request(&capability.control_method, params)
+            .await
+            .map(|_| ())
+    }
+
+    /// Mirrors goal snapshots the agent publishes on `session_info_update`
+    /// notifications into the harness goal store. A non-null snapshot proves
+    /// the agent's native goal loop owns continuation for this goal.
+    pub(super) async fn observe_session_update_for_goal_ext(&self, update: &acp::SessionUpdate) {
+        let acp::SessionUpdate::SessionInfoUpdate(info) = update else {
+            return;
+        };
+        let Some(goal_update) = goal_ext::goal_update_from_session_info_meta(info.meta.as_ref())
+        else {
+            return;
+        };
+        let outcome = {
+            let mut state = self.thread_goal_state.lock().await;
+            goal_ext::mirror_update(&mut state, &goal_update, now_seconds())
+        };
+        match outcome {
+            goal_ext::GoalMirrorOutcome::Unchanged => {
+                if matches!(goal_update, goal_ext::GoalExtUpdate::Snapshot(_)) {
+                    self.goal_ext_driving
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            goal_ext::GoalMirrorOutcome::Updated(snapshot) => {
+                self.goal_ext_driving
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                self.emit_goal_changed(Some(snapshot.into_client_goal()))
+                    .await;
+            }
+            goal_ext::GoalMirrorOutcome::Cleared => {
+                self.goal_ext_driving
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                self.emit_goal_changed(None).await;
+            }
+        }
     }
 
     pub(super) async fn thread_goal_update_from_client_event(
@@ -476,6 +617,14 @@ impl AcpBackend {
     }
 
     pub(super) async fn prepend_goal_context_to_prompt(&self, prompt: String) -> String {
+        // While the agent's native goal loop drives, it owns goal context and
+        // the nori-client instructions would point at the wrong control plane.
+        if self
+            .goal_ext_driving
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return prompt;
+        }
         if !self.goal_automation_available().await {
             return prompt;
         }

@@ -114,6 +114,7 @@ pub(crate) struct NoriClientShared {
     connected: Arc<AtomicBool>,
     agent_capabilities: crate::normalized::AgentCapabilitiesView,
     nori_client_advertised: bool,
+    goal_ext_advertised: bool,
 }
 
 impl NoriClientShared {
@@ -123,6 +124,7 @@ impl NoriClientShared {
         connected: Arc<AtomicBool>,
         agent_capabilities: crate::normalized::AgentCapabilitiesView,
         nori_client_advertised: bool,
+        goal_ext_advertised: bool,
     ) -> Self {
         Self {
             thread_goal_state,
@@ -130,6 +132,7 @@ impl NoriClientShared {
             connected,
             agent_capabilities,
             nori_client_advertised,
+            goal_ext_advertised,
         }
     }
 }
@@ -288,6 +291,7 @@ impl ServerHandler for NoriClientService {
                 self.shared.agent_capabilities.clone(),
                 self.shared.nori_client_advertised,
                 true,
+                self.shared.goal_ext_advertised,
             );
             let _ = self
                 .shared
@@ -460,10 +464,13 @@ pub(super) fn capabilities_update_for_nori_client(
     nori_client_advertised: bool,
     nori_client_initialized: bool,
 ) -> crate::normalized::SessionCapabilitiesView {
+    let goal_ext_advertised =
+        goal_ext::GoalExtCapability::from_initialize_meta(connection.initialize_meta()).is_some();
     capabilities_update(
         agent_capabilities_view(connection),
         nori_client_advertised,
         nori_client_initialized,
+        goal_ext_advertised,
     )
 }
 
@@ -486,7 +493,9 @@ fn capabilities_update(
     agent: crate::normalized::AgentCapabilitiesView,
     nori_client_advertised: bool,
     nori_client_initialized: bool,
+    goal_ext_advertised: bool,
 ) -> crate::normalized::SessionCapabilitiesView {
+    let goal_available = nori_client_advertised || goal_ext_advertised;
     crate::normalized::SessionCapabilitiesView {
         agent,
         nori_client: crate::normalized::NoriClientCapabilitiesView {
@@ -496,9 +505,9 @@ fn capabilities_update(
         builtin_commands: HashMap::from([(
             "goal".to_string(),
             nori_protocol::CommandAvailability {
-                enabled: nori_client_advertised,
-                reason: (!nori_client_advertised).then(|| {
-                    "The active agent does not advertise HTTP MCP support, so /goal is unavailable."
+                enabled: goal_available,
+                reason: (!goal_available).then(|| {
+                    "The active agent advertises neither HTTP MCP support nor the goal extension, so /goal is unavailable."
                         .to_string()
                 }),
             },
@@ -523,6 +532,7 @@ pub(super) async fn register_for_session(
         Arc::clone(&connected),
         agent_capabilities_view(connection),
         true,
+        goal_ext::GoalExtCapability::from_initialize_meta(connection.initialize_meta()).is_some(),
     ))
     .await?;
     let advertised_server = next_server.as_mcp_server();
@@ -555,6 +565,24 @@ mod tests {
         }
     }
 
+    #[test]
+    fn goal_command_enabled_by_goal_extension_without_nori_client() {
+        let view = capabilities_update(test_agent_capabilities(), false, false, true);
+        let goal = view.builtin_commands.get("goal").expect("goal command");
+        assert!(goal.enabled);
+        assert_eq!(goal.reason, None);
+    }
+
+    #[test]
+    fn goal_command_disabled_without_nori_client_or_goal_extension() {
+        let view = capabilities_update(test_agent_capabilities(), false, false, false);
+        let goal = view.builtin_commands.get("goal").expect("goal command");
+        assert!(!goal.enabled);
+        assert!(goal.reason.as_deref().is_some_and(|reason| {
+            reason.contains("neither HTTP MCP support nor the goal extension")
+        }));
+    }
+
     fn service() -> NoriClientService {
         let (backend_event_tx, _backend_event_rx) = mpsc::channel(8);
         NoriClientService::new(NoriClientShared::new(
@@ -563,6 +591,7 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             test_agent_capabilities(),
             true,
+            false,
         ))
     }
 
@@ -644,6 +673,7 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             test_agent_capabilities(),
             true,
+            false,
         ));
 
         let create_result = create(&service, "Ship the ACP goal bridge").await;
@@ -728,6 +758,7 @@ mod tests {
             Arc::clone(&connected),
             test_agent_capabilities(),
             true,
+            false,
         ))
         .await
         .expect("nori-client server should spawn");
@@ -813,6 +844,7 @@ mod tests {
             Arc::clone(&connected),
             test_agent_capabilities(),
             true,
+            false,
         ))
         .await
         .expect("nori-client server should spawn");
@@ -920,6 +952,7 @@ mod tests {
             Arc::clone(&connected),
             test_agent_capabilities(),
             true,
+            false,
         ))
         .await
         .expect("nori-client server should spawn");

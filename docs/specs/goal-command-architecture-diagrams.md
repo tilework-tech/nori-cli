@@ -288,6 +288,19 @@ ThreadGoalState status changes; continuation loop stops
 | Context window            | Same Codex thread/session history, compacted as needed | External ACP agent's session context, steered by Nori prompts |
 | Subagents                 | Separate Codex threads only when explicitly spawned    | Determined by the external ACP agent, not by Nori goal state  |
 
+## Goal Extension Bridge
+
+A third path exists when the ACP agent advertises the `_session/goal`
+extension in the top-level `_meta` of its initialize response: the harness
+drives the agent's native goal loop over that extension instead of running its
+own continuation loop, and mirrors the goal snapshots the agent publishes
+(`session_info_update` `_meta.goal`) into `ThreadGoalState` and `GoalChanged`
+events. `ThreadGoalState` remains the source of truth for the TUI either way;
+only the continuation owner changes. The nori-client MCP loop diagrammed above
+stays the fallback for agents without the extension or when an extension call
+fails. Contract details: `docs/followups/nori-client-mcp.md`, "Goal Extension
+Bridge".
+
 ## Mental Model
 
 Both implementations are intentionally simple at the decision point: the model

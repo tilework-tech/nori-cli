@@ -556,6 +556,15 @@ impl AcpBackend {
             return;
         }
 
+        // The agent's native goal loop owns continuation while the
+        // `_session/goal` extension drives this goal.
+        if self
+            .goal_ext_driving
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
+
         // Safety invariant: a hidden continuation may only chain after another
         // hidden continuation once we have observed the agent actually connect to
         // the `nori-client` MCP endpoint (`goal.connected`). Until then the agent
@@ -578,6 +587,12 @@ impl AcpBackend {
     }
 
     pub(super) async fn submit_goal_continuation_if_idle(&self) {
+        if self
+            .goal_ext_driving
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
         if self.goal_mcp_http_server.lock().await.is_none() {
             return;
         }

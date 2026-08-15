@@ -107,12 +107,37 @@ prompts.
 `/goal` requires a close-the-loop path: the agent must be able to call the
 backend-owned goal tools to mark work complete or blocked. When `nori-client` is
 not available, goal automation should be unavailable as behavior, not merely
-dimmed as UI.
+dimmed as UI — unless the agent advertises the `_session/goal` extension
+described below.
 
 When the requested work is verified complete, the agent must call
 `update_goal` from the `nori-client` MCP server with the exact status `complete`
 and verify the returned status. A genuine impasse uses the
 exact status `blocked` through the same server.
+
+## Goal Extension Bridge (`_session/goal`)
+
+Agents may advertise a goal capability in the top-level `_meta` of the
+initialize response (`goal: {version: 1, controlMethod: "_session/goal",
+actions: [...]}`; `set` and `clear` are the required floor). When advertised,
+the harness prefers driving the goal through that extension: `/goal` sends
+`_session/goal` requests, the agent's native goal loop owns continuation, and
+the harness mirrors the goal snapshots the agent publishes on
+`session_info_update` `_meta.goal` into its own goal store and `GoalChanged`
+events. While the extension drives a goal:
+
+- the harness goal-continuation loop is suppressed,
+- the `<goal_context>`/`<goal_control>` prompt injection is skipped (the agent
+  runtime owns goal context), and
+- `/goal pause`/`resume` are honored only when the capability advertises those
+  actions; otherwise they fail with an explicit error rather than silently
+  diverging from the native loop.
+
+If an extension request fails and `nori-client` is available, the harness falls
+back to the MCP goal loop for that goal. Agents advertising the extension but
+not HTTP MCP get `/goal` through the extension alone. The end-to-end contract
+is exercised in `nori-rs/harness/tests/goal_ext_bridge.rs` against the mock
+agent (`MOCK_AGENT_GOAL_EXT`, `MOCK_AGENT_GOAL_EXT_AUTOCOMPLETE`).
 
 Required behavior:
 
