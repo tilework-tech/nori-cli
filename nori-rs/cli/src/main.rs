@@ -403,8 +403,8 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             // A piped prompt seeds the session; the TUI still starts normally so
             // the user keeps the conversation going after the first turn.
             let prompt = interactive.prompt.take();
-            let consumed_stdin = prompt.is_none() || interactive.stdin;
-            interactive.prompt = stdin_prompt::resolve_prompt(prompt, interactive.stdin)?;
+            let (prompt, consumed_stdin) = stdin_prompt::resolve_prompt(prompt, interactive.stdin)?;
+            interactive.prompt = prompt;
             if consumed_stdin {
                 stdin_prompt::restore_stdin_from_terminal();
             }
@@ -584,7 +584,8 @@ async fn run_exec(
     }
 
     // Read stdin only after the ACP facade has had its chance to claim it.
-    let Some(prompt) = stdin_prompt::resolve_prompt(prompt, stdin)? else {
+    let (prompt, _) = stdin_prompt::resolve_prompt(prompt, stdin)?;
+    let Some(prompt) = prompt else {
         anyhow::bail!("a prompt argument or piped stdin is required");
     };
     let outcome = nori_exec::run_plaintext(config, cli_version, prompt).await?;

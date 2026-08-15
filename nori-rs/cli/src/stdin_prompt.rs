@@ -8,7 +8,6 @@
 use anyhow::Context;
 use std::io::IsTerminal;
 use std::io::Read;
-use std::io::Write;
 
 /// Prompt argument that means "the prompt is on stdin", matching the `-`
 /// convention the upstream Codex CLI uses for the same purpose.
@@ -29,10 +28,11 @@ const MAX_PIPED_BYTES: u64 = 10 * 1024 * 1024;
 ///
 /// Callers must not invoke this when stdin is reserved for another protocol
 /// (notably `nori exec --acp`, which speaks JSON-RPC over stdin).
+/// Returns the resolved prompt and whether piped stdin was consumed.
 pub fn resolve_prompt(
     argument: Option<String>,
     stdin_requested: bool,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<(Option<String>, bool)> {
     let is_sentinel = argument.as_deref() == Some(STDIN_SENTINEL);
     let instruction = if is_sentinel { None } else { argument };
     let wants_stdin = is_sentinel || stdin_requested || instruction.is_none();
@@ -41,7 +41,8 @@ pub fn resolve_prompt(
     } else {
         None
     };
-    Ok(compose_prompt(instruction, piped))
+    let consumed_stdin = piped.is_some();
+    Ok((compose_prompt(instruction, piped), consumed_stdin))
 }
 
 /// Reads stdin to EOF when it is a pipe or a redirect, capped at
@@ -52,27 +53,6 @@ fn read_piped_stdin() -> anyhow::Result<Option<String>> {
     let stdin = std::io::stdin();
     if stdin.is_terminal() {
         return Ok(None);
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::FileTypeExt;
-
-        let file_type = std::fs::metadata("/dev/stdin").map(|metadata| metadata.file_type());
-        let diagnostic = format!(
-            "[DEBUG-a4f2] stdin is not a terminal: {:?}\n",
-            file_type.map(|file_type| (
-                file_type.is_char_device(),
-                file_type.is_fifo(),
-                file_type.is_file(),
-                file_type.is_socket(),
-            ))
-        );
-        if let Ok(nori_home) = std::env::var("NORI_HOME") {
-            let _ = std::fs::write(
-                std::path::Path::new(&nori_home).join("stdin-debug.log"),
-                diagnostic,
-            );
-        }
     }
     let mut piped = String::new();
     let read = stdin
@@ -100,26 +80,13 @@ fn read_piped_stdin() -> anyhow::Result<Option<String>> {
 pub fn restore_stdin_from_terminal() {
     use std::os::fd::AsRawFd;
 
-    let log_stage = |stage: &str| {
-        if let Ok(nori_home) = std::env::var("NORI_HOME") {
-            let _ = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(std::path::Path::new(&nori_home).join("stdin-debug.log"))
-                .and_then(|mut file| writeln!(file, "[DEBUG-a4f2] {stage}"));
-        }
-    };
-    log_stage("restore stdin entered");
     let Ok(tty) = std::fs::File::open("/dev/tty") else {
-        log_stage("open /dev/tty failed");
         return;
     };
-    log_stage("open /dev/tty succeeded");
     // Safety: both descriptors are valid for the duration of the call, and
     // stdin is not borrowed elsewhere this early in startup.
     unsafe {
-        let result = libc::dup2(tty.as_raw_fd(), libc::STDIN_FILENO);
-        log_stage(&format!("dup2 returned {result}"));
+        libc::dup2(tty.as_raw_fd(), libc::STDIN_FILENO);
     }
 }
 
