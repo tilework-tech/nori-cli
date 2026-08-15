@@ -152,6 +152,8 @@ pub(crate) struct ChatComposer {
     vim_enter_behavior: nori_config::VimEnterBehavior,
     vertical_footer: bool,
     prompt_summary: Option<String>,
+    /// Agent-supplied session title, sanitized for single-line display.
+    session_title: Option<String>,
     footer_segment_config: nori_config::FooterSegmentConfig,
     footer_layout_config: nori_config::FooterLayoutConfig,
 }
@@ -220,6 +222,7 @@ impl ChatComposer {
             vim_enter_behavior: nori_config::VimEnterBehavior::Off,
             vertical_footer: false,
             prompt_summary: None,
+            session_title: None,
             footer_segment_config: nori_config::FooterSegmentConfig::default(),
             footer_layout_config: nori_config::FooterLayoutConfig::default(),
         };
@@ -470,6 +473,10 @@ impl ChatComposer {
 
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.prompt_summary = summary;
+    }
+
+    pub(crate) fn set_session_title(&mut self, title: Option<String>) {
+        self.session_title = title;
     }
 
     pub(crate) fn set_command_description_override(&mut self, cmd: SlashCommand, desc: String) {

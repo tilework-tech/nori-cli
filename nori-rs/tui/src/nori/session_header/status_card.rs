@@ -33,6 +33,8 @@ pub(crate) struct StatusCardInfo {
     pub(crate) git_has_untracked: bool,
     /// ACP agent mode label (e.g. "Plan", "Build") when the agent exposes modes.
     pub(crate) acp_mode_label: Option<String>,
+    /// Agent-supplied session title from ACP session-info updates.
+    pub(crate) session_title: Option<String>,
     /// Detected Nori skillsets version.
     pub(crate) nori_version: Option<String>,
     /// The source of the version detection (affects the display label).

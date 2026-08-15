@@ -1317,6 +1317,7 @@ fn status_card_full_snapshot() {
             git_lines_removed: Some(8),
             git_has_untracked: true,
             acp_mode_label: Some("Plan".to_string()),
+            session_title: Some("Fix login flakes".to_string()),
             nori_version: Some("1.2.3".to_string()),
             nori_version_source: Some(NoriVersionSource::Skillsets),
             context_tokens: Some(43_000),

@@ -12,6 +12,7 @@ expression: rendered
 │ directory:   /home/user/project                                         │
 │ session:     11111111-2222-3333-4444-555555555555                       │
 │ forked from: 22222222-2222-2222-2222-222222222222                       │
+│ title:       Fix login flakes                                           │
 │ agent:       claude-sonnet                                              │
 │ skillset:    (none)                                                     │
 │ approvals:   Agent                                                      │

@@ -62,6 +62,7 @@ impl ChatWidget {
             } => {
                 self.session_agent_info = response.agent_info;
                 self.session_info_state.reset();
+                self.publish_session_title();
                 let capabilities = response.agent_capabilities;
                 self.session_agent_capabilities = crate::presentation::AgentCapabilitiesView {
                     http_mcp: capabilities.mcp_capabilities.http,
@@ -533,6 +534,25 @@ impl ChatWidget {
         self.bottom_pane.set_prompt_summary(Some(summary));
     }
 
+    /// Mirror the merged session title into the footer and the `/status` card.
+    /// This is the part of a session-info update worth showing on every build,
+    /// including the stable releases that suppress the metadata dump.
+    pub(super) fn publish_session_title(&mut self) {
+        let title = self
+            .session_info_state
+            .title()
+            .map(|title| {
+                crate::nori::session_info::sanitize(
+                    title,
+                    crate::nori::session_info::MAX_TITLE_DISPLAY_CHARS,
+                )
+                .trim()
+                .to_string()
+            })
+            .filter(|title| !title.is_empty());
+        self.bottom_pane.set_session_title(title);
+    }
+
     pub(crate) fn on_undo_snapshots_loaded(&mut self, snapshots: Vec<nori_harness::UndoSnapshot>) {
         if snapshots.is_empty() {
             self.add_info_message("No undo snapshots available.".to_string(), None);
@@ -744,13 +764,16 @@ impl ChatWidget {
                         self.replay_source,
                     );
                     self.session_info_state.apply(patch, origin);
-                    let display = crate::nori::session_info::display(
+                    self.publish_session_title();
+                    if let Some(display) = crate::nori::session_info::display(
                         self.session_agent_info.as_ref(),
                         self.bottom_pane.agent_display_name(),
                         patch,
                         origin,
-                    );
-                    self.add_to_history(display.history_cell());
+                        self.session_info_detail,
+                    ) {
+                        self.add_to_history(display.history_cell());
+                    }
                 } else if update.kind == crate::presentation::SessionUpdateKind::Usage
                     && let Some(usage) = update.usage
                 {

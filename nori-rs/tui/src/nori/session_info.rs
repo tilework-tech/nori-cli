@@ -23,6 +23,38 @@ const MAX_AGENT_VERSION_CHARS: usize = 40;
 pub(super) const MAX_DISPLAY_CHARS: usize = 160;
 const MAX_PATH_CHARS: usize = 120;
 const MAX_PATH_SEGMENT_CHARS: usize = 64;
+/// Characters of an agent-supplied session title kept for single-line status
+/// surfaces (the footer segment and the `/status` card). Titles are
+/// agent-controlled free text and are routinely a whole paragraph long.
+pub(crate) const MAX_TITLE_DISPLAY_CHARS: usize = 48;
+
+/// Prefix of the assignments an agent uses to report a failure. These survive
+/// on every build: this cell is the only surface that renders them, so
+/// suppressing them would turn an agent-side error into a silent stall.
+const ERROR_FIELD_PREFIX: &str = "error.";
+
+/// How much ACP session-info detail reaches the transcript.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionInfoDetail {
+    /// Render the full metadata dump. Unstable builds only: it documents what
+    /// a harness supports and how agents differ, which is worth the noise
+    /// while developing against an agent.
+    Metadata,
+    /// Render error fields only, and nothing at all without them. The merged
+    /// state still feeds the footer and the `/status` card, so the useful part
+    /// of an ordinary update survives without the dump.
+    ErrorsOnly,
+}
+
+impl SessionInfoDetail {
+    pub(crate) fn for_build() -> Self {
+        if crate::version::is_unstable_build() {
+            Self::Metadata
+        } else {
+            Self::ErrorsOnly
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum SessionInfoOrigin {
@@ -95,12 +127,14 @@ impl SessionInfoDisplay {
     }
 }
 
+/// Render one session-info patch, or `None` when the build suppresses it.
 pub(crate) fn display(
     agent_info: Option<&acp::Implementation>,
     fallback_agent_name: &str,
     patch: &SessionInfoPatch,
     origin: SessionInfoOrigin,
-) -> SessionInfoDisplay {
+    detail: SessionInfoDetail,
+) -> Option<SessionInfoDisplay> {
     let agent_name = agent_info
         .and_then(|agent| agent.title.as_deref())
         .filter(|title| !title.is_empty())
@@ -151,10 +185,20 @@ pub(crate) fn display(
         }
     }
 
-    SessionInfoDisplay {
+    match detail {
+        SessionInfoDetail::Metadata => {}
+        SessionInfoDetail::ErrorsOnly => {
+            assignments.retain(|assignment| assignment.name.starts_with(ERROR_FIELD_PREFIX));
+            if assignments.is_empty() {
+                return None;
+            }
+        }
+    }
+
+    Some(SessionInfoDisplay {
         header,
         assignments,
-    }
+    })
 }
 
 fn is_codex_agent(agent: &acp::Implementation) -> bool {
@@ -282,7 +326,7 @@ fn json_type(value: &Value) -> &'static str {
     }
 }
 
-pub(super) fn sanitize(value: &str, max_chars: usize) -> String {
+pub(crate) fn sanitize(value: &str, max_chars: usize) -> String {
     let mut characters = value.chars();
     let mut sanitized = String::with_capacity(max_chars.saturating_add(1));
     for character in characters.by_ref().take(max_chars) {
