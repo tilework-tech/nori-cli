@@ -925,18 +925,14 @@ async fn test_shutdown_closes_stdin_and_waits_for_child_exit() {
 #[tokio::test]
 #[cfg(unix)]
 async fn test_shutdown_sweeps_descendant_after_group_leader_exits() {
-    let Some(mock) = mock_agent_config() else {
+    let Some(mut config) = mock_agent_config() else {
         return;
     };
     let temp_dir = tempdir().expect("temp dir");
     let descendant_pidfile = temp_dir.path().join("descendant-pid");
-    let config = script_agent_config(
-        temp_dir.path(),
-        &format!(
-            "#!/bin/sh\n'{mock}'\nsleep 600 &\necho $! > '{descendant_pidfile}'\n",
-            mock = mock.command,
-            descendant_pidfile = descendant_pidfile.display(),
-        ),
+    config.env.insert(
+        "MOCK_AGENT_DESCENDANT_PID_FILE".to_string(),
+        descendant_pidfile.to_string_lossy().into_owned(),
     );
 
     let conn = AcpConnection::spawn(
@@ -953,7 +949,7 @@ async fn test_shutdown_sweeps_descendant_after_group_leader_exits() {
     conn.shutdown().await;
 
     let descendant_pid: libc::pid_t = std::fs::read_to_string(&descendant_pidfile)
-        .expect("wrapper should record its descendant pid before exiting")
+        .expect("mock agent should record its descendant pid before exiting")
         .trim()
         .parse()
         .expect("descendant pid parses");
