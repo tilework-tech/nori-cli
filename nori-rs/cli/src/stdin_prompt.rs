@@ -57,8 +57,8 @@ fn read_piped_stdin() -> anyhow::Result<Option<String>> {
         use std::os::unix::fs::FileTypeExt;
 
         let file_type = std::fs::metadata("/dev/stdin").map(|metadata| metadata.file_type());
-        eprintln!(
-            "[DEBUG-a4f2] stdin is not a terminal: {:?}",
+        let diagnostic = format!(
+            "[DEBUG-a4f2] stdin is not a terminal: {:?}\n",
             file_type.map(|file_type| (
                 file_type.is_char_device(),
                 file_type.is_fifo(),
@@ -66,6 +66,12 @@ fn read_piped_stdin() -> anyhow::Result<Option<String>> {
                 file_type.is_socket(),
             ))
         );
+        if let Ok(nori_home) = std::env::var("NORI_HOME") {
+            let _ = std::fs::write(
+                std::path::Path::new(&nori_home).join("stdin-debug.log"),
+                diagnostic,
+            );
+        }
     }
     let mut piped = String::new();
     let read = stdin

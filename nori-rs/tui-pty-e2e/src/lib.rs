@@ -123,6 +123,11 @@ impl Drop for TuiSession {
             eprintln!("{}", indent_lines(&screen, indent).style(s.cyan));
 
             if let Some(tmpdir) = &self._temp_dir {
+                if let Ok(diagnostic) =
+                    std::fs::read_to_string(tmpdir.path().join("stdin-debug.log"))
+                {
+                    eprintln!("{diagnostic}");
+                }
                 let log_tail = if let Some(log_path) = find_acp_log_file(tmpdir.path()) {
                     if let Ok(content) = std::fs::read_to_string(&log_path) {
                         let lines: Vec<&str> = content.lines().collect();
