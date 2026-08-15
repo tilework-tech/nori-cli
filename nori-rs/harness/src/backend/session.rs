@@ -636,6 +636,7 @@ impl AcpBackend {
             thread_goal_state,
             goal_mcp_connected,
             goal_mcp_http_server,
+            goal_ext_driving: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder: Arc::new(RwLock::new(transcript_recorder)),
             session_event_tx: session_event_tx.clone(),
@@ -742,7 +743,8 @@ impl AcpBackend {
                 .ok();
         }
 
-        let goal_automation_available = backend.goal_mcp_http_server.lock().await.is_some();
+        let goal_automation_available = backend.goal_mcp_http_server.lock().await.is_some()
+            || backend.goal_ext_capability().is_some();
         let resume_goal_notice = {
             let goals = backend.thread_goal_state.lock().await;
             let now = thread_goal::now_seconds();

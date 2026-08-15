@@ -249,6 +249,7 @@ impl AcpBackend {
             thread_goal_state,
             goal_mcp_connected,
             goal_mcp_http_server,
+            goal_ext_driving: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             pending_hook_context: Arc::new(Mutex::new(pending_hook_context)),
             transcript_recorder: Arc::new(RwLock::new(transcript_recorder)),
             session_event_tx: session_event_tx.clone(),
@@ -369,6 +370,7 @@ impl AcpBackend {
                     match maybe_event {
                         Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
                             backend.wait_for_prompt_phase().await;
+                            backend.observe_session_update_for_goal_ext(&update).await;
                             relay_seq += 1;
                             debug!(
                                 target: "acp_event_flow",
@@ -523,6 +525,7 @@ impl AcpBackend {
                                             .await;
                                     }
                                     crate::connection::ConnectionEvent::SessionUpdate(update) => {
+                                        backend.observe_session_update_for_goal_ext(&update).await;
                                         relay_seq += 1;
                                         debug!(
                                             target: "acp_event_flow",

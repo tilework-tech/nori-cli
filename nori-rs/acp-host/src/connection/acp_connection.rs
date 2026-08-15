@@ -75,6 +75,10 @@ pub struct AcpConnection {
     /// Agent capabilities from the initialization handshake.
     agent_capabilities: acp::AgentCapabilities,
 
+    /// Top-level `_meta` of the initialize response, where agents advertise
+    /// ACP extensions (e.g. the `_session/goal` goal extension).
+    initialize_meta: Option<acp::Meta>,
+
     /// Ordered inbox of raw ACP events from the transport layer.
     event_rx: mpsc::Receiver<ConnectionEvent>,
 
@@ -117,8 +121,13 @@ async fn establish_connection(
     let write_cwd = cwd.to_path_buf();
     let read_cwd = cwd.to_path_buf();
 
-    let (init_tx, init_rx) =
-        oneshot::channel::<Result<(ConnectionTo<Agent>, acp::AgentCapabilities)>>();
+    let (init_tx, init_rx) = oneshot::channel::<
+        Result<(
+            ConnectionTo<Agent>,
+            acp::AgentCapabilities,
+            Option<acp::Meta>,
+        )>,
+    >();
 
     let connection_task = tokio::spawn(async move {
         let result = Client
@@ -355,7 +364,11 @@ async fn establish_connection(
                             );
                         }
                         debug!("ACP connection established, agent: {:?}", resp.agent_info);
-                        let _ = init_tx.send(Ok((connection.clone(), resp.agent_capabilities)));
+                        let _ = init_tx.send(Ok((
+                            connection.clone(),
+                            resp.agent_capabilities,
+                            resp.meta,
+                        )));
 
                         futures::future::pending::<Result<(), acp::Error>>().await
                     }
@@ -373,13 +386,14 @@ async fn establish_connection(
         }
     });
 
-    let (cx, capabilities) = init_rx
+    let (cx, capabilities, initialize_meta) = init_rx
         .await
         .context("ACP connection task died during initialization")??;
 
     Ok(AcpConnection {
         cx,
         agent_capabilities: capabilities,
+        initialize_meta,
         event_rx,
         event_tx: connection_event_tx,
         session_config_state,
@@ -899,6 +913,28 @@ impl AcpConnection {
     /// Get the agent's capabilities.
     pub fn capabilities(&self) -> &acp::AgentCapabilities {
         &self.agent_capabilities
+    }
+
+    /// Get the top-level `_meta` of the initialize response, where agents
+    /// advertise ACP extensions.
+    pub fn initialize_meta(&self) -> Option<&acp::Meta> {
+        self.initialize_meta.as_ref()
+    }
+
+    /// Send an extension (`_`-prefixed) method request to the agent and
+    /// return its raw JSON response.
+    pub async fn send_ext_request(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        let request = agent_client_protocol::UntypedMessage::new(method, params)
+            .with_context(|| format!("failed to encode {method} request"))?;
+        self.cx
+            .send_request(request)
+            .block_task()
+            .await
+            .with_context(|| format!("{method} request failed"))
     }
 
     /// Take ownership of the ordered ACP event receiver.

@@ -87,7 +87,7 @@ impl MarkdownStreamCollector {
     /// If the buffer does not end with a newline, a temporary one is appended
     /// for rendering. Optionally unwraps ```markdown language fences in
     /// non-test builds.
-    pub fn finalize_and_drain(&mut self) -> Vec<Line<'static>> {
+    pub fn finalize_and_drain(&mut self) -> (Vec<Line<'static>>, String) {
         let raw_buffer = self.buffer.clone();
         let mut source: String = raw_buffer.clone();
         if !source.ends_with('\n') {
@@ -113,7 +113,7 @@ impl MarkdownStreamCollector {
 
         // Reset collector state for next stream.
         self.clear();
-        out
+        (out, raw_buffer)
     }
 }
 
@@ -131,7 +131,7 @@ pub(crate) fn simulate_stream_markdown_for_tests(
         }
     }
     if finalize {
-        out.extend(collector.finalize_and_drain());
+        out.extend(collector.finalize_and_drain().0);
     }
     out
 }
@@ -156,7 +156,7 @@ mod tests {
     async fn finalize_commits_partial_line() {
         let mut c = super::MarkdownStreamCollector::new(None);
         c.push_delta("Line without newline");
-        let out = c.finalize_and_drain();
+        let (out, _source) = c.finalize_and_drain();
         assert_eq!(out.len(), 1);
     }
 
@@ -704,7 +704,7 @@ mod tests {
                 out.extend(collector.commit_complete_lines());
             }
         }
-        out.extend(collector.finalize_and_drain());
+        out.extend(collector.finalize_and_drain().0);
         out
     }
 

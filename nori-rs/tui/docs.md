@@ -31,7 +31,10 @@ non-HTTP-MCP variant also explains the ACP fallback and unavailable MCP-backed
 affordances. The harness chooses between them from the connected agent's
 reported HTTP MCP capability and injects the selected envelope once. The CLI
 does not add a user identity because authenticated Nori Sessions identity is
-owned outside this layer.
+owned outside this layer. When that first prompt carries active goal context,
+the HTTP-MCP envelope also states that Nori CLI owns the goal and routes reads
+and updates to `get_goal` and `update_goal` from the `nori-client` MCP server,
+never to similarly named native agent tools.
 
 ### Core Implementation
 
@@ -202,6 +205,29 @@ terminal before the UI starts. This matters to every child the TUI spawns with
 inherited stdin -- the external editor and the file browser -- which would
 otherwise be handed an EOF'd pipe and exit immediately.
 
+#### Inline transcript reflow
+
+In inline mode, terminal width changes rebuild the visible transcript at the
+new width. Completed assistant messages retain their raw Markdown source, so
+replay reruns Markdown layout instead of wrapping already-rendered lines.
+Streaming output remains transient and is consolidated into one source-backed
+assistant cell when the message finishes; user, tool, event, and assistant
+cells otherwise keep their semantic order.
+
+Reflow is width-only and trailing-debounced by 75 ms. It waits while a popup,
+transcript overlay, alternate screen, or assistant stream owns presentation,
+then runs once that boundary closes. The replay retains at most the newest
+1,000 semantic cells and 10,000 physical rows, truncating from the oldest edge
+and prefixing `… history truncated` plus a blank line when either limit applies.
+These bounds limit terminal output, not the in-memory transcript.
+
+Reflow deliberately clears the visible screen and the terminal's native
+scrollback, including output from before Nori started, before replaying the
+bounded history. It does not attempt to discover or preserve a scrollback
+origin. The behavior is enabled by default and can be toggled through
+`/settings` or `[tui] resize_reflow` in `config.toml`; disabling it cancels any
+pending replay.
+
 #### Lifecycle behavior
 
 An orderly ACP close completes the typed close call, leaves the raw close
@@ -331,7 +357,9 @@ insert the hefty history cell.
 
 Between `ReplayStarted` and `ReplayFinished`, replayed user and assistant
 messages are assembled in event order and rendered as static conversation
-history with turn boundaries. They are not handled as live output streams.
+history with turn boundaries. They are not handled as live output streams;
+replayed assistant messages use the same raw-Markdown-backed cells as completed
+live messages so later width changes use the same rendering path.
 View-only rendering recovers initialization identity and replay source from the
 stored lifecycle events, then runs raw session-information notifications
 through the same private normalizer and renderer as the live TUI.

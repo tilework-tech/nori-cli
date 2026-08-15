@@ -381,6 +381,18 @@ where
         Ok(())
     }
 
+    /// Clear the visible screen and native scrollback before transcript replay.
+    pub fn clear_scrollback_and_visible_screen_for_reflow(&mut self) -> io::Result<()> {
+        if self.viewport_area.is_empty() {
+            return Ok(());
+        }
+        write!(self.backend, "\x1b[2J\x1b[H\x1b[3J")?;
+        Write::flush(&mut self.backend)?;
+        self.last_known_cursor_pos = Position { x: 0, y: 0 };
+        self.previous_buffer_mut().reset();
+        Ok(())
+    }
+
     /// Clears the inactive buffer and swaps it with the current buffer
     pub fn swap_buffers(&mut self) {
         self.previous_buffer_mut().reset();
@@ -594,8 +606,100 @@ impl ModifierDiff {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use ratatui::backend::WindowSize;
+    use ratatui::buffer::Cell;
     use ratatui::layout::Rect;
     use ratatui::style::Style;
+
+    struct RecordingBackend {
+        inner: crate::test_backend::VT100Backend,
+        bytes: Vec<u8>,
+    }
+
+    impl RecordingBackend {
+        fn new(width: u16, height: u16) -> Self {
+            Self {
+                inner: crate::test_backend::VT100Backend::new(width, height),
+                bytes: Vec::new(),
+            }
+        }
+    }
+
+    impl Write for RecordingBackend {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.bytes.extend_from_slice(buffer);
+            self.inner.write(buffer)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Write::flush(&mut self.inner)
+        }
+    }
+
+    impl Backend for RecordingBackend {
+        fn draw<'a, I>(&mut self, content: I) -> io::Result<()>
+        where
+            I: Iterator<Item = (u16, u16, &'a Cell)>,
+        {
+            self.inner.draw(content)
+        }
+
+        fn hide_cursor(&mut self) -> io::Result<()> {
+            self.inner.hide_cursor()
+        }
+
+        fn show_cursor(&mut self) -> io::Result<()> {
+            self.inner.show_cursor()
+        }
+
+        fn get_cursor_position(&mut self) -> io::Result<Position> {
+            self.inner.get_cursor_position()
+        }
+
+        fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> io::Result<()> {
+            self.inner.set_cursor_position(position)
+        }
+
+        fn clear(&mut self) -> io::Result<()> {
+            self.inner.clear()
+        }
+
+        fn clear_region(&mut self, clear_type: ClearType) -> io::Result<()> {
+            self.inner.clear_region(clear_type)
+        }
+
+        fn append_lines(&mut self, line_count: u16) -> io::Result<()> {
+            self.inner.append_lines(line_count)
+        }
+
+        fn scroll_region_up(
+            &mut self,
+            region: std::ops::Range<u16>,
+            line_count: u16,
+        ) -> io::Result<()> {
+            self.inner.scroll_region_up(region, line_count)
+        }
+
+        fn scroll_region_down(
+            &mut self,
+            region: std::ops::Range<u16>,
+            line_count: u16,
+        ) -> io::Result<()> {
+            self.inner.scroll_region_down(region, line_count)
+        }
+
+        fn size(&self) -> io::Result<Size> {
+            self.inner.size()
+        }
+
+        fn window_size(&mut self) -> io::Result<WindowSize> {
+            self.inner.window_size()
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Backend::flush(&mut self.inner)
+        }
+    }
 
     #[test]
     fn diff_buffers_does_not_emit_clear_to_end_for_full_width_row() {
@@ -641,5 +745,28 @@ mod tests {
                 .any(|command| matches!(command, DrawCommand::ClearToEnd { x: 2, y: 0, .. })),
             "expected clear-to-end to start after the remaining wide char; commands: {commands:?}"
         );
+    }
+
+    #[test]
+    fn resize_reflow_clears_screen_then_homes_then_purges_before_history() {
+        let backend = RecordingBackend::new(80, 24);
+        let mut terminal = Terminal::with_options(backend).expect("terminal");
+        terminal.set_viewport_area(Rect::new(0, 20, 80, 4));
+
+        terminal
+            .clear_scrollback_and_visible_screen_for_reflow()
+            .expect("clear terminal");
+        crate::insert_history::insert_history_lines(
+            &mut terminal,
+            vec![ratatui::text::Line::from("history after clear")],
+        )
+        .expect("insert history");
+
+        let output = String::from_utf8_lossy(&terminal.backend().bytes);
+        let clear = output
+            .find("\x1b[2J\x1b[H\x1b[3J")
+            .expect("ordered resize-reflow clear sequence");
+        let history = output.find("history after clear").expect("history bytes");
+        assert!(clear < history);
     }
 }

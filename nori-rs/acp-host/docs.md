@@ -44,13 +44,24 @@ The host is the only client-side product crate that directly uses the
 - A private `SessionUpdate` copy feeds the harness reducer after the matching
   raw notification; it is implementation state, not another public protocol.
 - `registry.rs` resolves built-in and configured agents to spawnable process
-  definitions. `error_category.rs` preserves structured ACP errors before
+  definitions. The built-in Codex definition uses the maintained
+  `@agentclientprotocol/codex-acp` adapter and disables Codex-native goals in
+  its subprocess configuration. It merges a valid ambient `CODEX_CONFIG`,
+  preserving unrelated top-level and feature settings while forcing only
+  `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
+  MCP server. `error_category.rs` preserves structured ACP errors before
   falling back to message classification.
 
 ### Things to Know
 
 - The dependency direction is `nori-harness -> nori-acp-host`, never the
   reverse.
+- Disabling native goals is a policy of Nori's built-in Codex launch only.
+  User-defined agent processes retain their explicit command and environment;
+  goal ownership and routing remain a harness concern.
+- Ambient `CODEX_CONFIG` must be a JSON object whose `features` value, when
+  present, is also an object. Invalid JSON or incompatible shapes fail built-in
+  Codex configuration explicitly instead of silently discarding user settings.
 - Terminal and extension request families are not advertised by the current
   host. Adding them requires an explicit host-policy decision, not a generic
   protocol mirror.

@@ -135,6 +135,23 @@ config calls return typed values directly. A consumer does not wait for a Nori
 response event or use a generic operation enum. ACP-backed methods still leave
 their raw response visible for schema-complete observation.
 
+#### Goal ownership and MCP routing
+
+Thread goals are Nori-owned live state. The harness is the authority for their
+objective, status, and continuation lifecycle; an agent's native goal store is
+not interchangeable with that state. The backend-owned `nori-client` MCP server
+is the agent-facing control plane: agents read the goal with `get_goal` from the
+`nori-client` MCP server and change it with `update_goal` from the `nori-client`
+MCP server. Completion uses the exact status `complete`; genuine impasses use
+`blocked`.
+
+This ownership boundary is repeated in the active-goal context, automatic
+continuation prompt, and `nori-client` MCP server instructions. Before ending a
+goal turn, the agent is instructed to read the Nori-owned goal, update it only
+with `update_goal` from the `nori-client` MCP server when complete or blocked,
+and verify the returned status. Native or unqualified `create_goal`, `get_goal`,
+and `update_goal` tools must not control Nori continuation.
+
 #### Request routing
 
 ACP permission requests that require a consumer decision are emitted as
@@ -331,6 +348,9 @@ temp dir is removed.
 - The harness receives a resolved config; it must not reload ambient config
   during launch, resume, or probing.
 - Approval, sandbox, MCP, trust, and shell policy belong to `nori-config`.
+- Nori thread-goal completion is proven only by the Nori-owned status returned
+  by `update_goal` from the `nori-client` MCP server; similarly named native
+  agent tools cannot stop harness continuation.
 - Consumers should correlate raw requests and responses only by the supplied
   ACP `RequestId`.
 

@@ -19,6 +19,8 @@ use ratatui::style::Stylize;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 use std::any::Any;
+use std::path::Path;
+use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
 
 /// Represents an event to display in the conversation history. Returns its
@@ -203,6 +205,35 @@ impl HistoryCell for AgentMessageCell {
 
     fn is_stream_continuation(&self) -> bool {
         !self.is_first_line
+    }
+}
+
+/// A completed assistant message that keeps raw Markdown for width-aware replay.
+#[derive(Debug)]
+pub(crate) struct AgentMarkdownCell {
+    markdown_source: String,
+    cwd: PathBuf,
+}
+
+impl AgentMarkdownCell {
+    pub(crate) fn new(markdown_source: String, cwd: &Path) -> Self {
+        Self {
+            markdown_source,
+            cwd: cwd.to_path_buf(),
+        }
+    }
+}
+
+impl HistoryCell for AgentMarkdownCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        crate::markdown::append_markdown_with_cwd(
+            &self.markdown_source,
+            Some(usize::from(width.saturating_sub(2).max(1))),
+            Some(&self.cwd),
+            &mut lines,
+        );
+        prefix_lines(lines, "• ".dim(), "  ".into())
     }
 }
 
@@ -609,5 +640,41 @@ impl HistoryCell for FinalMessageSeparator {
         } else {
             vec![Line::from_iter(["─".repeat(width as usize).dim()])]
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use insta::assert_snapshot;
+    use pretty_assertions::assert_ne;
+
+    use super::*;
+
+    #[test]
+    fn finalized_agent_markdown_reparses_at_each_width() {
+        let cell = AgentMarkdownCell::new(
+            "A deliberately long paragraph with [a long clickable link](https://example.com/a/very/long/path) before a table.\n\n| Name | Description |\n| --- | --- |\n| resize | a deliberately long explanation |".to_string(),
+            Path::new("/tmp"),
+        );
+
+        let wide = cell.display_lines(80);
+        let narrow = cell.display_lines(36);
+
+        assert_ne!(wide, narrow);
+        assert_snapshot!(
+            wide.iter()
+                .map(Line::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert_snapshot!(
+            narrow
+                .iter()
+                .map(Line::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 }
