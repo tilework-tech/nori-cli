@@ -336,10 +336,17 @@ impl ChatWidget {
     }
 
     pub(super) fn flush_answer_stream_with_separator(&mut self) {
-        if let Some(mut controller) = self.stream_controller.take()
-            && let Some(cell) = controller.finalize()
-        {
-            self.add_boxed_history(cell);
+        if let Some(mut controller) = self.stream_controller.take() {
+            let (cell, source) = controller.finalize();
+            if let Some(cell) = cell {
+                self.add_boxed_history(cell);
+            }
+            if let Some(source) = source {
+                self.app_event_tx.send(AppEvent::ConsolidateAgentMessage {
+                    source,
+                    cwd: self.config.cwd.clone(),
+                });
+            }
         }
     }
 
@@ -585,6 +592,10 @@ impl ChatWidget {
                 self.app_event_tx.send(AppEvent::StopCommitAnimation);
             }
         }
+    }
+
+    pub(crate) fn has_active_agent_stream(&self) -> bool {
+        self.stream_controller.is_some()
     }
 
     #[inline]

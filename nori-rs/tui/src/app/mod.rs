@@ -101,6 +101,7 @@ pub(crate) struct App {
     pub(crate) overlay: Option<Overlay>,
     pub(crate) deferred_history_lines: Vec<Line<'static>>,
     has_emitted_history_lines: bool,
+    pub(crate) transcript_reflow: crate::transcript_reflow::TranscriptReflowState,
 
     pub(crate) enhanced_keys_supported: bool,
     cloud_onboard: bool,
@@ -163,6 +164,7 @@ struct SystemInfoRefreshRequest {
 
 mod config_persistence;
 mod event_handling;
+mod resize_reflow;
 mod session_setup;
 
 impl App {
@@ -245,6 +247,7 @@ impl App {
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
+            transcript_reflow: Default::default(),
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
             pending_update_action: None,

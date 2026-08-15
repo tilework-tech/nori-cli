@@ -68,6 +68,7 @@ impl App {
         &mut self,
         entries: Vec<crate::viewonly_transcript::ViewonlyEntry>,
     ) {
+        use crate::history_cell::AgentMarkdownCell;
         use crate::history_cell::AgentMessageCell;
         use crate::markdown::append_markdown;
         use crate::viewonly_transcript::ViewonlyEntry;
@@ -95,10 +96,7 @@ impl App {
                     ));
                 }
                 ViewonlyEntry::Assistant { content } => {
-                    // Add assistant response with markdown rendering
-                    let mut lines = Vec::new();
-                    append_markdown(&content, None, &mut lines);
-                    let cell = AgentMessageCell::new(lines, true);
+                    let cell = AgentMarkdownCell::new(content, &self.config.cwd);
                     self.chat_widget.add_boxed_history(Box::new(cell));
                 }
                 ViewonlyEntry::Thinking { content } => {

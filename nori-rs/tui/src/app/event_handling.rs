@@ -42,6 +42,9 @@ impl App {
         tui: &mut tui::Tui,
         event: TuiEvent,
     ) -> Result<bool> {
+        if matches!(event, TuiEvent::Draw) {
+            self.handle_resize_reflow_draw(tui)?;
+        }
         if self.overlay.is_some() {
             let _ = self.handle_backtrack_overlay_event(tui, event).await?;
         } else {
@@ -293,6 +296,23 @@ impl App {
                     } else {
                         tui.insert_history_lines(display);
                     }
+                }
+            }
+            AppEvent::ConsolidateAgentMessage { source, cwd } => {
+                let consolidation = crate::transcript_reflow::consolidate_agent_message_cells(
+                    &mut self.transcript_cells,
+                    source,
+                    &cwd,
+                );
+                if let Some((range, replacement)) = consolidation
+                    && let Some(Overlay::Transcript(transcript)) = &mut self.overlay
+                {
+                    transcript.replace_cells(range, replacement);
+                    tui.frame_requester().schedule_frame();
+                }
+                if self.transcript_reflow.take_stream_finish_reflow_needed() {
+                    self.transcript_reflow.schedule_immediate();
+                    tui.frame_requester().schedule_frame();
                 }
             }
             AppEvent::StartCommitAnimation => {
@@ -885,6 +905,9 @@ impl App {
             }
             AppEvent::SetConfigPinnedPlanDrawer(enabled) => {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
+            }
+            AppEvent::SetConfigResizeReflow(enabled) => {
+                self.persist_resize_reflow_setting(enabled, tui).await;
             }
             AppEvent::SetConfigAcpWireRecording(enabled) => {
                 self.persist_acp_wire_recording_setting(enabled).await;
