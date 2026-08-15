@@ -52,6 +52,21 @@ fn read_piped_stdin() -> anyhow::Result<Option<String>> {
     if stdin.is_terminal() {
         return Ok(None);
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+
+        let file_type = std::fs::metadata("/dev/stdin").map(|metadata| metadata.file_type());
+        eprintln!(
+            "[DEBUG-a4f2] stdin is not a terminal: {:?}",
+            file_type.map(|file_type| (
+                file_type.is_char_device(),
+                file_type.is_fifo(),
+                file_type.is_file(),
+                file_type.is_socket(),
+            ))
+        );
+    }
     let mut piped = String::new();
     let read = stdin
         .lock()
