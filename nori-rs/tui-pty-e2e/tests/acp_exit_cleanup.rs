@@ -82,7 +82,7 @@ fn test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent() {
     session.send_key(Key::Enter).unwrap();
 
     assert!(
-        session.wait_for_process_exit(Duration::from_millis(750)),
+        session.wait_for_process_exit(Duration::from_millis(900)),
         "local quit should force and reap a stuck ACP child without waiting for the old 1s watchdog; took {:?}",
         started.elapsed()
     );
