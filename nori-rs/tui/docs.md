@@ -31,7 +31,10 @@ non-HTTP-MCP variant also explains the ACP fallback and unavailable MCP-backed
 affordances. The harness chooses between them from the connected agent's
 reported HTTP MCP capability and injects the selected envelope once. The CLI
 does not add a user identity because authenticated Nori Sessions identity is
-owned outside this layer.
+owned outside this layer. When that first prompt carries active goal context,
+the HTTP-MCP envelope also states that Nori CLI owns the goal and routes reads
+and updates to `get_goal` and `update_goal` from the `nori-client` MCP server,
+never to similarly named native agent tools.
 
 ### Core Implementation
 
