@@ -234,10 +234,10 @@ impl ServerHandler for NoriClientService {
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 ..Default::default()
             },
-            instructions: Some(
-                "Use nori-client resources and prompts for Nori CLI harness context; use tools only for Nori-owned live state."
-                    .to_string(),
-            ),
+            instructions: Some(format!(
+                "Use nori-client resources and prompts for Nori CLI harness context; use tools only for Nori-owned live state.\n\n{}",
+                thread_goal::NORI_GOAL_CONTROL_INSTRUCTIONS
+            )),
         }
     }
 
@@ -745,6 +745,17 @@ mod tests {
             connected.load(Ordering::Relaxed),
             "initialize handshake must flip the connected gate"
         );
+        let instructions = client
+            .peer()
+            .peer_info()
+            .and_then(|info| info.instructions.as_deref())
+            .expect("initialized nori-client instructions");
+        assert!(instructions.contains("Nori CLI is the authoritative owner of this goal state"));
+        assert!(instructions.contains(
+            "Do not use native or unqualified `create_goal`, `get_goal`, or `update_goal` tools"
+        ));
+        assert!(instructions.contains("`get_goal` from the `nori-client` MCP server"));
+        assert!(instructions.contains("`update_goal` from the `nori-client` MCP server"));
 
         let tools = client
             .list_all_tools()
