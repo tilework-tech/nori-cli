@@ -456,6 +456,19 @@ impl TranscriptOverlay {
         }
     }
 
+    pub(crate) fn replace_cells(
+        &mut self,
+        range: std::ops::Range<usize>,
+        replacement: Arc<dyn HistoryCell>,
+    ) {
+        let follow_bottom = self.view.is_scrolled_to_bottom();
+        self.cells.splice(range, std::iter::once(replacement));
+        self.view.renderables = Self::render_cells(&self.cells, self.highlight_cell);
+        if follow_bottom {
+            self.view.scroll_offset = usize::MAX;
+        }
+    }
+
     pub(crate) fn set_highlight_cell(&mut self, cell: Option<usize>) {
         self.highlight_cell = cell;
         self.view.renderables = Self::render_cells(&self.cells, self.highlight_cell);
@@ -763,6 +776,36 @@ mod tests {
         }));
 
         assert_eq!(overlay.view.scroll_offset, 0);
+    }
+
+    #[test]
+    fn transcript_overlay_can_replace_finalized_stream_cells() {
+        let mut overlay = TranscriptOverlay::new(vec![
+            Arc::new(TestCell {
+                lines: vec![Line::from("tool")],
+            }),
+            Arc::new(crate::history_cell::AgentMessageCell::new(
+                vec![Line::from("first")],
+                true,
+            )),
+            Arc::new(crate::history_cell::AgentMessageCell::new(
+                vec![Line::from("second")],
+                false,
+            )),
+        ]);
+        let replacement: Arc<dyn HistoryCell> = Arc::new(
+            crate::history_cell::AgentMarkdownCell::new(
+                "first\nsecond".to_string(),
+                std::path::Path::new("/tmp"),
+            ),
+        );
+
+        overlay.replace_cells(1..3, replacement);
+
+        assert_eq!(overlay.cells.len(), 2);
+        assert!(overlay.cells[1]
+            .as_any()
+            .is::<crate::history_cell::AgentMarkdownCell>());
     }
 
     #[test]

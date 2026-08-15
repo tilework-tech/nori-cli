@@ -10,6 +10,13 @@ async fn persist_acp_wire_recording_config(nori_home: &Path, enabled: bool) -> a
         .await
 }
 
+async fn persist_resize_reflow_config(nori_home: &Path, enabled: bool) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(nori_home)
+        .set_path(&["tui", "resize_reflow"], enabled)
+        .apply()
+        .await
+}
+
 /// Persist a session config option selection as the agent's default model.
 ///
 /// Returns `Ok(true)` only when `config_id` names the agent's Model-category
@@ -301,6 +308,37 @@ impl App {
             .add_info_message(format!("Pinned plan drawer {status}."), None);
         self.chat_widget
             .reopen_settings_focused(SettingsItem::PinnedPlanDrawer);
+    }
+
+    pub(super) async fn persist_resize_reflow_setting(
+        &mut self,
+        enabled: bool,
+        tui: &mut tui::Tui,
+    ) {
+        if let Err(err) = persist_resize_reflow_config(&self.config.nori_home, enabled).await {
+            tracing::error!(error = %err, "failed to persist resize_reflow setting");
+            self.chat_widget
+                .add_error_message(format!("Failed to save resize_reflow setting: {err}"));
+            return;
+        }
+
+        self.config.resize_reflow = enabled;
+        self.sync_runtime_config();
+        if enabled {
+            if let Ok(size) = tui.terminal.size() {
+                self.transcript_reflow
+                    .note_width(size.width, std::time::Instant::now());
+            }
+            self.transcript_reflow.schedule_immediate();
+            tui.frame_requester().schedule_frame();
+        } else {
+            self.transcript_reflow.cancel();
+        }
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("Resize reflow {status}."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::ResizeReflow);
     }
 
     pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
@@ -659,6 +697,20 @@ mod tests {
             message,
             "failed to handle OAuth callback: OAuth token exchange failed: server returned 400"
         );
+    }
+
+    #[tokio::test]
+    async fn resize_reflow_persists_to_the_tui_section() {
+        let temp = TempDir::new().expect("temp home");
+
+        persist_resize_reflow_config(temp.path(), false)
+            .await
+            .expect("persist resize reflow");
+
+        let config = std::fs::read_to_string(temp.path().join("config.toml"))
+            .expect("read config.toml");
+        assert!(config.contains("[tui]"));
+        assert!(config.contains("resize_reflow = false"));
     }
 
     fn session_config_options_with_model() -> Vec<nori_protocol::acp::v1::SessionConfigOption> {

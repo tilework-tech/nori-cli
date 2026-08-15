@@ -206,6 +206,7 @@ impl NoriConfig {
             notify: toml.notify,
             acp_proxy,
             animations: toml.tui.animations.unwrap_or(true),
+            resize_reflow: toml.tui.resize_reflow.unwrap_or(true),
             terminal_notifications: toml
                 .tui
                 .terminal_notifications
@@ -446,6 +447,33 @@ args = ["@example/not-allowed"]
 
         let config = NoriConfig::from_toml(toml, nori_home, overrides).unwrap();
         assert_eq!(config.cwd, custom_cwd);
+    }
+
+    #[test]
+    fn resize_reflow_defaults_to_enabled() {
+        let config = NoriConfig::from_toml(
+            NoriConfigToml::default(),
+            PathBuf::from("/tmp/nori"),
+            NoriConfigOverrides::default(),
+        )
+        .unwrap();
+
+        assert!(config.resize_reflow);
+    }
+
+    #[test]
+    fn resize_reflow_can_be_disabled_in_tui_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+        std::fs::write(
+            &config_path,
+            "[tui]\nresize_reflow = false\n",
+        )
+        .unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        assert!(!config.resize_reflow);
     }
 
     #[test]

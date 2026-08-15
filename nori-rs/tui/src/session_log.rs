@@ -161,11 +161,26 @@ pub(crate) fn log_inbound_app_event(event: &AppEvent) {
                 "ts": now_ts(),
                 "dir": "to_tui",
                 "kind": "app_event",
-                "variant": format!("{other:?}").split('(').next().unwrap_or("app_event"),
+                "variant": app_event_variant(other),
             });
             LOGGER.write_json_line(value);
         }
     }
+}
+
+fn app_event_variant(event: &AppEvent) -> std::borrow::Cow<'static, str> {
+    if matches!(event, AppEvent::ConsolidateAgentMessage { .. }) {
+        return "ConsolidateAgentMessage".into();
+    }
+    let debug = format!("{event:?}");
+    std::borrow::Cow::Owned(
+        debug
+        .split(['(', '{'])
+        .next()
+        .unwrap_or("app_event")
+        .trim()
+        .to_string(),
+    )
 }
 
 pub(crate) fn log_session_end() {
@@ -178,4 +193,23 @@ pub(crate) fn log_session_end() {
         "kind": "session_end",
     });
     LOGGER.write_json_line(value);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn struct_app_event_variant_excludes_debug_fields() {
+        let event = AppEvent::ConsolidateAgentMessage {
+            source: "secret raw Markdown".to_string(),
+            cwd: std::path::PathBuf::from("/secret/cwd"),
+        };
+
+        let variant = app_event_variant(&event);
+
+        assert_eq!(variant, "ConsolidateAgentMessage");
+        assert!(matches!(variant, std::borrow::Cow::Borrowed(_)));
+        assert!(!variant.contains("secret"));
+    }
 }
