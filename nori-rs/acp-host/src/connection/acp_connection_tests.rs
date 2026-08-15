@@ -841,12 +841,30 @@ fn script_agent_config(dir: &std::path::Path, body: &str) -> crate::registry::Ac
 }
 
 #[cfg(unix)]
-async fn wait_for_process_to_disappear(pid: libc::pid_t) -> bool {
+fn process_is_running(pid: libc::pid_t) -> bool {
+    let exists = unsafe { libc::kill(pid, 0) } == 0
+        || std::io::Error::last_os_error().kind() == std::io::ErrorKind::PermissionDenied;
+    if !exists {
+        return false;
+    }
+
+    std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .is_none_or(|output| {
+            !String::from_utf8_lossy(&output.stdout)
+                .trim_start()
+                .starts_with('Z')
+        })
+}
+
+#[cfg(unix)]
+async fn wait_for_process_to_stop(pid: libc::pid_t) -> bool {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
     loop {
-        let exists = unsafe { libc::kill(pid, 0) } == 0
-            || std::io::Error::last_os_error().kind() == std::io::ErrorKind::PermissionDenied;
-        if !exists {
+        if !process_is_running(pid) {
             return true;
         }
         if std::time::Instant::now() >= deadline {
@@ -940,8 +958,8 @@ async fn test_shutdown_sweeps_descendant_after_group_leader_exits() {
         .parse()
         .expect("descendant pid parses");
     assert!(
-        wait_for_process_to_disappear(descendant_pid).await,
-        "descendant process {descendant_pid} survived its ACP group leader"
+        wait_for_process_to_stop(descendant_pid).await,
+        "descendant process {descendant_pid} remained running after its ACP group leader exited"
     );
 }
 
@@ -995,8 +1013,8 @@ async fn test_shutdown_kills_child_that_outlives_grace() {
         .parse()
         .expect("pid parses");
     assert!(
-        wait_for_process_to_disappear(pid).await,
-        "the hung child (pid {pid}) must be killed after the grace period"
+        wait_for_process_to_stop(pid).await,
+        "the hung child (pid {pid}) must stop after the grace period"
     );
 }
 
