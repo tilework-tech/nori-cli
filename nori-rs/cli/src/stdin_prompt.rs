@@ -20,11 +20,11 @@ const MAX_PIPED_BYTES: u64 = 10 * 1024 * 1024;
 
 /// Resolves the prompt from the argument and, only when asked, from piped stdin.
 ///
-/// Stdin is consumed in exactly three cases: there is no prompt argument at all,
-/// the argument is the `-` sentinel, or the caller passed `--stdin`. A plain
-/// prompt argument never touches stdin, so `nori exec "..."` cannot swallow a
-/// pipe it merely inherited from a parent (a `while read` loop, a git hook, a
-/// `curl | bash` script).
+/// Stdin is considered in exactly three cases: there is no prompt argument at
+/// all, the argument is the `-` sentinel, or the caller passed `--stdin`. It is
+/// consumed only when it is not a terminal. A plain prompt argument never
+/// touches stdin, so `nori exec "..."` cannot swallow a pipe it merely inherited
+/// from a parent (a `while read` loop, a git hook, a `curl | bash` script).
 ///
 /// Callers must not invoke this when stdin is reserved for another protocol
 /// (notably `nori exec --acp`, which speaks JSON-RPC over stdin).
