@@ -18,6 +18,10 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
 
+mod table_segments;
+
+pub(crate) use table_segments::committable_prefix_len;
+
 struct MarkdownStyles {
     h1: Style,
     h2: Style,
@@ -103,18 +107,19 @@ pub(crate) fn render_markdown_text_with_width_and_cwd(
     width: Option<usize>,
     cwd: Option<&Path>,
 ) -> Text<'static> {
-    let segments = markdown_segments(input);
+    let segments = table_segments::markdown_segments(input);
     if segments.iter().any(|segment| segment.is_table) {
         let mut lines = Vec::new();
         for segment in segments {
+            let source = &input[segment.range];
             let rendered = if segment.is_table {
-                let mut markdown = codex_tui_components::Markdown::new(segment.source);
+                let mut markdown = codex_tui_components::Markdown::new(source);
                 if let Some(width) = width.and_then(|width| u16::try_from(width).ok()) {
                     markdown = markdown.width(width);
                 }
                 markdown.render_text()
             } else {
-                render_markdown_without_tables(segment.source, width, cwd)
+                render_markdown_without_tables(source, width, cwd)
             };
             lines.extend(rendered.lines);
         }
@@ -134,83 +139,6 @@ fn render_markdown_without_tables(
     let mut w = Writer::new(parser, width, cwd.map(Path::to_path_buf));
     w.run();
     w.text
-}
-
-#[derive(Clone, Copy)]
-struct MarkdownSegment<'a> {
-    source: &'a str,
-    is_table: bool,
-}
-
-fn markdown_segments(input: &str) -> Vec<MarkdownSegment<'_>> {
-    let mut lines = Vec::new();
-    let mut offset = 0;
-    for line in input.split_inclusive('\n') {
-        let start = offset;
-        offset += line.len();
-        lines.push((start, offset, line));
-    }
-    if offset < input.len() {
-        lines.push((offset, input.len(), &input[offset..]));
-    }
-
-    let mut segments = Vec::new();
-    let mut prose_start = 0;
-    let mut index = 0;
-    while index + 1 < lines.len() {
-        let header = lines[index].2.trim();
-        let delimiter = lines[index + 1].2.trim();
-        if !header.contains('|') || !is_table_delimiter(delimiter) {
-            index += 1;
-            continue;
-        }
-
-        let table_start = lines[index].0;
-        if prose_start < table_start {
-            segments.push(MarkdownSegment {
-                source: &input[prose_start..table_start],
-                is_table: false,
-            });
-        }
-        let mut table_end_index = index + 2;
-        while table_end_index < lines.len() {
-            let row = lines[table_end_index].2.trim();
-            if row.is_empty() || !row.contains('|') {
-                break;
-            }
-            table_end_index += 1;
-        }
-        let table_end = lines[table_end_index.saturating_sub(1)].1;
-        segments.push(MarkdownSegment {
-            source: &input[table_start..table_end],
-            is_table: true,
-        });
-        prose_start = table_end;
-        index = table_end_index;
-    }
-    if prose_start < input.len() {
-        segments.push(MarkdownSegment {
-            source: &input[prose_start..],
-            is_table: false,
-        });
-    }
-    if segments.is_empty() {
-        segments.push(MarkdownSegment {
-            source: input,
-            is_table: false,
-        });
-    }
-    segments
-}
-
-fn is_table_delimiter(line: &str) -> bool {
-    let line = line.trim_matches('|');
-    let cells = line.split('|').map(str::trim).collect::<Vec<_>>();
-    !cells.is_empty()
-        && cells.iter().all(|cell| {
-            let rule = cell.trim_start_matches(':').trim_end_matches(':');
-            !rule.is_empty() && rule.chars().all(|character| character == '-')
-        })
 }
 
 struct Writer<'a, I>

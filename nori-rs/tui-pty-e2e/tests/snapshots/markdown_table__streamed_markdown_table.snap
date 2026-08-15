@@ -1,0 +1,19 @@
+---
+source: tui-pty-e2e/tests/markdown_table.rs
+expression: normalize_for_input_snapshot(screen)
+---
+› show me a table
+
+• Here is a table:
+  Situation                            Commit strategy
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Streaming/tail append                Existing incremental insertion
+  ───────────────────────────────────  ──────────────────────────────
+  Width changes                        Debounced full replay
+  ───────────────────────────────────  ──────────────────────────────
+  Rollback/session replacement/resume  Full replay
+  Done.
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approvals: Agent
