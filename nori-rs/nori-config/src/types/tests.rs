@@ -866,6 +866,7 @@ fn test_footer_segment_serialize() {
 fn test_footer_segment_display_name() {
     use pretty_assertions::assert_eq;
     assert_eq!(FooterSegment::PromptSummary.display_name(), "Task Summary");
+    assert_eq!(FooterSegment::SessionTitle.display_name(), "Session Title");
     assert_eq!(FooterSegment::VimMode.display_name(), "Vim Mode");
     assert_eq!(FooterSegment::GitBranch.display_name(), "Git Branch");
     assert_eq!(FooterSegment::WorktreeName.display_name(), "Worktree Name");

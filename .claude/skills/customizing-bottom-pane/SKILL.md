@@ -71,6 +71,7 @@ elsewhere, both can render.
 The current built-in names are:
 
 - `prompt_summary`
+- `session_title`
 - `vim_mode`
 - `git_branch`
 - `worktree_name`
@@ -90,7 +91,9 @@ The current built-in names are:
 
 `context` is the default context indicator and renders like `44% / 272k` when
 both usage and window size are known. The five `context_*` primitives exist for
-standalone placement and custom composition.
+standalone placement and custom composition. `session_title` renders the title
+the agent reports over ACP session-info updates (`Title: Fix login flakes`) and
+self-hides for agents that never send one.
 
 Treat the source as authoritative when working in a Nori CLI checkout:
 

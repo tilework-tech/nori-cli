@@ -1554,6 +1554,22 @@ footer_left = [
     }
 
     #[test]
+    fn footer_session_title_truncates_to_share_the_line() {
+        // The value arriving here is already bounded to MAX_TITLE_DISPLAY_CHARS
+        // (48); the footer caps it again so git, context, and approvals still
+        // fit alongside it.
+        let rendered = render_footer_text(FooterProps {
+            session_title: Some("Continue working toward the active thread goal.".to_string()),
+            git_branch: Some("main".to_string()),
+            ..default_props()
+        });
+        assert!(
+            rendered.contains("Title: Continue working toward…"),
+            "long session titles should truncate in the footer, got:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn footer_with_worktree_name() {
         snapshot_footer(
             "footer_with_worktree_name",
