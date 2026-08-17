@@ -7,6 +7,7 @@ use codex_tui_components::EmptyState;
 use codex_tui_components::KeyHint;
 use codex_tui_components::KeyHints;
 use codex_tui_components::Markdown;
+use codex_tui_components::MenuShortcut;
 use codex_tui_components::MessageLevel;
 use codex_tui_components::Picker;
 use codex_tui_components::PickerAction;
@@ -77,12 +78,24 @@ fn overlay_menu_action(page: Page, key: KeyEvent) -> Option<menu_storybook::Menu
         KeyCode::Char(character) if character.eq_ignore_ascii_case(&'j') => {
             Some(menu_storybook::MenuAction::MoveDown)
         }
-        KeyCode::Char(character) if ('1'..='5').contains(&character) => Some(
-            menu_storybook::MenuAction::InvokeNumber(character as u8 - b'0'),
+        KeyCode::Char('1') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(1),
+        )),
+        KeyCode::Char('2') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(2),
+        )),
+        KeyCode::Char('3') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(3),
+        )),
+        KeyCode::Char('4') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(4),
+        )),
+        KeyCode::Char('5') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(5),
+        )),
+        KeyCode::Char(character) if character.is_ascii_alphabetic() => Some(
+            menu_storybook::MenuAction::InvokeShortcut(MenuShortcut::Character(character)),
         ),
-        KeyCode::Char(character) if character.is_ascii_alphabetic() => {
-            Some(menu_storybook::MenuAction::InvokeCharacter(character))
-        }
         _ => None,
     }
 }
@@ -104,7 +117,7 @@ fn main() -> Result<()> {
     let mut page = Page::default();
     let mut density = PickerDensity::Normal;
     let mut state = picker_state();
-    let mut menu_state = menu_storybook::MenuStoryState::new(menu_storybook::MenuStory::Action);
+    let mut menu_state = menu_storybook::MenuStoryState::new(menu_storybook::MenuStory::Action)?;
     let mut notice = "Resize the terminal to exercise responsive layout".to_string();
 
     loop {
@@ -125,7 +138,7 @@ fn main() -> Result<()> {
                 Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
                 Page::States => render_states(content, frame.buffer_mut(), theme),
                 Page::OverlayMenu => {
-                    menu_storybook::render(content, frame.buffer_mut(), theme, &menu_state)
+                    menu_storybook::render(content, frame.buffer_mut(), theme, &mut menu_state)
                 }
             }
         })?;
@@ -143,8 +156,8 @@ fn main() -> Result<()> {
             }
             match key.code {
                 KeyCode::Esc | KeyCode::Char('q') => break,
-                KeyCode::Tab | KeyCode::Char(']') => menu_state.next_story(),
-                KeyCode::BackTab | KeyCode::Char('[') => menu_state.previous_story(),
+                KeyCode::Tab | KeyCode::Char(']') => menu_state.next_story()?,
+                KeyCode::BackTab | KeyCode::Char('[') => menu_state.previous_story()?,
                 _ => {
                     if let Some(action) = overlay_menu_action(page, key) {
                         menu_state.handle(action);

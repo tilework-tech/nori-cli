@@ -1,8 +1,40 @@
 use super::MenuStory;
-use super::MenuTone;
-use super::PrototypeItem;
-use super::PrototypeMenu;
 use codex_tui_components::KeyHint;
+use codex_tui_components::MenuItem;
+use codex_tui_components::MenuItemTone;
+use codex_tui_components::MenuModelError;
+use codex_tui_components::MenuState;
+
+pub(super) struct MenuPresentation {
+    pub(super) title: &'static str,
+    pub(super) subtitle: Option<&'static str>,
+    pub(super) max_width: u16,
+}
+
+pub(super) fn presentation(story: MenuStory) -> MenuPresentation {
+    match story {
+        MenuStory::Action => MenuPresentation {
+            title: "Choose how to continue",
+            subtitle: Some("Select one action"),
+            max_width: 58,
+        },
+        MenuStory::Shortcuts => MenuPresentation {
+            title: "Choose a session action",
+            subtitle: Some("Shortcuts activate immediately"),
+            max_width: 58,
+        },
+        MenuStory::Narrow => MenuPresentation {
+            title: "Continue",
+            subtitle: Some("Supporting copy disappears at this width"),
+            max_width: 58,
+        },
+        MenuStory::Destructive => MenuPresentation {
+            title: "Remove local session?",
+            subtitle: Some("Remote history will remain available"),
+            max_width: 58,
+        },
+    }
+}
 
 pub(super) fn footer_hints(story: MenuStory) -> Vec<KeyHint<'static>> {
     match story {
@@ -21,78 +53,69 @@ pub(super) fn footer_hints(story: MenuStory) -> Vec<KeyHint<'static>> {
     }
 }
 
-pub(super) fn menu(story: MenuStory) -> PrototypeMenu {
-    match story {
-        MenuStory::Action => PrototypeMenu {
-            title: "Choose how to continue",
-            subtitle: Some("Select one action"),
-            items: vec![
-                PrototypeItem::new("Resume session", "Continue the selected transcript"),
-                PrototypeItem::new("Start a new session", "Create an empty local session"),
-                PrototypeItem::new("Open read-only", "Inspect without changing state"),
-                PrototypeItem::new("Share session", "Unavailable for this session").disabled(),
-            ],
-            selected: 0,
-        },
-        MenuStory::Shortcuts => PrototypeMenu {
-            title: "Choose a session action",
-            subtitle: Some("Shortcuts activate immediately"),
-            items: vec![
-                PrototypeItem::new("Resume session", "Continue the selected transcript")
-                    .mnemonic('r')
-                    .number(1),
-                PrototypeItem::new("Start a new session", "Create an empty local session")
-                    .mnemonic('s')
-                    .number(2),
-                PrototypeItem::new("Inspect transcript", "Open without changing state")
-                    .mnemonic('i')
-                    .number(3),
-                PrototypeItem::new("Archive session", "Move the transcript to local history")
-                    .mnemonic('a')
-                    .number(4),
-                PrototypeItem::new("Share session", "Unavailable for this session")
-                    .number(5)
-                    .disabled(),
-            ],
-            selected: 0,
-        },
-        MenuStory::Narrow => PrototypeMenu {
-            title: "Continue",
-            subtitle: Some("Supporting copy disappears at this width"),
-            items: vec![
-                PrototypeItem::new(
-                    "Resume the selected transcript without changing its history",
-                    "Continue from the most recent complete assistant response",
-                ),
-                PrototypeItem::new(
-                    "Start a new session",
-                    "Create an empty local session in this directory",
-                ),
-                PrototypeItem::new(
-                    "Open read-only",
-                    "Inspect the transcript without changing it",
-                ),
-                PrototypeItem::new("Share session", "Unavailable for this session").disabled(),
-            ],
-            selected: 0,
-        },
-        MenuStory::Destructive => PrototypeMenu {
-            title: "Remove local session?",
-            subtitle: Some("Remote history will remain available"),
-            items: vec![
-                PrototypeItem::new("Keep session", "Return without changing local history"),
-                PrototypeItem::new(
-                    "Delete local transcript",
-                    "This cannot be restored from this machine",
-                )
-                .tone(MenuTone::Destructive),
-                PrototypeItem::new(
-                    "Archive before deleting",
-                    "Review the transcript before removing it",
-                )
-                .tone(MenuTone::Warning),
-            ],
-            selected: 1,
-        },
+pub(super) fn state(story: MenuStory) -> Result<MenuState<&'static str>, MenuModelError> {
+    let items = match story {
+        MenuStory::Action => vec![
+            MenuItem::new("resume", "Resume session")
+                .description("Continue the selected transcript"),
+            MenuItem::new("new", "Start a new session")
+                .description("Create an empty local session"),
+            MenuItem::new("inspect", "Open read-only")
+                .description("Inspect without changing state"),
+            MenuItem::new("share", "Share session")
+                .description("Unavailable for this session")
+                .disabled(true),
+        ],
+        MenuStory::Shortcuts => vec![
+            MenuItem::new("resume", "Resume session")
+                .description("Continue the selected transcript")
+                .mnemonic('r')
+                .number_shortcut(1),
+            MenuItem::new("new", "Start a new session")
+                .description("Create an empty local session")
+                .mnemonic('s')
+                .number_shortcut(2),
+            MenuItem::new("inspect", "Inspect transcript")
+                .description("Open without changing state")
+                .mnemonic('i')
+                .number_shortcut(3),
+            MenuItem::new("archive", "Archive session")
+                .description("Move the transcript to local history")
+                .mnemonic('a')
+                .number_shortcut(4),
+            MenuItem::new("share", "Share session")
+                .description("Unavailable for this session")
+                .number_shortcut(5)
+                .disabled(true),
+        ],
+        MenuStory::Narrow => vec![
+            MenuItem::new(
+                "resume",
+                "Resume the selected transcript without changing its history",
+            )
+            .description("Continue from the most recent complete assistant response"),
+            MenuItem::new("new", "Start a new session")
+                .description("Create an empty local session in this directory"),
+            MenuItem::new("inspect", "Open read-only")
+                .description("Inspect the transcript without changing it"),
+            MenuItem::new("share", "Share session")
+                .description("Unavailable for this session")
+                .disabled(true),
+        ],
+        MenuStory::Destructive => vec![
+            MenuItem::new("keep", "Keep session")
+                .description("Return without changing local history"),
+            MenuItem::new("delete", "Delete local transcript")
+                .description("This cannot be restored from this machine")
+                .tone(MenuItemTone::Destructive),
+            MenuItem::new("archive", "Archive before deleting")
+                .description("Review the transcript before removing it")
+                .tone(MenuItemTone::Warning),
+        ],
+    };
+    let mut state = MenuState::try_new(items)?;
+    if matches!(story, MenuStory::Destructive) {
+        let _ = state.select_key(&"delete");
     }
+    Ok(state)
 }

@@ -7,6 +7,9 @@ event collection, update loops, and command dispatch.
 
 The v0 surface contains:
 
+- a centered selectable overlay menu for bounded action sets, with stable
+  typed keys, validated explicit shortcuts, disabled and consequence states,
+  responsive two-row items, and typed interaction outcomes;
 - a configurable searchable picker with responsive columns, tabs, details,
   single/toggle/multi modes, and explicit loading/empty/error states;
 - width-aware Markdown rendering with adaptive table layouts;
@@ -21,8 +24,8 @@ Run the storybook examples from `nori-rs/`:
 cargo run -p codex-tui-components --example nori_storybook
 ```
 
-The canonical storybook contains Picker, Markdown, Primitives, States, and an
-overlay-menu visual prototype. Use `1-5` to change page, `d` to switch picker
+The canonical storybook contains Picker, Markdown, Primitives, States, and the
+production Overlay menu. Use `1-5` to change page, `d` to switch picker
 density, and `Tab`/`Shift-Tab` to compare overlay-menu states. While the overlay
 page is active, use arrows or `j`/`k` to move, `Enter` to activate, and `1-5` or
 `r`/`s`/`i`/`a` to invoke displayed shortcuts. Overlay shortcuts take precedence

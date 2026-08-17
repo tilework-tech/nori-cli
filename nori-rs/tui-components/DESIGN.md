@@ -46,6 +46,79 @@ as they move into this crate.
 20. Mark search with a text magnifying-glass character, not an emoji. Shade
     only the editable input region after the marker.
 
+## Overlay menus
+
+An overlay menu is a bounded list of actions, not a picker with different
+placement. Use a picker for search and filtering across potentially large data
+sets. Use an overlay menu when the choices are few enough to scan directly.
+
+The reusable menu boundary is deliberately narrow:
+
+- The consumer owns terminal initialization and restoration, raw input and its
+  mapping to `MenuAction`, event polling, render cadence, application actions
+  and routing, focus and modal stacks, confirmation policy, asynchronous work,
+  and persistence.
+- `MenuState` owns only validated items, the selected item, and menu-local
+  viewport position. `MenuOutcome` reports selection, activation, or
+  cancellation through the caller's stable item key; it never dispatches an
+  application event.
+- `OverlayMenu` receives a caller-owned `Rect`, centers a bounded surface
+  within that rectangle, and updates only the viewport bookkeeping needed to
+  keep selection visible. It does not assume that the rectangle is the whole
+  terminal.
+
+Overlay menus follow these interaction rules:
+
+1. Navigation wraps and skips disabled items. Empty and all-disabled menus have
+   no selection, and disabled items cannot be activated by selection or a
+   shortcut.
+2. Character mnemonics are explicit ASCII letters, match the first visible
+   character of the label case-insensitively, and are rendered in bold without
+   changing the label. Number shortcuts are explicit values from `1` through
+   `9` and appear in one aligned column when any item has one.
+3. Stable keys and both shortcut families are unique across the complete menu,
+   including disabled items. An item may expose both shortcut kinds; either
+   activates that item immediately. The consumer's raw-key adapter decides
+   whether an input is navigation, a character mnemonic, or a number shortcut,
+   so no additional precedence exists inside the component.
+4. Consequence tones color an unselected item's identity. Selection always
+   uses the primary accent, even for warning and destructive actions.
+
+Overlay menu layout responds to the caller's rectangle:
+
+- The centered surface is at most 58 cells wide by default and never exceeds
+  the supplied rectangle. Widths of at least 34 cells reserve a two-cell outer
+  margin; narrower rectangles surrender that margin before truncating primary
+  labels. The title is retained whenever any content can render.
+- Supporting subtitles require at least 40 content cells and a height of 14
+  rows. They disappear before labels or item descriptions when space is tight.
+- Descriptions wrap by Unicode display width to at most two rows. Structured
+  labels and cells truncate with an ellipsis only when they cannot fit. A blank
+  row separates menu items; items without descriptions reserve equivalent
+  vertical rhythm.
+- Content-derived height is capped by the caller's height. When the list does
+  not fit, the selected item remains visible and muted top or bottom overflow
+  markers communicate that more items exist.
+- Key hints remain centered at the bottom of the surface and use at most two
+  rows. Their height is clamped to the content remaining below the title, so
+  even tiny caller rectangles with non-zero origins stay within bounds.
+  Header, list, and footer spacing compress before essential content is
+  removed.
+
+The overlay may shade only the caller-provided area. `backdrop` and
+`menu_surface` are terminal-relative neutral theme tokens: derive them from a
+reported RGB terminal background only when true-color support is known. Leave
+their backgrounds unset otherwise. Never replace them with indexed grays. A
+selected item fills its complete rendered height and padding with the selected
+neutral surface, then receives matching one-cell thin accent rails on both
+edges. Ordinary rows use the menu surface; they are not zebra striped.
+
+There is intentionally no public `SelectableListState` abstraction. The menu
+and picker both expose caller-held state and typed outcomes, but their
+navigation, filtering, layout, and activation semantics are not yet a proven
+shared consumer boundary. Handroll informed the overlay's interaction and
+information design; adopting it there remains separate consumer work.
+
 ## Details and copy
 
 21. Render metadata as an aligned definition list: right-aligned label gutter,
@@ -71,6 +144,9 @@ Run the single full-screen design reference from `nori-rs/`:
 cargo run -p codex-tui-components --example nori_storybook
 ```
 
-The Picker, Markdown, Primitives, and States pages are the visual acceptance
-target for this crate. The example owns its event loop and uses production
-components only.
+The Picker, Markdown, Primitives, States, and Overlay menu pages are the visual
+acceptance target for this crate. Page `5` is interactive: use arrows or
+`j`/`k` to move, `Enter` to activate, `Tab`/`Shift-Tab` to change the menu case,
+and the displayed number or character shortcuts to invoke actions. The example
+owns its terminal and event loop, adapts raw keys to domain-free actions, and
+uses production components only.
