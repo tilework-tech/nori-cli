@@ -94,6 +94,22 @@ pub enum LabelWidth {
     Fixed(u16),
 }
 
+/// Which neutral surface layer the pane paints inside its caller-owned area.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DetailBackground {
+    /// Leave the caller's background untouched.
+    Transparent,
+    /// Shade the complete pane area.
+    #[default]
+    Pane,
+    /// Shade only the optional heading row.
+    Heading,
+    /// Shade only the label gutter and separator column.
+    LabelGutter,
+    /// Shade each key-value row, including wrapped continuation lines.
+    Rows,
+}
+
 impl Default for LabelWidth {
     fn default() -> Self {
         Self::Auto { max: 14 }
@@ -106,6 +122,7 @@ pub struct DetailPane<'a> {
     heading: Option<Line<'static>>,
     theme: Theme,
     label_width: LabelWidth,
+    background: DetailBackground,
 }
 
 impl<'a> DetailPane<'a> {
@@ -115,6 +132,7 @@ impl<'a> DetailPane<'a> {
             heading: None,
             theme: Theme::default(),
             label_width: LabelWidth::default(),
+            background: DetailBackground::default(),
         }
     }
 
@@ -132,6 +150,11 @@ impl<'a> DetailPane<'a> {
         self.label_width = label_width;
         self
     }
+
+    pub fn background(mut self, background: DetailBackground) -> Self {
+        self.background = background;
+        self
+    }
 }
 
 impl Widget for DetailPane<'_> {
@@ -139,9 +162,17 @@ impl Widget for DetailPane<'_> {
         if area.width < 4 || area.height == 0 {
             return;
         }
-        buf.set_style(area, self.theme.detail_surface);
+        if self.background == DetailBackground::Pane {
+            buf.set_style(area, self.theme.detail_surface);
+        }
         let mut y = area.y;
         if let Some(heading) = self.heading {
+            if self.background == DetailBackground::Heading {
+                buf.set_style(
+                    Rect::new(area.x, y, area.width, 1),
+                    self.theme.detail_surface,
+                );
+            }
             Paragraph::new(heading)
                 .style(self.theme.title)
                 .render(Rect::new(area.x, y, area.width, 1), buf);
@@ -168,6 +199,26 @@ impl Widget for DetailPane<'_> {
                     tone,
                     wrap,
                 } => {
+                    let value_width = area.width.saturating_sub(gutter).saturating_sub(3);
+                    let row_height = if *wrap {
+                        line_height(value, value_width as usize)
+                    } else {
+                        1
+                    }
+                    .min(area.bottom().saturating_sub(y));
+                    match self.background {
+                        DetailBackground::LabelGutter => buf.set_style(
+                            Rect::new(area.x, y, gutter.saturating_add(2), row_height),
+                            self.theme.detail_surface,
+                        ),
+                        DetailBackground::Rows => buf.set_style(
+                            Rect::new(area.x, y, area.width, row_height),
+                            self.theme.detail_surface,
+                        ),
+                        DetailBackground::Transparent
+                        | DetailBackground::Pane
+                        | DetailBackground::Heading => {}
+                    }
                     let label = pad_left(&truncate(label, gutter as usize), gutter as usize);
                     buf.set_string(area.x, y, label, self.theme.muted);
                     let separator_x = area.x.saturating_add(gutter).saturating_add(1);
@@ -188,11 +239,7 @@ impl Widget for DetailPane<'_> {
                         .style(tone_style(*tone, self.theme))
                         .wrap(ratatui::widgets::Wrap { trim: false })
                         .render(value_area, buf);
-                    y = y.saturating_add(if *wrap {
-                        line_height(value, value_width as usize).min(value_area.height)
-                    } else {
-                        1
-                    });
+                    y = y.saturating_add(row_height);
                 }
             }
         }

@@ -63,6 +63,10 @@ key handling, loading, routing, and application actions. It intentionally does
 not make breakpoints or overlay decisions. Handroll adoption is deferred to a
 separate consumer migration.
 
+Callers may choose a transparent pane, a complete neutral pane surface, or a
+smaller heading, label-gutter, or row surface. These are presentation layers
+only; the caller still owns the surrounding page and placement.
+
 ## Verification
 
 25. Snapshot every component at representative wide and narrow widths.
