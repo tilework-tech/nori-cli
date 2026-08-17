@@ -2,6 +2,24 @@ use super::MenuStory;
 use super::MenuTone;
 use super::PrototypeItem;
 use super::PrototypeMenu;
+use codex_tui_components::KeyHint;
+
+pub(super) fn footer_hints(story: MenuStory) -> Vec<KeyHint<'static>> {
+    match story {
+        MenuStory::Shortcuts => vec![
+            KeyHint::new("1-5/r,s,i,a", "activate"),
+            KeyHint::new("↑↓/jk", "move"),
+            KeyHint::new("tab", "example"),
+            KeyHint::new("q", "close"),
+        ],
+        MenuStory::Action | MenuStory::Narrow | MenuStory::Destructive => vec![
+            KeyHint::new("↑↓/jk", "move"),
+            KeyHint::new("enter", "select"),
+            KeyHint::new("tab", "example"),
+            KeyHint::new("q", "close"),
+        ],
+    }
+}
 
 pub(super) fn menu(story: MenuStory) -> PrototypeMenu {
     match story {
@@ -24,14 +42,15 @@ pub(super) fn menu(story: MenuStory) -> PrototypeMenu {
                     .mnemonic('r')
                     .number(1),
                 PrototypeItem::new("Start a new session", "Create an empty local session")
+                    .mnemonic('s')
                     .number(2),
                 PrototypeItem::new("Inspect transcript", "Open without changing state")
-                    .mnemonic('i'),
+                    .mnemonic('i')
+                    .number(3),
                 PrototypeItem::new("Archive session", "Move the transcript to local history")
                     .mnemonic('a')
                     .number(4),
                 PrototypeItem::new("Share session", "Unavailable for this session")
-                    .mnemonic('s')
                     .number(5)
                     .disabled(),
             ],

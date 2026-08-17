@@ -23,8 +23,11 @@ cargo run -p codex-tui-components --example nori_storybook
 
 The canonical storybook contains Picker, Markdown, Primitives, States, and an
 overlay-menu visual prototype. Use `1-5` to change page, `d` to switch picker
-density, and `a`/`s`/`n`/`d` to compare overlay-menu states. The focused examples
-remain useful while developing one component:
+density, and `Tab`/`Shift-Tab` to compare overlay-menu states. While the overlay
+page is active, use arrows or `j`/`k` to move, `Enter` to activate, and `1-5` or
+`r`/`s`/`i`/`a` to invoke displayed shortcuts. Overlay shortcuts take precedence
+over numbered page navigation; use left/right arrows to leave the overlay page.
+The focused examples remain useful while developing one component:
 
 ```console
 cargo run -p codex-tui-components --example picker_storybook

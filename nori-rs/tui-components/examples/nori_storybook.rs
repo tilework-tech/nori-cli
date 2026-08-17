@@ -63,13 +63,48 @@ enum Page {
     OverlayMenu,
 }
 
+fn overlay_menu_action(page: Page, key: KeyEvent) -> Option<menu_storybook::MenuAction> {
+    if page != Page::OverlayMenu {
+        return None;
+    }
+    match key.code {
+        KeyCode::Up => Some(menu_storybook::MenuAction::MoveUp),
+        KeyCode::Down => Some(menu_storybook::MenuAction::MoveDown),
+        KeyCode::Enter => Some(menu_storybook::MenuAction::ActivateSelected),
+        KeyCode::Char(character) if character.eq_ignore_ascii_case(&'k') => {
+            Some(menu_storybook::MenuAction::MoveUp)
+        }
+        KeyCode::Char(character) if character.eq_ignore_ascii_case(&'j') => {
+            Some(menu_storybook::MenuAction::MoveDown)
+        }
+        KeyCode::Char(character) if ('1'..='5').contains(&character) => Some(
+            menu_storybook::MenuAction::InvokeNumber(character as u8 - b'0'),
+        ),
+        KeyCode::Char(character) if character.is_ascii_alphabetic() => {
+            Some(menu_storybook::MenuAction::InvokeCharacter(character))
+        }
+        _ => None,
+    }
+}
+
+fn overlay_page_navigation(page: Page, key: KeyEvent) -> Option<Page> {
+    if page != Page::OverlayMenu {
+        return None;
+    }
+    match key.code {
+        KeyCode::Left => Some(Page::States),
+        KeyCode::Right => Some(Page::Picker),
+        _ => None,
+    }
+}
+
 fn main() -> Result<()> {
     let mut terminal = StorybookTerminal::enter()?;
     let theme = terminal.theme;
     let mut page = Page::default();
     let mut density = PickerDensity::Normal;
     let mut state = picker_state();
-    let mut menu_story = menu_storybook::MenuStory::Action;
+    let mut menu_state = menu_storybook::MenuStoryState::new(menu_storybook::MenuStory::Action);
     let mut notice = "Resize the terminal to exercise responsive layout".to_string();
 
     loop {
@@ -90,7 +125,7 @@ fn main() -> Result<()> {
                 Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
                 Page::States => render_states(content, frame.buffer_mut(), theme),
                 Page::OverlayMenu => {
-                    menu_storybook::render(content, frame.buffer_mut(), theme, menu_story)
+                    menu_storybook::render(content, frame.buffer_mut(), theme, &menu_state)
                 }
             }
         })?;
@@ -101,6 +136,23 @@ fn main() -> Result<()> {
         if key.kind != KeyEventKind::Press {
             continue;
         }
+        if page == Page::OverlayMenu {
+            if let Some(next_page) = overlay_page_navigation(page, key) {
+                page = next_page;
+                continue;
+            }
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => break,
+                KeyCode::Tab | KeyCode::Char(']') => menu_state.next_story(),
+                KeyCode::BackTab | KeyCode::Char('[') => menu_state.previous_story(),
+                _ => {
+                    if let Some(action) = overlay_menu_action(page, key) {
+                        menu_state.handle(action);
+                    }
+                }
+            }
+            continue;
+        }
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => break,
             KeyCode::Char('1') => page = Page::Picker,
@@ -108,18 +160,6 @@ fn main() -> Result<()> {
             KeyCode::Char('3') => page = Page::Primitives,
             KeyCode::Char('4') => page = Page::States,
             KeyCode::Char('5') => page = Page::OverlayMenu,
-            KeyCode::Char('a') if page == Page::OverlayMenu => {
-                menu_story = menu_storybook::MenuStory::Action;
-            }
-            KeyCode::Char('s') if page == Page::OverlayMenu => {
-                menu_story = menu_storybook::MenuStory::Shortcuts;
-            }
-            KeyCode::Char('n') if page == Page::OverlayMenu => {
-                menu_story = menu_storybook::MenuStory::Narrow;
-            }
-            KeyCode::Char('d') if page == Page::OverlayMenu => {
-                menu_story = menu_storybook::MenuStory::Destructive;
-            }
             KeyCode::Char('d') if page == Page::Picker => {
                 density = match density {
                     PickerDensity::Compact => PickerDensity::Normal,
@@ -169,6 +209,18 @@ fn main() -> Result<()> {
 
 fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, theme: Theme) {
     Block::default().style(theme.surface).render(area, buf);
+    if page == Page::OverlayMenu {
+        Paragraph::new(Line::from(vec![
+            Span::styled("← previous page", theme.muted),
+            Span::raw("   "),
+            Span::styled("Overlay menu", theme.accent),
+            Span::raw("   "),
+            Span::styled("next page →", theme.muted),
+        ]))
+        .alignment(Alignment::Center)
+        .render(Rect::new(area.x, area.y, area.width, 1), buf);
+        return;
+    }
     let labels = [
         (Page::Picker, "1 Picker"),
         (Page::Markdown, "2 Markdown"),
@@ -443,3 +495,7 @@ fn picker_state() -> PickerState<String> {
         .categories(["Local", "Cloud"])
         .search_placeholder("Title, project, or session id")
 }
+
+#[cfg(test)]
+#[path = "nori_storybook/navigation_tests.rs"]
+mod navigation_tests;

@@ -3,8 +3,12 @@
 //! The production component will replace this module after visual approval.
 
 mod fixtures;
+#[path = "menu_storybook/state.rs"]
+mod state;
 
-use codex_tui_components::KeyHint;
+pub(super) use state::MenuAction;
+pub(super) use state::MenuStoryState;
+
 use codex_tui_components::KeyHints;
 use codex_tui_components::Theme;
 use ratatui::buffer::Buffer;
@@ -84,21 +88,24 @@ struct PrototypeMenu {
     selected: usize,
 }
 
-pub(super) fn render(area: Rect, buf: &mut Buffer, theme: Theme, story: MenuStory) {
-    render_host(area, buf, theme, story);
-    let caller_area = match story {
+pub(super) fn render(area: Rect, buf: &mut Buffer, theme: Theme, state: &MenuStoryState) {
+    render_host(area, buf, theme, state);
+    let caller_area = match state.story() {
         MenuStory::Narrow => centered(area, area.width.min(30), area.height.min(12)),
         MenuStory::Action | MenuStory::Shortcuts | MenuStory::Destructive => area,
     };
-    render_overlay(caller_area, buf, theme, story, fixtures::menu(story));
+    let mut menu = fixtures::menu(state.story());
+    menu.selected = state.selected_index();
+    let subtitle = state.notice().or(menu.subtitle);
+    render_overlay(caller_area, buf, theme, state.story(), subtitle, menu);
 }
 
-fn render_host(area: Rect, buf: &mut Buffer, theme: Theme, story: MenuStory) {
+fn render_host(area: Rect, buf: &mut Buffer, theme: Theme, state: &MenuStoryState) {
     Block::default().style(theme.surface).render(area, buf);
     if area.width < 60 {
         return;
     }
-    let story_name = match story {
+    let story_name = match state.story() {
         MenuStory::Action => "centered action",
         MenuStory::Shortcuts => "shortcut-heavy",
         MenuStory::Narrow => "30x12 caller area",
@@ -112,11 +119,8 @@ fn render_host(area: Rect, buf: &mut Buffer, theme: Theme, story: MenuStory) {
             ),
             Span::styled(format!("  {story_name}"), theme.muted),
         ]),
-        Line::styled(
-            "a action   s shortcuts   n narrow   d destructive",
-            theme.muted,
-        ),
-        Line::default(),
+        Line::styled("tab next example   shift-tab previous example", theme.muted),
+        Line::styled(state.notice().unwrap_or_default(), theme.accent),
         Line::styled("Session transcript", theme.text),
         Line::styled("[host] transcript remains beneath the overlay", theme.muted),
         Line::styled("[host] status stays visible outside the menu", theme.muted),
@@ -129,6 +133,7 @@ fn render_overlay(
     buf: &mut Buffer,
     theme: Theme,
     story: MenuStory,
+    subtitle: Option<&str>,
     menu: PrototypeMenu,
 ) {
     if area.width == 0 || area.height == 0 {
@@ -143,20 +148,25 @@ fn render_overlay(
     let surface_width = area.width.saturating_sub(outer_margin * 2).min(58);
     let content_width = surface_width.saturating_sub(4);
     let show_subtitle = content_width >= 40 && area.height >= 14;
-    let subtitle_rows = menu
-        .subtitle
+    let subtitle_rows = subtitle
         .filter(|_| show_subtitle)
         .map(|subtitle| wrap_lines(subtitle, content_width, 2).len() as u16)
         .unwrap_or(0);
     let vertical_padding = u16::from(area.height >= 16);
     let gap = u16::from(area.height >= 14);
-    let footer_rows = if content_width < 40 { 2 } else { 1 };
+    let footer_rows = if content_width < 40 || matches!(story, MenuStory::Shortcuts) {
+        2
+    } else {
+        1
+    };
     let item_heights = item_heights(&menu, content_width);
+    let item_gaps = menu.items.len().saturating_sub(1) as u16;
     let desired_height = vertical_padding * 2
         + 1
         + subtitle_rows
         + gap
         + item_heights.iter().sum::<u16>()
+        + item_gaps
         + gap
         + footer_rows;
     let vertical_margin = u16::from(area.height >= 18);
@@ -182,7 +192,7 @@ fn render_overlay(
         .style(theme.text.add_modifier(Modifier::BOLD))
         .render(Rect::new(content.x, content.y, content.width, 1), buf);
     if subtitle_rows > 0
-        && let Some(subtitle) = menu.subtitle
+        && let Some(subtitle) = subtitle
     {
         let lines = wrap_lines(subtitle, content.width, 2)
             .into_iter()
@@ -210,10 +220,12 @@ fn render_overlay(
         &menu,
         &item_heights,
     );
-    KeyHints::new(footer_hints(story)).theme(theme).render(
-        Rect::new(content.x, footer_y, content.width, footer_rows),
-        buf,
-    );
+    KeyHints::new(fixtures::footer_hints(story))
+        .theme(theme)
+        .render(
+            Rect::new(content.x, footer_y, content.width, footer_rows),
+            buf,
+        );
 }
 
 fn render_items(
@@ -226,25 +238,39 @@ fn render_items(
     if area.height == 0 || menu.items.is_empty() {
         return;
     }
-    let mut end = 0;
-    let mut used = 0;
-    while end < menu.items.len() {
-        let height = item_heights[end];
-        let bottom_marker = u16::from(end + 1 < menu.items.len());
-        if used + height + bottom_marker > area.height {
-            break;
-        }
-        used += height;
+    let mut start = 0;
+    let mut end = menu.selected.saturating_add(1).min(menu.items.len());
+    while start < menu.selected
+        && window_height(start, end, item_heights, menu.items.len()) > area.height
+    {
+        start += 1;
+    }
+    while end < menu.items.len()
+        && window_height(start, end + 1, item_heights, menu.items.len()) <= area.height
+    {
         end += 1;
     }
-    if end == 0 {
-        end += 1;
+    while start > 0 && window_height(start - 1, end, item_heights, menu.items.len()) <= area.height
+    {
+        start -= 1;
     }
 
-    let show_bottom_marker = end < menu.items.len() && area.height > 1;
-    let items_bottom = area.bottom().saturating_sub(u16::from(show_bottom_marker));
+    let show_top_marker = start > 0 && area.height > 2;
+    let show_bottom_marker =
+        end < menu.items.len() && area.height.saturating_sub(u16::from(show_top_marker)) > 1;
     let mut y = area.y;
-    for (item_index, item) in menu.items[..end].iter().enumerate() {
+    if show_top_marker {
+        Paragraph::new(format!("↑ {start} more"))
+            .style(theme.muted)
+            .render(Rect::new(area.x, y, area.width, 1), buf);
+        y = y.saturating_add(1);
+    }
+    let items_bottom = area.bottom().saturating_sub(u16::from(show_bottom_marker));
+    for (offset, item_index) in (start..end).enumerate() {
+        if offset > 0 {
+            y = y.saturating_add(1).min(items_bottom);
+        }
+        let item = &menu.items[item_index];
         let height = item_heights[item_index].min(items_bottom.saturating_sub(y));
         render_item(
             Rect::new(area.x, y, area.width, height),
@@ -266,6 +292,13 @@ fn render_items(
     }
 }
 
+fn window_height(start: usize, end: usize, item_heights: &[u16], item_count: usize) -> u16 {
+    item_heights[start..end].iter().sum::<u16>()
+        + end.saturating_sub(start + 1) as u16
+        + u16::from(start > 0)
+        + u16::from(end < item_count)
+}
+
 fn render_item(
     area: Rect,
     buf: &mut Buffer,
@@ -285,7 +318,7 @@ fn render_item(
             .map_or_else(Style::new, |background| Style::new().bg(background));
         buf.set_style(area, selection_surface);
         for y in area.y..area.bottom() {
-            Paragraph::new("▎")
+            Paragraph::new("▏")
                 .style(theme.accent)
                 .render(Rect::new(area.x, y, 1, 1), buf);
             Paragraph::new("▕")
@@ -393,21 +426,6 @@ fn item_heights(menu: &PrototypeMenu, content_width: u16) -> Vec<u16> {
         .collect()
 }
 
-fn footer_hints(story: MenuStory) -> Vec<KeyHint<'static>> {
-    match story {
-        MenuStory::Shortcuts => vec![
-            KeyHint::new("1-5/a-z", "activate"),
-            KeyHint::new("↑↓", "move"),
-            KeyHint::new("q", "close"),
-        ],
-        MenuStory::Action | MenuStory::Narrow | MenuStory::Destructive => vec![
-            KeyHint::new("↑↓", "move"),
-            KeyHint::new("enter", "select"),
-            KeyHint::new("q", "close"),
-        ],
-    }
-}
-
 fn wrap_lines(text: &str, width: u16, maximum: u16) -> Vec<String> {
     if width == 0 || maximum == 0 {
         return Vec::new();
@@ -465,3 +483,7 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
         height.min(area.height),
     )
 }
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;
