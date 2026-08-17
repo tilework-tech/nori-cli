@@ -11,6 +11,8 @@ pub struct Theme {
     pub text: Style,
     pub muted: Style,
     pub accent: Style,
+    pub backdrop: Style,
+    pub menu_surface: Style,
     pub surface: Style,
     pub input: Style,
     pub row: Style,
@@ -37,6 +39,8 @@ impl Default for Theme {
             text: Style::new(),
             muted: Style::new().fg(Color::DarkGray),
             accent: Style::new().fg(Color::Cyan),
+            backdrop: Style::new(),
+            menu_surface: Style::new(),
             surface: Style::new(),
             input: Style::new(),
             row: Style::new(),
@@ -74,6 +78,8 @@ impl Theme {
             return theme;
         };
 
+        theme.backdrop = theme.backdrop.bg(relative_surface(background, 4));
+        theme.menu_surface = theme.menu_surface.bg(relative_surface(background, 8));
         theme.row = theme.row.bg(relative_surface(background, 4));
         theme.row_alt = theme.row_alt.bg(relative_surface(background, 7));
         theme.input = theme.input.bg(relative_surface(background, 8));

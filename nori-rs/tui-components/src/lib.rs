@@ -6,6 +6,7 @@
 
 pub mod detail;
 pub mod markdown;
+pub mod menu;
 pub mod picker;
 pub mod primitives;
 pub mod theme;
@@ -17,6 +18,14 @@ pub use detail::LabelWidth;
 pub use detail::ProviderKind;
 pub use markdown::Markdown;
 pub use markdown::StreamingMarkdown;
+pub use menu::MenuAction;
+pub use menu::MenuItem;
+pub use menu::MenuItemTone;
+pub use menu::MenuModelError;
+pub use menu::MenuOutcome;
+pub use menu::MenuShortcut;
+pub use menu::MenuState;
+pub use menu::OverlayMenu;
 pub use picker::Picker;
 pub use picker::PickerAction;
 pub use picker::PickerColumn;

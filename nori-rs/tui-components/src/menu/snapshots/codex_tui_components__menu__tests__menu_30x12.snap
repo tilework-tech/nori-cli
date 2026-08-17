@@ -1,0 +1,16 @@
+---
+source: tui-components/src/menu/tests.rs
+expression: rendered
+---
+"  Continue                    "
+"  ↑ 2 more                    "
+"  ▏ Open read-only         ▕  "
+"  ▏ Supporting copy for    ▕  "
+"  ▏ Open read-only         ▕  "
+"                              "
+"    Share session             "
+"    Supporting copy for       "
+"    Share session             "
+"                              "
+"   ↑↓/jk move  enter select   "
+"            q close           "

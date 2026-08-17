@@ -1,3 +1,5 @@
+#[path = "nori_storybook/menu_storybook.rs"]
+mod menu_storybook;
 mod support;
 
 use anyhow::Result;
@@ -8,6 +10,7 @@ use codex_tui_components::EmptyState;
 use codex_tui_components::KeyHint;
 use codex_tui_components::KeyHints;
 use codex_tui_components::Markdown;
+use codex_tui_components::MenuShortcut;
 use codex_tui_components::MessageLevel;
 use codex_tui_components::Picker;
 use codex_tui_components::PickerAction;
@@ -63,6 +66,54 @@ enum Page {
     Primitives,
     States,
     Details,
+    OverlayMenu,
+}
+
+fn overlay_menu_action(page: Page, key: KeyEvent) -> Option<menu_storybook::MenuAction> {
+    if page != Page::OverlayMenu {
+        return None;
+    }
+    match key.code {
+        KeyCode::Up => Some(menu_storybook::MenuAction::MoveUp),
+        KeyCode::Down => Some(menu_storybook::MenuAction::MoveDown),
+        KeyCode::Enter => Some(menu_storybook::MenuAction::ActivateSelected),
+        KeyCode::Char(character) if character.eq_ignore_ascii_case(&'k') => {
+            Some(menu_storybook::MenuAction::MoveUp)
+        }
+        KeyCode::Char(character) if character.eq_ignore_ascii_case(&'j') => {
+            Some(menu_storybook::MenuAction::MoveDown)
+        }
+        KeyCode::Char('1') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(1),
+        )),
+        KeyCode::Char('2') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(2),
+        )),
+        KeyCode::Char('3') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(3),
+        )),
+        KeyCode::Char('4') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(4),
+        )),
+        KeyCode::Char('5') => Some(menu_storybook::MenuAction::InvokeShortcut(
+            MenuShortcut::Number(5),
+        )),
+        KeyCode::Char(character) if character.is_ascii_alphabetic() => Some(
+            menu_storybook::MenuAction::InvokeShortcut(MenuShortcut::Character(character)),
+        ),
+        _ => None,
+    }
+}
+
+fn overlay_page_navigation(page: Page, key: KeyEvent) -> Option<Page> {
+    if page != Page::OverlayMenu {
+        return None;
+    }
+    match key.code {
+        KeyCode::Left => Some(Page::Details),
+        KeyCode::Right => Some(Page::Picker),
+        _ => None,
+    }
 }
 
 fn main() -> Result<()> {
@@ -71,6 +122,7 @@ fn main() -> Result<()> {
     let mut page = Page::default();
     let mut density = PickerDensity::Normal;
     let mut state = picker_state();
+    let mut menu_state = menu_storybook::MenuStoryState::new(menu_storybook::MenuStory::Action)?;
     let mut notice = "Resize the terminal to exercise responsive layout".to_string();
 
     loop {
@@ -91,6 +143,9 @@ fn main() -> Result<()> {
                 Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
                 Page::States => render_states(content, frame.buffer_mut(), theme),
                 Page::Details => render_details(content, frame.buffer_mut(), theme),
+                Page::OverlayMenu => {
+                    menu_storybook::render(content, frame.buffer_mut(), theme, &mut menu_state)
+                }
             }
         })?;
 
@@ -100,6 +155,23 @@ fn main() -> Result<()> {
         if key.kind != KeyEventKind::Press {
             continue;
         }
+        if page == Page::OverlayMenu {
+            if let Some(next_page) = overlay_page_navigation(page, key) {
+                page = next_page;
+                continue;
+            }
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => break,
+                KeyCode::Tab | KeyCode::Char(']') => menu_state.next_story()?,
+                KeyCode::BackTab | KeyCode::Char('[') => menu_state.previous_story()?,
+                _ => {
+                    if let Some(action) = overlay_menu_action(page, key) {
+                        menu_state.handle(action);
+                    }
+                }
+            }
+            continue;
+        }
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => break,
             KeyCode::Char('1') => page = Page::Picker,
@@ -107,6 +179,7 @@ fn main() -> Result<()> {
             KeyCode::Char('3') => page = Page::Primitives,
             KeyCode::Char('4') => page = Page::States,
             KeyCode::Char('5') => page = Page::Details,
+            KeyCode::Char('6') => page = Page::OverlayMenu,
             KeyCode::Char('d') if page == Page::Picker => {
                 density = match density {
                     PickerDensity::Compact => PickerDensity::Normal,
@@ -156,12 +229,25 @@ fn main() -> Result<()> {
 
 fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, theme: Theme) {
     Block::default().style(theme.surface).render(area, buf);
+    if page == Page::OverlayMenu {
+        Paragraph::new(Line::from(vec![
+            Span::styled("← previous page", theme.muted),
+            Span::raw("   "),
+            Span::styled("Overlay menu", theme.accent),
+            Span::raw("   "),
+            Span::styled("next page →", theme.muted),
+        ]))
+        .alignment(Alignment::Center)
+        .render(Rect::new(area.x, area.y, area.width, 1), buf);
+        return;
+    }
     let labels = [
         (Page::Picker, "1 Picker"),
         (Page::Markdown, "2 Markdown"),
         (Page::Primitives, "3 Primitives"),
         (Page::States, "4 States"),
         (Page::Details, "5 Details"),
+        (Page::OverlayMenu, "6 Overlay menu"),
     ];
     let spans = labels
         .into_iter()
@@ -385,7 +471,7 @@ fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str, theme:
 }
 
 fn render_page_footer(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
-    KeyHints::new([KeyHint::new("1-5", "page"), KeyHint::new("q", "close")])
+    KeyHints::new([KeyHint::new("1-6", "page"), KeyHint::new("q", "close")])
         .theme(theme)
         .render(
             Rect::new(
@@ -491,3 +577,7 @@ fn picker_state() -> PickerState<String> {
         .categories(["Local", "Cloud"])
         .search_placeholder("Title, project, or session id")
 }
+
+#[cfg(test)]
+#[path = "nori_storybook/navigation_tests.rs"]
+mod navigation_tests;
