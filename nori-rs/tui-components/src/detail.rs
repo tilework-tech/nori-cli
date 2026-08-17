@@ -94,32 +94,6 @@ pub enum LabelWidth {
     Fixed(u16),
 }
 
-/// Which neutral surface layer the pane paints inside its caller-owned area.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum DetailBackground {
-    /// Leave the caller's background untouched.
-    Transparent,
-    /// Shade the complete pane area.
-    #[default]
-    Pane,
-    /// Shade only the optional heading row.
-    Heading,
-    /// Shade only the label gutter and separator column.
-    LabelGutter,
-    /// Shade each key-value row, including wrapped continuation lines.
-    Rows,
-    /// Draw a strong accent rail outside transparently rendered content.
-    AccentRail,
-    /// Inset transparent content between open vertical edge rails.
-    EdgeRails,
-    /// Separate a transparent heading and body with a horizontal rule.
-    HeadingRule,
-    /// Shade only the value side of each key-value row.
-    ValuePanel,
-    /// Inset transparent content beside rails broken into semantic sections.
-    SectionRails,
-}
-
 impl Default for LabelWidth {
     fn default() -> Self {
         Self::Auto { max: 14 }
@@ -132,7 +106,6 @@ pub struct DetailPane<'a> {
     heading: Option<Line<'static>>,
     theme: Theme,
     label_width: LabelWidth,
-    background: DetailBackground,
 }
 
 impl<'a> DetailPane<'a> {
@@ -142,7 +115,6 @@ impl<'a> DetailPane<'a> {
             heading: None,
             theme: Theme::default(),
             label_width: LabelWidth::default(),
-            background: DetailBackground::default(),
         }
     }
 
@@ -160,11 +132,6 @@ impl<'a> DetailPane<'a> {
         self.label_width = label_width;
         self
     }
-
-    pub fn background(mut self, background: DetailBackground) -> Self {
-        self.background = background;
-        self
-    }
 }
 
 impl Widget for DetailPane<'_> {
@@ -172,86 +139,30 @@ impl Widget for DetailPane<'_> {
         if area.width < 4 || area.height == 0 {
             return;
         }
-        if self.background == DetailBackground::Pane {
-            buf.set_style(area, self.theme.detail_surface);
-        }
-        let content = match self.background {
-            DetailBackground::AccentRail => {
-                for y in area.y..area.bottom() {
-                    buf.set_string(area.x, y, "▎", self.theme.accent);
-                }
-                Rect::new(
-                    area.x.saturating_add(2),
-                    area.y,
-                    area.width.saturating_sub(2),
-                    area.height,
-                )
-            }
-            DetailBackground::EdgeRails => {
-                for y in area.y..area.bottom() {
-                    buf.set_string(area.x, y, "│", self.theme.separator);
-                    buf.set_string(area.right().saturating_sub(1), y, "│", self.theme.separator);
-                }
-                Rect::new(
-                    area.x.saturating_add(2),
-                    area.y,
-                    area.width.saturating_sub(4),
-                    area.height,
-                )
-            }
-            DetailBackground::SectionRails => Rect::new(
-                area.x.saturating_add(2),
-                area.y,
-                area.width.saturating_sub(2),
-                area.height,
-            ),
-            DetailBackground::Transparent
-            | DetailBackground::Pane
-            | DetailBackground::Heading
-            | DetailBackground::LabelGutter
-            | DetailBackground::Rows
-            | DetailBackground::HeadingRule
-            | DetailBackground::ValuePanel => area,
-        };
-        let mut y = content.y;
+        let mut y = area.y;
         if let Some(heading) = self.heading {
-            if self.background == DetailBackground::Heading {
-                buf.set_style(
-                    Rect::new(content.x, y, content.width, 1),
-                    self.theme.detail_surface,
-                );
-            }
+            buf.set_style(
+                Rect::new(area.x, y, area.width, 1),
+                self.theme.detail_surface,
+            );
             Paragraph::new(heading)
                 .style(self.theme.title)
-                .render(Rect::new(content.x, y, content.width, 1), buf);
-            if self.background == DetailBackground::HeadingRule && y + 1 < content.bottom() {
-                buf.set_string(
-                    content.x,
-                    y.saturating_add(1),
-                    "─".repeat(content.width as usize),
-                    self.theme.separator,
-                );
-            }
+                .render(Rect::new(area.x, y, area.width, 1), buf);
             y = y.saturating_add(2);
         }
-        let gutter = gutter_width(self.entries, self.label_width, content.width);
-        let mut primary_section = true;
+        let gutter = gutter_width(self.entries, self.label_width, area.width);
         for entry in self.entries {
-            if y >= content.bottom() {
+            if y >= area.bottom() {
                 break;
             }
             match entry {
                 DetailEntry::Rule => {
                     buf.set_string(
-                        content.x,
+                        area.x,
                         y,
-                        "─".repeat(content.width as usize),
+                        "─".repeat(area.width as usize),
                         self.theme.separator,
                     );
-                    if self.background == DetailBackground::SectionRails {
-                        buf.set_string(area.x, y, "├─", self.theme.separator);
-                        primary_section = false;
-                    }
                     y = y.saturating_add(1);
                 }
                 DetailEntry::KeyValue {
@@ -260,58 +171,19 @@ impl Widget for DetailPane<'_> {
                     tone,
                     wrap,
                 } => {
-                    let value_width = content.width.saturating_sub(gutter).saturating_sub(3);
+                    let value_width = area.width.saturating_sub(gutter).saturating_sub(3);
                     let row_height = if *wrap {
                         line_height(value, value_width as usize)
                     } else {
                         1
                     }
-                    .min(content.bottom().saturating_sub(y));
-                    match self.background {
-                        DetailBackground::LabelGutter => buf.set_style(
-                            Rect::new(content.x, y, gutter.saturating_add(2), row_height),
-                            self.theme.detail_surface,
-                        ),
-                        DetailBackground::Rows => buf.set_style(
-                            Rect::new(content.x, y, content.width, row_height),
-                            self.theme.detail_surface,
-                        ),
-                        DetailBackground::ValuePanel => {
-                            let value_x = content.x.saturating_add(gutter).saturating_add(3);
-                            buf.set_style(
-                                Rect::new(
-                                    value_x.saturating_sub(1),
-                                    y,
-                                    content.right().saturating_sub(value_x.saturating_sub(1)),
-                                    row_height,
-                                ),
-                                self.theme.detail_surface,
-                            );
-                        }
-                        DetailBackground::Transparent
-                        | DetailBackground::Pane
-                        | DetailBackground::Heading
-                        | DetailBackground::AccentRail
-                        | DetailBackground::EdgeRails
-                        | DetailBackground::HeadingRule
-                        | DetailBackground::SectionRails => {}
-                    }
-                    if self.background == DetailBackground::SectionRails {
-                        let style = if primary_section {
-                            self.theme.accent
-                        } else {
-                            self.theme.separator
-                        };
-                        for rail_y in y..y.saturating_add(row_height) {
-                            buf.set_string(area.x, rail_y, "│", style);
-                        }
-                    }
+                    .min(area.bottom().saturating_sub(y));
                     let label = pad_left(&truncate(label, gutter as usize), gutter as usize);
-                    buf.set_string(content.x, y, label, self.theme.muted);
-                    let separator_x = content.x.saturating_add(gutter).saturating_add(1);
+                    buf.set_string(area.x, y, label, self.theme.muted);
+                    let separator_x = area.x.saturating_add(gutter).saturating_add(1);
                     buf.set_string(separator_x, y, "│", self.theme.separator);
                     let value_x = separator_x.saturating_add(2);
-                    let value_width = content.right().saturating_sub(value_x);
+                    let value_width = area.right().saturating_sub(value_x);
                     if value_width == 0 {
                         break;
                     }

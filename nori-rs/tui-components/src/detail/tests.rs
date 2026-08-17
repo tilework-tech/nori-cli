@@ -66,41 +66,9 @@ fn detail_pane_respects_fixed_gutter_and_provider_tone() {
 }
 
 #[test]
-fn detail_pane_background_options_only_shade_their_intended_layer() {
-    let cases = [
-        (
-            DetailBackground::Transparent,
-            Color::Reset,
-            Color::Reset,
-            Color::Reset,
-        ),
-        (
-            DetailBackground::Pane,
-            Color::Blue,
-            Color::Blue,
-            Color::Blue,
-        ),
-        (
-            DetailBackground::Heading,
-            Color::Blue,
-            Color::Reset,
-            Color::Reset,
-        ),
-        (
-            DetailBackground::LabelGutter,
-            Color::Reset,
-            Color::Blue,
-            Color::Reset,
-        ),
-        (
-            DetailBackground::Rows,
-            Color::Reset,
-            Color::Blue,
-            Color::Blue,
-        ),
-    ];
+fn detail_pane_only_shades_the_optional_heading() {
     let entries = [DetailEntry::key_value("Agent", "Codex")];
-    for (background, heading_bg, label_bg, value_bg) in cases {
+    let render = |heading: Option<&'static str>| {
         let backend = TestBackend::new(30, 5);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let theme = Theme {
@@ -109,78 +77,25 @@ fn detail_pane_background_options_only_shade_their_intended_layer() {
         };
         terminal
             .draw(|frame| {
+                let pane = DetailPane::new(&entries).theme(theme);
                 frame.render_widget(
-                    DetailPane::new(&entries)
-                        .heading("Details")
-                        .theme(theme)
-                        .background(background),
+                    if let Some(heading) = heading {
+                        pane.heading(heading)
+                    } else {
+                        pane
+                    },
                     frame.area(),
-                )
-            })
-            .expect("draw pane");
-        let buffer = terminal.backend().buffer();
-        assert_eq!(buffer[(0, 0)].bg, heading_bg, "{background:?} heading");
-        assert_eq!(buffer[(0, 2)].bg, label_bg, "{background:?} label");
-        assert_eq!(buffer[(10, 2)].bg, value_bg, "{background:?} value");
-        assert_eq!(
-            buffer[(29, 4)].bg,
-            if background == DetailBackground::Pane {
-                Color::Blue
-            } else {
-                Color::Reset
-            },
-            "{background:?} unused area"
-        );
-    }
-}
-
-#[test]
-fn detail_pane_structural_options_draw_open_lines_and_insets() {
-    let entries = [
-        DetailEntry::key_value("Agent", "Codex"),
-        DetailEntry::Rule,
-        DetailEntry::key_value("Turns", "48"),
-    ];
-    let theme = Theme {
-        detail_surface: Style::new().bg(Color::Blue),
-        ..Theme::default()
-    };
-    let render = |background| {
-        let backend = TestBackend::new(30, 7);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
-        terminal
-            .draw(|frame| {
-                frame.render_widget(
-                    DetailPane::new(&entries)
-                        .heading("Details")
-                        .theme(theme)
-                        .background(background),
-                    frame.area(),
-                )
+                );
             })
             .expect("draw pane");
         terminal.backend().buffer().clone()
     };
+    let with_heading = render(Some("Details"));
+    assert_eq!(with_heading[(0, 0)].bg, Color::Blue);
+    assert_eq!(with_heading[(0, 2)].bg, Color::Reset);
+    assert_eq!(with_heading[(29, 4)].bg, Color::Reset);
 
-    let accent = render(DetailBackground::AccentRail);
-    assert_eq!(accent[(0, 0)].symbol(), "▎");
-    assert_eq!(accent[(0, 0)].fg, Color::Cyan);
-    assert_eq!(accent[(2, 0)].symbol(), "D");
-
-    let edges = render(DetailBackground::EdgeRails);
-    assert_eq!(edges[(0, 0)].symbol(), "│");
-    assert_eq!(edges[(29, 0)].symbol(), "│");
-
-    let underline = render(DetailBackground::HeadingRule);
-    assert_eq!(underline[(0, 1)].symbol(), "─");
-
-    let values = render(DetailBackground::ValuePanel);
-    assert_eq!(values[(0, 2)].bg, Color::Reset);
-    assert_eq!(values[(10, 2)].bg, Color::Blue);
-
-    let sections = render(DetailBackground::SectionRails);
-    assert_eq!(sections[(0, 2)].symbol(), "│");
-    assert_eq!(sections[(0, 2)].fg, Color::Cyan);
-    assert_eq!(sections[(0, 3)].symbol(), "├");
-    assert_eq!(sections[(0, 4)].symbol(), "│");
+    let without_heading = render(None);
+    assert_eq!(without_heading[(0, 0)].bg, Color::Reset);
+    assert_eq!(without_heading[(0, 0)].symbol(), "A");
 }

@@ -1,7 +1,6 @@
 mod support;
 
 use anyhow::Result;
-use codex_tui_components::DetailBackground;
 use codex_tui_components::DetailEntry;
 use codex_tui_components::DetailPane;
 use codex_tui_components::DetailTone;
@@ -73,7 +72,6 @@ fn main() -> Result<()> {
     let mut density = PickerDensity::Normal;
     let mut state = picker_state();
     let mut notice = "Resize the terminal to exercise responsive layout".to_string();
-    let mut detail_background = DetailBackground::Heading;
 
     loop {
         terminal.terminal.draw(|frame| {
@@ -92,9 +90,7 @@ fn main() -> Result<()> {
                 Page::Markdown => render_markdown(content, frame.buffer_mut(), theme),
                 Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
                 Page::States => render_states(content, frame.buffer_mut(), theme),
-                Page::Details => {
-                    render_details(content, frame.buffer_mut(), theme, detail_background)
-                }
+                Page::Details => render_details(content, frame.buffer_mut(), theme),
             }
         })?;
 
@@ -111,12 +107,6 @@ fn main() -> Result<()> {
             KeyCode::Char('3') => page = Page::Primitives,
             KeyCode::Char('4') => page = Page::States,
             KeyCode::Char('5') => page = Page::Details,
-            KeyCode::Left | KeyCode::Char('[') if page == Page::Details => {
-                detail_background = previous_detail_background(detail_background);
-            }
-            KeyCode::Right | KeyCode::Char(']') if page == Page::Details => {
-                detail_background = next_detail_background(detail_background);
-            }
             KeyCode::Char('d') if page == Page::Picker => {
                 density = match density {
                     PickerDensity::Compact => PickerDensity::Normal,
@@ -317,14 +307,8 @@ fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
     render_page_footer(area, buf, theme);
 }
 
-fn render_details(
-    area: Rect,
-    buf: &mut ratatui::buffer::Buffer,
-    theme: Theme,
-    background: DetailBackground,
-) {
-    let title = format!("Detail pane · {}", detail_background_name(background));
-    let inner = page_frame(area, buf, &title, theme);
+fn render_details(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
+    let inner = page_frame(area, buf, "Detail pane", theme);
     let areas =
         Layout::vertical([Constraint::Percentage(52), Constraint::Percentage(48)]).split(inner);
     let cli = Layout::horizontal([
@@ -344,7 +328,6 @@ fn render_details(
     DetailPane::new(&detail_entries())
         .heading("Session details")
         .theme(theme)
-        .background(background)
         .render(cli[2], buf);
     Paragraph::new(Line::styled(
         "Handroll-style bottom panel - caller owns its reserved rows",
@@ -360,23 +343,8 @@ fn render_details(
     DetailPane::new(&detail_entries())
         .heading("Current session")
         .theme(theme)
-        .background(background)
         .render(bottom, buf);
-    KeyHints::new([
-        KeyHint::new("←→", "background option"),
-        KeyHint::new("1-5", "page"),
-        KeyHint::new("q", "close"),
-    ])
-    .theme(theme)
-    .render(
-        Rect::new(
-            area.x.saturating_add(2),
-            area.bottom().saturating_sub(2),
-            area.width.saturating_sub(4),
-            1,
-        ),
-        buf,
-    );
+    render_page_footer(area, buf, theme);
 }
 
 fn detail_entries() -> Vec<DetailEntry> {
@@ -398,51 +366,6 @@ fn detail_entries() -> Vec<DetailEntry> {
             "Inspecting parser recovery fixtures and structured error handling.",
         ),
     ]
-}
-
-fn next_detail_background(background: DetailBackground) -> DetailBackground {
-    match background {
-        DetailBackground::Transparent => DetailBackground::Pane,
-        DetailBackground::Pane => DetailBackground::Heading,
-        DetailBackground::Heading => DetailBackground::LabelGutter,
-        DetailBackground::LabelGutter => DetailBackground::Rows,
-        DetailBackground::Rows => DetailBackground::AccentRail,
-        DetailBackground::AccentRail => DetailBackground::EdgeRails,
-        DetailBackground::EdgeRails => DetailBackground::HeadingRule,
-        DetailBackground::HeadingRule => DetailBackground::ValuePanel,
-        DetailBackground::ValuePanel => DetailBackground::SectionRails,
-        DetailBackground::SectionRails => DetailBackground::Transparent,
-    }
-}
-
-fn previous_detail_background(background: DetailBackground) -> DetailBackground {
-    match background {
-        DetailBackground::Transparent => DetailBackground::SectionRails,
-        DetailBackground::Pane => DetailBackground::Transparent,
-        DetailBackground::Heading => DetailBackground::Pane,
-        DetailBackground::LabelGutter => DetailBackground::Heading,
-        DetailBackground::Rows => DetailBackground::LabelGutter,
-        DetailBackground::AccentRail => DetailBackground::Rows,
-        DetailBackground::EdgeRails => DetailBackground::AccentRail,
-        DetailBackground::HeadingRule => DetailBackground::EdgeRails,
-        DetailBackground::ValuePanel => DetailBackground::HeadingRule,
-        DetailBackground::SectionRails => DetailBackground::ValuePanel,
-    }
-}
-
-fn detail_background_name(background: DetailBackground) -> &'static str {
-    match background {
-        DetailBackground::Transparent => "1/10 transparent",
-        DetailBackground::Pane => "2/10 full pane",
-        DetailBackground::Heading => "3/10 heading band",
-        DetailBackground::LabelGutter => "4/10 label rail",
-        DetailBackground::Rows => "5/10 row bands",
-        DetailBackground::AccentRail => "6/10 accent rail",
-        DetailBackground::EdgeRails => "7/10 open edge rails",
-        DetailBackground::HeadingRule => "8/10 heading underline",
-        DetailBackground::ValuePanel => "9/10 value-side surface",
-        DetailBackground::SectionRails => "10/10 segmented rails",
-    }
 }
 
 fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str, theme: Theme) -> Rect {

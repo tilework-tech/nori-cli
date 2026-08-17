@@ -63,11 +63,10 @@ key handling, loading, routing, and application actions. It intentionally does
 not make breakpoints or overlay decisions. Handroll adoption is deferred to a
 separate consumer migration.
 
-Callers may choose a transparent pane, a complete neutral pane surface, or a
-smaller heading, label-gutter, or row surface. These are presentation layers
-only; the caller still owns the surrounding page and placement. The storybook
-also carries rail, underline, and value-side experiments while the final
-visual treatment is selected.
+The body stays transparent. When the caller supplies the optional heading, the
+component renders it on one neutral heading band and leaves one row of space
+before the definition list. The caller still owns the surrounding page and
+placement.
 
 ## Verification
 

@@ -10,7 +10,6 @@ pub mod picker;
 pub mod primitives;
 pub mod theme;
 
-pub use detail::DetailBackground;
 pub use detail::DetailEntry;
 pub use detail::DetailPane;
 pub use detail::DetailTone;
