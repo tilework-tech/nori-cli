@@ -12,7 +12,7 @@ use pretty_assertions::assert_eq;
 fn overlay_page_has_an_alternate_route_back_to_other_pages() {
     assert_eq!(
         overlay_page_navigation(Page::OverlayMenu, key(KeyCode::Left)),
-        Some(Page::States)
+        Some(Page::Details)
     );
     assert_eq!(
         overlay_page_navigation(Page::OverlayMenu, key(KeyCode::Right)),

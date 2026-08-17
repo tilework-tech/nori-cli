@@ -128,6 +128,19 @@ information design; adopting it there remains separate consumer work.
     value, or explicit phrase such as `Not reported`.
 24. Use sentence case and concise action labels.
 
+## Detail panes
+
+`DetailPane` is a presentation-only definition-list widget. Callers provide
+its rectangle, choose side or bottom placement, and retain scrolling, focus,
+key handling, loading, routing, and application actions. It intentionally does
+not make breakpoints or overlay decisions. Handroll adoption is deferred to a
+separate consumer migration.
+
+The body stays transparent. When the caller supplies the optional heading, the
+component renders it on one neutral heading band and leaves one row of space
+before the definition list. The caller still owns the surrounding page and
+placement.
+
 ## Verification
 
 25. Snapshot every component at representative wide and narrow widths.
@@ -144,9 +157,10 @@ Run the single full-screen design reference from `nori-rs/`:
 cargo run -p codex-tui-components --example nori_storybook
 ```
 
-The Picker, Markdown, Primitives, States, and Overlay menu pages are the visual
-acceptance target for this crate. Page `5` is interactive: use arrows or
-`j`/`k` to move, `Enter` to activate, `Tab`/`Shift-Tab` to change the menu case,
-and the displayed number or character shortcuts to invoke actions. The example
-owns its terminal and event loop, adapts raw keys to domain-free actions, and
-uses production components only.
+The Picker, Markdown, Primitives, States, Detail pane, and Overlay menu pages
+are the visual acceptance target for this crate. Detail pane is page `5`; page
+`6`, Overlay menu, is interactive. Use arrows or `j`/`k` to move, `Enter` to
+activate, `Tab`/`Shift-Tab` to change the menu case, and the displayed number or
+character shortcuts to invoke actions. The example owns its terminal and event
+loop, adapts raw keys to domain-free actions, and uses production components
+only.

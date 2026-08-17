@@ -4,12 +4,18 @@
 //! Consumers translate their input events into component actions, update
 //! caller-owned state, and render the resulting widgets.
 
+pub mod detail;
 pub mod markdown;
 pub mod menu;
 pub mod picker;
 pub mod primitives;
 pub mod theme;
 
+pub use detail::DetailEntry;
+pub use detail::DetailPane;
+pub use detail::DetailTone;
+pub use detail::LabelWidth;
+pub use detail::ProviderKind;
 pub use markdown::Markdown;
 pub use markdown::StreamingMarkdown;
 pub use menu::MenuAction;

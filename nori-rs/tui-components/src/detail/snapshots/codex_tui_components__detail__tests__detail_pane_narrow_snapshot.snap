@@ -1,0 +1,16 @@
+---
+source: tui-components/src/detail/tests.rs
+expression: "snapshot(22, 12)"
+---
+"Session details       "
+"                      "
+"    Agent │ Codex     "
+"  Created │ 2026-08-1…"
+"──────────────────────"
+"Latest p… │ Investigat"
+"            e the     "
+"            reusable  "
+"            component "
+"            boundary  "
+"            without   "
+"            changing  "

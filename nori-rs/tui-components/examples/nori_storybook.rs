@@ -3,6 +3,9 @@ mod menu_storybook;
 mod support;
 
 use anyhow::Result;
+use codex_tui_components::DetailEntry;
+use codex_tui_components::DetailPane;
+use codex_tui_components::DetailTone;
 use codex_tui_components::EmptyState;
 use codex_tui_components::KeyHint;
 use codex_tui_components::KeyHints;
@@ -20,6 +23,7 @@ use codex_tui_components::PickerLoadState;
 use codex_tui_components::PickerMode;
 use codex_tui_components::PickerOutcome;
 use codex_tui_components::PickerState;
+use codex_tui_components::ProviderKind;
 use codex_tui_components::SearchMode;
 use codex_tui_components::SemanticMessage;
 use codex_tui_components::Theme;
@@ -61,6 +65,7 @@ enum Page {
     Markdown,
     Primitives,
     States,
+    Details,
     OverlayMenu,
 }
 
@@ -105,7 +110,7 @@ fn overlay_page_navigation(page: Page, key: KeyEvent) -> Option<Page> {
         return None;
     }
     match key.code {
-        KeyCode::Left => Some(Page::States),
+        KeyCode::Left => Some(Page::Details),
         KeyCode::Right => Some(Page::Picker),
         _ => None,
     }
@@ -137,6 +142,7 @@ fn main() -> Result<()> {
                 Page::Markdown => render_markdown(content, frame.buffer_mut(), theme),
                 Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
                 Page::States => render_states(content, frame.buffer_mut(), theme),
+                Page::Details => render_details(content, frame.buffer_mut(), theme),
                 Page::OverlayMenu => {
                     menu_storybook::render(content, frame.buffer_mut(), theme, &mut menu_state)
                 }
@@ -172,7 +178,8 @@ fn main() -> Result<()> {
             KeyCode::Char('2') => page = Page::Markdown,
             KeyCode::Char('3') => page = Page::Primitives,
             KeyCode::Char('4') => page = Page::States,
-            KeyCode::Char('5') => page = Page::OverlayMenu,
+            KeyCode::Char('5') => page = Page::Details,
+            KeyCode::Char('6') => page = Page::OverlayMenu,
             KeyCode::Char('d') if page == Page::Picker => {
                 density = match density {
                     PickerDensity::Compact => PickerDensity::Normal,
@@ -239,7 +246,8 @@ fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, 
         (Page::Markdown, "2 Markdown"),
         (Page::Primitives, "3 Primitives"),
         (Page::States, "4 States"),
-        (Page::OverlayMenu, "5 Overlay menu"),
+        (Page::Details, "5 Details"),
+        (Page::OverlayMenu, "6 Overlay menu"),
     ];
     let spans = labels
         .into_iter()
@@ -385,6 +393,67 @@ fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
     render_page_footer(area, buf, theme);
 }
 
+fn render_details(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
+    let inner = page_frame(area, buf, "Detail pane", theme);
+    let areas =
+        Layout::vertical([Constraint::Percentage(52), Constraint::Percentage(48)]).split(inner);
+    let cli = Layout::horizontal([
+        Constraint::Percentage(58),
+        Constraint::Length(2),
+        Constraint::Percentage(42),
+    ])
+    .split(areas[0]);
+    Paragraph::new(vec![
+        Line::styled("Nori CLI session picker", theme.title),
+        Line::styled("Caller owns the side-pane split", theme.muted),
+        Line::from(""),
+        Line::from("› Fix parser recovery"),
+        Line::styled("  nori-cli · 2m ago · working", theme.muted),
+    ])
+    .render(cli[0], buf);
+    DetailPane::new(&detail_entries())
+        .heading("Session details")
+        .theme(theme)
+        .render(cli[2], buf);
+    Paragraph::new(Line::styled(
+        "Handroll-style bottom panel - caller owns its reserved rows",
+        theme.muted,
+    ))
+    .render(areas[1], buf);
+    let bottom = Rect::new(
+        areas[1].x,
+        areas[1].y.saturating_add(2),
+        areas[1].width,
+        areas[1].height.saturating_sub(2),
+    );
+    DetailPane::new(&detail_entries())
+        .heading("Current session")
+        .theme(theme)
+        .render(bottom, buf);
+    render_page_footer(area, buf, theme);
+}
+
+fn detail_entries() -> Vec<DetailEntry> {
+    vec![
+        DetailEntry::key_value("Thread", "Fix parser recovery"),
+        DetailEntry::key_value("Agent", "Codex").tone(DetailTone::Provider(ProviderKind::Codex)),
+        DetailEntry::key_value("Origin", "Local · nori-cli"),
+        DetailEntry::key_value("Created", "Aug 16, 2026 · 9:42 AM"),
+        DetailEntry::key_value("Modified", "Aug 17, 2026 · 11:08 AM"),
+        DetailEntry::key_value("Turns", "48"),
+        DetailEntry::key_value("Transcript", "1.8 MB"),
+        DetailEntry::Rule,
+        DetailEntry::muted(
+            "Latest prompt",
+            "Recover malformed session transcripts without changing user-visible behavior.",
+        ),
+        DetailEntry::muted(
+            "Latest response",
+            "Inspecting parser recovery fixtures and structured error handling.",
+        ),
+    ]
+}
+
 fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str, theme: Theme) -> Rect {
     Block::default().style(theme.surface).render(area, buf);
     let inner = area.inner(Margin {
@@ -402,7 +471,7 @@ fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str, theme:
 }
 
 fn render_page_footer(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
-    KeyHints::new([KeyHint::new("1-5", "page"), KeyHint::new("q", "close")])
+    KeyHints::new([KeyHint::new("1-6", "page"), KeyHint::new("q", "close")])
         .theme(theme)
         .render(
             Rect::new(

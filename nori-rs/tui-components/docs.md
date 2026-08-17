@@ -6,12 +6,13 @@ Path: @/nori-rs/tui-components
 
 - `codex-tui-components` provides reusable, domain-free Ratatui presentation
   and interaction state for Nori terminal applications.
-- Components accept caller-owned rectangles and state, then return typed
-  outcomes. They never own a terminal, an application event loop, or product
-  routing.
+- Components accept caller-owned rectangles and caller-provided data or state.
+  Interactive state machines return typed outcomes; presentation-only widgets
+  render without taking over application behavior.
 - [`DESIGN.md`](DESIGN.md) is the visual contract, while the production
   [`nori_storybook`](examples/nori_storybook.rs) is the interactive acceptance
-  reference.
+  reference. Detail pane is page `5`, followed by the interactive Overlay menu
+  on page `6`.
 
 ### How it fits into the larger codebase
 
@@ -22,9 +23,9 @@ consumer application
                          | domain-free action, state, and Rect
                          v
                 codex-tui-components
-                  menu / picker / primitives
+             menu / picker / detail / primitives
                          |
-                         | typed outcome
+                         | typed outcome, when interactive
                          v
                  consumer application
 ```
@@ -36,6 +37,9 @@ consumer application
   [`picker`](src/picker/) remains the search and filtering surface for
   potentially large data sets; centered overlay placement does not turn one
   into the other.
+- [`DetailPane`](src/detail.rs) is a stateless definition-list renderer for
+  caller-positioned side or bottom regions. Its caller retains placement,
+  scrolling, focus, loading, key handling, and application routing.
 - [`theme`](src/theme/) supplies semantic styles shared across components.
   Neutral backgrounds are derived from a reported terminal RGB background
   only when the consumer knows true color is supported; otherwise those
@@ -65,11 +69,15 @@ consumer application
   supplied rectangle. Rendering reconciles only menu-local viewport offset and
   capacity so the selection stays visible when content exceeds the available
   height.
-- The renderer preserves titles and primary labels first, suppresses optional
-  subtitles on constrained rectangles, wraps descriptions by Unicode display
-  width, and emits overflow markers when not all items fit. Key hints occupy
-  the bottom of the remaining surface and clamp below the title so tiny or
-  non-zero-origin caller rectangles remain bounded.
+- `DetailPane` accepts key/value entries and structural rules, trims trailing
+  colons from labels, and maps semantic or provider tones through the shared
+  theme. Its auto or fixed label gutter stays within the caller's width;
+  callers explicitly choose whether each value wraps or truncates.
+- The overlay renderer preserves titles and primary labels first, suppresses
+  optional subtitles on constrained rectangles, wraps descriptions by Unicode
+  display width, and emits overflow markers when not all items fit. Key hints
+  occupy the bottom of the remaining surface and clamp below the title so tiny
+  or non-zero-origin caller rectangles remain bounded.
 - Selected items retain the normal primary accent across semantic tones, fill
   the complete row surface, and use symmetric thin edge rails. Warning and
   destructive colors identify consequences only while an item is not selected.
