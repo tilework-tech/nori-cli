@@ -1,0 +1,4 @@
+interface:
+  display_name: "Capture TUI"
+  short_description: "Capture reproducible TUI screenshots"
+  default_prompt: "Use $capture-tui to run this storybook in a real PTY and refresh its Ghostty-backed screenshot."

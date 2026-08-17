@@ -1,0 +1,7 @@
+{
+  "name": "capture-tui",
+  "version": "1.0.0",
+  "type": "skill",
+  "description": "Run, inspect, and refresh reproducible Ghostty-backed terminal UI and storybook captures.",
+  "registryURL": "https://noriskillsets.dev"
+}
