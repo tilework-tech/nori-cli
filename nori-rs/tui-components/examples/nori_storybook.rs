@@ -1,3 +1,5 @@
+#[path = "nori_storybook/menu_storybook.rs"]
+mod menu_storybook;
 mod support;
 
 use anyhow::Result;
@@ -58,6 +60,7 @@ enum Page {
     Markdown,
     Primitives,
     States,
+    OverlayMenu,
 }
 
 fn main() -> Result<()> {
@@ -66,6 +69,7 @@ fn main() -> Result<()> {
     let mut page = Page::default();
     let mut density = PickerDensity::Normal;
     let mut state = picker_state();
+    let mut menu_story = menu_storybook::MenuStory::Action;
     let mut notice = "Resize the terminal to exercise responsive layout".to_string();
 
     loop {
@@ -85,6 +89,9 @@ fn main() -> Result<()> {
                 Page::Markdown => render_markdown(content, frame.buffer_mut(), theme),
                 Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
                 Page::States => render_states(content, frame.buffer_mut(), theme),
+                Page::OverlayMenu => {
+                    menu_storybook::render(content, frame.buffer_mut(), theme, menu_story)
+                }
             }
         })?;
 
@@ -100,6 +107,19 @@ fn main() -> Result<()> {
             KeyCode::Char('2') => page = Page::Markdown,
             KeyCode::Char('3') => page = Page::Primitives,
             KeyCode::Char('4') => page = Page::States,
+            KeyCode::Char('5') => page = Page::OverlayMenu,
+            KeyCode::Char('a') if page == Page::OverlayMenu => {
+                menu_story = menu_storybook::MenuStory::Action;
+            }
+            KeyCode::Char('s') if page == Page::OverlayMenu => {
+                menu_story = menu_storybook::MenuStory::Shortcuts;
+            }
+            KeyCode::Char('n') if page == Page::OverlayMenu => {
+                menu_story = menu_storybook::MenuStory::Narrow;
+            }
+            KeyCode::Char('d') if page == Page::OverlayMenu => {
+                menu_story = menu_storybook::MenuStory::Destructive;
+            }
             KeyCode::Char('d') if page == Page::Picker => {
                 density = match density {
                     PickerDensity::Compact => PickerDensity::Normal,
@@ -154,6 +174,7 @@ fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, 
         (Page::Markdown, "2 Markdown"),
         (Page::Primitives, "3 Primitives"),
         (Page::States, "4 States"),
+        (Page::OverlayMenu, "5 Overlay menu"),
     ];
     let spans = labels
         .into_iter()
@@ -316,7 +337,7 @@ fn page_frame(area: Rect, buf: &mut ratatui::buffer::Buffer, title: &str, theme:
 }
 
 fn render_page_footer(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
-    KeyHints::new([KeyHint::new("1-4", "page"), KeyHint::new("q", "close")])
+    KeyHints::new([KeyHint::new("1-5", "page"), KeyHint::new("q", "close")])
         .theme(theme)
         .render(
             Rect::new(

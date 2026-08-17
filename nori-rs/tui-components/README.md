@@ -21,9 +21,10 @@ Run the storybook examples from `nori-rs/`:
 cargo run -p codex-tui-components --example nori_storybook
 ```
 
-The canonical storybook contains Picker, Markdown, Primitives, and States
-pages. Use `1-4` to change page and `d` to switch picker density. The focused
-examples remain useful while developing one component:
+The canonical storybook contains Picker, Markdown, Primitives, States, and an
+overlay-menu visual prototype. Use `1-5` to change page, `d` to switch picker
+density, and `a`/`s`/`n`/`d` to compare overlay-menu states. The focused examples
+remain useful while developing one component:
 
 ```console
 cargo run -p codex-tui-components --example picker_storybook
