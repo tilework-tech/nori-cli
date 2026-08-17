@@ -133,3 +133,54 @@ fn detail_pane_background_options_only_shade_their_intended_layer() {
         );
     }
 }
+
+#[test]
+fn detail_pane_structural_options_draw_open_lines_and_insets() {
+    let entries = [
+        DetailEntry::key_value("Agent", "Codex"),
+        DetailEntry::Rule,
+        DetailEntry::key_value("Turns", "48"),
+    ];
+    let theme = Theme {
+        detail_surface: Style::new().bg(Color::Blue),
+        ..Theme::default()
+    };
+    let render = |background| {
+        let backend = TestBackend::new(30, 7);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        terminal
+            .draw(|frame| {
+                frame.render_widget(
+                    DetailPane::new(&entries)
+                        .heading("Details")
+                        .theme(theme)
+                        .background(background),
+                    frame.area(),
+                )
+            })
+            .expect("draw pane");
+        terminal.backend().buffer().clone()
+    };
+
+    let accent = render(DetailBackground::AccentRail);
+    assert_eq!(accent[(0, 0)].symbol(), "▎");
+    assert_eq!(accent[(0, 0)].fg, Color::Cyan);
+    assert_eq!(accent[(2, 0)].symbol(), "D");
+
+    let edges = render(DetailBackground::EdgeRails);
+    assert_eq!(edges[(0, 0)].symbol(), "│");
+    assert_eq!(edges[(29, 0)].symbol(), "│");
+
+    let underline = render(DetailBackground::HeadingRule);
+    assert_eq!(underline[(0, 1)].symbol(), "─");
+
+    let values = render(DetailBackground::ValuePanel);
+    assert_eq!(values[(0, 2)].bg, Color::Reset);
+    assert_eq!(values[(10, 2)].bg, Color::Blue);
+
+    let sections = render(DetailBackground::SectionRails);
+    assert_eq!(sections[(0, 2)].symbol(), "│");
+    assert_eq!(sections[(0, 2)].fg, Color::Cyan);
+    assert_eq!(sections[(0, 3)].symbol(), "├");
+    assert_eq!(sections[(0, 4)].symbol(), "│");
+}

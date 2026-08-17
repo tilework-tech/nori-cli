@@ -65,7 +65,9 @@ separate consumer migration.
 
 Callers may choose a transparent pane, a complete neutral pane surface, or a
 smaller heading, label-gutter, or row surface. These are presentation layers
-only; the caller still owns the surrounding page and placement.
+only; the caller still owns the surrounding page and placement. The storybook
+also carries rail, underline, and value-side experiments while the final
+visual treatment is selected.
 
 ## Verification
 

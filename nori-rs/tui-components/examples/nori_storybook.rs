@@ -73,7 +73,7 @@ fn main() -> Result<()> {
     let mut density = PickerDensity::Normal;
     let mut state = picker_state();
     let mut notice = "Resize the terminal to exercise responsive layout".to_string();
-    let mut detail_background = DetailBackground::Transparent;
+    let mut detail_background = DetailBackground::Heading;
 
     loop {
         terminal.terminal.draw(|frame| {
@@ -406,27 +406,42 @@ fn next_detail_background(background: DetailBackground) -> DetailBackground {
         DetailBackground::Pane => DetailBackground::Heading,
         DetailBackground::Heading => DetailBackground::LabelGutter,
         DetailBackground::LabelGutter => DetailBackground::Rows,
-        DetailBackground::Rows => DetailBackground::Transparent,
+        DetailBackground::Rows => DetailBackground::AccentRail,
+        DetailBackground::AccentRail => DetailBackground::EdgeRails,
+        DetailBackground::EdgeRails => DetailBackground::HeadingRule,
+        DetailBackground::HeadingRule => DetailBackground::ValuePanel,
+        DetailBackground::ValuePanel => DetailBackground::SectionRails,
+        DetailBackground::SectionRails => DetailBackground::Transparent,
     }
 }
 
 fn previous_detail_background(background: DetailBackground) -> DetailBackground {
     match background {
-        DetailBackground::Transparent => DetailBackground::Rows,
+        DetailBackground::Transparent => DetailBackground::SectionRails,
         DetailBackground::Pane => DetailBackground::Transparent,
         DetailBackground::Heading => DetailBackground::Pane,
         DetailBackground::LabelGutter => DetailBackground::Heading,
         DetailBackground::Rows => DetailBackground::LabelGutter,
+        DetailBackground::AccentRail => DetailBackground::Rows,
+        DetailBackground::EdgeRails => DetailBackground::AccentRail,
+        DetailBackground::HeadingRule => DetailBackground::EdgeRails,
+        DetailBackground::ValuePanel => DetailBackground::HeadingRule,
+        DetailBackground::SectionRails => DetailBackground::ValuePanel,
     }
 }
 
 fn detail_background_name(background: DetailBackground) -> &'static str {
     match background {
-        DetailBackground::Transparent => "1/5 transparent",
-        DetailBackground::Pane => "2/5 full pane",
-        DetailBackground::Heading => "3/5 heading band",
-        DetailBackground::LabelGutter => "4/5 label rail",
-        DetailBackground::Rows => "5/5 row bands",
+        DetailBackground::Transparent => "1/10 transparent",
+        DetailBackground::Pane => "2/10 full pane",
+        DetailBackground::Heading => "3/10 heading band",
+        DetailBackground::LabelGutter => "4/10 label rail",
+        DetailBackground::Rows => "5/10 row bands",
+        DetailBackground::AccentRail => "6/10 accent rail",
+        DetailBackground::EdgeRails => "7/10 open edge rails",
+        DetailBackground::HeadingRule => "8/10 heading underline",
+        DetailBackground::ValuePanel => "9/10 value-side surface",
+        DetailBackground::SectionRails => "10/10 segmented rails",
     }
 }
 
