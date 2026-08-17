@@ -55,6 +55,19 @@ as they move into this crate.
     value, or explicit phrase such as `Not reported`.
 24. Use sentence case and concise action labels.
 
+## Detail panes
+
+`DetailPane` is a presentation-only definition-list widget. Callers provide
+its rectangle, choose side or bottom placement, and retain scrolling, focus,
+key handling, loading, routing, and application actions. It intentionally does
+not make breakpoints or overlay decisions. Handroll adoption is deferred to a
+separate consumer migration.
+
+The body stays transparent. When the caller supplies the optional heading, the
+component renders it on one neutral heading band and leaves one row of space
+before the definition list. The caller still owns the surrounding page and
+placement.
+
 ## Verification
 
 25. Snapshot every component at representative wide and narrow widths.
