@@ -6,9 +6,15 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(version)]
 pub struct Cli {
-    /// Optional user prompt to start the session.
+    /// Optional user prompt to start the session. Pass `-` to read the prompt
+    /// from piped stdin instead.
     #[arg(value_name = "PROMPT", value_hint = clap::ValueHint::Other)]
     pub prompt: Option<String>,
+
+    /// Read piped stdin and append it to PROMPT as context. Without this (or a
+    /// `-` prompt), a prompt argument is used as-is and stdin is left alone.
+    #[arg(long = "stdin", default_value_t = false)]
+    pub stdin: bool,
 
     /// Optional image(s) to attach to the initial prompt.
     #[arg(long = "image", short = 'i', value_name = "FILE", value_delimiter = ',', num_args = 1..)]
@@ -31,13 +37,21 @@ pub struct Cli {
     #[clap(skip)]
     pub resume_show_all: bool,
 
+    /// Internal: the top-level `nori cloud` wrapper launched the pinned
+    /// handroll agent. Also enables picker-first entry before session creation.
+    /// Not exposed as a public flag.
+    #[clap(skip)]
+    pub cloud_mode: bool,
+
+    /// Internal: `nori cloud --onboard` — skip the picker and probe for the
+    /// org's onboarding session before resuming or acquiring it.
+    /// Not exposed as a public flag.
+    #[clap(skip)]
+    pub cloud_onboard: bool,
+
     /// Agent the CLI should use (e.g., "claude-code", "gemini", "codex").
     #[arg(long, short = 'a')]
     pub agent: Option<String>,
-
-    /// Configuration profile from config.toml to specify default options.
-    #[arg(long = "profile", short = 'p')]
-    pub config_profile: Option<String>,
 
     /// Skip all confirmation prompts and execute commands without sandboxing.
     /// EXTREMELY DANGEROUS. Intended solely for running in environments that are externally sandboxed.
@@ -111,5 +125,15 @@ mod tests {
             !cli.dangerously_bypass_approvals_and_sandbox,
             "dangerously_bypass_approvals_and_sandbox should default to false"
         );
+    }
+
+    /// `-p` is no longer a profile selector. The top-level CLI now owns it as
+    /// `--print` (see the `cli` crate); it must not resurface here as a `Cli`
+    /// flag, and the long form stays rejected outright.
+    #[test]
+    fn legacy_profile_flags_are_rejected() {
+        for args in [["nori", "--profile", "focused"], ["nori", "-p", "focused"]] {
+            assert!(Cli::try_parse_from(args).is_err());
+        }
     }
 }

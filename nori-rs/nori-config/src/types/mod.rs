@@ -1,6 +1,12 @@
 //! Type definitions for Nori configuration
 
-use codex_protocol::config_types::SandboxMode;
+use crate::AskForApproval;
+use crate::McpServerConfig;
+use crate::SandboxMode;
+use crate::SandboxPolicy;
+use crate::ShellEnvironmentPolicy;
+use crate::ShellEnvironmentPolicyToml;
+use crate::TrustLevel;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -17,6 +23,60 @@ pub enum HistoryPersistence {
     SaveAll,
     /// Do not write history to disk.
     None,
+}
+
+/// Which Chrome profile the `/browser` command launches against.
+///
+/// Secure-by-default: `Throwaway` shares no cookies, logins, or settings with
+/// the user's real Chrome. The other tiers are explicit power-user opt-ins that
+/// trade isolation for persistence or real credentials.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BrowserProfileMode {
+    /// Fresh throwaway profile per launch, wiped on shutdown. No shared state.
+    #[default]
+    Throwaway,
+    /// Persistent nori-owned profile (`<nori_home>/browser-profile`) reused
+    /// across launches. Logins survive, but it stays isolated from real Chrome.
+    Persistent,
+    /// The user's real default Chrome profile, with all their logins/cookies.
+    System,
+}
+
+impl BrowserProfileMode {
+    /// Human-readable name for display in the TUI picker.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "Throwaway",
+            Self::Persistent => "Persistent nori profile",
+            Self::System => "Real Chrome profile",
+        }
+    }
+
+    /// One-line description shown beneath each picker row.
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "Fresh profile, no logins or cookies (secure default)",
+            Self::Persistent => {
+                "Reuses a nori-owned profile; logins persist, isolated from your Chrome"
+            }
+            Self::System => "Your real Chrome logins & cookies — only use on trusted pages",
+        }
+    }
+
+    /// TOML string representation for persistence.
+    pub fn toml_value(&self) -> &'static str {
+        match self {
+            Self::Throwaway => "throwaway",
+            Self::Persistent => "persistent",
+            Self::System => "system",
+        }
+    }
+
+    /// All variants in order, for building picker UIs.
+    pub fn all_variants() -> &'static [BrowserProfileMode] {
+        &[Self::Throwaway, Self::Persistent, Self::System]
+    }
 }
 
 /// Default agent for ACP-only mode
@@ -184,20 +244,30 @@ pub enum ResolvedDistribution {
 #[serde(rename_all = "snake_case")]
 pub struct NoriConfigToml {
     /// The ACP agent to use (e.g., "claude-code", "codex", "gemini")
-    /// This is persisted separately from model to track user's agent preference
+    /// This is persisted to track the user's agent preference.
     pub agent: Option<String>,
-
-    /// Legacy field: the ACP agent to use. Prefer `agent` field.
-    pub model: Option<String>,
 
     /// Sandbox mode for command execution
     pub sandbox_mode: Option<SandboxMode>,
 
+    /// Settings applied when the sandbox uses workspace-write mode.
+    pub sandbox_workspace_write: Option<SandboxWorkspaceWrite>,
+
     /// Approval policy for commands
-    pub approval_policy: Option<ApprovalPolicy>,
+    pub approval_policy: Option<AskForApproval>,
+
+    /// Environment inherited by sandboxed commands.
+    #[serde(default)]
+    pub shell_environment_policy: ShellEnvironmentPolicyToml,
 
     /// History persistence policy
     pub history_persistence: Option<HistoryPersistence>,
+
+    /// Which Chrome profile the `/browser` command launches against.
+    pub browser_profile: Option<BrowserProfileMode>,
+
+    /// External notifier command and arguments.
+    pub notify: Option<Vec<String>>,
 
     /// ACP wire proxy logging settings
     #[serde(default)]
@@ -209,7 +279,7 @@ pub struct NoriConfigToml {
 
     /// MCP server configurations (optional)
     #[serde(default)]
-    pub mcp_servers: HashMap<String, McpServerConfigToml>,
+    pub mcp_servers: HashMap<String, McpServerConfig>,
 
     /// Session lifecycle hooks
     #[serde(default)]
@@ -226,6 +296,50 @@ pub struct NoriConfigToml {
     /// Cloud session settings
     #[serde(default)]
     pub cloud: CloudConfigToml,
+
+    /// Whether to check for Nori updates at startup.
+    pub check_for_update_on_startup: Option<bool>,
+
+    /// Disable burst-paste detection in the prompt composer.
+    pub disable_paste_burst: Option<bool>,
+
+    /// Nori-owned feature switches.
+    #[serde(default)]
+    pub features: FeaturesToml,
+
+    /// User acknowledgement state for safety notices.
+    #[serde(default)]
+    pub notice: Notice,
+
+    /// Per-project trust settings, keyed by project path.
+    #[serde(default)]
+    pub projects: HashMap<String, ProjectConfig>,
+}
+
+/// Workspace-write sandbox settings from `config.toml`.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SandboxWorkspaceWrite {
+    #[serde(default)]
+    pub writable_roots: Vec<PathBuf>,
+    #[serde(default)]
+    pub network_access: bool,
+    #[serde(default)]
+    pub exclude_tmpdir_env_var: bool,
+    #[serde(default)]
+    pub exclude_slash_tmp: bool,
+}
+
+/// Feature switches that still affect the Nori runtime.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FeaturesToml {
+    pub enable_experimental_windows_sandbox: Option<bool>,
+}
+
+/// Persisted safety notice acknowledgements.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct Notice {
+    pub hide_full_access_warning: Option<bool>,
+    pub hide_world_writable_warning: Option<bool>,
 }
 
 /// TOML settings for cloud session integration.
@@ -462,6 +576,8 @@ pub enum VimEnterBehavior {
     Newline,
     /// Enter submits in INSERT mode, inserts a newline in NORMAL mode.
     Submit,
+    /// Enter submits in both INSERT and NORMAL mode.
+    AlwaysSubmit,
     /// Vim mode is disabled.
     #[default]
     Off,
@@ -471,8 +587,9 @@ impl VimEnterBehavior {
     /// Human-readable name for display in the TUI.
     pub fn display_name(&self) -> &'static str {
         match self {
-            Self::Newline => "Enter is Newline",
-            Self::Submit => "Enter is Submit",
+            Self::Newline => "Submit in NORMAL",
+            Self::Submit => "Submit in INSERT",
+            Self::AlwaysSubmit => "Always Submit",
             Self::Off => "Off",
         }
     }
@@ -482,13 +599,14 @@ impl VimEnterBehavior {
         match self {
             Self::Newline => "newline",
             Self::Submit => "submit",
+            Self::AlwaysSubmit => "always_submit",
             Self::Off => "off",
         }
     }
 
     /// All variants in order, for building picker UIs.
     pub fn all_variants() -> &'static [VimEnterBehavior] {
-        &[Self::Newline, Self::Submit, Self::Off]
+        &[Self::Newline, Self::Submit, Self::AlwaysSubmit, Self::Off]
     }
 
     /// Returns true if vim mode is enabled (i.e. not Off).
@@ -517,7 +635,9 @@ impl<'de> Deserialize<'de> for VimEnterBehavior {
             type Value = VimEnterBehavior;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a boolean or one of \"newline\", \"submit\", \"off\"")
+                formatter.write_str(
+                    "a boolean or one of \"newline\", \"submit\", \"always_submit\", \"off\"",
+                )
             }
 
             fn visit_bool<E>(self, value: bool) -> Result<VimEnterBehavior, E>
@@ -538,8 +658,12 @@ impl<'de> Deserialize<'de> for VimEnterBehavior {
                 match value {
                     "newline" => Ok(VimEnterBehavior::Newline),
                     "submit" => Ok(VimEnterBehavior::Submit),
+                    "always_submit" => Ok(VimEnterBehavior::AlwaysSubmit),
                     "off" => Ok(VimEnterBehavior::Off),
-                    _ => Err(E::unknown_variant(value, &["newline", "submit", "off"])),
+                    _ => Err(E::unknown_variant(
+                        value,
+                        &["newline", "submit", "always_submit", "off"],
+                    )),
                 }
             }
         }
@@ -1140,6 +1264,8 @@ impl HotkeyConfig {
 pub enum FooterSegment {
     /// Task summary: "Task: <summary>"
     PromptSummary,
+    /// Agent-supplied session title: "Title: Fix login flakes"
+    SessionTitle,
     /// Vim mode indicator: "NORMAL" or "INSERT"
     VimMode,
     /// Git branch: "⎇ branch-name"
@@ -1148,18 +1274,31 @@ pub enum FooterSegment {
     WorktreeName,
     /// Git stats: "+10 -3"
     GitStats,
-    /// Context window: "Context: 34K (27%)"
+    /// Default context window display: "27% / 128k"
     Context,
+    /// Percentage of the context window currently used: "27%"
+    ContextUsedPercent,
+    /// Percentage of the context window still available: "73%"
+    ContextRemainingPercent,
+    /// Tokens currently used in the context window: "34.0k"
+    ContextUsedTokens,
+    /// Tokens still available in the context window: "94.0k"
+    ContextRemainingTokens,
+    /// Maximum context window size: "128k"
+    ContextWindowTokens,
     /// Approval mode: "Approvals: Agent"
     ApprovalMode,
-    /// Nori profile: "Skillset: name"
-    NoriProfile,
+    /// Active skillset: "Skillset: name"
+    Skillset,
     /// Nori version: "Skillsets v19.1.1"
     NoriVersion,
     /// Token usage: "Tokens: 77K total (32K cached)"
     TokenUsage,
     /// ACP mode indicator: "[ Plan ]"
     ModeIndicator,
+    /// Cloud session identity: "☁ nori-fast-kazunoko-aac8". Only rendered when
+    /// attached to a cloud-mode session; self-hides otherwise.
+    CloudSession,
 }
 
 impl FooterSegment {
@@ -1167,16 +1306,23 @@ impl FooterSegment {
     pub fn display_name(&self) -> &'static str {
         match self {
             Self::PromptSummary => "Task Summary",
+            Self::SessionTitle => "Session Title",
             Self::VimMode => "Vim Mode",
             Self::GitBranch => "Git Branch",
             Self::WorktreeName => "Worktree Name",
             Self::GitStats => "Git Stats",
             Self::Context => "Context Window",
+            Self::ContextUsedPercent => "Context Used %",
+            Self::ContextRemainingPercent => "Context Remaining %",
+            Self::ContextUsedTokens => "Context Used Tokens",
+            Self::ContextRemainingTokens => "Context Remaining Tokens",
+            Self::ContextWindowTokens => "Context Window Tokens",
             Self::ApprovalMode => "Approvals",
-            Self::NoriProfile => "Skillset",
+            Self::Skillset => "Skillset",
             Self::NoriVersion => "Skillset Version",
             Self::TokenUsage => "Token Usage",
             Self::ModeIndicator => "Mode Indicator",
+            Self::CloudSession => "Cloud Session",
         }
     }
 
@@ -1184,16 +1330,23 @@ impl FooterSegment {
     pub fn toml_key(&self) -> &'static str {
         match self {
             Self::PromptSummary => "prompt_summary",
+            Self::SessionTitle => "session_title",
             Self::VimMode => "vim_mode",
             Self::GitBranch => "git_branch",
             Self::WorktreeName => "worktree_name",
             Self::GitStats => "git_stats",
             Self::Context => "context",
+            Self::ContextUsedPercent => "context_used_percent",
+            Self::ContextRemainingPercent => "context_remaining_percent",
+            Self::ContextUsedTokens => "context_used_tokens",
+            Self::ContextRemainingTokens => "context_remaining_tokens",
+            Self::ContextWindowTokens => "context_window_tokens",
             Self::ApprovalMode => "approval_mode",
-            Self::NoriProfile => "nori_profile",
+            Self::Skillset => "skillset",
             Self::NoriVersion => "nori_version",
             Self::TokenUsage => "token_usage",
             Self::ModeIndicator => "mode_indicator",
+            Self::CloudSession => "cloud_session",
         }
     }
 
@@ -1201,22 +1354,36 @@ impl FooterSegment {
     pub fn all_variants() -> &'static [FooterSegment] {
         &[
             Self::PromptSummary,
+            Self::SessionTitle,
             Self::VimMode,
             Self::GitBranch,
             Self::WorktreeName,
             Self::GitStats,
             Self::Context,
+            Self::ContextUsedPercent,
+            Self::ContextRemainingPercent,
+            Self::ContextUsedTokens,
+            Self::ContextRemainingTokens,
+            Self::ContextWindowTokens,
             Self::ApprovalMode,
-            Self::NoriProfile,
+            Self::Skillset,
             Self::NoriVersion,
             Self::TokenUsage,
             Self::ModeIndicator,
+            Self::CloudSession,
         ]
     }
 
     /// Default order of footer segments (same as all_variants).
     pub fn default_order() -> &'static [FooterSegment] {
         Self::all_variants()
+    }
+
+    fn from_toml_key(key: &str) -> Option<Self> {
+        Self::all_variants()
+            .iter()
+            .copied()
+            .find(|segment| segment.toml_key() == key)
     }
 }
 
@@ -1227,12 +1394,14 @@ impl fmt::Display for FooterSegment {
 }
 
 /// TOML-deserializable footer segment configuration.
-/// Each field is optional - if not specified, the segment is enabled by default.
+/// Each field is optional; unspecified fields use `FooterSegmentConfig::default`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FooterSegmentConfigToml {
     /// Enable/disable task summary segment.
     pub prompt_summary: Option<bool>,
+    /// Enable/disable agent-supplied session title segment.
+    pub session_title: Option<bool>,
     /// Enable/disable vim mode indicator.
     pub vim_mode: Option<bool>,
     /// Enable/disable git branch segment.
@@ -1243,16 +1412,28 @@ pub struct FooterSegmentConfigToml {
     pub git_stats: Option<bool>,
     /// Enable/disable context window segment.
     pub context: Option<bool>,
+    /// Enable/disable context used percentage segment.
+    pub context_used_percent: Option<bool>,
+    /// Enable/disable context remaining percentage segment.
+    pub context_remaining_percent: Option<bool>,
+    /// Enable/disable context used token segment.
+    pub context_used_tokens: Option<bool>,
+    /// Enable/disable context remaining token segment.
+    pub context_remaining_tokens: Option<bool>,
+    /// Enable/disable context window maximum token segment.
+    pub context_window_tokens: Option<bool>,
     /// Enable/disable approval mode segment.
     pub approval_mode: Option<bool>,
-    /// Enable/disable nori profile segment.
-    pub nori_profile: Option<bool>,
+    /// Enable/disable active skillset segment.
+    pub skillset: Option<bool>,
     /// Enable/disable nori version segment.
     pub nori_version: Option<bool>,
     /// Enable/disable token usage segment.
     pub token_usage: Option<bool>,
     /// Enable/disable ACP mode indicator segment.
     pub mode_indicator: Option<bool>,
+    /// Enable/disable cloud session identity segment.
+    pub cloud_session: Option<bool>,
 }
 
 /// Resolved footer segment configuration with defaults applied.
@@ -1260,6 +1441,8 @@ pub struct FooterSegmentConfigToml {
 pub struct FooterSegmentConfig {
     /// Enable/disable task summary segment.
     pub prompt_summary: bool,
+    /// Enable/disable agent-supplied session title segment.
+    pub session_title: bool,
     /// Enable/disable vim mode indicator.
     pub vim_mode: bool,
     /// Enable/disable git branch segment.
@@ -1270,37 +1453,55 @@ pub struct FooterSegmentConfig {
     pub git_stats: bool,
     /// Enable/disable context window segment.
     pub context: bool,
+    /// Enable/disable context used percentage segment.
+    pub context_used_percent: bool,
+    /// Enable/disable context remaining percentage segment.
+    pub context_remaining_percent: bool,
+    /// Enable/disable context used token segment.
+    pub context_used_tokens: bool,
+    /// Enable/disable context remaining token segment.
+    pub context_remaining_tokens: bool,
+    /// Enable/disable context window maximum token segment.
+    pub context_window_tokens: bool,
     /// Enable/disable approval mode segment.
     pub approval_mode: bool,
-    /// Enable/disable nori profile segment.
-    pub nori_profile: bool,
+    /// Enable/disable active skillset segment.
+    pub skillset: bool,
     /// Enable/disable nori version segment.
     pub nori_version: bool,
     /// Enable/disable token usage segment.
     pub token_usage: bool,
     /// Enable/disable ACP mode indicator segment.
     pub mode_indicator: bool,
+    /// Enable/disable cloud session identity segment.
+    pub cloud_session: bool,
 }
 
 impl Default for FooterSegmentConfig {
     fn default() -> Self {
         // Lean defaults: only segments that are useful for everyone (or
-        // self-hiding when irrelevant) ship enabled. Niche segments such as
-        // vim mode, prompt summary, git stats, and skillset info are gated
-        // behind explicit opt-in so the footer stays readable on smaller
-        // terminals.
+        // self-hiding when irrelevant) ship enabled. Vim mode is self-hiding
+        // when disabled and must stay visible when enabled so modal state is
+        // never ambiguous.
         Self {
             prompt_summary: false,
-            vim_mode: false,
+            session_title: true,
+            vim_mode: true,
             git_branch: true,
             worktree_name: true,
             git_stats: false,
             context: true,
+            context_used_percent: false,
+            context_remaining_percent: false,
+            context_used_tokens: false,
+            context_remaining_tokens: false,
+            context_window_tokens: false,
             approval_mode: true,
-            nori_profile: false,
+            skillset: false,
             nori_version: false,
             token_usage: true,
             mode_indicator: true,
+            cloud_session: true,
         }
     }
 }
@@ -1311,16 +1512,33 @@ impl FooterSegmentConfig {
         let defaults = Self::default();
         Self {
             prompt_summary: toml.prompt_summary.unwrap_or(defaults.prompt_summary),
+            session_title: toml.session_title.unwrap_or(defaults.session_title),
             vim_mode: toml.vim_mode.unwrap_or(defaults.vim_mode),
             git_branch: toml.git_branch.unwrap_or(defaults.git_branch),
             worktree_name: toml.worktree_name.unwrap_or(defaults.worktree_name),
             git_stats: toml.git_stats.unwrap_or(defaults.git_stats),
             context: toml.context.unwrap_or(defaults.context),
+            context_used_percent: toml
+                .context_used_percent
+                .unwrap_or(defaults.context_used_percent),
+            context_remaining_percent: toml
+                .context_remaining_percent
+                .unwrap_or(defaults.context_remaining_percent),
+            context_used_tokens: toml
+                .context_used_tokens
+                .unwrap_or(defaults.context_used_tokens),
+            context_remaining_tokens: toml
+                .context_remaining_tokens
+                .unwrap_or(defaults.context_remaining_tokens),
+            context_window_tokens: toml
+                .context_window_tokens
+                .unwrap_or(defaults.context_window_tokens),
             approval_mode: toml.approval_mode.unwrap_or(defaults.approval_mode),
-            nori_profile: toml.nori_profile.unwrap_or(defaults.nori_profile),
+            skillset: toml.skillset.unwrap_or(defaults.skillset),
             nori_version: toml.nori_version.unwrap_or(defaults.nori_version),
             token_usage: toml.token_usage.unwrap_or(defaults.token_usage),
             mode_indicator: toml.mode_indicator.unwrap_or(defaults.mode_indicator),
+            cloud_session: toml.cloud_session.unwrap_or(defaults.cloud_session),
         }
     }
 
@@ -1328,16 +1546,23 @@ impl FooterSegmentConfig {
     pub fn is_enabled(&self, segment: FooterSegment) -> bool {
         match segment {
             FooterSegment::PromptSummary => self.prompt_summary,
+            FooterSegment::SessionTitle => self.session_title,
             FooterSegment::VimMode => self.vim_mode,
             FooterSegment::GitBranch => self.git_branch,
             FooterSegment::WorktreeName => self.worktree_name,
             FooterSegment::GitStats => self.git_stats,
             FooterSegment::Context => self.context,
+            FooterSegment::ContextUsedPercent => self.context_used_percent,
+            FooterSegment::ContextRemainingPercent => self.context_remaining_percent,
+            FooterSegment::ContextUsedTokens => self.context_used_tokens,
+            FooterSegment::ContextRemainingTokens => self.context_remaining_tokens,
+            FooterSegment::ContextWindowTokens => self.context_window_tokens,
             FooterSegment::ApprovalMode => self.approval_mode,
-            FooterSegment::NoriProfile => self.nori_profile,
+            FooterSegment::Skillset => self.skillset,
             FooterSegment::NoriVersion => self.nori_version,
             FooterSegment::TokenUsage => self.token_usage,
             FooterSegment::ModeIndicator => self.mode_indicator,
+            FooterSegment::CloudSession => self.cloud_session,
         }
     }
 
@@ -1345,16 +1570,23 @@ impl FooterSegmentConfig {
     pub fn set_enabled(&mut self, segment: FooterSegment, enabled: bool) {
         match segment {
             FooterSegment::PromptSummary => self.prompt_summary = enabled,
+            FooterSegment::SessionTitle => self.session_title = enabled,
             FooterSegment::VimMode => self.vim_mode = enabled,
             FooterSegment::GitBranch => self.git_branch = enabled,
             FooterSegment::WorktreeName => self.worktree_name = enabled,
             FooterSegment::GitStats => self.git_stats = enabled,
             FooterSegment::Context => self.context = enabled,
+            FooterSegment::ContextUsedPercent => self.context_used_percent = enabled,
+            FooterSegment::ContextRemainingPercent => self.context_remaining_percent = enabled,
+            FooterSegment::ContextUsedTokens => self.context_used_tokens = enabled,
+            FooterSegment::ContextRemainingTokens => self.context_remaining_tokens = enabled,
+            FooterSegment::ContextWindowTokens => self.context_window_tokens = enabled,
             FooterSegment::ApprovalMode => self.approval_mode = enabled,
-            FooterSegment::NoriProfile => self.nori_profile = enabled,
+            FooterSegment::Skillset => self.skillset = enabled,
             FooterSegment::NoriVersion => self.nori_version = enabled,
             FooterSegment::TokenUsage => self.token_usage = enabled,
             FooterSegment::ModeIndicator => self.mode_indicator = enabled,
+            FooterSegment::CloudSession => self.cloud_session = enabled,
         }
     }
 
@@ -1367,6 +1599,128 @@ impl FooterSegmentConfig {
     }
 }
 
+/// A footer layout entry: either one built-in segment or one custom format.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FooterLayoutItem {
+    Builtin(FooterSegment),
+    Custom(FooterFormat),
+}
+
+impl From<FooterSegment> for FooterLayoutItem {
+    fn from(segment: FooterSegment) -> Self {
+        Self::Builtin(segment)
+    }
+}
+
+impl<'de> Deserialize<'de> for FooterLayoutItem {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct CustomFooterFormat {
+            format: String,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum FooterLayoutItemToml {
+            Builtin(String),
+            Custom(CustomFooterFormat),
+        }
+
+        match FooterLayoutItemToml::deserialize(deserializer)? {
+            FooterLayoutItemToml::Builtin(key) => FooterSegment::from_toml_key(&key)
+                .map(Self::Builtin)
+                .ok_or_else(|| serde::de::Error::custom(format!("unknown footer segment `{key}`"))),
+            FooterLayoutItemToml::Custom(custom) => FooterFormat::parse(&custom.format)
+                .map(Self::Custom)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+}
+
+/// A validated custom footer format, compiled when configuration is loaded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FooterFormat {
+    parts: Vec<FooterFormatPart>,
+}
+
+impl FooterFormat {
+    fn parse(format: &str) -> Result<Self, String> {
+        let mut chars = format.chars().peekable();
+        let mut parts = Vec::new();
+        let mut text = String::new();
+
+        while let Some(ch) = chars.next() {
+            match ch {
+                '{' if chars.peek() == Some(&'{') => {
+                    chars.next();
+                    text.push('{');
+                }
+                '}' if chars.peek() == Some(&'}') => {
+                    chars.next();
+                    text.push('}');
+                }
+                '{' => {
+                    if !text.is_empty() {
+                        parts.push(FooterFormatPart::Text(std::mem::take(&mut text)));
+                    }
+
+                    let mut placeholder = String::new();
+                    loop {
+                        match chars.next() {
+                            Some('}') => break,
+                            Some('{') => {
+                                return Err(format!(
+                                    "invalid footer format `{format}`: nested `{{` in placeholder"
+                                ));
+                            }
+                            Some(ch) => placeholder.push(ch),
+                            None => {
+                                return Err(format!(
+                                    "invalid footer format `{format}`: missing closing `}}`"
+                                ));
+                            }
+                        }
+                    }
+
+                    let Some(segment) = FooterSegment::from_toml_key(&placeholder) else {
+                        return Err(format!(
+                            "unknown footer segment placeholder `{placeholder}` in `{format}`"
+                        ));
+                    };
+                    parts.push(FooterFormatPart::Segment(segment));
+                }
+                '}' => {
+                    return Err(format!(
+                        "invalid footer format `{format}`: unmatched closing `}}`"
+                    ));
+                }
+                _ => text.push(ch),
+            }
+        }
+
+        if !text.is_empty() {
+            parts.push(FooterFormatPart::Text(text));
+        }
+
+        Ok(Self { parts })
+    }
+
+    pub fn parts(&self) -> &[FooterFormatPart] {
+        &self.parts
+    }
+}
+
+/// One compiled piece of a custom footer format.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FooterFormatPart {
+    Text(String),
+    Segment(FooterSegment),
+}
+
 /// TOML-deserializable footer segment placement settings.
 ///
 /// Each field replaces that placement when present. Listed segments are moved
@@ -1376,41 +1730,48 @@ impl FooterSegmentConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FooterLayoutConfigToml {
-    pub footer_left: Option<Vec<FooterSegment>>,
-    pub footer_right: Option<Vec<FooterSegment>>,
-    pub textarea_top_left: Option<Vec<FooterSegment>>,
-    pub textarea_top_right: Option<Vec<FooterSegment>>,
-    pub textarea_bottom_left: Option<Vec<FooterSegment>>,
-    pub textarea_bottom_right: Option<Vec<FooterSegment>>,
+    pub footer_left: Option<Vec<FooterLayoutItem>>,
+    pub footer_right: Option<Vec<FooterLayoutItem>>,
+    pub textarea_top_left: Option<Vec<FooterLayoutItem>>,
+    pub textarea_top_right: Option<Vec<FooterLayoutItem>>,
+    pub textarea_bottom_left: Option<Vec<FooterLayoutItem>>,
+    pub textarea_bottom_right: Option<Vec<FooterLayoutItem>>,
 }
 
 /// Resolved footer segment placement configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FooterLayoutConfig {
-    pub footer_left: Vec<FooterSegment>,
-    pub footer_right: Vec<FooterSegment>,
-    pub textarea_top_left: Vec<FooterSegment>,
-    pub textarea_top_right: Vec<FooterSegment>,
-    pub textarea_bottom_left: Vec<FooterSegment>,
-    pub textarea_bottom_right: Vec<FooterSegment>,
+    pub footer_left: Vec<FooterLayoutItem>,
+    pub footer_right: Vec<FooterLayoutItem>,
+    pub textarea_top_left: Vec<FooterLayoutItem>,
+    pub textarea_top_right: Vec<FooterLayoutItem>,
+    pub textarea_bottom_left: Vec<FooterLayoutItem>,
+    pub textarea_bottom_right: Vec<FooterLayoutItem>,
 }
 
 impl Default for FooterLayoutConfig {
     fn default() -> Self {
         Self {
             footer_left: vec![
-                FooterSegment::PromptSummary,
-                FooterSegment::VimMode,
-                FooterSegment::GitBranch,
-                FooterSegment::WorktreeName,
-                FooterSegment::GitStats,
-                FooterSegment::Context,
-                FooterSegment::ApprovalMode,
-                FooterSegment::NoriProfile,
-                FooterSegment::NoriVersion,
-                FooterSegment::TokenUsage,
+                FooterSegment::CloudSession.into(),
+                FooterSegment::PromptSummary.into(),
+                FooterSegment::SessionTitle.into(),
+                FooterSegment::VimMode.into(),
+                FooterSegment::GitBranch.into(),
+                FooterSegment::WorktreeName.into(),
+                FooterSegment::GitStats.into(),
+                FooterSegment::Context.into(),
+                FooterSegment::ContextUsedPercent.into(),
+                FooterSegment::ContextRemainingPercent.into(),
+                FooterSegment::ContextUsedTokens.into(),
+                FooterSegment::ContextRemainingTokens.into(),
+                FooterSegment::ContextWindowTokens.into(),
+                FooterSegment::ApprovalMode.into(),
+                FooterSegment::Skillset.into(),
+                FooterSegment::NoriVersion.into(),
+                FooterSegment::TokenUsage.into(),
             ],
-            footer_right: vec![FooterSegment::ModeIndicator],
+            footer_right: vec![FooterSegment::ModeIndicator.into()],
             textarea_top_left: Vec::new(),
             textarea_top_right: Vec::new(),
             textarea_bottom_left: Vec::new(),
@@ -1451,7 +1812,7 @@ impl FooterLayoutConfig {
         config
     }
 
-    fn remove_segments(&mut self, segments: &[FooterSegment]) {
+    fn remove_segments(&mut self, segments: &[FooterLayoutItem]) {
         self.footer_left
             .retain(|segment| !segments.contains(segment));
         self.footer_right
@@ -1473,6 +1834,9 @@ impl FooterLayoutConfig {
 pub struct TuiConfigToml {
     /// Enable animations (shimmer effects, spinners)
     pub animations: Option<bool>,
+
+    /// Rebuild inline transcript scrollback when the terminal width changes.
+    pub resize_reflow: Option<bool>,
 
     /// Terminal notification preference (OSC 9 escape sequences)
     pub terminal_notifications: Option<TerminalNotifications>,
@@ -1536,6 +1900,9 @@ pub struct TuiConfig {
     /// Enable animations (shimmer effects, spinners)
     pub animations: bool,
 
+    /// Rebuild inline transcript scrollback when the terminal width changes.
+    pub resize_reflow: bool,
+
     /// Terminal notification preference (OSC 9 escape sequences)
     pub terminal_notifications: TerminalNotifications,
 
@@ -1550,6 +1917,7 @@ impl Default for TuiConfig {
     fn default() -> Self {
         Self {
             animations: true,
+            resize_reflow: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
@@ -1611,20 +1979,6 @@ impl fmt::Display for FileManager {
     }
 }
 
-/// Approval policy for command execution
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[derive(Default)]
-pub enum ApprovalPolicy {
-    /// Always ask for approval
-    Always,
-    /// Ask on potentially dangerous operations
-    #[default]
-    OnRequest,
-    /// Never ask (dangerous)
-    Never,
-}
-
 /// CLI overrides for config values
 #[derive(Debug, Clone, Default)]
 pub struct NoriConfigOverrides {
@@ -1635,10 +1989,22 @@ pub struct NoriConfigOverrides {
     pub sandbox_mode: Option<SandboxMode>,
 
     /// Override approval policy
-    pub approval_policy: Option<ApprovalPolicy>,
+    pub approval_policy: Option<AskForApproval>,
 
     /// Override current working directory
     pub cwd: Option<PathBuf>,
+
+    /// Additional directories writable under the workspace-write sandbox.
+    pub additional_writable_roots: Vec<PathBuf>,
+
+    /// Dotted-path TOML overrides from `-c key=value` flags.
+    pub raw_overrides: Vec<(String, toml::Value)>,
+}
+
+/// Trust settings resolved for the active project.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct ProjectConfig {
+    pub trust_level: Option<TrustLevel>,
 }
 
 /// Resolved configuration with defaults applied
@@ -1648,23 +2014,59 @@ pub struct NoriConfig {
     /// Persisted to track user's agent preference across sessions
     pub agent: String,
 
-    /// The active ACP agent slug (CLI override > config model > persisted agent)
+    /// The active ACP agent slug (CLI override > persisted agent)
     pub active_agent: String,
 
     /// Sandbox mode for command execution
     pub sandbox_mode: SandboxMode,
 
+    /// Resolved sandbox policy for command execution.
+    pub sandbox_policy: SandboxPolicy,
+
     /// Approval policy for commands
-    pub approval_policy: ApprovalPolicy,
+    pub approval_policy: AskForApproval,
+
+    /// Whether approval or sandbox policy was explicitly configured.
+    pub has_explicit_approval_or_sandbox_policy: bool,
+
+    /// Whether workspace-write was downgraded because Windows sandboxing is unavailable.
+    pub forced_auto_mode_downgraded_on_windows: bool,
+
+    /// Whether the experimental Windows sandbox is enabled in user config.
+    pub windows_sandbox_enabled: bool,
+
+    /// Environment inherited by sandboxed commands.
+    pub shell_environment_policy: ShellEnvironmentPolicy,
+
+    /// Trust settings for the active working directory.
+    pub active_project: ProjectConfig,
+
+    /// User acknowledgement state for safety notices.
+    pub notices: Notice,
+
+    /// Whether to check for Nori updates at startup.
+    pub check_for_update_on_startup: bool,
+
+    /// Disable burst-paste detection in the prompt composer.
+    pub disable_paste_burst: bool,
 
     /// History persistence policy
     pub history_persistence: HistoryPersistence,
+
+    /// Which Chrome profile the `/browser` command launches against.
+    pub browser_profile: BrowserProfileMode,
+
+    /// External notifier command and arguments.
+    pub notify: Option<Vec<String>>,
 
     /// ACP wire proxy logging settings.
     pub acp_proxy: AcpProxyConfig,
 
     /// Enable TUI animations
     pub animations: bool,
+
+    /// Rebuild inline transcript scrollback when the terminal width changes.
+    pub resize_reflow: bool,
 
     /// Terminal notification preference (OSC 9 escape sequences)
     pub terminal_notifications: TerminalNotifications,
@@ -1791,13 +2193,25 @@ impl Default for NoriConfig {
             agent: DEFAULT_AGENT.to_string(),
             active_agent: DEFAULT_AGENT.to_string(),
             sandbox_mode: SandboxMode::WorkspaceWrite,
-            approval_policy: ApprovalPolicy::OnRequest,
+            sandbox_policy: SandboxPolicy::new_workspace_write_policy(),
+            approval_policy: AskForApproval::OnRequest,
+            has_explicit_approval_or_sandbox_policy: false,
+            forced_auto_mode_downgraded_on_windows: false,
+            windows_sandbox_enabled: false,
+            shell_environment_policy: ShellEnvironmentPolicy::default(),
+            active_project: ProjectConfig::default(),
+            notices: Notice::default(),
+            check_for_update_on_startup: true,
+            disable_paste_burst: false,
             history_persistence: HistoryPersistence::default(),
+            browser_profile: BrowserProfileMode::default(),
+            notify: None,
             acp_proxy: AcpProxyConfig {
                 enabled: false,
                 log_dir: PathBuf::from(".nori/cli/acp-wire"),
             },
             animations: true,
+            resize_reflow: true,
             terminal_notifications: TerminalNotifications::Enabled,
             os_notifications: OsNotifications::Enabled,
             vertical_footer: false,
@@ -1836,6 +2250,18 @@ impl Default for NoriConfig {
             default_models: HashMap::new(),
             agents: Vec::new(),
             cloud_broker_url: None,
+        }
+    }
+}
+
+impl NoriConfig {
+    /// Downgrade workspace-write when the Windows sandbox is unavailable.
+    pub fn apply_windows_sandbox_availability(&mut self, sandbox_available: bool) {
+        let needs_downgrade = !sandbox_available
+            && matches!(self.sandbox_policy, SandboxPolicy::WorkspaceWrite { .. });
+        self.forced_auto_mode_downgraded_on_windows = needs_downgrade;
+        if needs_downgrade {
+            self.sandbox_policy = SandboxPolicy::new_read_only_policy();
         }
     }
 }
@@ -1935,144 +2361,6 @@ pub fn resolve_hook_paths(paths: Option<Vec<String>>) -> Vec<PathBuf> {
         .into_iter()
         .map(|s| expand_tilde(&s))
         .collect()
-}
-
-// ============================================================================
-// MCP Server Configuration
-// ============================================================================
-
-/// MCP server configuration (TOML representation)
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct McpServerConfigToml {
-    // Stdio transport fields
-    /// Command to execute
-    pub command: Option<String>,
-    /// Arguments to pass to the command
-    #[serde(default)]
-    pub args: Option<Vec<String>>,
-    /// Environment variables to set
-    #[serde(default)]
-    pub env: Option<HashMap<String, String>>,
-    /// Environment variable names to inherit
-    #[serde(default)]
-    pub env_vars: Option<Vec<String>>,
-
-    // HTTP transport fields
-    /// URL for HTTP-based MCP server
-    pub url: Option<String>,
-    /// Environment variable containing bearer token
-    pub bearer_token_env_var: Option<String>,
-    /// HTTP headers to include
-    #[serde(default)]
-    pub http_headers: Option<HashMap<String, String>>,
-    /// HTTP headers sourced from environment variables
-    #[serde(default)]
-    pub env_http_headers: Option<HashMap<String, String>>,
-
-    /// Pre-registered OAuth client ID
-    #[serde(default)]
-    pub client_id: Option<String>,
-    /// Environment variable holding the OAuth client secret
-    #[serde(default)]
-    pub client_secret_env_var: Option<String>,
-
-    // Shared fields
-    /// Whether this server is enabled
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    /// Startup timeout in seconds
-    pub startup_timeout_sec: Option<f64>,
-    /// Tool call timeout in seconds
-    pub tool_timeout_sec: Option<f64>,
-    /// Allow-list of tool names
-    pub enabled_tools: Option<Vec<String>>,
-    /// Deny-list of tool names
-    pub disabled_tools: Option<Vec<String>>,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-/// Resolved MCP server configuration
-#[derive(Debug, Clone, PartialEq)]
-pub struct McpServerConfig {
-    /// Transport configuration
-    pub transport: McpServerTransportConfig,
-
-    /// Whether this server is enabled
-    pub enabled: bool,
-
-    /// Startup timeout
-    pub startup_timeout: Option<Duration>,
-
-    /// Tool call timeout
-    pub tool_timeout: Option<Duration>,
-
-    /// Allow-list of tools
-    pub enabled_tools: Option<Vec<String>>,
-
-    /// Deny-list of tools
-    pub disabled_tools: Option<Vec<String>>,
-}
-
-/// MCP server transport configuration
-#[derive(Debug, Clone, PartialEq)]
-pub enum McpServerTransportConfig {
-    /// Stdio-based MCP server (subprocess)
-    Stdio {
-        command: String,
-        args: Vec<String>,
-        env: Option<HashMap<String, String>>,
-        env_vars: Vec<String>,
-    },
-    /// HTTP-based MCP server
-    StreamableHttp {
-        url: String,
-        bearer_token_env_var: Option<String>,
-        http_headers: Option<HashMap<String, String>>,
-        env_http_headers: Option<HashMap<String, String>>,
-        client_id: Option<String>,
-        client_secret_env_var: Option<String>,
-    },
-}
-
-impl McpServerConfigToml {
-    /// Convert TOML representation to resolved config
-    pub fn resolve(&self) -> Result<McpServerConfig, String> {
-        let transport = if let Some(command) = &self.command {
-            if self.url.is_some() {
-                return Err("Cannot specify both 'command' and 'url'".to_string());
-            }
-            McpServerTransportConfig::Stdio {
-                command: command.clone(),
-                args: self.args.clone().unwrap_or_default(),
-                env: self.env.clone(),
-                env_vars: self.env_vars.clone().unwrap_or_default(),
-            }
-        } else if let Some(url) = &self.url {
-            McpServerTransportConfig::StreamableHttp {
-                url: url.clone(),
-                bearer_token_env_var: self.bearer_token_env_var.clone(),
-                http_headers: self.http_headers.clone(),
-                env_http_headers: self.env_http_headers.clone(),
-                client_id: self.client_id.clone(),
-                client_secret_env_var: self.client_secret_env_var.clone(),
-            }
-        } else {
-            return Err("Must specify either 'command' or 'url'".to_string());
-        };
-
-        Ok(McpServerConfig {
-            transport,
-            enabled: self.enabled,
-            startup_timeout: self.startup_timeout_sec.map(Duration::from_secs_f64),
-            tool_timeout: self.tool_timeout_sec.map(Duration::from_secs_f64),
-            enabled_tools: self.enabled_tools.clone(),
-            disabled_tools: self.disabled_tools.clone(),
-        })
-    }
 }
 
 #[cfg(test)]

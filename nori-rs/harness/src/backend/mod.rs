@@ -1,10 +1,6 @@
 //! Backend adapter for ACP agents in the TUI
 //!
-//! This module provides `AcpBackend`, which adapts the ACP connection interface
-//! to be compatible with the TUI's event-driven architecture. It translates
-//! between Codex `Op` submissions and ACP protocol calls, emits ACP session
-//! semantics on `nori_protocol::ClientEvent`, and keeps `codex_protocol::Event`
-//! only for shared control-plane notifications.
+//! This module provides the private runtime behind the typed harness API.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,41 +8,27 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use agent_client_protocol_schema::v1 as acp;
+use crate::ConversationId;
 use anyhow::Result;
-use codex_protocol::ConversationId;
-use codex_protocol::config_types::McpServerConfig;
-#[cfg(test)]
-use codex_protocol::parse_command::ParsedCommand;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::ErrorEvent;
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::HookOutputEvent;
-use codex_protocol::protocol::HookOutputLevel;
-use codex_protocol::protocol::Op;
-use codex_protocol::protocol::PromptSummaryEvent;
-use codex_protocol::protocol::ReviewDecision;
-use codex_protocol::protocol::SandboxPolicy;
-use codex_protocol::protocol::SessionConfiguredEvent;
-use codex_protocol::protocol::WarningEvent;
-use codex_protocol::user_input::UserInput;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
-use nori_protocol::ClientEvent;
+use nori_config::AskForApproval;
+use nori_config::McpServerConfig;
+use nori_config::SandboxPolicy;
+use nori_protocol::SessionEvent;
+use nori_protocol::acp::v1 as acp;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tokio::sync::watch;
 use tracing::debug;
 use tracing::warn;
 
-use crate::connection::ApprovalEventType;
-use crate::connection::ApprovalRequest;
+use crate::connection::DelegatedRequest;
 use crate::connection::acp_connection::AcpConnection;
 use crate::registry::get_agent_config;
 use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
-use crate::translator;
 use crate::undo::GhostSnapshotStack;
 
 // =============================================================================
@@ -54,7 +36,9 @@ use crate::undo::GhostSnapshotStack;
 // =============================================================================
 
 pub use nori_acp_host::AcpErrorCategory;
+pub use nori_acp_host::AcpErrorDetails;
 pub use nori_acp_host::categorize_acp_error;
+pub use nori_acp_host::categorize_acp_error_chain;
 
 /// Generate an enhanced error message with actionable instructions.
 ///
@@ -91,6 +75,24 @@ pub fn enhanced_error_message(
             "The API returned a server error. This is usually temporary — please try again."
                 .to_string()
         }
+        AcpErrorCategory::SessionNotFound => format!(
+            "That session no longer exists on {provider_name} — it may have expired or been \
+             closed elsewhere. Pick another session from /resume or start a new one."
+        ),
+        AcpErrorCategory::SessionNotResumable => format!(
+            "That session can't be reattached on {provider_name}. Start a new session instead."
+        ),
+        AcpErrorCategory::SessionAlreadyActive => format!(
+            "A session is already active on the {provider_name} connection. Close it with /close \
+             before resuming or creating another."
+        ),
+        AcpErrorCategory::NoActiveSession => format!(
+            "No session is active on the {provider_name} connection. Start a new chat with /new."
+        ),
+        AcpErrorCategory::AgentUnreachable => format!(
+            "Could not reach the {provider_name} backing service. Check your network and try \
+             again. Original error: {original_error}"
+        ),
         AcpErrorCategory::Unknown => original_error.to_string(),
     }
 }
@@ -102,15 +104,26 @@ pub fn enhance_agent_error(
     error: anyhow::Error,
     config: &crate::registry::AcpAgentConfig,
 ) -> anyhow::Error {
-    let category = categorize_acp_error(&format!("{error:?}"));
-    anyhow::anyhow!(enhanced_error_message(
-        category,
+    let details = categorize_acp_error_chain(&error);
+    // An agent-supplied `error.data.detail` (e.g. the exact login command for
+    // this deployment) is more precise than the registry's static auth hint.
+    let auth_hint = details.detail.as_deref().unwrap_or(&config.auth_hint);
+    let mut message = enhanced_error_message(
+        details.category.clone(),
         &format!("{error}"),
         &config.provider_info.name,
-        &config.auth_hint,
+        auth_hint,
         &config.display_name,
         &config.install_hint,
-    ))
+    );
+    // For non-auth categories the detail is agent-supplied context (e.g.
+    // "the session is no longer claimed") — keep it verbatim.
+    if details.category != AcpErrorCategory::Authentication
+        && let Some(detail) = details.detail
+    {
+        message = format!("{message} ({detail})");
+    }
+    anyhow::anyhow!(message)
 }
 
 /// Configuration for spawning an ACP backend.
@@ -145,6 +158,8 @@ pub struct AcpBackendConfig {
     pub auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming the worktree
     pub auto_worktree_repo_root: Option<PathBuf>,
+    /// Whether the first prompt should be summarized for the footer.
+    pub prompt_summary_enabled: bool,
     /// Scripts to run when a session starts
     pub session_start_hooks: Vec<PathBuf>,
     /// Scripts to run when a session ends
@@ -187,28 +202,29 @@ pub struct AcpBackendConfig {
     /// Optional session context injected into the first prompt without
     /// `SUMMARY_PREFIX` framing. Used to provide product-level context
     /// (e.g. "you are running inside the nori CLI").
-    pub session_context: Option<String>,
+    pub session_context: Option<SessionContext>,
     /// MCP server configuration for listing via /mcp command
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// OAuth credentials store mode for MCP auth status computation
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 }
 
-/// Backend adapter that provides a TUI-compatible interface for ACP agents.
-///
-/// This struct wraps a `AcpConnection` and translates between:
-/// - Codex `Op` submissions → ACP protocol calls
-/// - ACP control-plane output → `codex_protocol::Event`
-/// - ACP session-domain output → `nori_protocol::ClientEvent`
+/// First-prompt product context selected from the agent's actual MCP support.
+#[derive(Debug, Clone)]
+pub struct SessionContext {
+    /// Context for agents that support Nori's HTTP MCP affordances.
+    pub with_http_mcp: String,
+    /// Context for agents that need the non-MCP fallback guidance.
+    pub without_http_mcp: String,
+}
+
 #[derive(Debug, Clone)]
 pub enum BackendEvent {
-    Control(Event),
-    Client(ClientEvent),
+    Public(SessionEvent),
 }
 
 pub(crate) struct PendingApprovalRequest {
-    request_id: String,
-    request: ApprovalRequest,
+    request: DelegatedRequest,
 }
 
 #[derive(Clone)]
@@ -216,12 +232,14 @@ pub struct AcpBackend {
     connection: Arc<AcpConnection>,
     /// Session ID is wrapped in RwLock to allow replacing it during /compact
     session_id: Arc<RwLock<acp::SessionId>>,
-    event_tx: mpsc::Sender<Event>,
     backend_event_tx: mpsc::Sender<BackendEvent>,
     /// Working directory for the session
     cwd: PathBuf,
     /// Pending approval requests waiting for user decision
     pending_approvals: Arc<Mutex<Vec<PendingApprovalRequest>>>,
+    /// Typed prompt callers waiting for the ACP transport request ID.
+    pending_prompt_submissions:
+        Arc<Mutex<HashMap<String, oneshot::Sender<Result<acp::RequestId>>>>>,
     /// Notifier for OS-level notifications (approval waiting, idle)
     user_notifier: Arc<crate::UserNotifier>,
     /// Abort handle for the idle detection timer (if running)
@@ -232,8 +250,11 @@ pub struct AcpBackend {
     history_persistence: crate::config::HistoryPersistence,
     /// ACP wire proxy logging settings
     acp_proxy: crate::config::AcpProxyConfig,
-    /// Conversation ID for this session (used for history entries)
-    conversation_id: ConversationId,
+    /// Conversation ID for this session (used for history entries).
+    ///
+    /// Interior-mutable so branch-at-head `/fork` can swap the active
+    /// conversation to the forked transcript.
+    conversation_id: Arc<RwLock<ConversationId>>,
     /// Sender for broadcasting approval policy updates to the handler
     approval_policy_tx: watch::Sender<AskForApproval>,
     /// Stored summary from last /compact operation, to be prepended to next prompt
@@ -245,25 +266,36 @@ pub struct AcpBackend {
     goal_mcp_connected: Arc<AtomicBool>,
     /// Loopback HTTP server exposing the backend-owned `nori-client` MCP tools.
     goal_mcp_http_server: Arc<Mutex<Option<nori_client_mcp::NoriClientServer>>>,
-    /// Transcript recorder cell used by local MCP tools created before the
-    /// recorder's session ID is known.
-    transcript_recorder_cell: Arc<Mutex<Option<Arc<TranscriptRecorder>>>>,
+    /// Goal extension capability the agent advertised at initialize, parsed
+    /// once. `Some` enables driving goals via `_session/goal`.
+    goal_ext_capability: Option<goal_ext::GoalExtCapability>,
     /// Accumulated context from hook `::context::` lines, prepended to next prompt
     pending_hook_context: Arc<Mutex<Option<String>>>,
-    /// Transcript recorder for session persistence
-    transcript_recorder: Option<Arc<TranscriptRecorder>>,
+    /// Transcript recorder for session persistence.
+    ///
+    /// Interior-mutable so branch-at-head `/fork` can swap the active recorder
+    /// to a freshly forked transcript. The event-forwarding task reads this
+    /// cell per event so post-fork entries never land in the frozen parent.
+    transcript_recorder: Arc<RwLock<Option<Arc<TranscriptRecorder>>>>,
     /// Internal queue for prompt result events that need reducer processing.
     session_event_tx: mpsc::Sender<session_runtime_driver::SessionRuntimeInput>,
     /// Prompt result channel bridged with ACP notifications to preserve ordering.
     prompt_result_tx: mpsc::Sender<session_reducer::InboundEvent>,
+    /// Blocks prompt-time transport and failure events until the public Prompting
+    /// phase carrying the exact wire request ID has been emitted.
+    prompt_phase_gate: Arc<Mutex<Option<tokio::sync::watch::Receiver<bool>>>>,
     /// How long after idle before sending a notification
     notify_after_idle: crate::config::NotifyAfterIdle,
     /// Stack of ghost commit snapshots for /undo support
     ghost_snapshots: Arc<GhostSnapshotStack>,
     /// Whether the first user prompt has been sent (for prompt summary)
     is_first_prompt: Arc<Mutex<bool>>,
+    /// Whether the first prompt should be summarized for the footer.
+    prompt_summary_enabled: bool,
     /// Agent name stored for spawning summarization connection
     agent_name: String,
+    /// CLI version recorded in transcript metadata (including forked transcripts)
+    cli_version: String,
     /// Auto-worktree mode (whether a worktree was created at startup)
     auto_worktree: crate::config::AutoWorktree,
     /// The git repo root (before worktree creation), used for renaming
@@ -298,67 +330,74 @@ pub struct AcpBackend {
     prompt_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
     /// Abort handle for the cancel timeout watchdog (if any)
     cancel_timeout_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the serialized reducer task.
+    runtime_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    /// Abort handle for the connection event relay task.
+    relay_task_abort: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
 }
 
-fn fallback_session_context_for_connection(
+impl AcpBackend {
+    /// The shared cell holding the active transcript recorder.
+    ///
+    /// The event-forwarding task holds this cell and re-reads the recorder per
+    /// event so a branch-at-head fork swap immediately redirects recording to
+    /// the new transcript instead of the frozen parent.
+    pub(crate) fn transcript_recorder_cell(&self) -> Arc<RwLock<Option<Arc<TranscriptRecorder>>>> {
+        Arc::clone(&self.transcript_recorder)
+    }
+}
+
+fn session_context_for_connection(
     config: &AcpBackendConfig,
     connection: &AcpConnection,
 ) -> Option<String> {
     if connection.capabilities().mcp_capabilities.http {
-        None
+        config
+            .session_context
+            .as_ref()
+            .map(|context| context.with_http_mcp.clone())
     } else {
-        config.session_context.clone()
+        config
+            .session_context
+            .as_ref()
+            .map(|context| context.without_http_mcp.clone())
     }
 }
 
 #[cfg(unix)]
+pub mod browser_profile;
+#[cfg(unix)]
 pub mod browser_session;
-mod helpers;
+mod goal_ext;
 mod nori_client_context;
 mod nori_client_mcp;
+pub mod probe;
 mod session;
 mod session_defaults;
 pub(crate) mod session_reducer;
 mod session_runtime_driver;
+mod session_swap;
 mod spawn_and_relay;
 mod submit_and_ops;
 mod thread_goal;
+mod transcript;
 mod user_input;
 mod user_shell;
-use helpers::get_op_name;
-mod tool_display;
-#[cfg(test)]
-pub(crate) use tool_display::classify_tool_to_parsed_command;
-#[cfg(test)]
-pub(crate) use tool_display::truncate_for_log;
-mod transcript;
 pub use transcript::client_events_to_replay_client_events;
 pub use transcript::transcript_to_replay_client_events;
+pub use transcript::transcript_to_replay_session_events;
 pub use transcript::transcript_to_summary;
 mod hooks;
 
-pub(crate) async fn emit_client_event(
-    backend_event_tx: &mpsc::Sender<BackendEvent>,
-    transcript_recorder: Option<&Arc<TranscriptRecorder>>,
-    client_event: ClientEvent,
-) {
-    let _ = backend_event_tx
-        .send(BackendEvent::Client(client_event.clone()))
-        .await;
-    if let Some(recorder) = transcript_recorder
-        && transcript::should_record_client_event(&client_event)
-        && let Err(e) = recorder.record_client_event(&client_event).await
-    {
-        warn!("Failed to record normalized client event: {e}");
-    }
-}
-
-pub(crate) async fn forward_control_events(
-    mut event_rx: mpsc::Receiver<Event>,
-    backend_event_tx: mpsc::Sender<BackendEvent>,
-) {
-    while let Some(event) = event_rx.recv().await {
-        let _ = backend_event_tx.send(BackendEvent::Control(event)).await;
+fn public_nori_capabilities(
+    view: crate::normalized::SessionCapabilitiesView,
+) -> nori_protocol::NoriCapabilities {
+    nori_protocol::NoriCapabilities {
+        goal_management: view
+            .builtin_commands
+            .get("goal")
+            .is_some_and(|command| command.enabled),
+        builtin_commands: view.builtin_commands,
     }
 }
 
@@ -367,6 +406,3 @@ use hooks::generate_id;
 use hooks::route_hook_results;
 use hooks::run_prompt_summary;
 use hooks::run_session_start_hooks;
-
-#[cfg(test)]
-mod tests;

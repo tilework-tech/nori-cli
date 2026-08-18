@@ -22,7 +22,7 @@ use tui_pty_e2e::TuiSession;
 #[cfg(target_os = "linux")]
 fn test_single_prompt_response_appears_immediately() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("RESPONSE_ONE_UNIQUE_MARKER");
 
     let mut session =
@@ -62,7 +62,7 @@ fn test_two_prompts_responses_not_off_by_one() {
     // We need to use agent env vars to control responses per-prompt
     // Since mock agent doesn't support that directly, we'll check ordering
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("FIRST_RESPONSE_MARKER");
 
     let mut session =
@@ -142,7 +142,7 @@ fn test_long_response_appears_immediately() {
                          FINAL_LINE_MARKER";
 
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response(long_response);
 
     let mut session =
@@ -187,7 +187,7 @@ fn test_long_response_appears_immediately() {
 #[cfg(target_os = "linux")]
 fn test_delayed_streaming_response() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("DELAYED_RESPONSE_MARKER")
         // Add delay between chunks to simulate realistic streaming
         .with_agent_env("MOCK_AGENT_DELAY_MS", "100");
@@ -225,7 +225,7 @@ fn test_delayed_streaming_response() {
 #[cfg(target_os = "linux")]
 fn test_tool_call_response_draining() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_tool_call(); // This sets MOCK_AGENT_SEND_TOOL_CALL=1
 
     let mut session =
@@ -263,7 +263,7 @@ fn test_tool_call_response_draining() {
 #[ignore]
 fn test_interactive_debug_draining() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("DEBUG_RESPONSE_1");
 
     let mut session =

@@ -118,6 +118,37 @@ fn slash_popup_model_first_for_mo_ui() {
 }
 
 #[test]
+fn slash_popup_close_visible_for_cl_ui() {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+
+    // Type "/cl" humanlike so paste-burst doesn’t interfere.
+    type_chars_humanlike(&mut composer, &['/', 'c', 'l']);
+
+    let mut terminal = match Terminal::new(TestBackend::new(60, 5)) {
+        Ok(t) => t,
+        Err(e) => panic!("Failed to create terminal: {e}"),
+    };
+    terminal
+        .draw(|f| composer.render(f.area(), f.buffer_mut()))
+        .unwrap_or_else(|e| panic!("Failed to draw composer: {e}"));
+
+    // Visual snapshot should show the slash popup offering /close.
+    insta::assert_snapshot!("slash_popup_cl", terminal.backend());
+}
+
+#[test]
 fn slash_popup_model_first_for_mo_logic() {
     use crate::bottom_pane::command_popup::CommandItem;
     let (tx, _rx) = unbounded_channel::<AppEvent>();
@@ -157,7 +188,7 @@ fn composer_can_render_mode_segment_in_textarea_top_right() {
     snapshot_composer_state("composer_acp_mode_textarea_top_right", false, |composer| {
         composer.set_footer_layout_config(nori_config::FooterLayoutConfig::from_toml(
             &nori_config::FooterLayoutConfigToml {
-                textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator]),
+                textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator.into()]),
                 ..Default::default()
             },
         ));
@@ -508,4 +539,30 @@ fn test_partial_placeholder_deletion() {
             (false, 0), // After deleting from end
         ]
     );
+}
+
+#[test]
+fn deleting_one_equal_length_paste_keeps_the_other_payload() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    let first = "a".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+    let second = "b".repeat(LARGE_PASTE_CHAR_THRESHOLD + 10);
+    let base = format!("[Pasted Content {} chars]", first.chars().count());
+    let second_placeholder = format!("{base} #2");
+
+    composer.handle_paste(first);
+    composer.handle_paste(second.clone());
+    composer.textarea.set_cursor(base.len());
+    composer.handle_key_event(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+
+    assert_eq!(composer.current_text(), second_placeholder);
+    let (result, _) = composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(result, InputResult::Submitted(second));
 }

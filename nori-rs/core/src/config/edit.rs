@@ -1,9 +1,9 @@
 use crate::config::CONFIG_TOML_FILE;
 use crate::config::types::McpServerConfig;
 use crate::config::types::Notice;
+use crate::config::types::ReasoningEffort;
 use anyhow::Context;
-use codex_protocol::config_types::ReasoningEffort;
-use codex_protocol::config_types::TrustLevel;
+use nori_config::TrustLevel;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -35,8 +35,6 @@ pub enum ConfigEdit {
     SetNoticeHideWorldWritableWarning(bool),
     /// Toggle the Windows onboarding acknowledgement flag.
     SetWindowsWslSetupAcknowledged(bool),
-    /// Toggle the model migration prompt acknowledgement flag.
-    SetNoticeHideModelMigrationPrompt(String, bool),
     /// Replace the entire `[mcp_servers]` table.
     ReplaceMcpServers(BTreeMap<String, McpServerConfig>),
     /// Set trust_level under `[projects."<path>"]`,
@@ -216,13 +214,6 @@ mod document_helpers {
 
 struct ConfigDocument {
     doc: DocumentMut,
-    profile: Option<String>,
-}
-
-#[derive(Copy, Clone)]
-enum Scope {
-    Global,
-    Profile,
 }
 
 #[derive(Copy, Clone)]
@@ -232,54 +223,42 @@ enum TraversalMode {
 }
 
 impl ConfigDocument {
-    fn new(doc: DocumentMut, profile: Option<String>) -> Self {
-        Self { doc, profile }
+    fn new(doc: DocumentMut) -> Self {
+        Self { doc }
     }
 
     fn apply(&mut self, edit: &ConfigEdit) -> anyhow::Result<bool> {
         match edit {
             ConfigEdit::SetAgent { agent } => Ok(self.write_value(
-                Scope::Global,
                 &["agent"],
                 match agent {
                     Some(a) => value(a.clone()),
-                    None => return Ok(self.clear(Scope::Global, &["agent"])),
+                    None => return Ok(self.clear(&["agent"])),
                 },
             )),
             ConfigEdit::SetModel { model, effort } => Ok({
                 let mut mutated = false;
-                mutated |= self.write_profile_value(
+                mutated |= self.write_optional_value(
                     &["model"],
                     model.as_ref().map(|model_value| value(model_value.clone())),
                 );
-                mutated |= self.write_profile_value(
+                mutated |= self.write_optional_value(
                     &["model_reasoning_effort"],
                     effort.map(|effort| value(effort.to_string())),
                 );
                 mutated
             }),
             ConfigEdit::SetNoticeHideFullAccessWarning(acknowledged) => Ok(self.write_value(
-                Scope::Global,
                 &[Notice::TABLE_KEY, "hide_full_access_warning"],
                 value(*acknowledged),
             )),
             ConfigEdit::SetNoticeHideWorldWritableWarning(acknowledged) => Ok(self.write_value(
-                Scope::Global,
                 &[Notice::TABLE_KEY, "hide_world_writable_warning"],
                 value(*acknowledged),
             )),
-            ConfigEdit::SetNoticeHideModelMigrationPrompt(migration_config, acknowledged) => {
-                Ok(self.write_value(
-                    Scope::Global,
-                    &[Notice::TABLE_KEY, migration_config.as_str()],
-                    value(*acknowledged),
-                ))
+            ConfigEdit::SetWindowsWslSetupAcknowledged(acknowledged) => {
+                Ok(self.write_value(&["windows_wsl_setup_acknowledged"], value(*acknowledged)))
             }
-            ConfigEdit::SetWindowsWslSetupAcknowledged(acknowledged) => Ok(self.write_value(
-                Scope::Global,
-                &["windows_wsl_setup_acknowledged"],
-                value(*acknowledged),
-            )),
             ConfigEdit::ReplaceMcpServers(servers) => Ok(self.replace_mcp_servers(servers)),
             ConfigEdit::SetPath { segments, value } => Ok(self.insert(segments, value.clone())),
             ConfigEdit::ClearPath { segments } => Ok(self.clear_owned(segments)),
@@ -296,20 +275,26 @@ impl ConfigDocument {
         }
     }
 
-    fn write_profile_value(&mut self, segments: &[&str], value: Option<TomlItem>) -> bool {
+    fn write_optional_value(&mut self, segments: &[&str], value: Option<TomlItem>) -> bool {
         match value {
-            Some(item) => self.write_value(Scope::Profile, segments, item),
-            None => self.clear(Scope::Profile, segments),
+            Some(item) => self.write_value(segments, item),
+            None => self.clear(segments),
         }
     }
 
-    fn write_value(&mut self, scope: Scope, segments: &[&str], value: TomlItem) -> bool {
-        let resolved = self.scoped_segments(scope, segments);
+    fn write_value(&mut self, segments: &[&str], value: TomlItem) -> bool {
+        let resolved = segments
+            .iter()
+            .map(|segment| (*segment).to_string())
+            .collect::<Vec<_>>();
         self.insert(&resolved, value)
     }
 
-    fn clear(&mut self, scope: Scope, segments: &[&str]) -> bool {
-        let resolved = self.scoped_segments(scope, segments);
+    fn clear(&mut self, segments: &[&str]) -> bool {
+        let resolved = segments
+            .iter()
+            .map(|segment| (*segment).to_string())
+            .collect::<Vec<_>>();
         self.remove(&resolved)
     }
 
@@ -319,7 +304,7 @@ impl ConfigDocument {
 
     fn replace_mcp_servers(&mut self, servers: &BTreeMap<String, McpServerConfig>) -> bool {
         if servers.is_empty() {
-            return self.clear(Scope::Global, &["mcp_servers"]);
+            return self.clear(&["mcp_servers"]);
         }
 
         let mut table = TomlTable::new();
@@ -330,27 +315,7 @@ impl ConfigDocument {
         }
 
         let item = TomlItem::Table(table);
-        self.write_value(Scope::Global, &["mcp_servers"], item)
-    }
-
-    fn scoped_segments(&self, scope: Scope, segments: &[&str]) -> Vec<String> {
-        let resolved: Vec<String> = segments
-            .iter()
-            .map(|segment| (*segment).to_string())
-            .collect();
-
-        if matches!(scope, Scope::Profile)
-            && resolved.first().is_none_or(|segment| segment != "profiles")
-            && let Some(profile) = self.profile.as_deref()
-        {
-            let mut scoped = Vec::with_capacity(resolved.len() + 2);
-            scoped.push("profiles".to_string());
-            scoped.push(profile.to_string());
-            scoped.extend(resolved);
-            return scoped;
-        }
-
-        resolved
+        self.write_value(&["mcp_servers"], item)
     }
 
     fn insert(&mut self, segments: &[String], value: TomlItem) -> bool {
@@ -406,11 +371,7 @@ impl ConfigDocument {
 }
 
 /// Persist edits using a blocking strategy.
-pub fn apply_blocking(
-    codex_home: &Path,
-    profile: Option<&str>,
-    edits: &[ConfigEdit],
-) -> anyhow::Result<()> {
+pub fn apply_blocking(codex_home: &Path, edits: &[ConfigEdit]) -> anyhow::Result<()> {
     if edits.is_empty() {
         return Ok(());
     }
@@ -428,13 +389,7 @@ pub fn apply_blocking(
         serialized.parse::<DocumentMut>()?
     };
 
-    let profile = profile.map(ToOwned::to_owned).or_else(|| {
-        doc.get("profile")
-            .and_then(|item| item.as_str())
-            .map(ToOwned::to_owned)
-    });
-
-    let mut document = ConfigDocument::new(doc, profile);
+    let mut document = ConfigDocument::new(doc);
     let mut mutated = false;
 
     for edit in edits {
@@ -465,14 +420,9 @@ pub fn apply_blocking(
 }
 
 /// Persist edits asynchronously by offloading the blocking writer.
-pub async fn apply(
-    codex_home: &Path,
-    profile: Option<&str>,
-    edits: Vec<ConfigEdit>,
-) -> anyhow::Result<()> {
+pub async fn apply(codex_home: &Path, edits: Vec<ConfigEdit>) -> anyhow::Result<()> {
     let codex_home = codex_home.to_path_buf();
-    let profile = profile.map(ToOwned::to_owned);
-    task::spawn_blocking(move || apply_blocking(&codex_home, profile.as_deref(), &edits))
+    task::spawn_blocking(move || apply_blocking(&codex_home, &edits))
         .await
         .context("config persistence task panicked")?
 }
@@ -481,7 +431,6 @@ pub async fn apply(
 #[derive(Default)]
 pub struct ConfigEditsBuilder {
     codex_home: PathBuf,
-    profile: Option<String>,
     edits: Vec<ConfigEdit>,
 }
 
@@ -489,14 +438,8 @@ impl ConfigEditsBuilder {
     pub fn new(codex_home: &Path) -> Self {
         Self {
             codex_home: codex_home.to_path_buf(),
-            profile: None,
             edits: Vec::new(),
         }
-    }
-
-    pub fn with_profile(mut self, profile: Option<&str>) -> Self {
-        self.profile = profile.map(ToOwned::to_owned);
-        self
     }
 
     pub fn set_model(mut self, model: Option<&str>, effort: Option<ReasoningEffort>) -> Self {
@@ -523,15 +466,6 @@ impl ConfigEditsBuilder {
     pub fn set_hide_world_writable_warning(mut self, acknowledged: bool) -> Self {
         self.edits
             .push(ConfigEdit::SetNoticeHideWorldWritableWarning(acknowledged));
-        self
-    }
-
-    pub fn set_hide_model_migration_prompt(mut self, model: &str, acknowledged: bool) -> Self {
-        self.edits
-            .push(ConfigEdit::SetNoticeHideModelMigrationPrompt(
-                model.to_string(),
-                acknowledged,
-            ));
         self
     }
 
@@ -589,16 +523,14 @@ impl ConfigEditsBuilder {
 
     /// Apply edits on a blocking thread.
     pub fn apply_blocking(self) -> anyhow::Result<()> {
-        apply_blocking(&self.codex_home, self.profile.as_deref(), &self.edits)
+        apply_blocking(&self.codex_home, &self.edits)
     }
 
     /// Apply edits asynchronously via a blocking offload.
     pub async fn apply(self) -> anyhow::Result<()> {
-        task::spawn_blocking(move || {
-            apply_blocking(&self.codex_home, self.profile.as_deref(), &self.edits)
-        })
-        .await
-        .context("config persistence task panicked")?
+        task::spawn_blocking(move || apply_blocking(&self.codex_home, &self.edits))
+            .await
+            .context("config persistence task panicked")?
     }
 }
 
@@ -606,7 +538,7 @@ impl ConfigEditsBuilder {
 mod tests {
     use super::*;
     use crate::config::types::McpServerTransportConfig;
-    use codex_protocol::config_types::ReasoningEffort;
+    use crate::config::types::ReasoningEffort;
     use pretty_assertions::assert_eq;
     use tempfile::tempdir;
     use tokio::runtime::Builder;
@@ -619,7 +551,6 @@ mod tests {
 
         apply_blocking(
             codex_home,
-            None,
             &[ConfigEdit::SetModel {
                 model: Some("gpt-5.1-codex".to_string()),
                 effort: Some(ReasoningEffort::High),
@@ -631,153 +562,6 @@ mod tests {
             std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
         let expected = r#"model = "gpt-5.1-codex"
 model_reasoning_effort = "high"
-"#;
-        assert_eq!(contents, expected);
-    }
-
-    #[test]
-    fn blocking_set_model_preserves_inline_table_contents() {
-        let tmp = tempdir().expect("tmpdir");
-        let codex_home = tmp.path();
-
-        // Seed with inline tables for profiles to simulate common user config.
-        std::fs::write(
-            codex_home.join(CONFIG_TOML_FILE),
-            r#"profile = "fast"
-
-profiles = { fast = { model = "gpt-4o", sandbox_mode = "strict" } }
-"#,
-        )
-        .expect("seed");
-
-        apply_blocking(
-            codex_home,
-            None,
-            &[ConfigEdit::SetModel {
-                model: Some("o4-mini".to_string()),
-                effort: None,
-            }],
-        )
-        .expect("persist");
-
-        let raw = std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
-        let value: TomlValue = toml::from_str(&raw).expect("parse config");
-
-        // Ensure sandbox_mode is preserved under profiles.fast and model updated.
-        let profiles_tbl = value
-            .get("profiles")
-            .and_then(|v| v.as_table())
-            .expect("profiles table");
-        let fast_tbl = profiles_tbl
-            .get("fast")
-            .and_then(|v| v.as_table())
-            .expect("fast table");
-        assert_eq!(
-            fast_tbl.get("sandbox_mode").and_then(|v| v.as_str()),
-            Some("strict")
-        );
-        assert_eq!(
-            fast_tbl.get("model").and_then(|v| v.as_str()),
-            Some("o4-mini")
-        );
-    }
-
-    #[test]
-    fn blocking_clear_model_removes_inline_table_entry() {
-        let tmp = tempdir().expect("tmpdir");
-        let codex_home = tmp.path();
-
-        std::fs::write(
-            codex_home.join(CONFIG_TOML_FILE),
-            r#"profile = "fast"
-
-profiles = { fast = { model = "gpt-4o", sandbox_mode = "strict" } }
-"#,
-        )
-        .expect("seed");
-
-        apply_blocking(
-            codex_home,
-            None,
-            &[ConfigEdit::SetModel {
-                model: None,
-                effort: Some(ReasoningEffort::High),
-            }],
-        )
-        .expect("persist");
-
-        let contents =
-            std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
-        let expected = r#"profile = "fast"
-
-[profiles.fast]
-sandbox_mode = "strict"
-model_reasoning_effort = "high"
-"#;
-        assert_eq!(contents, expected);
-    }
-
-    #[test]
-    fn blocking_set_model_scopes_to_active_profile() {
-        let tmp = tempdir().expect("tmpdir");
-        let codex_home = tmp.path();
-        std::fs::write(
-            codex_home.join(CONFIG_TOML_FILE),
-            r#"profile = "team"
-
-[profiles.team]
-model_reasoning_effort = "low"
-"#,
-        )
-        .expect("seed");
-
-        apply_blocking(
-            codex_home,
-            None,
-            &[ConfigEdit::SetModel {
-                model: Some("o5-preview".to_string()),
-                effort: Some(ReasoningEffort::Minimal),
-            }],
-        )
-        .expect("persist");
-
-        let contents =
-            std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
-        let expected = r#"profile = "team"
-
-[profiles.team]
-model_reasoning_effort = "minimal"
-model = "o5-preview"
-"#;
-        assert_eq!(contents, expected);
-    }
-
-    #[test]
-    fn blocking_set_model_with_explicit_profile() {
-        let tmp = tempdir().expect("tmpdir");
-        let codex_home = tmp.path();
-        std::fs::write(
-            codex_home.join(CONFIG_TOML_FILE),
-            r#"[profiles."team a"]
-model = "gpt-5.1-codex"
-"#,
-        )
-        .expect("seed");
-
-        apply_blocking(
-            codex_home,
-            Some("team a"),
-            &[ConfigEdit::SetModel {
-                model: Some("o4-mini".to_string()),
-                effort: None,
-            }],
-        )
-        .expect("persist");
-
-        let contents =
-            std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
-        let expected = r#"[profiles."team a"]
-model = "o4-mini"
 "#;
         assert_eq!(contents, expected);
     }
@@ -799,7 +583,6 @@ existing = "value"
 
         apply_blocking(
             codex_home,
-            None,
             &[ConfigEdit::SetNoticeHideFullAccessWarning(true)],
         )
         .expect("persist");
@@ -812,66 +595,6 @@ existing = "value"
 # keep me
 existing = "value"
 hide_full_access_warning = true
-"#;
-        assert_eq!(contents, expected);
-    }
-
-    #[test]
-    fn blocking_set_hide_gpt5_1_migration_prompt_preserves_table() {
-        let tmp = tempdir().expect("tmpdir");
-        let codex_home = tmp.path();
-        std::fs::write(
-            codex_home.join(CONFIG_TOML_FILE),
-            r#"[notice]
-existing = "value"
-"#,
-        )
-        .expect("seed");
-        apply_blocking(
-            codex_home,
-            None,
-            &[ConfigEdit::SetNoticeHideModelMigrationPrompt(
-                "hide_gpt5_1_migration_prompt".to_string(),
-                true,
-            )],
-        )
-        .expect("persist");
-
-        let contents =
-            std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
-        let expected = r#"[notice]
-existing = "value"
-hide_gpt5_1_migration_prompt = true
-"#;
-        assert_eq!(contents, expected);
-    }
-
-    #[test]
-    fn blocking_set_hide_gpt_5_1_codex_max_migration_prompt_preserves_table() {
-        let tmp = tempdir().expect("tmpdir");
-        let codex_home = tmp.path();
-        std::fs::write(
-            codex_home.join(CONFIG_TOML_FILE),
-            r#"[notice]
-existing = "value"
-"#,
-        )
-        .expect("seed");
-        apply_blocking(
-            codex_home,
-            None,
-            &[ConfigEdit::SetNoticeHideModelMigrationPrompt(
-                "hide_gpt-5.1-codex-max_migration_prompt".to_string(),
-                true,
-            )],
-        )
-        .expect("persist");
-
-        let contents =
-            std::fs::read_to_string(codex_home.join(CONFIG_TOML_FILE)).expect("read config");
-        let expected = r#"[notice]
-existing = "value"
-"hide_gpt-5.1-codex-max_migration_prompt" = true
 "#;
         assert_eq!(contents, expected);
     }
@@ -931,7 +654,6 @@ existing = "value"
 
         apply_blocking(
             codex_home,
-            None,
             &[ConfigEdit::ReplaceMcpServers(servers.clone())],
         )
         .expect("persist");
@@ -968,7 +690,6 @@ B = \"2\"
 
         apply_blocking(
             codex_home,
-            None,
             &[ConfigEdit::ClearPath {
                 segments: vec!["missing".to_string()],
             }],
@@ -989,7 +710,6 @@ B = \"2\"
         let item = value(false);
         apply_blocking(
             codex_home,
-            None,
             &[ConfigEdit::SetPath {
                 segments: vec!["tui".to_string(), "notifications".to_string()],
                 value: item,
@@ -1099,7 +819,6 @@ model_reasoning_effort = "high"
 
         apply_blocking(
             codex_home,
-            None,
             &[ConfigEdit::ReplaceMcpServers(BTreeMap::new())],
         )
         .expect("persist");

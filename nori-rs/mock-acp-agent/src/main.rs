@@ -19,13 +19,31 @@ use agent_client_protocol::ByteStreams;
 use agent_client_protocol::Client;
 use agent_client_protocol::ConnectionTo;
 use agent_client_protocol::Responder;
-use agent_client_protocol::schema::v1 as acp;
 use futures::io::AsyncRead;
+use nori_protocol::acp::v1 as acp;
 use serde_json::json;
 use tokio::time::Duration;
 use tokio::time::sleep;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+#[cfg(unix)]
+fn spawn_descendant_if_requested() {
+    let Some(pid_file) = std::env::var_os("MOCK_AGENT_DESCENDANT_PID_FILE") else {
+        return;
+    };
+
+    let child = std::process::Command::new("sleep")
+        .arg("600")
+        .spawn()
+        .expect("spawn mock descendant");
+    let child_pid = child.id();
+    // The ACP host owns this process through the agent's process group. Leave
+    // the descendant alive after the mock exits so the lifecycle test can
+    // prove that the host sweeps it.
+    std::mem::forget(child);
+    std::fs::write(pid_file, child_pid.to_string()).expect("write mock descendant pid");
+}
 
 /// Incoming byte stream that exits the process when the peer closes stdin.
 ///
@@ -51,7 +69,17 @@ impl<R: AsyncRead + Unpin> AsyncRead for ExitOnEof<R> {
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
         match Pin::new(&mut self.inner).poll_read(cx, buf) {
-            Poll::Ready(Ok(0)) if !buf.is_empty() => std::process::exit(0),
+            Poll::Ready(Ok(0)) if !buf.is_empty() => {
+                // MOCK_AGENT_IGNORE_EOF simulates an agent whose EOF teardown
+                // stalls (e.g. a hung broker release): stay alive instead of
+                // exiting, so tests can prove the client's bounded child
+                // lifecycle never waits indefinitely on a stuck child.
+                if std::env::var("MOCK_AGENT_IGNORE_EOF").is_ok() {
+                    eprintln!("Mock agent: ignoring stdin EOF (MOCK_AGENT_IGNORE_EOF is set)");
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                }
+                std::process::exit(0)
+            }
             other => other,
         }
     }
@@ -66,8 +94,6 @@ impl<R: AsyncRead + Unpin> AsyncRead for ExitOnEof<R> {
 struct MockState {
     next_session_id: AtomicI64,
     cancel_requested: AtomicBool,
-    pending_cancel_tail_empty_end_turns: AtomicI64,
-    follow_up_after_cancel_tail: AtomicBool,
     session_configs: Mutex<HashMap<String, MockSessionConfig>>,
 }
 
@@ -243,24 +269,52 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
+            eprintln!("Mock agent: exiting during prompt");
+            std::process::exit(17);
+        }
         self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
-        let pending_cancel_tail_empty_end_turns = self
-            .state
-            .pending_cancel_tail_empty_end_turns
-            .load(Ordering::SeqCst);
-        if pending_cancel_tail_empty_end_turns > 0 {
-            self.state
-                .pending_cancel_tail_empty_end_turns
-                .store(pending_cancel_tail_empty_end_turns - 1, Ordering::SeqCst);
-            eprintln!("Mock agent: emitting empty end_turn from cancel tail");
+
+        // Advertise a native `compact` slash command so the harness forwards
+        // `/compact` as an ordinary turn instead of summarize-and-swap.
+        if std::env::var("MOCK_AGENT_ADVERTISE_COMPACT").is_ok() {
+            self.send_update(
+                session_id.clone(),
+                acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(
+                    vec![acp::AvailableCommand::new(
+                        "compact",
+                        "Summarize conversation",
+                    )],
+                )),
+            )
+            .await?;
+        }
+
+        // Reply to the summarize-and-swap compaction prompt with a summary
+        // message so the fallback path has a `last_agent_message` to stash.
+        let prompt_text = arguments
+            .prompt
+            .iter()
+            .filter_map(|block| match block {
+                acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        if prompt_text.contains("CONTEXT CHECKPOINT COMPACTION") {
+            eprintln!("Mock agent: replying to compaction prompt with a summary");
+            self.send_text_chunk(session_id.clone(), "MOCK COMPACT SUMMARY")
+                .await?;
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
-        let complete_after_default_response = self
-            .state
-            .follow_up_after_cancel_tail
-            .swap(false, Ordering::SeqCst);
 
+        let request_permission = arguments.prompt.iter().any(|block| {
+            matches!(
+                block,
+                acp::ContentBlock::Text(text) if text.text == "mock:request-permission"
+            )
+        });
         // Support configurable stderr output for testing stderr capture
         if let Ok(count_str) = std::env::var("MOCK_AGENT_STDERR_COUNT")
             && let Ok(count) = count_str.parse::<usize>()
@@ -277,6 +331,35 @@ impl MockAgent {
         if std::env::var("MOCK_AGENT_PROMPT_FAIL").is_ok() {
             eprintln!("Mock agent: simulating prompt failure");
             return Err(acp::Error::new(-32001, "Mock prompt failure for testing"));
+        }
+
+        // Support simulating a structured prompt failure (JSON-RPC code -32010,
+        // "agent unreachable") whose `data` includes both a `detail` string and
+        // unrelated noise fields — used to verify the user-facing message
+        // surfaces `detail` cleanly instead of the raw pretty-printed JSON blob.
+        if std::env::var("MOCK_AGENT_PROMPT_FAIL_JSON").is_ok() {
+            eprintln!("Mock agent: simulating structured prompt failure with detail");
+            return Err(
+                acp::Error::new(-32010, "broker unreachable").data(serde_json::json!({
+                    "detail": "connection reset by broker",
+                    "retry_after_ms": 5000,
+                    "trace_id": "mock-trace-9001"
+                })),
+            );
+        }
+
+        // Support simulating a structured prompt failure whose `data` carries
+        // no `detail` field (only unrelated noise) — the message must still
+        // avoid dumping the raw JSON blob even when there's no clean detail
+        // string to substitute.
+        if std::env::var("MOCK_AGENT_PROMPT_FAIL_JSON_NO_DETAIL").is_ok() {
+            eprintln!("Mock agent: simulating structured prompt failure without detail");
+            return Err(
+                acp::Error::new(-32010, "broker unreachable").data(serde_json::json!({
+                    "retry_after_ms": 7000,
+                    "trace_id": "mock-trace-9002"
+                })),
+            );
         }
 
         // Support multi-turn conversations for transcript testing.
@@ -808,17 +891,27 @@ impl MockAgent {
             }
         }
 
-        if complete_after_default_response {
-            let response = std::env::var("MOCK_AGENT_CANCEL_TAIL_FOLLOW_UP_RESPONSE")
-                .unwrap_or_else(|_| "Recovered after cancel tail".to_string());
-            self.send_text_chunk(session_id.clone(), &response).await?;
-            eprintln!("Mock agent: completing follow-up prompt after cancel tail");
-            return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
-        }
-
         // Support custom response text for TUI testing
         if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
-            self.send_text_chunk(session_id.clone(), &response).await?;
+            // MOCK_AGENT_RESPONSE_CHUNK_CHARS splits the response into small chunks the way a real
+            // model streams it, so tests can cover incremental rendering instead of a single chunk
+            // that always parses as complete markdown.
+            match std::env::var("MOCK_AGENT_RESPONSE_CHUNK_CHARS")
+                .ok()
+                .and_then(|chars| chars.parse::<usize>().ok())
+                .filter(|chars| *chars > 0)
+            {
+                Some(chunk_chars) => {
+                    let characters = response.chars().collect::<Vec<_>>();
+                    for chunk in characters.chunks(chunk_chars) {
+                        self.send_text_chunk(session_id.clone(), &chunk.iter().collect::<String>())
+                            .await?;
+                    }
+                }
+                None => {
+                    self.send_text_chunk(session_id.clone(), &response).await?;
+                }
+            }
         } else {
             // Default behavior
             self.send_text_chunk(session_id.clone(), "Test message 1")
@@ -836,7 +929,7 @@ impl MockAgent {
         }
 
         // Support requesting permission from client for testing approval bridging
-        if std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
+        if request_permission || std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
             eprintln!("Mock agent: requesting permission from client");
 
             // Create a tool call update describing the operation
@@ -1071,23 +1164,6 @@ impl MockAgent {
                 sleep(Duration::from_millis(10)).await;
             }
 
-            let cancel_tail_empty_end_turns =
-                std::env::var("MOCK_AGENT_CANCEL_TAIL_EMPTY_END_TURNS")
-                    .ok()
-                    .and_then(|count| count.parse::<i64>().ok())
-                    .unwrap_or(0);
-            if self.cancel_requested() && cancel_tail_empty_end_turns > 0 {
-                self.state
-                    .pending_cancel_tail_empty_end_turns
-                    .store(cancel_tail_empty_end_turns, Ordering::SeqCst);
-                self.state
-                    .follow_up_after_cancel_tail
-                    .store(true, Ordering::SeqCst);
-                eprintln!(
-                    "Mock agent: queued {cancel_tail_empty_end_turns} empty end_turn responses after cancel"
-                );
-            }
-
             return Ok(acp::PromptResponse::new(if self.cancel_requested() {
                 acp::StopReason::Cancelled
             } else {
@@ -1282,6 +1358,9 @@ Connection: close\r\n\r\n\
 async fn main() -> acp::Result<()> {
     env_logger::init();
 
+    #[cfg(unix)]
+    spawn_descendant_if_requested();
+
     let state = Arc::new(MockState::default());
 
     Agent
@@ -1320,6 +1399,13 @@ async fn main() -> acp::Result<()> {
                     return responder
                         .respond_with_error(acp::Error::new(-32000, "Authentication required"));
                 }
+                if std::env::var("MOCK_AGENT_INITIALIZE_FAIL").is_ok() {
+                    eprintln!("Mock agent: simulating initialize failure");
+                    return responder.respond_with_error(acp::Error::new(
+                        -32004,
+                        "Mock initialize failure for testing",
+                    ));
+                }
 
                 eprintln!("Mock agent: initialize");
                 let mut response = acp::InitializeResponse::new(arguments.protocol_version)
@@ -1341,16 +1427,58 @@ async fn main() -> acp::Result<()> {
                     has_capabilities = true;
                 }
 
+                let mut session_capabilities = acp::SessionCapabilities::new();
+                let mut has_session_capabilities = false;
+
                 if std::env::var("MOCK_AGENT_SUPPORT_SESSION_LIST").is_ok() {
                     eprintln!("Mock agent: advertising session/list capability");
-                    capabilities = capabilities.session_capabilities(
-                        acp::SessionCapabilities::new().list(acp::SessionListCapabilities::new()),
-                    );
+                    session_capabilities =
+                        session_capabilities.list(acp::SessionListCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_RESUME").is_ok() {
+                    eprintln!("Mock agent: advertising session/resume capability");
+                    session_capabilities =
+                        session_capabilities.resume(acp::SessionResumeCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_CLOSE").is_ok() {
+                    eprintln!("Mock agent: advertising session/close capability");
+                    session_capabilities =
+                        session_capabilities.close(acp::SessionCloseCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if std::env::var("MOCK_AGENT_SUPPORT_SESSION_FORK").is_ok() {
+                    eprintln!("Mock agent: advertising session/fork capability");
+                    session_capabilities =
+                        session_capabilities.fork(acp::SessionForkCapabilities::new());
+                    has_session_capabilities = true;
+                }
+
+                if has_session_capabilities {
+                    capabilities = capabilities.session_capabilities(session_capabilities);
                     has_capabilities = true;
                 }
 
                 if has_capabilities {
                     response = response.agent_capabilities(capabilities);
+                }
+
+                if std::env::var("MOCK_AGENT_GOAL_EXT").is_ok() {
+                    eprintln!("Mock agent: advertising the _session/goal goal extension");
+                    let mut meta = serde_json::Map::new();
+                    meta.insert(
+                        "goal".to_string(),
+                        serde_json::json!({
+                            "version": 1,
+                            "controlMethod": "_session/goal",
+                            "actions": ["set", "pause", "resume", "clear"],
+                        }),
+                    );
+                    response.meta = Some(meta);
                 }
 
                 responder.respond(response)
@@ -1370,7 +1498,7 @@ async fn main() -> acp::Result<()> {
                 let state = state.clone();
                 async move |arguments: acp::NewSessionRequest,
                             responder: Responder<acp::NewSessionResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     let session_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
                     if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
                         && let Ok(fail_from) = fail_from.parse::<i64>()
@@ -1391,6 +1519,17 @@ async fn main() -> acp::Result<()> {
                         .lock()
                         .unwrap()
                         .insert(session_key.clone(), session_config.clone());
+                    if std::env::var("MOCK_AGENT_NEW_SESSION_NOTIFICATION").is_ok() {
+                        MockAgent {
+                            cx: cx.clone(),
+                            state: state.clone(),
+                        }
+                        .send_text_chunk(
+                            acp::SessionId::new(session_key.clone()),
+                            "new session setup notification",
+                        )
+                        .await?;
+                    }
                     if std::env::var("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION").is_ok()
                         && let Err(error) =
                             initialize_advertised_nori_client(&arguments.mcp_servers).await
@@ -1414,14 +1553,6 @@ async fn main() -> acp::Result<()> {
                 async move |arguments: acp::LoadSessionRequest,
                             responder: Responder<acp::LoadSessionResponse>,
                             cx: ConnectionTo<Client>| {
-                    if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
-                        eprintln!("Mock agent: simulating load_session failure");
-                        return responder.respond_with_error(acp::Error::new(
-                            -32001,
-                            "Mock load_session failure for testing",
-                        ));
-                    }
-
                     let session_config = state
                         .session_configs
                         .lock()
@@ -1449,8 +1580,97 @@ async fn main() -> acp::Result<()> {
                         }
                     }
 
+                    if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating load_session failure");
+                        return responder.respond_with_error(acp::Error::new(
+                            -32001,
+                            "Mock load_session failure for testing",
+                        ));
+                    }
+
                     responder.respond(
                         acp::LoadSessionResponse::new()
+                            .config_options(config_options_for_state(&session_config)),
+                    )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |arguments: acp::ResumeSessionRequest,
+                            responder: Responder<acp::ResumeSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    if std::env::var("MOCK_AGENT_RESUME_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating resume_session failure");
+                        return responder.respond_with_error(
+                            acp::Error::new(-32002, "session not found").data(serde_json::json!({
+                                "detail": "the session is no longer claimed"
+                            })),
+                        );
+                    }
+                    eprintln!("Mock agent: resume_session id={}", arguments.session_id);
+                    let session_config = state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .entry(arguments.session_id.to_string())
+                        .or_insert_with(default_session_config)
+                        .clone();
+                    responder.respond(
+                        acp::ResumeSessionResponse::new()
+                            .config_options(config_options_for_state(&session_config)),
+                    )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |arguments: acp::CloseSessionRequest,
+                        responder: Responder<acp::CloseSessionResponse>,
+                        _cx: ConnectionTo<Client>| {
+                if std::env::var("MOCK_AGENT_CLOSE_SESSION_FAIL").is_ok() {
+                    eprintln!("Mock agent: simulating close_session failure");
+                    return responder
+                        .respond_with_error(acp::Error::new(-32002, "session not found"));
+                }
+                eprintln!("Mock agent: close_session id={}", arguments.session_id);
+                responder.respond(acp::CloseSessionResponse::new())
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |arguments: acp::ForkSessionRequest,
+                            responder: Responder<acp::ForkSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    if std::env::var("MOCK_AGENT_FORK_SESSION_FAIL").is_ok() {
+                        eprintln!("Mock agent: simulating fork_session failure");
+                        return responder
+                            .respond_with_error(acp::Error::new(-32002, "session not found"));
+                    }
+                    let forked_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
+                    eprintln!(
+                        "Mock agent: fork_session from={} new_id={forked_id}",
+                        arguments.session_id
+                    );
+                    let forked_key = forked_id.to_string();
+                    let session_config = state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .entry(arguments.session_id.to_string())
+                        .or_insert_with(default_session_config)
+                        .clone();
+                    state
+                        .session_configs
+                        .lock()
+                        .unwrap()
+                        .insert(forked_key.clone(), session_config.clone());
+                    responder.respond(
+                        acp::ForkSessionResponse::new(acp::SessionId::new(forked_key))
                             .config_options(config_options_for_state(&session_config)),
                     )
                 }
@@ -1461,16 +1681,28 @@ async fn main() -> acp::Result<()> {
             async move |arguments: acp::ListSessionsRequest,
                         responder: Responder<acp::ListSessionsResponse>,
                         _cx: ConnectionTo<Client>| {
+                if std::env::var("MOCK_AGENT_LIST_SESSIONS_FAIL").is_ok() {
+                    eprintln!("Mock agent: simulating list_sessions failure");
+                    return responder
+                        .respond_with_error(acp::Error::new(-32010, "broker unreachable"));
+                }
                 eprintln!("Mock agent: session/list");
                 let cwd = arguments
                     .cwd
                     .unwrap_or_else(|| PathBuf::from("/mock/session/cwd"));
-                let sessions = vec![
-                    acp::SessionInfo::new("mock-session-1", cwd.clone())
-                        .title("First mock session")
-                        .updated_at("2026-01-02T03:04:05Z"),
-                    acp::SessionInfo::new("mock-session-2", cwd),
-                ];
+                let mut first = acp::SessionInfo::new("mock-session-1", cwd.clone())
+                    .title("First mock session")
+                    .updated_at("2026-01-02T03:04:05Z");
+                // MOCK_AGENT_LIST_SESSIONS_META, when set to a JSON object,
+                // is attached as the `_meta` extension on the first session
+                // row so tests can exercise the real `_meta` wire path.
+                if let Ok(meta_json) = std::env::var("MOCK_AGENT_LIST_SESSIONS_META")
+                    && let Ok(serde_json::Value::Object(meta)) =
+                        serde_json::from_str::<serde_json::Value>(&meta_json)
+                {
+                    first = first.meta(meta);
+                }
+                let sessions = vec![first, acp::SessionInfo::new("mock-session-2", cwd)];
                 responder.respond(acp::ListSessionsResponse::new(sessions))
             },
             agent_client_protocol::on_receive_request!(),
@@ -1552,6 +1784,84 @@ async fn main() -> acp::Result<()> {
                             .respond(acp::SetSessionConfigOptionResponse::new(options)),
                         Err(error) => responder.respond_with_error(error),
                     }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                // Native goal store for the `_session/goal` extension. Matches
+                // any method (untyped fallback), so it must stay registered
+                // after every typed request handler.
+                let goal_objective: Arc<std::sync::Mutex<Option<String>>> =
+                    Arc::new(std::sync::Mutex::new(None));
+                async move |arguments: agent_client_protocol::UntypedMessage,
+                            responder: Responder<serde_json::Value>,
+                            cx: ConnectionTo<Client>| {
+                    // Direct `UntypedMessage` dispatch preserves the wire
+                    // method (`_session/goal`); the crate's enum-fallback path
+                    // (agent-client-protocol schema/mod.rs `parse_message`)
+                    // strips the leading underscore instead. Accept both so
+                    // the mock does not depend on which path dispatched it.
+                    let is_goal_method =
+                        matches!(arguments.method(), "_session/goal" | "session/goal");
+                    if !is_goal_method || std::env::var("MOCK_AGENT_GOAL_EXT").is_err() {
+                        return responder.respond_with_error(acp::Error::method_not_found());
+                    }
+                    let params = arguments.params.clone();
+                    let session_id = params
+                        .get("sessionId")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    let action = params
+                        .get("action")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    eprintln!("Mock agent: _session/goal action={action}");
+                    if action == "set" {
+                        *goal_objective.lock().unwrap() = params
+                            .get("objective")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string);
+                    }
+                    let objective = goal_objective.lock().unwrap().clone().unwrap_or_default();
+                    let goal_value = match action.as_str() {
+                        "set" | "resume" => {
+                            serde_json::json!({ "objective": objective, "status": "active" })
+                        }
+                        "pause" => {
+                            serde_json::json!({ "objective": objective, "status": "paused" })
+                        }
+                        "clear" => {
+                            goal_objective.lock().unwrap().take();
+                            serde_json::Value::Null
+                        }
+                        _ => return responder.respond_with_error(acp::Error::invalid_params()),
+                    };
+                    let snapshot_update = |goal: serde_json::Value| {
+                        let mut meta = serde_json::Map::new();
+                        meta.insert("goal".to_string(), goal);
+                        let mut info = acp::SessionInfoUpdate::new();
+                        info.meta = Some(meta);
+                        acp::SessionUpdate::SessionInfoUpdate(info)
+                    };
+                    let _ = cx.send_notification(acp::SessionNotification::new(
+                        acp::SessionId::new(session_id.clone()),
+                        snapshot_update(goal_value),
+                    ));
+                    if action == "set" && std::env::var("MOCK_AGENT_GOAL_EXT_AUTOCOMPLETE").is_ok()
+                    {
+                        eprintln!("Mock agent: auto-completing goal");
+                        let _ = cx.send_notification(acp::SessionNotification::new(
+                            acp::SessionId::new(session_id),
+                            snapshot_update(
+                                serde_json::json!({ "objective": objective, "status": "complete" }),
+                            ),
+                        ));
+                    }
+                    responder.respond(serde_json::json!({}))
                 }
             },
             agent_client_protocol::on_receive_request!(),

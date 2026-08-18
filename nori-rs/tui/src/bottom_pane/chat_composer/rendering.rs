@@ -84,10 +84,10 @@ impl ChatComposer {
                 })
             })
         });
-        let (context_tokens, context_window_percent) =
+        let (context_tokens, context_window_percent, context_window_tokens) =
             if let Some(session_usage) = &self.session_usage {
                 (
-                    Some(session_usage.used_tokens).filter(|&tokens| tokens > 0),
+                    Some(session_usage.used_tokens).filter(|&tokens| tokens >= 0),
                     (session_usage.total_tokens > 0).then(|| {
                         session_usage
                             .used_tokens
@@ -95,9 +95,14 @@ impl ChatComposer {
                             .saturating_div(session_usage.total_tokens)
                             .clamp(0, 100)
                     }),
+                    Some(session_usage.total_tokens).filter(|&tokens| tokens > 0),
                 )
             } else {
-                (context_tokens, context_window_percent)
+                (
+                    context_tokens,
+                    context_window_percent,
+                    context_window_size.filter(|&tokens| tokens > 0),
+                )
             };
 
         FooterProps {
@@ -108,6 +113,7 @@ impl ChatComposer {
             vertical_footer: self.vertical_footer,
             context_window_percent,
             context_tokens,
+            context_window_tokens,
             git_branch,
             approval_mode_label: self.approval_mode_label.clone(),
             active_skillsets,
@@ -126,6 +132,7 @@ impl ChatComposer {
             cached_tokens: token_breakdown.map(|t| t.cached_tokens),
             vim_mode_state: self.textarea.vim_mode_state_if_enabled(),
             prompt_summary: self.prompt_summary.clone(),
+            session_title: self.session_title.clone(),
             worktree_name: self
                 .system_info
                 .as_ref()
@@ -133,6 +140,28 @@ impl ChatComposer {
             footer_segment_config: self.footer_segment_config.clone(),
             footer_layout_config: self.footer_layout_config.clone(),
             acp_mode_label: self.acp_mode_label.clone(),
+            cloud_session: self.cloud_session.clone(),
+        }
+    }
+
+    /// Status-relevant footer values for the `/status` card, so the card stays
+    /// a superset of the footer's information categories.
+    pub(crate) fn status_card_info(&self) -> crate::nori::session_header::StatusCardInfo {
+        let props = self.footer_props();
+        crate::nori::session_header::StatusCardInfo {
+            git_branch: props.git_branch,
+            is_worktree: props.is_worktree,
+            worktree_name: props.worktree_name,
+            git_lines_added: props.git_lines_added,
+            git_lines_removed: props.git_lines_removed,
+            git_has_untracked: props.git_has_untracked,
+            acp_mode_label: props.acp_mode_label,
+            session_title: props.session_title,
+            nori_version: props.nori_version,
+            nori_version_source: props.nori_version_source,
+            context_tokens: props.context_tokens,
+            context_window_tokens: props.context_window_tokens,
+            context_window_percent: props.context_window_percent,
         }
     }
 

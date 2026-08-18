@@ -14,6 +14,7 @@ use super::PROJECT_METADATA_FILE;
 use super::SESSIONS_DIR;
 use super::TRANSCRIPTS_DIR;
 use super::project::compute_project_id;
+use super::types::ContentBlock;
 use super::types::SessionMetaEntry;
 use super::types::TranscriptEntry;
 use super::types::TranscriptLine;
@@ -72,8 +73,96 @@ pub struct SessionMetadata {
 pub struct Transcript {
     /// Session metadata (first entry)
     pub meta: SessionMetaEntry,
-    /// All entries including the metadata
-    pub entries: Vec<TranscriptLine>,
+    /// Storage entries, including the metadata.
+    ///
+    /// Kept private so transcript schema compatibility does not become part of
+    /// the Harness API. Consumers should use [`Transcript::records`].
+    pub(crate) entries: Vec<TranscriptLine>,
+}
+
+/// A schema-independent record exposed by a loaded transcript.
+#[derive(Debug, Clone, Copy)]
+pub enum TranscriptRecord<'a> {
+    /// User-authored text.
+    User { content: &'a str },
+    /// Agent-authored text.
+    Assistant { content: &'a str },
+    /// Agent reasoning text retained by legacy transcripts.
+    Thinking { content: &'a str },
+    /// The exact public event stored by schema-v3 transcripts.
+    SessionEvent(&'a nori_protocol::SessionEvent),
+}
+
+impl PartialEq for TranscriptRecord<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::User { content: left }, Self::User { content: right })
+            | (Self::Assistant { content: left }, Self::Assistant { content: right })
+            | (Self::Thinking { content: left }, Self::Thinking { content: right }) => {
+                left == right
+            }
+            (Self::SessionEvent(left), Self::SessionEvent(right)) => {
+                serde_json::to_value(left).ok() == serde_json::to_value(right).ok()
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Transcript {
+    /// Iterate over records without exposing the versioned storage schema.
+    pub fn records(&self) -> impl Iterator<Item = TranscriptRecord<'_>> {
+        TranscriptRecords {
+            entries: self.entries.iter(),
+            assistant_blocks: None,
+        }
+    }
+}
+
+struct TranscriptRecords<'a> {
+    entries: std::slice::Iter<'a, TranscriptLine>,
+    assistant_blocks: Option<std::slice::Iter<'a, ContentBlock>>,
+}
+
+impl<'a> Iterator for TranscriptRecords<'a> {
+    type Item = TranscriptRecord<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(blocks) = &mut self.assistant_blocks {
+                if let Some(block) = blocks.next() {
+                    return Some(match block {
+                        ContentBlock::Text { text } => {
+                            TranscriptRecord::Assistant { content: text }
+                        }
+                        ContentBlock::Thinking { thinking } => {
+                            TranscriptRecord::Thinking { content: thinking }
+                        }
+                    });
+                }
+                self.assistant_blocks = None;
+            }
+
+            match &self.entries.next()?.entry {
+                TranscriptEntry::User(user) => {
+                    return Some(TranscriptRecord::User {
+                        content: &user.content,
+                    });
+                }
+                TranscriptEntry::Assistant(assistant) => {
+                    self.assistant_blocks = Some(assistant.content.iter());
+                }
+                TranscriptEntry::SessionEvent(entry) => {
+                    return Some(TranscriptRecord::SessionEvent(&entry.event));
+                }
+                TranscriptEntry::SessionMeta(_)
+                | TranscriptEntry::ClientEvent(_)
+                | TranscriptEntry::ToolCall(_)
+                | TranscriptEntry::ToolResult(_)
+                | TranscriptEntry::PatchApply(_) => {}
+            }
+        }
+    }
 }
 
 /// Loads and lists transcripts for viewing.
@@ -406,6 +495,27 @@ impl TranscriptLoader {
             .join(SESSIONS_DIR)
             .join(format!("{session_id}.jsonl"))
     }
+}
+
+/// Read a transcript file's entries for seeding a forked transcript.
+///
+/// Drops the leading `SessionMeta` line (the fork mints its own metadata) and
+/// returns the remaining entries in order. Reuses the tolerant transcript
+/// loader so unrecognized legacy entries are skipped rather than aborting the
+/// fork.
+pub(crate) async fn read_seed_entries(path: &Path) -> io::Result<Vec<TranscriptEntry>> {
+    let transcript = load_transcript_from_path(path).await?;
+    Ok(transcript
+        .entries
+        .into_iter()
+        .filter_map(|line| {
+            if let TranscriptEntry::SessionMeta(_) = line.entry {
+                None
+            } else {
+                Some(line.entry)
+            }
+        })
+        .collect())
 }
 
 /// Count the number of session files in a directory.
@@ -758,7 +868,6 @@ async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcript::ContentBlock;
     use crate::transcript::recorder::TranscriptRecorder;
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
@@ -867,16 +976,6 @@ mod tests {
             .record_user_message("msg-001", "Hello", vec![])
             .await
             .unwrap();
-        recorder
-            .record_assistant_message(
-                "msg-002",
-                vec![ContentBlock::Text {
-                    text: "Hi there!".to_string(),
-                }],
-                Some("claude".to_string()),
-            )
-            .await
-            .unwrap();
         recorder.flush().await.unwrap();
         recorder.shutdown().await.unwrap();
 
@@ -888,51 +987,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(transcript.meta.session_id, session_id);
-        assert_eq!(transcript.entries.len(), 3); // SessionMeta + User + Assistant
-    }
-
-    #[tokio::test]
-    async fn test_load_transcript_with_client_event_entry() {
-        let temp_dir = TempDir::new().unwrap();
-        let nori_home = temp_dir.path();
-
-        let recorder = TranscriptRecorder::new(nori_home, nori_home, None, "0.1.0", None)
-            .await
-            .unwrap();
-        let project_id = recorder.project_id().to_string();
-        let session_id = recorder.session_id().to_string();
-
-        recorder
-            .record_client_event(&nori_protocol::ClientEvent::ToolSnapshot(
-                nori_protocol::ToolSnapshot {
-                    call_id: "call-001".to_string(),
-                    title: "Edit /tmp/test.md".to_string(),
-                    kind: nori_protocol::ToolKind::Edit,
-                    phase: nori_protocol::ToolPhase::Completed,
-                    locations: vec![],
-                    invocation: None,
-                    artifacts: vec![],
-                    raw_input: None,
-                    raw_output: None,
-                    owner_request_id: None,
-                },
-            ))
-            .await
-            .unwrap();
-        recorder.flush().await.unwrap();
-        recorder.shutdown().await.unwrap();
-
-        let loader = TranscriptLoader::new(nori_home.to_path_buf());
-        let transcript = loader
-            .load_transcript(&project_id, &session_id)
-            .await
-            .unwrap();
-
-        assert_eq!(transcript.entries.len(), 2);
-        assert!(matches!(
-            transcript.entries[1].entry,
-            TranscriptEntry::ClientEvent(_)
-        ));
+        assert_eq!(transcript.entries.len(), 2); // SessionMeta + User
     }
 
     #[tokio::test]

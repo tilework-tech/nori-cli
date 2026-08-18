@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use ratatui::text::Line;
 
 use crate::markdown;
+use crate::markdown_render::committable_prefix_len;
 
 /// Newline-gated accumulator that renders markdown and commits only fully
 /// completed logical lines.
@@ -46,6 +47,11 @@ impl MarkdownStreamCollector {
     /// Render the full buffer and return only the newly completed logical lines
     /// since the last commit. When the buffer does not end with a newline, the
     /// final rendered line is considered incomplete and is not emitted.
+    ///
+    /// Committing by line prefix assumes rendering is append-only, which markdown tables violate:
+    /// every body row feeds the column widths, so a new row rewrites the header, the header rule,
+    /// and each separator already emitted. An unfinished trailing table is therefore withheld until
+    /// it closes (see [`committable_prefix_len`]) rather than committed row by row.
     pub fn commit_complete_lines(&mut self) -> Vec<Line<'static>> {
         let source = self.buffer.clone();
         let last_newline_idx = source.rfind('\n');
@@ -54,6 +60,7 @@ impl MarkdownStreamCollector {
         } else {
             return Vec::new();
         };
+        let source = source[..committable_prefix_len(&source)].to_string();
         let mut rendered: Vec<Line<'static>> = Vec::new();
         markdown::append_markdown_with_cwd(&source, self.width, self.cwd.as_deref(), &mut rendered);
         let mut complete_line_count = rendered.len();
@@ -80,7 +87,7 @@ impl MarkdownStreamCollector {
     /// If the buffer does not end with a newline, a temporary one is appended
     /// for rendering. Optionally unwraps ```markdown language fences in
     /// non-test builds.
-    pub fn finalize_and_drain(&mut self) -> Vec<Line<'static>> {
+    pub fn finalize_and_drain(&mut self) -> (Vec<Line<'static>>, String) {
         let raw_buffer = self.buffer.clone();
         let mut source: String = raw_buffer.clone();
         if !source.ends_with('\n') {
@@ -106,7 +113,7 @@ impl MarkdownStreamCollector {
 
         // Reset collector state for next stream.
         self.clear();
-        out
+        (out, raw_buffer)
     }
 }
 
@@ -124,7 +131,7 @@ pub(crate) fn simulate_stream_markdown_for_tests(
         }
     }
     if finalize {
-        out.extend(collector.finalize_and_drain());
+        out.extend(collector.finalize_and_drain().0);
     }
     out
 }
@@ -149,7 +156,7 @@ mod tests {
     async fn finalize_commits_partial_line() {
         let mut c = super::MarkdownStreamCollector::new(None);
         c.push_delta("Line without newline");
-        let out = c.finalize_and_drain();
+        let (out, _source) = c.finalize_and_drain();
         assert_eq!(out.len(), 1);
     }
 
@@ -680,5 +687,99 @@ mod tests {
             "more stuff\n",
         ])
         .await;
+    }
+
+    /// Stream `source` one character at a time and return the committed lines.
+    ///
+    /// Character-at-a-time is the worst case for a table: every row arrives in its own commit, so
+    /// any line committed before the table closes is a line the final table would have rewritten.
+    fn stream_char_by_char(source: &str, width: Option<usize>) -> Vec<Line<'static>> {
+        let mut collector = MarkdownStreamCollector::new(width);
+        let mut out = Vec::new();
+        for character in source.chars() {
+            let mut delta = [0u8; 4];
+            let delta = character.encode_utf8(&mut delta);
+            collector.push_delta(delta);
+            if character == '\n' {
+                out.extend(collector.commit_complete_lines());
+            }
+        }
+        out.extend(collector.finalize_and_drain().0);
+        out
+    }
+
+    fn assert_streamed_table_equals_full(source: &str, width: Option<usize>) {
+        let streamed = lines_to_plain_strings(&stream_char_by_char(source, width));
+        let mut rendered: Vec<Line<'static>> = Vec::new();
+        crate::markdown::append_markdown(source, width, &mut rendered);
+        assert_eq!(
+            streamed,
+            lines_to_plain_strings(&rendered),
+            "streamed table should match the full render at width {width:?}"
+        );
+    }
+
+    const STREAMED_TABLE: &str = concat!(
+        "Here is a table:\n",
+        "\n",
+        "| Situation | Commit strategy |\n",
+        "| --- | --- |\n",
+        "| Streaming/tail append | Existing incremental insertion |\n",
+        "| Width changes | Debounced full replay |\n",
+        "| Height-only changes | Replay only when viewport bookkeeping requires it |\n",
+        "| Rollback/session replacement/resume | Full replay |\n",
+        "| Change above writable viewport | Full replay |\n",
+    );
+
+    #[tokio::test]
+    async fn streamed_table_matches_full_render() {
+        for width in [Some(60), Some(80), Some(120), None] {
+            assert_streamed_table_equals_full(STREAMED_TABLE, width);
+        }
+    }
+
+    #[tokio::test]
+    async fn streamed_table_followed_by_prose_matches_full() {
+        let source = format!("{STREAMED_TABLE}\nAnd some trailing prose.\n");
+        assert_streamed_table_equals_full(&source, Some(80));
+    }
+
+    #[tokio::test]
+    async fn streamed_table_never_commits_raw_pipe_syntax() {
+        let streamed = lines_to_plain_strings(&stream_char_by_char(STREAMED_TABLE, Some(80)));
+        assert!(
+            !streamed.iter().any(|line| line.contains('|')),
+            "raw markdown pipe syntax leaked into the transcript: {streamed:?}"
+        );
+        assert!(
+            streamed.iter().any(|line| line.contains('━')),
+            "expected a grid header rule in the transcript: {streamed:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn streamed_table_snapshot() {
+        let transcript = lines_to_plain_strings(&stream_char_by_char(STREAMED_TABLE, Some(80)))
+            .into_iter()
+            .map(|line| line.trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!("streamed_markdown_table", transcript);
+    }
+
+    #[tokio::test]
+    async fn streamed_table_commits_column_rules_of_one_width() {
+        let streamed = lines_to_plain_strings(&stream_char_by_char(STREAMED_TABLE, Some(80)));
+        let rules = streamed
+            .iter()
+            .filter(|line| line.contains('─'))
+            .map(|line| line.trim_end().to_string())
+            .collect::<Vec<_>>();
+        let distinct = rules.iter().collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            distinct.len(),
+            1,
+            "column widths drifted mid-table across commits: {rules:?}"
+        );
     }
 }

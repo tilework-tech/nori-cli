@@ -1,0 +1,17 @@
+---
+source: tui-components/src/picker/tests.rs
+expression: "snapshot(&session_picker(), 48, 13)"
+---
+"                                                "
+"  Resume a session                              "
+"  Search ACP sessions or start fresh            "
+"  All  Local  Cloud                             "
+"  ⌕  Title, project, or session id              "
+"    Session                         Updated     "
+"  › Start a new session             now         "
+"    Create a fresh ACP session                  "
+"    Fix parser recovery (current)   2m ago      "
+"    Codex is implementing parser recovery       "
+"                                                "
+"        ↑↓ move  enter select  esc close        "
+"                                                "

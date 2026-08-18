@@ -6,14 +6,14 @@ mod seatbelt;
 use std::path::PathBuf;
 
 use codex_common::CliConfigOverrides;
-use codex_core::config::Config;
-use codex_core::config::ConfigOverrides;
-use codex_protocol::config_types::SandboxMode;
 use codex_sandbox::exec_env::create_env;
 use codex_sandbox::landlock::spawn_command_under_linux_sandbox;
 #[cfg(target_os = "macos")]
 use codex_sandbox::seatbelt::spawn_command_under_seatbelt;
 use codex_sandbox::spawn::StdioPolicy;
+use nori_config::NoriConfig;
+use nori_config::NoriConfigOverrides;
+use nori_config::SandboxMode;
 
 use crate::LandlockCommand;
 use crate::SeatbeltCommand;
@@ -109,17 +109,13 @@ async fn run_command_under_sandbox(
     log_denials: bool,
 ) -> anyhow::Result<()> {
     let sandbox_mode = create_sandbox_mode(full_auto);
-    let config = Config::load_with_cli_overrides(
-        config_overrides
+    let config = NoriConfig::load_with_overrides(NoriConfigOverrides {
+        sandbox_mode: Some(sandbox_mode),
+        raw_overrides: config_overrides
             .parse_overrides()
             .map_err(anyhow::Error::msg)?,
-        ConfigOverrides {
-            sandbox_mode: Some(sandbox_mode),
-            codex_linux_sandbox_exe,
-            ..Default::default()
-        },
-    )
-    .await?;
+        ..Default::default()
+    })?;
 
     // In practice, this should be `std::env::current_dir()` because this CLI
     // does not support `--cwd`, but let's use the config value for consistency.
@@ -144,7 +140,7 @@ async fn run_command_under_sandbox(
             let cwd_clone = cwd.clone();
             let env_map = env.clone();
             let command_vec = command.clone();
-            let base_dir = config.codex_home.clone();
+            let base_dir = config.nori_home.clone();
 
             // Preflight audit is invoked elsewhere at the appropriate times.
             let res = tokio::task::spawn_blocking(move || {
@@ -209,9 +205,8 @@ async fn run_command_under_sandbox(
         }
         SandboxType::Landlock => {
             #[expect(clippy::expect_used)]
-            let codex_linux_sandbox_exe = config
-                .codex_linux_sandbox_exe
-                .expect("codex-linux-sandbox executable not found");
+            let codex_linux_sandbox_exe =
+                codex_linux_sandbox_exe.expect("codex-linux-sandbox executable not found");
             spawn_command_under_linux_sandbox(
                 codex_linux_sandbox_exe,
                 command,

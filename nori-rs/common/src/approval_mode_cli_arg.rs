@@ -3,7 +3,7 @@
 
 use clap::ValueEnum;
 
-use codex_protocol::protocol::AskForApproval;
+use nori_config::AskForApproval;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 #[value(rename_all = "kebab-case")]

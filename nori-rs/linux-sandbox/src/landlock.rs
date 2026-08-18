@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-use codex_protocol::protocol::SandboxPolicy;
 use codex_sandbox::error::CodexErr;
 use codex_sandbox::error::Result;
 use codex_sandbox::error::SandboxErr;
+use nori_config::SandboxPolicy;
 
 use landlock::ABI;
 use landlock::Access;

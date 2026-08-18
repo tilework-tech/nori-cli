@@ -15,16 +15,13 @@ path = "src/lib.rs"
 [features]
 default = ["login"]
 
-# OpenTelemetry tracing export (disabled by default)
-otel = ["dep:opentelemetry-appender-tracing"]
-
 # Enable vt100-based tests (emulator) when running with `--features vt100-tests`.
 vt100-tests = []
 # Gate verbose debug logging inside the TUI implementation.
 debug-logs = []
 
 # ChatGPT/API login functionality
-login = ["dep:codex-login", "dep:codex-utils-pty"]
+login = ["dep:codex-utils-pty"]
 
 [lints]
 workspace = true
@@ -38,22 +35,20 @@ clap = { workspace = true, features = ["derive"] }
 nori-harness = { workspace = true }
 nori-config = { workspace = true }
 codex-ansi-escape = { workspace = true }
-codex-app-server-protocol = { workspace = true }
 codex-arg0 = { workspace = true }
 codex-common = { workspace = true, features = [
     "cli",
     "elapsed",
     "sandbox_summary",
 ] }
-codex-core = { workspace = true }
 codex-sandbox = { workspace = true }
 codex-git = { workspace = true }
 codex-rmcp-client = { workspace = true }
 nori-installed = { workspace = true }
 nori-protocol = { workspace = true }
 codex-file-search = { workspace = true }
-codex-login = { workspace = true, optional = true }
-codex-protocol = { workspace = true }
+codex-tui-components = { workspace = true }
+codex-login = { workspace = true }
 codex-utils-pty = { workspace = true, optional = true }
 color-eyre = { workspace = true }
 crossterm = { workspace = true, features = ["bracketed-paste", "event-stream"] }
@@ -65,7 +60,6 @@ image = { workspace = true, features = ["jpeg", "png"] }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 mcp-types = { workspace = true }
-opentelemetry-appender-tracing = { workspace = true, optional = true }
 pathdiff = { workspace = true }
 pulldown-cmark = { workspace = true }
 rand = { workspace = true }

@@ -1,12 +1,11 @@
-use agent_client_protocol_schema::v1 as acp;
-use nori_protocol::ClientEvent;
-use nori_protocol::ClientEventNormalizer;
-use nori_protocol::session_runtime::ActiveRequestKind;
-use nori_protocol::session_runtime::QueuedPrompt;
-use nori_protocol::session_runtime::QueuedPromptKind;
-use nori_protocol::session_runtime::SessionPhase;
-use nori_protocol::session_runtime::SessionPhaseView;
-use nori_protocol::session_runtime::SessionRuntime;
+use crate::normalized::ClientEvent;
+use crate::normalized::ClientEventNormalizer;
+use crate::normalized::session_runtime::QueuedPrompt;
+use crate::normalized::session_runtime::QueuedPromptKind;
+use crate::normalized::session_runtime::SessionPhase;
+use crate::normalized::session_runtime::SessionPhaseView;
+use crate::normalized::session_runtime::SessionRuntime;
+use nori_protocol::acp::v1 as acp;
 use pretty_assertions::assert_eq;
 
 use super::InboundEvent;
@@ -23,13 +22,17 @@ fn new_normalizer() -> ClientEventNormalizer {
     ClientEventNormalizer::default()
 }
 
+fn text_content(text: &str) -> Vec<acp::ContentBlock> {
+    vec![acp::ContentBlock::Text(acp::TextContent::new(text))]
+}
+
 fn simple_prompt() -> QueuedPrompt {
     QueuedPrompt {
         event_id: "evt-1".to_string(),
         kind: QueuedPromptKind::User,
         text: "hello".to_string(),
+        content: text_content("hello"),
         display_text: Some("hello".to_string()),
-        images: Vec::new(),
     }
 }
 
@@ -47,6 +50,10 @@ fn sample_config_option() -> acp::SessionConfigOption {
 
 fn notification(update: acp::SessionUpdate) -> InboundEvent {
     InboundEvent::Notification(Box::new(update))
+}
+
+fn request_id(value: &str) -> acp::RequestId {
+    acp::RequestId::Str(value.to_string())
 }
 
 fn has_event(events: &[ClientEvent], pred: impl Fn(&ClientEvent) -> bool) -> bool {
@@ -82,7 +89,7 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         }
     ));
 
-    assert!(has_event(&out.events, |e| matches!(
+    assert!(!has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
     )));
@@ -92,6 +99,22 @@ fn prompt_submit_from_idle_transitions_to_prompt() {
         e,
         SideEffect::SendPrompt { .. }
     )));
+
+    let out = reduce(
+        &mut rt,
+        InboundEvent::PromptStarted {
+            request_id: request_id("wire-1"),
+        },
+        &mut norm,
+    );
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
+    )));
+    assert!(matches!(
+        rt.phase,
+        SessionPhase::Prompt { request_id: ref wire_id, .. } if wire_id == &request_id("wire-1")
+    ));
 }
 
 #[test]
@@ -142,8 +165,8 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
         event_id: "goal-continuation-1".to_string(),
         kind: QueuedPromptKind::GoalContinuation,
         text: "Continue working toward the active thread goal.".to_string(),
+        content: text_content("Continue working toward the active thread goal."),
         display_text: None,
-        images: Vec::new(),
     };
     let out = reduce(
         &mut rt,
@@ -172,7 +195,7 @@ fn queued_goal_continuation_is_hidden_from_user_queue_and_transcript() {
             .map(|message| (message.role, message.content.as_str()))
             .collect::<Vec<_>>(),
         vec![(
-            nori_protocol::session_runtime::TranscriptRole::User,
+            crate::normalized::session_runtime::TranscriptRole::User,
             "hello"
         )]
     );
@@ -200,21 +223,21 @@ fn session_phase_label_labels_known_phases() {
     assert_eq!(session_phase_label(&SessionPhase::Idle), "idle");
     assert_eq!(
         session_phase_label(&SessionPhase::Prompt {
-            request_id: "req-1".to_string(),
+            request_id: request_id("req-1"),
             cancelling: false,
         }),
         "prompt"
     );
     assert_eq!(
         session_phase_label(&SessionPhase::Prompt {
-            request_id: "req-1".to_string(),
+            request_id: request_id("req-1"),
             cancelling: true,
         }),
         "cancelling"
     );
     assert_eq!(
         session_phase_label(&SessionPhase::Loading {
-            request_id: "req-2".to_string(),
+            request_id: request_id("req-2"),
         }),
         "loading"
     );
@@ -345,28 +368,74 @@ fn open_messages_finalized_into_transcript_on_completion() {
 }
 
 // =========================================================================
-// 4. Out-of-phase content
+// 4. Proactive content
 // =========================================================================
 
 #[test]
-fn notification_while_idle_emits_warning() {
+fn notification_while_idle_warns_and_remains_unowned() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
 
     let chunk = acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(
-        acp::ContentBlock::Text(acp::TextContent::new("stray content")),
+        acp::ContentBlock::Text(acp::TextContent::new("proactive content")),
     ));
     let out = reduce(&mut rt, notification(chunk), &mut norm);
 
-    // Should emit a warning
-    assert!(has_event(&out.events, |e| matches!(
-        e,
-        ClientEvent::Warning(_)
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::Warning(warning)
+            if warning.message == "Received update with no active local request"
     )));
-
-    // Should NOT create an active request
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::MessageDelta(delta) if delta.delta == "proactive content"
+    )));
     assert!(rt.active.is_none());
     assert_eq!(rt.phase, SessionPhase::Idle);
+}
+
+#[test]
+fn known_nori_status_updates_do_not_affect_an_owned_prompt() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+    let owned_request_id = rt
+        .active
+        .as_ref()
+        .expect("prompt should be active")
+        .request_id
+        .clone();
+
+    let working = reduce(
+        &mut rt,
+        notification(nori_status_update("working")),
+        &mut norm,
+    );
+    let idle = reduce(&mut rt, notification(nori_status_update("idle")), &mut norm);
+
+    assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
+    assert_eq!(
+        rt.active.as_ref().map(|active| &active.request_id),
+        Some(&owned_request_id)
+    );
+    for events in [&working.events, &idle.events] {
+        assert!(!has_event(events, |event| matches!(
+            event,
+            ClientEvent::SessionPhaseChanged(_)
+                | ClientEvent::PromptCompleted(_)
+                | ClientEvent::Warning(_)
+        )));
+    }
+}
+
+fn nori_status_update(status: &str) -> acp::SessionUpdate {
+    let mut meta = serde_json::Map::new();
+    meta.insert("nori".to_string(), serde_json::json!({ "status": status }));
+    acp::SessionUpdate::SessionInfoUpdate(acp::SessionInfoUpdate::new().meta(meta))
 }
 
 // =========================================================================
@@ -389,8 +458,8 @@ fn prompt_submit_while_active_queues() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -422,8 +491,8 @@ fn end_turn_drains_queue() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -443,7 +512,7 @@ fn end_turn_drains_queue() {
     // Should have transitioned directly to a new Prompt phase
     assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
 
-    assert!(has_event(&out.events, |e| matches!(
+    assert!(!has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionPhaseChanged(SessionPhaseView::Prompt)
     )));
@@ -471,8 +540,8 @@ fn cancelled_does_not_drain_queue() {
             event_id: "evt-2".to_string(),
             kind: QueuedPromptKind::User,
             text: "second".to_string(),
+            content: text_content("second"),
             display_text: Some("second".to_string()),
-            images: Vec::new(),
         }),
         &mut norm,
     );
@@ -525,7 +594,7 @@ fn tool_call_gets_owner_request_id() {
         .expect("tool should exist");
     assert_eq!(
         snapshot.owner_request_id.as_deref(),
-        Some(request_id.as_str())
+        Some(request_id.to_string().as_str())
     );
 }
 
@@ -560,7 +629,7 @@ fn cancel_marks_active_tools_cancelled() {
         .tool_calls
         .get("tc-1")
         .expect("tool should exist");
-    assert_eq!(snapshot.phase, nori_protocol::ToolPhase::Failed);
+    assert_eq!(snapshot.phase, crate::normalized::ToolPhase::Failed);
 }
 
 // =========================================================================
@@ -667,7 +736,7 @@ fn multiple_chunks_assembled_into_one_transcript_entry() {
         .persisted
         .transcript
         .iter()
-        .filter(|m| m.role == nori_protocol::session_runtime::TranscriptRole::Agent)
+        .filter(|m| m.role == crate::normalized::session_runtime::TranscriptRole::Agent)
         .collect();
     assert_eq!(agent_messages.len(), 1);
     assert_eq!(agent_messages[0].content, "hello world!");
@@ -719,19 +788,19 @@ fn mixed_agent_and_thought_chunks_preserve_transcript_order() {
         transcript,
         vec![
             (
-                nori_protocol::session_runtime::TranscriptRole::User,
+                crate::normalized::session_runtime::TranscriptRole::User,
                 "hello",
             ),
             (
-                nori_protocol::session_runtime::TranscriptRole::Agent,
+                crate::normalized::session_runtime::TranscriptRole::Agent,
                 "CI is green.",
             ),
             (
-                nori_protocol::session_runtime::TranscriptRole::Thought,
+                crate::normalized::session_runtime::TranscriptRole::Thought,
                 "Preparing PR.",
             ),
             (
-                nori_protocol::session_runtime::TranscriptRole::Agent,
+                crate::normalized::session_runtime::TranscriptRole::Agent,
                 "The PR is up.",
             ),
         ]
@@ -750,15 +819,14 @@ fn load_transitions_idle_to_loading_and_back() {
     reduce(
         &mut rt,
         InboundEvent::LoadSubmit {
-            request_id: "load-1".to_string(),
+            request_id: request_id("load-1"),
         },
         &mut norm,
     );
 
     assert_eq!(rt.phase_view(), SessionPhaseView::Loading);
     assert!(rt.active.is_some());
-    let active = rt.active.as_ref().unwrap();
-    assert_eq!(active.kind, ActiveRequestKind::Loading);
+    let _active = rt.active.as_ref().unwrap();
 
     // Load response
     reduce(&mut rt, InboundEvent::LoadResponse, &mut norm);
@@ -779,7 +847,7 @@ fn load_does_not_drain_queue() {
     reduce(
         &mut rt,
         InboundEvent::LoadSubmit {
-            request_id: "load-1".to_string(),
+            request_id: request_id("load-1"),
         },
         &mut norm,
     );
@@ -893,7 +961,35 @@ fn session_info_update_is_accepted_while_idle_and_emits_info_event() {
     assert!(has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionUpdateInfo(info)
-            if info.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            if info.kind == crate::normalized::SessionUpdateKind::SessionInfo
+    )));
+}
+
+#[test]
+fn unknown_nori_status_remains_visible_session_metadata() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+    let mut meta = serde_json::Map::new();
+    meta.insert(
+        "nori".to_string(),
+        serde_json::json!({ "status": "paused" }),
+    );
+
+    let update = acp::SessionUpdate::SessionInfoUpdate(
+        acp::SessionInfoUpdate::new()
+            .title("Paused session")
+            .meta(meta),
+    );
+    let out = reduce(&mut rt, notification(update), &mut norm);
+
+    assert_eq!(
+        rt.persisted.session_info.title.as_deref(),
+        Some("Paused session")
+    );
+    assert!(has_event(&out.events, |event| matches!(
+        event,
+        ClientEvent::SessionUpdateInfo(info)
+            if info.message.contains("Paused session")
     )));
 }
 
@@ -909,7 +1005,7 @@ fn usage_update_is_accepted_while_idle_and_emits_info_event() {
 
     assert_eq!(
         rt.persisted.session_usage,
-        Some(nori_protocol::session_runtime::SessionUsageState {
+        Some(crate::normalized::session_runtime::SessionUsageState {
             used_tokens: 128,
             total_tokens: 4096,
             cost_display: Some("0.42 USD".to_string()),
@@ -922,7 +1018,7 @@ fn usage_update_is_accepted_while_idle_and_emits_info_event() {
     assert!(has_event(&out.events, |e| matches!(
         e,
         ClientEvent::SessionUpdateInfo(info)
-            if info.kind == nori_protocol::SessionUpdateKind::Usage
+            if info.kind == crate::normalized::SessionUpdateKind::Usage
     )));
 }
 
@@ -972,7 +1068,7 @@ fn prompt_failed_carries_failure_disposition_onto_completion() {
     let out = reduce(
         &mut rt,
         InboundEvent::PromptFailed {
-            failure: Some(nori_protocol::TurnFailure::Fatal),
+            failure: Some(crate::normalized::TurnFailure::Fatal),
         },
         &mut norm,
     );
@@ -980,12 +1076,12 @@ fn prompt_failed_carries_failure_disposition_onto_completion() {
     assert!(has_event(&out.events, |e| matches!(
         e,
         ClientEvent::PromptCompleted(completed)
-            if completed.failure == Some(nori_protocol::TurnFailure::Fatal)
+            if completed.failure == Some(crate::normalized::TurnFailure::Fatal)
     )));
 }
 
 // =========================================================================
-// Orphan-update warning de-duplication
+// Unowned-update warning de-duplication
 // =========================================================================
 
 fn orphan_tool_update(call_id: &'static str) -> acp::SessionUpdate {
@@ -1002,10 +1098,10 @@ fn orphan_tool_update(call_id: &'static str) -> acp::SessionUpdate {
 fn count_orphan_warnings(events: &[ClientEvent]) -> usize {
     events
         .iter()
-        .filter(|e| match e {
-            ClientEvent::Warning(w) => w
-                .message
-                .contains("Received request-owned content update while no request is active"),
+        .filter(|event| match event {
+            ClientEvent::Warning(warning) => {
+                warning.message == "Received update with no active local request"
+            }
             _ => false,
         })
         .count()
@@ -1014,7 +1110,7 @@ fn count_orphan_warnings(events: &[ClientEvent]) -> usize {
 fn count_tool_snapshots(events: &[ClientEvent]) -> usize {
     events
         .iter()
-        .filter(|e| matches!(e, ClientEvent::ToolSnapshot(_)))
+        .filter(|event| matches!(event, ClientEvent::ToolSnapshot(_)))
         .count()
 }
 
@@ -1044,7 +1140,7 @@ fn orphan_warning_is_emitted_only_once_per_burst() {
         + count_orphan_warnings(&third.events);
     assert_eq!(
         warnings, 1,
-        "expected exactly one orphan warning across the burst"
+        "expected exactly one unowned-update warning across the burst"
     );
 
     let snapshots = count_tool_snapshots(&first.events)
@@ -1052,7 +1148,7 @@ fn orphan_warning_is_emitted_only_once_per_burst() {
         + count_tool_snapshots(&third.events);
     assert_eq!(
         snapshots, 3,
-        "every orphan update should still produce a tool snapshot"
+        "every unowned update should still produce a tool snapshot"
     );
 }
 
@@ -1092,7 +1188,7 @@ fn orphan_warning_resets_when_a_new_prompt_starts() {
     );
     assert_eq!(rt.phase_view(), SessionPhaseView::Idle);
 
-    // Second burst after the new request — warning should fire again.
+    // A later unowned burst warns once again.
     let third = reduce(
         &mut rt,
         notification(orphan_tool_update("call-3")),

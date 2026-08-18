@@ -12,7 +12,7 @@ pub struct LandlockCommand {
     pub sandbox_policy_cwd: PathBuf,
 
     #[arg(long = "sandbox-policy")]
-    pub sandbox_policy: codex_protocol::protocol::SandboxPolicy,
+    pub sandbox_policy: nori_config::SandboxPolicy,
 
     /// Full command args to run under landlock.
     #[arg(trailing_var_arg = true)]

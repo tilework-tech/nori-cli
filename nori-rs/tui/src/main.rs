@@ -25,10 +25,7 @@ fn main() -> anyhow::Result<()> {
 
         let token_usage = exit_info.token_usage;
         if !token_usage.is_zero() {
-            println!(
-                "{}",
-                codex_protocol::protocol::FinalOutput::from(token_usage),
-            );
+            println!("{token_usage}");
         }
         Ok(())
     })

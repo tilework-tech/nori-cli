@@ -1,5 +1,8 @@
 # ACP Turn State and Session Update Model
 
+Canonical terms live in [Turns and Ownership](../terminology/turns-and-ownership.md).
+Existing `proactive_*` identifiers name presentation state only.
+
 ## Goal
 
 Define a minimal, ACP-faithful model for turn state and `session/update`
@@ -40,6 +43,26 @@ The protocol rules that matter most here are:
   cross-turn heuristics
 
 This design follows those boundaries exactly.
+
+## Ownership Vocabulary
+
+- A **client-owned turn** is initiated by this connection with
+  `session/prompt`; its lifecycle is correlated to that request and ends with
+  its response.
+- An **agent-owned turn** is established on this connection by explicit Nori
+  agent-turn metadata. ACP v1 has no corresponding primitive.
+- An **unowned update** is an individual `session/update` received while this
+  client has no active local request. It is not a protocol error or evidence
+  of a turn.
+- **Unowned presentation** groups unowned updates without creating a turn or
+  request.
+
+- while a local request is active, request-scoped updates belong to that
+  request
+- without a local request, request-scoped updates are unowned activity; warn
+  once per unowned burst, but accept, preserve, and render them
+- never invent a request ID or assign unowned activity to an earlier or later
+  local request
 
 ## Proposed Runtime Model
 
@@ -83,7 +106,9 @@ Properties:
 - `cancelling` means `session/cancel` has been sent for the active prompt, but
   the prompt still remains in flight until its response arrives.
 
-There is no second TUI-owned turn FSM beyond this.
+There is no second request-lifecycle FSM beyond this. The TUI may retain
+presentation-only state for grouping unowned output, but that state does not
+own ACP requests or change this phase.
 
 ### `PersistedSessionState`
 
@@ -148,12 +173,12 @@ The buffer exists only inside the active request. It must never survive into
 
 ### `ToolSnapshot`
 
-Tool snapshots persist across turns, but each one records which request created
-it.
+Tool snapshots persist across turns. They record a local owner when a request
+created them, while unowned updates remain ownerless.
 
 ```rust
 struct ToolSnapshot {
-    owner_request_id: JsonRpcId,
+    owner_request_id: Option<JsonRpcId>,
     status: ToolStatus,
     title: String,
     kind: ToolKind,
@@ -164,8 +189,9 @@ struct ToolSnapshot {
 }
 ```
 
-`owner_request_id` is required so that cancellation, stale updates, and
-request-local rendering stay precise without heuristics.
+`owner_request_id` is `Some(active.request_id)` for locally owned tool activity
+and `None` for unowned activity. The client never invents ownership from
+timing.
 
 ### `OutgoingQueue`
 
@@ -205,8 +231,10 @@ This is not an optimization. It is a correctness requirement. ACP explicitly
 calls out that unordered handling can allow a request response to overtake a
 prior `session/update`, which makes turn completion ambiguous in practice.
 
-The backend reduces state first, then emits derived UI events. The TUI consumes
-those projections. It does not race the backend for authority.
+The harness reducer maintains private phase, persisted state, and local request
+ownership while separately forwarding raw ACP traffic. The TUI builds its own
+private display projections from that public traffic; neither projection
+changes ACP ownership or semantics.
 
 ## Routing Rules
 
@@ -232,9 +260,9 @@ Rules:
 - patch `PersistedSessionState`
 - never treat them as turn boundaries
 
-### 2. Request-owned content updates
+### 2. Request-scoped content updates
 
-The following updates require an active request:
+The following updates ordinarily belong to an active request:
 
 - `user_message_chunk`
 - `agent_message_chunk`
@@ -245,7 +273,7 @@ The following updates require an active request:
 Rules:
 
 - if `active.is_some()`, patch `ActiveRequestState` or create request-owned state
-- if `active.is_none()`, handle the update as out-of-phase content
+- if `active.is_none()`, handle the update as unowned activity
 
 More specifically:
 
@@ -253,33 +281,41 @@ More specifically:
 - `agent_message_chunk` appends only to `active.open_agent_message`
 - `agent_thought_chunk` appends only to `active.open_thought_message`
 - `plan` patches `persisted.plan`
-- `tool_call` creates or replaces `persisted.tool_calls[toolCallId]`, sets
-  `owner_request_id = active.request_id`, and adds the id to
-  `active.tool_call_ids`
+- `tool_call` creates or replaces `persisted.tool_calls[toolCallId]`; when
+  active, it records that request as owner and adds the id to
+  `active.tool_call_ids`, otherwise ownership remains `None`
 
 The client never invents a turn owner when ACP did not provide one.
 
-### 3. Out-of-phase request content
+### 3. Unowned updates and agent-owned turns
 
-The NDJSON event stream can contain well-formed request-shaped content outside
-an active `session/prompt` or `session/load`. The backend therefore has to
-handle that path anyway, even if only to log and drop it.
+Well-formed user, agent, thought, plan, or tool content received with
+`active.is_none()` is a valid unowned update. The
+harness normalizes and projects it after emitting `Received update with no
+active local request` for the first non-metadata update in the unowned burst.
+Later updates do not repeat the warning until a local prompt or load starts.
+The warning does not reopen `active`, fabricate a request ID or completion
+signal, or attribute the update to an earlier or later local request. An idle
+user chunk therefore does not create a synthetic prompt phase.
 
-The observable behavior should be:
+The harness forwards schema-native ACP metadata and does not use it to complete
+a prompt. Any unowned user, agent, thought, plan, or tool update starts or
+confirms unowned presentation. Without a lifecycle hint, content still renders,
+and a later local prompt or load start separates it without fabricating
+completion.
 
-- if a request-owned content update arrives with `active.is_none()`, emit
-  `UiEvent::Warning` once per burst — only the first such update since the
-  last active request emits the warning, subsequent updates in the same
-  idle window do not. The flag resets when a new prompt or load begins.
-- forward the well-formed content to the TUI as standalone between-turn output
-  (every update, regardless of whether the warning fired)
-- do not attribute that content to a prior or future request
-- do not reopen `active`
-- if the update is malformed or unrecognizable, log a warning and drop it
+Nori's brokered Sessions product may send status-only `SessionInfoUpdate`
+notifications with `_meta.nori.status`:
 
-This keeps the protocol handling honest without adding attribution heuristics to
-the core reducer, and prevents post-cancel update bursts from spamming the
-history with identical warning cells.
+- exact `working` establishes or confirms an agent-owned turn and starts its
+  presentation when no local prompt or load is active
+- exact `idle` ends that turn and completes its presentation under the same
+  condition
+
+The TUI hides a known status-only frame. If the same frame also carries
+`title` or `updated_at`, those fields remain visible. Unknown status values are
+ordinary session metadata. Agent ownership implies no queue, cancellation,
+loop, permission, or request semantics.
 
 ### 4. Attributed tool updates
 
@@ -288,10 +324,11 @@ history with identical warning cells.
 Rules:
 
 - if `persisted.tool_calls` already contains the id, patch that snapshot
-- if the id is unknown, emit `UiEvent::Warning` and ignore the update
+- if the id is unknown, normalize it from a default `ToolCall`, apply the
+  update, and persist the resulting snapshot
 
-Tool snapshots are persisted session state. Their ownership is explicit via
-`owner_request_id`, not inferred from timing.
+Tool snapshots are persisted session state. Their optional ownership is
+explicit via `owner_request_id`, not inferred from timing.
 
 ### 5. Permission requests
 
@@ -359,7 +396,9 @@ active until the response to the original `session/prompt` arrives.
 
 ### Prompt response handling
 
-The response to `session/prompt` is the only prompt-turn boundary.
+The response to `session/prompt` is the only locally owned prompt-turn
+boundary. Presentation of unowned updates or an agent-owned turn does not
+create an active backend prompt or publish a separate Nori completion event.
 
 When the response to the active prompt arrives, the reducer performs one ordered
 completion step:
@@ -432,8 +471,9 @@ between "continue immediately" and "surface the next queued draft for editing."
 
 ## UI Event Surface
 
-The backend may project reduced state into UI events, but those events are not a
-second source of truth.
+The harness may project reduced state into private client events for its own
+behavior, but those events are not a public protocol or a second source of
+truth.
 
 A flat event model is sufficient:
 
@@ -463,9 +503,10 @@ enum SessionPhaseView {
 }
 ```
 
-The TUI reads these events as projections of backend-owned state. If a piece of
-logic needs to know whether a prompt is active, it should ask the backend-owned
-session runtime, not infer it from timing or event order.
+The TUI instead normalizes raw public ACP traffic for display and observes Nori
+phase events for locally owned lifecycle. Its unowned presentation bit may
+group unowned output, but it cannot complete a prompt or mutate harness-owned
+request state.
 
 ## Non-Goals
 
@@ -483,8 +524,9 @@ design.
 
 Future changes should be rejected if they introduce any of these smells:
 
-- the TUI and backend both track whether a prompt is active
-- turn completion is inferred from anything other than the request response
+- TUI presentation state becomes an authority for ACP request lifecycle
+- owned-turn completion is inferred from anything other than the request
+  response
 - open message buffers survive across request completion
 - tool ownership is inferred from timing instead of stored explicitly
 - cancel is treated as immediate idle

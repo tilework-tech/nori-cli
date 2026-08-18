@@ -1,11 +1,50 @@
 use super::*;
 
 impl App {
+    /// Clear and report a due deferred agent spawn.
+    ///
+    /// Per-session startup defers the agent spawn until the chosen skillset's
+    /// files are on disk. Returns `true` (clearing the pending flag) when a
+    /// spawn is now due; `false` while an agent-session probe is still in
+    /// flight or no spawn was deferred. Shared by the skillset-applied and
+    /// picker-dismissed paths so their guard cannot drift.
+    pub(super) fn take_deferred_spawn(&mut self) -> bool {
+        if self.deferred_spawn_pending && !self.agent_session_probe_in_flight {
+            self.deferred_spawn_pending = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Resolve a deferred agent spawn and refresh system info after a skillset
+    /// install or switch completes. Both `SkillsetInstallResult` and
+    /// `SkillsetSwitchResult` route here: a per-session startup that lands on a
+    /// non-worktree cwd installs (rather than switches), so the deferred spawn
+    /// must resolve on either result or the agent never starts.
+    fn on_skillset_applied(&mut self, success: bool) {
+        if !success {
+            return;
+        }
+        if self.take_deferred_spawn() {
+            self.chat_widget
+                .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
+        }
+        self.request_system_info_refresh(
+            self.config.cwd.clone(),
+            self.config.active_agent.clone().into(),
+            self.chat_widget.first_prompt_text(),
+        );
+    }
+
     pub(crate) async fn handle_tui_event(
         &mut self,
         tui: &mut tui::Tui,
         event: TuiEvent,
     ) -> Result<bool> {
+        if matches!(event, TuiEvent::Draw) {
+            self.handle_resize_reflow_draw(tui)?;
+        }
         if self.overlay.is_some() {
             let _ = self.handle_backtrack_overlay_event(tui, event).await?;
         } else {
@@ -14,11 +53,6 @@ impl App {
                     self.handle_key_event(tui, key_event).await;
                 }
                 TuiEvent::Paste(pasted) => {
-                    // Many terminals convert newlines to \r when pasting (e.g., iTerm2),
-                    // but tui-textarea expects \n. Normalize CR to LF.
-                    // [tui-textarea]: https://github.com/rhysd/tui-textarea/blob/4d18622eeac13b309e0ff6a55a46ac6706da68cf/src/textarea.rs#L782-L783
-                    // [iTerm2]: https://github.com/gnachman/iTerm2/blob/5d0c0d9f68523cbd0494dad5422998964a2ecd8d/sources/iTermPasteHelper.m#L206-L216
-                    let pasted = pasted.replace("\r", "\n");
                     self.chat_widget.handle_paste(pasted);
                 }
                 TuiEvent::Draw => {
@@ -53,21 +87,13 @@ impl App {
         self.config.approval_policy = approval;
         self.config.sandbox_policy = sandbox.clone();
         #[cfg(target_os = "windows")]
-        if !matches!(sandbox, codex_protocol::protocol::SandboxPolicy::ReadOnly)
+        if !matches!(sandbox, nori_config::SandboxPolicy::ReadOnly)
             || codex_sandbox::get_platform_sandbox().is_some()
         {
             self.config.forced_auto_mode_downgraded_on_windows = false;
         }
         self.chat_widget.set_approval_policy(approval);
-        self.chat_widget.set_sandbox_policy(sandbox.clone());
-        self.chat_widget.submit_op(Op::OverrideTurnContext {
-            cwd: None,
-            approval_policy: Some(approval),
-            sandbox_policy: Some(sandbox),
-            model: None,
-            effort: None,
-            summary: None,
-        });
+        self.chat_widget.set_sandbox_policy(sandbox);
     }
 
     pub(super) async fn handle_event(
@@ -77,6 +103,7 @@ impl App {
     ) -> Result<bool> {
         match event {
             AppEvent::NewSession => {
+                self.deferred_spawn_pending = self.cloud_onboard;
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
@@ -88,11 +115,16 @@ impl App {
                     None,
                     Vec::new(),
                     None,
-                    false,
+                    self.cloud_onboard,
                     None,
                 );
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
+                if self.cloud_onboard {
+                    self.begin_agent_session_probe(
+                        crate::app_event::AgentSessionProbeIntent::Onboarding,
+                    );
+                }
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = Vec::new();
                     if let Some(usage_line) = summary.usage_line {
@@ -105,6 +137,140 @@ impl App {
                     self.chat_widget.add_plain_history_lines(lines);
                 }
                 tui.frame_requester().schedule_frame();
+            }
+            AppEvent::SessionCloseFailed { message } => {
+                self.chat_widget.on_session_close_failed(message);
+            }
+            AppEvent::SessionClosed => {
+                // The session was released; land back on the session picker
+                // with a fresh deferred widget — never auto-claim a new
+                // session (on a cloud agent that would boot a new VM).
+                let init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    None,
+                    Vec::new(),
+                    None,
+                    true,
+                    None,
+                );
+                self.chat_widget = ChatWidget::new(init);
+                self.configure_new_chat_widget();
+                self.deferred_spawn_pending = true;
+                self.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                    fallback_to_spawn: false,
+                });
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::AgentSessionListProbed { probe, intent } => {
+                self.agent_session_probe_in_flight = false;
+                match probe {
+                    Ok(probe) => {
+                        // Seed the deferred widget with the probed agent
+                        // capabilities so capability-gated behavior (e.g. the
+                        // detach wording on quit) is right before any session
+                        // exists.
+                        self.chat_widget.handle_client_event(
+                            crate::presentation::ClientEvent::SessionCapabilitiesChanged(
+                                crate::presentation::SessionCapabilitiesView {
+                                    agent: crate::presentation::AgentCapabilitiesView {
+                                        http_mcp: probe.capabilities.mcp_capabilities.http,
+                                        load_session: probe.capabilities.load_session,
+                                        session_list: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .list
+                                            .is_some(),
+                                        session_resume: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .resume
+                                            .is_some(),
+                                        session_close: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .close
+                                            .is_some(),
+                                        session_fork: probe
+                                            .capabilities
+                                            .session_capabilities
+                                            .fork
+                                            .is_some(),
+                                    },
+                                    ..Default::default()
+                                },
+                            ),
+                        );
+                        match intent {
+                            crate::app_event::AgentSessionProbeIntent::Onboarding => {
+                                if let Some(event) =
+                                    super::session_setup::onboarding_resume_event(probe.sessions)
+                                {
+                                    self.app_event_tx.send(event);
+                                } else if self.take_deferred_spawn() {
+                                    self.chat_widget.spawn_deferred_agent(
+                                        self.config.clone(),
+                                        self.app_event_tx.clone(),
+                                    );
+                                }
+                            }
+                            crate::app_event::AgentSessionProbeIntent::Picker { .. } => self
+                                .chat_widget
+                                .show_acp_resume_session_picker(probe.sessions),
+                        }
+                    }
+                    Err(nori_harness::ProbeError::SessionListUnsupported(message))
+                        if intent.fallback_to_spawn() =>
+                    {
+                        // Expected for agents without the session lifecycle
+                        // (older handroll, local agents): fall through to the
+                        // plain spawn quietly.
+                        tracing::debug!("agent session probe: {message}");
+                        if self.deferred_spawn_pending {
+                            self.deferred_spawn_pending = false;
+                            self.chat_widget.spawn_deferred_agent(
+                                self.config.clone(),
+                                self.app_event_tx.clone(),
+                            );
+                        }
+                    }
+                    Err(error) if intent.fallback_to_spawn() => {
+                        // Entry-path failure: surface it, then fall back to
+                        // the plain spawn — that surface owns the full error
+                        // handling (auth hints, retry wording).
+                        self.chat_widget
+                            .add_error_message(format!("Couldn't list sessions: {error}"));
+                        if self.deferred_spawn_pending {
+                            self.deferred_spawn_pending = false;
+                            self.chat_widget.spawn_deferred_agent(
+                                self.config.clone(),
+                                self.app_event_tx.clone(),
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        // Post-/close failure: the user just released a
+                        // session — silently claiming a fresh one is
+                        // forbidden. Leave them at explicit next actions.
+                        self.deferred_spawn_pending = false;
+                        self.chat_widget
+                            .add_error_message(format!("Couldn't list sessions: {error}"));
+                        self.chat_widget.add_info_message(
+                            "No session is active — /resume retries the picker, /new starts a \
+                             fresh session."
+                                .to_string(),
+                            None,
+                        );
+                    }
+                }
+                tui.frame_requester().schedule_frame();
+            }
+            AppEvent::OpenAgentSessionPicker => {
+                self.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                    fallback_to_spawn: false,
+                });
+            }
+            AppEvent::BeginExit => {
+                self.chat_widget.begin_exit();
             }
             AppEvent::InsertHistoryCell(cell) => {
                 let cell: Arc<dyn HistoryCell> = cell.into();
@@ -132,6 +298,23 @@ impl App {
                     }
                 }
             }
+            AppEvent::ConsolidateAgentMessage { source, cwd } => {
+                let consolidation = crate::transcript_reflow::consolidate_agent_message_cells(
+                    &mut self.transcript_cells,
+                    source,
+                    &cwd,
+                );
+                if let Some((range, replacement)) = consolidation
+                    && let Some(Overlay::Transcript(transcript)) = &mut self.overlay
+                {
+                    transcript.replace_cells(range, replacement);
+                    tui.frame_requester().schedule_frame();
+                }
+                if self.transcript_reflow.take_stream_finish_reflow_needed() {
+                    self.transcript_reflow.schedule_immediate();
+                    tui.frame_requester().schedule_frame();
+                }
+            }
             AppEvent::StartCommitAnimation => {
                 if self
                     .commit_anim_running
@@ -154,20 +337,8 @@ impl App {
             AppEvent::CommitTick => {
                 self.chat_widget.on_commit_tick();
             }
-            AppEvent::CodexEvent(event) => {
-                if self.suppress_shutdown_complete {
-                    if matches!(event.msg, EventMsg::ShutdownComplete) {
-                        self.suppress_shutdown_complete = false;
-                        return Ok(true);
-                    }
-                    if matches!(event.msg, EventMsg::TurnAborted(_)) {
-                        return Ok(true);
-                    }
-                }
-                self.chat_widget.handle_codex_event(event);
-            }
-            AppEvent::ClientEvent(event) => {
-                self.chat_widget.handle_client_event(event);
+            AppEvent::SessionEvent { generation, event } => {
+                self.chat_widget.handle_session_event(generation, event);
             }
             AppEvent::ConversationHistory(ev) => {
                 self.on_conversation_history_for_backtrack(tui, ev)?;
@@ -216,7 +387,28 @@ impl App {
                 // Exit the application
                 return Ok(false);
             }
-            AppEvent::CodexOp(op) => self.chat_widget.submit_op(op),
+            AppEvent::HarnessAction(action) => {
+                self.chat_widget.submit_harness_action(action);
+            }
+            AppEvent::HistoryEntryLoaded {
+                log_id,
+                offset,
+                entry,
+            } => self
+                .chat_widget
+                .on_history_entry_loaded(log_id, offset, entry),
+            AppEvent::HistorySearchLoaded(entries) => {
+                self.chat_widget.on_history_search_loaded(entries);
+            }
+            AppEvent::CustomPromptsLoaded(prompts) => {
+                self.chat_widget.on_custom_prompts_loaded(prompts);
+            }
+            AppEvent::UndoSnapshotsLoaded(snapshots) => {
+                self.chat_widget.on_undo_snapshots_loaded(snapshots);
+            }
+            AppEvent::GoalLoaded(Some(goal)) => self.chat_widget.handle_thread_goal_updated(goal),
+            AppEvent::GoalLoaded(None) => self.chat_widget.handle_thread_goal_cleared(),
+            AppEvent::HarnessActionFailed(message) => self.chat_widget.add_error_message(message),
             AppEvent::DiffResult(text) => {
                 // Clear the in-progress state in the bottom pane
                 self.chat_widget.on_diff_complete();
@@ -259,19 +451,6 @@ impl App {
             AppEvent::RefreshSystemInfoForDirectory { dir, agent } => {
                 self.request_system_info_refresh(dir, agent, self.chat_widget.first_prompt_text());
             }
-            AppEvent::RateLimitSnapshotFetched(snapshot) => {
-                self.chat_widget.on_rate_limit_snapshot(Some(snapshot));
-            }
-            AppEvent::UpdateReasoningEffort(effort) => {
-                self.on_update_reasoning_effort(effort);
-            }
-            AppEvent::UpdateAgent(model) => {
-                self.chat_widget.set_agent(&model);
-                self.config.model = model.clone();
-                if let Some(family) = find_family_for_model(&model) {
-                    self.config.model_family = family;
-                }
-            }
             AppEvent::OpenFullAccessConfirmation { preset } => {
                 self.chat_widget.open_full_access_confirmation(preset);
             }
@@ -294,16 +473,15 @@ impl App {
             AppEvent::EnableWindowsSandboxForAgentMode { preset } => {
                 #[cfg(target_os = "windows")]
                 {
-                    let profile = self.active_profile.as_deref();
-                    let feature_key = Feature::WindowsSandbox.key();
-                    match ConfigEditsBuilder::new(&self.config.codex_home)
-                        .with_profile(profile)
-                        .set_feature_enabled(feature_key, true)
+                    match ConfigEditsBuilder::new(&self.config.nori_home)
+                        .set_path(&["features", "enable_experimental_windows_sandbox"], true)
                         .apply()
                         .await
                     {
                         Ok(()) => {
-                            self.config.set_windows_sandbox_globally(true);
+                            codex_sandbox::set_windows_sandbox_enabled(true);
+                            self.config.windows_sandbox_enabled = true;
+                            self.config.forced_auto_mode_downgraded_on_windows = false;
                             self.chat_widget.clear_forced_auto_mode_downgrade();
                             if let Some((sample_paths, extra_count, failed_scan)) =
                                 self.chat_widget.world_writable_warning_details()
@@ -343,55 +521,12 @@ impl App {
                     let _ = preset;
                 }
             }
-            AppEvent::PersistAgentSelection {
-                agent: model,
-                effort,
-            } => {
-                let profile = self.active_profile.as_deref();
-                match ConfigEditsBuilder::new(&self.config.codex_home)
-                    .with_profile(profile)
-                    .set_model(Some(model.as_str()), effort)
-                    .apply()
-                    .await
-                {
-                    Ok(()) => {
-                        let reasoning_label = Self::reasoning_label(effort);
-                        if let Some(profile) = profile {
-                            self.chat_widget.add_info_message(
-                                format!(
-                                    "Model changed to {model} {reasoning_label} for {profile} profile"
-                                ),
-                                None,
-                            );
-                        } else {
-                            self.chat_widget.add_info_message(
-                                format!("Model changed to {model} {reasoning_label}"),
-                                None,
-                            );
-                        }
-                    }
-                    Err(err) => {
-                        tracing::error!(
-                            error = %err,
-                            "failed to persist model selection"
-                        );
-                        if let Some(profile) = profile {
-                            self.chat_widget.add_error_message(format!(
-                                "Failed to save model for profile `{profile}`: {err}"
-                            ));
-                        } else {
-                            self.chat_widget
-                                .add_error_message(format!("Failed to save default model: {err}"));
-                        }
-                    }
-                }
-            }
             AppEvent::ApplyApprovalPreset { approval, sandbox } => {
                 #[cfg(target_os = "windows")]
                 let sandbox_is_workspace_write_or_ro = matches!(
                     sandbox,
-                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
+                    nori_config::SandboxPolicy::WorkspaceWrite { .. }
+                        | nori_config::SandboxPolicy::ReadOnly
                 );
 
                 self.apply_approval_preset(approval, sandbox);
@@ -413,7 +548,7 @@ impl App {
                         let env_map: std::collections::HashMap<String, String> =
                             std::env::vars().collect();
                         let tx = self.app_event_tx.clone();
-                        let logs_base_dir = self.config.codex_home.clone();
+                        let logs_base_dir = self.config.nori_home.clone();
                         let sandbox_policy = self.config.sandbox_policy.clone();
                         Self::spawn_world_writable_scan(
                             cwd,
@@ -436,8 +571,8 @@ impl App {
                     .set_world_writable_warning_acknowledged(ack);
             }
             AppEvent::PersistFullAccessWarningAcknowledged => {
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_hide_full_access_warning(true)
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+                    .set_path(&["notice", "hide_full_access_warning"], true)
                     .apply()
                     .await
                 {
@@ -451,8 +586,8 @@ impl App {
                 }
             }
             AppEvent::PersistWorldWritableWarningAcknowledged => {
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_hide_world_writable_warning(true)
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+                    .set_path(&["notice", "hide_world_writable_warning"], true)
                     .apply()
                     .await
                 {
@@ -465,118 +600,66 @@ impl App {
                     ));
                 }
             }
-            AppEvent::PersistModelMigrationPromptAcknowledged { migration_config } => {
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_hide_model_migration_prompt(&migration_config, true)
-                    .apply()
-                    .await
-                {
-                    tracing::error!(error = %err, "failed to persist model migration prompt acknowledgement");
-                    self.chat_widget.add_error_message(format!(
-                        "Failed to save model migration prompt preference: {err}"
-                    ));
-                }
-            }
             AppEvent::OpenApprovalsPopup => {
                 self.chat_widget.open_approvals_popup();
             }
-            AppEvent::FullScreenApprovalRequest(request) => match request {
-                ApprovalRequest::ApplyPatch { cwd, changes, .. } => {
-                    let _ = tui.enter_alt_screen();
-                    let diff_summary = DiffSummary::new(changes, cwd);
-                    self.overlay = Some(Overlay::new_static_with_renderables(
-                        vec![diff_summary.into()],
-                        "P A T C H".to_string(),
-                    ));
-                }
-                ApprovalRequest::Exec { command, .. } => {
-                    let _ = tui.enter_alt_screen();
-                    let full_cmd = strip_bash_lc_and_escape(&command);
-                    let full_cmd_lines = highlight_bash_to_lines(&full_cmd);
-                    self.overlay = Some(Overlay::new_static_with_lines(
-                        full_cmd_lines,
-                        "E X E C".to_string(),
-                    ));
-                }
-                ApprovalRequest::McpElicitation {
-                    server_name,
-                    message,
-                    ..
-                } => {
-                    let _ = tui.enter_alt_screen();
-                    let paragraph = Paragraph::new(vec![
-                        Line::from(vec!["Server: ".into(), server_name.bold()]),
-                        Line::from(""),
-                        Line::from(message),
-                    ])
-                    .wrap(Wrap { trim: false });
-                    self.overlay = Some(Overlay::new_static_with_renderables(
-                        vec![Box::new(paragraph)],
-                        "E L I C I T A T I O N".to_string(),
-                    ));
-                }
-                ApprovalRequest::AcpTool {
+            AppEvent::FullScreenApprovalRequest(request) => {
+                let ApprovalRequest {
                     title,
                     kind,
                     cwd,
                     snapshot,
                     ..
-                } => {
-                    let _ = tui.enter_alt_screen();
+                } = request;
+                let _ = tui.enter_alt_screen();
 
-                    // For edit-like tools, show DiffSummary in fullscreen
-                    let edit_changes = if matches!(
-                        kind,
-                        nori_protocol::ToolKind::Create
-                            | nori_protocol::ToolKind::Edit
-                            | nori_protocol::ToolKind::Delete
-                            | nori_protocol::ToolKind::Move
-                    ) {
-                        let mut changes = client_tool_cell::diff_changes_from_artifacts(
-                            &snapshot.artifacts,
-                            &cwd,
-                        );
-                        if changes.is_empty() {
-                            changes = client_tool_cell::changes_from_invocation(
-                                &snapshot.invocation,
-                                &cwd,
-                            );
-                        }
-                        if changes.is_empty() {
-                            None
-                        } else {
-                            Some(changes)
-                        }
-                    } else {
-                        None
-                    };
-
-                    if let Some(changes) = edit_changes {
-                        let diff_summary = DiffSummary::new(changes, cwd);
-                        self.overlay = Some(Overlay::new_static_with_renderables(
-                            vec![diff_summary.into()],
-                            "P A T C H".to_string(),
-                        ));
-                    } else {
-                        let rel_title = client_event_format::relativize_paths_in_text(&title, &cwd);
-                        let mut lines = vec![Line::from(rel_title.clone())];
-                        if let Some(inv_text) =
-                            client_event_format::format_invocation(&snapshot.invocation)
-                        {
-                            let rel_inv =
-                                client_event_format::relativize_paths_in_text(&inv_text, &cwd);
-                            if !client_event_format::is_invocation_redundant(&rel_inv, &rel_title) {
-                                lines.push(Line::from(rel_inv));
-                            }
-                        }
-                        for text in client_event_format::format_artifacts(&snapshot.artifacts) {
-                            lines.push(Line::from(text));
-                        }
-                        self.overlay =
-                            Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
+                let edit_changes = if matches!(
+                    kind,
+                    crate::presentation::ToolKind::Create
+                        | crate::presentation::ToolKind::Edit
+                        | crate::presentation::ToolKind::Delete
+                        | crate::presentation::ToolKind::Move
+                ) {
+                    let mut changes =
+                        client_tool_cell::diff_changes_from_artifacts(&snapshot.artifacts, &cwd);
+                    if changes.is_empty() {
+                        changes =
+                            client_tool_cell::changes_from_invocation(&snapshot.invocation, &cwd);
                     }
+                    if changes.is_empty() {
+                        None
+                    } else {
+                        Some(changes)
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(changes) = edit_changes {
+                    let diff_summary = DiffSummary::new(changes, cwd);
+                    self.overlay = Some(Overlay::new_static_with_renderables(
+                        vec![diff_summary.into()],
+                        "P A T C H".to_string(),
+                    ));
+                } else {
+                    let rel_title = client_event_format::relativize_paths_in_text(&title, &cwd);
+                    let mut lines = vec![Line::from(rel_title.clone())];
+                    if let Some(inv_text) =
+                        client_event_format::format_invocation(&snapshot.invocation)
+                    {
+                        let rel_inv =
+                            client_event_format::relativize_paths_in_text(&inv_text, &cwd);
+                        if !client_event_format::is_invocation_redundant(&rel_inv, &rel_title) {
+                            lines.push(Line::from(rel_inv));
+                        }
+                    }
+                    for text in client_event_format::format_artifacts(&snapshot.artifacts) {
+                        lines.push(Line::from(text));
+                    }
+                    self.overlay =
+                        Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
                 }
-            },
+            }
             AppEvent::SetPendingAgent {
                 agent_name,
                 display_name,
@@ -617,11 +700,12 @@ impl App {
                 self.pending_agent = None;
 
                 // Update the model in config
-                self.config.model = agent_name.clone();
+                self.config.active_agent = agent_name.clone();
+                self.config.agent = agent_name.clone();
 
                 // Persist the agent selection to config.toml for next TUI startup
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-                    .set_agent(Some(&agent_name))
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+                    .set_agent(&agent_name)
                     .apply()
                     .await
                 {
@@ -632,8 +716,7 @@ impl App {
                 // Shutdown current conversation
                 self.shutdown_current_conversation();
 
-                // Create the new chat widget with the new config and the message as initial prompt
-                // Set expected_agent to filter events from the OLD agent until SessionConfigured
+                // Create the new chat widget with the new config and the message as initial prompt.
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
                     Some(message_text),
@@ -669,9 +752,12 @@ impl App {
             AppEvent::OpenAcpModelPickerUnsupported => {
                 self.chat_widget.open_model_unsupported_popup();
             }
-            AppEvent::OpenAcpSessionConfigPicker { config_options } => {
+            AppEvent::OpenAcpSessionConfigPicker {
+                config_options,
+                focus_config_id,
+            } => {
                 self.chat_widget
-                    .open_acp_session_config_picker(config_options);
+                    .open_acp_session_config_picker(config_options, focus_config_id);
             }
             AppEvent::OpenAcpSessionConfigValuePicker { option } => {
                 self.chat_widget
@@ -701,25 +787,24 @@ impl App {
                 error,
             } => {
                 if success {
-                    let saved_as_default =
-                        match config_persistence::persist_default_model_selection(
-                            &self.config.codex_home,
+                    let saved_as_default = match self
+                        .persist_default_model_selection(
                             &agent,
                             &config_id,
                             &value,
                             config_options.as_deref().unwrap_or_default(),
                         )
                         .await
-                        {
-                            Ok(persisted) => persisted,
-                            Err(err) => {
-                                tracing::error!(
-                                    error = %err,
-                                    "failed to persist default model selection"
-                                );
-                                false
-                            }
-                        };
+                    {
+                        Ok(persisted) => persisted,
+                        Err(err) => {
+                            tracing::error!(
+                                error = %err,
+                                "failed to persist default model selection"
+                            );
+                            false
+                        }
+                    };
                     self.chat_widget.add_acp_session_config_set_message(
                         &option_name,
                         &value_name,
@@ -781,17 +866,15 @@ impl App {
                     .open_hotkey_picker(self.hotkey_config.clone());
             }
             AppEvent::OpenNotifyAfterIdlePicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_notify_after_idle_picker(nori_config.notify_after_idle);
+                    .open_notify_after_idle_picker(self.config.notify_after_idle);
             }
             AppEvent::SetConfigNotifyAfterIdle(value) => {
                 self.persist_notify_after_idle_setting(value).await;
             }
             AppEvent::OpenScriptTimeoutPicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_script_timeout_picker(nori_config.script_timeout);
+                    .open_script_timeout_picker(self.config.script_timeout.clone());
             }
             AppEvent::SetConfigScriptTimeout(value) => {
                 self.persist_script_timeout_setting(value).await;
@@ -799,11 +882,7 @@ impl App {
             AppEvent::OpenLoopCountPicker => {
                 let current = match self.loop_count_override {
                     Some(overridden) => overridden,
-                    None => {
-                        nori_config::NoriConfig::load()
-                            .unwrap_or_default()
-                            .loop_count
-                    }
+                    None => self.config.loop_count,
                 };
                 self.chat_widget.open_loop_count_picker(current);
             }
@@ -811,13 +890,12 @@ impl App {
                 self.set_session_loop_count(value);
             }
             AppEvent::OpenVimModePicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
-                self.chat_widget.open_vim_mode_picker(nori_config.vim_mode);
+                self.chat_widget
+                    .open_vim_mode_picker(self.config.vim_mode, true);
             }
             AppEvent::OpenAutoWorktreePicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_auto_worktree_picker(nori_config.auto_worktree);
+                    .open_auto_worktree_picker(self.config.auto_worktree);
             }
             AppEvent::SetConfigAutoWorktree(value) => {
                 self.persist_auto_worktree_setting(value).await;
@@ -827,6 +905,9 @@ impl App {
             }
             AppEvent::SetConfigPinnedPlanDrawer(enabled) => {
                 self.persist_pinned_plan_drawer_setting(enabled).await;
+            }
+            AppEvent::SetConfigResizeReflow(enabled) => {
+                self.persist_resize_reflow_setting(enabled, tui).await;
             }
             AppEvent::SetConfigAcpWireRecording(enabled) => {
                 self.persist_acp_wire_recording_setting(enabled).await;
@@ -851,9 +932,8 @@ impl App {
                 self.persist_file_manager_setting(value).await;
             }
             AppEvent::OpenFileManagerPicker => {
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
                 self.chat_widget
-                    .open_file_manager_picker(nori_config.file_manager);
+                    .open_file_manager_picker(self.config.file_manager);
             }
             AppEvent::LoopIteration {
                 prompt,
@@ -880,8 +960,11 @@ impl App {
                 self.chat_widget
                     .add_info_message(format!("Loop iteration {iteration} of {total}"), None);
             }
-            AppEvent::SetConfigVimMode(value) => {
-                self.persist_vim_mode_setting(value).await;
+            AppEvent::SetConfigVimMode {
+                value,
+                from_settings,
+            } => {
+                self.persist_vim_mode_setting(value, from_settings).await;
             }
             AppEvent::SkillsetListResult {
                 names,
@@ -905,13 +988,7 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_install_result(&name, success, &message);
-                if success {
-                    self.request_system_info_refresh(
-                        self.config.cwd.clone(),
-                        self.config.model.clone().into(),
-                        self.chat_widget.first_prompt_text(),
-                    );
-                }
+                self.on_skillset_applied(success);
             }
             AppEvent::SkillsetSwitchResult {
                 name,
@@ -920,35 +997,20 @@ impl App {
             } => {
                 self.chat_widget
                     .on_skillset_switch_result(&name, success, &message);
-                // If the agent spawn was deferred (waiting for skillset switch to
-                // complete), trigger it now that files are on disk.
-                if success && self.deferred_spawn_pending {
-                    self.deferred_spawn_pending = false;
-                    self.chat_widget
-                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
-                }
-                if success {
-                    self.request_system_info_refresh(
-                        self.config.cwd.clone(),
-                        self.config.model.clone().into(),
-                        self.chat_widget.first_prompt_text(),
-                    );
-                }
+                self.on_skillset_applied(success);
             }
             AppEvent::SkillsetPickerDismissed => {
                 // The skillset picker was dismissed without selection. If the
                 // agent spawn was deferred, spawn it now without a skillset
                 // (behaves as if skillset_per_session is disabled).
-                if self.deferred_spawn_pending {
-                    self.deferred_spawn_pending = false;
+                if self.take_deferred_spawn() {
                     self.chat_widget
                         .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {
                 let tx = self.app_event_tx.clone();
-                let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
-                let timeout = nori_config.script_timeout.as_duration();
+                let timeout = self.config.script_timeout.as_duration();
                 let name = prompt.name.clone();
                 self.chat_widget
                     .add_info_message(format!("Running script '{name}'..."), None);
@@ -1024,11 +1086,10 @@ impl App {
                 nori_home,
                 generation,
             } => {
-                let params = crate::nori::resume_session_picker::resume_session_picker_params(
-                    sessions,
-                    nori_home,
-                    self.app_event_tx.clone(),
-                );
+                let params =
+                    crate::nori::resume_session_picker::resume_session_component_picker_params(
+                        sessions, nori_home,
+                    );
                 self.chat_widget
                     .show_resume_session_picker(params, generation);
             }
@@ -1060,9 +1121,9 @@ impl App {
                     Ok(transcript) => {
                         let acp_session_id = transcript.meta.acp_session_id.clone();
                         let display_name =
-                            crate::nori::agent_picker::get_agent_info(&self.config.model)
+                            crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
                                 .map(|info| info.display_name)
-                                .unwrap_or_else(|| self.config.model.clone());
+                                .unwrap_or_else(|| self.config.active_agent.clone());
 
                         self.shutdown_current_conversation();
 
@@ -1074,8 +1135,12 @@ impl App {
                             false,
                             None,
                         );
-                        self.chat_widget =
-                            ChatWidget::new_resumed_acp(init, acp_session_id, Some(transcript));
+                        self.chat_widget = ChatWidget::new_resumed_acp(
+                            init,
+                            acp_session_id,
+                            None,
+                            Some(transcript),
+                        );
                         self.configure_new_chat_widget();
 
                         self.chat_widget.add_info_message(
@@ -1090,26 +1155,43 @@ impl App {
                     }
                 }
             }
-            AppEvent::ResumeAcpSession { acp_session_id } => {
-                let display_name = crate::nori::agent_picker::get_agent_info(&self.config.model)
-                    .map(|info| info.display_name)
-                    .unwrap_or_else(|| self.config.model.clone());
-
+            AppEvent::ResumeAcpSession {
+                acp_session_id,
+                title,
+            } => {
+                let display_name =
+                    crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
+                        .map(|info| info.display_name)
+                        .unwrap_or_else(|| self.config.active_agent.clone());
+                let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+                self.deferred_spawn_pending = false;
                 self.shutdown_current_conversation();
 
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
-                    None,
-                    Vec::new(),
+                    initial_prompt,
+                    initial_images,
                     None,
                     false,
                     None,
                 );
-                self.chat_widget = ChatWidget::new_resumed_acp(init, Some(acp_session_id), None);
+                self.chat_widget = ChatWidget::new_resumed_acp(
+                    init,
+                    Some(acp_session_id.clone()),
+                    title.clone(),
+                    None,
+                );
                 self.configure_new_chat_widget();
 
-                self.chat_widget
-                    .add_info_message(format!("Resuming session with {display_name}..."), None);
+                self.chat_widget.add_info_message(
+                    reattach_info_message(
+                        &acp_session_id,
+                        title.as_deref(),
+                        self.cloud_mode,
+                        &display_name,
+                    ),
+                    None,
+                );
                 tui.frame_requester().schedule_frame();
             }
             #[cfg(unix)]
@@ -1126,20 +1208,36 @@ impl App {
                 self.chat_widget
                     .add_error_message(format!("Failed to launch browser: {err}"));
             }
+            #[cfg(unix)]
+            AppEvent::SetBrowserProfile(mode) => {
+                // Persist the choice as the new default, then launch with it.
+                self.persist_browser_profile_setting(mode).await;
+                self.chat_widget.launch_browser_session(mode);
+            }
+            #[cfg(not(unix))]
+            AppEvent::SetBrowserProfile(_mode) => {}
             AppEvent::OpenForkPicker => {
                 let messages =
                     crate::app_backtrack::collect_all_user_messages(&self.transcript_cells);
-                if messages.is_empty() {
+                // Only agents that advertise ACP `session/fork` can branch at the
+                // current head; without it, the picker only rewinds to a message.
+                let supports_fork = self.chat_widget.agent_capabilities().session_fork;
+                if !supports_fork && messages.is_empty() {
                     self.chat_widget
                         .add_info_message("No messages to fork from.".to_string(), None);
                 } else {
                     let params = crate::nori::fork_picker::fork_picker_params(
                         messages,
+                        supports_fork,
                         self.app_event_tx.clone(),
                     );
                     self.chat_widget.show_selection_view(params);
                 }
                 tui.frame_requester().schedule_frame();
+            }
+            AppEvent::BranchFromCurrent => {
+                self.chat_widget
+                    .submit_harness_action(crate::app_event::HarnessAction::Branch);
             }
             AppEvent::ForkToMessage {
                 cell_index,
@@ -1233,15 +1331,36 @@ impl App {
                 let servers = self.chat_widget.config_ref().mcp_servers.clone();
                 let tx = self.app_event_tx.clone();
                 tokio::spawn(async move {
-                    let entries = codex_core::mcp::auth::compute_auth_statuses(
-                        &servers,
-                        codex_rmcp_client::OAuthCredentialsStoreMode::Auto,
-                    )
-                    .await;
-                    let statuses = entries
-                        .into_iter()
-                        .map(|(name, entry)| (name, entry.auth_status))
-                        .collect();
+                    let mut statuses = std::collections::HashMap::new();
+                    for (name, config) in servers {
+                        let status = match config.transport {
+                            nori_config::McpServerTransportConfig::Stdio {
+                                ..
+                            } => codex_rmcp_client::McpAuthStatus::Unsupported,
+                            nori_config::McpServerTransportConfig::StreamableHttp {
+                                url,
+                                bearer_token_env_var,
+                                http_headers,
+                                env_http_headers,
+                                ..
+                            } => codex_rmcp_client::determine_streamable_http_auth_status(
+                                &name,
+                                &url,
+                                bearer_token_env_var.as_deref(),
+                                http_headers,
+                                env_http_headers,
+                                codex_rmcp_client::OAuthCredentialsStoreMode::Auto,
+                            )
+                            .await
+                            .unwrap_or_else(|err| {
+                                tracing::warn!(
+                                    "failed to determine auth status for MCP server `{name}`: {err:?}"
+                                );
+                                codex_rmcp_client::McpAuthStatus::Unsupported
+                            }),
+                        };
+                        statuses.insert(name, status);
+                    }
                     tx.send(AppEvent::McpAuthStatusesReady(statuses));
                 });
             }
@@ -1296,9 +1415,7 @@ impl App {
                 kind: KeyEventKind::Press | KeyEventKind::Repeat,
                 ..
             } => {
-                if self.chat_widget.is_normal_backtrack_mode()
-                    && self.chat_widget.composer_is_empty()
-                {
+                if self.should_handle_backtrack_esc(key_event) {
                     self.handle_backtrack_esc_key(tui);
                 } else {
                     self.chat_widget.handle_key_event(key_event);
@@ -1332,5 +1449,45 @@ impl App {
                 // Ignore Release key events.
             }
         };
+    }
+
+    pub(super) fn should_handle_backtrack_esc(&self, key_event: KeyEvent) -> bool {
+        self.chat_widget.is_normal_backtrack_mode()
+            && self.chat_widget.composer_is_empty()
+            && !self.chat_widget.should_handle_vim_insert_escape(key_event)
+    }
+}
+
+/// Compose the info-cell message shown when resuming/reattaching to a session.
+///
+/// Cloud reattach wording names the selected broker session. It deliberately
+/// makes no claim about replay: that depends on the facade's capabilities.
+pub(super) fn reattach_info_message(
+    acp_session_id: &str,
+    title: Option<&str>,
+    cloud_mode: bool,
+    display_name: &str,
+) -> String {
+    if cloud_mode {
+        let session_label = match title {
+            Some(title) => format!("{acp_session_id} ({title})"),
+            None => acp_session_id.to_string(),
+        };
+        format!("Reattaching to {session_label}...")
+    } else {
+        format!("Resuming session with {display_name}...")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reattach_info_message;
+
+    #[test]
+    fn cloud_reattach_info_message_snapshot() {
+        insta::assert_snapshot!(
+            "cloud_reattach_info_message",
+            reattach_info_message("session-123", Some("Fix reconnect"), true, "Nori Cloud")
+        );
     }
 }

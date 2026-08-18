@@ -17,6 +17,28 @@ mod onboarding_screen;
 mod trust_directory;
 mod welcome;
 
+use crossterm::event::KeyEvent;
+
+pub(crate) trait KeyboardHandler {
+    fn handle_key_event(&mut self, key_event: KeyEvent);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StepState {
+    InProgress,
+    Complete,
+}
+
+pub(crate) trait StepStateProvider {
+    fn get_step_state(&self) -> StepState;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TrustDirectorySelection {
+    Trust,
+    DontTrust,
+}
+
 // Re-exports for the Nori onboarding module
 pub(crate) use first_launch::is_first_launch;
 pub(crate) use first_launch::mark_first_launch_complete;
@@ -28,7 +50,3 @@ pub(crate) use onboarding_screen::NoriOnboardingScreenArgs;
 pub(crate) use onboarding_screen::run_nori_onboarding_app;
 pub(crate) use trust_directory::NoriTrustDirectoryWidget;
 pub(crate) use welcome::NoriWelcomeWidget;
-
-// Re-export the selection enum for compatibility
-#[allow(unused_imports)]
-pub(crate) use crate::onboarding::TrustDirectorySelection;

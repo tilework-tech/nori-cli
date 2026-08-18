@@ -1,5 +1,5 @@
-use codex_protocol::config_types::ReasoningEffort;
-use codex_protocol::config_types::Verbosity;
+use crate::config::types::ReasoningEffort;
+use crate::config::types::Verbosity;
 
 use crate::config::types::ReasoningSummaryFormat;
 use crate::tool_types::ApplyPatchToolType;

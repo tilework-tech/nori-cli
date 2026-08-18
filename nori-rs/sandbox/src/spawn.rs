@@ -5,7 +5,7 @@ use tokio::process::Child;
 use tokio::process::Command;
 use tracing::trace;
 
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::SandboxPolicy;
 
 /// Experimental environment variable that will be set to some non-empty value
 /// if both of the following are true:

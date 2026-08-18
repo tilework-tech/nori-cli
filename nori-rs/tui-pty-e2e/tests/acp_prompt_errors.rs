@@ -29,7 +29,7 @@ use tui_pty_e2e::TuiSession;
 fn test_acp_prompt_failure_shows_error_to_user() {
     // Configure mock agent to fail on prompt
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_PROMPT_FAIL", "1");
 
     let mut session =
@@ -58,13 +58,12 @@ fn test_acp_prompt_failure_shows_error_to_user() {
     eprintln!("{}", contents);
     eprintln!("============================================");
 
-    // The user should see a SPECIFIC error message, not just any text
-    // The error message from the mock agent is "Mock prompt failure for testing"
-    // The enhanced message will be "ACP prompt failed: ACP prompt failed"
+    // The user should see the agent's schema-native error message.
     //
     // NOTE: The error might scroll off the 24-row screen, so we also check
     // by waiting specifically for the error text to appear
-    let error_appeared = session.wait_for_text("ACP prompt failed", Duration::from_secs(5));
+    let expected_error = "Mock prompt failure for testing";
+    let error_appeared = session.wait_for_text(expected_error, Duration::from_secs(5));
 
     // Re-capture screen after waiting
     let contents = session.screen_contents();
@@ -75,9 +74,9 @@ fn test_acp_prompt_failure_shows_error_to_user() {
     eprintln!("======================================");
 
     assert!(
-        error_appeared.is_ok() || contents.contains("ACP prompt failed"),
+        error_appeared.is_ok() || contents.contains(expected_error),
         "ACP prompt failure should display an error to the user.\n\
-         Expected to find 'ACP prompt failed' in the TUI.\n\
+         Expected to find {expected_error:?} in the TUI.\n\
          Wait result: {:?}\n\
          Screen contents:\n{}",
         error_appeared,
@@ -102,7 +101,7 @@ fn test_acp_prompt_failure_shows_error_to_user() {
 fn test_acp_prompt_failure_tui_remains_responsive() {
     // Configure mock agent to fail on prompt
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_PROMPT_FAIL", "1");
 
     let mut session =
@@ -122,7 +121,7 @@ fn test_acp_prompt_failure_tui_remains_responsive() {
 
     // Wait for error event to appear (confirms the error was processed)
     session
-        .wait_for_text("ACP prompt failed", Duration::from_secs(5))
+        .wait_for_text("Mock prompt failure for testing", Duration::from_secs(5))
         .expect("Error message should appear");
 
     // After the error, the TUI should show the prompt indicator,

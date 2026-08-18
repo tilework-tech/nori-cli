@@ -1,4 +1,5 @@
 use super::agent::SpawnAgentResult;
+use super::agent::next_session_generation;
 use super::*;
 
 impl ChatWidget {
@@ -14,7 +15,7 @@ impl ChatWidget {
             vertical_footer,
             footer_segment_config,
             footer_layout_config,
-            expected_agent,
+            cloud_mode,
             deferred_spawn,
             fork_context,
         } = common;
@@ -22,21 +23,23 @@ impl ChatWidget {
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
+        let session_generation = next_session_generation();
         let spawn_result = if deferred_spawn {
-            let (op_tx, _) = tokio::sync::mpsc::unbounded_channel();
-            SpawnAgentResult {
-                op_tx,
-                acp_handle: None,
-            }
+            SpawnAgentResult { handle: None }
         } else {
-            spawn_agent(config.clone(), app_event_tx.clone(), fork_context)
+            spawn_agent(
+                config.clone(),
+                app_event_tx.clone(),
+                session_generation,
+                fork_context,
+            )
         };
 
         let first_prompt_text = initial_prompt.clone();
+        let acp_wire_recording_enabled = config.acp_proxy.enabled;
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
-            codex_op_tx: spawn_result.op_tx,
             bottom_pane: BottomPane::new(BottomPaneParams {
                 frame_requester,
                 app_event_tx,
@@ -50,53 +53,48 @@ impl ChatWidget {
                 vertical_footer,
                 footer_segment_config,
                 footer_layout_config,
-                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.active_agent)
                     .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
-                agent_slug: config.model.clone(),
+                    .unwrap_or_else(|| config.active_agent.clone()),
+                agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
             config: config.clone(),
             auth_manager,
-            session_header: SessionHeader::new(config.model),
             initial_user_message: create_initial_user_message(
                 initial_prompt.unwrap_or_default(),
                 initial_images,
             ),
-            token_info: None,
-            rate_limit_snapshot: None,
-            rate_limit_warnings: RateLimitWarningState::default(),
-
-            rate_limit_poller: None,
             stream_controller: None,
-            running_commands: HashMap::new(),
-            suppressed_exec_calls: HashSet::new(),
+            session_generation,
+            owned_prompt_request_id: None,
+            proactive_turn_active: false,
+            unpaired_prompt_error_ids: HashSet::new(),
             completed_client_tool_calls: HashSet::new(),
-            last_unified_wait: None,
-            task_complete_pending: false,
-            mcp_startup_status: None,
-            interrupts: InterruptManager::new(),
+            client_event_normalizer: Default::default(),
+            replay_source: None,
+            replay_message: None,
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,
                 &config.custom_working_message_list,
             ),
-            retry_status_header: None,
             conversation_id: None,
+            forked_from: None,
             show_welcome_banner: true,
             suppress_session_configured_redraw: false,
             pending_notification: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
             current_rollout_path: None,
-            pending_exec_cells: PendingExecCellTracker::new(),
             pending_client_tool_cells: HashMap::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_agent,
             session_configured_received: false,
-            acp_handle: spawn_result.acp_handle,
+            harness_handle: spawn_result.handle,
+            session_close_in_flight: false,
+            exiting: false,
             acp_config_option_snapshot: None,
             acp_mode_config: None,
             acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
@@ -107,7 +105,13 @@ impl ChatWidget {
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
-            session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+            session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
+            cloud_mode,
+            session_agent_info: None,
+            session_info_state: Default::default(),
+            session_info_detail: crate::nori::session_info::SessionInfoDetail::for_build(),
+            acp_session_id: None,
+            cloud_session_title: None,
             builtin_command_availability: HashMap::new(),
             pending_goal_status: false,
             pending_goal_edit: false,
@@ -121,16 +125,19 @@ impl ChatWidget {
             last_terminal_title: None,
         };
 
-        widget.prefetch_rate_limits();
-
+        widget
+            .bottom_pane
+            .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
         widget
     }
 
     /// Create a ChatWidget that resumes an ACP session via `session/load`
     /// or client-side replay when the agent doesn't support `session/load`.
+    /// `title` is the broker-reported session title, when known.
     pub(crate) fn new_resumed_acp(
         common: ChatWidgetInit,
         acp_session_id: Option<String>,
+        title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
     ) -> Self {
         let ChatWidgetInit {
@@ -144,7 +151,7 @@ impl ChatWidget {
             vertical_footer,
             footer_segment_config,
             footer_layout_config,
-            expected_agent,
+            cloud_mode,
             deferred_spawn: _,
             fork_context: _,
         } = common;
@@ -152,18 +159,20 @@ impl ChatWidget {
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
+        let session_generation = next_session_generation();
         let spawn_result = spawn_acp_agent_resume(
             config.clone(),
-            acp_session_id,
+            acp_session_id.clone(),
             transcript,
             app_event_tx.clone(),
+            session_generation,
         );
 
         let first_prompt_text = initial_prompt.clone();
+        let acp_wire_recording_enabled = config.acp_proxy.enabled;
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
-            codex_op_tx: spawn_result.op_tx,
             bottom_pane: BottomPane::new(BottomPaneParams {
                 frame_requester,
                 app_event_tx,
@@ -177,53 +186,48 @@ impl ChatWidget {
                 vertical_footer,
                 footer_segment_config,
                 footer_layout_config,
-                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.model)
+                agent_display_name: crate::nori::agent_picker::get_agent_info(&config.active_agent)
                     .map(|info| info.display_name)
-                    .unwrap_or_else(|| config.model.clone()),
-                agent_slug: config.model.clone(),
+                    .unwrap_or_else(|| config.active_agent.clone()),
+                agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
             config: config.clone(),
             auth_manager,
-            session_header: SessionHeader::new(config.model),
             initial_user_message: create_initial_user_message(
                 initial_prompt.unwrap_or_default(),
                 initial_images,
             ),
-            token_info: None,
-            rate_limit_snapshot: None,
-            rate_limit_warnings: RateLimitWarningState::default(),
-
-            rate_limit_poller: None,
             stream_controller: None,
-            running_commands: HashMap::new(),
-            suppressed_exec_calls: HashSet::new(),
+            session_generation,
+            owned_prompt_request_id: None,
+            proactive_turn_active: false,
+            unpaired_prompt_error_ids: HashSet::new(),
             completed_client_tool_calls: HashSet::new(),
-            last_unified_wait: None,
-            task_complete_pending: false,
-            mcp_startup_status: None,
-            interrupts: InterruptManager::new(),
+            client_event_normalizer: Default::default(),
+            replay_source: None,
+            replay_message: None,
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
             current_status_header: crate::status_indicator_widget::pick_status_message(
                 config.custom_working_messages,
                 &config.custom_working_message_list,
             ),
-            retry_status_header: None,
             conversation_id: None,
+            forked_from: None,
             show_welcome_banner: false,
             suppress_session_configured_redraw: false,
             pending_notification: None,
             needs_final_message_separator: false,
             last_rendered_width: std::cell::Cell::new(None),
             current_rollout_path: None,
-            pending_exec_cells: PendingExecCellTracker::new(),
             pending_client_tool_cells: HashMap::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
             pending_agent: None,
-            expected_agent,
             session_configured_received: false,
-            acp_handle: spawn_result.acp_handle,
+            harness_handle: spawn_result.handle,
+            session_close_in_flight: false,
+            exiting: false,
             acp_config_option_snapshot: None,
             acp_mode_config: None,
             acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
@@ -234,7 +238,13 @@ impl ChatWidget {
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
-            session_agent_capabilities: nori_protocol::AgentCapabilitiesView::default(),
+            session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
+            cloud_mode,
+            session_agent_info: None,
+            session_info_state: Default::default(),
+            session_info_detail: crate::nori::session_info::SessionInfoDetail::for_build(),
+            acp_session_id,
+            cloud_session_title: title,
             builtin_command_availability: HashMap::new(),
             pending_goal_status: false,
             pending_goal_edit: false,
@@ -248,8 +258,9 @@ impl ChatWidget {
             last_terminal_title: None,
         };
 
-        widget.prefetch_rate_limits();
-
+        widget
+            .bottom_pane
+            .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
         widget
     }
 
@@ -270,8 +281,7 @@ impl ChatWidget {
     /// This should be called after pre-session setup (e.g., skillset switch)
     /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
     pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
-        let spawn_result = spawn_agent(config, app_event_tx, None);
-        self.codex_op_tx = spawn_result.op_tx;
-        self.acp_handle = spawn_result.acp_handle;
+        let spawn_result = spawn_agent(config, app_event_tx, self.session_generation, None);
+        self.harness_handle = spawn_result.handle;
     }
 }

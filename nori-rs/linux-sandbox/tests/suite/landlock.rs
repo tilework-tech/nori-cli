@@ -1,11 +1,11 @@
 #![cfg(target_os = "linux")]
-use codex_core::config::types::ShellEnvironmentPolicy;
-use codex_protocol::protocol::SandboxPolicy;
 use codex_sandbox::error::CodexErr;
 use codex_sandbox::error::SandboxErr;
 use codex_sandbox::exec::ExecParams;
 use codex_sandbox::exec::process_exec_tool_call;
 use codex_sandbox::exec_env::create_env;
+use nori_config::SandboxPolicy;
+use nori_config::ShellEnvironmentPolicy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
@@ -27,7 +27,7 @@ const NETWORK_TIMEOUT_MS: u64 = 2_000;
 #[cfg(target_arch = "aarch64")]
 const NETWORK_TIMEOUT_MS: u64 = 10_000;
 
-fn create_env_from_core_vars() -> HashMap<String, String> {
+fn create_test_env() -> HashMap<String, String> {
     let policy = ShellEnvironmentPolicy::default();
     create_env(&policy)
 }
@@ -40,7 +40,7 @@ async fn run_cmd(cmd: &[&str], writable_roots: &[PathBuf], timeout_ms: u64) {
         command: cmd.iter().copied().map(str::to_owned).collect(),
         cwd,
         expiration: timeout_ms.into(),
-        env: create_env_from_core_vars(),
+        env: create_test_env(),
         with_escalated_permissions: None,
         justification: None,
         arg0: None,
@@ -62,7 +62,6 @@ async fn run_cmd(cmd: &[&str], writable_roots: &[PathBuf], timeout_ms: u64) {
         &sandbox_policy,
         sandbox_cwd.as_path(),
         &codex_linux_sandbox_exe,
-        None,
     )
     .await
     .unwrap();
@@ -142,7 +141,7 @@ async fn assert_network_blocked(cmd: &[&str]) {
         // Give the tool a generous 2-second timeout so even slow DNS timeouts
         // do not stall the suite.
         expiration: NETWORK_TIMEOUT_MS.into(),
-        env: create_env_from_core_vars(),
+        env: create_test_env(),
         with_escalated_permissions: None,
         justification: None,
         arg0: None,
@@ -156,7 +155,6 @@ async fn assert_network_blocked(cmd: &[&str]) {
         &sandbox_policy,
         sandbox_cwd.as_path(),
         &codex_linux_sandbox_exe,
-        None,
     )
     .await;
 

@@ -5,14 +5,10 @@
 
 use std::path::PathBuf;
 
-// TODO: Replace with Nori-specific config when available.
-// Currently delegates to codex_core for trust level persistence.
-use codex_core::config::set_project_trust_level;
-use codex_core::git_info::resolve_root_git_project_for_trust;
-use codex_protocol::config_types::TrustLevel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_config::TrustLevel;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -21,21 +17,22 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::WidgetRef;
 use ratatui::widgets::Wrap;
 
+use super::KeyboardHandler;
+use super::StepState;
+use super::StepStateProvider;
+use super::TrustDirectorySelection;
 use crate::key_hint;
-use crate::onboarding::TrustDirectorySelection;
-use crate::onboarding::onboarding_screen::KeyboardHandler;
-use crate::onboarding::onboarding_screen::StepState;
-use crate::onboarding::onboarding_screen::StepStateProvider;
 use crate::render::Insets;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableExt as _;
 use crate::selection_list::selection_option_row;
+use nori_config::NoriConfigEdits;
+use nori_config::resolve_root_git_project_for_trust;
 
 /// Nori-branded directory trust widget.
 pub(crate) struct NoriTrustDirectoryWidget {
     /// Path to Nori home directory for config storage.
-    /// TODO: Update to use Nori-specific config path when available.
     pub nori_home: PathBuf,
     /// Current working directory being evaluated.
     pub cwd: PathBuf,
@@ -165,9 +162,10 @@ impl NoriTrustDirectoryWidget {
         let target =
             resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
 
-        // TODO: Update to use Nori-specific config when available.
-        // Currently delegates to codex_core for trust level persistence.
-        if let Err(e) = set_project_trust_level(&self.nori_home, &target, TrustLevel::Trusted) {
+        if let Err(e) = NoriConfigEdits::new(&self.nori_home)
+            .set_project_trust_level(&target, TrustLevel::Trusted)
+            .apply_blocking()
+        {
             tracing::error!("Failed to set project trusted: {e:?}");
             self.error = Some(format!("Failed to set trust for {}: {e}", target.display()));
         }
@@ -180,9 +178,10 @@ impl NoriTrustDirectoryWidget {
         let target =
             resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
 
-        // TODO: Update to use Nori-specific config when available.
-        // Currently delegates to codex_core for trust level persistence.
-        if let Err(e) = set_project_trust_level(&self.nori_home, &target, TrustLevel::Untrusted) {
+        if let Err(e) = NoriConfigEdits::new(&self.nori_home)
+            .set_project_trust_level(&target, TrustLevel::Untrusted)
+            .apply_blocking()
+        {
             tracing::error!("Failed to set project untrusted: {e:?}");
             self.error = Some(format!(
                 "Failed to set untrusted for {}: {e}",

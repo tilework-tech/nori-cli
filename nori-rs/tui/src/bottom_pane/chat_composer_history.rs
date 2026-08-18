@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
-use codex_protocol::protocol::Op;
 
 /// State machine that manages shell-style history navigation (Up/Down) inside
 /// the chat composer. This struct is intentionally decoupled from the
@@ -87,10 +86,10 @@ impl ChatComposerHistory {
             return true;
         }
 
-        // Textarea is not empty – only navigate when cursor is at start and
-        // text matches last recalled history entry so regular editing is not
-        // hijacked.
-        if cursor != 0 {
+        // Recalled entries keep the cursor at the end for shell-like history
+        // traversal. Preserve start-of-line compatibility while allowing both
+        // boundaries; interior multiline positions remain normal cursor moves.
+        if cursor != 0 && cursor != text.len() {
             return false;
         }
 
@@ -184,11 +183,15 @@ impl ChatComposerHistory {
             self.last_history_text = Some(text.clone());
             return Some(text.clone());
         } else if let Some(log_id) = self.history_log_id {
-            let op = Op::GetHistoryEntryRequest {
-                offset: global_idx,
-                log_id,
+            let Ok(log_id) = i64::try_from(log_id) else {
+                return None;
             };
-            app_event_tx.send(AppEvent::CodexOp(op));
+            let Ok(offset) = i64::try_from(global_idx) else {
+                return None;
+            };
+            app_event_tx.send(AppEvent::HarnessAction(
+                crate::app_event::HarnessAction::HistoryEntry { log_id, offset },
+            ));
         }
         None
     }
@@ -198,7 +201,6 @@ impl ChatComposerHistory {
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
-    use codex_protocol::protocol::Op;
     use tokio::sync::mpsc::unbounded_channel;
 
     #[test]
@@ -237,18 +239,16 @@ mod tests {
         assert!(history.should_handle_navigation("", 0));
         assert!(history.navigate_up(&tx).is_none()); // don't replace the text yet
 
-        // Verify that an AppEvent::CodexOp with the correct GetHistoryEntryRequest was sent.
+        // Verify that the typed history query was sent.
         let event = rx.try_recv().expect("expected AppEvent to be sent");
-        let AppEvent::CodexOp(history_request1) = event else {
+        let AppEvent::HarnessAction(crate::app_event::HarnessAction::HistoryEntry {
+            log_id,
+            offset,
+        }) = event
+        else {
             panic!("unexpected event variant");
         };
-        assert_eq!(
-            Op::GetHistoryEntryRequest {
-                log_id: 1,
-                offset: 2
-            },
-            history_request1
-        );
+        assert_eq!((log_id, offset), (1, 2));
 
         // Inject the async response.
         assert_eq!(
@@ -259,18 +259,16 @@ mod tests {
         // Next Up should move to offset 1.
         assert!(history.navigate_up(&tx).is_none()); // don't replace the text yet
 
-        // Verify second CodexOp event for offset 1.
+        // Verify the second typed query for offset 1.
         let event2 = rx.try_recv().expect("expected second event");
-        let AppEvent::CodexOp(history_request_2) = event2 else {
+        let AppEvent::HarnessAction(crate::app_event::HarnessAction::HistoryEntry {
+            log_id,
+            offset,
+        }) = event2
+        else {
             panic!("unexpected event variant");
         };
-        assert_eq!(
-            Op::GetHistoryEntryRequest {
-                log_id: 1,
-                offset: 1
-            },
-            history_request_2
-        );
+        assert_eq!((log_id, offset), (1, 1));
 
         assert_eq!(
             Some("older".into()),
@@ -296,5 +294,19 @@ mod tests {
         assert!(history.last_history_text.is_none());
 
         assert_eq!(Some("command3".into()), history.navigate_up(&tx));
+    }
+
+    #[test]
+    fn recalled_history_only_handles_navigation_at_text_boundaries() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut history = ChatComposerHistory::new();
+        history.record_local_submission("first\nmessage");
+        let recalled = history.navigate_up(&tx).expect("history entry");
+
+        assert!(history.should_handle_navigation(&recalled, 0));
+        assert!(history.should_handle_navigation(&recalled, recalled.len()));
+        assert!(!history.should_handle_navigation(&recalled, "first".len()));
+        assert!(!history.should_handle_navigation("edited", "edited".len()));
     }
 }

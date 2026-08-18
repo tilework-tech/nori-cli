@@ -99,6 +99,7 @@ impl EffectiveCwdTracker {
     /// Updates the tracker with an observed directory from a tool call.
     ///
     /// Returns `true` if the effective CWD changed as a result of this update.
+    #[cfg(test)]
     pub(crate) fn observe_directory(&mut self, dir: PathBuf) -> bool {
         self.observe_directory_at(dir, Instant::now())
     }

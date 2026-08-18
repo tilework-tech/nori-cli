@@ -17,7 +17,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 /// Test that ACP mode starts successfully with mock-model
 #[test]
 fn test_acp_mode_startup_with_mock_agent() {
-    let config = SessionConfig::new().with_model("mock-model".to_owned());
+    let config = SessionConfig::new().with_agent("mock-model".to_owned());
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");
@@ -51,7 +51,7 @@ fn test_acp_mode_startup_with_mock_agent() {
 #[cfg(target_os = "linux")]
 fn test_acp_mode_prompt_response_flow() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_mock_response("Hello from ACP mock agent!");
 
     let mut session =
@@ -90,7 +90,7 @@ fn test_acp_mode_prompt_response_flow() {
 #[cfg(target_os = "linux")]
 fn test_acp_approval_request_displayed_in_tui() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         // Configure mock agent to request permission before responding
         .with_agent_env("MOCK_AGENT_REQUEST_PERMISSION", "1");
 
@@ -109,15 +109,9 @@ fn test_acp_approval_request_displayed_in_tui() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait for the approval request to appear
-    // The TUI should display something like "ACP agent requests permission"
-    // or show the approval popup from ExecApprovalRequestEvent
+    // Wait for the schema-native permission request to appear.
     let approval_appeared = session.wait_for(
-        |screen| {
-            screen.contains("Yes, proceed")
-                || screen.contains("Yes, and")
-                || screen.contains("No, and")
-        },
+        |screen| screen.contains("Would you like to allow") && screen.contains("1. Allow"),
         Duration::from_secs(10),
     );
 
@@ -127,15 +121,9 @@ fn test_acp_approval_request_displayed_in_tui() {
             let contents = session.screen_contents();
             eprintln!("Approval request displayed:\n{}", contents);
 
-            // The approval UI should show:
-            // - "Yes, proceed" for approve
-            // - "No, and tell" for deny/alternative
-            // - The reason from the ACP agent
             assert!(
-                contents.contains("Yes, proceed")
-                    || contents.contains("Yes,")
-                    || contents.contains("No,"),
-                "Approval UI should show Yes/No options, got: {}",
+                contents.contains("1. Allow") && contents.contains("2. Reject"),
+                "Approval UI should show the ACP permission options, got: {}",
                 contents
             );
         }
@@ -162,7 +150,7 @@ fn test_acp_approval_request_displayed_in_tui() {
 #[cfg(target_os = "linux")]
 fn test_acp_approval_full_flow() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_REQUEST_PERMISSION", "1");
 
     let mut session =
@@ -182,10 +170,7 @@ fn test_acp_approval_full_flow() {
 
     // Wait for the approval request to appear
     session
-        .wait_for(
-            |screen| screen.contains("Yes, proceed") || screen.contains("proceed"),
-            Duration::from_secs(10),
-        )
+        .wait_for_text("Would you like to allow", Duration::from_secs(10))
         .expect("Approval UI should appear");
 
     eprintln!("Approval UI appeared:\n{}", session.screen_contents());
@@ -233,7 +218,7 @@ fn test_acp_approval_full_flow() {
 #[cfg(target_os = "linux")]
 fn test_acp_write_text_file() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         // Configure mock agent to write to hello.py with new content
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "hello.py")
         .with_agent_env(
@@ -304,7 +289,7 @@ fn test_acp_write_text_file() {
 #[test]
 #[ignore] // Flaky: ListCustomPrompts error timing varies between runs
 fn test_acp_mode_startup_snapshot() {
-    let config = SessionConfig::new().with_model("mock-model".to_owned());
+    let config = SessionConfig::new().with_agent("mock-model".to_owned());
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn in ACP mode");

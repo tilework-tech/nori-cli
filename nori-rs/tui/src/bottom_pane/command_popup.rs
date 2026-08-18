@@ -7,14 +7,14 @@ use super::popup_consts::MAX_POPUP_ROWS;
 use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::render_rows;
+use crate::presentation::AgentCommandInfo;
 use crate::render::Insets;
 use crate::render::RectExt;
 use crate::slash_command::SlashCommand;
 use crate::slash_command::built_in_slash_commands;
 use codex_common::fuzzy_match::fuzzy_match;
-use codex_protocol::custom_prompts::CustomPrompt;
-use codex_protocol::custom_prompts::PROMPTS_CMD_PREFIX;
-use nori_protocol::AgentCommandInfo;
+use nori_harness::custom_prompts::CustomPrompt;
+use nori_harness::custom_prompts::PROMPTS_CMD_PREFIX;
 use std::collections::HashMap;
 use std::collections::HashSet;
 

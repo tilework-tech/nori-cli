@@ -224,6 +224,21 @@ impl ChatComposer {
             return;
         }
 
+        // Slash commands remain navigable in Vim Normal mode, but token-based
+        // file and skill lookup is intentionally Insert-only. This keeps `$`
+        // available as Vim's end-of-line motion and prevents Normal-mode edits
+        // from mutating picker queries behind the popup.
+        if self.textarea.is_in_vim_normal_mode() {
+            if matches!(
+                self.active_popup,
+                ActivePopup::File(_) | ActivePopup::Skill(_)
+            ) {
+                self.active_popup = ActivePopup::None;
+            }
+            self.sync_command_popup();
+            return;
+        }
+
         if Self::current_at_token(&self.textarea).is_some() {
             self.sync_file_search_popup();
             return;
@@ -331,6 +346,13 @@ impl ChatComposer {
         let first_line_end = text.find('\n').unwrap_or(text.len());
         let first_line = &text[..first_line_end];
         let is_editing_slash_command_name = self.is_editing_slash_command_name();
+        if self.dismissed_command_popup_text.as_deref() == Some(first_line) {
+            if matches!(self.active_popup, ActivePopup::Command(_)) {
+                self.active_popup = ActivePopup::None;
+            }
+            return;
+        }
+        self.dismissed_command_popup_text = None;
         // If the cursor is currently positioned within an `@token`, prefer the
         // file-search popup over the slash popup so users can insert a file path
         // as an argument to the command (e.g., "/compact @docs/...").
@@ -373,7 +395,7 @@ impl ChatComposer {
 
     pub(crate) fn set_agent_commands(
         &mut self,
-        commands: Vec<nori_protocol::AgentCommandInfo>,
+        commands: Vec<crate::presentation::AgentCommandInfo>,
         prefix: String,
     ) {
         self.agent_commands = commands.clone();

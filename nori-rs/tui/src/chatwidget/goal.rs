@@ -1,6 +1,8 @@
 use super::*;
-use codex_protocol::num_format::format_elapsed_seconds;
-use codex_protocol::num_format::format_si_suffix;
+use crate::slash_command::CommandScope;
+use crate::ui_types::format_elapsed_seconds;
+use crate::ui_types::format_si_suffix;
+use strum::IntoEnumIterator;
 
 impl ChatWidget {
     pub(super) fn handle_goal_user_message(&mut self, text: &str) -> bool {
@@ -23,36 +25,29 @@ impl ChatWidget {
         let lower = rest.to_ascii_lowercase();
         match lower.as_str() {
             "pause" => {
-                self.submit_op(Op::ThreadGoalSet {
-                    objective: None,
-                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Paused),
-                });
+                self.submit_harness_action(crate::app_event::HarnessAction::SetGoalStatus(
+                    nori_protocol::ThreadGoalStatus::Paused,
+                ));
             }
             "resume" => {
-                self.submit_op(Op::ThreadGoalSet {
-                    objective: None,
-                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
-                });
+                self.submit_harness_action(crate::app_event::HarnessAction::SetGoalStatus(
+                    nori_protocol::ThreadGoalStatus::Active,
+                ));
             }
             "clear" => {
-                self.submit_op(Op::ThreadGoalClear);
+                self.submit_harness_action(crate::app_event::HarnessAction::ClearGoal);
             }
             "edit" => {
                 self.open_goal_editor_or_request_snapshot();
             }
             _ => {
-                if let Err(message) = codex_protocol::protocol::validate_thread_goal_objective(rest)
-                {
-                    self.add_error_message(message);
-                    return true;
-                }
                 if self.should_confirm_before_replacing_goal() {
                     self.show_replace_goal_confirmation(rest.to_string());
                     return true;
                 }
-                self.submit_op(Op::ThreadGoalSet {
-                    objective: Some(rest.to_string()),
-                    status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
+                self.submit_harness_action(crate::app_event::HarnessAction::SetGoal {
+                    objective: rest.to_string(),
+                    status: Some(nori_protocol::ThreadGoalStatus::Active),
                 });
             }
         }
@@ -61,23 +56,16 @@ impl ChatWidget {
 
     pub(super) fn handle_session_capabilities_changed(
         &mut self,
-        update: nori_protocol::SessionCapabilitiesView,
+        update: crate::presentation::SessionCapabilitiesView,
     ) {
-        let previous = std::mem::replace(
-            &mut self.builtin_command_availability,
-            update.builtin_commands,
-        );
+        self.builtin_command_availability = update.builtin_commands;
         self.session_agent_capabilities = update.agent;
 
-        let command_names: HashSet<String> = previous
-            .keys()
-            .chain(self.builtin_command_availability.keys())
-            .cloned()
-            .collect();
-        for command_name in command_names {
-            let Ok(command) = command_name.parse::<SlashCommand>() else {
-                continue;
-            };
+        // Refresh the popup greying for every builtin from the merged
+        // (server + client-scope) verdict. Iterating all variants — not just
+        // the server map keys — both clears stale disabled state and applies
+        // scope verdicts for commands the server never mentions.
+        for command in SlashCommand::iter() {
             let availability = self.builtin_command_availability(command);
             let disabled_reason = (!availability.enabled).then(|| {
                 Line::from(
@@ -109,25 +97,39 @@ impl ChatWidget {
         false
     }
 
+    /// Merged availability verdict for a builtin command: an explicit server
+    /// disable (with its reason) wins; otherwise the client-side session-type
+    /// scope applies. Cloud mode comes from the launch path; capabilities are
+    /// consulted only for capability-gated commands such as `/close`.
     fn builtin_command_availability(
         &self,
         command: SlashCommand,
     ) -> nori_protocol::CommandAvailability {
-        self.builtin_command_availability
-            .get(command.command())
-            .cloned()
-            .unwrap_or(nori_protocol::CommandAvailability {
-                enabled: true,
-                reason: None,
-            })
+        if let Some(server) = self.builtin_command_availability.get(command.command())
+            && !server.enabled
+        {
+            return server.clone();
+        }
+        if let Some(reason) =
+            scope_unavailable_reason(command, self.cloud_mode, &self.session_agent_capabilities)
+        {
+            return nori_protocol::CommandAvailability {
+                enabled: false,
+                reason: Some(reason),
+            };
+        }
+        nori_protocol::CommandAvailability {
+            enabled: true,
+            reason: None,
+        }
     }
 
     pub(super) fn request_thread_goal_status(&mut self) {
         self.pending_goal_status = true;
-        self.submit_op(Op::ThreadGoalGet);
+        self.submit_harness_action(crate::app_event::HarnessAction::LoadGoal);
     }
 
-    pub(super) fn handle_thread_goal_updated(&mut self, goal: nori_protocol::ThreadGoal) {
+    pub(crate) fn handle_thread_goal_updated(&mut self, goal: nori_protocol::ThreadGoal) {
         let should_show_summary = self.current_goal.as_ref().is_none_or(|previous| {
             previous.objective != goal.objective
                 || previous.status != goal.status
@@ -145,7 +147,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn handle_thread_goal_cleared(&mut self) {
+    pub(crate) fn handle_thread_goal_cleared(&mut self) {
         self.current_goal = None;
         self.pending_goal_status = false;
         self.pending_goal_edit = false;
@@ -155,16 +157,16 @@ impl ChatWidget {
 
     pub(super) fn clear_pending_goal_edit_if_no_goal(
         &mut self,
-        update: &nori_protocol::SessionUpdateInfo,
+        update: &crate::presentation::SessionUpdateInfo,
     ) {
         if self.pending_goal_edit
-            && update.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            && update.kind == crate::presentation::SessionUpdateKind::SessionInfo
             && update.hint.as_deref() == Some("No goal is currently set.")
         {
             self.pending_goal_edit = false;
         }
         if self.pending_goal_status
-            && update.kind == nori_protocol::SessionUpdateKind::SessionInfo
+            && update.kind == crate::presentation::SessionUpdateKind::SessionInfo
             && update.hint.as_deref() == Some("No goal is currently set.")
         {
             self.pending_goal_status = false;
@@ -176,7 +178,7 @@ impl ChatWidget {
             self.open_goal_editor(goal);
         } else {
             self.pending_goal_edit = true;
-            self.submit_op(Op::ThreadGoalGet);
+            self.submit_harness_action(crate::app_event::HarnessAction::LoadGoal);
         }
     }
 
@@ -207,10 +209,12 @@ impl ChatWidget {
                 name: "Replace current goal".to_string(),
                 description: Some("Set the new objective and start it now".to_string()),
                 actions: vec![Box::new(move |tx| {
-                    tx.send(AppEvent::CodexOp(Op::ThreadGoalSet {
-                        objective: Some(replacement.clone()),
-                        status: Some(codex_protocol::protocol::ThreadGoalStatus::Active),
-                    }));
+                    tx.send(AppEvent::HarnessAction(
+                        crate::app_event::HarnessAction::SetGoal {
+                            objective: replacement.clone(),
+                            status: Some(nori_protocol::ThreadGoalStatus::Active),
+                        },
+                    ));
                 })],
                 dismiss_on_select: true,
                 ..Default::default()
@@ -256,6 +260,32 @@ impl ChatWidget {
 
 fn default_command_unavailable_reason(command: SlashCommand) -> String {
     format!("/{} is disabled for the active session.", command.command())
+}
+
+/// Client-side session-type scope verdict: Some(reason) when `command` is
+/// unavailable for the current session shape. LocalOnly commands operate on
+/// the local machine and are meaningless in a cloud session (agent on a
+/// remote VM); /close (CloudOnly) needs both cloud mode and the agent's
+/// `session/close` capability.
+fn scope_unavailable_reason(
+    command: SlashCommand,
+    cloud_mode: bool,
+    agent: &crate::presentation::AgentCapabilitiesView,
+) -> Option<String> {
+    match command.scope() {
+        CommandScope::LocalOnly if cloud_mode => Some(format!(
+            "/{} runs on the local machine and is unavailable in cloud sessions.",
+            command.command()
+        )),
+        CommandScope::CloudOnly if !cloud_mode => {
+            Some("/close is available only in cloud sessions.".to_string())
+        }
+        CommandScope::CloudOnly if !agent.session_close => Some(
+            "/close releases a cloud session and needs the agent's session/close capability."
+                .to_string(),
+        ),
+        CommandScope::LocalOnly | CommandScope::CloudOnly | CommandScope::Universal => None,
+    }
 }
 
 fn goal_status_label(status: nori_protocol::ThreadGoalStatus) -> &'static str {

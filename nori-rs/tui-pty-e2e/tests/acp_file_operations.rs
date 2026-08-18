@@ -47,7 +47,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 #[cfg(target_os = "linux")]
 fn test_acp_create_new_file() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "new_file.txt")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "New file created by ACP");
 
@@ -101,7 +101,7 @@ fn test_acp_create_new_file() {
 #[cfg(target_os = "linux")]
 fn test_acp_edit_existing_file() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "hello.py")
         .with_agent_env(
             "MOCK_AGENT_WRITE_CONTENT",
@@ -157,7 +157,7 @@ fn test_acp_edit_existing_file() {
 #[cfg(target_os = "linux")]
 fn test_acp_create_file_with_parent_dirs() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "subdir/nested/file.txt")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Content in nested directory");
 
@@ -210,7 +210,7 @@ fn test_acp_create_file_with_parent_dirs() {
 #[cfg(target_os = "linux")]
 fn test_acp_write_outside_workspace_denied() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "/home/outside/forbidden.txt")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "This should not be written");
 
@@ -260,7 +260,7 @@ fn test_acp_write_outside_workspace_denied() {
 #[cfg(target_os = "linux")]
 fn test_acp_write_system_path_denied() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "/etc/hosts")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Malicious content");
 
@@ -310,7 +310,7 @@ fn test_acp_write_system_path_denied() {
 fn test_acp_write_to_tmp_allowed() {
     // Note: The sandbox allows writes to /tmp/claude/, not arbitrary /tmp/ paths
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "/tmp/claude/acp_test_file.txt")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Temporary file content");
 
@@ -361,7 +361,7 @@ fn test_acp_write_to_tmp_allowed() {
 fn test_acp_multiple_file_writes() {
     // First write: create file1.txt
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "file1.txt")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "First file content");
 
@@ -428,7 +428,7 @@ fn test_acp_multiple_file_writes() {
 #[ignore]
 fn test_acp_file_write_snapshot() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_WRITE_FILE", "snapshot_test.txt")
         .with_agent_env("MOCK_AGENT_WRITE_CONTENT", "Snapshot test content");
 

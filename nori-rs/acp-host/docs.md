@@ -4,46 +4,87 @@ Path: @/nori-rs/acp-host
 
 ### Overview
 
-- Agent-agnostic, client-side ACP hosting machinery, split out of the session harness (now `nori-harness`, then named `nori-acp`) during the crate-layering cleanup (`@/docs/specs/crate-layering.md`). It owns spawning an ACP agent subprocess and speaking JSON-RPC over its stdio (`connection/`, see `@/nori-rs/acp-host/src/connection/docs.md`), the agent registry and distribution resolution (`registry.rs`), the ACP-wire to internal-event bridge (`translator.rs`), file-change/diff helpers (`patch.rs`), and ACP error categorization (`error_category.rs`).
-- One deliberate exception to agent-agnosticism: `claude_models/` (see `@/nori-rs/acp-host/src/claude_models/docs.md`) is Claude-specific spawn-time machinery that widens the model list the Claude ACP adapter advertises. It is quarantined to its own module and hooked in from a single branch in `connection/acp_connection.rs`.
-- This is a Layer-0 leaf of the crate layering: it must stay independent of the session harness (`nori-harness`) and any terminal UI so it remains usable and testable by other ACP-ecosystem projects.
-- Deliberately harness-free: no session runtime, transcripts, hooks, or goal state. New agent-facing wire behavior belongs here; anything that needs backend session state belongs in `@/nori-rs/harness/`.
+`nori-acp-host` is Nori's agent-agnostic, client-side ACP host. It owns the ACP
+SDK connection, subprocess and wire lifecycle, agent registry, delegated client
+requests, MCP forwarding, and ACP error categorization. It owns no TUI or
+session-product state.
 
 ### How it fits into the larger codebase
 
-```
-nori-tui
-    |
-    v
-nori-harness (session harness, re-exports this crate)
-    |
-    v
-nori-acp-host <---> ACP Agent subprocess (JSON-RPC over stdio)
+```text
+nori-harness
+      |
+      v
+nori-acp-host <----> ACP agent subprocess
+      |
+      +---- nori-protocol (schema and public envelopes)
+      +---- nori-config (agent and MCP configuration)
+      +---- codex-rmcp-client (stored MCP credentials)
 ```
 
-- `nori-harness` (`@/nori-rs/harness/`) is the primary consumer and re-exports every public module (`pub use nori_acp_host::connection;` and friends in `@/nori-rs/harness/src/lib.rs`), so downstream consumers such as `@/nori-rs/tui/` import through `nori_harness` paths. Crate-private modules like `claude_models/` are invisible above this layer -- their effect reaches the TUI only through what the agent ends up advertising on the wire.
-- Wire/schema types come from the official `agent-client-protocol` SDK. The schema's `unstable` umbrella feature is enabled unconditionally, but **not** for the Model-category config option: `SessionConfigOptionCategory` is ungated and its `Model` variant is always available (only the sibling `ModelConfig` variant sits behind `unstable_model_config_category`). What actually requires the feature is `SessionConfigOptionValue`, the payload type `set_config_option()` constructs, which is gated behind `unstable_boolean_config`.
-- Depends on `codex-protocol` (`@/nori-rs/protocol/`) for the internal event vocabulary, `nori-config` (`@/nori-rs/nori-config/`) for agent/MCP/wire-proxy configuration types, and `codex-rmcp-client` (`@/nori-rs/rmcp-client/`) for OAuth token loading in `connection/mcp.rs`.
-- `reqwest` is the crate's only outbound HTTP client and exists solely for `claude_models/`; everything else here talks to the agent subprocess over stdio.
-- Error classification lives here (`AcpErrorCategory`, `categorize_acp_error`); the harness-side user-facing message composition (`enhanced_error_message`) stays in `@/nori-rs/harness/src/backend/`.
+The host is the only client-side product crate that directly uses the
+`agent-client-protocol` SDK. Schema values are still imported through
+`nori_protocol::acp`, never through the SDK or schema crate directly.
 
 ### Core Implementation
 
-- `connection/` — `AcpConnection::spawn()` launches the agent as a child subprocess, owns its full lifecycle (exit watching, stderr tail, graceful stdin-EOF shutdown), forwards configured MCP servers (`mcp.rs`), optionally wraps the transport in an append-only wire logger (`wire_log.rs`), and delivers everything through one ordered `ConnectionEvent` inbox. See `@/nori-rs/acp-host/src/connection/docs.md`.
-- `registry.rs` — data-driven agent registry merging built-in agents (Claude Code, Codex, Gemini) with custom `[[agents]]` config entries; resolves an agent slug to a spawnable `AcpAgentConfig` across npx/bunx/pipx/uvx/local distributions. The registry is process-global state (`AGENT_REGISTRY`, a `RwLock`) initialized once via `initialize_registry()` at startup, with a built-in-defaults fallback when uninitialized.
-- `translator.rs` — converts user input into ACP `ContentBlock`s (text plus base64 image blocks) and provides local parsing/display helpers.
-- `patch.rs` — diff/patch construction (`create_patch_with_context`) used to normalize file mutations for rendering and transcripts.
-- `error_category.rs` — priority-chained substring matching (Auth > Quota > ExecutableNotFound > Initialization > PromptTooLong > ApiServerError > Unknown) over the Debug-formatted error chain; `is_retryable()` marks only server errors and quota limits as transient.
-- `claude_models/` — crate-private, Claude-only, unix-only. At spawn it fetches Anthropic's published model id list, filters out retired and duplicate-dated ids, and writes a `claude` wrapper into `$NORI_HOME/cache` that injects the widened list via `--settings`. Every failure path — including running on a non-unix platform, where no safe wrapper strategy exists — resolves to "no injection", leaving the adapter's own list intact.
+- `connection/` spawns an agent, performs ACP initialization, exposes typed ACP
+  methods, and emits one source-ordered `ConnectionEvent` stream.
+- ACP notifications, delegated requests, and method responses become raw
+  `nori_protocol::AcpEvent` values with their `RequestId` intact.
+- Initialization can route its raw response to the harness independently of
+  connection construction, preserving schema errors even when construction
+  fails without duplicating successful initialize events.
+- Each prompt call issues exactly one ACP `session/prompt` request and publishes
+  its transport-assigned ID. Cancellation does not trigger a hidden resend or
+  cancel-tail absorption loop. A successful empty `EndTurn` response is a
+  terminal result.
+- Permission requests are delegated outward. Filesystem read/write requests are
+  handled by the host and are not emitted a second time as public requests.
+- A private `SessionUpdate` copy feeds the harness reducer after the matching
+  raw notification; it is implementation state, not another public protocol.
+- `registry.rs` resolves built-in and configured agents to spawnable process
+  definitions. The built-in Codex definition uses the maintained
+  `@agentclientprotocol/codex-acp` adapter and disables Codex-native goals in
+  its subprocess configuration. It merges a valid ambient `CODEX_CONFIG`,
+  preserving unrelated top-level and feature settings while forcing only
+  `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
+  MCP server. `error_category.rs` preserves structured ACP errors before
+  falling back to message classification.
+- `claude_models/` widens the model list the Claude adapter advertises, which
+  otherwise omits models the account can run. At spawn it reads Anthropic's
+  published model ids and injects them into Claude Code through a generated
+  wrapper. See `@/nori-rs/acp-host/src/claude_models/docs.md`.
 
 ### Things to Know
 
-- Detailed behavior documentation for the registry, error categorization, and their harness coupling still lives in `@/nori-rs/harness/docs.md`, which documents the full `nori-harness` public API (this crate's modules are part of that API via re-export).
-- The connection layer's child-lifecycle invariants (ordered inbox, stdin-EOF-then-grace shutdown, exit-watcher ownership of the `Child`) are load-bearing for `nori cloud` session release; see `@/nori-rs/acp-host/src/connection/docs.md` before changing teardown behavior.
-- `to_acp_mcp_servers()` in `connection/mcp.rs` is not a pure transformation: it eagerly resolves environment variables and loads stored OAuth tokens from the keyring/filesystem at conversion time.
-- The dependency direction is `nori-harness -> nori-acp-host`, never the reverse. If a change here needs harness state (session runtime, transcript, goals), thread it in as a parameter or move the logic up to `@/nori-rs/harness/`.
-- Agent-specific behavior is a smell here but occasionally unavoidable when an adapter's own defaults are too narrow (`claude_models/`). The containment rule is: keep it in a dedicated module, gate it on `AgentKind`, and make every failure degrade to the agent's unmodified behavior rather than a nori-specific one.
-- `$NORI_HOME/cache` is this crate's only on-disk state. It holds derived, regenerable artifacts (the fetched model catalog and the generated Claude wrapper plus its settings file); nothing here is user data and deleting it only costs one refetch.
-- Those paths are **not per-session** — every concurrent nori process writes the same files. The generated wrapper and its settings file are therefore installed by atomic rename and skipped when the content already matches, because a truncating write over a file another session is executing fails that session's agent spawn with `ETXTBSY`. Any future cache artifact added here inherits that constraint.
+- The dependency direction is `nori-harness -> nori-acp-host`, never the
+  reverse.
+- Disabling native goals is a policy of Nori's built-in Codex launch only.
+  User-defined agent processes retain their explicit command and environment;
+  goal ownership and routing remain a harness concern.
+- Ambient `CODEX_CONFIG` must be a JSON object whose `features` value, when
+  present, is also an object. Invalid JSON or incompatible shapes fail built-in
+  Codex configuration explicitly instead of silently discarding user settings.
+- Terminal and extension request families are not advertised by the current
+  host. Adding them requires an explicit host-policy decision, not a generic
+  protocol mirror.
+- The `agent-client-protocol` SDK is built with the `unstable` feature so the
+  host can call `session/fork` (branch-at-head). See `fork_session` in
+  `@/nori-rs/acp-host/src/connection/docs.md`.
+- Shutdown closes stdin and optionally waits for a caller-selected grace period.
+  The child owner then kills the process group before reaping its leader, so
+  MCP servers and other descendants cannot survive a cooperative agent exit.
+  A nonzero grace is reserved for flows such as cloud detach.
+- The removed ACP-to-Codex translator must not be recreated. Display-friendly
+  projection belongs privately in a consumer such as the TUI.
+- `claude_models/` is the crate's one agent-specific module, tolerated because
+  an adapter's own defaults are too narrow. The containment rule for anything
+  like it: keep it in a dedicated module, gate it on `AgentKind`, and make every
+  failure degrade to the agent's unmodified behavior rather than a nori-specific
+  one. It must never widen a list into an empty one.
+- `$NORI_HOME/cache` is the crate's only on-disk state: derived, regenerable
+  artifacts shared by all concurrent sessions, which is why the wrapper and its
+  settings are installed by atomic rename rather than truncating writes.
 
 Created and maintained by Nori.

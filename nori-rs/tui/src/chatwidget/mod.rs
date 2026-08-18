@@ -6,59 +6,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-#[allow(unused_imports)]
-use codex_app_server_protocol::AuthMode;
-use codex_core::config::Config;
-use codex_core::project_doc::DEFAULT_PROJECT_DOC_FILENAME;
-use codex_protocol::ConversationId;
-use codex_protocol::approvals::ElicitationRequestEvent;
-use codex_protocol::parse_command::ParsedCommand;
-use codex_protocol::protocol::AgentMessageDeltaEvent;
-use codex_protocol::protocol::AgentMessageEvent;
-use codex_protocol::protocol::AgentReasoningDeltaEvent;
-use codex_protocol::protocol::AgentReasoningEvent;
-use codex_protocol::protocol::AgentReasoningRawContentDeltaEvent;
-use codex_protocol::protocol::AgentReasoningRawContentEvent;
-use codex_protocol::protocol::ApplyPatchApprovalRequestEvent;
-use codex_protocol::protocol::BackgroundEventEvent;
-use codex_protocol::protocol::DeprecationNoticeEvent;
-use codex_protocol::protocol::ErrorEvent;
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::ExecApprovalRequestEvent;
-use codex_protocol::protocol::ExecCommandBeginEvent;
-use codex_protocol::protocol::ExecCommandEndEvent;
-use codex_protocol::protocol::ExecCommandSource;
-use codex_protocol::protocol::HookOutputEvent;
-use codex_protocol::protocol::HookOutputLevel;
-use codex_protocol::protocol::ListCustomPromptsResponseEvent;
-use codex_protocol::protocol::McpStartupCompleteEvent;
-use codex_protocol::protocol::McpStartupStatus;
-use codex_protocol::protocol::McpStartupUpdateEvent;
-use codex_protocol::protocol::McpToolCallBeginEvent;
-use codex_protocol::protocol::McpToolCallEndEvent;
-use codex_protocol::protocol::Op;
-use codex_protocol::protocol::PatchApplyBeginEvent;
-use codex_protocol::protocol::RateLimitSnapshot;
-use codex_protocol::protocol::StreamErrorEvent;
-use codex_protocol::protocol::TaskCompleteEvent;
-use codex_protocol::protocol::TokenUsage;
-use codex_protocol::protocol::TokenUsageInfo;
-use codex_protocol::protocol::TurnAbortReason;
-use codex_protocol::protocol::TurnDiffEvent;
-use codex_protocol::protocol::UndoCompletedEvent;
-use codex_protocol::protocol::UndoListResultEvent;
-use codex_protocol::protocol::UndoStartedEvent;
-use codex_protocol::protocol::UserMessageEvent;
-use codex_protocol::protocol::ViewImageToolCallEvent;
-use codex_protocol::protocol::WarningEvent;
-use codex_protocol::protocol::WebSearchBeginEvent;
-use codex_protocol::protocol::WebSearchEndEvent;
-use codex_protocol::user_input::UserInput;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use nori_config::NoriConfig as Config;
+use nori_harness::ConversationId;
 use rand::Rng;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -67,9 +20,6 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::JoinHandle;
-use tracing::debug;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -84,15 +34,10 @@ use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::client_tool_cell::ClientToolCell;
 use crate::clipboard_paste::paste_image_to_temp_png;
-use crate::diff_render::display_path_for;
 use crate::effective_cwd_tracker::EffectiveCwdTracker;
-use crate::exec_cell::CommandOutput;
-use crate::exec_cell::ExecCell;
-use crate::exec_cell::new_active_exec_command;
 use crate::get_git_diff::get_git_diff;
 use crate::history_cell;
 use crate::history_cell::HistoryCell;
-use crate::history_cell::McpToolCallCell;
 use crate::history_cell::PlainHistoryCell;
 use crate::login_handler::AgentLoginSupport;
 use crate::login_handler::LoginHandler;
@@ -105,23 +50,13 @@ use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableExt;
 use crate::render::renderable::RenderableItem;
 use crate::session_stats::SessionStats;
-use crate::session_stats::extract_skill_from_raw_input;
-use crate::session_stats::extract_skill_from_read_path;
-use crate::session_stats::extract_skills_from_text;
-use crate::session_stats::extract_subagent_from_raw_input;
 use crate::slash_command::SlashCommand;
-use crate::status::RateLimitSnapshotDisplay;
 use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
-mod interrupts;
-use self::interrupts::InterruptManager;
-mod pending_exec_cells;
-use self::pending_exec_cells::PendingExecCellTracker;
 mod agent;
-pub(crate) use self::agent::AcpAgentHandle;
+pub(crate) use self::agent::HarnessHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
-mod session_header;
 
 mod approvals;
 mod constructors;
@@ -133,132 +68,23 @@ mod login;
 mod pickers;
 mod session_config_mode;
 mod user_input;
-use self::session_header::SessionHeader;
+use crate::nori::session_header::CloudSessionInfo;
 use crate::streaming::controller::StreamController;
-use chrono::Local;
 use codex_common::approval_presets::ApprovalPreset;
 use codex_common::approval_presets::approval_mode_label;
 use codex_common::approval_presets::builtin_approval_presets;
 
-use codex_core::AuthManager;
-#[allow(unused_imports)]
-use codex_core::CodexAuth;
+use crate::ui_types::PlanUpdate;
 use codex_file_search::FileMatch;
-use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
-use codex_protocol::plan_tool::UpdatePlanArgs;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::SandboxPolicy;
+use codex_login::AuthManager;
+#[allow(unused_imports)]
+use codex_login::CodexAuth;
+use nori_config::AskForApproval;
+use nori_config::SandboxPolicy;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
+const DEFAULT_PROJECT_DOC_FILENAME: &str = "AGENTS.md";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
-// Track information about an in-flight exec command.
-struct RunningCommand {
-    command: Vec<String>,
-    parsed_cmd: Vec<ParsedCommand>,
-    source: ExecCommandSource,
-}
-
-struct UnifiedExecWaitState {
-    command_display: String,
-}
-
-impl UnifiedExecWaitState {
-    fn new(command_display: String) -> Self {
-        Self { command_display }
-    }
-
-    fn is_duplicate(&self, command_display: &str) -> bool {
-        self.command_display == command_display
-    }
-}
-
-const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [75.0, 90.0, 95.0];
-
-#[derive(Default)]
-struct RateLimitWarningState {
-    secondary_index: usize,
-    primary_index: usize,
-}
-
-impl RateLimitWarningState {
-    fn take_warnings(
-        &mut self,
-        secondary_used_percent: Option<f64>,
-        secondary_window_minutes: Option<i64>,
-        primary_used_percent: Option<f64>,
-        primary_window_minutes: Option<i64>,
-    ) -> Vec<String> {
-        let reached_secondary_cap =
-            matches!(secondary_used_percent, Some(percent) if percent == 100.0);
-        let reached_primary_cap = matches!(primary_used_percent, Some(percent) if percent == 100.0);
-        if reached_secondary_cap || reached_primary_cap {
-            return Vec::new();
-        }
-
-        let mut warnings = Vec::new();
-
-        if let Some(secondary_used_percent) = secondary_used_percent {
-            let mut highest_secondary: Option<f64> = None;
-            while self.secondary_index < RATE_LIMIT_WARNING_THRESHOLDS.len()
-                && secondary_used_percent >= RATE_LIMIT_WARNING_THRESHOLDS[self.secondary_index]
-            {
-                highest_secondary = Some(RATE_LIMIT_WARNING_THRESHOLDS[self.secondary_index]);
-                self.secondary_index += 1;
-            }
-            if let Some(threshold) = highest_secondary {
-                let limit_label = secondary_window_minutes
-                    .map(get_limits_duration)
-                    .unwrap_or_else(|| "weekly".to_string());
-                warnings.push(format!(
-                    "Heads up, you've used over {threshold:.0}% of your {limit_label} limit. Run /status for a breakdown."
-                ));
-            }
-        }
-
-        if let Some(primary_used_percent) = primary_used_percent {
-            let mut highest_primary: Option<f64> = None;
-            while self.primary_index < RATE_LIMIT_WARNING_THRESHOLDS.len()
-                && primary_used_percent >= RATE_LIMIT_WARNING_THRESHOLDS[self.primary_index]
-            {
-                highest_primary = Some(RATE_LIMIT_WARNING_THRESHOLDS[self.primary_index]);
-                self.primary_index += 1;
-            }
-            if let Some(threshold) = highest_primary {
-                let limit_label = primary_window_minutes
-                    .map(get_limits_duration)
-                    .unwrap_or_else(|| "5h".to_string());
-                warnings.push(format!(
-                    "Heads up, you've used over {threshold:.0}% of your {limit_label} limit. Run /status for a breakdown."
-                ));
-            }
-        }
-
-        warnings
-    }
-}
-
-pub(crate) fn get_limits_duration(windows_minutes: i64) -> String {
-    const MINUTES_PER_HOUR: i64 = 60;
-    const MINUTES_PER_DAY: i64 = 24 * MINUTES_PER_HOUR;
-    const MINUTES_PER_WEEK: i64 = 7 * MINUTES_PER_DAY;
-    const MINUTES_PER_MONTH: i64 = 30 * MINUTES_PER_DAY;
-    const ROUNDING_BIAS_MINUTES: i64 = 3;
-
-    let windows_minutes = windows_minutes.max(0);
-
-    if windows_minutes <= MINUTES_PER_DAY.saturating_add(ROUNDING_BIAS_MINUTES) {
-        let adjusted = windows_minutes.saturating_add(ROUNDING_BIAS_MINUTES);
-        let hours = std::cmp::max(1, adjusted / MINUTES_PER_HOUR);
-        format!("{hours}h")
-    } else if windows_minutes <= MINUTES_PER_WEEK.saturating_add(ROUNDING_BIAS_MINUTES) {
-        "weekly".to_string()
-    } else if windows_minutes <= MINUTES_PER_MONTH.saturating_add(ROUNDING_BIAS_MINUTES) {
-        "monthly".to_string()
-    } else {
-        "annual".to_string()
-    }
-}
-
 /// Strip ANSI escape codes from a string.
 /// Uses a simple state machine approach to handle common escape sequences.
 #[cfg(feature = "login")]
@@ -319,10 +145,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) vertical_footer: bool,
     pub(crate) footer_segment_config: nori_config::FooterSegmentConfig,
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
-    /// Expected agent name for this widget. When set, events from other agents
-    /// (e.g., from a previous agent) are ignored until SessionConfigured arrives
-    /// with a matching agent. This prevents race conditions when switching agents.
-    pub(crate) expected_agent: Option<String>,
+    /// Whether the top-level CLI launched the handroll-backed cloud mode.
+    pub(crate) cloud_mode: bool,
     /// When true, skip spawning the agent in `new()`. The caller must later
     /// call `spawn_deferred_agent()` once pre-session setup (e.g., skillset
     /// switch) is complete.
@@ -345,27 +169,21 @@ pub(crate) enum PlanDrawerMode {
 
 pub(crate) struct ChatWidget {
     app_event_tx: AppEventSender,
-    codex_op_tx: UnboundedSender<Op>,
     bottom_pane: BottomPane,
     active_cell: Option<Box<dyn HistoryCell>>,
     config: Config,
     auth_manager: Arc<AuthManager>,
-    session_header: SessionHeader,
     initial_user_message: Option<UserMessage>,
-    token_info: Option<TokenUsageInfo>,
-    rate_limit_snapshot: Option<RateLimitSnapshotDisplay>,
-    rate_limit_warnings: RateLimitWarningState,
-    rate_limit_poller: Option<JoinHandle<()>>,
     // Stream lifecycle controller
     stream_controller: Option<StreamController>,
-    running_commands: HashMap<String, RunningCommand>,
-    suppressed_exec_calls: HashSet<String>,
+    session_generation: crate::app_event::SessionGeneration,
+    owned_prompt_request_id: Option<nori_protocol::acp::v1::RequestId>,
+    proactive_turn_active: bool,
+    unpaired_prompt_error_ids: HashSet<nori_protocol::acp::v1::RequestId>,
     completed_client_tool_calls: HashSet<String>,
-    last_unified_wait: Option<UnifiedExecWaitState>,
-    task_complete_pending: bool,
-    mcp_startup_status: Option<HashMap<String, McpStartupStatus>>,
-    // Queue of interruptive UI events deferred during an active write cycle
-    interrupts: InterruptManager,
+    client_event_normalizer: crate::presentation::ClientEventNormalizer,
+    replay_source: Option<nori_protocol::ReplaySource>,
+    replay_message: Option<ReplayMessage>,
     // Accumulates the current reasoning block text to extract a header
     reasoning_buffer: String,
     // Accumulates full reasoning content for transcript-only recording
@@ -373,8 +191,10 @@ pub(crate) struct ChatWidget {
     // Current status header shown in the status indicator.
     current_status_header: String,
     // Previous status header to restore after a transient stream retry.
-    retry_status_header: Option<String>,
     conversation_id: Option<ConversationId>,
+    // The parent conversation id after a branch-at-head fork, shown as the
+    // `forked from:` row on the status card.
+    forked_from: Option<ConversationId>,
     frame_requester: FrameRequester,
     // Whether to include the initial welcome banner on session configured
     show_welcome_banner: bool,
@@ -389,8 +209,6 @@ pub(crate) struct ChatWidget {
     last_rendered_width: std::cell::Cell<Option<usize>>,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
-    // Tracks incomplete ExecCells that were flushed before completion.
-    pending_exec_cells: PendingExecCellTracker,
     // Buffers incomplete Execute ClientToolCells displaced from active_cell
     // by subsequent tool snapshots. Completions check here before discarding.
     pending_client_tool_cells: HashMap<String, ClientToolCell>,
@@ -398,14 +216,19 @@ pub(crate) struct ChatWidget {
     effective_cwd_tracker: EffectiveCwdTracker,
     // Pending agent selection for next prompt submission
     pending_agent: Option<PendingAgentInfo>,
-    // Expected agent name for agent switch synchronization.
-    // When set, events are ignored until SessionConfigured arrives with this agent.
-    expected_agent: Option<String>,
     // Whether SessionConfigured has been received for this widget.
-    // Used with expected_agent to filter events from previous agents.
     session_configured_received: bool,
-    // ACP agent handle for session config and model switching (only present in ACP mode)
-    acp_handle: Option<AcpAgentHandle>,
+    // Typed handle for the active harness session.
+    harness_handle: Option<HarnessHandle>,
+    // True while /close awaits the agent's session/close response. Blocks
+    // session-switching commands so the deferred NewSession can't clobber a
+    // conversation the user switched to mid-close.
+    session_close_in_flight: bool,
+    /// True once the user asked to quit: input is refused, and a hard-exit
+    /// watchdog guarantees the process leaves within ~a second even if the
+    /// backend teardown stalls. On cloud agents this exit is a detach — the
+    /// session keeps running server-side.
+    exiting: bool,
     acp_config_option_snapshot: Option<crate::nori::session_config_history::SessionConfigSnapshot>,
     acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
     acp_mode_config_generation: i64,
@@ -420,7 +243,20 @@ pub(crate) struct ChatWidget {
     // Latest ACP-owned goal snapshot for this session.
     current_goal: Option<nori_protocol::ThreadGoal>,
     // Latest ACP capability snapshot projected into Nori client concepts.
-    session_agent_capabilities: nori_protocol::AgentCapabilitiesView,
+    session_agent_capabilities: crate::presentation::AgentCapabilitiesView,
+    /// Whether the top-level CLI launched the handroll-backed cloud mode.
+    cloud_mode: bool,
+    // Identity reported by the active agent during ACP initialization.
+    session_agent_info: Option<nori_protocol::acp::v1::Implementation>,
+    // Latest structured session metadata for status/footer consumers.
+    session_info_state: crate::nori::session_info::SessionInfoState,
+    // How much session-info metadata this build writes to the transcript.
+    session_info_detail: crate::nori::session_info::SessionInfoDetail,
+    /// The agent-assigned ACP session id of the active session, when known
+    /// (seeded by the resume path, refreshed by SessionConfigured).
+    acp_session_id: Option<String>,
+    /// Broker-reported title for the resumed cloud session, when known.
+    cloud_session_title: Option<String>,
     builtin_command_availability: HashMap<String, nori_protocol::CommandAvailability>,
     // Whether `/goal` is waiting for the backend to return a goal snapshot.
     pending_goal_status: bool,
@@ -433,14 +269,14 @@ pub(crate) struct ChatWidget {
     // Ephemeral per-session override for loop_count (set via /settings menu).
     // Outer Option: whether overridden; inner Option<i32>: the value.
     loop_count_override: Option<Option<i32>>,
-    acp_session_phase: Option<nori_protocol::session_runtime::SessionPhaseView>,
+    acp_session_phase: Option<crate::presentation::session_runtime::SessionPhaseView>,
     /// Whether and how plan updates are rendered in a pinned drawer instead of
     /// history cells.
     plan_drawer_mode: PlanDrawerMode,
     /// Latest plan state, always updated on every plan event. Used by the
     /// pinned plan drawer when enabled; retained when disabled so toggling
     /// the drawer on shows the most recent plan immediately.
-    pinned_plan: Option<UpdatePlanArgs>,
+    pinned_plan: Option<PlanUpdate>,
 
     // Terminal title state: baseline instant for computing spinner frame index.
     terminal_title_animation_origin: Instant,
@@ -458,6 +294,12 @@ pub(crate) struct PendingAgentInfo {
 struct UserMessage {
     text: String,
     image_paths: Vec<PathBuf>,
+}
+
+struct ReplayMessage {
+    stream: crate::presentation::MessageStream,
+    message_id: Option<String>,
+    text: String,
 }
 
 impl From<String> for UserMessage {
@@ -486,16 +328,10 @@ fn create_initial_user_message(text: String, image_paths: Vec<PathBuf>) -> Optio
     }
 }
 
-impl ChatWidget {
-    #[cfg(test)]
-    pub(crate) fn footer_segment_config(&self) -> nori_config::FooterSegmentConfig {
-        self.bottom_pane.footer_segment_config()
-    }
-}
+impl ChatWidget {}
 
 impl Drop for ChatWidget {
     fn drop(&mut self) {
-        self.stop_rate_limit_poller();
         if let Err(err) = self.clear_managed_terminal_title() {
             tracing::debug!(error = %err, "failed to clear terminal title on drop");
         }
@@ -520,8 +356,6 @@ impl Renderable for ChatWidget {
 enum Notification {
     AgentTurnComplete { response: String },
     ExecApprovalRequested { command: String },
-    EditApprovalRequested { cwd: PathBuf, changes: Vec<PathBuf> },
-    ElicitationRequested { server_name: String },
 }
 
 impl Notification {
@@ -533,20 +367,6 @@ impl Notification {
             }
             Notification::ExecApprovalRequested { command } => {
                 format!("Approval requested: {}", truncate_text(command, 30))
-            }
-            Notification::EditApprovalRequested { cwd, changes } => {
-                format!(
-                    "Nori wants to edit {}",
-                    if changes.len() == 1 {
-                        #[allow(clippy::unwrap_used)]
-                        display_path_for(changes.first().unwrap(), cwd)
-                    } else {
-                        format!("{} files", changes.len())
-                    }
-                )
-            }
-            Notification::ElicitationRequested { server_name } => {
-                format!("Approval requested by {server_name}")
             }
         }
     }

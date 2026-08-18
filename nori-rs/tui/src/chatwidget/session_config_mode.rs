@@ -9,11 +9,6 @@ pub(super) fn next_acp_mode_config_generation() -> i64 {
 }
 
 impl ChatWidget {
-    #[cfg(test)]
-    pub(crate) fn acp_mode_config_generation(&self) -> i64 {
-        self.acp_mode_config_generation
-    }
-
     pub(crate) fn apply_acp_mode_config_snapshot(
         &mut self,
         generation: i64,
@@ -50,7 +45,7 @@ impl ChatWidget {
             .map(str::to_string)
             .unwrap_or_else(|| current_mode_id.to_string());
 
-        let agent_display_name = nori_harness::get_agent_display_name(&self.config.model);
+        let agent_display_name = nori_harness::get_agent_display_name(&self.config.active_agent);
         self.add_to_history(
             crate::nori::agent_mode_history::new_agent_mode_changed_cell(
                 &agent_display_name,
@@ -62,7 +57,7 @@ impl ChatWidget {
     }
 
     pub(super) fn refresh_acp_mode_config_snapshot(&self) {
-        let Some(handle) = self.acp_handle.clone() else {
+        let Some(handle) = self.harness_handle.clone() else {
             return;
         };
         let generation = self.acp_mode_config_generation;
@@ -79,12 +74,12 @@ impl ChatWidget {
     }
 
     pub(super) fn cycle_acp_mode_config(&mut self) -> bool {
-        let Some(handle) = self.acp_handle.clone() else {
+        let Some(handle) = self.harness_handle.clone() else {
             return false;
         };
         let generation = self.acp_mode_config_generation;
         let app_event_tx = self.app_event_tx.clone();
-        let agent = self.config.model.clone();
+        let agent = self.config.active_agent.clone();
 
         if let Some(mode) = self.acp_mode_config.clone() {
             let next_mode = mode.advanced();

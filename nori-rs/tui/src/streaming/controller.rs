@@ -39,9 +39,9 @@ impl StreamController {
     }
 
     /// Finalize the active stream. Drain and emit now.
-    pub(crate) fn finalize(&mut self) -> Option<Box<dyn HistoryCell>> {
+    pub(crate) fn finalize(&mut self) -> (Option<Box<dyn HistoryCell>>, Option<String>) {
         // Finalize collector first.
-        let remaining = {
+        let (remaining, source) = {
             let state = &mut self.state;
             state.collector.finalize_and_drain()
         };
@@ -59,7 +59,9 @@ impl StreamController {
         // Cleanup
         self.state.clear();
         self.finishing_after_drain = false;
-        self.emit(out_lines)
+        let cell = self.emit(out_lines);
+        let source = (!source.is_empty()).then_some(source);
+        (cell, source)
     }
 
     /// Step animation: commit at most one queued line and handle end-of-drain cleanup.
@@ -184,7 +186,7 @@ mod tests {
             }
         }
         // Finalize and flush remaining lines now.
-        if let Some(cell) = ctrl.finalize() {
+        if let Some(cell) = ctrl.finalize().0 {
             lines.extend(cell.transcript_lines(u16::MAX));
         }
 
@@ -218,6 +220,21 @@ mod tests {
         assert_eq!(
             streamed, expected,
             "expected exact rendered lines for loose/tight section"
+        );
+    }
+
+    #[test]
+    fn finalize_returns_the_complete_raw_markdown_source() {
+        let mut controller = StreamController::new(Some(20));
+        controller.push("A **formatted** line\n");
+        let _ = controller.on_commit_tick();
+        controller.push("and a final fragment");
+
+        let (_cell, source) = controller.finalize();
+
+        assert_eq!(
+            source.as_deref(),
+            Some("A **formatted** line\nand a final fragment")
         );
     }
 }

@@ -1,52 +1,50 @@
 //! Thin adapter between the harness session runtime and the TUI event loop.
 //!
 //! All session orchestration (backend config assembly, connect/shutdown/
-//! timeout race, op forwarding, session-control commands) lives in
+//! timeout race and session control) lives in
 //! `nori_harness::runtime`; this module only builds a launch spec from the codex
-//! `Config` and maps [`SessionEvent`]s onto [`AppEvent`]s.
+//! resolved Nori config and maps session events onto [`AppEvent`]s.
 
-use codex_core::config::Config;
-use codex_protocol::protocol::Op;
+use nori_config::NoriConfig as Config;
+use nori_harness::SessionContext;
 use nori_harness::get_agent_display_name;
 use nori_harness::list_available_agents;
-use nori_harness::runtime::SessionEvent;
+pub(crate) use nori_harness::runtime::HarnessHandle;
 use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionResume;
 use nori_harness::runtime::launch_session;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::mpsc::unbounded_channel;
-
-#[cfg(test)]
-pub(crate) use nori_harness::runtime::AcpAgentCommand;
-pub(crate) use nori_harness::runtime::AcpAgentHandle;
-#[cfg(test)]
-pub(crate) use nori_harness::runtime::drain_until_shutdown;
+use std::sync::Arc;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 
-/// Result of spawning an agent, which may include an ACP handle for model control.
-pub(crate) struct SpawnAgentResult {
-    /// The Op sender for submitting operations to the agent.
-    pub op_tx: UnboundedSender<Op>,
-    /// Optional ACP handle for session control (only present in ACP mode).
-    pub acp_handle: Option<AcpAgentHandle>,
+static NEXT_SESSION_GENERATION: AtomicI64 = AtomicI64::new(1);
+
+pub(super) fn next_session_generation() -> crate::app_event::SessionGeneration {
+    NEXT_SESSION_GENERATION.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Spawn the agent bootstrapper and op forwarding loop, returning a result
-/// that includes the Op sender and optionally an ACP handle for model control.
+/// Result of spawning a harness session.
+pub(crate) struct SpawnAgentResult {
+    pub handle: Option<HarnessHandle>,
+}
+
+/// Spawn the agent bootstrapper and return its typed handle.
 ///
 /// Looks up the agent in the ACP registry. If found, spawns an ACP agent.
 /// Otherwise, emits an error and opens the agent picker.
 pub(crate) fn spawn_agent(
     config: Config,
     app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
     fork_context: Option<String>,
 ) -> SpawnAgentResult {
-    match nori_harness::get_agent_config(&config.model) {
-        Ok(_) => launch_acp_agent(config, app_event_tx, fork_context, None),
+    match nori_harness::get_agent_config(&config.active_agent) {
+        Ok(_) => launch_acp_agent(config, app_event_tx, generation, fork_context, None),
         Err(_) => {
-            let agent_name = config.model;
+            let agent_name = config.active_agent;
             let known: Vec<String> = list_available_agents()
                 .iter()
                 .map(|a| a.agent_name.clone())
@@ -56,11 +54,8 @@ pub(crate) fn spawn_agent(
                  Known ACP agents: {}",
                 known.join(", ")
             );
-            let op_tx = spawn_error_agent(agent_name, error_msg, app_event_tx);
-            SpawnAgentResult {
-                op_tx,
-                acp_handle: None,
-            }
+            spawn_error_agent(agent_name, error_msg, app_event_tx);
+            SpawnAgentResult { handle: None }
         }
     }
 }
@@ -74,10 +69,12 @@ pub(crate) fn spawn_acp_agent_resume(
     acp_session_id: Option<String>,
     transcript: Option<nori_harness::transcript::Transcript>,
     app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
 ) -> SpawnAgentResult {
     launch_acp_agent(
         config,
         app_event_tx,
+        generation,
         None,
         Some(SessionResume {
             acp_session_id,
@@ -89,13 +86,7 @@ pub(crate) fn spawn_acp_agent_resume(
 /// Spawn an agent that emits an error and opens the agent picker.
 ///
 /// This is used when the requested agent is not a valid ACP agent.
-fn spawn_error_agent(
-    agent_name: String,
-    error_msg: String,
-    app_event_tx: AppEventSender,
-) -> UnboundedSender<Op> {
-    let (codex_op_tx, _codex_op_rx) = unbounded_channel::<Op>();
-
+fn spawn_error_agent(agent_name: String, error_msg: String, app_event_tx: AppEventSender) {
     tokio::spawn(async move {
         tracing::error!("{}", error_msg);
         // Send AgentSpawnFailed so the user can select a different agent
@@ -104,8 +95,6 @@ fn spawn_error_agent(
             error: error_msg,
         });
     });
-
-    codex_op_tx
 }
 
 /// Launch a session via the harness runtime and forward its events into the
@@ -113,55 +102,32 @@ fn spawn_error_agent(
 fn launch_acp_agent(
     config: Config,
     app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
     fork_context: Option<String>,
     resume: Option<SessionResume>,
 ) -> SpawnAgentResult {
     // Emit "Connecting" status before spawning the backend
-    let display_name = get_agent_display_name(&config.model);
+    let display_name = get_agent_display_name(&config.active_agent);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     let spec = SessionLaunchSpec {
-        agent: config.model.clone(),
-        cwd: config.cwd.clone(),
-        approval_policy: config.approval_policy,
-        sandbox_policy: config.sandbox_policy.clone(),
-        notify: config.notify.clone(),
-        mcp_servers: config.mcp_servers.clone(),
-        mcp_oauth_credentials_store_mode: config.mcp_oauth_credentials_store_mode,
+        config: Arc::new(config),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
-        session_context: Some(include_str!("../../session_context.md").to_string()),
+        session_context: Some(SessionContext {
+            with_http_mcp: include_str!("../../session_context_http_mcp.md").to_string(),
+            without_http_mcp: include_str!("../../session_context.md").to_string(),
+        }),
         initial_context: fork_context,
         resume,
     };
-    let agent_name = config.model;
-
     let mut session = launch_session(spec);
-    let acp_handle = Some(session.handle.clone());
-    let op_tx = session.op_tx.clone();
+    let handle = Some(session.handle.clone());
 
     tokio::spawn(async move {
         while let Some(event) = session.events.recv().await {
-            match event {
-                SessionEvent::Backend(backend_event) => match *backend_event {
-                    nori_harness::BackendEvent::Control(event) => {
-                        app_event_tx.send(AppEvent::CodexEvent(event));
-                    }
-                    nori_harness::BackendEvent::Client(client_event) => {
-                        app_event_tx.send(AppEvent::ClientEvent(client_event));
-                    }
-                },
-                SessionEvent::SpawnFailed { error } => {
-                    app_event_tx.send(AppEvent::AgentSpawnFailed {
-                        agent_name: agent_name.clone(),
-                        error,
-                    });
-                }
-                SessionEvent::ShutdownRequested => {
-                    app_event_tx.send(AppEvent::ExitRequest);
-                }
-            }
+            app_event_tx.send(AppEvent::SessionEvent { generation, event });
         }
     });
 
-    SpawnAgentResult { op_tx, acp_handle }
+    SpawnAgentResult { handle }
 }

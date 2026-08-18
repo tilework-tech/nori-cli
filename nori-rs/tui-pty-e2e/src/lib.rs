@@ -100,6 +100,7 @@ pub struct TuiSession {
     reader: Box<dyn Read + Send>,
     writer: Box<dyn Write + Send>,
     parser: Parser,
+    child: Box<dyn portable_pty::Child + Send>,
     _temp_dir: Option<tempfile::TempDir>,
 }
 
@@ -246,7 +247,7 @@ impl TuiSession {
 
         // Use mock-acp-agent agent
         cmd.arg("--agent");
-        cmd.arg(&config.model);
+        cmd.arg(&config.agent);
 
         // Skip trust directory prompt for E2E tests (avoids interactive prompts)
         if config.skip_trust_directory {
@@ -268,8 +269,7 @@ impl TuiSession {
             // Write config.toml to CODEX_HOME (unless explicitly empty for first-launch testing)
             let config_path = codex_home.join("config.toml");
             let mut config_content = config.config_toml.clone().unwrap_or_else(|| {
-                // Generate default config with model, trusted project path,
-                // and mock_provider that doesn't require OpenAI auth.
+                // Generate default config with the selected agent and trusted project path.
                 //
                 // IMPORTANT: Canonicalize the cwd path for the projects section.
                 // On macOS, /tmp is a symlink to /private/tmp, so paths like
@@ -295,16 +295,12 @@ impl TuiSession {
                     ""
                 };
                 format!(
-                    r#"model = "{model}"
-model_provider = "mock_provider"
+                    r#"agent = "{agent}"
 
 [projects."{cwd}"]
 trust_level = "trusted"
-
-[model_providers.mock_provider]
-name = "Mock ACP provider for tests"
 {acp_section}"#,
-                    model = config.model,
+                    agent = config.agent,
                     cwd = cwd_path,
                     acp_section = acp_section
                 )
@@ -384,7 +380,7 @@ name = "Mock ACP provider for tests"
             "codex_core=info,nori_tui=info,codex_rmcp_client=info,nori_harness=debug,nori_acp_host=debug",
         );
 
-        let _child = pair.slave.spawn_command(cmd)?;
+        let child = pair.slave.spawn_command(cmd)?;
 
         // Set master PTY to non-blocking mode before cloning reader
         // This ensures the cloned reader FD inherits the non-blocking flag
@@ -403,8 +399,29 @@ name = "Mock ACP provider for tests"
             reader,
             writer,
             parser: Parser::new(rows, cols, 0),
+            child,
             _temp_dir: temp_dir,
         })
+    }
+
+    /// Wait for the TUI process itself to exit, polling and draining PTY
+    /// output so the child can't block on a full PTY buffer. Returns true if
+    /// the process exited within the timeout.
+    pub fn wait_for_process_exit(&mut self, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let _ = self.poll();
+            match self.child.try_wait() {
+                Ok(Some(_)) => return true,
+                Ok(None) => {}
+                // If the wait itself errors, treat the process as gone.
+                Err(_) => return true,
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     /// Read any available output and update screen state
@@ -678,7 +695,7 @@ fn find_acp_log_file(nori_home: &std::path::Path) -> Option<std::path::PathBuf> 
 
 /// Configuration for spawning a test session
 pub struct SessionConfig {
-    pub model: String,
+    pub agent: String,
     /// Subcommand to run before the flags (e.g. "cloud" for `nori cloud`).
     pub subcommand: Option<String>,
     pub mock_agent_env: HashMap<String, String>,
@@ -699,8 +716,8 @@ pub struct SessionConfig {
     /// This prevents the "Snapshots disabled" BackgroundEvent from overwriting
     /// the "Working" status indicator during streaming tests.
     pub git_init: bool,
-    /// When true, allows falling back to HTTP providers if model is not in ACP registry.
-    /// When false (default), ACP-only mode: unregistered models produce an error.
+    /// When true, allows falling back to HTTP providers if the agent is not in the ACP registry.
+    /// When false (default), ACP-only mode: unregistered agents produce an error.
     pub allow_http_fallback: bool,
     /// Extra directories to prepend to PATH when spawning the process.
     pub extra_path: Vec<std::path::PathBuf>,
@@ -718,7 +735,7 @@ impl Default for SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
-            model: "mock-model".to_string(),
+            agent: "mock-model".to_string(),
             subcommand: None,
             mock_agent_env: HashMap::new(),
             no_color: true,
@@ -740,8 +757,8 @@ impl SessionConfig {
         self
     }
 
-    pub fn with_model(mut self, model: String) -> Self {
-        self.model = model;
+    pub fn with_agent(mut self, agent: String) -> Self {
+        self.agent = agent;
         self
     }
 
@@ -754,6 +771,24 @@ impl SessionConfig {
     pub fn with_mock_response(mut self, response: impl Into<String>) -> Self {
         self.mock_agent_env
             .insert("MOCK_AGENT_RESPONSE".to_string(), response.into());
+        self
+    }
+
+    /// Stream `response` in `chunk_chars`-sized pieces instead of one chunk.
+    ///
+    /// Markdown that is complete only after several chunks (a table gains rows, a fence closes)
+    /// renders differently while it streams, which a single-chunk response never exercises.
+    pub fn with_mock_response_streamed(
+        mut self,
+        response: impl Into<String>,
+        chunk_chars: usize,
+    ) -> Self {
+        self.mock_agent_env
+            .insert("MOCK_AGENT_RESPONSE".to_string(), response.into());
+        self.mock_agent_env.insert(
+            "MOCK_AGENT_RESPONSE_CHUNK_CHARS".to_string(),
+            chunk_chars.to_string(),
+        );
         self
     }
 
@@ -845,12 +880,15 @@ fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<S
     let val_offset = rest.find(|c: char| !c.is_whitespace()).unwrap_or(0);
     let val_start = val_start + val_offset;
 
-    // Find value end (next whitespace) and region end (│ border or EOL)
+    // Find value end (next whitespace) and region end (footer separator, │ border, or EOL).
     let rest = &line[val_start..];
     let val_end = rest
         .find(char::is_whitespace)
         .map_or(line.len(), |pos| val_start + pos);
-    let region_end = rest.find('│').map_or(line.len(), |pos| val_start + pos);
+    let footer_separator = rest.find(" · ");
+    let region_end = footer_separator
+        .or_else(|| rest.find('│'))
+        .map_or(line.len(), |pos| val_start + pos);
 
     // Check that we have a non-empty value
     if val_start >= val_end {
@@ -859,6 +897,10 @@ fn replace_after_marker(line: &str, marker: &str, replacement: &str) -> Option<S
 
     // Replace value with placeholder, padding to maintain width
     let mut result = line.to_string();
+    if footer_separator.is_some() {
+        result.replace_range(val_start..region_end, replacement);
+        return Some(result);
+    }
     let region_width = region_end - val_start;
     if region_width >= replacement.len() {
         let padded = format!(
@@ -977,8 +1019,8 @@ pub fn normalize_for_snapshot(contents: String) -> String {
                 line = result;
             }
 
-            // Profile: "profile:   value" -> "profile:   [PROF]"
-            if let Some(result) = replace_after_marker(&line, "profile:", "[PROF]") {
+            // Active skillset names depend on the user's local environment.
+            if let Some(result) = replace_after_marker(&line, "Skillset:", "[SKILLSET]") {
                 line = result;
             }
 
@@ -1364,19 +1406,17 @@ enhancements
     }
 
     #[test]
-    fn test_normalize_version_and_profile() {
-        // Test that version and profile are normalized correctly
+    fn test_normalize_version_and_skillset() {
         let input = r#"╭──────────────────────────────────────────────────────────────╮
 │ Nori CLI v0.1.2                                              │
-│ profile:   testuser                                          │
+│ Skillset: test-skillset                                      │
 ╰──────────────────────────────────────────────────────────────╯"#;
 
         let normalized = normalize_for_snapshot(input.to_string());
 
-        // Profile should be normalized to [PROF]
         assert!(
-            normalized.contains("[PROF]"),
-            "Profile should be normalized, got:\n{}",
+            normalized.contains("[SKILLSET]"),
+            "Skillset should be normalized, got:\n{}",
             normalized
         );
 
@@ -1397,6 +1437,12 @@ enhancements
             normalized.contains("╰──"),
             "Should preserve bottom border, got:\n{}",
             normalized
+        );
+
+        let footer = "  Approvals: Agent · Skillset: test-skillset · Skillsets v0.9.99".to_string();
+        assert_eq!(
+            normalize_for_snapshot(footer),
+            "  Approvals: Agent · Skillset: [SKILLSET] · Skillsets v0.9.99"
         );
     }
 }

@@ -7,7 +7,8 @@ goal complete or blocked.
 - In the raw Codex harness, goals are native session/runtime state.
 - In Nori CLI over ACP, goals are owned by the Nori ACP backend and projected
   into an external ACP agent through prompt context plus a local `nori-client`
-  MCP server.
+  MCP server. Nori's built-in Codex launch disables Codex-native goals through
+  the adapter configuration, so they cannot compete with this Nori-owned state.
 
 ## Raw Codex Harness
 
@@ -123,9 +124,11 @@ Nori keeps the user-facing goal state in the ACP backend. During ACP session
 setup, it advertises a local `nori-client` MCP server when the agent connection
 reports HTTP MCP support. Per turn, it sends goal context to the external ACP
 agent as prompt text, and the external agent marks completion/blocking through
-that local MCP server. Agents without the MCP capability do not get the `/goal`
-command surface, because they cannot close the loop by calling the backend-owned
-goal tools.
+`update_goal` from the `nori-client` MCP server. Completion uses the exact
+status `complete`. Nori's built-in Codex launch also disables
+the adapter's native goals, ensuring only `nori-client` controls Nori thread
+goals. Agents without the MCP capability do not get the `/goal` command surface,
+because they cannot close the loop by calling the backend-owned goal tools.
 
 ### Mermaid Sequence Diagram
 
@@ -234,7 +237,8 @@ External ACP agent keeps working
   |
   | when evidence proves done or blocked
   v
-nori-client.update_goal(status="complete" | "blocked")
+`update_goal` from the `nori-client` MCP server
+  with status="complete" | "blocked"
   |
   v
 ThreadGoalState status changes; continuation loop stops
@@ -243,24 +247,28 @@ ThreadGoalState status changes; continuation loop stops
 ### Nori Source Notes
 
 - `ThreadGoalState` renders visible `<goal_context>` and hidden continuation
-  text in `acp/src/backend/thread_goal.rs`.
+  text in `nori-rs/harness/src/backend/thread_goal.rs`.
 - User prompts are augmented with goal context before submission in
-  `acp/src/backend/user_input.rs`.
+  `nori-rs/harness/src/backend/user_input.rs`.
 - The ACP runtime schedules hidden continuations after `EndTurn` in
-  `acp/src/backend/session_runtime_driver.rs`.
+  `nori-rs/harness/src/backend/session_runtime_driver.rs`.
 - Nori registers the local goal MCP server during ACP session setup/load and
   advertises it only when the connection reports HTTP MCP support:
-  `acp/src/backend/spawn_and_relay.rs`, `acp/src/backend/session.rs`, and
-  `acp/src/backend/nori_client_mcp.rs`.
+  `nori-rs/harness/src/backend/spawn_and_relay.rs`,
+  `nori-rs/harness/src/backend/session.rs`, and
+  `nori-rs/harness/src/backend/nori_client_mcp.rs`.
 - The backend also projects session capabilities to the TUI. `/goal` is disabled
   when the active agent cannot receive the `nori-client` MCP server, keeping the
   user-facing command surface aligned with the agent's ability to complete or
   block goals.
 - The ACP connection forwards `mcpServers` to the external agent when creating a
-  session in `acp/src/connection/sacp_connection.rs`.
+  session in `nori-rs/acp-host/src/connection/acp_connection.rs`.
+- Nori's built-in Codex process selects the maintained ACP adapter and disables
+  native goals in `nori-rs/acp-host/src/registry.rs`.
 - The local `nori-client` MCP server exposes `get_goal`, `create_goal`, and
   `update_goal` as typed rmcp `#[tool]` handlers on an rmcp `StreamableHttpService`
-  (served over a loopback `axum` listener) in `acp/src/backend/nori_client_mcp.rs`.
+  (served over a loopback `axum` listener) in
+  `nori-rs/harness/src/backend/nori_client_mcp.rs`.
   `nori-client` is Nori's general harness-side channel to the agent; the goal
   tools are its first tenants, not the whole of it. Future tenants should move
   Nori-specific prompt workarounds into MCP prompts/resources, including Nori
@@ -276,9 +284,22 @@ ThreadGoalState status changes; continuation loop stops
 | Model-facing goal context | Hidden `GoalContext` response item                     | Prepended prompt text and hidden continuation prompt          |
 | Continuation scheduler    | `GoalRuntimeState::MaybeContinueIfIdle`                | `SessionRuntimeDriver::maybe_submit_goal_continuation`        |
 | Completion evaluator      | The model self-audits against current evidence         | The external ACP agent self-audits against current evidence   |
-| Completion actuator       | Built-in Codex `update_goal` tool                      | Local `nori-client` MCP `update_goal` tool                    |
+| Completion actuator       | Built-in Codex `update_goal` tool                      | `update_goal` from the `nori-client` MCP server               |
 | Context window            | Same Codex thread/session history, compacted as needed | External ACP agent's session context, steered by Nori prompts |
 | Subagents                 | Separate Codex threads only when explicitly spawned    | Determined by the external ACP agent, not by Nori goal state  |
+
+## Goal Extension Bridge
+
+A third path exists when the ACP agent advertises the `_session/goal`
+extension in the top-level `_meta` of its initialize response: the harness
+drives the agent's native goal loop over that extension instead of running its
+own continuation loop, and mirrors the goal snapshots the agent publishes
+(`session_info_update` `_meta.goal`) into `ThreadGoalState` and `GoalChanged`
+events. `ThreadGoalState` remains the source of truth for the TUI either way;
+only the continuation owner changes. The nori-client MCP loop diagrammed above
+stays the fallback for agents without the extension or when an extension call
+fails. Contract details: `docs/followups/nori-client-mcp.md`, "Goal Extension
+Bridge".
 
 ## Mental Model
 

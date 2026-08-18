@@ -1,0 +1,57 @@
+use super::*;
+use insta::assert_snapshot;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+
+fn snapshot_widget(widget: impl Widget, width: u16, height: u16) -> String {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| frame.render_widget(widget, frame.area()))
+        .expect("draw widget");
+    terminal.backend().to_string()
+}
+
+#[test]
+fn semantic_messages_snapshot() {
+    let messages = [
+        SemanticMessage::new(MessageLevel::Info, "Connected to the agent"),
+        SemanticMessage::new(MessageLevel::Success, "Snapshot accepted"),
+        SemanticMessage::new(MessageLevel::Warning, "Two sessions are still running")
+            .detail("Open the session picker to inspect them."),
+        SemanticMessage::new(MessageLevel::Error, "Could not resume the session")
+            .detail("The agent no longer reports that session id."),
+    ];
+    let backend = TestBackend::new(58, 10);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            for (index, message) in messages.into_iter().enumerate() {
+                let area = Rect::new(0, index as u16 * 2, frame.area().width, 2);
+                frame.render_widget(message, area);
+            }
+        })
+        .expect("draw messages");
+
+    assert_snapshot!(terminal.backend().to_string());
+}
+
+#[test]
+fn empty_state_snapshot() {
+    assert_snapshot!(snapshot_widget(
+        EmptyState::new("No matching sessions").detail("Try a title, project path, or session id."),
+        52,
+        3,
+    ));
+}
+
+#[test]
+fn key_hints_wrap_snapshot() {
+    let hints = KeyHints::new([
+        KeyHint::new("↑↓", "move"),
+        KeyHint::new("enter", "open"),
+        KeyHint::new("/", "search"),
+        KeyHint::new("esc", "close"),
+    ]);
+    assert_snapshot!(snapshot_widget(hints, 29, 3));
+}

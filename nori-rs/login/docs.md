@@ -13,6 +13,7 @@ Used by `@/nori-rs/tui/` (via the `login` feature) to implement the `/login` sla
 ### Core Implementation
 
 **Device Code Auth** (`device_code_auth.rs`): Implements OAuth device code flow:
+
 1. Request device code from provider
 2. Display user code and verification URL
 3. Poll for token completion
@@ -21,13 +22,16 @@ Used by `@/nori-rs/tui/` (via the `login` feature) to implement the `/login` sla
 **PKCE** (`pkce.rs`): Implements Proof Key for Code Exchange for secure OAuth flows.
 
 **Login Server** (`server.rs`): Runs a local HTTP server to:
+
 - Serve the OAuth redirect endpoint
 - Receive authorization codes
 - Exchange codes for tokens
 
 ### Things to Know
 
-- Re-exports `CodexAuth` and `AuthManager` from codex-core, and `AuthMode` from codex-app-server-protocol
+- Re-exports `CodexAuth`, `AuthManager`, `AuthMode`, credential-store types, and
+  login helpers from `codex-core::auth`; it has no app-server protocol
+  dependency
 - Supports both API key login and OAuth flows
 - Tokens are stored in system keyring via `codex-keyring-store`
 - The `CLIENT_ID` constant identifies Nori to OAuth providers

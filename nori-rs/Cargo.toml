@@ -2,13 +2,13 @@
 members = [
     "ansi-escape",
     "async-utils",
-    "app-server-protocol",
     "apply-patch",
     "arg0",
     "cli",
     "common",
     "core",
     "execpolicy",
+    "exec",
     "keyring-store",
     "file-search",
     "linux-sandbox",
@@ -17,12 +17,11 @@ members = [
     "process-hardening",
     "acp-host",
     "nori-config",
-    "protocol",
     "sandbox",
     "rmcp-client",
     "stdio-to-uds",
-    "otel",
     "tui",
+    "tui-components",
     "utils/git",
     "utils/cache",
     "utils/image",
@@ -51,7 +50,6 @@ repository = "https://github.com/tilework-tech/nori-cli"
 [workspace.dependencies]
 # Internal
 codex-ansi-escape = { path = "ansi-escape" }
-codex-app-server-protocol = { path = "app-server-protocol" }
 codex-apply-patch = { path = "apply-patch" }
 codex-arg0 = { path = "arg0" }
 codex-async-utils = { path = "async-utils" }
@@ -66,13 +64,12 @@ codex-sandbox = { path = "sandbox" }
 nori-acp-host = { path = "acp-host" }
 nori-config = { path = "nori-config" }
 codex-login = { path = "login" }
-codex-otel = { path = "otel" }
 codex-process-hardening = { path = "process-hardening" }
-codex-protocol = { path = "protocol" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-stdio-to-uds = { path = "stdio-to-uds" }
 nori-protocol = { path = "nori-protocol" }
 nori-tui = { path = "tui" }
+codex-tui-components = { path = "tui-components" }
 codex-utils-cache = { path = "utils/cache" }
 codex-utils-image = { path = "utils/image" }
 codex-utils-json-to-toml = { path = "utils/json-to-toml" }
@@ -83,11 +80,12 @@ codex-windows-sandbox = { path = "windows-sandbox-rs" }
 core_test_support = { path = "core/tests/common" }
 mcp-types = { path = "mcp-types" }
 nori-harness = { path = "harness" }
+nori-exec = { path = "exec" }
 nori-installed = { path = "installed" }
 
 # External
 allocative = "0.3.3"
-ansi-to-tui = "7.0.0"
+ansi-to-tui = "8.0.1"
 anyhow = "1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 assert_cmd = "2"
@@ -105,7 +103,7 @@ chrono = "0.4.42"
 clap = "4"
 clap_complete = "4"
 color-eyre = "0.6.3"
-crossterm = "0.28.1"
+crossterm = "0.29.0"
 ctor = "0.5.0"
 derive_more = "2"
 diffy = "0.4.2"
@@ -132,7 +130,7 @@ landlock = "0.4.1"
 lazy_static = "1"
 libc = "0.2.177"
 log = "0.4"
-lru = "0.16.3"
+lru = "0.18.2"
 maplit = "1.0.2"
 mime_guess = "2.0.5"
 multimap = "0.10.0"
@@ -141,11 +139,6 @@ notify-rust = "4"
 nucleo-matcher = "0.3.1"
 once_cell = "1.20.2"
 openssl-sys = "*"
-opentelemetry = "0.30.0"
-opentelemetry-appender-tracing = "0.30.0"
-opentelemetry-otlp = "0.30.0"
-opentelemetry-semantic-conventions = "0.30.0"
-opentelemetry_sdk = "0.30.0"
 os_info = "3.12.0"
 owo-colors = "4.2.0"
 path-absolutize = "3.1.1"
@@ -155,8 +148,12 @@ predicates = "3"
 pretty_assertions = "1.4.1"
 pulldown-cmark = "0.10"
 rand = "0.9"
-ratatui = "0.29.0"
-ratatui-macros = "0.6.0"
+ratatui = { version = "0.30.2", default-features = false, features = [
+    "crossterm",
+    "layout-cache",
+    "underline-color",
+] }
+ratatui-macros = "0.7.2"
 regex = "1.12.2"
 regex-lite = "0.1.7"
 reqwest = "0.12"
@@ -208,7 +205,7 @@ urlencoding = "2.1"
 uuid = "1"
 vt100 = "0.16.2"
 walkdir = "2.5.0"
-webbrowser = "1.0"
+webbrowser = "1.2.2"
 which = "6"
 wildmatch = "2.5.0"
 
@@ -278,8 +275,7 @@ incremental = false
 [patch.crates-io]
 # Uncomment to debug local changes.
 # ratatui = { path = "../../ratatui" }
-crossterm = { git = "https://github.com/nornagon/crossterm", branch = "nornagon/color-query" }
-ratatui = { git = "https://github.com/nornagon/ratatui", branch = "nornagon-v0.29.0-patch" }
+crossterm = { git = "https://github.com/openai-oss-forks/crossterm", rev = "45fecb9508105988f42fe6ff0441783ed3717f92" }
 
 # Uncomment to debug local changes.
 # rmcp = { path = "../../rust-sdk/crates/rmcp" }

@@ -8,7 +8,7 @@ use ratatui::widgets::WidgetRef;
 
 use super::popup_consts::MAX_POPUP_ROWS;
 use super::scroll_state::ScrollState;
-use codex_protocol::message_history::HistoryEntry;
+use nori_harness::HistoryEntry;
 
 pub(crate) struct HistorySearchPopup {
     query: String,
@@ -247,7 +247,7 @@ mod tests {
 
     fn make_entry(text: &str, ts: u64) -> HistoryEntry {
         HistoryEntry {
-            conversation_id: "test-session".to_string(),
+            session_id: "test-session".to_string(),
             ts,
             text: text.to_string(),
         }

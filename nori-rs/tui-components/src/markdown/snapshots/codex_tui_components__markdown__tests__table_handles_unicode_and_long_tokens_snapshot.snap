@@ -1,0 +1,22 @@
+---
+source: tui-components/src/markdown/tests.rs
+expression: "snapshot(source, 58, 18)"
+---
+"Name   日本語のセッション                                 " Hidden by multi-width symbols: [(8, " "), (10, " "), (12, " "), (14, " "), (16, " "), (18, " "), (20, " "), (22, " "), (24, " ")]
+"Path   /workspace/really-long-project-directory/src/      "
+"       parser.rs                                          "
+"State  ✓                                                  "
+"──────────────────────────────────────────────────────────"
+"Name   Résumé UI                                          "
+"Path   session-019fc87740127ac08ef3a91ace638f94           "
+"State  queued                                             "
+"                                                          "
+"                                                          "
+"                                                          "
+"                                                          "
+"                                                          "
+"                                                          "
+"                                                          "
+"                                                          "
+"                                                          "
+"                                                          "

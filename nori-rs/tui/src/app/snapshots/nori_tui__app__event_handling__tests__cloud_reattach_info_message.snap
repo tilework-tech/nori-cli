@@ -1,0 +1,5 @@
+---
+source: tui/src/app/event_handling.rs
+expression: "reattach_info_message(\"session-123\", Some(\"Fix reconnect\"), true,\n\"Nori Cloud\")"
+---
+Reattaching to session-123 (Fix reconnect)...

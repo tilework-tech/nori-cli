@@ -1,0 +1,16 @@
+---
+source: tui/src/bottom_pane/list_selection_view.rs
+expression: "render_lines_with_width(&view, 80)"
+---
+                                                                                
+  Vim Mode                                                                      
+  Choose Enter key behavior for vim mode                                        
+                                                                                
+  1. Submit in NORMAL         Enter inserts a newline in INSERT mode, submits   
+                              in NORMAL mode                                    
+  2. Submit in INSERT         Enter submits in INSERT mode, inserts a newline   
+                              in NORMAL mode                                    
+› 3. Always Submit (current)  Enter submits in both INSERT and NORMAL modes     
+  4. Off                      Disable vim mode                                  
+                                                                                
+  ↑/k ↓/j to navigate, enter to confirm, esc to go back

@@ -2,11 +2,12 @@
 source: tui/src/chatwidget/tests/part2.rs
 expression: popup
 ---
-  Resume previous session
-  Select a session to resume
+  Sessions
+  Resume a live session or start a new one
 
   Type to search sessions
-› Refactor the parser  2020-01-15 10:30 · /home/user/project
+› Start a new session  Begin a fresh session with this agent
+  Refactor the parser  2020-01-15 10:30 · /home/user/project
   session-def          /home/user/other
 
   ↑/k ↓/j to navigate, enter to confirm, esc to go back

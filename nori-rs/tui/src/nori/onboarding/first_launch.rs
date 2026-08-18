@@ -9,8 +9,7 @@
 use std::io;
 use std::path::Path;
 
-use codex_core::config::edit::ConfigEditsBuilder;
-use codex_core::config::edit::toml_value;
+use nori_config::NoriConfigEdits;
 
 /// Check if this is the user's first launch of Nori.
 ///
@@ -26,8 +25,8 @@ pub(crate) fn is_first_launch(nori_home: &Path) -> bool {
 /// Uses ConfigEditsBuilder to merge with existing config instead of overwriting.
 /// Note: nori_home is expected to be `~/.nori/cli` (the full path).
 pub(crate) fn mark_first_launch_complete(nori_home: &Path) -> io::Result<()> {
-    ConfigEditsBuilder::new(nori_home)
-        .set_path(&["cli", "first_launch_complete"], toml_value(true))
+    NoriConfigEdits::new(nori_home)
+        .set_path(&["cli", "first_launch_complete"], true)
         .apply_blocking()
         .map_err(io::Error::other)
 }

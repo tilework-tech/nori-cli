@@ -1,0 +1,14 @@
+---
+source: tui-components/src/markdown/tests.rs
+expression: "snapshot(streaming.source(), 42, 10)"
+---
+"## Streaming                              "
+"                                          "
+"State     Value                           "
+"━━━━━━━━  ━━━━━                           "
+"complete      3                           "
+"                                          "
+"                                          "
+"                                          "
+"                                          "
+"                                          "

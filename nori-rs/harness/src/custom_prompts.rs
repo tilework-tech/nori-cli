@@ -1,9 +1,34 @@
-use codex_protocol::custom_prompts::CustomPrompt;
-use codex_protocol::custom_prompts::CustomPromptKind;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashSet;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs;
+
+/// Base namespace for custom prompt slash commands.
+pub const PROMPTS_CMD_PREFIX: &str = "prompts";
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CustomPromptKind {
+    #[default]
+    Markdown,
+    Script {
+        interpreter: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomPrompt {
+    pub name: String,
+    pub path: PathBuf,
+    pub content: String,
+    pub description: Option<String>,
+    pub argument_hint: Option<String>,
+    #[serde(default)]
+    pub kind: CustomPromptKind,
+}
 
 /// Discover prompt files in the given directory, returning entries sorted by name.
 /// Non-files are ignored. If the directory does not exist or cannot be read, returns empty.
@@ -312,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn discovers_script_files_alongside_markdown() {
-        use codex_protocol::custom_prompts::CustomPromptKind;
+        use super::CustomPromptKind;
 
         let tmp = tempdir().expect("create TempDir");
         let dir = tmp.path();
@@ -364,7 +389,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_script_captures_stdout() {
-        use codex_protocol::custom_prompts::CustomPromptKind;
+        use super::CustomPromptKind;
         use std::time::Duration;
 
         let tmp = tempdir().expect("create TempDir");
@@ -389,7 +414,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_script_returns_error_on_nonzero_exit() {
-        use codex_protocol::custom_prompts::CustomPromptKind;
+        use super::CustomPromptKind;
         use std::time::Duration;
 
         let tmp = tempdir().expect("create TempDir");
@@ -416,7 +441,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_script_passes_positional_args() {
-        use codex_protocol::custom_prompts::CustomPromptKind;
+        use super::CustomPromptKind;
         use std::time::Duration;
 
         let tmp = tempdir().expect("create TempDir");
@@ -446,7 +471,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_script_returns_empty_string_on_no_output() {
-        use codex_protocol::custom_prompts::CustomPromptKind;
+        use super::CustomPromptKind;
         use std::time::Duration;
 
         let tmp = tempdir().expect("create TempDir");
@@ -471,7 +496,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_script_times_out() {
-        use codex_protocol::custom_prompts::CustomPromptKind;
+        use super::CustomPromptKind;
         use std::time::Duration;
 
         let tmp = tempdir().expect("create TempDir");

@@ -127,11 +127,8 @@ network_access = false  # This should be ignored.
     let sandbox_full_access_cfg = toml::from_str::<ConfigToml>(sandbox_full_access)
         .expect("TOML deserialization should succeed");
     let sandbox_mode_override = None;
-    let resolution = sandbox_full_access_cfg.derive_sandbox_policy(
-        sandbox_mode_override,
-        None,
-        &PathBuf::from("/tmp/test"),
-    );
+    let resolution = sandbox_full_access_cfg
+        .derive_sandbox_policy(sandbox_mode_override, &PathBuf::from("/tmp/test"));
     assert_eq!(
         resolution,
         SandboxPolicyResolution {
@@ -150,11 +147,8 @@ network_access = true  # This should be ignored.
     let sandbox_read_only_cfg = toml::from_str::<ConfigToml>(sandbox_read_only)
         .expect("TOML deserialization should succeed");
     let sandbox_mode_override = None;
-    let resolution = sandbox_read_only_cfg.derive_sandbox_policy(
-        sandbox_mode_override,
-        None,
-        &PathBuf::from("/tmp/test"),
-    );
+    let resolution = sandbox_read_only_cfg
+        .derive_sandbox_policy(sandbox_mode_override, &PathBuf::from("/tmp/test"));
     assert_eq!(
         resolution,
         SandboxPolicyResolution {
@@ -177,11 +171,8 @@ exclude_slash_tmp = true
     let sandbox_workspace_write_cfg = toml::from_str::<ConfigToml>(sandbox_workspace_write)
         .expect("TOML deserialization should succeed");
     let sandbox_mode_override = None;
-    let resolution = sandbox_workspace_write_cfg.derive_sandbox_policy(
-        sandbox_mode_override,
-        None,
-        &PathBuf::from("/tmp/test"),
-    );
+    let resolution = sandbox_workspace_write_cfg
+        .derive_sandbox_policy(sandbox_mode_override, &PathBuf::from("/tmp/test"));
     if cfg!(target_os = "windows") {
         assert_eq!(
             resolution,
@@ -222,11 +213,8 @@ trust_level = "trusted"
     let sandbox_workspace_write_cfg = toml::from_str::<ConfigToml>(sandbox_workspace_write)
         .expect("TOML deserialization should succeed");
     let sandbox_mode_override = None;
-    let resolution = sandbox_workspace_write_cfg.derive_sandbox_policy(
-        sandbox_mode_override,
-        None,
-        &PathBuf::from("/tmp/test"),
-    );
+    let resolution = sandbox_workspace_write_cfg
+        .derive_sandbox_policy(sandbox_mode_override, &PathBuf::from("/tmp/test"));
     if cfg!(target_os = "windows") {
         assert_eq!(
             resolution,
@@ -358,109 +346,6 @@ fn config_defaults_to_auto_oauth_store_mode() -> std::io::Result<()> {
         config.mcp_oauth_credentials_store_mode,
         OAuthCredentialsStoreMode::Auto,
     );
-
-    Ok(())
-}
-
-#[test]
-fn profile_legacy_toggles_override_base() -> std::io::Result<()> {
-    let codex_home = TempDir::new()?;
-    let mut profiles = HashMap::new();
-    profiles.insert(
-        "work".to_string(),
-        ConfigProfile {
-            tools_view_image: Some(false),
-            ..Default::default()
-        },
-    );
-    let cfg = ConfigToml {
-        profiles,
-        profile: Some("work".to_string()),
-        ..Default::default()
-    };
-
-    let config = Config::load_from_base_config_with_overrides(
-        cfg,
-        ConfigOverrides::default(),
-        codex_home.path().to_path_buf(),
-    )?;
-
-    assert!(!config.features.enabled(Feature::ViewImageTool));
-
-    Ok(())
-}
-
-#[test]
-fn profile_sandbox_mode_overrides_base() -> std::io::Result<()> {
-    let codex_home = TempDir::new()?;
-    let mut profiles = HashMap::new();
-    profiles.insert(
-        "work".to_string(),
-        ConfigProfile {
-            sandbox_mode: Some(SandboxMode::DangerFullAccess),
-            ..Default::default()
-        },
-    );
-    let cfg = ConfigToml {
-        profiles,
-        profile: Some("work".to_string()),
-        sandbox_mode: Some(SandboxMode::ReadOnly),
-        ..Default::default()
-    };
-
-    let config = Config::load_from_base_config_with_overrides(
-        cfg,
-        ConfigOverrides::default(),
-        codex_home.path().to_path_buf(),
-    )?;
-
-    assert!(matches!(
-        config.sandbox_policy,
-        SandboxPolicy::DangerFullAccess
-    ));
-    assert!(config.did_user_set_custom_approval_policy_or_sandbox_mode);
-
-    Ok(())
-}
-
-#[test]
-fn cli_override_takes_precedence_over_profile_sandbox_mode() -> std::io::Result<()> {
-    let codex_home = TempDir::new()?;
-    let mut profiles = HashMap::new();
-    profiles.insert(
-        "work".to_string(),
-        ConfigProfile {
-            sandbox_mode: Some(SandboxMode::DangerFullAccess),
-            ..Default::default()
-        },
-    );
-    let cfg = ConfigToml {
-        profiles,
-        profile: Some("work".to_string()),
-        ..Default::default()
-    };
-
-    let overrides = ConfigOverrides {
-        sandbox_mode: Some(SandboxMode::WorkspaceWrite),
-        ..Default::default()
-    };
-
-    let config = Config::load_from_base_config_with_overrides(
-        cfg,
-        overrides,
-        codex_home.path().to_path_buf(),
-    )?;
-
-    if cfg!(target_os = "windows") {
-        assert!(matches!(config.sandbox_policy, SandboxPolicy::ReadOnly));
-        assert!(config.forced_auto_mode_downgraded_on_windows);
-    } else {
-        assert!(matches!(
-            config.sandbox_policy,
-            SandboxPolicy::WorkspaceWrite { .. }
-        ));
-        assert!(!config.forced_auto_mode_downgraded_on_windows);
-    }
 
     Ok(())
 }

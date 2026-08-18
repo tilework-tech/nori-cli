@@ -1,13 +1,15 @@
 use super::*;
+use crate::test_backend::VT100Backend;
 use pretty_assertions::assert_eq;
+use ratatui::Terminal;
 
 fn acp_tool_snapshot(
     call_id: &str,
     title: &str,
-    kind: nori_protocol::ToolKind,
-    phase: nori_protocol::ToolPhase,
-) -> nori_protocol::ToolSnapshot {
-    nori_protocol::ToolSnapshot {
+    kind: crate::presentation::ToolKind,
+    phase: crate::presentation::ToolPhase,
+) -> crate::presentation::ToolSnapshot {
+    crate::presentation::ToolSnapshot {
         call_id: call_id.to_string(),
         title: title.to_string(),
         kind,
@@ -25,45 +27,51 @@ fn acp_tool_snapshot(
 fn acp_tool_snapshots_update_exit_stats_once_and_extract_skill() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(acp_tool_snapshot(
-        "read-skill",
-        "Read SKILL.md",
-        nori_protocol::ToolKind::Read,
-        nori_protocol::ToolPhase::Pending,
-    )));
+    chat.handle_client_event(crate::presentation::ClientEvent::ToolSnapshot(
+        acp_tool_snapshot(
+            "read-skill",
+            "Read SKILL.md",
+            crate::presentation::ToolKind::Read,
+            crate::presentation::ToolPhase::Pending,
+        ),
+    ));
 
     let skill_path = PathBuf::from("/tmp/repro-skill/SKILL.md");
     let mut completed_read = acp_tool_snapshot(
         "read-skill",
         "Read SKILL.md",
-        nori_protocol::ToolKind::Read,
-        nori_protocol::ToolPhase::Completed,
+        crate::presentation::ToolKind::Read,
+        crate::presentation::ToolPhase::Completed,
     );
-    completed_read.locations = vec![nori_protocol::ToolLocation {
+    completed_read.locations = vec![crate::presentation::ToolLocation {
         path: skill_path.clone(),
         line: None,
     }];
-    completed_read.invocation = Some(nori_protocol::Invocation::Read {
+    completed_read.invocation = Some(crate::presentation::Invocation::Read {
         path: skill_path.clone(),
     });
     completed_read.raw_input = Some(serde_json::json!({
         "file_path": skill_path,
     }));
-    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(completed_read));
+    chat.handle_client_event(crate::presentation::ClientEvent::ToolSnapshot(
+        completed_read,
+    ));
 
     let mut completed_execute = acp_tool_snapshot(
         "exec",
         "Run command",
-        nori_protocol::ToolKind::Execute,
-        nori_protocol::ToolPhase::Completed,
+        crate::presentation::ToolKind::Execute,
+        crate::presentation::ToolPhase::Completed,
     );
-    completed_execute.invocation = Some(nori_protocol::Invocation::Command {
+    completed_execute.invocation = Some(crate::presentation::Invocation::Command {
         command: "printf done".to_string(),
     });
     completed_execute.raw_input = Some(serde_json::json!({
         "command": "printf done",
     }));
-    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(completed_execute));
+    chat.handle_client_event(crate::presentation::ClientEvent::ToolSnapshot(
+        completed_execute,
+    ));
 
     assert_eq!(chat.session_stats.tool_calls.get("read"), Some(&1));
     assert_eq!(chat.session_stats.tool_calls.get("execute"), Some(&1));
@@ -77,15 +85,15 @@ fn acp_agent_snapshot_uses_title_for_generic_other_and_records_subagent() {
     let mut snapshot = acp_tool_snapshot(
         "agent",
         "Agent",
-        nori_protocol::ToolKind::Other("Other".to_string()),
-        nori_protocol::ToolPhase::Completed,
+        crate::presentation::ToolKind::Other("Other".to_string()),
+        crate::presentation::ToolPhase::Completed,
     );
     snapshot.raw_input = Some(serde_json::json!({
         "subagent_type": "nori-task-runner",
         "prompt": "Inspect the implementation",
     }));
 
-    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(snapshot));
+    chat.handle_client_event(crate::presentation::ClientEvent::ToolSnapshot(snapshot));
 
     assert_eq!(chat.session_stats.tool_calls.get("Agent"), Some(&1));
     assert_eq!(chat.session_stats.subagents_used, vec!["nori-task-runner"]);
@@ -95,9 +103,9 @@ fn acp_agent_snapshot_uses_title_for_generic_other_and_records_subagent() {
 fn acp_prompt_completed_with_final_message_counts_assistant_once() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::PromptCompleted(
-        nori_protocol::PromptCompleted {
-            stop_reason: nori_protocol::StopReason::EndTurn,
+    chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(
+        crate::presentation::PromptCompleted {
+            stop_reason: nori_protocol::acp::v1::StopReason::EndTurn,
             last_agent_message: Some("Done".to_string()),
             failure: None,
         },
@@ -110,15 +118,16 @@ fn acp_prompt_completed_with_final_message_counts_assistant_once() {
 fn acp_streamed_answer_counts_assistant_once_when_prompt_completes() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
 
-    chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
-        nori_protocol::MessageDelta {
-            stream: nori_protocol::MessageStream::Answer,
+    chat.handle_client_event(crate::presentation::ClientEvent::MessageDelta(
+        crate::presentation::MessageDelta {
+            stream: crate::presentation::MessageStream::Answer,
+            message_id: None,
             delta: "Done".to_string(),
         },
     ));
-    chat.handle_client_event(nori_protocol::ClientEvent::PromptCompleted(
-        nori_protocol::PromptCompleted {
-            stop_reason: nori_protocol::StopReason::EndTurn,
+    chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(
+        crate::presentation::PromptCompleted {
+            stop_reason: nori_protocol::acp::v1::StopReason::EndTurn,
             last_agent_message: None,
             failure: None,
         },
@@ -140,15 +149,17 @@ fn noop_tool_updates_do_not_fragment_streaming_answer() {
         let mut snapshot = acp_tool_snapshot(
             "clippy",
             "cargo clippy",
-            nori_protocol::ToolKind::Execute,
-            nori_protocol::ToolPhase::InProgress,
+            crate::presentation::ToolKind::Execute,
+            crate::presentation::ToolPhase::InProgress,
         );
-        snapshot.invocation = Some(nori_protocol::Invocation::Command {
+        snapshot.invocation = Some(crate::presentation::Invocation::Command {
             command: "cargo clippy".to_string(),
         });
         snapshot
     };
-    chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(running_tool()));
+    chat.handle_client_event(crate::presentation::ClientEvent::ToolSnapshot(
+        running_tool(),
+    ));
 
     // The agent streams its answer while the tool is still running; progress
     // updates for the running tool interleave with the answer deltas.
@@ -158,18 +169,21 @@ fn noop_tool_updates_do_not_fragment_streaming_answer() {
         "ish.",
     ];
     for delta in deltas {
-        chat.handle_client_event(nori_protocol::ClientEvent::MessageDelta(
-            nori_protocol::MessageDelta {
-                stream: nori_protocol::MessageStream::Answer,
+        chat.handle_client_event(crate::presentation::ClientEvent::MessageDelta(
+            crate::presentation::MessageDelta {
+                stream: crate::presentation::MessageStream::Answer,
+                message_id: None,
                 delta: delta.to_string(),
             },
         ));
-        chat.handle_client_event(nori_protocol::ClientEvent::ToolSnapshot(running_tool()));
+        chat.handle_client_event(crate::presentation::ClientEvent::ToolSnapshot(
+            running_tool(),
+        ));
     }
 
-    chat.handle_client_event(nori_protocol::ClientEvent::PromptCompleted(
-        nori_protocol::PromptCompleted {
-            stop_reason: nori_protocol::StopReason::EndTurn,
+    chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(
+        crate::presentation::PromptCompleted {
+            stop_reason: nori_protocol::acp::v1::StopReason::EndTurn,
             last_agent_message: None,
             failure: None,
         },
@@ -206,4 +220,190 @@ fn transcript_subagents_are_merged_into_exit_stats() {
     });
 
     assert_eq!(chat.session_stats.subagents_used, vec!["nori-task-runner"]);
+}
+
+#[test]
+fn session_usage_updates_footer_and_disables_transcript_fallback() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_system_info_refresh(crate::system_info::SystemInfo {
+        transcript_location: Some(nori_harness::TranscriptLocation {
+            agent_kind: nori_harness::AgentKind::Codex,
+            transcript_path: PathBuf::from("/tmp/codex-transcript.jsonl"),
+            session_id: "codex-session".to_string(),
+            token_breakdown: Some(nori_harness::TranscriptTokenUsage {
+                input_tokens: 995_726,
+                output_tokens: 8_452,
+                cached_tokens: 500_000,
+                last_context_tokens: Some(69_246),
+            }),
+            subagents_used: Vec::new(),
+        }),
+        ..Default::default()
+    });
+    chat.handle_client_event(crate::presentation::ClientEvent::SessionUpdateInfo(
+        crate::presentation::SessionUpdateInfo {
+            kind: crate::presentation::SessionUpdateKind::Usage,
+            message: "Session usage: 42600 / 258400 tokens".into(),
+            hint: None,
+            usage: Some(crate::presentation::session_runtime::SessionUsageState {
+                used_tokens: 42_600,
+                total_tokens: 258_400,
+                cost_display: None,
+            }),
+            session_info_patch: None,
+        },
+    ));
+
+    assert!(drain_insert_history(&mut rx).is_empty());
+
+    let height = chat.desired_height(80);
+    let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with footer usage");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("16% / 258k"),
+        "expected ACP session usage in footer, got: {contents:?}"
+    );
+}
+
+#[test]
+fn transcript_usage_supplies_default_context_percentage_and_window_size() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_system_info_refresh(crate::system_info::SystemInfo {
+        transcript_location: Some(nori_harness::TranscriptLocation {
+            agent_kind: nori_harness::AgentKind::Codex,
+            transcript_path: PathBuf::from("/tmp/codex-transcript.jsonl"),
+            session_id: "codex-session".to_string(),
+            token_breakdown: Some(nori_harness::TranscriptTokenUsage {
+                input_tokens: 69_246,
+                output_tokens: 1_200,
+                cached_tokens: 45_000,
+                last_context_tokens: Some(69_246),
+            }),
+            subagents_used: Vec::new(),
+        }),
+        ..Default::default()
+    });
+
+    let height = chat.desired_height(80);
+    let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with transcript context usage");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("27% / 258k"),
+        "expected transcript usage and agent window size in footer: {contents:?}"
+    );
+}
+
+#[test]
+fn custom_footer_formats_can_compose_context_values_in_footer_and_corner() {
+    let config: nori_config::NoriConfigToml = toml::from_str(
+        r#"
+[tui.footer_layout]
+footer_left = [
+    { format = "{context_used_percent} / {context_window_tokens}" },
+]
+textarea_top_right = [
+    { format = "{context_remaining_percent} remaining" },
+]
+"#,
+    )
+    .expect("custom footer layout should parse");
+    let layout = nori_config::FooterLayoutConfig::from_toml(&config.tui.footer_layout);
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual_with_footer_layout(layout);
+
+    chat.handle_client_event(crate::presentation::ClientEvent::SessionUpdateInfo(
+        crate::presentation::SessionUpdateInfo {
+            kind: crate::presentation::SessionUpdateKind::Usage,
+            message: "Session usage: 42600 / 258400 tokens".into(),
+            hint: None,
+            usage: Some(crate::presentation::session_runtime::SessionUsageState {
+                used_tokens: 42_600,
+                total_tokens: 258_400,
+                cost_display: None,
+            }),
+            session_info_patch: None,
+        },
+    ));
+    assert!(drain_insert_history(&mut rx).is_empty());
+
+    let height = chat.desired_height(80);
+    let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with custom footer layout");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("16% / 258k"),
+        "custom footer should compose used percentage and window size: {contents:?}"
+    );
+    assert!(
+        contents.contains("84% remaining"),
+        "custom corner should compose remaining percentage: {contents:?}"
+    );
+}
+
+#[test]
+fn all_atomic_context_segments_render_session_usage_values() {
+    let config: nori_config::NoriConfigToml = toml::from_str(
+        r#"
+[tui.footer_segments]
+context = false
+token_usage = false
+context_used_percent = true
+context_remaining_percent = true
+context_used_tokens = true
+context_remaining_tokens = true
+context_window_tokens = true
+
+[tui.footer_layout]
+footer_left = [
+    "context_used_percent",
+    "context_remaining_percent",
+    "context_used_tokens",
+    "context_remaining_tokens",
+    "context_window_tokens",
+]
+"#,
+    )
+    .expect("atomic context segments should parse");
+    let segments = nori_config::FooterSegmentConfig::from_toml(&config.tui.footer_segments);
+    let layout = nori_config::FooterLayoutConfig::from_toml(&config.tui.footer_layout);
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual_with_footer_config(segments, layout);
+
+    chat.handle_client_event(crate::presentation::ClientEvent::SessionUpdateInfo(
+        crate::presentation::SessionUpdateInfo {
+            kind: crate::presentation::SessionUpdateKind::Usage,
+            message: "Session usage: 42600 / 258400 tokens".into(),
+            hint: None,
+            usage: Some(crate::presentation::session_runtime::SessionUsageState {
+                used_tokens: 42_600,
+                total_tokens: 258_400,
+                cost_display: None,
+            }),
+            session_info_patch: None,
+        },
+    ));
+    assert!(drain_insert_history(&mut rx).is_empty());
+
+    let height = chat.desired_height(80);
+    let mut terminal = Terminal::new(VT100Backend::new(80, height)).expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("draw chat with atomic context segments");
+    let contents = terminal.backend().vt100().screen().contents();
+
+    assert!(
+        contents.contains("16% · 84% · 42.6k · 216k · 258k"),
+        "expected every atomic context value in the footer: {contents:?}"
+    );
 }

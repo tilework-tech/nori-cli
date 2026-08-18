@@ -4,102 +4,66 @@ Path: @/
 
 ### Overview
 
-Nori CLI is a multi-provider terminal-based AI coding assistant built in Rust. It provides a unified interface for interacting with AI agents from Anthropic (Claude Code), OpenAI (Codex), and Google (Gemini). The project uses the Agent Client Protocol (ACP) for subprocess-based agent communication and features a Ratatui-based TUI. The implementation is in Rust (`nori-rs`), with a Node.js launcher for npm distribution (`nori-cli`).
+Nori CLI is a Rust terminal frontend and headless session harness for ACP
+agents. The shipped `nori` binary composes configuration, a reusable harness,
+and the Ratatui frontend; the npm package in `nori-cli/` is a thin launcher.
 
 ### How it fits into the larger codebase
 
-This is the root repository containing the Nori CLI project:
-
-- **`nori-rs/`**: Main Rust implementation (Cargo workspace with all core functionality)
-- **`nori-cli/`**: Node.js launcher for npm distribution (thin wrapper that invokes the Rust binary)
-- **`docs/`**: Durable specs (`docs/specs/`), implementation plans, and follow-up backlogs — the single home for design material
-- **`.github/`**: Build and CI configuration
-- **`.claude/`**: Skills and configuration for Claude-based development
-- **`scripts/`**: Development scripts
-
-The project was originally forked from OpenAI Codex CLI and has been adapted to support multiple AI providers through ACP integration. The `nori-cli` package provides the `nori` command via npm.
+- `nori-rs/` contains the Cargo workspace and production binary.
+- `nori-cli/` packages that binary for npm distribution.
+- `docs/specs/` records durable architecture decisions; `docs/plans/` records
+  their execution.
+- ACP owns agent-to-client messages, plans, tools, permissions, capabilities,
+  configuration options, usage, and responses. Nori adds only lifecycle and
+  product behavior ACP does not define.
 
 ### Core Implementation
 
-**Architecture:**
+```text
+nori-cli / nori-tui
+         |
+         v
+   nori-harness  <-------- nori-config
+         |
+         v
+  nori-acp-host  <-------- codex-rmcp-client (MCP credentials)
+         |
+         v
+    ACP agent process
 
-```
-┌─────────────────────────────────────────────────┐
-│                   nori CLI                      │
-│         (nori-rs/tui - main binary)            │
-├─────────────────────────────────────────────────┤
-│                  nori-tui                       │
-│        Interactive Terminal Interface           │
-├────────────────────────┬────────────────────────┤
-│ nori-harness (harness/)│  codex-core (core/)    │
-│  ACP Agent Connection  │  Config, Auth, Tools   │
-│  Subprocess Spawning   │  Sandbox, Utilities    │
-├────────────────────────┴────────────────────────┤
-│           codex-protocol (protocol/)            │
-│         Events, Operations, Types               │
-└─────────────────────────────────────────────────┘
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │   ACP Agent Process   │
-        │  (claude-code, etc.)  │
-        └───────────────────────┘
+Public boundary used by every client-side layer:
+    nori-protocol
+      ├── nori_protocol::acp   (re-exported ACP schema)
+      └── SessionEvent::{Acp, Nori}
 ```
 
-**Entry Points:**
+`nori-protocol` is the sole direct ACP schema dependency and re-exports it as
+`nori_protocol::acp`. `nori-acp-host` alone uses the higher-level ACP SDK on the
+client side. The harness exposes typed control methods and one ordered
+`SessionEvent` stream. Frontends match the source branch first: raw ACP
+envelopes remain ACP-shaped, while the Nori branch carries lifecycle, queue,
+replay, goals, undo, user shell, hooks, notices, and failures for which no ACP
+response exists.
 
-| Command            | Description              | Implementation                          |
-| ------------------ | ------------------------ | --------------------------------------- |
-| `nori`             | Interactive TUI          | `nori-rs/tui`                           |
-| `nori login`       | Authentication           | `nori-rs/cli` + `nori-rs/login`         |
-| `nori logout`      | Clear saved credentials  | `nori-rs/cli` + `nori-rs/login`         |
-| `nori sandbox ...` | Sandbox command runner   | `nori-rs/cli` + platform sandbox crates |
-| `nori skillsets`   | Skillset management shim | `nori-rs/cli`                           |
-
-**Model Providers (via ACP):**
-
-- Claude Code (primary)
-- Codex
-- Gemini
-
-**Installation:**
-
-```bash
-npm i -g nori-ai-cli
-```
-
-**Configuration:**
-
-Stored in `~/.nori/cli/`:
-
-- `config.toml`: Main configuration
-- `sessions/`: Saved conversations
-- `history.jsonl`: Message history
-
-**Session Management:**
-
-Conversations are recorded to `~/.nori/cli/sessions/` and can be resumed:
-
-```bash
-nori resume              # Show picker
-nori resume --last       # Most recent
-nori resume <SESSION_ID> # Specific session
-```
-
-**MCP Support:**
-
-Nori acts as an MCP client:
-
-- Connects to MCP servers defined in config
-- Exposes MCP management through the interactive `/mcp` workflow in the TUI
+Configuration is resolved from `$NORI_HOME/config.toml` (default
+`~/.nori/cli/config.toml`) and injected into session launches. Transcripts live
+under the same Nori home and can be resumed through `nori resume`.
 
 ### Things to Know
 
-- Nori-authored crates use a `nori-` prefix (`nori-cli`, `nori-tui`, `nori-acp`, `nori-acp-host`, `nori-config`, `nori-protocol`, `nori-installed`); inherited crates keep the legacy `codex-` prefix from the OpenAI Codex fork and are progressively adopted or removed per `docs/specs/crate-layering.md`
-- Configuration always uses the Nori paths (`~/.nori/cli/`); the old `nori-config` and `unstable` cargo feature flags were removed during the crate-layering cleanup (no cargo feature may change which crate owns a responsibility)
-- Cross-platform sandboxing is implemented using Landlock (Linux), Seatbelt (macOS), and restricted tokens (Windows)
-- Snapshot testing with `insta` is used extensively for TUI regression testing
-- The project has two justfiles: a root `@/justfile` implementing the Shared Local Runner Layer spec (standardized `help`, `dev`, `test`, `doctor` targets) and `@/nori-rs/justfile` for Rust-specific workflows. The root justfile wraps `nori-rs` by running `cd nori-rs && cargo ...` for each target. Both coexist -- run `just` from the repo root for the standard targets, or `cd nori-rs && just` for the Rust-native recipes
-- `pnpm` is used for Node.js workspace management in `@/nori-cli/`
+- The former `codex-protocol` and `codex-app-server-protocol` crates were
+  deleted in the ACP-canonical hard cut. There is no deprecated facade or
+  second public normalized ACP vocabulary.
+- `nori-config` owns approval, sandbox, MCP, trust, and shell policy.
+  `codex-rmcp-client` owns computed MCP authentication status.
+- Filesystem requests from an ACP agent are currently handled by the host.
+  Permission requests that require a consumer decision are delegated with
+  their raw `RequestId`; `AskForApproval::Never` resolves them internally.
+- Cross-platform sandboxing uses Landlock on Linux, Seatbelt on macOS, and
+  restricted tokens on Windows.
+- The crate-layering decision and the exact protocol contract are documented
+  in `@/docs/specs/crate-layering.md` and
+  `@/docs/specs/protocol-unification.md`.
 
 Created and maintained by Nori.

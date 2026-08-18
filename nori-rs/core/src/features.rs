@@ -6,7 +6,6 @@
 //! container attached to `Config`.
 
 use crate::config::ConfigToml;
-use crate::config::profile::ConfigProfile;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -165,11 +164,7 @@ impl Features {
         }
     }
 
-    pub fn from_config(
-        cfg: &ConfigToml,
-        config_profile: &ConfigProfile,
-        overrides: FeatureOverrides,
-    ) -> Self {
+    pub fn from_config(cfg: &ConfigToml, overrides: FeatureOverrides) -> Self {
         let mut features = Features::with_defaults();
 
         let base_legacy = LegacyFeatureToggles {
@@ -185,23 +180,6 @@ impl Features {
 
         if let Some(base_features) = cfg.features.as_ref() {
             features.apply_map(&base_features.entries);
-        }
-
-        let profile_legacy = LegacyFeatureToggles {
-            include_apply_patch_tool: config_profile.include_apply_patch_tool,
-            experimental_sandbox_command_assessment: config_profile
-                .experimental_sandbox_command_assessment,
-            experimental_use_freeform_apply_patch: config_profile
-                .experimental_use_freeform_apply_patch,
-
-            experimental_use_unified_exec_tool: config_profile.experimental_use_unified_exec_tool,
-            experimental_use_rmcp_client: config_profile.experimental_use_rmcp_client,
-            tools_web_search: config_profile.tools_web_search,
-            tools_view_image: config_profile.tools_view_image,
-        };
-        profile_legacy.apply(&mut features);
-        if let Some(profile_features) = config_profile.features.as_ref() {
-            features.apply_map(&profile_features.entries);
         }
 
         overrides.apply(&mut features);

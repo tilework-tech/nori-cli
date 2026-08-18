@@ -6,6 +6,7 @@
 //! - Building a picker UI for skillset selection
 //! - Installing selected skillsets
 
+use std::path::Path;
 use std::path::PathBuf;
 
 use crate::app_event::AppEvent;
@@ -15,6 +16,28 @@ use crate::bottom_pane::SelectionViewParams;
 
 /// The command name for the nori-skillsets CLI.
 const NORI_SKILLSETS_CMD: &str = "nori-skillsets";
+
+/// Resolve the `--install-dir` to pass to `nori-skillsets switch`/`install`
+/// for the current session.
+///
+/// Per-session skillsets isolate their managed files (`.nori-managed` markers
+/// and manifests) inside the session's git worktree, so we only pass a custom
+/// install dir when `cwd` is a worktree; otherwise we return `None` and let the
+/// switch target the user's home install.
+///
+/// `skillset_per_session` must NOT force a non-worktree `cwd` (e.g. the repo
+/// root, when auto-worktree is off or was blocked) to be used as the install
+/// dir: that scatters managed state into the project tree and orphans it.
+///
+/// Worktree detection is path-based (`extract_worktree_name`): it recognizes
+/// the `.worktrees/<name>` layout that auto-worktree creates, which is the
+/// supported per-session mechanism. A hand-made `git worktree` outside
+/// `.worktrees/` is not recognized and falls back to the home install.
+pub fn session_skillset_install_dir(cwd: &Path) -> Option<PathBuf> {
+    crate::system_info::extract_worktree_name(cwd)
+        .is_some()
+        .then(|| cwd.to_path_buf())
+}
 
 /// Check if nori-skillsets command is available in PATH.
 pub fn is_nori_skillsets_available() -> bool {
@@ -136,8 +159,10 @@ pub async fn switch_skillset(name: &str, install_dir: &std::path::Path) -> Resul
 ///   selection (e.g. via Escape or Ctrl-C).
 /// * `show_no_skillset` - When `true`, prepends a "No Skillset" option that
 ///   dismisses the picker without installing anything.
-/// * `auto_worktree_off` - When `true` and `install_dir` is `Some`, the subtitle
-///   warns that skillset files will be added to the current directory.
+/// * `auto_worktree_off` - Per-session is on but auto-worktree is disabled.
+///   When `install_dir` is `Some`, the subtitle warns that skillset files will
+///   be added to the current directory; when `None`, it warns that the skillset
+///   installs globally because there is no session worktree to isolate into.
 pub fn skillset_picker_params(
     skillset_names: Vec<String>,
     install_dir: Option<PathBuf>,
@@ -190,16 +215,14 @@ pub fn skillset_picker_params(
         }
     }));
 
-    let subtitle = if auto_worktree_off {
-        if let Some(ref dir) = install_dir {
-            format!("Warning: skillset files will be added to {}", dir.display())
-        } else {
-            "Install a skillset to customize Nori's capabilities".to_string()
-        }
-    } else if let Some(ref dir) = install_dir {
-        format!("Switching skillset in {}", dir.display())
-    } else {
-        "Install a skillset to customize Nori's capabilities".to_string()
+    let subtitle = match (&install_dir, auto_worktree_off) {
+        (Some(dir), true) => format!("Warning: skillset files will be added to {}", dir.display()),
+        (Some(dir), false) => format!("Switching skillset in {}", dir.display()),
+        // Per-session is on but there is no session worktree to isolate into
+        // (auto-worktree is off), so the skillset installs globally. Say so
+        // rather than silently doing a home install.
+        (None, true) => "No session worktree — installing to your global skillset".to_string(),
+        (None, false) => "Install a skillset to customize Nori's capabilities".to_string(),
     };
 
     SelectionViewParams {
@@ -289,6 +312,21 @@ mod tests {
     use crate::app_event_sender::AppEventSender;
     use pretty_assertions::assert_eq;
     use tokio::sync::mpsc::unbounded_channel;
+
+    #[test]
+    fn install_dir_is_worktree_path_when_under_dot_worktrees() {
+        let cwd = PathBuf::from("/home/user/project/.worktrees/swift-oak");
+        assert_eq!(session_skillset_install_dir(&cwd), Some(cwd.clone()));
+    }
+
+    #[test]
+    fn install_dir_is_none_at_repo_root() {
+        // Regression: a per-session skillset switch must not use a non-worktree
+        // cwd (e.g. the repo root, when auto-worktree is off or blocked) as the
+        // install dir, which would scatter managed state into the project tree.
+        let cwd = PathBuf::from("/home/user/project");
+        assert_eq!(session_skillset_install_dir(&cwd), None);
+    }
 
     #[test]
     fn test_skillset_picker_params_creates_items() {
@@ -664,6 +702,23 @@ Restart Claude Code to apply the new skillset."#;
         assert!(
             !subtitle.to_lowercase().contains("warning"),
             "Subtitle should not contain a warning when worktrees are on: {subtitle}"
+        );
+    }
+
+    #[test]
+    fn test_skillset_picker_global_install_subtitle_when_no_worktree() {
+        // Per-session on but no worktree (install_dir None, auto_worktree_off):
+        // the subtitle must say the install is global, not silently generic.
+        let names = vec!["rust-dev".to_string()];
+        let params = skillset_picker_params(
+            names, None, None, true, // show_no_skillset (per-session)
+            true, // auto_worktree_off
+        );
+
+        let subtitle = params.subtitle.expect("should have subtitle");
+        assert!(
+            subtitle.to_lowercase().contains("global"),
+            "Subtitle should say the install is global: {subtitle}"
         );
     }
 }
