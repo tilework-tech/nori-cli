@@ -5,6 +5,7 @@
 //! Layer 0 of the crate layering (`docs/specs/crate-layering.md`): this crate
 //! must stay independent of the session harness and any terminal UI.
 
+mod claude_models;
 pub mod connection;
 mod error_category;
 pub mod patch;

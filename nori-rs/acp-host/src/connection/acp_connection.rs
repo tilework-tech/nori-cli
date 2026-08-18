@@ -40,6 +40,7 @@ use super::child_lifecycle::collect_stderr_tail;
 use super::wire_log::WireDirection;
 use super::wire_log::WireLogger;
 use crate::registry::AcpAgentConfig;
+use crate::registry::AgentKind;
 use crate::translator;
 use nori_config::AcpProxyConfig;
 
@@ -454,6 +455,20 @@ impl AcpConnection {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+
+        // The Claude adapter advertises a short curated model list; widen it to
+        // everything Anthropic publishes. Falls back to the adapter's own list.
+        if config.agent == AgentKind::ClaudeCode
+            && let Some(claude_path) = config.env.get("CLAUDE_CODE_EXECUTABLE")
+            && let Ok(nori_home) = nori_config::find_nori_home()
+            && let Some(shim) = crate::claude_models::claude_executable_override(
+                &nori_home.join("cache"),
+                Path::new(claude_path),
+            )
+            .await
+        {
+            cmd.env("CLAUDE_CODE_EXECUTABLE", shim);
+        }
 
         // Process group isolation and parent death signal.
         #[cfg(unix)]

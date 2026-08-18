@@ -29,6 +29,7 @@ Local ACP Agent (subprocess, own process group)
 - MCP server configuration from `config.toml` is converted to ACP schema types via `mcp.rs` and passed at session creation time
 - All transport events (session updates, permission requests, synthetic file-operation updates, and child exits) flow into a single ordered `mpsc::Receiver<ConnectionEvent>` consumed by the backend's relay loop in `@/nori-rs/harness/src/backend/spawn_and_relay.rs`
 - The wire logging layer (`wire_log.rs`) optionally wraps the subprocess transport when `[acp_proxy]` is enabled in config
+- `spawn()` is also where the one agent-specific escape hatch lives: for Claude it may override `CLAUDE_CODE_EXECUTABLE` with a generated wrapper that widens the model list the adapter advertises (`@/nori-rs/acp-host/src/claude_models/docs.md`)
 
 ### Core Implementation
 
@@ -45,6 +46,8 @@ Local ACP Agent (subprocess, own process group)
 
 - The connection sends `InitializeRequest` with `ProtocolVersion::LATEST` and enforces `MINIMUM_SUPPORTED_VERSION = ProtocolVersion::V1` during the initialization handshake in `establish_connection()`; wire/schema types come from `agent_client_protocol_schema::v1` (aliased as `acp`)
 - The child process is spawned in its own process group (`setpgid(0, 0)`) and `CODEX_HOME` is stripped from the environment to prevent config parser conflicts (see `@/nori-rs/harness/docs.md` for rationale)
+- The child environment is layered: `AcpAgentConfig.env` from the registry is applied first, then `spawn()` mutates individual vars on top. Ordering is load-bearing for the Claude model-list override, which reads the registry's `CLAUDE_CODE_EXECUTABLE` (the system `claude` path) and replaces it with a wrapper around that same binary. The override requires `AgentKind::ClaudeCode`, the var already being present, and a resolvable `NORI_HOME`; it is skipped entirely if the catalog or wrapper cannot be produced — including on non-unix platforms, where the wrapper is never generated — so a network failure or an unsupported platform at spawn never affects agent startup
+- `spawn()` performs network I/O before the subprocess exists (the Claude catalog fetch). The requests are issued concurrently and each carries a short timeout, so an unreachable host adds at most one timeout to session launch rather than one per request
 - The stdin-EOF-then-grace shutdown contract exists because agents may need network cleanup on exit; `nori-handroll cloud-acp` releases its broker session on stdin EOF, and the previous immediate-SIGKILL shutdown leaked every cloud session
 - `Drop` on `AcpConnection` is only a backstop for paths that never ran `shutdown()`: it requests a kill via the recorded pid, with a pid-reuse guard that only signals while the child is unreaped
 - Without the `ChildExited` event, a dead child is a silent EOF that the ACP SDK layer treats as non-terminal -- pending requests would hang forever. The backend relay turns it into a visible error and fails any in-flight prompt
