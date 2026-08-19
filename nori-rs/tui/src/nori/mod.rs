@@ -21,6 +21,8 @@ pub(crate) mod config_adapter;
 
 pub(crate) mod config_picker;
 
+pub(crate) mod custom_model_input;
+
 pub(crate) mod hotkey_match;
 pub(crate) mod hotkey_picker;
 

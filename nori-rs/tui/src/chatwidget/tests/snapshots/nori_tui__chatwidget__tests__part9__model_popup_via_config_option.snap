@@ -5,7 +5,8 @@ expression: popup
   Model
   Select a value for this ACP session setting
 
-› 1. Opus 4.6 (current)  Most capable model
-  2. Sonnet 4.6          Fast and capable
+› 1. Opus 4.6 (current)   Most capable model
+  2. Sonnet 4.6           Fast and capable
+  3. Use custom model...  Enter any model ID
 
   ↑/k ↓/j to navigate, enter to confirm, esc to go back

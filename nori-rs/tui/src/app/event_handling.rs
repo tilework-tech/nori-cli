@@ -677,6 +677,13 @@ impl App {
                 self.chat_widget
                     .open_acp_session_config_value_picker(option);
             }
+            AppEvent::OpenCustomModelInput {
+                config_id,
+                option_name,
+            } => {
+                self.chat_widget
+                    .open_custom_model_input(config_id, option_name);
+            }
             AppEvent::SetAcpSessionConfigOption {
                 config_id,
                 value,

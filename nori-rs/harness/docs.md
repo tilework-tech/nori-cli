@@ -363,7 +363,7 @@ The config flow is:
 
 `session_defaults.rs` applies the default through the stable mechanism only: when the agent advertises a select-style config option with the `Model` category, the persisted default is applied through `session/set_config_option`. When no Model-category option exists, the default is simply not applied. There is no unstable `session/set_model` fallback -- that API was removed along with the harness/`nori-tui` `unstable` feature.
 
-The path validates before sending anything on the wire and skips with a debug log when validation fails: the option must be a select, the persisted value must appear among the option's advertised values (ungrouped or grouped), and application is skipped when the persisted value is already the current value.
+The path validates only that the option kind is a select and that the persisted value is not already the current value; it does **not** check whether the persisted value appears among the option's advertised values. This is intentional: users may persist newer model IDs (e.g., via the TUI's "Use custom model..." input) that the agent has not yet added to its advertised list. The agent itself decides whether to accept or reject the model when it handles the `session/set_config_option` RPC.
 
 Application is best-effort: wire errors produce warnings but never block session startup. The `[default_models]` entries are written by the TUI whenever the user selects a model through the stable Model-category config option (`/model` or `/config`) by calling `ConfigEditsBuilder::set_default_model()` (see `@/nori-rs/core/docs.md` and `@/nori-rs/tui/docs.md`).
 

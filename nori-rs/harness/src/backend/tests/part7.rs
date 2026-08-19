@@ -53,11 +53,12 @@ async fn default_model_applied_via_stable_config_options_on_session_start() {
         .expect("Failed to shut down ACP backend");
 }
 
-/// A persisted default model the agent no longer advertises must be skipped:
-/// no model selection is sent on the wire, and the session still starts.
+/// A persisted default model the agent does not advertise is still attempted
+/// via `session/set_config_option` — the agent decides whether to accept or
+/// reject it. The session must start regardless of the outcome.
 #[tokio::test]
 #[serial]
-async fn unknown_default_model_is_skipped_on_session_start() {
+async fn unknown_default_model_is_attempted_on_session_start() {
     let mock_config =
         crate::registry::get_agent_config("mock-model").expect("mock-model should be registered");
     if !std::path::Path::new(&mock_config.command).exists() {
@@ -76,7 +77,7 @@ async fn unknown_default_model_is_skipped_on_session_start() {
         enabled: true,
         log_dir: wire_log_dir.clone(),
     };
-    config.default_model = Some("model-that-no-longer-exists".to_string());
+    config.default_model = Some("model-that-does-not-exist-yet".to_string());
 
     let backend = AcpBackend::spawn(&config, backend_event_tx)
         .await
@@ -86,30 +87,15 @@ async fn unknown_default_model_is_skipped_on_session_start() {
         .await
         .expect("Should receive SessionConfigured event");
 
-    // Anchor the absence assertion to a completed prompt round-trip: once
-    // session/prompt shows up in the wire log, session startup (where default
-    // model application happens) is long past and the session is usable.
-    backend
-        .submit(Op::UserInput {
-            items: vec![codex_protocol::user_input::UserInput::Text {
-                text: "hello".to_string(),
-            }],
-        })
-        .await
-        .expect("Failed to submit prompt");
-    wait_for_logged_request(
+    let params = wait_for_logged_request(
         &wire_log_dir,
-        "session/prompt",
+        "session/set_config_option",
         std::time::Duration::from_secs(5),
     )
     .await
-    .expect("session should accept prompts after skipping the unknown default model");
-
-    assert_eq!(
-        try_latest_logged_request_params(&wire_log_dir, "session/set_config_option"),
-        None,
-        "unknown default model must not be applied via config options"
-    );
+    .expect("unknown default model should still be attempted via set_config_option");
+    assert_eq!(params["configId"], "model");
+    assert_eq!(params["value"], "model-that-does-not-exist-yet");
 
     backend
         .submit(Op::Shutdown)
