@@ -318,9 +318,10 @@ async fn unknown_default_model_is_attempted_on_session_start() {
         nori_home: temp.path().to_path_buf(),
         ..Default::default()
     };
-    config
-        .default_models
-        .insert("mock-model".to_string(), "model-that-does-not-exist-yet".to_string());
+    config.default_models.insert(
+        "mock-model".to_string(),
+        "model-that-does-not-exist-yet".to_string(),
+    );
     let mut session = launch_session(SessionLaunchSpec {
         config: Arc::new(config),
         cli_version: "boundary-test".to_string(),
@@ -358,7 +359,9 @@ async fn unknown_default_model_is_attempted_on_session_start() {
         "set_config_option should be attempted for unknown models"
     );
     assert!(
-        events.iter().any(|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)))),
+        events
+            .iter()
+            .any(|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)))),
         "session should start regardless of model validation outcome"
     );
 
