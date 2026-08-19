@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   checks:
     name: ${{ matrix.name }}
@@ -132,7 +136,6 @@ jobs:
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-config
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-tui
           cargo test --profile ci-test --target ${{ matrix.target }} --package nori-cli
-          cargo test --profile ci-test --target ${{ matrix.target }} --package codex-protocol
       - name: cargo clippy
         run: cargo clippy --target ${{ matrix.target }} --all-features -- -D warnings
 

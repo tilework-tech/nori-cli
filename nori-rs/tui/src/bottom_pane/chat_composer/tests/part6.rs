@@ -1,3 +1,26 @@
+#[test]
+fn empty_vim_insert_escape_enters_normal_mode() {
+    use crate::bottom_pane::textarea::VimModeState;
+
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        true,
+    );
+    composer.set_vim_mode(nori_config::VimEnterBehavior::Submit);
+
+    assert_eq!(composer.vim_mode_state(), VimModeState::Insert);
+
+    let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert_eq!(composer.vim_mode_state(), VimModeState::Normal);
+    assert!(composer.textarea.is_empty());
+}
+
 use super::snapshot_composer_state;
 use super::type_chars_humanlike;
 use crate::app_event::AppEvent;
@@ -27,12 +50,12 @@ fn make_composer_with_agent_commands()
     );
     composer.set_agent_commands(
         vec![
-            nori_protocol::AgentCommandInfo {
+            crate::presentation::AgentCommandInfo {
                 name: "loop".to_string(),
                 description: "Run a command on a recurring interval".to_string(),
                 input_hint: None,
             },
-            nori_protocol::AgentCommandInfo {
+            crate::presentation::AgentCommandInfo {
                 name: "schedule".to_string(),
                 description: "Schedule a remote agent".to_string(),
                 input_hint: None,
@@ -59,7 +82,7 @@ fn make_composer_with_commands(
     composer.set_agent_commands(
         commands
             .into_iter()
-            .map(|name| nori_protocol::AgentCommandInfo {
+            .map(|name| crate::presentation::AgentCommandInfo {
                 name: name.to_string(),
                 description: format!("Description for {name}"),
                 input_hint: None,
@@ -369,12 +392,12 @@ fn dollar_skill_popup_renders_de_sigiled_names() {
     snapshot_composer_state("dollar_skill_popup", false, |composer| {
         composer.set_agent_commands(
             vec![
-                nori_protocol::AgentCommandInfo {
+                crate::presentation::AgentCommandInfo {
                     name: "$using-skills".to_string(),
                     description: "Use skill instructions".to_string(),
                     input_hint: None,
                 },
-                nori_protocol::AgentCommandInfo {
+                crate::presentation::AgentCommandInfo {
                     name: "$writing-plans".to_string(),
                     description: "Write an implementation plan".to_string(),
                     input_hint: None,

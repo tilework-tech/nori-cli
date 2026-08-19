@@ -9,7 +9,6 @@ ready‑to‑spawn environment.
 use crate::exec::ExecExpiration;
 use crate::exec::ExecToolCallOutput;
 use crate::exec::SandboxType;
-use crate::exec::StdoutStream;
 use crate::exec::execute_exec_env;
 use crate::landlock::create_linux_sandbox_command_args;
 #[cfg(target_os = "macos")]
@@ -19,7 +18,7 @@ use crate::seatbelt::create_seatbelt_command_args;
 #[cfg(target_os = "macos")]
 use crate::spawn::CODEX_SANDBOX_ENV_VAR;
 use crate::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR;
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::SandboxPolicy;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -173,7 +172,6 @@ impl SandboxManager {
 pub async fn execute_env(
     env: ExecEnv,
     policy: &SandboxPolicy,
-    stdout_stream: Option<StdoutStream>,
 ) -> crate::error::Result<ExecToolCallOutput> {
-    execute_exec_env(env, policy, stdout_stream).await
+    execute_exec_env(env, policy).await
 }

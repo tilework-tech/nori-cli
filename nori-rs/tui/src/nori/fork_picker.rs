@@ -26,42 +26,65 @@ fn truncate_preview(message: &str) -> String {
     }
 }
 
+/// Label for the branch-at-head entry, always the first item in the picker.
+const BRANCH_FROM_CURRENT_LABEL: &str = "⎇ Branch from current point";
+
 /// Create selection view parameters for the fork picker.
 ///
 /// # Arguments
 /// * `messages` - List of `(cell_index, message_text)` tuples, ordered oldest-first
+/// * `supports_fork` - Whether the agent advertises ACP `session/fork`; when
+///   true the picker's first item branches at the current head
 /// * `app_event_tx` - The app event sender for triggering fork events
 ///
-/// Items are displayed newest-first (reversed from input order).
+/// When the agent supports `session/fork`, the first item branches at the
+/// current head. The remaining items are the earlier user messages, displayed
+/// newest-first (reversed from input order).
 pub fn fork_picker_params(
     messages: Vec<(usize, String)>,
+    supports_fork: bool,
     _app_event_tx: AppEventSender,
 ) -> SelectionViewParams {
-    let items: Vec<SelectionItem> = messages
-        .into_iter()
-        .rev()
-        .map(|(cell_index, message)| {
-            let preview = truncate_preview(&message);
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::ForkToMessage {
-                    cell_index,
-                    prefill: message.clone(),
-                });
-            })];
-            SelectionItem {
-                name: preview,
-                description: None,
-                is_current: false,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            }
-        })
-        .collect();
+    let mut items: Vec<SelectionItem> = Vec::new();
+    if supports_fork {
+        let branch_actions: Vec<SelectionAction> = vec![Box::new(|tx| {
+            tx.send(AppEvent::BranchFromCurrent);
+        })];
+        items.push(SelectionItem {
+            name: BRANCH_FROM_CURRENT_LABEL.to_string(),
+            description: None,
+            is_current: false,
+            actions: branch_actions,
+            dismiss_on_select: true,
+            ..Default::default()
+        });
+    }
+    items.extend(messages.into_iter().rev().map(|(cell_index, message)| {
+        let preview = truncate_preview(&message);
+        let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+            tx.send(AppEvent::ForkToMessage {
+                cell_index,
+                prefill: message.clone(),
+            });
+        })];
+        SelectionItem {
+            name: preview,
+            description: None,
+            is_current: false,
+            actions,
+            dismiss_on_select: true,
+            ..Default::default()
+        }
+    }));
 
+    let subtitle = if supports_fork {
+        "Branch at the current point, or select a message to rewind to"
+    } else {
+        "Select a message to rewind to"
+    };
     SelectionViewParams {
         title: Some("Fork Conversation".to_string()),
-        subtitle: Some("Select a message to rewind to".to_string()),
+        subtitle: Some(subtitle.to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
         is_searchable: false,
@@ -73,6 +96,11 @@ pub fn fork_picker_params(
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
+    use crate::bottom_pane::ListSelectionView;
+    use crate::render::renderable::Renderable;
+    use insta::assert_snapshot;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
     use tokio::sync::mpsc::unbounded_channel;
 
     fn make_tx() -> (
@@ -83,18 +111,73 @@ mod tests {
         (AppEventSender::new(tx_raw), rx)
     }
 
+    fn render_lines(view: &ListSelectionView, width: u16) -> String {
+        let height = view.desired_height(width);
+        let area = Rect::new(0, 0, width, height);
+        let mut buf = Buffer::empty(area);
+        view.render(area, &mut buf);
+        (0..area.height)
+            .map(|row| {
+                (0..area.width)
+                    .map(|col| {
+                        let symbol = buf[(area.x + col, area.y + row)].symbol();
+                        if symbol.is_empty() { " " } else { symbol }.to_string()
+                    })
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     #[test]
-    fn fork_picker_with_no_messages_returns_empty_items() {
+    fn fork_picker_with_no_messages_still_offers_branch() {
         let (tx, _rx) = make_tx();
-        let params = fork_picker_params(vec![], tx);
-        assert!(params.items.is_empty());
+        let params = fork_picker_params(vec![], true, tx);
+        assert_eq!(params.items.len(), 1);
+        assert_eq!(params.items[0].name, BRANCH_FROM_CURRENT_LABEL);
+    }
+
+    #[test]
+    fn fork_picker_without_fork_support_omits_branch_entry() {
+        let (tx, _rx) = make_tx();
+        let messages = vec![(0, "only message".to_string())];
+        let params = fork_picker_params(messages, false, tx);
+        assert_eq!(params.items.len(), 1);
+        assert_eq!(params.items[0].name, "only message");
+    }
+
+    #[test]
+    fn fork_picker_branch_entry_is_first_even_with_messages() {
+        let (tx, _rx) = make_tx();
+        let messages = vec![(0, "only message".to_string())];
+        let params = fork_picker_params(messages, true, tx);
+        assert_eq!(params.items.len(), 2);
+        assert_eq!(params.items[0].name, BRANCH_FROM_CURRENT_LABEL);
+        assert_eq!(params.items[1].name, "only message");
+    }
+
+    #[test]
+    fn fork_picker_branch_action_fires_branch_from_current() {
+        let (tx, _rx) = make_tx();
+        let params = fork_picker_params(vec![], true, tx);
+
+        assert!(!params.items[0].actions.is_empty());
+        let (verify_tx, mut verify_rx) = unbounded_channel::<AppEvent>();
+        let verify_sender = AppEventSender::new(verify_tx);
+        (params.items[0].actions[0])(&verify_sender);
+
+        let event = verify_rx.try_recv().expect("should have received event");
+        assert!(
+            matches!(event, AppEvent::BranchFromCurrent),
+            "expected BranchFromCurrent, got {event:?}"
+        );
     }
 
     #[test]
     fn fork_picker_has_correct_title_and_subtitle() {
         let (tx, _rx) = make_tx();
         let messages = vec![(0, "Hello".to_string())];
-        let params = fork_picker_params(messages, tx);
+        let params = fork_picker_params(messages, true, tx);
 
         assert_eq!(params.title.as_deref(), Some("Fork Conversation"));
         assert!(params.subtitle.is_some());
@@ -108,12 +191,13 @@ mod tests {
             (1, "second message".to_string()),
             (2, "third message".to_string()),
         ];
-        let params = fork_picker_params(messages, tx);
+        let params = fork_picker_params(messages, true, tx);
 
-        assert_eq!(params.items.len(), 3);
-        assert_eq!(params.items[0].name, "third message");
-        assert_eq!(params.items[1].name, "second message");
-        assert_eq!(params.items[2].name, "first message");
+        assert_eq!(params.items.len(), 4);
+        assert_eq!(params.items[0].name, BRANCH_FROM_CURRENT_LABEL);
+        assert_eq!(params.items[1].name, "third message");
+        assert_eq!(params.items[2].name, "second message");
+        assert_eq!(params.items[3].name, "first message");
     }
 
     #[test]
@@ -121,34 +205,34 @@ mod tests {
         let (tx, _rx) = make_tx();
         let long_msg = "a".repeat(200);
         let messages = vec![(0, long_msg.clone())];
-        let params = fork_picker_params(messages, tx);
+        let params = fork_picker_params(messages, true, tx);
 
-        assert_eq!(params.items.len(), 1);
-        assert!(params.items[0].name.len() < long_msg.len());
-        assert!(params.items[0].name.ends_with('…'));
+        assert_eq!(params.items.len(), 2);
+        assert!(params.items[1].name.len() < long_msg.len());
+        assert!(params.items[1].name.ends_with('…'));
     }
 
     #[test]
     fn fork_picker_truncates_multiline_messages() {
         let (tx, _rx) = make_tx();
         let messages = vec![(0, "first line\nsecond line\nthird line".to_string())];
-        let params = fork_picker_params(messages, tx);
+        let params = fork_picker_params(messages, true, tx);
 
-        assert_eq!(params.items.len(), 1);
-        assert_eq!(params.items[0].name, "first line…");
+        assert_eq!(params.items.len(), 2);
+        assert_eq!(params.items[1].name, "first line…");
     }
 
     #[test]
     fn fork_picker_action_fires_correct_event() {
         let (tx, _rx) = make_tx();
         let messages = vec![(0, "first".to_string()), (1, "second".to_string())];
-        let params = fork_picker_params(messages, tx);
+        let params = fork_picker_params(messages, true, tx);
 
-        // Execute the action for the first item (newest-first, so index 0 = message 1)
-        assert!(!params.items[0].actions.is_empty());
+        // Item 0 is the branch entry; item 1 is the newest message (index 1).
+        assert!(!params.items[1].actions.is_empty());
         let (verify_tx, mut verify_rx) = unbounded_channel::<AppEvent>();
         let verify_sender = AppEventSender::new(verify_tx);
-        (params.items[0].actions[0])(&verify_sender);
+        (params.items[1].actions[0])(&verify_sender);
 
         let event = verify_rx.try_recv().expect("should have received event");
         match event {
@@ -167,12 +251,12 @@ mod tests {
     fn fork_picker_action_for_oldest_message() {
         let (tx, _rx) = make_tx();
         let messages = vec![(0, "first".to_string()), (1, "second".to_string())];
-        let params = fork_picker_params(messages, tx);
+        let params = fork_picker_params(messages, true, tx);
 
-        // Last item in picker = oldest message (index 0)
+        // Last item in picker = oldest message (index 0).
         let (verify_tx, mut verify_rx) = unbounded_channel::<AppEvent>();
         let verify_sender = AppEventSender::new(verify_tx);
-        (params.items[1].actions[0])(&verify_sender);
+        (params.items[2].actions[0])(&verify_sender);
 
         let event = verify_rx.try_recv().expect("should have received event");
         match event {
@@ -185,5 +269,14 @@ mod tests {
             }
             other => panic!("expected ForkToMessage, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn fork_picker_renders_branch_entry() {
+        let (tx, _rx) = make_tx();
+        let messages = vec![(0, "an earlier message".to_string())];
+        let params = fork_picker_params(messages, true, tx.clone());
+        let view = ListSelectionView::new(params, tx);
+        assert_snapshot!("fork_picker_with_branch_entry", render_lines(&view, 60));
     }
 }

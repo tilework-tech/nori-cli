@@ -31,7 +31,6 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
     let serialized_with_optional = std::fs::read_to_string(&config_path)?;
@@ -59,7 +58,6 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
     );
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -142,7 +140,6 @@ async fn replace_mcp_servers_streamable_http_isolates_headers_between_servers() 
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -220,7 +217,6 @@ async fn replace_mcp_servers_serializes_disabled_flag() -> anyhow::Result<()> {
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -261,7 +257,6 @@ async fn replace_mcp_servers_serializes_tool_filters() -> anyhow::Result<()> {
 
     apply_blocking(
         codex_home.path(),
-        None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -312,9 +307,6 @@ async fn set_model_overwrites_existing_model() -> anyhow::Result<()> {
         r#"
 model = "gpt-5.1-codex"
 model_reasoning_effort = "medium"
-
-[profiles.dev]
-model = "gpt-4.1"
 "#,
     )
     .await?;
@@ -329,88 +321,6 @@ model = "gpt-4.1"
 
     assert_eq!(parsed.model.as_deref(), Some("o4-mini"));
     assert_eq!(parsed.model_reasoning_effort, Some(ReasoningEffort::High));
-    assert_eq!(
-        parsed
-            .profiles
-            .get("dev")
-            .and_then(|profile| profile.model.as_deref()),
-        Some("gpt-4.1"),
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn set_model_updates_profile() -> anyhow::Result<()> {
-    let codex_home = TempDir::new()?;
-
-    ConfigEditsBuilder::new(codex_home.path())
-        .with_profile(Some("dev"))
-        .set_model(Some("gpt-5.1-codex"), Some(ReasoningEffort::Medium))
-        .apply()
-        .await?;
-
-    let serialized = tokio::fs::read_to_string(codex_home.path().join(CONFIG_TOML_FILE)).await?;
-    let parsed: ConfigToml = toml::from_str(&serialized)?;
-    let profile = parsed
-        .profiles
-        .get("dev")
-        .expect("profile should be created");
-
-    assert_eq!(profile.model.as_deref(), Some("gpt-5.1-codex"));
-    assert_eq!(
-        profile.model_reasoning_effort,
-        Some(ReasoningEffort::Medium)
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn set_model_updates_existing_profile() -> anyhow::Result<()> {
-    let codex_home = TempDir::new()?;
-    let config_path = codex_home.path().join(CONFIG_TOML_FILE);
-
-    tokio::fs::write(
-        &config_path,
-        r#"
-[profiles.dev]
-model = "gpt-4"
-model_reasoning_effort = "medium"
-
-[profiles.prod]
-model = "gpt-5.1-codex"
-"#,
-    )
-    .await?;
-
-    ConfigEditsBuilder::new(codex_home.path())
-        .with_profile(Some("dev"))
-        .set_model(Some("o4-high"), Some(ReasoningEffort::Medium))
-        .apply()
-        .await?;
-
-    let serialized = tokio::fs::read_to_string(config_path).await?;
-    let parsed: ConfigToml = toml::from_str(&serialized)?;
-
-    let dev_profile = parsed
-        .profiles
-        .get("dev")
-        .expect("dev profile should survive updates");
-    assert_eq!(dev_profile.model.as_deref(), Some("o4-high"));
-    assert_eq!(
-        dev_profile.model_reasoning_effort,
-        Some(ReasoningEffort::Medium)
-    );
-
-    assert_eq!(
-        parsed
-            .profiles
-            .get("prod")
-            .and_then(|profile| profile.model.as_deref()),
-        Some("gpt-5.1-codex"),
-    );
-
     Ok(())
 }
 
@@ -466,182 +376,5 @@ fn loads_compact_prompt_from_file() -> std::io::Result<()> {
         Some("summarize differently")
     );
 
-    Ok(())
-}
-
-/// Users can specify config values at multiple levels that have the
-/// following precedence:
-///
-/// 1. custom command-line argument, e.g. `--agent o3`
-/// 2. as part of a profile, where the `--profile` is specified via a CLI
-///    (or in the config file itself)
-/// 3. as an entry in `config.toml`, e.g. `model = "o3"`
-/// 4. the default value for a required field defined in code, e.g.,
-///    `crate::flags::OPENAI_DEFAULT_MODEL`
-///
-/// Note that profiles are the recommended way to specify a group of
-/// configuration options together.
-#[test]
-fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
-    let fixture = create_test_fixture()?;
-
-    let o3_profile_overrides = ConfigOverrides {
-        config_profile: Some("o3".to_string()),
-        cwd: Some(fixture.cwd()),
-        ..Default::default()
-    };
-    let o3_profile_config: Config = Config::load_from_base_config_with_overrides(
-        fixture.cfg.clone(),
-        o3_profile_overrides,
-        fixture.codex_home(),
-    )?;
-    assert_eq!(
-        Config {
-            model: "o3".to_string(),
-            model_family: find_family_for_model("o3").expect("known model slug"),
-            model_context_window: Some(200_000),
-            model_auto_compact_token_limit: Some(180_000),
-            model_provider_id: "openai".to_string(),
-            model_provider: fixture.openai_provider.clone(),
-            approval_policy: AskForApproval::Never,
-            sandbox_policy: SandboxPolicy::new_read_only_policy(),
-            did_user_set_custom_approval_policy_or_sandbox_mode: true,
-            forced_auto_mode_downgraded_on_windows: false,
-            shell_environment_policy: ShellEnvironmentPolicy::default(),
-            user_instructions: None,
-            notify: None,
-            cwd: fixture.cwd(),
-            cli_auth_credentials_store_mode: Default::default(),
-            mcp_servers: HashMap::new(),
-            mcp_oauth_credentials_store_mode: Default::default(),
-            model_providers: fixture.model_provider_map.clone(),
-            project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
-            project_doc_fallback_filenames: Vec::new(),
-            tool_output_token_limit: None,
-            codex_home: fixture.codex_home(),
-            history: History::default(),
-            file_opener: UriBasedFileOpener::VsCode,
-            codex_linux_sandbox_exe: None,
-            hide_agent_reasoning: false,
-            show_raw_agent_reasoning: false,
-            model_reasoning_effort: Some(ReasoningEffort::High),
-            model_reasoning_summary: ReasoningSummary::Detailed,
-            model_verbosity: None,
-
-            base_instructions: None,
-            developer_instructions: None,
-            compact_prompt: None,
-            forced_chatgpt_workspace_id: None,
-            forced_login_method: None,
-            include_apply_patch_tool: false,
-            tools_web_search_request: false,
-            experimental_sandbox_command_assessment: false,
-            use_experimental_unified_exec_tool: false,
-            use_experimental_use_rmcp_client: false,
-            features: Features::with_defaults(),
-            active_profile: Some("o3".to_string()),
-            active_project: ProjectConfig { trust_level: None },
-            windows_wsl_setup_acknowledged: false,
-            notices: Default::default(),
-            check_for_update_on_startup: true,
-            disable_paste_burst: false,
-            tui_notifications: true,
-            animations: true,
-            custom_working_messages: true,
-            custom_working_message_list: Vec::new(),
-            otel: OtelConfig::default(),
-            acp_allow_http_fallback: false,
-        },
-        o3_profile_config
-    );
-    Ok(())
-}
-
-#[test]
-fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
-    let fixture = create_test_fixture()?;
-
-    let gpt3_profile_overrides = ConfigOverrides {
-        config_profile: Some("gpt3".to_string()),
-        cwd: Some(fixture.cwd()),
-        ..Default::default()
-    };
-    let gpt3_profile_config = Config::load_from_base_config_with_overrides(
-        fixture.cfg.clone(),
-        gpt3_profile_overrides,
-        fixture.codex_home(),
-    )?;
-    let expected_gpt3_profile_config = Config {
-        model: "gpt-3.5-turbo".to_string(),
-        model_family: find_family_for_model("gpt-3.5-turbo").expect("known model slug"),
-        model_context_window: Some(16_385),
-        model_auto_compact_token_limit: Some(14_746),
-        model_provider_id: "openai-chat-completions".to_string(),
-        model_provider: fixture.openai_chat_completions_provider.clone(),
-        approval_policy: AskForApproval::UnlessTrusted,
-        sandbox_policy: SandboxPolicy::new_read_only_policy(),
-        did_user_set_custom_approval_policy_or_sandbox_mode: true,
-        forced_auto_mode_downgraded_on_windows: false,
-        shell_environment_policy: ShellEnvironmentPolicy::default(),
-        user_instructions: None,
-        notify: None,
-        cwd: fixture.cwd(),
-        cli_auth_credentials_store_mode: Default::default(),
-        mcp_servers: HashMap::new(),
-        mcp_oauth_credentials_store_mode: Default::default(),
-        model_providers: fixture.model_provider_map.clone(),
-        project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
-        project_doc_fallback_filenames: Vec::new(),
-        tool_output_token_limit: None,
-        codex_home: fixture.codex_home(),
-        history: History::default(),
-        file_opener: UriBasedFileOpener::VsCode,
-        codex_linux_sandbox_exe: None,
-        hide_agent_reasoning: false,
-        show_raw_agent_reasoning: false,
-        model_reasoning_effort: None,
-        model_reasoning_summary: ReasoningSummary::default(),
-        model_verbosity: None,
-        base_instructions: None,
-        developer_instructions: None,
-        compact_prompt: None,
-        forced_chatgpt_workspace_id: None,
-        forced_login_method: None,
-        include_apply_patch_tool: false,
-        tools_web_search_request: false,
-        experimental_sandbox_command_assessment: false,
-        use_experimental_unified_exec_tool: false,
-        use_experimental_use_rmcp_client: false,
-        features: Features::with_defaults(),
-        active_profile: Some("gpt3".to_string()),
-        active_project: ProjectConfig { trust_level: None },
-        windows_wsl_setup_acknowledged: false,
-        notices: Default::default(),
-        check_for_update_on_startup: true,
-        disable_paste_burst: false,
-        tui_notifications: true,
-        animations: true,
-        custom_working_messages: true,
-        custom_working_message_list: Vec::new(),
-        otel: OtelConfig::default(),
-        acp_allow_http_fallback: false,
-    };
-
-    assert_eq!(expected_gpt3_profile_config, gpt3_profile_config);
-
-    // Verify that loading without specifying a profile in ConfigOverrides
-    // uses the default profile from the config file (which is "gpt3").
-    let default_profile_overrides = ConfigOverrides {
-        cwd: Some(fixture.cwd()),
-        ..Default::default()
-    };
-
-    let default_profile_config = Config::load_from_base_config_with_overrides(
-        fixture.cfg.clone(),
-        default_profile_overrides,
-        fixture.codex_home(),
-    )?;
-
-    assert_eq!(expected_gpt3_profile_config, default_profile_config);
     Ok(())
 }

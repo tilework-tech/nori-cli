@@ -3,20 +3,100 @@
 // Note this file should generally be restricted to simple struct/enum
 // definitions that do not contain business logic.
 
+#[cfg(test)]
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use serde::Serialize;
 
-pub use codex_protocol::config_types::EnvironmentVariablePattern;
-pub use codex_protocol::config_types::ShellEnvironmentPolicy;
-pub use codex_protocol::config_types::ShellEnvironmentPolicyInherit;
-pub use codex_protocol::config_types::ShellEnvironmentPolicyToml;
+pub use nori_config::EnvironmentVariablePattern;
+pub use nori_config::McpServerConfig;
+pub use nori_config::McpServerTransportConfig;
+pub use nori_config::ShellEnvironmentPolicy;
+pub use nori_config::ShellEnvironmentPolicyInherit;
+pub use nori_config::ShellEnvironmentPolicyToml;
 
-pub use codex_protocol::config_types::McpServerConfig;
-pub use codex_protocol::config_types::McpServerTransportConfig;
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningEffort {
+    None,
+    Minimal,
+    Low,
+    #[default]
+    Medium,
+    High,
+    XHigh,
+}
 
-pub const DEFAULT_OTEL_ENVIRONMENT: &str = "dev";
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningSummary {
+    #[default]
+    Auto,
+    Concise,
+    Detailed,
+    None,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum Verbosity {
+    Low,
+    #[default]
+    Medium,
+    High,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ForcedLoginMethod {
+    Chatgpt,
+    Api,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UserSavedConfig {
+    pub approval_policy: Option<nori_config::AskForApproval>,
+    pub sandbox_mode: Option<nori_config::SandboxMode>,
+    pub sandbox_settings: Option<SandboxSettings>,
+    pub forced_chatgpt_workspace_id: Option<String>,
+    pub forced_login_method: Option<ForcedLoginMethod>,
+    pub model: Option<String>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
+    pub model_reasoning_summary: Option<ReasoningSummary>,
+    pub model_verbosity: Option<Verbosity>,
+    pub tools: Option<Tools>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Tools {
+    pub web_search: Option<bool>,
+    pub view_image: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SandboxSettings {
+    #[serde(default)]
+    pub writable_roots: Vec<PathBuf>,
+    pub network_access: Option<bool>,
+    pub exclude_tmpdir_env_var: Option<bool>,
+    pub exclude_slash_tmp: Option<bool>,
+}
+
+impl std::fmt::Display for ReasoningEffort {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            Self::None => "none",
+            Self::Minimal => "minimal",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::XHigh => "xhigh",
+        };
+        formatter.write_str(value)
+    }
+}
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum UriBasedFileOpener {
@@ -70,78 +150,6 @@ pub enum HistoryPersistence {
     None,
 }
 
-// ===== OTEL configuration =====
-
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum OtelHttpProtocol {
-    /// Binary payload
-    Binary,
-    /// JSON payload
-    Json,
-}
-
-#[derive(Deserialize, Debug, Clone, PartialEq, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct OtelTlsConfig {
-    pub ca_certificate: Option<PathBuf>,
-    pub client_certificate: Option<PathBuf>,
-    pub client_private_key: Option<PathBuf>,
-}
-
-/// Which OTEL exporter to use.
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum OtelExporterKind {
-    None,
-    OtlpHttp {
-        endpoint: String,
-        #[serde(default)]
-        headers: HashMap<String, String>,
-        protocol: OtelHttpProtocol,
-        #[serde(default)]
-        tls: Option<OtelTlsConfig>,
-    },
-    OtlpGrpc {
-        endpoint: String,
-        #[serde(default)]
-        headers: HashMap<String, String>,
-        #[serde(default)]
-        tls: Option<OtelTlsConfig>,
-    },
-}
-
-/// OTEL settings loaded from config.toml. Fields are optional so we can apply defaults.
-#[derive(Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct OtelConfigToml {
-    /// Log user prompt in traces
-    pub log_user_prompt: Option<bool>,
-
-    /// Mark traces with environment (dev, staging, prod, test). Defaults to dev.
-    pub environment: Option<String>,
-
-    /// Exporter to use. Defaults to `otlp-file`.
-    pub exporter: Option<OtelExporterKind>,
-}
-
-/// Effective OTEL settings after defaults are applied.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OtelConfig {
-    pub log_user_prompt: bool,
-    pub environment: String,
-    pub exporter: OtelExporterKind,
-}
-
-impl Default for OtelConfig {
-    fn default() -> Self {
-        OtelConfig {
-            log_user_prompt: false,
-            environment: DEFAULT_OTEL_ENVIRONMENT.to_owned(),
-            exporter: OtelExporterKind::None,
-        }
-    }
-}
-
 /// Collection of settings that are specific to the TUI.
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct Tui {
@@ -182,11 +190,6 @@ pub struct Notice {
     pub hide_world_writable_warning: Option<bool>,
     /// Tracks whether the user opted out of the rate limit model switch reminder.
     pub hide_rate_limit_model_nudge: Option<bool>,
-    /// Tracks whether the user has seen the model migration prompt
-    pub hide_gpt5_1_migration_prompt: Option<bool>,
-    /// Tracks whether the user has seen the gpt-5.1-codex-max migration prompt
-    #[serde(rename = "hide_gpt-5.1-codex-max_migration_prompt")]
-    pub hide_gpt_5_1_codex_max_migration_prompt: Option<bool>,
 }
 
 impl Notice {
@@ -206,7 +209,7 @@ pub struct SandboxWorkspaceWrite {
     pub exclude_slash_tmp: bool,
 }
 
-impl From<SandboxWorkspaceWrite> for codex_app_server_protocol::SandboxSettings {
+impl From<SandboxWorkspaceWrite> for SandboxSettings {
     fn from(sandbox_workspace_write: SandboxWorkspaceWrite) -> Self {
         Self {
             writable_roots: sandbox_workspace_write.writable_roots,

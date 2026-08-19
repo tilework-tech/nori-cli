@@ -93,7 +93,7 @@ pub fn compute_allow_paths(
 #[cfg(test)]
 mod tests {
     use super::compute_allow_paths;
-    use codex_protocol::protocol::SandboxPolicy;
+    use nori_config::SandboxPolicy;
     use std::collections::HashMap;
     use std::collections::HashSet;
     use std::fs;

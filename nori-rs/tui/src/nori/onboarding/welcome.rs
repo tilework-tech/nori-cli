@@ -15,9 +15,9 @@ use ratatui::widgets::Widget;
 use ratatui::widgets::WidgetRef;
 use ratatui::widgets::Wrap;
 
-use crate::onboarding::onboarding_screen::KeyboardHandler;
-use crate::onboarding::onboarding_screen::StepState;
-use crate::onboarding::onboarding_screen::StepStateProvider;
+use super::KeyboardHandler;
+use super::StepState;
+use super::StepStateProvider;
 
 /// ASCII art banner for NORI - reused from session_header.rs
 const NORI_BANNER: &[&str] = &[

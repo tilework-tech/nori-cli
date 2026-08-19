@@ -4,6 +4,19 @@ use strum_macros::EnumIter;
 use strum_macros::EnumString;
 use strum_macros::IntoStaticStr;
 
+/// Where a builtin command can run: on the local machine only, only against a
+/// cloud (remote-VM) session, or anywhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandScope {
+    /// Operates on the local machine; meaningless when the agent runs on a
+    /// remote VM (cloud session).
+    LocalOnly,
+    /// Only meaningful against a cloud session (needs `session/close`).
+    CloudOnly,
+    /// Meaningful for every session type.
+    Universal,
+}
+
 /// Commands that can be invoked by starting a message with a leading slash.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, EnumIter, AsRefStr, IntoStaticStr,
@@ -17,10 +30,12 @@ pub enum SlashCommand {
     Config,
     Approvals,
     Settings,
+    Vim,
     Goal,
     New,
     Resume,
     ResumeViewonly,
+    Close,
     Init,
     Compact,
     Undo,
@@ -48,6 +63,7 @@ impl SlashCommand {
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::Resume => "resume a previous session",
             SlashCommand::ResumeViewonly => "view a previous session transcript (read-only)",
+            SlashCommand::Close => "close (release) the current session and start a fresh chat",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Nori",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Undo => "ask Nori to undo a turn",
@@ -62,6 +78,7 @@ impl SlashCommand {
             SlashCommand::Config => "configure ACP agent settings (if exposed by the agent)",
             SlashCommand::Approvals => "choose what Nori can do without approval",
             SlashCommand::Settings => "configure Nori CLI settings (theme, hotkeys, layout, …)",
+            SlashCommand::Vim => "configure Vim mode and Enter key behavior",
             SlashCommand::Goal => "set or view the goal for a long-running task",
             SlashCommand::Mcp => "manage MCP server connections",
             SlashCommand::Login => "log in to the current agent",
@@ -92,11 +109,13 @@ impl SlashCommand {
             | SlashCommand::Config
             | SlashCommand::Approvals
             | SlashCommand::Settings
+            | SlashCommand::Vim
             | SlashCommand::Mcp
             | SlashCommand::Login
             | SlashCommand::Logout
             | SlashCommand::SwitchSkillset
             | SlashCommand::Fork
+            | SlashCommand::Close
             | SlashCommand::Browser => false,
             SlashCommand::Browse
             | SlashCommand::Diff
@@ -107,6 +126,42 @@ impl SlashCommand {
             | SlashCommand::Goal
             | SlashCommand::Quit
             | SlashCommand::Exit => true,
+        }
+    }
+
+    /// Session-type scope of this command. LocalOnly commands are unavailable
+    /// on cloud sessions; CloudOnly commands are unavailable elsewhere.
+    /// `/quit` and `/exit` must stay Universal — they are never disabled.
+    pub fn scope(self) -> CommandScope {
+        match self {
+            SlashCommand::Close => CommandScope::CloudOnly,
+            SlashCommand::SwitchSkillset
+            | SlashCommand::Browse
+            | SlashCommand::Diff
+            | SlashCommand::Browser => CommandScope::LocalOnly,
+            SlashCommand::Agent
+            | SlashCommand::Model
+            | SlashCommand::Config
+            | SlashCommand::Approvals
+            | SlashCommand::Settings
+            | SlashCommand::Vim
+            | SlashCommand::Goal
+            | SlashCommand::New
+            | SlashCommand::Resume
+            | SlashCommand::ResumeViewonly
+            | SlashCommand::Init
+            | SlashCommand::Compact
+            | SlashCommand::Undo
+            | SlashCommand::Mention
+            | SlashCommand::Status
+            | SlashCommand::Memory
+            | SlashCommand::FirstPrompt
+            | SlashCommand::Mcp
+            | SlashCommand::Login
+            | SlashCommand::Logout
+            | SlashCommand::Quit
+            | SlashCommand::Exit
+            | SlashCommand::Fork => CommandScope::Universal,
         }
     }
 
@@ -226,6 +281,18 @@ mod tests {
     #[test]
     fn settings_serializes_to_kebab_settings() {
         assert_eq!(SlashCommand::Settings.command(), "settings");
+    }
+
+    #[test]
+    fn vim_command_is_available_as_a_settings_shortcut() {
+        assert_eq!(SlashCommand::Vim.command(), "vim");
+        assert!(
+            built_in_slash_commands()
+                .iter()
+                .any(|(_, command)| *command == SlashCommand::Vim)
+        );
+        assert!(!SlashCommand::Vim.available_during_task());
+        assert_eq!(SlashCommand::Vim.scope(), CommandScope::Universal);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Generic picker helpers for ACP session config options.
 
-use nori_harness as acp;
+use nori_protocol::acp::v1 as acp;
 use ratatui::text::Line;
 
 use crate::app_event::AppEvent;
@@ -11,6 +11,7 @@ use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 
 pub(crate) fn acp_session_config_picker_params(
     config_options: &[acp::SessionConfigOption],
+    focus_config_id: Option<&str>,
 ) -> SelectionViewParams {
     let supported = config_options
         .iter()
@@ -35,6 +36,12 @@ pub(crate) fn acp_session_config_picker_params(
             ..Default::default()
         };
     }
+
+    let focus_idx = focus_config_id.and_then(|config_id| {
+        supported
+            .iter()
+            .position(|option| option.id.to_string() == config_id)
+    });
 
     let items = supported
         .iter()
@@ -64,7 +71,7 @@ pub(crate) fn acp_session_config_picker_params(
         subtitle: Some("Select an ACP session setting to change".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
-        initial_selected_idx: Some(0),
+        initial_selected_idx: Some(focus_idx.unwrap_or(0)),
         ..Default::default()
     }
 }
@@ -293,11 +300,37 @@ mod tests {
 
     #[test]
     fn top_level_picker_shows_select_options_with_current_value() {
-        let params = super::acp_session_config_picker_params(&[model_option()]);
+        let params = super::acp_session_config_picker_params(&[model_option()], None);
 
         assert_eq!(params.title.as_deref(), Some("Session Config"));
         assert_eq!(params.items.len(), 1);
         assert_eq!(params.items[0].name, "Model (Mock Default Model)");
+        assert_eq!(params.initial_selected_idx, Some(0));
+    }
+
+    #[test]
+    fn top_level_picker_focuses_the_requested_option() {
+        let params = super::acp_session_config_picker_params(
+            &[model_option(), grouped_mode_option()],
+            Some("mode"),
+        );
+
+        assert_eq!(params.items.len(), 2);
+        assert!(params.items[1].name.starts_with("Mode"));
+        assert_eq!(
+            params.initial_selected_idx,
+            Some(1),
+            "reopening after a change should land the cursor on the edited option"
+        );
+    }
+
+    #[test]
+    fn top_level_picker_defaults_focus_to_first_when_id_absent() {
+        let params = super::acp_session_config_picker_params(
+            &[model_option(), grouped_mode_option()],
+            Some("nonexistent"),
+        );
+
         assert_eq!(params.initial_selected_idx, Some(0));
     }
 
@@ -373,7 +406,7 @@ mod tests {
 
     #[test]
     fn empty_picker_explains_when_agent_exposes_no_supported_options() {
-        let params = super::acp_session_config_picker_params(&[]);
+        let params = super::acp_session_config_picker_params(&[], None);
 
         assert_eq!(params.title.as_deref(), Some("Session Config"));
         assert_eq!(params.items.len(), 1);

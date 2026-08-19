@@ -18,6 +18,10 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
 
+mod table_segments;
+
+pub(crate) use table_segments::committable_prefix_len;
+
 struct MarkdownStyles {
     h1: Style,
     h2: Style,
@@ -37,8 +41,6 @@ struct MarkdownStyles {
 
 impl Default for MarkdownStyles {
     fn default() -> Self {
-        use ratatui::style::Stylize;
-
         Self {
             h1: Style::new().bold().underlined(),
             h2: Style::new().bold(),
@@ -99,6 +101,32 @@ pub(crate) fn render_markdown_text_with_width(input: &str, width: Option<usize>)
 }
 
 pub(crate) fn render_markdown_text_with_width_and_cwd(
+    input: &str,
+    width: Option<usize>,
+    cwd: Option<&Path>,
+) -> Text<'static> {
+    let segments = table_segments::markdown_segments(input);
+    if segments.iter().any(|segment| segment.is_table) {
+        let mut lines = Vec::new();
+        for segment in segments {
+            let source = &input[segment.range];
+            let rendered = if segment.is_table {
+                let mut markdown = codex_tui_components::Markdown::new(source);
+                if let Some(width) = width.and_then(|width| u16::try_from(width).ok()) {
+                    markdown = markdown.width(width);
+                }
+                markdown.render_text()
+            } else {
+                render_markdown_without_tables(source, width, cwd)
+            };
+            lines.extend(rendered.lines);
+        }
+        return Text::from(lines);
+    }
+    render_markdown_without_tables(input, width, cwd)
+}
+
+fn render_markdown_without_tables(
     input: &str,
     width: Option<usize>,
     cwd: Option<&Path>,

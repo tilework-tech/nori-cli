@@ -1,9 +1,18 @@
 use super::*;
+use crate::nori::config_picker::SettingsItem;
+use nori_config::NoriConfigEdits as ConfigEditsBuilder;
 use std::path::Path;
 
-async fn persist_acp_wire_recording_config(codex_home: &Path, enabled: bool) -> anyhow::Result<()> {
-    ConfigEditsBuilder::new(codex_home)
-        .set_path(&["acp_proxy", "enabled"], toml_value(enabled))
+async fn persist_acp_wire_recording_config(nori_home: &Path, enabled: bool) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(nori_home)
+        .set_path(&["acp_proxy", "enabled"], enabled)
+        .apply()
+        .await
+}
+
+async fn persist_resize_reflow_config(nori_home: &Path, enabled: bool) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(nori_home)
+        .set_path(&["tui", "resize_reflow"], enabled)
         .apply()
         .await
 }
@@ -14,21 +23,21 @@ async fn persist_acp_wire_recording_config(codex_home: &Path, enabled: bool) -> 
 /// option and the selection was written to `[default_models]` in config.toml.
 /// Non-model options (mode, thought level, ...) are not persisted.
 pub(super) async fn persist_default_model_selection(
-    codex_home: &Path,
+    nori_home: &Path,
     agent: &str,
     config_id: &str,
     value: &str,
-    config_options: &[nori_harness::SessionConfigOption],
+    config_options: &[nori_protocol::acp::v1::SessionConfigOption],
 ) -> anyhow::Result<bool> {
     let is_model_option = config_options.iter().any(|option| {
         option.id.to_string() == config_id
-            && option.category == Some(nori_harness::SessionConfigOptionCategory::Model)
+            && option.category == Some(nori_protocol::acp::v1::SessionConfigOptionCategory::Model)
     });
     if !is_model_option {
         return Ok(false);
     }
 
-    ConfigEditsBuilder::new(codex_home)
+    ConfigEditsBuilder::new(nori_home)
         .set_default_model(agent, value)
         .apply()
         .await?;
@@ -36,14 +45,38 @@ pub(super) async fn persist_default_model_selection(
 }
 
 impl App {
+    fn sync_runtime_config(&mut self) {
+        self.chat_widget.set_config(self.config.clone());
+    }
+
+    pub(super) async fn persist_default_model_selection(
+        &mut self,
+        agent: &str,
+        config_id: &str,
+        value: &str,
+        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
+    ) -> anyhow::Result<bool> {
+        let persisted = persist_default_model_selection(
+            &self.config.nori_home,
+            agent,
+            config_id,
+            value,
+            config_options,
+        )
+        .await?;
+        if persisted {
+            self.config
+                .default_models
+                .insert(agent.to_string(), value.to_string());
+            self.sync_runtime_config();
+        }
+        Ok(persisted)
+    }
+
     /// Persist a TUI config setting to config.toml and apply it immediately.
     pub(super) async fn persist_config_setting(&mut self, setting_name: &str, enabled: bool) {
-        // Apply immediately to the running TUI
         match setting_name {
-            "vertical_footer" => {
-                self.vertical_footer = enabled;
-                self.chat_widget.set_vertical_footer(enabled);
-            }
+            "vertical_footer" => {}
             _ => {
                 tracing::warn!("Unknown config setting: {setting_name}");
                 return;
@@ -51,8 +84,8 @@ impl App {
         }
 
         // Persist to config.toml
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", setting_name], toml_value(enabled))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", setting_name], enabled)
             .apply()
             .await
         {
@@ -66,9 +99,16 @@ impl App {
             return;
         }
 
+        self.config.vertical_footer = enabled;
+        self.sync_runtime_config();
+        self.vertical_footer = enabled;
+        self.chat_widget.set_vertical_footer(enabled);
+
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("{setting_name} {status}"), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::VerticalFooter);
     }
 
     pub(super) async fn persist_notify_after_idle_setting(
@@ -77,8 +117,8 @@ impl App {
     ) {
         let toml_str = value.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "notify_after_idle"], toml_value(toml_str))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "notify_after_idle"], toml_str)
             .apply()
             .await
         {
@@ -91,13 +131,42 @@ impl App {
             return;
         }
 
+        self.config.notify_after_idle = value;
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
-            format!(
-                "Notify after idle set to {}. Changes will take effect after restart.",
-                value.display_name()
-            ),
+            format!("Notify after idle set to {}.", value.display_name()),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::NotifyAfterIdle);
+    }
+
+    /// Persist the chosen `/browser` profile as the new default.
+    ///
+    /// The `/browser` picker resolves the current default fresh from disk on
+    /// every launch, so this only records the choice; the caller launches with
+    /// it separately.
+    #[cfg(unix)]
+    pub(super) async fn persist_browser_profile_setting(
+        &mut self,
+        value: nori_config::BrowserProfileMode,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["browser_profile"], value.toml_value())
+            .apply()
+            .await
+        {
+            tracing::error!(
+                error = %err,
+                "failed to persist browser_profile setting"
+            );
+            self.chat_widget
+                .add_error_message(format!("Failed to save browser_profile setting: {err}"));
+            return;
+        }
+
+        self.config.browser_profile = value;
+        self.sync_runtime_config();
     }
 
     pub(super) async fn persist_script_timeout_setting(
@@ -106,8 +175,8 @@ impl App {
     ) {
         let toml_str = value.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "script_timeout"], toml_value(toml_str))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "script_timeout"], toml_str)
             .apply()
             .await
         {
@@ -120,10 +189,14 @@ impl App {
             return;
         }
 
+        self.config.script_timeout = value.clone();
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
             format!("Script timeout set to {}.", value.display_name()),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::ScriptTimeout);
     }
 
     /// Store the loop count as an ephemeral per-session override (not persisted
@@ -139,11 +212,17 @@ impl App {
         };
         self.chat_widget
             .add_info_message(format!("Loop count set to {display} (this session)."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::LoopCount);
     }
 
-    pub(super) async fn persist_vim_mode_setting(&mut self, value: nori_config::VimEnterBehavior) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "vim_mode"], toml_value(value.toml_value()))
+    pub(super) async fn persist_vim_mode_setting(
+        &mut self,
+        value: nori_config::VimEnterBehavior,
+        from_settings: bool,
+    ) {
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "vim_mode"], value.toml_value())
             .apply()
             .await
         {
@@ -157,19 +236,28 @@ impl App {
         }
 
         // Update in-memory state and propagate to the chat widget
+        self.config.vim_mode = value;
+        self.sync_runtime_config();
         self.vim_mode = value;
         self.chat_widget.set_vim_mode(value);
 
         let display = value.display_name();
         self.chat_widget
             .add_info_message(format!("Vim mode: {display}."), None);
+
+        // Only return to the settings panel when the change came from it; the
+        // standalone `/vim` command should just close.
+        if from_settings {
+            self.chat_widget
+                .reopen_settings_focused(SettingsItem::VimMode);
+        }
     }
 
     pub(super) async fn persist_auto_worktree_setting(&mut self, value: nori_config::AutoWorktree) {
         let toml_str = value.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "auto_worktree"], toml_value(toml_str))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "auto_worktree"], toml_str)
             .apply()
             .await
         {
@@ -182,6 +270,8 @@ impl App {
             return;
         }
 
+        self.config.auto_worktree = value;
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
             format!(
                 "Auto worktree set to {}. Changes will take effect on next session.",
@@ -189,19 +279,13 @@ impl App {
             ),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::AutoWorktree);
     }
 
     pub(super) async fn persist_pinned_plan_drawer_setting(&mut self, enabled: bool) {
-        let mode = if enabled {
-            crate::chatwidget::PlanDrawerMode::Expanded
-        } else {
-            crate::chatwidget::PlanDrawerMode::Off
-        };
-        self.plan_drawer_mode = mode;
-        self.chat_widget.set_plan_drawer_mode(mode);
-
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "pinned_plan_drawer"], toml_value(enabled))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "pinned_plan_drawer"], enabled)
             .apply()
             .await
         {
@@ -210,20 +294,63 @@ impl App {
                 .add_error_message(format!("Failed to save pinned_plan_drawer setting: {err}"));
             return;
         }
+        self.config.pinned_plan_drawer = enabled;
+        self.sync_runtime_config();
+        let mode = if enabled {
+            crate::chatwidget::PlanDrawerMode::Expanded
+        } else {
+            crate::chatwidget::PlanDrawerMode::Off
+        };
+        self.plan_drawer_mode = mode;
+        self.chat_widget.set_plan_drawer_mode(mode);
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Pinned plan drawer {status}."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::PinnedPlanDrawer);
+    }
+
+    pub(super) async fn persist_resize_reflow_setting(
+        &mut self,
+        enabled: bool,
+        tui: &mut tui::Tui,
+    ) {
+        if let Err(err) = persist_resize_reflow_config(&self.config.nori_home, enabled).await {
+            tracing::error!(error = %err, "failed to persist resize_reflow setting");
+            self.chat_widget
+                .add_error_message(format!("Failed to save resize_reflow setting: {err}"));
+            return;
+        }
+
+        self.config.resize_reflow = enabled;
+        self.sync_runtime_config();
+        if enabled {
+            if let Ok(size) = tui.terminal.size() {
+                self.transcript_reflow
+                    .note_width(size.width, std::time::Instant::now());
+            }
+            self.transcript_reflow.schedule_immediate();
+            tui.frame_requester().schedule_frame();
+        } else {
+            self.transcript_reflow.cancel();
+        }
+        let status = if enabled { "enabled" } else { "disabled" };
+        self.chat_widget
+            .add_info_message(format!("Resize reflow {status}."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::ResizeReflow);
     }
 
     pub(super) async fn persist_acp_wire_recording_setting(&mut self, enabled: bool) {
-        if let Err(err) = persist_acp_wire_recording_config(&self.config.codex_home, enabled).await
-        {
+        if let Err(err) = persist_acp_wire_recording_config(&self.config.nori_home, enabled).await {
             tracing::error!(error = %err, "failed to persist acp wire recording setting");
             self.chat_widget
                 .add_error_message(format!("Failed to save ACP wire recording setting: {err}"));
             return;
         }
 
+        self.config.acp_proxy.enabled = enabled;
+        self.sync_runtime_config();
         self.chat_widget.set_acp_wire_recording_enabled(enabled);
         self.chat_widget.replace_agent_popup(enabled);
         let status = if enabled { "enabled" } else { "disabled" };
@@ -232,11 +359,8 @@ impl App {
     }
 
     pub(super) async fn persist_custom_working_messages_setting(&mut self, enabled: bool) {
-        self.config.custom_working_messages = enabled;
-        self.chat_widget.set_custom_working_messages(enabled);
-
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "custom_working_messages"], toml_value(enabled))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "custom_working_messages"], enabled)
             .apply()
             .await
         {
@@ -246,14 +370,19 @@ impl App {
             ));
             return;
         }
+        self.config.custom_working_messages = enabled;
+        self.sync_runtime_config();
+        self.chat_widget.set_custom_working_messages(enabled);
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("Custom working messages {status}."), None);
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::CustomWorkingMessages);
     }
 
     pub(super) async fn persist_skillset_per_session_setting(&mut self, enabled: bool) {
-        let builder = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "skillset_per_session"], toml_value(enabled));
+        let builder = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "skillset_per_session"], enabled);
         if let Err(err) = builder.apply().await {
             tracing::error!(error = %err, "failed to persist skillset_per_session setting");
             self.chat_widget.add_error_message(format!(
@@ -261,11 +390,15 @@ impl App {
             ));
             return;
         }
+        self.config.skillset_per_session = enabled;
+        self.sync_runtime_config();
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget.add_info_message(
             format!("Per Session Skillsets {status}. Changes will take effect on next session."),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::PerSessionSkillsets);
     }
 
     pub(super) async fn persist_footer_segment_setting(
@@ -273,11 +406,8 @@ impl App {
         segment: nori_config::FooterSegment,
         enabled: bool,
     ) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(
-                &["tui", "footer_segments", segment.toml_key()],
-                toml_value(enabled),
-            )
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "footer_segments", segment.toml_key()], enabled)
             .apply()
             .await
         {
@@ -292,6 +422,8 @@ impl App {
 
         // Update the local config and apply to the widget
         self.footer_segment_config.set_enabled(segment, enabled);
+        self.config.footer_segment_config = self.footer_segment_config.clone();
+        self.sync_runtime_config();
         self.chat_widget
             .set_footer_segment_enabled(segment, enabled);
 
@@ -305,8 +437,8 @@ impl App {
     }
 
     pub(super) async fn persist_file_manager_setting(&mut self, value: nori_config::FileManager) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "file_manager"], toml_value(value.command_name()))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "file_manager"], value.command_name())
             .apply()
             .await
         {
@@ -316,18 +448,26 @@ impl App {
             return;
         }
 
+        self.config.file_manager = Some(value);
+        self.sync_runtime_config();
         self.chat_widget.add_info_message(
             format!("File manager set to {}.", value.display_name()),
             None,
         );
+        self.chat_widget
+            .reopen_settings_focused(SettingsItem::FileManager);
     }
 
     pub(super) async fn persist_notification_setting(&mut self, setting_name: &str, enabled: bool) {
+        if !matches!(setting_name, "terminal_notifications" | "os_notifications") {
+            tracing::warn!("Unknown notification setting: {setting_name}");
+            return;
+        }
         let enum_value = if enabled { "enabled" } else { "disabled" };
 
         // Persist to config.toml as a string enum value
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", setting_name], toml_value(enum_value))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", setting_name], enum_value)
             .apply()
             .await
         {
@@ -341,9 +481,33 @@ impl App {
             return;
         }
 
+        match setting_name {
+            "terminal_notifications" => {
+                self.config.terminal_notifications = if enabled {
+                    nori_config::TerminalNotifications::Enabled
+                } else {
+                    nori_config::TerminalNotifications::Disabled
+                };
+            }
+            "os_notifications" => {
+                self.config.os_notifications = if enabled {
+                    nori_config::OsNotifications::Enabled
+                } else {
+                    nori_config::OsNotifications::Disabled
+                };
+            }
+            _ => unreachable!("notification setting was validated before persistence"),
+        }
+        self.sync_runtime_config();
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget
             .add_info_message(format!("{setting_name} {status}"), None);
+        let focus = match setting_name {
+            "terminal_notifications" => SettingsItem::TerminalNotifications,
+            "os_notifications" => SettingsItem::OsNotifications,
+            _ => unreachable!("notification setting was validated before persistence"),
+        };
+        self.chat_widget.reopen_settings_focused(focus);
     }
 
     pub(super) async fn persist_hotkey_setting(
@@ -354,8 +518,8 @@ impl App {
         let toml_key = action.toml_key();
         let toml_val = binding.toml_value();
 
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
-            .set_path(&["tui", "hotkeys", toml_key], toml_value(&toml_val))
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
+            .set_path(&["tui", "hotkeys", toml_key], toml_val)
             .apply()
             .await
         {
@@ -372,6 +536,8 @@ impl App {
         }
 
         self.hotkey_config.set_binding(action, binding.clone());
+        self.config.hotkeys = self.hotkey_config.clone();
+        self.sync_runtime_config();
         self.chat_widget
             .set_hotkey_config(self.hotkey_config.clone());
         self.chat_widget.add_info_message(
@@ -386,9 +552,9 @@ impl App {
 
     pub(super) async fn persist_mcp_servers(
         &mut self,
-        servers: std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
+        servers: std::collections::BTreeMap<String, nori_config::McpServerConfig>,
     ) {
-        if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+        if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
             .replace_mcp_servers(&servers)
             .apply()
             .await
@@ -402,8 +568,7 @@ impl App {
         // Sync in-memory state so that ComputeMcpAuthStatuses (which reads
         // chat_widget.config_ref().mcp_servers) sees the newly added servers.
         self.config.mcp_servers = servers.into_iter().collect();
-        self.chat_widget
-            .set_mcp_servers(self.config.mcp_servers.clone());
+        self.sync_runtime_config();
 
         self.chat_widget.add_info_message(
             "MCP servers saved. Start a new session to use them.".to_string(),
@@ -534,28 +699,45 @@ mod tests {
         );
     }
 
-    fn session_config_options_with_model() -> Vec<nori_harness::SessionConfigOption> {
+    #[tokio::test]
+    async fn resize_reflow_persists_to_the_tui_section() {
+        let temp = TempDir::new().expect("temp home");
+
+        persist_resize_reflow_config(temp.path(), false)
+            .await
+            .expect("persist resize reflow");
+
+        let config =
+            std::fs::read_to_string(temp.path().join("config.toml")).expect("read config.toml");
+        assert!(config.contains("[tui]"));
+        assert!(config.contains("resize_reflow = false"));
+    }
+
+    fn session_config_options_with_model() -> Vec<nori_protocol::acp::v1::SessionConfigOption> {
         vec![
-            nori_harness::SessionConfigOption::select(
+            nori_protocol::acp::v1::SessionConfigOption::select(
                 "model",
                 "Model",
                 "sonnet",
                 vec![
-                    nori_harness::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-                    nori_harness::SessionConfigSelectOption::new("opus", "Opus"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new("opus", "Opus"),
                 ],
             )
-            .category(nori_harness::SessionConfigOptionCategory::Model),
-            nori_harness::SessionConfigOption::select(
+            .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Model),
+            nori_protocol::acp::v1::SessionConfigOption::select(
                 "permission-mode",
                 "Mode",
                 "default",
                 vec![
-                    nori_harness::SessionConfigSelectOption::new("default", "Default"),
-                    nori_harness::SessionConfigSelectOption::new("acceptEdits", "Accept Edits"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new("default", "Default"),
+                    nori_protocol::acp::v1::SessionConfigSelectOption::new(
+                        "acceptEdits",
+                        "Accept Edits",
+                    ),
                 ],
             )
-            .category(nori_harness::SessionConfigOptionCategory::Mode),
+            .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Mode),
         ]
     }
 

@@ -2,18 +2,18 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use crate::app::App;
+use crate::app_event::ConversationPathResponseEvent;
 use crate::history_cell::AgentMessageCell;
 use crate::history_cell::SessionInfoCell;
 use crate::history_cell::UserHistoryCell;
 use crate::pager_overlay::Overlay;
 use crate::tui;
 use crate::tui::TuiEvent;
-use codex_protocol::ConversationId;
-use codex_protocol::protocol::ConversationPathResponseEvent;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_harness::ConversationId;
 
 /// Aggregates all backtrack-related state used by the App.
 #[derive(Default)]
@@ -103,10 +103,9 @@ impl App {
         nth_user_message: usize,
     ) {
         self.backtrack.pending = Some((base_id, nth_user_message, prefill));
-        if let Some(path) = self.chat_widget.rollout_path() {
+        if self.chat_widget.rollout_path().is_some() {
             let ev = ConversationPathResponseEvent {
                 conversation_id: base_id,
-                path,
             };
             self.app_event_tx
                 .send(crate::app_event::AppEvent::ConversationHistory(ev));
@@ -126,7 +125,9 @@ impl App {
     pub(crate) fn close_transcript_overlay(&mut self, tui: &mut tui::Tui) {
         let _ = tui.leave_alt_screen();
         let was_backtrack = self.backtrack.overlay_preview_active;
-        if !self.deferred_history_lines.is_empty() {
+        if self.transcript_reflow.has_pending_reflow() {
+            self.deferred_history_lines.clear();
+        } else if !self.deferred_history_lines.is_empty() {
             let lines = std::mem::take(&mut self.deferred_history_lines);
             tui.insert_history_lines(lines);
         }
@@ -135,6 +136,9 @@ impl App {
         if was_backtrack {
             // Ensure backtrack state is fully reset when overlay closes (e.g. via 'q').
             self.reset_backtrack_state();
+        }
+        if self.transcript_reflow.has_pending_reflow() {
+            tui.frame_requester().schedule_frame();
         }
     }
 

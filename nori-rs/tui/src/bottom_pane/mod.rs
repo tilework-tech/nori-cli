@@ -25,11 +25,13 @@ mod bottom_pane_view;
 mod chat_composer;
 mod chat_composer_history;
 mod command_popup;
+mod component_picker_view;
 mod file_search_popup;
 mod footer;
 mod history_search_popup;
 mod list_selection_view;
 mod prompt_args;
+pub(crate) use component_picker_view::ComponentPickerParams;
 #[cfg(test)]
 pub(crate) use list_selection_view::ListSelectionView;
 pub(crate) use list_selection_view::SelectionViewParams;
@@ -49,7 +51,7 @@ pub(crate) enum CancellationEvent {
 
 pub(crate) use chat_composer::ChatComposer;
 pub(crate) use chat_composer::InputResult;
-use codex_protocol::custom_prompts::CustomPrompt;
+use nori_harness::custom_prompts::CustomPrompt;
 
 use crate::status_indicator_widget::StatusIndicatorWidget;
 pub(crate) use list_selection_view::SelectionAction;
@@ -79,7 +81,6 @@ pub(crate) struct BottomPane {
     status: Option<StatusIndicatorWidget>,
     /// Queued user messages to show above the composer while a turn is running.
     queued_user_messages: QueuedUserMessages,
-    context_window_percent: Option<i64>,
     /// Display name of the current agent for use in approval dialogs.
     agent_display_name: String,
     /// Agent slug (e.g., "claude-code") used as prefix for agent commands.
@@ -149,10 +150,6 @@ impl BottomPane {
         let system_info = crate::system_info::SystemInfo::default();
         composer.set_system_info(system_info);
 
-        let acp_wire_recording_enabled = nori_config::NoriConfig::load()
-            .map(|config| config.acp_proxy.enabled)
-            .unwrap_or(false);
-
         let mut pane = Self {
             composer,
             view_stack: Vec::new(),
@@ -167,11 +164,10 @@ impl BottomPane {
             animations_enabled,
             custom_working_messages,
             custom_working_message_list,
-            context_window_percent: None,
             agent_display_name,
             agent_slug,
             vim_mode_enabled: false,
-            acp_wire_recording_enabled,
+            acp_wire_recording_enabled: false,
         };
 
         // Set description overrides for the slash command popup so that
@@ -186,10 +182,6 @@ impl BottomPane {
 
     pub fn status_widget(&self) -> Option<&StatusIndicatorWidget> {
         self.status.as_ref()
-    }
-
-    pub(crate) fn context_window_percent(&self) -> Option<i64> {
-        self.context_window_percent
     }
 
     fn active_view(&self) -> Option<&dyn BottomPaneView> {
@@ -208,6 +200,11 @@ impl BottomPane {
 
     /// Forward a key event to the active view or the composer.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> InputResult {
+        // Once exit is in progress every key is inert, including the
+        // task-status Esc interrupt below — teardown owns the backend.
+        if !self.composer.input_enabled() {
+            return InputResult::None;
+        }
         // If a modal/view is active, handle it here; otherwise forward to composer.
         if let Some(view) = self.view_stack.last_mut() {
             if key_event.code == KeyCode::Esc
@@ -230,6 +227,9 @@ impl BottomPane {
             // send an interrupt even while the composer has focus.
             if matches!(key_event.code, crossterm::event::KeyCode::Esc)
                 && self.is_task_running
+                && !self
+                    .composer
+                    .should_handle_vim_escape_during_task(key_event)
                 && let Some(status) = &self.status
             {
                 // Send Op::Interrupt
@@ -269,6 +269,12 @@ impl BottomPane {
             self.show_ctrl_c_quit_hint();
             CancellationEvent::Handled
         }
+    }
+
+    pub(crate) fn show_exit_in_progress(&mut self) {
+        self.view_stack.clear();
+        self.composer.show_exit_in_progress();
+        self.request_redraw();
     }
 
     pub fn handle_paste(&mut self, pasted: String) {
@@ -414,16 +420,6 @@ impl BottomPane {
         }
     }
 
-    pub(crate) fn set_context_window_percent(&mut self, percent: Option<i64>) {
-        if self.context_window_percent == percent {
-            return;
-        }
-
-        self.context_window_percent = percent;
-        self.composer.set_context_window_percent(percent);
-        self.request_redraw();
-    }
-
     /// Update the agent display name used in approval dialogs and slash command descriptions.
     pub(crate) fn set_agent_display_name(&mut self, name: String) {
         self.agent_display_name = name;
@@ -490,6 +486,10 @@ impl BottomPane {
         self.composer.set_vim_mode(value);
     }
 
+    pub(crate) fn should_handle_vim_insert_escape(&self, key_event: KeyEvent) -> bool {
+        self.composer.should_handle_vim_insert_escape(key_event)
+    }
+
     /// Set a footer segment's enabled state.
     pub(crate) fn set_footer_segment_enabled(
         &mut self,
@@ -497,11 +497,6 @@ impl BottomPane {
         enabled: bool,
     ) {
         self.composer.set_footer_segment_enabled(segment, enabled);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn footer_segment_config(&self) -> nori_config::FooterSegmentConfig {
-        self.composer.footer_segment_config()
     }
 
     /// Show a generic list selection view with the provided items.
@@ -515,6 +510,14 @@ impl BottomPane {
             params.vim_mode = self.vim_mode_enabled;
         }
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
+        self.push_view(Box::new(view));
+    }
+
+    /// Show a domain-free picker from the shared component crate, adapting
+    /// typed outcomes into this application's event callbacks.
+    pub(crate) fn show_component_picker(&mut self, params: ComponentPickerParams) {
+        let view =
+            component_picker_view::ComponentPickerView::new(params, self.app_event_tx.clone());
         self.push_view(Box::new(view));
     }
 
@@ -569,7 +572,10 @@ impl BottomPane {
     }
 
     /// Update agent-provided commands available for the slash popup.
-    pub(crate) fn set_agent_commands(&mut self, commands: Vec<nori_protocol::AgentCommandInfo>) {
+    pub(crate) fn set_agent_commands(
+        &mut self,
+        commands: Vec<crate::presentation::AgentCommandInfo>,
+    ) {
         let prefix = self.agent_slug.clone();
         self.composer.set_agent_commands(commands, prefix);
         self.request_redraw();
@@ -609,16 +615,28 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    /// Update the cloud session id displayed in the footer (None hides it).
+    pub(crate) fn set_cloud_session(&mut self, cloud_session: Option<String>) {
+        self.composer.set_cloud_session(cloud_session);
+        self.request_redraw();
+    }
+
     /// Update the prompt summary displayed in the footer.
     pub(crate) fn set_prompt_summary(&mut self, summary: Option<String>) {
         self.composer.set_prompt_summary(summary);
         self.request_redraw();
     }
 
+    /// Update the agent-supplied session title displayed in the footer.
+    pub(crate) fn set_session_title(&mut self, title: Option<String>) {
+        self.composer.set_session_title(title);
+        self.request_redraw();
+    }
+
     /// Update ACP-reported session usage displayed in the footer.
     pub(crate) fn set_session_usage(
         &mut self,
-        usage: Option<nori_protocol::session_runtime::SessionUsageState>,
+        usage: Option<crate::presentation::session_runtime::SessionUsageState>,
     ) {
         self.composer.set_session_usage(usage);
         self.request_redraw();
@@ -632,6 +650,12 @@ impl BottomPane {
     /// Get the token breakdown from transcript location (for status card display).
     pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_harness::TranscriptTokenUsage> {
         self.composer.transcript_token_breakdown()
+    }
+
+    /// Footer-derived values (git, ACP mode, skillset version, context window)
+    /// for the `/status` card.
+    pub(crate) fn status_card_info(&self) -> crate::nori::session_header::StatusCardInfo {
+        self.composer.status_card_info()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {
@@ -660,7 +684,7 @@ impl BottomPane {
     /// Forward MCP auth statuses to the active view (if any).
     pub(crate) fn update_mcp_auth_statuses(
         &mut self,
-        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+        statuses: &std::collections::HashMap<String, codex_rmcp_client::McpAuthStatus>,
     ) {
         if let Some(view) = self.view_stack.last_mut() {
             view.update_mcp_auth_statuses(statuses);
@@ -754,10 +778,7 @@ impl BottomPane {
         }
     }
 
-    pub(crate) fn on_search_history_response(
-        &mut self,
-        entries: Vec<codex_protocol::message_history::HistoryEntry>,
-    ) {
+    pub(crate) fn on_search_history_response(&mut self, entries: Vec<nori_harness::HistoryEntry>) {
         self.composer.on_search_history_response(entries);
         self.request_redraw();
     }
@@ -849,6 +870,7 @@ mod tests {
     use insta::assert_snapshot;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
+    use tokio::sync::mpsc::error::TryRecvError;
     use tokio::sync::mpsc::unbounded_channel;
 
     fn snapshot_buffer(buf: &Buffer) -> String {
@@ -870,33 +892,194 @@ mod tests {
     }
 
     fn exec_request() -> ApprovalRequest {
-        ApprovalRequest::Exec {
-            id: "1".to_string(),
-            command: vec!["echo".into(), "ok".into()],
-            reason: None,
-            risk: None,
+        ApprovalRequest {
+            request_id: "1".to_string().into(),
+            title: "Run echo ok".to_string(),
+            kind: crate::presentation::ToolKind::Execute,
+            cwd: std::env::current_dir().expect("current directory"),
+            snapshot: Box::new(crate::presentation::ToolSnapshot {
+                call_id: "call-1".to_string(),
+                title: "Run echo ok".to_string(),
+                kind: crate::presentation::ToolKind::Execute,
+                phase: crate::presentation::ToolPhase::PendingApproval,
+                locations: Vec::new(),
+                invocation: Some(crate::presentation::Invocation::Command {
+                    command: "echo ok".to_string(),
+                }),
+                artifacts: Vec::new(),
+                raw_input: None,
+                raw_output: None,
+                owner_request_id: None,
+            }),
+            options: vec![nori_protocol::acp::v1::PermissionOption::new(
+                nori_protocol::acp::v1::PermissionOptionId::new("allow-once"),
+                "Allow",
+                nori_protocol::acp::v1::PermissionOptionKind::AllowOnce,
+            )],
         }
     }
 
-    fn test_bottom_pane() -> BottomPane {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    fn test_bottom_pane_with_events() -> (BottomPane, tokio::sync::mpsc::UnboundedReceiver<AppEvent>)
+    {
+        let (tx_raw, rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        BottomPane::new(BottomPaneParams {
-            app_event_tx: tx,
-            frame_requester: FrameRequester::test_dummy(),
-            has_input_focus: true,
-            enhanced_keys_supported: false,
-            placeholder_text: "Ask Nori to do anything".to_string(),
-            disable_paste_burst: true,
-            animations_enabled: true,
-            custom_working_messages: true,
-            custom_working_message_list: Vec::new(),
-            vertical_footer: false,
-            footer_segment_config: nori_config::FooterSegmentConfig::default(),
-            footer_layout_config: nori_config::FooterLayoutConfig::default(),
-            agent_display_name: String::new(),
-            agent_slug: String::new(),
-        })
+        (
+            BottomPane::new(BottomPaneParams {
+                app_event_tx: tx,
+                frame_requester: FrameRequester::test_dummy(),
+                has_input_focus: true,
+                enhanced_keys_supported: false,
+                placeholder_text: "Ask Nori to do anything".to_string(),
+                disable_paste_burst: true,
+                animations_enabled: true,
+                custom_working_messages: true,
+                custom_working_message_list: Vec::new(),
+                vertical_footer: false,
+                footer_segment_config: nori_config::FooterSegmentConfig::default(),
+                footer_layout_config: nori_config::FooterLayoutConfig::default(),
+                agent_display_name: String::new(),
+                agent_slug: String::new(),
+            }),
+            rx,
+        )
+    }
+
+    fn test_bottom_pane() -> BottomPane {
+        test_bottom_pane_with_events().0
+    }
+
+    #[test]
+    fn active_turn_vim_escape_enters_normal_then_debounces_interrupt() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        pane.set_vim_mode(nori_config::VimEnterBehavior::Submit);
+        pane.set_task_running(true);
+
+        let escape = KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE);
+        pane.handle_key_event(escape);
+
+        assert_eq!(
+            pane.composer.vim_mode_state(),
+            textarea::VimModeState::Normal
+        );
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "Insert-mode Escape must not interrupt the active turn",
+        );
+
+        pane.handle_key_event(escape);
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "Escape must not interrupt immediately after entering Normal mode",
+        );
+
+        std::thread::sleep(Duration::from_millis(550));
+        pane.handle_key_event(KeyEvent::new_with_kind(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Repeat,
+        ));
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "holding Escape must not interrupt the active turn",
+        );
+
+        pane.handle_key_event(escape);
+
+        assert!(matches!(
+            events.try_recv(),
+            Ok(AppEvent::HarnessAction(
+                crate::app_event::HarnessAction::Cancel
+            ))
+        ));
+    }
+
+    #[test]
+    fn active_turn_escape_cancels_pending_vim_operator_without_interrupting() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        pane.set_vim_mode(nori_config::VimEnterBehavior::Submit);
+        pane.set_task_running(true);
+        let escape = KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE);
+        pane.handle_key_event(escape);
+        std::thread::sleep(Duration::from_millis(550));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('d'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(escape);
+
+        assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('i'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(
+            pane.composer.vim_mode_state(),
+            textarea::VimModeState::Insert
+        );
+    }
+
+    #[test]
+    fn active_turn_slash_picker_owns_escape_before_interrupt() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        let always_submit = *nori_config::VimEnterBehavior::all_variants()
+            .iter()
+            .find(|behavior| behavior.toml_value() == "always_submit")
+            .expect("always-submit Vim behavior should be available");
+        pane.set_vim_mode(always_submit);
+        pane.set_task_running(true);
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('/'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        std::thread::sleep(Duration::from_millis(550));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert!(!pane.composer.popup_active());
+        assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(matches!(
+            events.try_recv(),
+            Ok(AppEvent::HarnessAction(
+                crate::app_event::HarnessAction::Cancel
+            ))
+        ));
+    }
+
+    #[test]
+    fn active_turn_escape_interrupts_immediately_when_vim_is_disabled() {
+        let (mut pane, mut events) = test_bottom_pane_with_events();
+        pane.set_task_running(true);
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert!(matches!(
+            events.try_recv(),
+            Ok(AppEvent::HarnessAction(
+                crate::app_event::HarnessAction::Cancel
+            ))
+        ));
     }
 
     #[test]
@@ -1045,11 +1228,11 @@ mod tests {
         // Push an approval modal (e.g., command approval) which should hide the status view.
         pane.push_approval_request(exec_request());
 
-        // Simulate pressing 'n' (No) on the modal.
+        // Reject the schema-native permission request with Escape.
         use crossterm::event::KeyCode;
         use crossterm::event::KeyEvent;
         use crossterm::event::KeyModifiers;
-        pane.handle_key_event(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        pane.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
         // After denial, since the task is still running, the status indicator should be
         // visible above the composer. The modal should be gone.

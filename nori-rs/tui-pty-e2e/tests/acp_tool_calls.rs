@@ -50,7 +50,7 @@ use tui_pty_e2e::normalize_for_input_snapshot;
 fn test_acp_tool_call_rendered_in_tui() {
     // Configure mock agent to send a tool call
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         // Configure mock agent to emit a tool call before responding
         // The mock agent checks MOCK_AGENT_SEND_TOOL_CALL (not MOCK_AGENT_TOOL_CALL)
         .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
@@ -116,7 +116,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
     // The mock agent sends a hardcoded tool call with title "Reading configuration file"
     // and final text "Tool call completed successfully."
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
@@ -176,7 +176,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
     // Configure mock agent to send interleaved text and tool calls
     // This triggers the bug by sending text DURING the tool call execution
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_INTERLEAVED_TOOL_CALL", "1");
 
     let mut session =
@@ -251,7 +251,7 @@ fn test_acp_tool_call_snapshot() {
     // The mock agent sends hardcoded content: title "Reading configuration file"
     // and final text "Tool call completed successfully."
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_SEND_TOOL_CALL", "1");
 
     let mut session =
@@ -293,7 +293,7 @@ fn test_acp_tool_call_snapshot() {
 fn test_multi_call_exploring_cells_with_out_of_order_completion() {
     // Configure mock agent to send multiple exploring tool calls with interleaved text
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_MULTI_CALL_EXPLORING", "1");
 
     let mut session =
@@ -388,7 +388,7 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
 fn test_exploring_cell_flushed_immediately_without_agent_text() {
     // Configure mock agent with NO final text after tool calls complete
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_MULTI_CALL_EXPLORING", "1")
         .with_agent_env("MOCK_AGENT_NO_FINAL_TEXT", "1");
 
@@ -465,7 +465,7 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
 #[cfg(target_os = "linux")]
 fn test_tool_calls_during_final_stream_not_shown_after() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_TOOL_CALLS_DURING_FINAL_STREAM", "1");
 
     let mut session =
@@ -558,7 +558,7 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
 #[cfg(target_os = "linux")]
 fn test_no_orphan_tool_cells_from_cascade_deferral() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_ORPHAN_TOOL_CELLS", "1");
 
     let mut session =
@@ -638,7 +638,7 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
 #[cfg(target_os = "linux")]
 fn test_stuck_tool_calls_dont_block_agent_message() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_STUCK_TOOL_CALLS", "1");
 
     let mut session =
@@ -709,7 +709,7 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
 #[cfg(target_os = "linux")]
 fn test_acp_generic_tool_call_shows_resolved_name() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_GENERIC_TOOL_CALL", "1");
 
     let mut session =

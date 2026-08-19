@@ -60,6 +60,34 @@ fn process_exists_and_not_zombie(pid: u32) -> bool {
     true
 }
 
+/// Local quit escalates directly to owned process-group cleanup. It must not
+/// wait for the former global one-second TUI watchdog when an agent ignores
+/// stdin EOF.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_IGNORE_EOF", "1");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("/quit").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    let started = std::time::Instant::now();
+    session.send_key(Key::Enter).unwrap();
+
+    assert!(
+        session.wait_for_process_exit(Duration::from_millis(750)),
+        "local quit should force and reap a stuck ACP child without waiting for the old 1s watchdog; took {:?}",
+        started.elapsed()
+    );
+}
+
 // ============================================================================
 // Test: Agent Subprocess Cleanup on /exit Command
 // ============================================================================
@@ -78,7 +106,7 @@ fn process_exists_and_not_zombie(pid: u32) -> bool {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_cleanup_on_exit_command() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -158,7 +186,7 @@ fn test_acp_agent_cleanup_on_exit_command() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_cleanup_on_ctrl_c() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -215,7 +243,7 @@ fn test_acp_agent_cleanup_on_ctrl_c() {
 #[test]
 #[cfg(target_os = "linux")]
 fn test_acp_agent_cleanup_on_quit_command() {
-    let config = SessionConfig::new().with_model("mock-model".to_string());
+    let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 

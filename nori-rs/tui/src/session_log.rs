@@ -6,9 +6,7 @@ use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-use codex_core::config::Config;
-use codex_protocol::protocol::Op;
-use serde::Serialize;
+use nori_config::NoriConfig;
 use serde_json::json;
 
 use crate::app_event::AppEvent;
@@ -77,7 +75,7 @@ fn now_ts() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
-pub(crate) fn maybe_init(config: &Config) {
+pub(crate) fn maybe_init(config: &NoriConfig) {
     let enabled = std::env::var("CODEX_TUI_RECORD_SESSION")
         .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false);
@@ -88,10 +86,7 @@ pub(crate) fn maybe_init(config: &Config) {
     let path = if let Ok(path) = std::env::var("CODEX_TUI_SESSION_LOG_PATH") {
         PathBuf::from(path)
     } else {
-        let mut p = match codex_core::config::log_dir(config) {
-            Ok(dir) => dir,
-            Err(_) => std::env::temp_dir(),
-        };
+        let mut p = config.nori_home.join("log");
         let filename = format!(
             "session-{}.jsonl",
             chrono::Utc::now().format("%Y%m%dT%H%M%SZ")
@@ -111,9 +106,8 @@ pub(crate) fn maybe_init(config: &Config) {
         "dir": "meta",
         "kind": "session_start",
         "cwd": config.cwd,
-        "model": config.model,
-        "model_provider_id": config.model_provider_id,
-        "model_provider_name": config.model_provider.name,
+        "agent": config.active_agent,
+        "provider": "acp",
     });
     LOGGER.write_json_line(header);
 }
@@ -125,9 +119,6 @@ pub(crate) fn log_inbound_app_event(event: &AppEvent) {
     }
 
     match event {
-        AppEvent::CodexEvent(ev) => {
-            write_record("to_tui", "codex_event", ev);
-        }
         AppEvent::NewSession => {
             let value = json!({
                 "ts": now_ts(),
@@ -170,18 +161,26 @@ pub(crate) fn log_inbound_app_event(event: &AppEvent) {
                 "ts": now_ts(),
                 "dir": "to_tui",
                 "kind": "app_event",
-                "variant": format!("{other:?}").split('(').next().unwrap_or("app_event"),
+                "variant": app_event_variant(other),
             });
             LOGGER.write_json_line(value);
         }
     }
 }
 
-pub(crate) fn log_outbound_op(op: &Op) {
-    if !LOGGER.is_enabled() {
-        return;
+fn app_event_variant(event: &AppEvent) -> std::borrow::Cow<'static, str> {
+    if matches!(event, AppEvent::ConsolidateAgentMessage { .. }) {
+        return "ConsolidateAgentMessage".into();
     }
-    write_record("from_tui", "op", op);
+    let debug = format!("{event:?}");
+    std::borrow::Cow::Owned(
+        debug
+            .split(['(', '{'])
+            .next()
+            .unwrap_or("app_event")
+            .trim()
+            .to_string(),
+    )
 }
 
 pub(crate) fn log_session_end() {
@@ -196,15 +195,21 @@ pub(crate) fn log_session_end() {
     LOGGER.write_json_line(value);
 }
 
-fn write_record<T>(dir: &str, kind: &str, obj: &T)
-where
-    T: Serialize,
-{
-    let value = json!({
-        "ts": now_ts(),
-        "dir": dir,
-        "kind": kind,
-        "payload": obj,
-    });
-    LOGGER.write_json_line(value);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn struct_app_event_variant_excludes_debug_fields() {
+        let event = AppEvent::ConsolidateAgentMessage {
+            source: "secret raw Markdown".to_string(),
+            cwd: std::path::PathBuf::from("/secret/cwd"),
+        };
+
+        let variant = app_event_variant(&event);
+
+        assert_eq!(variant, "ConsolidateAgentMessage");
+        assert!(matches!(variant, std::borrow::Cow::Borrowed(_)));
+        assert!(!variant.contains("secret"));
+    }
 }

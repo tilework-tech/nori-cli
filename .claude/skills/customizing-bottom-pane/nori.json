@@ -1,0 +1,7 @@
+{
+  "name": "customizing-bottom-pane",
+  "version": "1.0.0",
+  "type": "skill",
+  "description": "Use when a user wants to customize Nori CLI's status footer or textarea corner indicators in $NORI_HOME/config.toml, including built-in segments, context metrics, placement, visibility, or custom format chunks.",
+  "registryURL": "http://noriskillsets.dev"
+}

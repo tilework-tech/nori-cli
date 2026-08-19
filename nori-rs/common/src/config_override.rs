@@ -61,7 +61,7 @@ impl CliConfigOverrides {
 
                 // Attempt to parse as TOML. If that fails, treat it as a raw
                 // string. This allows convenient usage such as
-                // `-c model=o3` without the quotes.
+                // `-c agent=codex` without the quotes.
                 let value: Value = match parse_toml_value(value_str) {
                     Ok(v) => v,
                     Err(_) => {

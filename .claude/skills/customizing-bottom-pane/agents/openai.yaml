@@ -1,0 +1,4 @@
+interface:
+  display_name: "Customize the Bottom Pane"
+  short_description: "Configure Nori footer and corner segments"
+  default_prompt: "Use $customizing-bottom-pane to tailor my Nori footer and textarea corner indicators."

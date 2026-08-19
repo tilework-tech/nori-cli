@@ -4,40 +4,75 @@ Path: @/nori-rs/acp-host
 
 ### Overview
 
-- Agent-agnostic, client-side ACP hosting machinery, split out of the session harness (now `nori-harness`, then named `nori-acp`) during the crate-layering cleanup (`@/docs/specs/crate-layering.md`). It owns spawning an ACP agent subprocess and speaking JSON-RPC over its stdio (`connection/`, see `@/nori-rs/acp-host/src/connection/docs.md`), the agent registry and distribution resolution (`registry.rs`), the ACP-wire to internal-event bridge (`translator.rs`), file-change/diff helpers (`patch.rs`), and ACP error categorization (`error_category.rs`).
-- This is a Layer-0 leaf of the crate layering: it must stay independent of the session harness (`nori-harness`) and any terminal UI so it remains usable and testable by other ACP-ecosystem projects.
-- Deliberately harness-free: no session runtime, transcripts, hooks, or goal state. New agent-facing wire behavior belongs here; anything that needs backend session state belongs in `@/nori-rs/harness/`.
+`nori-acp-host` is Nori's agent-agnostic, client-side ACP host. It owns the ACP
+SDK connection, subprocess and wire lifecycle, agent registry, delegated client
+requests, MCP forwarding, and ACP error categorization. It owns no TUI or
+session-product state.
 
 ### How it fits into the larger codebase
 
-```
-nori-tui
-    |
-    v
-nori-harness (session harness, re-exports this crate)
-    |
-    v
-nori-acp-host <---> ACP Agent subprocess (JSON-RPC over stdio)
+```text
+nori-harness
+      |
+      v
+nori-acp-host <----> ACP agent subprocess
+      |
+      +---- nori-protocol (schema and public envelopes)
+      +---- nori-config (agent and MCP configuration)
+      +---- codex-rmcp-client (stored MCP credentials)
 ```
 
-- `nori-harness` (`@/nori-rs/harness/`) is the primary consumer and re-exports every module (`pub use nori_acp_host::connection;` and friends in `@/nori-rs/harness/src/lib.rs`), so downstream consumers such as `@/nori-rs/tui/` import through `nori_harness` paths.
-- Wire/schema types come from the official `agent-client-protocol` SDK; the schema's own `unstable` feature is enabled unconditionally for the Model-category config option.
-- Depends on `codex-protocol` (`@/nori-rs/protocol/`) for the internal event vocabulary, `nori-config` (`@/nori-rs/nori-config/`) for agent/MCP/wire-proxy configuration types, and `codex-rmcp-client` (`@/nori-rs/rmcp-client/`) for OAuth token loading in `connection/mcp.rs`.
-- Error classification lives here (`AcpErrorCategory`, `categorize_acp_error`); the harness-side user-facing message composition (`enhanced_error_message`) stays in `@/nori-rs/harness/src/backend/`.
+The host is the only client-side product crate that directly uses the
+`agent-client-protocol` SDK. Schema values are still imported through
+`nori_protocol::acp`, never through the SDK or schema crate directly.
 
 ### Core Implementation
 
-- `connection/` — `AcpConnection::spawn()` launches the agent as a child subprocess, owns its full lifecycle (exit watching, stderr tail, graceful stdin-EOF shutdown), forwards configured MCP servers (`mcp.rs`), optionally wraps the transport in an append-only wire logger (`wire_log.rs`), and delivers everything through one ordered `ConnectionEvent` inbox. See `@/nori-rs/acp-host/src/connection/docs.md`.
-- `registry.rs` — data-driven agent registry merging built-in agents (Claude Code, Codex, Gemini) with custom `[[agents]]` config entries; resolves an agent slug to a spawnable `AcpAgentConfig` across npx/bunx/pipx/uvx/local distributions. The registry is process-global state (`AGENT_REGISTRY`, a `RwLock`) initialized once via `initialize_registry()` at startup, with a built-in-defaults fallback when uninitialized.
-- `translator.rs` — converts user input into ACP `ContentBlock`s (text plus base64 image blocks) and provides local parsing/display helpers.
-- `patch.rs` — diff/patch construction (`create_patch_with_context`) used to normalize file mutations for rendering and transcripts.
-- `error_category.rs` — priority-chained substring matching (Auth > Quota > ExecutableNotFound > Initialization > PromptTooLong > ApiServerError > Unknown) over the Debug-formatted error chain; `is_retryable()` marks only server errors and quota limits as transient.
+- `connection/` spawns an agent, performs ACP initialization, exposes typed ACP
+  methods, and emits one source-ordered `ConnectionEvent` stream.
+- ACP notifications, delegated requests, and method responses become raw
+  `nori_protocol::AcpEvent` values with their `RequestId` intact.
+- Initialization can route its raw response to the harness independently of
+  connection construction, preserving schema errors even when construction
+  fails without duplicating successful initialize events.
+- Each prompt call issues exactly one ACP `session/prompt` request and publishes
+  its transport-assigned ID. Cancellation does not trigger a hidden resend or
+  cancel-tail absorption loop. A successful empty `EndTurn` response is a
+  terminal result.
+- Permission requests are delegated outward. Filesystem read/write requests are
+  handled by the host and are not emitted a second time as public requests.
+- A private `SessionUpdate` copy feeds the harness reducer after the matching
+  raw notification; it is implementation state, not another public protocol.
+- `registry.rs` resolves built-in and configured agents to spawnable process
+  definitions. The built-in Codex definition uses the maintained
+  `@agentclientprotocol/codex-acp` adapter and disables Codex-native goals in
+  its subprocess configuration. It merges a valid ambient `CODEX_CONFIG`,
+  preserving unrelated top-level and feature settings while forcing only
+  `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
+  MCP server. `error_category.rs` preserves structured ACP errors before
+  falling back to message classification.
 
 ### Things to Know
 
-- Detailed behavior documentation for the registry, error categorization, and their harness coupling still lives in `@/nori-rs/harness/docs.md`, which documents the full `nori-harness` public API (this crate's modules are part of that API via re-export).
-- The connection layer's child-lifecycle invariants (ordered inbox, stdin-EOF-then-grace shutdown, exit-watcher ownership of the `Child`) are load-bearing for `nori cloud` session release; see `@/nori-rs/acp-host/src/connection/docs.md` before changing teardown behavior.
-- `to_acp_mcp_servers()` in `connection/mcp.rs` is not a pure transformation: it eagerly resolves environment variables and loads stored OAuth tokens from the keyring/filesystem at conversion time.
-- The dependency direction is `nori-harness -> nori-acp-host`, never the reverse. If a change here needs harness state (session runtime, transcript, goals), thread it in as a parameter or move the logic up to `@/nori-rs/harness/`.
+- The dependency direction is `nori-harness -> nori-acp-host`, never the
+  reverse.
+- Disabling native goals is a policy of Nori's built-in Codex launch only.
+  User-defined agent processes retain their explicit command and environment;
+  goal ownership and routing remain a harness concern.
+- Ambient `CODEX_CONFIG` must be a JSON object whose `features` value, when
+  present, is also an object. Invalid JSON or incompatible shapes fail built-in
+  Codex configuration explicitly instead of silently discarding user settings.
+- Terminal and extension request families are not advertised by the current
+  host. Adding them requires an explicit host-policy decision, not a generic
+  protocol mirror.
+- The `agent-client-protocol` SDK is built with the `unstable` feature so the
+  host can call `session/fork` (branch-at-head). See `fork_session` in
+  `@/nori-rs/acp-host/src/connection/docs.md`.
+- Shutdown closes stdin and optionally waits for a caller-selected grace period.
+  The child owner then kills the process group before reaping its leader, so
+  MCP servers and other descendants cannot survive a cooperative agent exit.
+  A nonzero grace is reserved for flows such as cloud detach.
+- The removed ACP-to-Codex translator must not be recreated. Display-friendly
+  projection belongs privately in a consumer such as the TUI.
 
 Created and maintained by Nori.

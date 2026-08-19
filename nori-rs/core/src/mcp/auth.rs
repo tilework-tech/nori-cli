@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use codex_protocol::protocol::McpAuthStatus;
+use codex_rmcp_client::McpAuthStatus;
 use codex_rmcp_client::OAuthCredentialsStoreMode;
 use codex_rmcp_client::determine_streamable_http_auth_status;
 use futures::future::join_all;

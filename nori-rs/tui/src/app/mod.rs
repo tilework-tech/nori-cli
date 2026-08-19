@@ -6,49 +6,29 @@ use crate::chatwidget::ChatWidget;
 use crate::client_event_format;
 use crate::client_tool_cell;
 use crate::diff_render::DiffSummary;
-use crate::exec_command::strip_bash_lc_and_escape;
 use crate::file_search::FileSearchManager;
 use crate::history_cell::HistoryCell;
-use crate::model_migration::ModelMigrationOutcome;
-use crate::model_migration::migration_copy_for_config;
-use crate::model_migration::run_model_migration_prompt;
 use crate::nori::agent_picker::PendingAgentSelection;
 use crate::pager_overlay::Overlay;
-use crate::render::highlight::highlight_bash_to_lines;
 use crate::render::renderable::Renderable;
 use crate::resume_picker::ResumeSelection;
 use crate::tui;
 use crate::tui::TuiEvent;
+use crate::ui_types::TokenUsage;
 use crate::update_action::UpdateAction;
 use codex_ansi_escape::ansi_escape_line;
-use codex_app_server_protocol::AuthMode;
-use codex_common::model_presets::HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG;
-use codex_common::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
-use codex_common::model_presets::ModelUpgrade;
-use codex_common::model_presets::all_model_presets;
-use codex_core::AuthManager;
-use codex_core::config::Config;
-use codex_core::config::edit::ConfigEditsBuilder;
-use codex_core::config::edit::toml_value;
-#[cfg(target_os = "windows")]
-use codex_core::features::Feature;
-use codex_core::model_family::find_family_for_model;
-use codex_protocol::ConversationId;
-use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::EventMsg;
-use codex_protocol::protocol::FinalOutput;
-use codex_protocol::protocol::Op;
-use codex_protocol::protocol::SandboxPolicy;
-use codex_protocol::protocol::TokenUsage;
+use codex_login::AuthManager;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_config::AskForApproval;
+use nori_config::NoriConfig;
+use nori_config::NoriConfigEdits as ConfigEditsBuilder;
+use nori_config::SandboxPolicy;
+use nori_harness::ConversationId;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
-use ratatui::widgets::Wrap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -62,8 +42,6 @@ use tokio::sync::mpsc::unbounded_channel;
 #[cfg(not(debug_assertions))]
 use crate::history_cell::UpdateAvailableHistoryCell;
 
-const GPT_5_1_MIGRATION_AUTH_MODES: [AuthMode; 2] = [AuthMode::ChatGPT, AuthMode::ApiKey];
-const GPT_5_1_CODEX_MIGRATION_AUTH_MODES: [AuthMode; 1] = [AuthMode::ChatGPT];
 pub const RESUME_HINT_LEAD: &str = "To continue this session, run:";
 
 #[derive(Debug, Clone)]
@@ -79,7 +57,7 @@ fn session_summary(
     conversation_id: Option<ConversationId>,
     conversation_has_activity: bool,
 ) -> Option<SessionSummary> {
-    let usage_line = (!token_usage.is_zero()).then(|| FinalOutput::from(token_usage).to_string());
+    let usage_line = (!token_usage.is_zero()).then(|| token_usage.to_string());
     let resume_command = conversation_id
         .filter(|_| conversation_has_activity)
         .map(|conversation_id| resume_command_for_conversation(&conversation_id));
@@ -104,118 +82,16 @@ struct SessionSummary {
     resume_command: Option<String>,
 }
 
-fn should_show_model_migration_prompt(
-    current_model: &str,
-    target_model: &str,
-    hide_prompt_flag: Option<bool>,
-) -> bool {
-    if target_model == current_model || hide_prompt_flag.unwrap_or(false) {
-        return false;
-    }
-
-    all_model_presets()
-        .iter()
-        .filter(|preset| preset.upgrade.is_some())
-        .any(|preset| preset.model == current_model)
-}
-
-fn migration_prompt_hidden(config: &Config, migration_config_key: &str) -> Option<bool> {
-    match migration_config_key {
-        HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG => {
-            config.notices.hide_gpt_5_1_codex_max_migration_prompt
-        }
-        HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => config.notices.hide_gpt5_1_migration_prompt,
-        _ => None,
-    }
-}
-
-async fn handle_model_migration_prompt_if_needed(
-    tui: &mut tui::Tui,
-    config: &mut Config,
-    app_event_tx: &AppEventSender,
-    auth_mode: Option<AuthMode>,
-) -> Option<AppExitInfo> {
-    let upgrade = all_model_presets()
-        .iter()
-        .find(|preset| preset.model == config.model)
-        .and_then(|preset| preset.upgrade.as_ref());
-
-    if let Some(ModelUpgrade {
-        id: target_model,
-        reasoning_effort_mapping,
-        migration_config_key,
-    }) = upgrade
-    {
-        if !migration_prompt_allows_auth_mode(auth_mode, migration_config_key) {
-            return None;
-        }
-
-        let target_model = target_model.to_string();
-        let hide_prompt_flag = migration_prompt_hidden(config, migration_config_key);
-        if !should_show_model_migration_prompt(&config.model, &target_model, hide_prompt_flag) {
-            return None;
-        }
-
-        let prompt_copy = migration_copy_for_config(migration_config_key);
-        match run_model_migration_prompt(tui, prompt_copy).await {
-            ModelMigrationOutcome::Accepted => {
-                app_event_tx.send(AppEvent::PersistModelMigrationPromptAcknowledged {
-                    migration_config: migration_config_key.to_string(),
-                });
-                config.model = target_model.to_string();
-                if let Some(family) = find_family_for_model(&target_model) {
-                    config.model_family = family;
-                }
-
-                let mapped_effort = if let Some(reasoning_effort_mapping) = reasoning_effort_mapping
-                    && let Some(reasoning_effort) = config.model_reasoning_effort
-                {
-                    reasoning_effort_mapping
-                        .get(&reasoning_effort)
-                        .cloned()
-                        .or(config.model_reasoning_effort)
-                } else {
-                    config.model_reasoning_effort
-                };
-
-                config.model_reasoning_effort = mapped_effort;
-
-                app_event_tx.send(AppEvent::UpdateAgent(target_model.clone()));
-                app_event_tx.send(AppEvent::UpdateReasoningEffort(mapped_effort));
-                app_event_tx.send(AppEvent::PersistAgentSelection {
-                    agent: target_model.clone(),
-                    effort: mapped_effort,
-                });
-            }
-            ModelMigrationOutcome::Rejected => {
-                app_event_tx.send(AppEvent::PersistModelMigrationPromptAcknowledged {
-                    migration_config: migration_config_key.to_string(),
-                });
-            }
-            ModelMigrationOutcome::Exit => {
-                return Some(AppExitInfo {
-                    token_usage: TokenUsage::default(),
-                    conversation_id: None,
-                    conversation_has_activity: false,
-                    update_action: None,
-                });
-            }
-        }
-    }
-
-    None
-}
-
 pub(crate) struct App {
     pub(crate) app_event_tx: AppEventSender,
     pub(crate) chat_widget: ChatWidget,
     pub(crate) auth_manager: Arc<AuthManager>,
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
-    pub(crate) config: Config,
+    pub(crate) config: NoriConfig,
     pub(crate) vertical_footer: bool,
+    pub(crate) cloud_mode: bool,
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
-    pub(crate) active_profile: Option<String>,
 
     pub(crate) file_search: FileSearchManager,
 
@@ -225,8 +101,10 @@ pub(crate) struct App {
     pub(crate) overlay: Option<Overlay>,
     pub(crate) deferred_history_lines: Vec<Line<'static>>,
     has_emitted_history_lines: bool,
+    pub(crate) transcript_reflow: crate::transcript_reflow::TranscriptReflowState,
 
     pub(crate) enhanced_keys_supported: bool,
+    cloud_onboard: bool,
 
     /// Controls the animation thread that sends CommitTick events.
     pub(crate) commit_anim_running: Arc<AtomicBool>,
@@ -235,10 +113,6 @@ pub(crate) struct App {
     pub(crate) backtrack: crate::app_backtrack::BacktrackState,
     /// Set when the user confirms an update; propagated on exit.
     pub(crate) pending_update_action: Option<UpdateAction>,
-
-    /// Ignore the next ShutdownComplete event when we're intentionally
-    /// stopping a conversation (e.g., before starting a new one).
-    suppress_shutdown_complete: bool,
 
     // One-shot suppression of the next world-writable scan after user confirmation.
     skip_world_writable_scan_once: bool,
@@ -272,6 +146,10 @@ pub(crate) struct App {
     /// switch). Cleared on the first successful skillset switch or picker
     /// dismissal. Guards against re-spawning the agent on later switches.
     deferred_spawn_pending: bool,
+    /// True while the pre-session agent probe (session/list) is running —
+    /// guards against concurrent probes and against skillset events
+    /// resolving the deferred spawn out from under the picker flow.
+    agent_session_probe_in_flight: bool,
 
     /// Cancel sender for an in-progress MCP OAuth login flow.
     mcp_oauth_cancel_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -286,6 +164,7 @@ struct SystemInfoRefreshRequest {
 
 mod config_persistence;
 mod event_handling;
+mod resize_reflow;
 mod session_setup;
 
 impl App {
@@ -293,25 +172,18 @@ impl App {
     pub async fn run(
         tui: &mut tui::Tui,
         auth_manager: Arc<AuthManager>,
-        mut config: Config,
-        active_profile: Option<String>,
+        config: NoriConfig,
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
         resume_selection: ResumeSelection,
         vertical_footer: bool,
+        cloud_mode: bool,
+        cloud_onboard: bool,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
         let app_event_tx = AppEventSender::new(app_event_tx);
-
-        let auth_mode = auth_manager.auth().map(|auth| auth.mode);
-        let exit_info =
-            handle_model_migration_prompt_if_needed(tui, &mut config, &app_event_tx, auth_mode)
-                .await;
-        if let Some(exit_info) = exit_info {
-            return Ok(exit_info);
-        }
 
         let enhanced_keys_supported = tui.enhanced_keys_supported();
 
@@ -319,12 +191,7 @@ impl App {
         // after the user picks a skillset and the switch writes
         // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
         // agent spawns without a skillset.
-        let needs_deferred_spawn = {
-            let nori_cfg = nori_config::NoriConfig::load().unwrap_or_default();
-            nori_cfg.skillset_per_session
-        };
-
-        let nori_config = nori_config::NoriConfig::load().unwrap_or_default();
+        let needs_deferred_spawn = cloud_mode || config.skillset_per_session;
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -335,9 +202,9 @@ impl App {
                 enhanced_keys_supported,
                 auth_manager: auth_manager.clone(),
                 vertical_footer,
-                footer_segment_config: nori_config.footer_segment_config.clone(),
-                footer_layout_config: nori_config.footer_layout_config.clone(),
-                expected_agent: None,
+                footer_segment_config: config.footer_segment_config.clone(),
+                footer_layout_config: config.footer_layout_config.clone(),
+                cloud_mode,
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
             };
@@ -348,7 +215,7 @@ impl App {
                         .load_transcript(&target.project_id, &target.session_id)
                         .await?;
                     let acp_session_id = transcript.meta.acp_session_id.clone();
-                    ChatWidget::new_resumed_acp(init, acp_session_id, Some(transcript))
+                    ChatWidget::new_resumed_acp(init, acp_session_id, None, Some(transcript))
                 }
                 ResumeSelection::StartFresh | ResumeSelection::Exit => ChatWidget::new(init),
             }
@@ -363,6 +230,8 @@ impl App {
         let (system_info_tx, system_info_rx) = mpsc::channel();
         let _system_info_worker =
             Self::spawn_system_info_worker(system_info_rx, app_event_tx.clone());
+        let footer_segment_config = config.footer_segment_config.clone();
+        let footer_layout_config = config.footer_layout_config.clone();
 
         let mut app = Self {
             app_event_tx,
@@ -370,34 +239,36 @@ impl App {
             auth_manager: auth_manager.clone(),
             config,
             vertical_footer,
-            active_profile,
+            cloud_mode,
             file_search,
             enhanced_keys_supported,
+            cloud_onboard,
             transcript_cells: Vec::new(),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
+            transcript_reflow: Default::default(),
             commit_anim_running: Arc::new(AtomicBool::new(false)),
             backtrack: BacktrackState::default(),
             pending_update_action: None,
-            suppress_shutdown_complete: false,
             skip_world_writable_scan_once: false,
             pending_agent: None,
             loop_count_override: None,
             hotkey_config: nori_config::HotkeyConfig::default(),
             vim_mode: nori_config::VimEnterBehavior::Off,
-            footer_segment_config: nori_config.footer_segment_config.clone(),
-            footer_layout_config: nori_config.footer_layout_config.clone(),
+            footer_segment_config,
+            footer_layout_config,
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
             deferred_spawn_pending: needs_deferred_spawn,
+            agent_session_probe_in_flight: false,
             mcp_oauth_cancel_tx: None,
         };
 
         // Propagate NoriConfig settings to the textarea.
-        app.hotkey_config = nori_config.hotkeys;
-        app.vim_mode = nori_config.vim_mode;
+        app.hotkey_config = app.config.hotkeys.clone();
+        app.vim_mode = app.config.vim_mode;
 
         // Propagate initial hotkey config to the textarea so editing bindings
         // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
@@ -405,7 +276,7 @@ impl App {
         // Propagate initial vim mode setting.
         app.chat_widget.set_vim_mode(app.vim_mode);
         // Propagate initial pinned plan drawer setting.
-        let plan_mode = if nori_config.pinned_plan_drawer {
+        let plan_mode = if app.config.pinned_plan_drawer {
             crate::chatwidget::PlanDrawerMode::Expanded
         } else {
             crate::chatwidget::PlanDrawerMode::Off
@@ -420,7 +291,19 @@ impl App {
         // `spawn_deferred_agent()`. If the user dismisses the picker, the
         // `SkillsetPickerDismissed` event triggers the deferred spawn without a
         // skillset.
-        if nori_config.skillset_per_session {
+        if cloud_mode {
+            if cloud_onboard {
+                app.begin_agent_session_probe(
+                    crate::app_event::AgentSessionProbeIntent::Onboarding,
+                );
+            } else {
+                // Picker-first entry: list live sessions before anything can
+                // claim one; "start new" is an explicit row in the picker.
+                app.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                    fallback_to_spawn: true,
+                });
+            }
+        } else if app.config.skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
         }
 
@@ -430,8 +313,8 @@ impl App {
             let should_check = codex_sandbox::get_platform_sandbox().is_some()
                 && matches!(
                     app.config.sandbox_policy,
-                    codex_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. }
-                        | codex_protocol::protocol::SandboxPolicy::ReadOnly
+                    nori_config::SandboxPolicy::WorkspaceWrite { .. }
+                        | nori_config::SandboxPolicy::ReadOnly
                 )
                 && !app
                     .config
@@ -442,7 +325,7 @@ impl App {
                 let cwd = app.config.cwd.clone();
                 let env_map: std::collections::HashMap<String, String> = std::env::vars().collect();
                 let tx = app.app_event_tx.clone();
-                let logs_base_dir = app.config.codex_home.clone();
+                let logs_base_dir = app.config.nori_home.clone();
                 let sandbox_policy = app.config.sandbox_policy.clone();
                 Self::spawn_world_writable_scan(cwd, env_map, logs_base_dir, sandbox_policy, tx);
             }
@@ -465,7 +348,7 @@ impl App {
 
         app.request_system_info_refresh(
             app.config.cwd.clone(),
-            Some(app.config.model.clone()),
+            Some(app.config.active_agent.clone()),
             app.chat_widget.first_prompt_text(),
         );
 
@@ -491,23 +374,12 @@ impl App {
         })
     }
 
-    fn reasoning_label(reasoning_effort: Option<ReasoningEffortConfig>) -> &'static str {
-        match reasoning_effort {
-            Some(ReasoningEffortConfig::Minimal) => "minimal",
-            Some(ReasoningEffortConfig::Low) => "low",
-            Some(ReasoningEffortConfig::Medium) => "medium",
-            Some(ReasoningEffortConfig::High) => "high",
-            Some(ReasoningEffortConfig::XHigh) => "xhigh",
-            None | Some(ReasoningEffortConfig::None) => "default",
-        }
-    }
-
     pub(super) fn chat_widget_init(
         &self,
         frame_requester: crate::tui::FrameRequester,
         initial_prompt: Option<String>,
         initial_images: Vec<PathBuf>,
-        expected_agent: Option<String>,
+        _expected_agent: Option<String>,
         deferred_spawn: bool,
         fork_context: Option<String>,
     ) -> crate::chatwidget::ChatWidgetInit {
@@ -522,7 +394,7 @@ impl App {
             vertical_footer: self.vertical_footer,
             footer_segment_config: self.footer_segment_config.clone(),
             footer_layout_config: self.footer_layout_config.clone(),
-            expected_agent,
+            cloud_mode: self.cloud_mode,
             deferred_spawn,
             fork_context,
         }
@@ -537,7 +409,7 @@ impl App {
             .set_loop_count_override(self.loop_count_override);
     }
 
-    pub(crate) fn token_usage(&self) -> codex_protocol::protocol::TokenUsage {
+    pub(crate) fn token_usage(&self) -> TokenUsage {
         self.chat_widget.token_usage()
     }
 
@@ -581,34 +453,4 @@ impl App {
             }
         })
     }
-
-    fn on_update_reasoning_effort(&mut self, effort: Option<ReasoningEffortConfig>) {
-        self.chat_widget.set_reasoning_effort(effort);
-        self.config.model_reasoning_effort = effort;
-    }
 }
-
-fn migration_prompt_allowed_auth_modes(migration_config_key: &str) -> Option<&'static [AuthMode]> {
-    match migration_config_key {
-        HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => Some(&GPT_5_1_MIGRATION_AUTH_MODES),
-        HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG => Some(&GPT_5_1_CODEX_MIGRATION_AUTH_MODES),
-        _ => None,
-    }
-}
-
-fn migration_prompt_allows_auth_mode(
-    auth_mode: Option<AuthMode>,
-    migration_config_key: &str,
-) -> bool {
-    if let Some(allowed_modes) = migration_prompt_allowed_auth_modes(migration_config_key) {
-        match auth_mode {
-            None => true,
-            Some(mode) => allowed_modes.contains(&mode),
-        }
-    } else {
-        auth_mode != Some(AuthMode::ApiKey)
-    }
-}
-
-#[cfg(test)]
-mod tests;

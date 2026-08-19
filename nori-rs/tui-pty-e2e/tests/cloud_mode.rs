@@ -30,10 +30,11 @@ fn mock_agent_path() -> PathBuf {
 ///
 /// The script records its argv to `argv`, the `NORI_BROKER_URL` it received
 /// to `broker_url`, then runs the mock agent on its stdio. After the mock
-/// agent exits (it exits 0 on stdin EOF), the script writes a `released`
-/// marker — the same "stdin EOF means clean release" contract that
-/// `nori-handroll cloud-acp` implements. A SIGKILLed process group never
-/// writes the marker.
+/// agent exits (it exits 0 on stdin EOF), the script APPENDS an `eof` line to
+/// the `released` marker — one line per child that saw EOF and finished its
+/// own teardown (post-#1276 that teardown is a *detach*, not a release). The
+/// picker-first entry probe spawns an extra short-lived child per boot, so
+/// tests count marker lines rather than checking existence.
 struct FakeHandroll {
     dir: tempfile::TempDir,
     script: PathBuf,
@@ -53,9 +54,9 @@ impl FakeHandroll {
             "#!/bin/sh\n\
              printf '%s\\n' \"$@\" > '{dir}/argv'\n\
              printenv NORI_BROKER_URL > '{dir}/broker_url' 2>/dev/null\n\
-             '{mock}'\n\
+             '{mock}' 2>>'{dir}/agent_stderr'\n\
              status=$?\n\
-             echo done > '{dir}/released'\n\
+             echo eof >> '{dir}/released'\n\
              exit $status\n",
             dir = dir.path().display(),
             mock = mock.display(),
@@ -114,12 +115,54 @@ impl FakeHandroll {
         }
         false
     }
+
+    fn wait_for_marker_text(&self, name: &str, expected: &str, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if std::fs::read_to_string(self.marker(name))
+                .is_ok_and(|contents| contents.trim() == expected)
+            {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
+
+    /// Number of children that have completed their stdin-EOF path so far.
+    fn released_count(&self) -> usize {
+        std::fs::read_to_string(self.marker("released"))
+            .map(|s| s.lines().count())
+            .unwrap_or(0)
+    }
+
+    fn wait_for_released_above(&self, baseline: usize, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if self.released_count() > baseline {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
 }
 
 fn cloud_session_config(fake: &FakeHandroll) -> SessionConfig {
     SessionConfig::new()
         .with_subcommand("cloud")
         .with_agent_env("NORI_HANDROLL_BIN", fake.script.to_string_lossy())
+}
+
+/// Cloud config where the mock agent advertises the full cloud session
+/// lifecycle (`sessionCapabilities.{list,resume,close}`, `loadSession:false`)
+/// — the real `nori-handroll cloud-acp` contract. This is what makes the
+/// picker-first entry flow eligible.
+fn cloud_lifecycle_config(fake: &FakeHandroll) -> SessionConfig {
+    cloud_session_config(fake)
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_RESUME", "1")
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_CLOSE", "1")
 }
 
 /// Find transcript files under NORI_HOME (same layout as transcript_persistence tests).
@@ -170,14 +213,286 @@ fn test_cloud_mode_round_trips_prompt_through_handroll() {
         .expect("prompt should round-trip through the handroll child");
 }
 
-/// On TUI exit the handroll child must be released gracefully: stdin closed
-/// and the child given time to run its EOF→release path — not SIGKILLed.
-/// A killed process group never writes the `released` marker.
+/// On TUI exit the handroll child gets stdin EOF first — the detach signal —
+/// and a cooperative child completes its EOF path. (Post-#1276 EOF detaches
+/// the session; `session/close` is the only terminal verb. The hard-exit
+/// watchdog may SIGKILL a child that *ignores* EOF — covered separately —
+/// but a prompt child must be allowed to finish cleanly.)
 #[test]
 #[cfg(target_os = "linux")]
-fn test_cloud_mode_releases_handroll_gracefully_on_exit() {
+fn test_cloud_mode_sends_eof_detach_to_handroll_on_exit() {
     let fake = FakeHandroll::new();
-    let config = cloud_session_config(&fake);
+    let config = cloud_session_config(&fake).with_mock_response("alive before exit");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("nori cloud should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+    // Prove the LIVE child exists (the deferred composer renders before the
+    // probe fallback spawns it), and let the probe child's late eof line
+    // land, so the baseline below cannot race either way.
+    session.send_str("prove the session is live").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("alive before exit", TIMEOUT)
+        .expect("session should be live before exit");
+    assert!(
+        fake.wait_for_released_above(0, Duration::from_secs(10)),
+        "the boot probe child should complete its EOF path"
+    );
+    let baseline = fake.released_count();
+
+    session.send_str("/exit").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    // Assert before dropping the PTY so a slow shutdown can't be SIGHUPed by
+    // the closing master and produce a false failure.
+    assert!(
+        fake.wait_for_released_above(baseline, Duration::from_secs(10)),
+        "the live handroll child should see stdin EOF and complete its detach path on exit"
+    );
+    drop(session);
+}
+
+/// `nori cloud` against a lifecycle-capable agent must boot into the session
+/// picker — live sessions listed by title, an explicit "start new" row — and
+/// must NOT claim a session before the user picks.
+/// `MOCK_AGENT_FAIL_NEW_SESSION_FROM=0` turns any premature `session/new`
+/// into a loud failure, so the picker appearing proves nothing was claimed.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_mode_boots_into_session_picker_without_claiming() {
+    let fake = FakeHandroll::new();
+    let config =
+        cloud_lifecycle_config(&fake).with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker with a create-new row");
+    session
+        .wait_for_text("First mock session", TIMEOUT)
+        .expect("the picker should list live sessions by their broker title");
+
+    // The probe child must be torn down once the picker is up — a leaked
+    // process per boot would never write its EOF line.
+    assert!(
+        fake.wait_for_released_above(0, Duration::from_secs(10)),
+        "the probe child should be torn down after the picker opens"
+    );
+    // Belt and braces on "nothing claimed": the mock logs every session/new
+    // to stderr; none may have happened.
+    let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
+    assert!(
+        !agent_stderr.contains("new_session id="),
+        "no session/new may run before the user picks, agent stderr:\n{agent_stderr}"
+    );
+}
+
+/// Plain `nori` (no cloud subcommand) must NOT get picker-first entry, even
+/// against an agent that advertises the full session lifecycle — the picker
+/// boot is a cloud-entry behavior, not a capability reflex.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_plain_nori_does_not_boot_into_the_agent_session_picker() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_RESUME", "1")
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_CLOSE", "1");
+
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("plain nori should boot straight to the composer");
+    let contents = session.screen_contents();
+    assert!(
+        !contents.contains("Start a new session"),
+        "plain nori must not open the agent session picker on boot, got:\n{contents}"
+    );
+}
+
+/// Picking a listed session from the entry picker reattaches to it via
+/// `session/load` when the cloud facade advertises replay support (never
+/// `session/new` — enforced by the fail-new guard), identifies the reattached
+/// session, and round-trips a prompt on it.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_entry_picker_resume_row_reattaches_live() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake)
+        .with_agent_env("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1")
+        .with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0")
+        .with_mock_response("hello from the reattached session");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("First mock session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Row 0 is "Start a new session"; row 1 is the first listed session.
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("Reattaching to mock-session-1", TIMEOUT)
+        .expect("reattach must identify the selected cloud session");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("the composer should be ready after reattach");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("ping the reattached session").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("hello from the reattached session", TIMEOUT)
+        .expect("prompt should round-trip on the reattached session");
+
+    // The fail-new guard is per-child; the stderr log covers every child in
+    // this boot (probe AND the reattached session's process).
+    let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
+    assert!(
+        !agent_stderr.contains("new_session id="),
+        "reattach must never create a session in any child, agent stderr:\n{agent_stderr}"
+    );
+}
+
+/// The "Start a new session" row claims a fresh session only when picked —
+/// and the session is then fully usable.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_entry_picker_create_new_starts_fresh_session() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake).with_mock_response("fresh session says hi");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    // Row 0 is the create-new row.
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("picking create-new should start a fresh session");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("hello fresh session").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("fresh session says hi", TIMEOUT)
+        .expect("prompt should round-trip on the fresh session");
+}
+
+/// /close releases the session and returns to the session picker — it must
+/// NOT auto-claim a fresh session ("swap" semantics are gone).
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_close_returns_to_the_picker() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake);
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("create-new should start a session");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("/close").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("Session closed", TIMEOUT)
+        .expect("/close should confirm the release");
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("/close should land back on the session picker, not a fresh chat");
+}
+
+/// After /close releases a session, a failing return-to-picker probe must
+/// NOT fall back to spawning a fresh session — the user just released one;
+/// silently claiming another is forbidden. (Entry-path probe failure DOES
+/// fall back — that is the old `nori cloud` behavior, exercised implicitly
+/// here because the same list failure hits the entry probe first.)
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_close_probe_failure_does_not_claim_a_new_session() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake).with_agent_env("MOCK_AGENT_LIST_SESSIONS_FAIL", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    // Entry: probe fails (list error) → error surfaced → fallback spawns a
+    // session (the old behavior).
+    session
+        .wait_for_text("Couldn't list sessions", TIMEOUT)
+        .expect("entry probe failure should be surfaced");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("entry probe failure should fall back to a plain session");
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("/close").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text("Session closed", TIMEOUT)
+        .expect("/close should release the session");
+    // The return-to-picker probe fails too — the user must land on explicit
+    // next actions, not a silently claimed session.
+    session
+        .wait_for_text("No session is active", TIMEOUT)
+        .expect("post-close probe failure must leave explicit next steps");
+
+    // Exactly one session was ever created (the entry fallback). A second
+    // new_session here would mean /close auto-claimed a fresh VM.
+    let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
+    let creates = agent_stderr
+        .lines()
+        .filter(|line| line.contains("new_session id="))
+        .count();
+    assert_eq!(
+        creates, 1,
+        "post-close probe failure must not create a session, agent stderr:\n{agent_stderr}"
+    );
+}
+
+/// Quit must force cleanup after the cloud detach grace even when the child
+/// ignores stdin EOF entirely — the old 25s shutdown grace held the whole TUI
+/// hostage.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_quit_exits_fast_even_if_child_ignores_eof() {
+    let fake = FakeHandroll::new();
+    let config = cloud_session_config(&fake).with_agent_env("MOCK_AGENT_IGNORE_EOF", "1");
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
@@ -187,19 +502,17 @@ fn test_cloud_mode_releases_handroll_gracefully_on_exit() {
         .expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("/exit").unwrap();
+    session.send_str("/quit").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // The marker appears while nori is still gracefully waiting on the child;
-    // assert before dropping the PTY so a slow shutdown can't be SIGHUPed by
-    // the closing master and produce a false failure.
+    // The owned child lifecycle caps detach grace at ~1s; 5s here is CI slack.
+    // The old behavior waited out a 25s child-exit grace, which this must never
+    // do.
     assert!(
-        fake.wait_for_marker("released", Duration::from_secs(10)),
-        "handroll child should see stdin EOF and complete its release path on exit; \
-         missing marker means the child was killed before it could release the session"
+        session.wait_for_process_exit(Duration::from_secs(5)),
+        "the TUI must finish bounded cleanup even when the agent child ignores EOF"
     );
-    drop(session);
 }
 
 /// A handroll child that dies mid-session must surface a loud error in the
@@ -235,6 +548,14 @@ fn test_cloud_mode_child_death_mid_session_surfaces_error() {
     session
         .wait_for_text("tunnel collapsed", TIMEOUT)
         .expect("the error must include the child's recent stderr");
+    assert!(
+        !session.wait_for_process_exit(Duration::from_millis(500)),
+        "an agent connection failure must not exit the client interface"
+    );
+    assert!(
+        !session.screen_contents().contains("Goodbye!"),
+        "an agent connection failure must preserve the error state, not render an exit summary"
+    );
 }
 
 /// Cloud sessions record local transcripts like any other agent session
@@ -309,7 +630,7 @@ fn test_cloud_mode_overrides_agent_flag() {
     let fake = FakeHandroll::new();
     // The harness passes `--agent definitely-not-an-agent`; cloud mode must
     // ignore it and pin the handroll adapter.
-    let config = cloud_session_config(&fake).with_model("definitely-not-an-agent".to_string());
+    let config = cloud_session_config(&fake).with_agent("definitely-not-an-agent".to_string());
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
@@ -338,13 +659,7 @@ fn test_cloud_mode_passes_broker_url_from_config() {
         .wait_for_text("›", TIMEOUT)
         .expect("nori cloud should start");
     assert!(
-        fake.wait_for_marker("broker_url", TIMEOUT),
-        "fake handroll should have dumped its NORI_BROKER_URL"
-    );
-    let broker_url = std::fs::read_to_string(fake.marker("broker_url")).expect("read broker_url");
-    assert_eq!(
-        broker_url.trim(),
-        "http://broker.test:19400",
+        fake.wait_for_marker_text("broker_url", "http://broker.test:19400", TIMEOUT),
         "[cloud] broker_url must be passed to the child as NORI_BROKER_URL"
     );
 }
@@ -361,6 +676,13 @@ fn test_cloud_mode_surfaces_auth_error_from_child_stderr() {
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
     session
-        .wait_for_text("nori-handroll login", TIMEOUT)
-        .expect("the child's stderr auth message should be surfaced to the user");
+        .wait_for(
+            |screen| {
+                let visible_text: String = screen.split_whitespace().collect();
+                visible_text
+                    .contains("AuthenticationrequiredforNoriCloudACP.run:nori-handrolllogin")
+            },
+            TIMEOUT,
+        )
+        .expect("the auth error should include an actionable login command");
 }

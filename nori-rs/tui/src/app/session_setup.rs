@@ -1,11 +1,66 @@
 use super::*;
 
+pub(super) fn onboarding_resume_event(
+    sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
+) -> Option<AppEvent> {
+    sessions.into_iter().find_map(|session| {
+        let is_onboarding = session
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("nori"))
+            .and_then(|nori| nori.get("purpose"))
+            .and_then(serde_json::Value::as_str)
+            == Some("onboarding");
+        is_onboarding.then(|| AppEvent::ResumeAcpSession {
+            acp_session_id: session.session_id.to_string(),
+            title: session.title.filter(|title| !title.is_empty()),
+        })
+    })
+}
+
 impl App {
-    pub(super) fn shutdown_current_conversation(&mut self) {
-        if self.chat_widget.conversation_id().is_some() {
-            self.suppress_shutdown_complete = true;
-            self.chat_widget.submit_op(Op::Shutdown);
+    /// Kick off the pre-session agent probe (spawn → initialize →
+    /// `session/list` → teardown; never `session/new`) and report the result
+    /// as [`AppEvent::AgentSessionListProbed`]. Used by picker-first entry
+    /// (`nori cloud`), the post-`/close` return to the picker, and /resume
+    /// retries on a deferred widget. Bounded by a wall-clock timeout so a
+    /// hung broker can never wedge the boot with no way forward.
+    pub(crate) fn begin_agent_session_probe(
+        &mut self,
+        intent: crate::app_event::AgentSessionProbeIntent,
+    ) {
+        if self.agent_session_probe_in_flight {
+            return;
         }
+        self.agent_session_probe_in_flight = true;
+        let display_name = nori_harness::get_agent_display_name(&self.config.active_agent);
+        self.chat_widget
+            .add_info_message(format!("Listing {display_name} sessions…"), None);
+
+        let agent = self.config.active_agent.clone();
+        let cwd = self.config.cwd.clone();
+        let acp_proxy = self.config.acp_proxy.clone();
+        let tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+            let probe = match tokio::time::timeout(
+                PROBE_TIMEOUT,
+                nori_harness::probe_agent_sessions_for(&agent, &cwd, acp_proxy),
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(_) => Err(nori_harness::ProbeError::Failed(format!(
+                    "timed out listing sessions after {}s",
+                    PROBE_TIMEOUT.as_secs()
+                ))),
+            };
+            tx.send(AppEvent::AgentSessionListProbed { probe, intent });
+        });
+    }
+
+    pub(super) fn shutdown_current_conversation(&mut self) {
+        self.chat_widget.shutdown_harness_session();
     }
 
     /// Display a loaded transcript in the history view.
@@ -13,6 +68,7 @@ impl App {
         &mut self,
         entries: Vec<crate::viewonly_transcript::ViewonlyEntry>,
     ) {
+        use crate::history_cell::AgentMarkdownCell;
         use crate::history_cell::AgentMessageCell;
         use crate::markdown::append_markdown;
         use crate::viewonly_transcript::ViewonlyEntry;
@@ -40,10 +96,7 @@ impl App {
                     ));
                 }
                 ViewonlyEntry::Assistant { content } => {
-                    // Add assistant response with markdown rendering
-                    let mut lines = Vec::new();
-                    append_markdown(&content, None, &mut lines);
-                    let cell = AgentMessageCell::new(lines, true);
+                    let cell = AgentMarkdownCell::new(content, &self.config.cwd);
                     self.chat_widget.add_boxed_history(Box::new(cell));
                 }
                 ViewonlyEntry::Thinking { content } => {
@@ -229,7 +282,7 @@ impl App {
         cwd: PathBuf,
         env_map: std::collections::HashMap<String, String>,
         logs_base_dir: PathBuf,
-        sandbox_policy: codex_protocol::protocol::SandboxPolicy,
+        sandbox_policy: nori_config::SandboxPolicy,
         tx: AppEventSender,
     ) {
         tokio::task::spawn_blocking(move || {
@@ -250,5 +303,41 @@ impl App {
                 });
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use nori_protocol::acp::v1::SessionInfo;
+
+    use super::onboarding_resume_event;
+    use crate::app_event::AppEvent;
+
+    #[test]
+    fn tagged_onboarding_session_emits_the_existing_resume_action() {
+        let ordinary = SessionInfo::new("ordinary", PathBuf::from("/"));
+        let mut onboarding = SessionInfo::new("onboarding", PathBuf::from("/"));
+        onboarding.title = Some("Set up Nori".to_string());
+        onboarding.meta = Some(
+            serde_json::from_value(serde_json::json!({
+                "nori": { "purpose": "onboarding" }
+            }))
+            .expect("valid metadata"),
+        );
+
+        assert!(matches!(
+            onboarding_resume_event(vec![ordinary, onboarding]),
+            Some(AppEvent::ResumeAcpSession { acp_session_id, title })
+                if acp_session_id == "onboarding" && title.as_deref() == Some("Set up Nori")
+        ));
+    }
+
+    #[test]
+    fn no_tagged_onboarding_session_leaves_the_fresh_fallback_available() {
+        let ordinary = SessionInfo::new("ordinary", PathBuf::from("/"));
+
+        assert!(onboarding_resume_event(vec![ordinary]).is_none());
     }
 }

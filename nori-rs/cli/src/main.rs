@@ -6,18 +6,9 @@ use codex_execpolicy::ExecPolicyCheckCommand;
 use nori_cli::LandlockCommand;
 use nori_cli::SeatbeltCommand;
 use nori_cli::WindowsCommand;
-#[cfg(feature = "login")]
-use nori_cli::login::read_api_key_from_stdin;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_status;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_with_api_key;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_with_chatgpt;
-#[cfg(feature = "login")]
-use nori_cli::login::run_login_with_device_code;
-#[cfg(feature = "login")]
-use nori_cli::login::run_logout;
+use nori_config::AskForApproval;
+use nori_config::NoriConfigOverrides;
+use nori_config::SandboxMode;
 use nori_config::find_nori_home;
 use nori_harness::init_rolling_file_tracing;
 
@@ -27,9 +18,12 @@ use nori_tui::RESUME_HINT_LEAD;
 use nori_tui::resume_command_for_conversation;
 use nori_tui::update_action::UpdateAction;
 use owo_colors::OwoColorize;
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 use supports_color::Stream;
 
+mod stdin_prompt;
 #[cfg(not(windows))]
 mod wsl_paths;
 
@@ -53,6 +47,11 @@ struct MultitoolCli {
     #[clap(flatten)]
     pub config_overrides: CliConfigOverrides,
 
+    /// Print the response and exit instead of starting the terminal UI.
+    /// Equivalent to `nori exec`.
+    #[arg(short = 'p', long = "print", default_value_t = false)]
+    print: bool,
+
     #[clap(flatten)]
     interactive: TuiCli,
 
@@ -62,14 +61,6 @@ struct MultitoolCli {
 
 #[derive(Debug, clap::Subcommand)]
 enum Subcommand {
-    /// Manage login.
-    #[cfg(feature = "login")]
-    Login(LoginCommand),
-
-    /// Remove stored authentication credentials.
-    #[cfg(feature = "login")]
-    Logout(LogoutCommand),
-
     /// Run commands within a Nori-provided sandbox.
     #[clap(visible_alias = "debug")]
     Sandbox(SandboxArgs),
@@ -93,6 +84,9 @@ enum Subcommand {
 
     /// Run a TUI session backed by a cloud VM via the nori-sessions broker.
     Cloud(CloudCommand),
+
+    /// Run a prompt non-interactively or serve the ACP stdio facade.
+    Exec(ExecCommand),
 }
 
 #[derive(Debug, Parser)]
@@ -121,8 +115,43 @@ struct ResumeCommand {
 
 #[derive(Debug, Parser)]
 struct CloudCommand {
+    /// Attach to the org's onboarding session (agent-led first-run setup)
+    /// instead of opening the session picker.
+    #[arg(long)]
+    onboard: bool,
+
     #[clap(flatten)]
     config_overrides: TuiCli,
+}
+
+#[derive(Debug, Parser)]
+struct ExecCommand {
+    /// Prompt to send. Reads stdin when omitted, or when set to `-`.
+    #[arg(value_name = "PROMPT", conflicts_with = "acp")]
+    prompt: Option<String>,
+
+    /// Read piped stdin and append it to PROMPT as context.
+    #[arg(long = "stdin", default_value_t = false, conflicts_with = "acp")]
+    stdin: bool,
+
+    /// Serve a bounded ACP agent facade over stdio.
+    #[arg(long)]
+    acp: bool,
+
+    /// ACP agent to run behind the facade.
+    #[arg(long)]
+    agent: Option<String>,
+
+    /// Working directory for the execution.
+    #[arg(short = 'C', long = "cwd", value_name = "DIR")]
+    cwd: Option<PathBuf>,
+
+    /// Disable approval prompts and sandboxing for ACP-visible operations.
+    #[arg(long)]
+    dangerously_bypass_approvals_and_sandbox: bool,
+
+    #[clap(flatten)]
+    config_overrides: CliConfigOverrides,
 }
 
 #[derive(Debug, Parser)]
@@ -158,56 +187,6 @@ enum ExecpolicySubcommand {
     Check(ExecPolicyCheckCommand),
 }
 
-#[cfg(feature = "login")]
-#[derive(Debug, Parser)]
-struct LoginCommand {
-    #[clap(skip)]
-    config_overrides: CliConfigOverrides,
-
-    #[arg(
-        long = "with-api-key",
-        help = "Read the API key from stdin (e.g. `printenv OPENAI_API_KEY | nori login --with-api-key`)"
-    )]
-    with_api_key: bool,
-
-    #[arg(
-        long = "api-key",
-        value_name = "API_KEY",
-        help = "(deprecated) Previously accepted the API key directly; now exits with guidance to use --with-api-key",
-        hide = true
-    )]
-    api_key: Option<String>,
-
-    #[arg(long = "device-auth")]
-    use_device_code: bool,
-
-    /// EXPERIMENTAL: Use custom OAuth issuer base URL (advanced)
-    /// Override the OAuth issuer base URL (advanced)
-    #[arg(long = "experimental_issuer", value_name = "URL", hide = true)]
-    issuer_base_url: Option<String>,
-
-    /// EXPERIMENTAL: Use custom OAuth client ID (advanced)
-    #[arg(long = "experimental_client-id", value_name = "CLIENT_ID", hide = true)]
-    client_id: Option<String>,
-
-    #[command(subcommand)]
-    action: Option<LoginSubcommand>,
-}
-
-#[cfg(feature = "login")]
-#[derive(Debug, clap::Subcommand)]
-enum LoginSubcommand {
-    /// Show login status.
-    Status,
-}
-
-#[cfg(feature = "login")]
-#[derive(Debug, Parser)]
-struct LogoutCommand {
-    #[clap(skip)]
-    config_overrides: CliConfigOverrides,
-}
-
 #[derive(Debug, Parser)]
 struct StdioToUdsCommand {
     /// Path to the Unix domain socket to connect to.
@@ -233,10 +212,7 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
 
     let mut lines = Vec::new();
     if !token_usage.is_zero() {
-        lines.push(format!(
-            "{}",
-            codex_protocol::protocol::FinalOutput::from(token_usage)
-        ));
+        lines.push(token_usage.to_string());
     }
 
     if conversation_has_activity && let Some(session_id) = conversation_id {
@@ -325,7 +301,7 @@ fn run_skillsets_command(cmd: SkillsetsCommand) -> anyhow::Result<()> {
         }
     } else {
         // Fall back to npx/bunx if not in PATH
-        use nori_harness::registry::detect_preferred_package_manager;
+        use nori_harness::detect_preferred_package_manager;
 
         let package_manager = detect_preferred_package_manager();
         let runner = package_manager.command(); // "npx" or "bunx"
@@ -370,29 +346,10 @@ fn main() -> anyhow::Result<()> {
 async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
     let MultitoolCli {
         config_overrides: root_config_overrides,
+        print,
         mut interactive,
         subcommand,
     } = MultitoolCli::parse();
-
-    // Set up CODEX_HOME to point to NORI_HOME so all codex-core config loading
-    // uses ~/.nori/cli/ instead of ~/.codex. This must happen early, before any
-    // subcommand dispatch or config loading. Only set if not already defined,
-    // to allow tests and users to override via environment variable.
-    if std::env::var("CODEX_HOME").is_err()
-        && let Ok(nori_home) = find_nori_home()
-    {
-        // Create the directory if it doesn't exist
-        if let Err(e) = std::fs::create_dir_all(&nori_home) {
-            eprintln!(
-                "Warning: Failed to create Nori config directory '{}': {e}",
-                nori_home.display()
-            );
-        }
-        // SAFETY: Called early in main before spawning threads
-        unsafe {
-            std::env::set_var("CODEX_HOME", &nori_home);
-        }
-    }
 
     // Initialize ACP rolling file tracing in $NORI_HOME/log/ (non-critical, log warning on failure)
     // Logs are stored as daily rolling files like: ~/.nori/cli/log/nori-acp.2024-01-15.log
@@ -403,54 +360,56 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
     }
 
+    // `-p` selects a mode, so a subcommand that selects a different one is a
+    // contradiction. Falling through would silently drop `print` and open the
+    // TUI for someone who asked for printed output.
+    if print && subcommand.is_some() {
+        anyhow::bail!("--print cannot be combined with a subcommand; use `nori exec` instead");
+    }
+
     match subcommand {
+        None if print => {
+            // `run_exec` has no way to attach images, so accepting them here
+            // would silently answer without the attachment.
+            if !interactive.images.is_empty() {
+                anyhow::bail!(
+                    "--print does not support --image; use the interactive CLI to attach images"
+                );
+            }
+            // `-p` is an alias for `exec`; the remaining flags are resolved from
+            // `interactive` inside `run_exec`, which also ingests piped stdin.
+            let cmd = ExecCommand {
+                prompt: interactive.prompt.take(),
+                stdin: interactive.stdin,
+                acp: false,
+                agent: None,
+                cwd: None,
+                dangerously_bypass_approvals_and_sandbox: false,
+                config_overrides: CliConfigOverrides::default(),
+            };
+            run_exec(
+                cmd,
+                interactive,
+                root_config_overrides,
+                env!("CARGO_PKG_VERSION").to_string(),
+            )
+            .await?;
+        }
         None => {
             prepend_config_flags(
                 &mut interactive.config_overrides,
                 root_config_overrides.clone(),
             );
+            // A piped prompt seeds the session; the TUI still starts normally so
+            // the user keeps the conversation going after the first turn.
+            let prompt = interactive.prompt.take();
+            let (prompt, consumed_stdin) = stdin_prompt::resolve_prompt(prompt, interactive.stdin)?;
+            interactive.prompt = prompt;
+            if consumed_stdin {
+                stdin_prompt::restore_stdin_from_terminal();
+            }
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
-        }
-        #[cfg(feature = "login")]
-        Some(Subcommand::Login(mut login_cli)) => {
-            prepend_config_flags(
-                &mut login_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            match login_cli.action {
-                Some(LoginSubcommand::Status) => {
-                    run_login_status(login_cli.config_overrides).await;
-                }
-                None => {
-                    if login_cli.use_device_code {
-                        run_login_with_device_code(
-                            login_cli.config_overrides,
-                            login_cli.issuer_base_url,
-                            login_cli.client_id,
-                        )
-                        .await;
-                    } else if login_cli.api_key.is_some() {
-                        eprintln!(
-                            "The --api-key flag is no longer supported. Pipe the key instead, e.g. `printenv OPENAI_API_KEY | nori login --with-api-key`."
-                        );
-                        std::process::exit(1);
-                    } else if login_cli.with_api_key {
-                        let api_key = read_api_key_from_stdin();
-                        run_login_with_api_key(login_cli.config_overrides, api_key).await;
-                    } else {
-                        run_login_with_chatgpt(login_cli.config_overrides).await;
-                    }
-                }
-            }
-        }
-        #[cfg(feature = "login")]
-        Some(Subcommand::Logout(mut logout_cli)) => {
-            prepend_config_flags(
-                &mut logout_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            run_logout(logout_cli.config_overrides).await;
         }
         Some(Subcommand::Sandbox(sandbox_args)) => match sandbox_args.cmd {
             SandboxCommand::Macos(mut seatbelt_cli) => {
@@ -537,10 +496,26 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             interactive.extra_agents = vec![nori_cli::cloud::cloud_agent_config(
                 &handroll_bin,
                 nori_config.cloud_broker_url.as_deref(),
+                cloud_cmd.onboard,
             )];
+            // Cloud entry is picker-first: list live sessions before
+            // anything can claim a VM; creating one is an explicit pick.
+            // `--onboard` skips the picker, resuming a tagged onboarding
+            // session or falling back to the broker's serialized acquisition.
+            interactive.cloud_mode = true;
+            interactive.cloud_onboard = cloud_cmd.onboard;
 
             let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
             handle_app_exit(exit_info)?;
+        }
+        Some(Subcommand::Exec(cmd)) => {
+            run_exec(
+                cmd,
+                interactive,
+                root_config_overrides,
+                env!("CARGO_PKG_VERSION").to_string(),
+            )
+            .await?;
         }
         Some(Subcommand::Completions(cmd)) => {
             clap_complete::generate(
@@ -552,6 +527,79 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
     }
 
+    Ok(())
+}
+
+async fn run_exec(
+    cmd: ExecCommand,
+    interactive: TuiCli,
+    root_config_overrides: CliConfigOverrides,
+    cli_version: String,
+) -> anyhow::Result<()> {
+    let ExecCommand {
+        prompt,
+        stdin,
+        acp,
+        agent,
+        cwd,
+        dangerously_bypass_approvals_and_sandbox,
+        config_overrides,
+    } = cmd;
+
+    let mut raw_overrides = root_config_overrides.raw_overrides;
+    raw_overrides.extend(interactive.config_overrides.raw_overrides);
+    raw_overrides.extend(config_overrides.raw_overrides);
+    let raw_overrides = CliConfigOverrides { raw_overrides }
+        .parse_overrides()
+        .map_err(anyhow::Error::msg)?;
+
+    let bypass = dangerously_bypass_approvals_and_sandbox
+        || interactive.dangerously_bypass_approvals_and_sandbox;
+    let (sandbox_mode, approval_policy) = if bypass {
+        (
+            Some(SandboxMode::DangerFullAccess),
+            Some(AskForApproval::Never),
+        )
+    } else {
+        (None, Some(AskForApproval::OnRequest))
+    };
+    let cwd = cwd
+        .or(interactive.cwd)
+        .map(|path| path.canonicalize().unwrap_or(path));
+    let overrides = NoriConfigOverrides {
+        agent: agent.or(interactive.agent),
+        sandbox_mode,
+        approval_policy,
+        cwd,
+        additional_writable_roots: interactive.add_dir,
+        raw_overrides,
+    };
+    let config = nori_config::NoriConfig::load_with_overrides(overrides)?;
+    nori_harness::initialize_registry(config.agents.clone())
+        .map_err(|error| anyhow::anyhow!("failed to initialize agent registry: {error}"))?;
+    let config = Arc::new(config);
+
+    if acp {
+        return nori_exec::run_acp(config, cli_version).await;
+    }
+
+    // Read stdin only after the ACP facade has had its chance to claim it.
+    let (prompt, _) = stdin_prompt::resolve_prompt(prompt, stdin)?;
+    let Some(prompt) = prompt else {
+        anyhow::bail!("a prompt argument or piped stdin is required");
+    };
+    let outcome = nori_exec::run_plaintext(config, cli_version, prompt).await?;
+    {
+        let mut stdout = std::io::stdout().lock();
+        stdout.write_all(outcome.output.as_bytes())?;
+        if !outcome.output.ends_with('\n') {
+            stdout.write_all(b"\n")?;
+        }
+        stdout.flush()?;
+    }
+    if outcome.permission_denied {
+        anyhow::bail!("permission request was rejected during unattended execution");
+    }
     Ok(())
 }
 
@@ -593,9 +641,6 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     if let Some(agent) = subcommand_cli.agent {
         interactive.agent = Some(agent);
     }
-    if let Some(profile) = subcommand_cli.config_profile {
-        interactive.config_profile = Some(profile);
-    }
     if subcommand_cli.dangerously_bypass_approvals_and_sandbox {
         interactive.dangerously_bypass_approvals_and_sandbox = true;
     }
@@ -620,8 +665,8 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_protocol::ConversationId;
-    use codex_protocol::protocol::TokenUsage;
+    use nori_harness::ConversationId;
+    use nori_tui::TokenUsage;
     use pretty_assertions::assert_eq;
 
     fn finalize_resume_from_args(args: &[&str]) -> TuiCli {
@@ -629,6 +674,7 @@ mod tests {
         let MultitoolCli {
             interactive,
             config_overrides: root_overrides,
+            print: _,
             subcommand,
         } = cli;
 
@@ -985,6 +1031,7 @@ mod tests {
         let MultitoolCli {
             mut interactive,
             config_overrides: root_overrides,
+            print: _,
             subcommand,
         } = cli;
 
@@ -995,6 +1042,21 @@ mod tests {
         merge_interactive_cli_flags(&mut interactive, cloud_cmd.config_overrides);
         prepend_config_flags(&mut interactive.config_overrides, root_overrides);
         interactive
+    }
+
+    #[test]
+    fn cloud_onboard_flag_parses_and_defaults_off() {
+        let cli = MultitoolCli::try_parse_from(["nori", "cloud", "--onboard"]).expect("parse");
+        let Some(Subcommand::Cloud(cloud_cmd)) = cli.subcommand else {
+            panic!("expected cloud subcommand");
+        };
+        assert!(cloud_cmd.onboard);
+
+        let cli = MultitoolCli::try_parse_from(["nori", "cloud"]).expect("parse");
+        let Some(Subcommand::Cloud(cloud_cmd)) = cli.subcommand else {
+            panic!("expected cloud subcommand");
+        };
+        assert!(!cloud_cmd.onboard);
     }
 
     #[test]

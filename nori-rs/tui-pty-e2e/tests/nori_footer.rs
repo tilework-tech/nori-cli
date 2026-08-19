@@ -74,7 +74,7 @@ fn test_footer_without_git_repo() {
 #[cfg(target_os = "linux")]
 fn test_footer_full_startup_with_all_info() {
     // This test verifies the complete footer display similar to startup.rs tests
-    // It should show: git branch, nori profile, nori version, and git diff stats
+    // It should show: git branch, active skillset, Nori version, and git diff stats.
 
     use std::os::unix::fs::PermissionsExt;
 
@@ -97,7 +97,7 @@ fn test_footer_full_startup_with_all_info() {
     // at the trusted default) is preserved.
     let extra_config_toml = r#"
 [tui.footer_segments]
-nori_profile = true
+skillset = true
 nori_version = true
 git_stats = true
 "#;
@@ -165,13 +165,7 @@ git_stats = true
 #[test]
 #[cfg(target_os = "linux")]
 fn test_footer_vertical_layout_from_config() {
-    let config_toml = r#"
-model = "mock-model"
-model_provider = "mock_provider"
-
-[model_providers.mock_provider]
-name = "Mock ACP provider for tests"
-
+    let extra_config_toml = r#"
 [tui]
 vertical_footer = true
 "#;
@@ -180,7 +174,7 @@ vertical_footer = true
         24,
         60,
         SessionConfig::new()
-            .with_config_toml(config_toml)
+            .with_extra_config_toml(extra_config_toml)
             .with_excluded_binary("nori-skillsets"),
     )
     .expect("Failed to spawn");
@@ -224,21 +218,18 @@ vertical_footer = true
 #[cfg(target_os = "linux")]
 fn test_footer_with_segments_disabled() {
     // Test that footer segments can be disabled via config.toml
-    let config_toml = r#"
-model = "mock-model"
-model_provider = "mock_provider"
-
-[model_providers.mock_provider]
-name = "Mock ACP provider for tests"
-
+    let extra_config_toml = r#"
 [tui.footer_segments]
 git_branch = false
 approval_mode = false
 "#;
 
-    let mut session =
-        TuiSession::spawn_with_config(24, 120, SessionConfig::new().with_config_toml(config_toml))
-            .expect("Failed to spawn");
+    let mut session = TuiSession::spawn_with_config(
+        24,
+        120,
+        SessionConfig::new().with_extra_config_toml(extra_config_toml),
+    )
+    .expect("Failed to spawn");
 
     // Wait for the TUI to fully start (session header contains "Nori CLI")
     session.wait_for_text("›", TIMEOUT).unwrap();

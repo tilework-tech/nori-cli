@@ -3,24 +3,45 @@
 //! Provides a minimal, standalone configuration system for ACP-only mode.
 //! Configuration is loaded from `~/.nori/cli/config.toml`.
 
+mod config_types;
+mod edits;
+mod git_root;
 mod loader;
+mod policy;
 mod types;
 
+pub use config_types::EnvironmentVariablePattern;
+pub use config_types::McpServerConfig;
+pub use config_types::McpServerTransportConfig;
+pub use config_types::SandboxMode;
+pub use config_types::ShellEnvironmentPolicy;
+pub use config_types::ShellEnvironmentPolicyInherit;
+pub use config_types::ShellEnvironmentPolicyToml;
+pub use config_types::TrustLevel;
+pub use edits::NoriConfigEdits;
+pub use git_root::resolve_root_git_project_for_trust;
 pub use loader::CONFIG_FILE;
 pub use loader::NORI_HOME_DIR;
 pub use loader::NORI_HOME_ENV;
 pub use loader::find_nori_home;
+pub use policy::AskForApproval;
+pub use policy::SandboxPolicy;
+pub use policy::WritableRoot;
 pub use types::AcpProxyConfig;
 pub use types::AcpProxyConfigToml;
 pub use types::AgentConfigToml;
 pub use types::AgentDistributionToml;
-pub use types::ApprovalPolicy;
 pub use types::AutoWorktree;
+pub use types::BrowserProfileMode;
 pub use types::CloudConfigToml;
 pub use types::DEFAULT_AGENT;
+pub use types::FeaturesToml;
 pub use types::FileManager;
+pub use types::FooterFormat;
+pub use types::FooterFormatPart;
 pub use types::FooterLayoutConfig;
 pub use types::FooterLayoutConfigToml;
+pub use types::FooterLayoutItem;
 pub use types::FooterSegment;
 pub use types::FooterSegmentConfig;
 pub use types::FooterSegmentConfigToml;
@@ -31,14 +52,14 @@ pub use types::HotkeyBinding;
 pub use types::HotkeyConfig;
 pub use types::HotkeyConfigToml;
 pub use types::LocalDistribution;
-pub use types::McpServerConfig;
-pub use types::McpServerTransportConfig;
 pub use types::NoriConfig;
 pub use types::NoriConfigOverrides;
 pub use types::NoriConfigToml;
+pub use types::Notice;
 pub use types::NotifyAfterIdle;
 pub use types::OsNotifications;
 pub use types::PackageDistribution;
+pub use types::ProjectConfig;
 pub use types::ResolvedDistribution;
 pub use types::ScriptTimeout;
 pub use types::TerminalNotifications;
@@ -49,6 +70,7 @@ pub use types::resolve_hook_paths;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AskForApproval;
     use serial_test::serial;
     use std::env;
     use tempfile::TempDir;
@@ -98,11 +120,8 @@ mod tests {
         );
         assert_eq!(config.os_notifications, OsNotifications::Enabled);
         assert!(!config.vertical_footer);
-        assert_eq!(
-            config.sandbox_mode,
-            codex_protocol::config_types::SandboxMode::WorkspaceWrite
-        );
-        assert_eq!(config.approval_policy, ApprovalPolicy::OnRequest);
+        assert_eq!(config.sandbox_mode, crate::SandboxMode::WorkspaceWrite);
+        assert_eq!(config.approval_policy, AskForApproval::OnRequest);
     }
 
     #[test]
@@ -110,7 +129,7 @@ mod tests {
         let toml_str = "";
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
 
-        assert!(config.model.is_none());
+        assert!(config.agent.is_none());
         assert!(config.sandbox_mode.is_none());
         assert!(config.approval_policy.is_none());
         assert!(config.tui.vertical_footer.is_none());
@@ -119,9 +138,9 @@ mod tests {
     #[test]
     fn test_nori_config_toml_deserialize_full() {
         let toml_str = r#"
-model = "gemini"
+agent = "gemini"
 sandbox_mode = "read-only"
-approval_policy = "always"
+approval_policy = "on-failure"
 
 [tui]
 animations = false
@@ -133,12 +152,9 @@ custom_working_message_list = ["alpha", "beta"]
 "#;
         let config: NoriConfigToml = toml::from_str(toml_str).unwrap();
 
-        assert_eq!(config.model, Some("gemini".to_string()));
-        assert_eq!(
-            config.sandbox_mode,
-            Some(codex_protocol::config_types::SandboxMode::ReadOnly)
-        );
-        assert_eq!(config.approval_policy, Some(ApprovalPolicy::Always));
+        assert_eq!(config.agent, Some("gemini".to_string()));
+        assert_eq!(config.sandbox_mode, Some(crate::SandboxMode::ReadOnly));
+        assert_eq!(config.approval_policy, Some(AskForApproval::OnFailure));
         assert_eq!(config.tui.animations, Some(false));
         assert_eq!(
             config.tui.terminal_notifications,
@@ -161,7 +177,7 @@ custom_working_message_list = ["alpha", "beta"]
         std::fs::write(
             &config_path,
             r#"
-model = "gemini"
+agent = "gemini"
 
 [tui]
 animations = false
@@ -198,7 +214,7 @@ custom_working_message_list = ["alpha", "beta"]
         std::fs::write(
             &config_path,
             r#"
-model = "gemini"
+agent = "gemini"
 "#,
         )
         .unwrap();
@@ -303,11 +319,11 @@ args = ["--arg1", "value"]
 
         assert!(config.mcp_servers.contains_key("my-tool"));
         let server = &config.mcp_servers["my-tool"];
-        assert_eq!(server.command, Some("my-tool".to_string()));
-        assert_eq!(
-            server.args,
-            Some(vec!["--arg1".to_string(), "value".to_string()])
-        );
+        let McpServerTransportConfig::Stdio { command, args, .. } = &server.transport else {
+            panic!("expected stdio MCP server");
+        };
+        assert_eq!(command, "my-tool");
+        assert_eq!(args, &["--arg1".to_string(), "value".to_string()]);
     }
 
     #[test]

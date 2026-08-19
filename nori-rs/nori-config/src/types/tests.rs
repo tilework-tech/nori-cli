@@ -4,67 +4,35 @@ use super::*;
 fn test_approval_policy_deserialize() {
     #[derive(Deserialize)]
     struct Wrapper {
-        policy: ApprovalPolicy,
+        policy: AskForApproval,
     }
 
-    let w: Wrapper = toml::from_str(r#"policy = "always""#).unwrap();
-    assert_eq!(w.policy, ApprovalPolicy::Always);
+    let w: Wrapper = toml::from_str(r#"policy = "untrusted""#).unwrap();
+    assert_eq!(w.policy, AskForApproval::UnlessTrusted);
+
+    let w: Wrapper = toml::from_str(r#"policy = "on-failure""#).unwrap();
+    assert_eq!(w.policy, AskForApproval::OnFailure);
 
     let w: Wrapper = toml::from_str(r#"policy = "on-request""#).unwrap();
-    assert_eq!(w.policy, ApprovalPolicy::OnRequest);
+    assert_eq!(w.policy, AskForApproval::OnRequest);
 
     let w: Wrapper = toml::from_str(r#"policy = "never""#).unwrap();
-    assert_eq!(w.policy, ApprovalPolicy::Never);
+    assert_eq!(w.policy, AskForApproval::Never);
 }
 
 #[test]
-fn test_mcp_server_resolve_stdio() {
-    let toml = McpServerConfigToml {
-        command: Some("my-tool".to_string()),
-        args: Some(vec!["--verbose".to_string()]),
-        enabled: true,
-        ..Default::default()
-    };
+fn vim_always_submit_round_trips_through_toml() {
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+    struct Wrapper {
+        vim_mode: VimEnterBehavior,
+    }
 
-    let config = toml.resolve().unwrap();
-    assert!(matches!(
-        config.transport,
-        McpServerTransportConfig::Stdio { .. }
-    ));
-    assert!(config.enabled);
-}
-
-#[test]
-fn test_mcp_server_resolve_http() {
-    let toml = McpServerConfigToml {
-        url: Some("https://example.com/mcp".to_string()),
-        bearer_token_env_var: Some("API_TOKEN".to_string()),
-        enabled: true,
-        ..Default::default()
-    };
-
-    let config = toml.resolve().unwrap();
-    assert!(matches!(
-        config.transport,
-        McpServerTransportConfig::StreamableHttp { .. }
-    ));
-}
-
-#[test]
-fn test_mcp_server_resolve_error_both() {
-    let toml = McpServerConfigToml {
-        command: Some("my-tool".to_string()),
-        url: Some("https://example.com/mcp".to_string()),
-        ..Default::default()
-    };
-
-    assert!(toml.resolve().is_err());
-}
-
-#[test]
-fn test_mcp_server_resolve_error_neither() {
-    let toml = McpServerConfigToml::default();
-    assert!(toml.resolve().is_err());
+    let parsed: Wrapper = toml::from_str(r#"vim_mode = "always_submit""#).unwrap();
+    assert_eq!(parsed.vim_mode.toml_value(), "always_submit");
+    assert_eq!(
+        toml::to_string(&parsed).unwrap(),
+        "vim_mode = \"always_submit\"\n"
+    );
 }
 
 #[test]
@@ -84,6 +52,41 @@ fn test_history_persistence_deserialize() {
 #[test]
 fn test_history_persistence_default() {
     assert_eq!(HistoryPersistence::default(), HistoryPersistence::SaveAll);
+}
+
+#[test]
+fn test_browser_profile_deserialize() {
+    #[derive(Deserialize)]
+    struct Wrapper {
+        browser_profile: BrowserProfileMode,
+    }
+
+    let w: Wrapper = toml::from_str(r#"browser_profile = "throwaway""#).unwrap();
+    assert_eq!(w.browser_profile, BrowserProfileMode::Throwaway);
+
+    let w: Wrapper = toml::from_str(r#"browser_profile = "persistent""#).unwrap();
+    assert_eq!(w.browser_profile, BrowserProfileMode::Persistent);
+
+    let w: Wrapper = toml::from_str(r#"browser_profile = "system""#).unwrap();
+    assert_eq!(w.browser_profile, BrowserProfileMode::System);
+}
+
+#[test]
+fn test_browser_profile_default() {
+    assert_eq!(BrowserProfileMode::default(), BrowserProfileMode::Throwaway);
+}
+
+#[test]
+fn test_browser_profile_toml_value_matches_variants() {
+    for &variant in BrowserProfileMode::all_variants() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            browser_profile: BrowserProfileMode,
+        }
+        let toml_str = format!(r#"browser_profile = "{}""#, variant.toml_value());
+        let w: Wrapper = toml::from_str(&toml_str).unwrap();
+        assert_eq!(w.browser_profile, variant);
+    }
 }
 
 #[test]
@@ -421,7 +424,7 @@ fn test_tui_config_toml_without_hotkeys() {
 fn test_full_config_toml_with_hotkeys() {
     let config: NoriConfigToml = toml::from_str(
         r#"
-model = "claude-code"
+agent = "claude-code"
 
 [tui]
 vertical_footer = true
@@ -808,7 +811,7 @@ fn test_script_timeout_in_nori_config() {
 fn test_full_config_toml_with_script_timeout() {
     let config: NoriConfigToml = toml::from_str(
         r#"
-model = "claude-code"
+agent = "claude-code"
 
 [tui]
 script_timeout = "2m"
@@ -834,37 +837,11 @@ fn test_footer_segment_deserialize_all_variants() {
         segment: FooterSegment,
     }
 
-    let w: Wrapper = toml::from_str(r#"segment = "prompt_summary""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::PromptSummary);
-
-    let w: Wrapper = toml::from_str(r#"segment = "vim_mode""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::VimMode);
-
-    let w: Wrapper = toml::from_str(r#"segment = "git_branch""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::GitBranch);
-
-    let w: Wrapper = toml::from_str(r#"segment = "worktree_name""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::WorktreeName);
-
-    let w: Wrapper = toml::from_str(r#"segment = "git_stats""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::GitStats);
-
-    let w: Wrapper = toml::from_str(r#"segment = "context""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::Context);
-
-    let w: Wrapper = toml::from_str(r#"segment = "approval_mode""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::ApprovalMode);
-
-    let w: Wrapper = toml::from_str(r#"segment = "nori_profile""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::NoriProfile);
-
-    let w: Wrapper = toml::from_str(r#"segment = "nori_version""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::NoriVersion);
-
-    let w: Wrapper = toml::from_str(r#"segment = "token_usage""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::TokenUsage);
-    let w: Wrapper = toml::from_str(r#"segment = "mode_indicator""#).unwrap();
-    assert_eq!(w.segment, FooterSegment::ModeIndicator);
+    for expected in FooterSegment::all_variants() {
+        let source = format!(r#"segment = "{}""#, expected.toml_key());
+        let parsed: Wrapper = toml::from_str(&source).unwrap();
+        assert_eq!(parsed.segment, *expected);
+    }
 }
 
 #[test]
@@ -889,13 +866,34 @@ fn test_footer_segment_serialize() {
 fn test_footer_segment_display_name() {
     use pretty_assertions::assert_eq;
     assert_eq!(FooterSegment::PromptSummary.display_name(), "Task Summary");
+    assert_eq!(FooterSegment::SessionTitle.display_name(), "Session Title");
     assert_eq!(FooterSegment::VimMode.display_name(), "Vim Mode");
     assert_eq!(FooterSegment::GitBranch.display_name(), "Git Branch");
     assert_eq!(FooterSegment::WorktreeName.display_name(), "Worktree Name");
     assert_eq!(FooterSegment::GitStats.display_name(), "Git Stats");
     assert_eq!(FooterSegment::Context.display_name(), "Context Window");
+    assert_eq!(
+        FooterSegment::ContextUsedPercent.display_name(),
+        "Context Used %"
+    );
+    assert_eq!(
+        FooterSegment::ContextRemainingPercent.display_name(),
+        "Context Remaining %"
+    );
+    assert_eq!(
+        FooterSegment::ContextUsedTokens.display_name(),
+        "Context Used Tokens"
+    );
+    assert_eq!(
+        FooterSegment::ContextRemainingTokens.display_name(),
+        "Context Remaining Tokens"
+    );
+    assert_eq!(
+        FooterSegment::ContextWindowTokens.display_name(),
+        "Context Window Tokens"
+    );
     assert_eq!(FooterSegment::ApprovalMode.display_name(), "Approvals");
-    assert_eq!(FooterSegment::NoriProfile.display_name(), "Skillset");
+    assert_eq!(FooterSegment::Skillset.display_name(), "Skillset");
     assert_eq!(
         FooterSegment::NoriVersion.display_name(),
         "Skillset Version"
@@ -905,6 +903,7 @@ fn test_footer_segment_display_name() {
         FooterSegment::ModeIndicator.display_name(),
         "Mode Indicator"
     );
+    assert_eq!(FooterSegment::CloudSession.display_name(), "Cloud Session");
 }
 
 #[test]
@@ -914,16 +913,23 @@ fn test_footer_segment_all_variants() {
         FooterSegment::all_variants(),
         &[
             FooterSegment::PromptSummary,
+            FooterSegment::SessionTitle,
             FooterSegment::VimMode,
             FooterSegment::GitBranch,
             FooterSegment::WorktreeName,
             FooterSegment::GitStats,
             FooterSegment::Context,
+            FooterSegment::ContextUsedPercent,
+            FooterSegment::ContextRemainingPercent,
+            FooterSegment::ContextUsedTokens,
+            FooterSegment::ContextRemainingTokens,
+            FooterSegment::ContextWindowTokens,
             FooterSegment::ApprovalMode,
-            FooterSegment::NoriProfile,
+            FooterSegment::Skillset,
             FooterSegment::NoriVersion,
             FooterSegment::TokenUsage,
             FooterSegment::ModeIndicator,
+            FooterSegment::CloudSession,
         ]
     );
 }
@@ -941,20 +947,27 @@ fn test_footer_segment_config_default_is_lean_subset() {
 
     // Segments enabled by default: broadly useful or cheap-when-absent.
     let expected_enabled = [
+        FooterSegment::SessionTitle,
         FooterSegment::Context,
         FooterSegment::GitBranch,
         FooterSegment::ApprovalMode,
+        FooterSegment::VimMode,
         FooterSegment::ModeIndicator,
         FooterSegment::WorktreeName,
         FooterSegment::TokenUsage,
+        FooterSegment::CloudSession,
     ];
     // Segments disabled by default: only meaningful after opting into the
-    // related workflow (vim mode, skillsets, prompt summary, git stats).
+    // related workflow (skillsets, prompt summary, git stats).
     let expected_disabled = [
-        FooterSegment::VimMode,
         FooterSegment::PromptSummary,
         FooterSegment::GitStats,
-        FooterSegment::NoriProfile,
+        FooterSegment::ContextUsedPercent,
+        FooterSegment::ContextRemainingPercent,
+        FooterSegment::ContextUsedTokens,
+        FooterSegment::ContextRemainingTokens,
+        FooterSegment::ContextWindowTokens,
+        FooterSegment::Skillset,
         FooterSegment::NoriVersion,
     ];
 
@@ -1000,12 +1013,12 @@ fn test_footer_segment_config_from_toml_empty_matches_default() {
 fn test_footer_segment_config_from_toml_can_enable_default_off_segments() {
     let toml = FooterSegmentConfigToml {
         vim_mode: Some(true),
-        nori_profile: Some(true),
+        skillset: Some(true),
         ..Default::default()
     };
     let config = FooterSegmentConfig::from_toml(&toml);
     assert!(config.is_enabled(FooterSegment::VimMode));
-    assert!(config.is_enabled(FooterSegment::NoriProfile));
+    assert!(config.is_enabled(FooterSegment::Skillset));
     // Other default-off segments stay off when unset.
     assert!(!config.is_enabled(FooterSegment::PromptSummary));
     assert!(!config.is_enabled(FooterSegment::GitStats));
@@ -1034,17 +1047,17 @@ fn test_footer_segment_config_from_toml_some_disabled() {
 fn test_footer_layout_default_puts_mode_in_footer_right() {
     assert_eq!(
         FooterLayoutConfig::default().footer_right,
-        vec![FooterSegment::ModeIndicator]
+        vec![FooterSegment::ModeIndicator.into()]
     );
     assert!(
         FooterLayoutConfig::default()
             .footer_left
-            .contains(&FooterSegment::GitBranch)
+            .contains(&FooterSegment::GitBranch.into())
     );
     assert!(
         !FooterLayoutConfig::default()
             .footer_left
-            .contains(&FooterSegment::ModeIndicator)
+            .contains(&FooterSegment::ModeIndicator.into())
     );
 }
 
@@ -1061,9 +1074,70 @@ textarea_top_right = ["mode_indicator"]
     let layout = FooterLayoutConfig::from_toml(&config.footer_layout);
     assert_eq!(
         layout.textarea_top_right,
-        vec![FooterSegment::ModeIndicator]
+        vec![FooterSegment::ModeIndicator.into()]
     );
     assert!(layout.footer_right.is_empty());
+}
+
+#[test]
+fn test_footer_layout_rejects_unknown_custom_format_placeholder() {
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = [{ format = "{not_a_footer_segment}" }]
+"#,
+    )
+    .expect_err("unknown placeholders should be configuration errors");
+
+    assert!(
+        error.to_string().contains("not_a_footer_segment"),
+        "error should name the unknown placeholder: {error}"
+    );
+}
+
+#[test]
+fn test_footer_layout_rejects_unbalanced_custom_format_braces() {
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = [{ format = "{git_branch" }]
+"#,
+    )
+    .expect_err("unbalanced braces should be configuration errors");
+
+    assert!(
+        error.to_string().contains("git_branch"),
+        "error should identify the invalid format: {error}"
+    );
+
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = [{ format = "git_branch}" }]
+"#,
+    )
+    .expect_err("stray closing braces should be configuration errors");
+
+    assert!(
+        error.to_string().contains("git_branch"),
+        "error should identify the invalid format: {error}"
+    );
+}
+
+#[test]
+fn test_footer_layout_rejects_unknown_builtin_segment() {
+    let error = toml::from_str::<TuiConfigToml>(
+        r#"
+[footer_layout]
+footer_left = ["git_barnch"]
+"#,
+    )
+    .expect_err("misspelled built-ins should be configuration errors");
+
+    assert!(
+        error.to_string().contains("git_barnch"),
+        "error should name the unknown built-in: {error}"
+    );
 }
 
 #[test]
@@ -1087,7 +1161,7 @@ mode_indicator = false
 fn test_full_config_toml_with_footer_segments() {
     let config: NoriConfigToml = toml::from_str(
         r#"
-model = "claude-code"
+agent = "claude-code"
 
 [tui]
 vertical_footer = true
@@ -1095,7 +1169,7 @@ vertical_footer = true
 [tui.footer_segments]
 prompt_summary = false
 vim_mode = false
-nori_profile = true
+skillset = true
 
 [tui.footer_layout]
 textarea_top_right = ["mode_indicator"]
@@ -1104,11 +1178,11 @@ textarea_top_right = ["mode_indicator"]
     .unwrap();
     assert_eq!(config.tui.footer_segments.prompt_summary, Some(false));
     assert_eq!(config.tui.footer_segments.vim_mode, Some(false));
-    assert_eq!(config.tui.footer_segments.nori_profile, Some(true));
+    assert_eq!(config.tui.footer_segments.skillset, Some(true));
     assert_eq!(config.tui.footer_segments.git_branch, None);
     assert_eq!(
         config.tui.footer_layout.textarea_top_right,
-        Some(vec![FooterSegment::ModeIndicator])
+        Some(vec![FooterSegment::ModeIndicator.into()])
     );
 }
 

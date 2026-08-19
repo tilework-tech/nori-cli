@@ -18,7 +18,7 @@ use tui_pty_e2e::TuiSession;
 #[cfg(target_os = "linux")]
 fn resume_picker_lists_agent_sessions_when_session_list_supported() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
         .with_agent_env("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
 
@@ -37,8 +37,11 @@ fn resume_picker_lists_agent_sessions_when_session_list_supported() {
     session.send_key(Key::Enter).unwrap();
 
     session
-        .wait_for_text("Resume previous session", Duration::from_secs(5))
-        .expect("Should show the agent-sourced resume picker");
+        .wait_for_text(
+            "Resume a live session or start a new one",
+            Duration::from_secs(5),
+        )
+        .expect("Should show the agent-sourced session picker");
 
     // The mock agent returns two sessions: the first carries a title, the second
     // falls back to its session id because it has none.
@@ -49,7 +52,10 @@ fn resume_picker_lists_agent_sessions_when_session_list_supported() {
         .wait_for_text("mock-session-2", Duration::from_secs(2))
         .expect("Picker should list the untitled session by its id");
 
-    // Selecting the first (default-highlighted) row resumes it over ACP.
+    // Row 0 is the pinned "Start a new session" action; the first listed
+    // session is one row down. Selecting it resumes over ACP.
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("Resuming session with", Duration::from_secs(5))

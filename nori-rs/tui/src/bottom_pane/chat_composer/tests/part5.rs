@@ -60,6 +60,7 @@ fn vim_enter_newline_normal_mode_submits() {
         InputResult::Submitted(text) => assert_eq!(text, "hello"),
         other => panic!("NORMAL Enter with Newline behavior should submit, got: {other:?}"),
     }
+    assert_eq!(composer.vim_mode_state(), VimModeState::Normal);
 }
 
 #[test]
@@ -75,6 +76,7 @@ fn vim_enter_submit_insert_mode_submits() {
         InputResult::Submitted(text) => assert_eq!(text, "hello"),
         other => panic!("INSERT Enter with Submit behavior should submit, got: {other:?}"),
     }
+    assert_eq!(composer.vim_mode_state(), VimModeState::Normal);
 }
 
 #[test]
@@ -134,7 +136,7 @@ fn agent_commands_use_updated_prefix_after_slug_change() {
 
     // Simulate: agent commands arrive with empty prefix (slug not yet set)
     composer.set_agent_commands(
-        vec![nori_protocol::AgentCommandInfo {
+        vec![crate::presentation::AgentCommandInfo {
             name: "loop".to_string(),
             description: "loop desc".to_string(),
             input_hint: None,

@@ -15,10 +15,10 @@ workspace = true
 [dependencies]
 async-channel = { workspace = true }
 chardetng = { workspace = true }
-codex-protocol = { workspace = true }
 codex-windows-sandbox = { package = "codex-windows-sandbox", path = "../windows-sandbox-rs" }
 encoding_rs = { workspace = true }
 libc = { workspace = true }
+nori-config = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

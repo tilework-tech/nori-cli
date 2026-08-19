@@ -1,18 +1,10 @@
 use super::*;
 
-impl ChatWidget {
-    /// Set the agent in the widget's config copy.
-    pub(crate) fn set_agent(&mut self, agent: &str) {
-        self.session_header.set_agent(agent);
-        self.config.model = agent.to_string();
-        // Update the bottom pane's agent display name for approval dialogs
-        let display_name = crate::nori::agent_picker::get_agent_info(agent)
-            .map(|info| info.display_name)
-            .unwrap_or_else(|| agent.to_string());
-        self.bottom_pane.set_agent_display_name(display_name);
-        self.bottom_pane.set_agent_slug(agent.to_string());
-    }
+/// Cloud detach gets a short opportunity to finish its stdin-EOF path. Local
+/// agents are torn down immediately; they have no remote detach work to flush.
+const CLOUD_EXIT_CHILD_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
 
+impl ChatWidget {
     /// Set the vertical footer layout flag for the TUI.
     pub(crate) fn set_vertical_footer(&mut self, enabled: bool) {
         self.bottom_pane.set_vertical_footer(enabled);
@@ -48,9 +40,67 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    /// The agent capability view from the latest SessionCapabilitiesChanged.
+    pub(crate) fn agent_capabilities(&self) -> crate::presentation::AgentCapabilitiesView {
+        self.session_agent_capabilities.clone()
+    }
+
+    /// The cloud session identity. Id presence IS the cloud signal inside the
+    /// widget: `on_session_started` retains it only when the top-level CLI
+    /// launched handroll in cloud mode.
+    pub(crate) fn cloud_session_identity(&self) -> Option<CloudSessionInfo> {
+        self.acp_session_id.as_ref().map(|id| CloudSessionInfo {
+            id: id.clone(),
+            title: self.cloud_session_title.clone(),
+        })
+    }
+
+    /// Push the current cloud identity (or its absence) into the footer.
+    /// Called from SessionConfigured — the only event that changes the id.
+    pub(super) fn refresh_cloud_session_indicator(&mut self) {
+        let cloud_session = self.cloud_session_identity().map(|info| info.id);
+        self.bottom_pane.set_cloud_session(cloud_session);
+    }
+
+    /// A `/close` failed: surface the (already enhanced) error and unblock the
+    /// session-switching commands that were held while the close was in flight.
+    pub(crate) fn on_session_close_failed(&mut self, message: String) {
+        self.session_close_in_flight = false;
+        self.add_error_message(format!("Failed to close the session: {message}"));
+    }
+
+    /// Begin exiting: immediate feedback, input refused, and bounded backend
+    /// cleanup. Idempotent.
+    ///
+    /// In cloud mode, exit is a *detach*: the connection drop is non-terminal
+    /// and the session keeps running server-side, so the feedback says exactly
+    /// that.
+    pub(crate) fn begin_exit(&mut self) {
+        if self.exiting {
+            return;
+        }
+        self.exiting = true;
+        self.bottom_pane.show_exit_in_progress();
+
+        if self.cloud_mode && self.acp_session_id.is_some() {
+            self.add_to_history(history_cell::new_info_event(
+                "This session keeps running in the cloud.".to_string(),
+                Some("reattach later from the `nori cloud` picker".to_string()),
+            ));
+        }
+        self.request_redraw();
+
+        let child_grace = if self.cloud_mode {
+            CLOUD_EXIT_CHILD_GRACE
+        } else {
+            std::time::Duration::ZERO
+        };
+        self.submit_harness_action(crate::app_event::HarnessAction::Shutdown { child_grace });
+    }
+
     pub(crate) fn handle_acp_session_config_update(
         &mut self,
-        config_options: &[nori_harness::SessionConfigOption],
+        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
     ) {
         let next_snapshot =
             crate::nori::session_config_history::snapshot_from_options(config_options);
@@ -87,7 +137,7 @@ impl ChatWidget {
 
     pub(crate) fn sync_acp_session_config_snapshot(
         &mut self,
-        config_options: &[nori_harness::SessionConfigOption],
+        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
     ) {
         self.acp_config_option_snapshot = Some(
             crate::nori::session_config_history::snapshot_from_options(config_options),
@@ -101,7 +151,7 @@ impl ChatWidget {
     pub(crate) fn handle_acp_session_config_snapshot(
         &mut self,
         generation: i64,
-        config_options: &[nori_harness::SessionConfigOption],
+        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
     ) {
         if generation != self.acp_mode_config_generation {
             return;
@@ -169,7 +219,7 @@ impl ChatWidget {
 
     pub(crate) fn add_memory_output(&mut self) {
         let files = crate::nori::session_header::active_instruction_file_contents(
-            &self.config.model,
+            &self.config.active_agent,
             &self.config.cwd,
         );
 
@@ -216,9 +266,20 @@ impl ChatWidget {
         self.first_prompt_text.clone()
     }
 
+    pub(crate) fn take_initial_input(&mut self) -> (Option<String>, Vec<PathBuf>) {
+        let Some(message) = self.initial_user_message.take() else {
+            return (None, Vec::new());
+        };
+        (self.first_prompt_text.take(), message.image_paths)
+    }
+
     /// Returns true if a popup or custom view is currently active in the bottom pane.
     pub(crate) fn has_active_popup(&self) -> bool {
         self.bottom_pane.has_active_view()
+    }
+
+    pub(crate) fn has_active_overlay_or_popup(&self) -> bool {
+        self.bottom_pane.has_active_overlay_or_popup()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {
@@ -249,26 +310,123 @@ impl ChatWidget {
         self.bottom_pane.clear_esc_backtrack_hint();
     }
 
-    /// Forward an `Op` directly to codex.
-    pub(crate) fn submit_op(&self, op: Op) {
-        // Record outbound operation for session replay fidelity.
-        crate::session_log::log_outbound_op(&op);
-        if let Err(e) = self.codex_op_tx.send(op) {
-            tracing::error!("failed to submit op: {e}");
-            // If we tried to send a Shutdown but the backend channel is dead,
-            // trigger an exit directly since there is no backend to gracefully
-            // shut down.
-            if matches!(e.0, Op::Shutdown) {
-                self.app_event_tx.send(AppEvent::ExitRequest);
-            }
+    pub(crate) fn shutdown_harness_session(&self) {
+        if self.harness_handle.is_some() {
+            let child_grace = if self.cloud_mode {
+                CLOUD_EXIT_CHILD_GRACE
+            } else {
+                std::time::Duration::ZERO
+            };
+            self.submit_harness_action(crate::app_event::HarnessAction::Shutdown { child_grace });
         }
     }
 
-    pub(crate) fn token_usage(&self) -> TokenUsage {
-        self.token_info
-            .as_ref()
-            .map(|ti| ti.total_token_usage.clone())
-            .unwrap_or_default()
+    pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {
+        let Some(handle) = self.harness_handle.clone() else {
+            if matches!(action, crate::app_event::HarnessAction::Shutdown { .. }) {
+                self.app_event_tx.send(AppEvent::ExitRequest);
+            } else {
+                self.app_event_tx.send(AppEvent::HarnessActionFailed(
+                    "No active harness session".to_string(),
+                ));
+            }
+            return;
+        };
+        let app_event_tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            use crate::app_event::HarnessAction;
+            let result = match action {
+                HarnessAction::Cancel => handle.cancel().await,
+                HarnessAction::Shutdown { child_grace } => {
+                    let result = handle.shutdown_with_grace(child_grace).await;
+                    if result.is_err() {
+                        app_event_tx.send(AppEvent::ExitRequest);
+                    }
+                    result
+                }
+                HarnessAction::Compact => handle.compact().await,
+                HarnessAction::Branch => handle.branch().await,
+                HarnessAction::UndoTo(index) => handle.undo_to(index).await,
+                HarnessAction::LoadUndoSnapshots => match handle.undo_snapshots().await {
+                    Ok(snapshots) => {
+                        app_event_tx.send(AppEvent::UndoSnapshotsLoaded(snapshots));
+                        Ok(())
+                    }
+                    Err(error) => Err(error),
+                },
+                HarnessAction::RunUserShell(command) => handle.run_user_shell(command).await,
+                HarnessAction::AddHistory(text) => handle.add_history(text).await,
+                HarnessAction::HistoryEntry { log_id, offset } => {
+                    match handle.history_entry(log_id, offset).await {
+                        Ok(entry) => {
+                            app_event_tx.send(AppEvent::HistoryEntryLoaded {
+                                log_id,
+                                offset,
+                                entry,
+                            });
+                            Ok(())
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+                HarnessAction::SearchHistory { max_results } => {
+                    match handle.search_history(max_results).await {
+                        Ok(entries) => {
+                            app_event_tx.send(AppEvent::HistorySearchLoaded(entries));
+                            Ok(())
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+                HarnessAction::LoadCustomPrompts => match handle.custom_prompts().await {
+                    Ok(prompts) => {
+                        app_event_tx.send(AppEvent::CustomPromptsLoaded(prompts));
+                        Ok(())
+                    }
+                    Err(error) => Err(error),
+                },
+                HarnessAction::LoadGoal => match handle.goal().await {
+                    Ok(goal) => {
+                        app_event_tx.send(AppEvent::GoalLoaded(goal));
+                        Ok(())
+                    }
+                    Err(error) => Err(error),
+                },
+                HarnessAction::SetGoal { objective, status } => {
+                    handle.set_goal(objective, status).await.map(drop)
+                }
+                HarnessAction::SetGoalStatus(status) => {
+                    handle.set_goal_status(status).await.map(drop)
+                }
+                HarnessAction::ClearGoal => handle.clear_goal().await,
+                HarnessAction::RespondToAgent {
+                    request_id,
+                    response,
+                } => handle.respond_to_agent(request_id, *response).await,
+            };
+            if let Err(error) = result {
+                app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));
+            }
+        });
+    }
+
+    pub(crate) fn submit_prompt(&self, content: Vec<nori_protocol::acp::v1::ContentBlock>) {
+        let Some(handle) = self.harness_handle.clone() else {
+            self.app_event_tx.send(AppEvent::HarnessActionFailed(
+                "No active harness session".to_string(),
+            ));
+            return;
+        };
+        let app_event_tx = self.app_event_tx.clone();
+        tokio::spawn(async move {
+            if let Err(error) = handle.prompt(content).await {
+                app_event_tx.send(AppEvent::HarnessActionFailed(error.to_string()));
+            }
+        });
+    }
+
+    pub(crate) fn token_usage(&self) -> crate::ui_types::TokenUsage {
+        crate::ui_types::TokenUsage::default()
     }
 
     pub(crate) fn conversation_id(&self) -> Option<ConversationId> {
@@ -285,19 +443,15 @@ impl ChatWidget {
         &self.config
     }
 
-    /// Update the in-memory MCP server map so that subsequent reads via
-    /// `config_ref().mcp_servers` reflect the latest persisted state.
-    pub(crate) fn set_mcp_servers(
-        &mut self,
-        servers: std::collections::HashMap<String, codex_protocol::config_types::McpServerConfig>,
-    ) {
-        self.config.mcp_servers = servers;
+    /// Replace the runtime config snapshot after an in-TUI edit.
+    pub(crate) fn set_config(&mut self, config: Config) {
+        self.config = config;
     }
 
     /// Forward MCP auth statuses to the active bottom pane view.
     pub(crate) fn update_mcp_auth_statuses(
         &mut self,
-        statuses: &std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
+        statuses: &std::collections::HashMap<String, codex_rmcp_client::McpAuthStatus>,
     ) {
         self.bottom_pane.update_mcp_auth_statuses(statuses);
     }
@@ -313,9 +467,7 @@ impl ChatWidget {
         &self.session_stats
     }
 
-    pub(crate) fn clear_token_usage(&mut self) {
-        self.token_info = None;
-    }
+    pub(crate) fn clear_token_usage(&mut self) {}
 
     pub(super) fn as_renderable(&self) -> RenderableItem<'_> {
         let active_cell_renderable = match &self.active_cell {
@@ -376,7 +528,7 @@ impl ChatWidget {
 
     /// Whether there is active progress that warrants showing the spinner.
     fn terminal_title_has_active_progress(&self) -> bool {
-        self.mcp_startup_status.is_some() || self.bottom_pane.is_task_running()
+        self.bottom_pane.is_task_running()
     }
 
     /// Recompute and write the terminal title. Schedules the next animation

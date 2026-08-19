@@ -2,10 +2,15 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 
-use crate::wrapping::word_wrap_lines;
-use crate::wrapping::word_wrap_lines_borrowed;
+use crate::wrapping::adaptive_wrap_line;
+use crate::wrapping::line_contains_url_like;
+use crate::wrapping::line_has_mixed_url_and_non_url_tokens;
 use crossterm::Command;
+use crossterm::cursor::MoveDown;
 use crossterm::cursor::MoveTo;
+use crossterm::cursor::MoveToColumn;
+use crossterm::cursor::RestorePosition;
+use crossterm::cursor::SavePosition;
 use crossterm::queue;
 use crossterm::style::Color as CColor;
 use crossterm::style::Print;
@@ -22,8 +27,14 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 
 fn queue_colors(writer: &mut impl Write, fg: Color, bg: Color) -> io::Result<()> {
-    queue!(writer, SetForegroundColor(fg.into()))?;
-    queue!(writer, SetBackgroundColor(bg.into()))
+    queue!(
+        writer,
+        SetForegroundColor(crate::custom_terminal::crossterm_color(fg))
+    )?;
+    queue!(
+        writer,
+        SetBackgroundColor(crate::custom_terminal::crossterm_color(bg))
+    )
 }
 
 fn merged_line_spans(line: &Line<'_>) -> Vec<Span<'static>> {
@@ -36,17 +47,39 @@ fn merged_line_spans(line: &Line<'_>) -> Vec<Span<'static>> {
         .collect()
 }
 
+fn wrap_history_line<'a>(line: &'a Line<'a>, width: usize) -> Vec<Line<'a>> {
+    if line_contains_url_like(line) && !line_has_mixed_url_and_non_url_tokens(line) {
+        vec![line.clone()]
+    } else {
+        adaptive_wrap_line(line, width)
+    }
+}
+
+pub(crate) fn wrap_history_lines_for_width(lines: &[Line<'_>], width: u16) -> Vec<Line<'static>> {
+    let mut wrapped = Vec::new();
+    let width = usize::from(width.max(1));
+    for line in lines {
+        crate::render::line_utils::push_owned_lines(&wrap_history_line(line, width), &mut wrapped);
+    }
+    wrapped
+}
+
+fn physical_row_count(line: &Line<'_>, width: usize) -> usize {
+    line.width().max(1).div_ceil(width.max(1))
+}
+
 /// Insert `lines` above the viewport using the terminal's backend writer
 /// (avoids direct stdout references).
 ///
 /// Returns `true` if lines were actually inserted, `false` if there was no
-/// room above the viewport (area.top() == 0).
+/// usable room above the viewport (area.top() <= 1; scroll-region insertion
+/// needs at least two rows above the viewport to form a valid DECSTBM region).
 pub fn insert_history_lines<B>(
     terminal: &mut crate::custom_terminal::Terminal<B>,
     lines: Vec<Line>,
 ) -> io::Result<bool>
 where
-    B: Backend + Write,
+    B: Backend<Error = io::Error> + Write,
 {
     let screen_size = terminal.backend().size().unwrap_or(Size::new(0, 0));
 
@@ -55,10 +88,18 @@ where
     let last_cursor_pos = terminal.last_known_cursor_pos;
     let writer = terminal.backend_mut();
 
-    // Pre-wrap lines using word-aware wrapping so terminal scrollback sees the same
-    // formatting as the TUI. This avoids character-level hard wrapping by the terminal.
-    let wrapped = word_wrap_lines_borrowed(&lines, area.width.max(1) as usize);
-    let wrapped_lines = wrapped.len() as u16;
+    let wrap_width = area.width.max(1) as usize;
+    let mut wrapped = Vec::new();
+    let mut wrapped_rows = 0usize;
+    for line in &lines {
+        let line_wrapped = wrap_history_line(line, wrap_width);
+        wrapped_rows += line_wrapped
+            .iter()
+            .map(|line| physical_row_count(line, wrap_width))
+            .sum::<usize>();
+        wrapped.extend(line_wrapped);
+    }
+    let wrapped_lines = wrapped_rows as u16;
     let cursor_top = if area.bottom() < screen_size.height {
         // If the viewport is not at the bottom of the screen, scroll it down to make room.
         // Don't scroll it past the bottom of the screen.
@@ -87,13 +128,25 @@ where
         area.top().saturating_sub(1)
     };
 
-    // No room above the viewport for history lines.
-    if area.top() == 0 {
+    // No usable room above the viewport for history lines. Scroll-region
+    // insertion needs a region spanning at least rows 1..2 (1-based): DECSTBM
+    // requires the bottom margin to exceed the top margin, so a region ending
+    // at row 1 (area.top() <= 1) is degenerate and terminals fall back to a
+    // full-screen scroll region, scrolling the viewport itself.
+    if area.top() <= 1 {
         tracing::warn!(
-            "insert_history_lines: no room above viewport (area.top()==0), skipping {} lines",
+            "insert_history_lines: no usable room above viewport (area.top()=={}), skipping {} lines",
+            area.top(),
             lines.len()
         );
-        let _ = writer;
+        // The scroll-down branch above may have moved the viewport and the
+        // cursor; keep the call cursor-position-neutral and persist the moved
+        // viewport so terminal state stays consistent. Without that branch
+        // nothing was queued, so stay byte-silent.
+        if should_update_area {
+            queue!(writer, MoveTo(last_cursor_pos.x, last_cursor_pos.y))?;
+            terminal.set_viewport_area(area);
+        }
         return Ok(false);
     }
 
@@ -121,6 +174,15 @@ where
 
     for line in wrapped {
         queue!(writer, Print("\r\n"))?;
+        let physical_rows = physical_row_count(&line, wrap_width);
+        if physical_rows > 1 {
+            queue!(writer, SavePosition)?;
+            for _ in 1..physical_rows {
+                queue!(writer, MoveDown(1), MoveToColumn(0))?;
+                queue!(writer, Clear(ClearType::UntilNewLine))?;
+            }
+            queue!(writer, RestorePosition)?;
+        }
         queue_colors(
             writer,
             line.style.fg.unwrap_or(Color::Reset),
@@ -162,7 +224,7 @@ pub fn write_pending_lines_directly<B>(
     available_rows: u16,
 ) -> io::Result<u16>
 where
-    B: Backend + Write,
+    B: Backend<Error = io::Error> + Write,
 {
     if available_rows == 0 || lines.is_empty() {
         return Ok(0);
@@ -170,12 +232,17 @@ where
 
     let width = terminal.viewport_area.width.max(1) as usize;
 
-    // First pass: figure out how many original lines fit by wrapping each
-    // individually and counting screen rows.
+    // First pass: figure out how many original lines fit, including terminal
+    // soft-wrap rows used to preserve long URL tokens.
     let mut total_rows: u16 = 0;
     let mut lines_consumed: usize = 0;
     for line in lines.iter() {
-        let wrapped_count = word_wrap_lines(std::iter::once(line.clone()), width).len() as u16;
+        let wrapped_count = wrap_history_line(line, width)
+            .iter()
+            .map(|line| physical_row_count(line, width))
+            .sum::<usize>()
+            .try_into()
+            .unwrap_or(u16::MAX);
         if total_rows + wrapped_count > available_rows {
             break;
         }
@@ -187,9 +254,12 @@ where
         return Ok(0);
     }
 
-    // Drain consumed lines and wrap them as a batch for writing.
+    // Drain consumed lines and wrap them for writing.
     let consumed: Vec<Line<'static>> = lines.drain(..lines_consumed).collect();
-    let wrapped = word_wrap_lines(consumed, width);
+    let wrapped = consumed
+        .iter()
+        .flat_map(|line| wrap_history_line(line, width))
+        .collect::<Vec<_>>();
 
     // Bottom-align: start writing from (available_rows - total_rows).
     let start_row = available_rows - total_rows;
@@ -204,8 +274,13 @@ where
     }
 
     // Write the wrapped lines directly to their target positions.
-    for (i, line) in wrapped.iter().enumerate() {
-        let row = start_row + i as u16;
+    let mut row = start_row;
+    for line in &wrapped {
+        let physical_rows = physical_row_count(line, width) as u16;
+        for offset in 0..physical_rows {
+            queue!(writer, MoveTo(0, row + offset))?;
+            queue!(writer, Clear(ClearType::UntilNewLine))?;
+        }
         queue!(writer, MoveTo(0, row))?;
         queue_colors(
             writer,
@@ -215,6 +290,7 @@ where
         queue!(writer, Clear(ClearType::UntilNewLine))?;
         let merged_spans = merged_line_spans(line);
         write_spans(writer, merged_spans.iter())?;
+        row += physical_rows;
     }
 
     // Restore cursor position.
@@ -371,6 +447,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::history_cell::AgentMessageCell;
+    use crate::history_cell::HistoryCell;
     use crate::markdown_render::render_markdown_text;
     use crate::test_backend::VT100Backend;
     use ratatui::layout::Rect;
@@ -447,6 +525,138 @@ mod tests {
     }
 
     #[test]
+    fn long_agent_link_continuation_rows_have_no_padding() {
+        let width: u16 = 40;
+        let height: u16 = 12;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+        term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+
+        let url = "https://checkout.stripe.com/c/pay/cs_live_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#fidkdWxOYHwnPyd1blpxYHZxWjA0V1dH%2FJ2FgY2Rw";
+        let markdown = format!("[Open Stripe Checkout]({url})");
+        let cell = AgentMessageCell::new(render_markdown_text(&markdown).lines, true);
+        let display_lines = cell.display_lines(width);
+
+        assert!(
+            display_lines.iter().any(|line| line
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+                .contains(url)),
+            "agent history must keep the complete Stripe URL in one logical line: {display_lines:?}",
+        );
+
+        insert_history_lines(&mut term, display_lines).expect("insert link history");
+
+        let rows = term
+            .backend()
+            .vt100()
+            .screen()
+            .rows(0, width)
+            .map(|row| row.trim_end().to_string())
+            .collect::<Vec<_>>();
+        let first_url_row = rows
+            .iter()
+            .position(|row| row.contains("https://"))
+            .unwrap_or_else(|| panic!("expected URL start in rows: {rows:?}"));
+        let last_url_row = rows
+            .iter()
+            .position(|row| row.contains("%2FJ2FgY2Rw)"))
+            .unwrap_or_else(|| panic!("expected URL tail in rows: {rows:?}"));
+
+        assert!(
+            last_url_row > first_url_row,
+            "expected URL to wrap: {rows:?}"
+        );
+        assert!(
+            rows[first_url_row + 1..=last_url_row]
+                .iter()
+                .all(|row| !row.starts_with(' ')),
+            "terminal-wrapped URL continuation rows must start at column zero: {rows:?}",
+        );
+        assert!(
+            (first_url_row..last_url_row).all(|row| term
+                .backend()
+                .vt100()
+                .screen()
+                .row_wrapped(row as u16)),
+            "Stripe URL must use terminal soft-wraps rather than inserted newlines: {rows:?}",
+        );
+        insta::assert_snapshot!("long_agent_stripe_link_soft_wrap", rows.join("\n"));
+    }
+
+    #[test]
+    fn direct_write_keeps_long_agent_link_soft_wrapped() {
+        let width: u16 = 40;
+        let height: u16 = 12;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+        term.set_viewport_area(Rect::new(0, 8, width, 4));
+
+        let url = "https://checkout.stripe.com/c/pay/cs_live_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#fidkdWxOYHwnPyd1blpxYHZxWjA0V1dH%2FJ2FgY2Rw";
+        let markdown = format!("[Open Stripe Checkout]({url})");
+        let cell = AgentMessageCell::new(render_markdown_text(&markdown).lines, true);
+        let mut lines = cell.display_lines(width);
+
+        write_pending_lines_directly(&mut term, &mut lines, 8).expect("write pending link");
+
+        let screen = term.backend().vt100().screen();
+        let rows = screen
+            .rows(0, width)
+            .map(|row| row.trim_end().to_string())
+            .collect::<Vec<_>>();
+        let first_url_row = rows
+            .iter()
+            .position(|row| row.contains("https://"))
+            .unwrap_or_else(|| panic!("expected URL start in rows: {rows:?}"));
+        let last_url_row = rows
+            .iter()
+            .position(|row| row.contains("%2FJ2FgY2Rw)"))
+            .unwrap_or_else(|| panic!("expected URL tail in rows: {rows:?}"));
+
+        assert!(
+            last_url_row > first_url_row,
+            "expected URL to wrap: {rows:?}"
+        );
+        assert!(
+            (first_url_row..last_url_row).all(|row| screen.row_wrapped(row as u16)),
+            "direct history writes must preserve terminal soft-wraps: {rows:?}",
+        );
+    }
+
+    #[test]
+    fn mixed_url_history_wraps_prose_before_the_url() {
+        let width: u16 = 20;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+        term.set_viewport_area(Rect::new(0, height - 1, width, 1));
+
+        let line = Line::from(
+            "see phrase before https://example.test/abcdefghijklmnopqrstuvwxyz tail words",
+        );
+        insert_history_lines(&mut term, vec![line]).expect("insert mixed URL history");
+
+        let rows = term
+            .backend()
+            .vt100()
+            .screen()
+            .rows(0, width)
+            .map(|row| row.trim_end().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(
+            rows.iter().any(|row| row == "see phrase before"),
+            "prose should wrap at a word boundary before the URL: {rows:?}",
+        );
+        assert!(
+            rows.iter().any(|row| row.starts_with("https://")),
+            "URL should begin as an intact token: {rows:?}",
+        );
+    }
+
+    #[test]
     fn deep_nested_mixed_list_third_level_marker_is_colored() {
         let md = "1. First\n   - Second level\n     1. Third level (ordered)\n        - Fourth level (bullet)\n          - Fifth level to test indent consistency\n";
         let text = render_markdown_text(md);
@@ -518,6 +728,202 @@ mod tests {
             after,
             "viewport content was corrupted by insert_history_lines when area.top()==0"
         );
+    }
+
+    /// When exactly one row exists above the viewport (area.top() == 1), the
+    /// insertion scroll region degenerates to a single row. DECSTBM requires
+    /// the bottom margin to exceed the top margin, so terminals (and the vt100
+    /// parser used here) ignore the degenerate region and fall back to a
+    /// full-screen scroll region — every inserted line then scrolls the
+    /// viewport itself. The viewport content must survive insertion.
+    #[test]
+    fn single_row_above_viewport_does_not_corrupt_display() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Viewport occupies rows 1..10, leaving exactly one row above.
+        let viewport = Rect::new(0, 1, width, height - 1);
+        term.set_viewport_area(viewport);
+
+        term.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for i in 0..area.height {
+                let text = format!("Viewport row {i}");
+                buf.set_string(area.x, area.y + i, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let before: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        assert!(
+            before[1].contains("Viewport row 0"),
+            "draw did not reach the vt100 screen; test would be vacuous, got: {before:?}"
+        );
+
+        // Insert a batch larger than the single row above the viewport.
+        let lines: Vec<Line> = (0..8).map(|i| Line::from(format!("History {i}"))).collect();
+        insert_history_lines(&mut term, lines).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let after: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+
+        // Insertion is a no-op here (no usable room), so the whole screen —
+        // including the single free row above the viewport — must be unchanged.
+        pretty_assertions::assert_eq!(
+            before,
+            after,
+            "screen content was corrupted by insert_history_lines when area.top()==1"
+        );
+    }
+
+    /// With only one row above the viewport, a multi-line batch cannot be
+    /// inserted through a scroll region. insert_history_lines must report
+    /// that the lines were NOT inserted so callers retain them.
+    #[test]
+    fn single_row_above_viewport_returns_false() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        let viewport = Rect::new(0, 1, width, height - 1);
+        term.set_viewport_area(viewport);
+
+        let lines: Vec<Line> = (0..8).map(|i| Line::from(format!("History {i}"))).collect();
+        let inserted = insert_history_lines(&mut term, lines).expect("insert");
+        assert!(
+            !inserted,
+            "insert_history_lines should return false when area.top() == 1"
+        );
+    }
+
+    /// A viewport at y == 0 that leaves room below is first scrolled down to
+    /// make space. When that scroll amount is 1, the viewport lands at y == 1
+    /// and the subsequent insertion hits the same degenerate scroll region.
+    /// The viewport content must survive.
+    #[test]
+    fn viewport_scrolled_down_to_row_one_does_not_corrupt_display() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        // Viewport at the very top with room below; a 1-line insert scrolls
+        // it down by exactly one row.
+        let viewport_h: u16 = 5;
+        let viewport = Rect::new(0, 0, width, viewport_h);
+        term.set_viewport_area(viewport);
+
+        term.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for i in 0..area.height {
+                let text = format!("Viewport row {i}");
+                buf.set_string(area.x, area.y + i, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        let inserted =
+            insert_history_lines(&mut term, vec![Line::from("History entry")]).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // With the viewport scrolled down to row 1, there is still no usable
+        // scroll region, so the line must be reported as not inserted.
+        assert!(
+            !inserted,
+            "insert_history_lines should return false when the scroll-down lands the viewport at y==1"
+        );
+
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+
+        // The 1-line insert scrolls the viewport down by exactly one row, and
+        // the early return must persist that move on the terminal.
+        let vp_start = rows
+            .iter()
+            .position(|r| r.contains("Viewport row 0"))
+            .unwrap_or_else(|| panic!("viewport content lost after insertion, rows: {rows:?}"));
+        pretty_assertions::assert_eq!(
+            vp_start,
+            1,
+            "viewport should have been scrolled down exactly one row"
+        );
+        pretty_assertions::assert_eq!(
+            term.viewport_area.y,
+            1,
+            "moved viewport position should be persisted on early return"
+        );
+        for i in 0..viewport_h as usize {
+            let row_text = &rows[vp_start + i];
+            assert!(
+                row_text.contains(&format!("Viewport row {i}")),
+                "viewport row {i} corrupted after scroll-down insertion, got: {row_text:?}"
+            );
+        }
+    }
+
+    /// The deferral at y == 1 is self-healing: retrying the same insert (as
+    /// Tui::draw does with retained pending lines) scrolls the viewport
+    /// further down, succeeds, and places the line above the viewport.
+    #[test]
+    fn insertion_retry_succeeds_after_deferral_at_row_one() {
+        let width: u16 = 40;
+        let height: u16 = 10;
+        let backend = VT100Backend::new(width, height);
+        let mut term = crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+
+        let viewport_h: u16 = 5;
+        term.set_viewport_area(Rect::new(0, 0, width, viewport_h));
+
+        term.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for i in 0..area.height {
+                let text = format!("Viewport row {i}");
+                buf.set_string(area.x, area.y + i, &text, ratatui::style::Style::default());
+            }
+        })
+        .expect("draw");
+        Backend::flush(term.backend_mut()).expect("flush");
+
+        // First attempt: the viewport scrolls down to y=1 and the insert is
+        // deferred (degenerate region).
+        let first =
+            insert_history_lines(&mut term, vec![Line::from("History entry")]).expect("insert");
+        assert!(!first, "first insert should be deferred at y==1");
+
+        // Retry with the same line, as Tui::draw does with retained pending
+        // lines. The viewport scrolls to y=2, opening a valid region.
+        let second =
+            insert_history_lines(&mut term, vec![Line::from("History entry")]).expect("insert");
+        Backend::flush(term.backend_mut()).expect("flush");
+        assert!(second, "retried insert should succeed once room exists");
+
+        let rows: Vec<String> = term.backend().vt100().screen().rows(0, width).collect();
+        let history_row = rows
+            .iter()
+            .position(|r| r.contains("History entry"))
+            .unwrap_or_else(|| panic!("history line should appear after retry, rows: {rows:?}"));
+        let vp_start = rows
+            .iter()
+            .position(|r| r.contains("Viewport row 0"))
+            .unwrap_or_else(|| panic!("viewport content lost after retry, rows: {rows:?}"));
+        assert!(
+            history_row < vp_start,
+            "history (row {history_row}) should sit above the viewport (row {vp_start})"
+        );
+        for i in 0..viewport_h as usize {
+            let row_text = &rows[vp_start + i];
+            assert!(
+                row_text.contains(&format!("Viewport row {i}")),
+                "viewport row {i} corrupted after retry, got: {row_text:?}"
+            );
+        }
     }
 
     /// insert_history_lines must return false when area.top() == 0

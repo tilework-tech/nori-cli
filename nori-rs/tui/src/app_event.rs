@@ -2,35 +2,109 @@ use std::path::PathBuf;
 
 use codex_common::approval_presets::ApprovalPreset;
 use codex_file_search::FileMatch;
-use codex_protocol::protocol::ConversationPathResponseEvent;
-use codex_protocol::protocol::Event;
-use codex_protocol::protocol::RateLimitSnapshot;
-use nori_harness::SessionConfigOption;
+use nori_protocol::acp::v1::SessionConfigOption;
 
 use crate::bottom_pane::ApprovalRequest;
 use crate::history_cell::HistoryCell;
 use crate::nori::session_config_mode::AcpModeConfig;
 use crate::system_info::SystemInfo;
 
-use codex_protocol::config_types::ReasoningEffort;
-use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::SandboxPolicy;
+use nori_config::AskForApproval;
+use nori_config::SandboxPolicy;
+
+pub(crate) type SessionGeneration = i64;
+
+#[derive(Debug, Clone)]
+pub(crate) struct ConversationPathResponseEvent {
+    pub(crate) conversation_id: nori_harness::ConversationId,
+}
+
+#[derive(Debug)]
+pub(crate) enum HarnessAction {
+    Cancel,
+    Shutdown {
+        child_grace: std::time::Duration,
+    },
+    Compact,
+    Branch,
+    UndoTo(i64),
+    LoadUndoSnapshots,
+    RunUserShell(String),
+    AddHistory(String),
+    HistoryEntry {
+        log_id: i64,
+        offset: i64,
+    },
+    SearchHistory {
+        max_results: i64,
+    },
+    LoadCustomPrompts,
+    LoadGoal,
+    SetGoal {
+        objective: String,
+        status: Option<nori_protocol::ThreadGoalStatus>,
+    },
+    SetGoalStatus(nori_protocol::ThreadGoalStatus),
+    ClearGoal,
+    RespondToAgent {
+        request_id: nori_protocol::acp::v1::RequestId,
+        response:
+            Box<Result<nori_protocol::acp::v1::ClientResponse, nori_protocol::acp::v1::Error>>,
+    },
+}
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
-    CodexEvent(Event),
-    ClientEvent(nori_protocol::ClientEvent),
+    SessionEvent {
+        generation: SessionGeneration,
+        event: nori_protocol::SessionEvent,
+    },
 
     /// Start a new session.
     NewSession,
 
+    /// A `/close` failed: surface the error and unblock the widget.
+    SessionCloseFailed {
+        message: String,
+    },
+
+    /// A `/close` succeeded: the session is released. Return to the agent
+    /// session picker instead of auto-claiming a fresh session.
+    SessionClosed,
+
+    /// The pre-session agent probe finished (picker-first entry and
+    /// post-/close). `fallback_to_spawn` says what a failure should do:
+    /// entry falls back to the plain spawn (the old `nori cloud` behavior);
+    /// post-/close must NOT — the user just released a session, so silently
+    /// claiming a fresh one is forbidden.
+    AgentSessionListProbed {
+        probe: Result<nori_harness::AgentSessionsProbe, nori_harness::ProbeError>,
+        intent: AgentSessionProbeIntent,
+    },
+
+    /// Re-run the pre-session probe and reopen the session picker (e.g.
+    /// /resume on a deferred widget that has no live agent connection).
+    OpenAgentSessionPicker,
+
+    /// Begin the quit flow (feedback, input freeze, bounded cleanup) on the chat
+    /// widget — used by input surfaces that don't own the widget (Ctrl+D).
+    BeginExit,
+
     /// Request to exit the application gracefully.
     ExitRequest,
 
-    /// Forward an `Op` to the Agent. Using an `AppEvent` for this avoids
-    /// bubbling channels through layers of widgets.
-    CodexOp(codex_protocol::protocol::Op),
+    HarnessAction(HarnessAction),
+    HistoryEntryLoaded {
+        log_id: i64,
+        offset: i64,
+        entry: Option<nori_harness::HistoryEntry>,
+    },
+    HistorySearchLoaded(Vec<nori_harness::HistoryEntry>),
+    CustomPromptsLoaded(Vec<nori_harness::CustomPrompt>),
+    UndoSnapshotsLoaded(Vec<nori_harness::UndoSnapshot>),
+    GoalLoaded(Option<nori_protocol::ThreadGoal>),
+    HarnessActionFailed(String),
 
     /// Kick off an asynchronous file search for the given query (text after
     /// the `@`). Previous searches may be cancelled by the app layer so there
@@ -59,30 +133,20 @@ pub(crate) enum AppEvent {
         agent: Option<String>,
     },
 
-    /// Result of refreshing rate limits
-    #[allow(dead_code)]
-    RateLimitSnapshotFetched(RateLimitSnapshot),
-
     /// Result of computing a `/diff` command.
     DiffResult(String),
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
+    /// Replace the just-finished assistant stream cells with one raw-Markdown cell.
+    ConsolidateAgentMessage {
+        source: String,
+        cwd: PathBuf,
+    },
+
     StartCommitAnimation,
     StopCommitAnimation,
     CommitTick,
-
-    /// Update the current reasoning effort in the running app and widget.
-    UpdateReasoningEffort(Option<ReasoningEffort>),
-
-    /// Update the current agent slug in the running app and widget.
-    UpdateAgent(String),
-
-    /// Persist the selected agent and reasoning effort to the appropriate config.
-    PersistAgentSelection {
-        agent: String,
-        effort: Option<ReasoningEffort>,
-    },
 
     /// Open the confirmation prompt before enabling full access mode.
     OpenFullAccessConfirmation {
@@ -136,11 +200,6 @@ pub(crate) enum AppEvent {
     /// Persist the acknowledgement flag for the world-writable directories warning.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     PersistWorldWritableWarningAcknowledged,
-
-    /// Persist the acknowledgement flag for the model migration prompt.
-    PersistModelMigrationPromptAcknowledged {
-        migration_config: String,
-    },
 
     /// Skip the next world-writable scan (one-shot) after a user-confirmed continue.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -197,9 +256,12 @@ pub(crate) enum AppEvent {
     /// expose a Model session config option.
     OpenAcpModelPickerUnsupported,
 
-    /// Open the generic ACP session config picker.
+    /// Open the generic ACP session config picker. `focus_config_id` optionally
+    /// names the option whose row should be selected when the panel opens (used
+    /// to return the cursor to the just-edited option).
     OpenAcpSessionConfigPicker {
         config_options: Vec<SessionConfigOption>,
+        focus_config_id: Option<String>,
     },
 
     /// Open the value picker for a specific ACP session config option.
@@ -285,8 +347,14 @@ pub(crate) enum AppEvent {
     /// Open the vim mode sub-picker.
     OpenVimModePicker,
 
-    /// Set the TUI vim mode config setting.
-    SetConfigVimMode(nori_config::VimEnterBehavior),
+    /// Set the TUI vim mode config setting. `from_settings` is true when the
+    /// change originated from the `/settings` panel (so the panel should be
+    /// reopened afterward) and false when it came from the standalone `/vim`
+    /// command.
+    SetConfigVimMode {
+        value: nori_config::VimEnterBehavior,
+        from_settings: bool,
+    },
 
     /// Open the notify-after-idle sub-picker.
     OpenNotifyAfterIdlePicker,
@@ -320,6 +388,9 @@ pub(crate) enum AppEvent {
 
     /// Set the TUI pinned plan drawer config setting.
     SetConfigPinnedPlanDrawer(bool),
+
+    /// Set width-resize transcript reflow.
+    SetConfigResizeReflow(bool),
 
     /// Set ACP wire JSONL recording for future ACP child subprocesses.
     SetConfigAcpWireRecording(bool),
@@ -399,7 +470,7 @@ pub(crate) enum AppEvent {
     /// Execute a custom prompt script asynchronously.
     ExecuteScript {
         /// The custom prompt to execute.
-        prompt: codex_protocol::custom_prompts::CustomPrompt,
+        prompt: nori_harness::custom_prompts::CustomPrompt,
         /// Positional arguments from the command line.
         args: Vec<String>,
     },
@@ -473,8 +544,8 @@ pub(crate) enum AppEvent {
     /// Show the resume session picker sourced from the live agent's ACP
     /// `session/list` rather than the local transcript store.
     ShowAcpResumeSessionPicker {
-        /// Session summaries reported by the agent.
-        sessions: Vec<nori_harness::AcpSessionSummary>,
+        /// Schema-native session records reported by the agent.
+        sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
     },
 
     /// Resume a session reported by the agent's `session/list`, via
@@ -482,6 +553,9 @@ pub(crate) enum AppEvent {
     ResumeAcpSession {
         /// The agent's session identifier to load.
         acp_session_id: String,
+        /// The broker-reported session title, when known, so the reattach
+        /// message and cloud surfaces can name the session.
+        title: Option<String>,
     },
 
     /// Launch a terminal file manager to browse and optionally edit files.
@@ -494,9 +568,7 @@ pub(crate) enum AppEvent {
     OpenFileManagerPicker,
 
     /// Persist the full MCP servers map to config.toml.
-    SaveMcpServers(
-        std::collections::BTreeMap<String, codex_protocol::config_types::McpServerConfig>,
-    ),
+    SaveMcpServers(std::collections::BTreeMap<String, nori_config::McpServerConfig>),
 
     /// Trigger an MCP OAuth login flow for a server.
     McpOAuthLogin {
@@ -526,9 +598,7 @@ pub(crate) enum AppEvent {
     ComputeMcpAuthStatuses,
 
     /// Deliver computed MCP auth statuses to the active picker view.
-    McpAuthStatusesReady(
-        std::collections::HashMap<String, codex_protocol::protocol::McpAuthStatus>,
-    ),
+    McpAuthStatusesReady(std::collections::HashMap<String, codex_rmcp_client::McpAuthStatus>),
 
     /// Browser launched successfully with CDP details.
     BrowserLaunched {
@@ -539,8 +609,15 @@ pub(crate) enum AppEvent {
     /// Browser launch failed with an error message.
     BrowserLaunchFailed(String),
 
+    /// Persist the chosen `/browser` profile as the default and launch with it.
+    SetBrowserProfile(nori_config::BrowserProfileMode),
+
     /// Open the fork picker modal showing previous user messages.
     OpenForkPicker,
+
+    /// Branch the conversation at its current head via ACP `session/fork`,
+    /// swapping the active session to the forked one.
+    BranchFromCurrent,
 
     /// Fork the conversation to just before the selected user message.
     ForkToMessage {
@@ -549,4 +626,19 @@ pub(crate) enum AppEvent {
         /// The text of the selected message, to prefill the composer.
         prefill: String,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AgentSessionProbeIntent {
+    Picker { fallback_to_spawn: bool },
+    Onboarding,
+}
+
+impl AgentSessionProbeIntent {
+    pub(crate) fn fallback_to_spawn(self) -> bool {
+        match self {
+            Self::Picker { fallback_to_spawn } => fallback_to_spawn,
+            Self::Onboarding => true,
+        }
+    }
 }

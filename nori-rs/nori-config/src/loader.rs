@@ -1,15 +1,19 @@
 //! Configuration loading for Nori CLI
 
-use super::types::ApprovalPolicy;
 use super::types::DEFAULT_AGENT;
-use super::types::McpServerConfig;
 use super::types::NoriConfig;
 use super::types::NoriConfigOverrides;
 use super::types::NoriConfigToml;
+use crate::AskForApproval;
+use crate::McpServerConfig;
+use crate::SandboxMode;
+use crate::SandboxPolicy;
+use crate::TrustLevel;
+use crate::git_root::resolve_root_git_project_for_trust;
 use anyhow::Context;
 use anyhow::Result;
-use codex_protocol::config_types::SandboxMode;
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 
 /// Environment variable to override the Nori home directory
@@ -42,36 +46,25 @@ impl NoriConfig {
     pub fn load_with_overrides(overrides: NoriConfigOverrides) -> Result<Self> {
         let nori_home = find_nori_home()?;
         let config_path = nori_home.join(CONFIG_FILE);
-
-        let toml_config = if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)
-                .with_context(|| format!("Failed to read {}", config_path.display()))?;
-            toml::from_str::<NoriConfigToml>(&content)
-                .with_context(|| format!("Failed to parse {}", config_path.display()))?
-        } else {
-            NoriConfigToml::default()
-        };
-
-        Self::from_toml(toml_config, nori_home, overrides)
+        Self::load_from_path_with_overrides(&config_path, overrides)
     }
 
     /// Load configuration from a specific path (for testing)
-    pub fn load_from_path(config_path: &PathBuf) -> Result<Self> {
+    pub fn load_from_path(config_path: &Path) -> Result<Self> {
+        Self::load_from_path_with_overrides(config_path, NoriConfigOverrides::default())
+    }
+
+    /// Load configuration from a specific path with raw and typed overrides.
+    pub fn load_from_path_with_overrides(
+        config_path: &Path,
+        overrides: NoriConfigOverrides,
+    ) -> Result<Self> {
         let nori_home = config_path
             .parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-
-        let toml_config = if config_path.exists() {
-            let content = std::fs::read_to_string(config_path)
-                .with_context(|| format!("Failed to read {}", config_path.display()))?;
-            toml::from_str::<NoriConfigToml>(&content)
-                .with_context(|| format!("Failed to parse {}", config_path.display()))?
-        } else {
-            NoriConfigToml::default()
-        };
-
-        Self::from_toml(toml_config, nori_home, NoriConfigOverrides::default())
+        let toml_config = load_toml(config_path, &overrides.raw_overrides)?;
+        Self::from_toml(toml_config, nori_home, overrides)
     }
 
     /// Build resolved config from TOML + overrides
@@ -80,10 +73,69 @@ impl NoriConfig {
         nori_home: PathBuf,
         overrides: NoriConfigOverrides,
     ) -> Result<Self> {
-        let cwd = overrides
-            .cwd
-            .or_else(|| std::env::current_dir().ok())
+        let has_explicit_approval_or_sandbox_policy = toml.approval_policy.is_some()
+            || toml.sandbox_mode.is_some()
+            || toml.sandbox_workspace_write.is_some()
+            || overrides.approval_policy.is_some()
+            || overrides.sandbox_mode.is_some()
+            || overrides.raw_overrides.iter().any(|(path, _)| {
+                matches!(path.as_str(), "approval_policy" | "sandbox_mode")
+                    || path.starts_with("sandbox_workspace_write.")
+            });
+        let NoriConfigOverrides {
+            agent: agent_override,
+            sandbox_mode: sandbox_mode_override,
+            approval_policy: approval_policy_override,
+            cwd,
+            additional_writable_roots,
+            raw_overrides: _,
+        } = overrides;
+
+        let process_cwd = std::env::current_dir().unwrap_or_default();
+        let cwd = resolve_path(cwd.unwrap_or_else(|| process_cwd.clone()), &process_cwd);
+        let active_project = toml
+            .projects
+            .get(cwd.to_string_lossy().as_ref())
+            .cloned()
+            .or_else(|| {
+                resolve_root_git_project_for_trust(&cwd).and_then(|repo_root| {
+                    toml.projects
+                        .get(repo_root.to_string_lossy().as_ref())
+                        .cloned()
+                })
+            })
             .unwrap_or_default();
+        let sandbox_mode = sandbox_mode_override
+            .or(toml.sandbox_mode)
+            .unwrap_or(SandboxMode::WorkspaceWrite);
+        let mut sandbox_policy = match sandbox_mode {
+            SandboxMode::ReadOnly => SandboxPolicy::new_read_only_policy(),
+            SandboxMode::WorkspaceWrite => toml
+                .sandbox_workspace_write
+                .as_ref()
+                .map(|settings| SandboxPolicy::WorkspaceWrite {
+                    writable_roots: settings.writable_roots.clone(),
+                    network_access: settings.network_access,
+                    exclude_tmpdir_env_var: settings.exclude_tmpdir_env_var,
+                    exclude_slash_tmp: settings.exclude_slash_tmp,
+                })
+                .unwrap_or_else(SandboxPolicy::new_workspace_write_policy),
+            SandboxMode::DangerFullAccess => SandboxPolicy::DangerFullAccess,
+        };
+        if let SandboxPolicy::WorkspaceWrite { writable_roots, .. } = &mut sandbox_policy {
+            for root in additional_writable_roots {
+                let root = resolve_path(root, &cwd);
+                if !writable_roots.contains(&root) {
+                    writable_roots.push(root);
+                }
+            }
+        }
+        let approval_policy = approval_policy_override.or(toml.approval_policy).unwrap_or(
+            match active_project.trust_level {
+                Some(TrustLevel::Untrusted) => AskForApproval::UnlessTrusted,
+                Some(TrustLevel::Trusted) | None => AskForApproval::OnRequest,
+            },
+        );
 
         // Resolve MCP servers
         let mcp_servers = resolve_mcp_servers(toml.mcp_servers)?;
@@ -125,29 +177,36 @@ impl NoriConfig {
         let auto_worktree = toml.tui.auto_worktree.unwrap_or_default();
         let acp_proxy = super::types::AcpProxyConfig::from_toml(toml.acp_proxy, &nori_home);
 
-        // Active agent is the runtime value: CLI override > config model > persisted agent > DEFAULT_AGENT
-        // Using agent as fallback ensures the persisted preference is honored at startup
-        let active_agent = overrides
-            .agent
-            .or(toml.model)
-            .unwrap_or_else(|| agent.clone());
+        // The CLI override is session-only; otherwise use the persisted agent.
+        let active_agent = agent_override.unwrap_or_else(|| agent.clone());
 
         Ok(Self {
             agent,
             active_agent,
-            sandbox_mode: overrides
-                .sandbox_mode
-                .or(toml.sandbox_mode)
-                .unwrap_or(SandboxMode::WorkspaceWrite),
-            approval_policy: overrides
-                .approval_policy
-                .or(toml.approval_policy)
-                .unwrap_or(ApprovalPolicy::OnRequest),
+            sandbox_mode,
+            sandbox_policy,
+            approval_policy,
+            has_explicit_approval_or_sandbox_policy,
+            forced_auto_mode_downgraded_on_windows: false,
+            windows_sandbox_enabled: toml
+                .features
+                .enable_experimental_windows_sandbox
+                .unwrap_or(false),
+            shell_environment_policy: toml.shell_environment_policy.into(),
+            active_project,
+            notices: toml.notice,
+            check_for_update_on_startup: toml.check_for_update_on_startup.unwrap_or(true),
+            disable_paste_burst: toml.disable_paste_burst.unwrap_or(false),
             history_persistence: toml
                 .history_persistence
                 .unwrap_or(super::types::HistoryPersistence::SaveAll),
+            browser_profile: toml
+                .browser_profile
+                .unwrap_or(super::types::BrowserProfileMode::Throwaway),
+            notify: toml.notify,
             acp_proxy,
             animations: toml.tui.animations.unwrap_or(true),
+            resize_reflow: toml.tui.resize_reflow.unwrap_or(true),
             terminal_notifications: toml
                 .tui
                 .terminal_notifications
@@ -207,31 +266,93 @@ impl NoriConfig {
     }
 }
 
+fn load_toml(
+    config_path: &Path,
+    raw_overrides: &[(String, toml::Value)],
+) -> Result<NoriConfigToml> {
+    let mut value = if config_path.exists() {
+        let content = std::fs::read_to_string(config_path)
+            .with_context(|| format!("Failed to read {}", config_path.display()))?;
+        if content.trim().is_empty() {
+            toml::Value::Table(toml::Table::new())
+        } else {
+            toml::from_str::<toml::Value>(&content)
+                .with_context(|| format!("Failed to parse {}", config_path.display()))?
+        }
+    } else {
+        toml::Value::Table(toml::Table::new())
+    };
+
+    for (path, override_value) in raw_overrides {
+        apply_toml_override(&mut value, path, override_value.clone());
+    }
+
+    if value.get("profile").is_some() || value.get("profiles").is_some() {
+        anyhow::bail!(
+            "Codex configuration profiles are no longer supported; use Nori skillsets to select dedicated agent behavior"
+        );
+    }
+    if value.get("model").is_some() {
+        anyhow::bail!("the legacy `model` key is no longer supported; use `agent` instead");
+    }
+
+    value
+        .try_into()
+        .with_context(|| format!("Failed to parse {}", config_path.display()))
+}
+
+fn apply_toml_override(root: &mut toml::Value, path: &str, value: toml::Value) {
+    let segments: Vec<&str> = path.split('.').collect();
+    let mut current = root;
+
+    for (index, segment) in segments.iter().enumerate() {
+        let is_last = index == segments.len() - 1;
+        if is_last {
+            if !current.is_table() {
+                *current = toml::Value::Table(toml::Table::new());
+            }
+            if let toml::Value::Table(table) = current {
+                table.insert((*segment).to_string(), value);
+            }
+            return;
+        }
+
+        if !current.is_table() {
+            *current = toml::Value::Table(toml::Table::new());
+        }
+        if let toml::Value::Table(table) = current {
+            current = table
+                .entry((*segment).to_string())
+                .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+        }
+    }
+}
+
+fn resolve_path(path: PathBuf, cwd: &Path) -> PathBuf {
+    let absolute = if path.is_absolute() {
+        path
+    } else {
+        cwd.join(path)
+    };
+    std::fs::canonicalize(&absolute).unwrap_or(absolute)
+}
+
 /// Resolve MCP server configurations from TOML
 fn resolve_mcp_servers(
-    toml_servers: HashMap<String, super::types::McpServerConfigToml>,
+    toml_servers: HashMap<String, McpServerConfig>,
 ) -> Result<HashMap<String, McpServerConfig>> {
     const RESERVED_NORI_CLIENT_MCP_SERVER_NAME: &str = "nori-client";
 
     let mut resolved = HashMap::new();
 
-    for (name, server_toml) in toml_servers {
+    for (name, server) in toml_servers {
         if name == RESERVED_NORI_CLIENT_MCP_SERVER_NAME {
             return Err(anyhow::anyhow!(
                 "MCP server name '{name}' is reserved for Nori's backend-owned nori-client server"
             ));
         }
 
-        match server_toml.resolve() {
-            Ok(config) => {
-                resolved.insert(name, config);
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "Invalid MCP server configuration '{name}': {e}"
-                ));
-            }
-        }
+        resolved.insert(name, server);
     }
 
     Ok(resolved)
@@ -250,7 +371,7 @@ mod tests {
         std::fs::write(
             &config_path,
             r#"
-model = "claude-code"
+agent = "claude-code"
 
 [mcp_servers.filesystem]
 command = "npx"
@@ -287,8 +408,8 @@ enabled = true
 
         let result = NoriConfig::load_from_path(&config_path);
         assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("invalid"));
+        let err = format!("{:#}", result.unwrap_err());
+        assert!(err.contains("invalid transport"));
     }
 
     #[test]
@@ -329,6 +450,29 @@ args = ["@example/not-allowed"]
     }
 
     #[test]
+    fn resize_reflow_defaults_to_enabled() {
+        let config = NoriConfig::from_toml(
+            NoriConfigToml::default(),
+            PathBuf::from("/tmp/nori"),
+            NoriConfigOverrides::default(),
+        )
+        .unwrap();
+
+        assert!(config.resize_reflow);
+    }
+
+    #[test]
+    fn resize_reflow_can_be_disabled_in_tui_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(CONFIG_FILE);
+        std::fs::write(&config_path, "[tui]\nresize_reflow = false\n").unwrap();
+
+        let config = NoriConfig::load_from_path(&config_path).unwrap();
+
+        assert!(!config.resize_reflow);
+    }
+
+    #[test]
     fn test_load_persisted_agent_from_config() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
@@ -344,7 +488,7 @@ agent = "gemini"
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();
 
-        // The agent field should be loaded and used to determine the model
+        // The persisted agent should be loaded directly.
         assert_eq!(
             config.agent, "gemini",
             "Agent should be loaded from config.toml"
@@ -435,11 +579,11 @@ enabled = true
     }
 
     #[test]
-    fn test_model_uses_persisted_agent_as_fallback() {
+    fn test_active_agent_uses_persisted_agent_as_fallback() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(CONFIG_FILE);
 
-        // Write a config with only agent set (no model specified)
+        // Write a config with the persisted agent set.
         std::fs::write(&config_path, "agent = \"gemini\"").unwrap();
 
         let config = NoriConfig::load_from_path(&config_path).unwrap();

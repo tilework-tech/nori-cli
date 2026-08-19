@@ -451,7 +451,7 @@ fn test_ctrl_r_history_search_escape_closes_popup() {
 
 #[test]
 fn test_ctrl_r_history_search_enter_selects_and_closes() {
-    use codex_protocol::message_history::HistoryEntry;
+    use nori_harness::HistoryEntry;
 
     let (tx, _rx) = unbounded_channel::<AppEvent>();
     let sender = AppEventSender::new(tx);
@@ -464,12 +464,12 @@ fn test_ctrl_r_history_search_enter_selects_and_closes() {
     if let ActivePopup::HistorySearch(popup) = &mut composer.active_popup {
         popup.set_entries(vec![
             HistoryEntry {
-                conversation_id: "sess-1".to_string(),
+                session_id: "sess-1".to_string(),
                 ts: 1,
                 text: "first entry".to_string(),
             },
             HistoryEntry {
-                conversation_id: "sess-2".to_string(),
+                session_id: "sess-2".to_string(),
                 ts: 2,
                 text: "second entry".to_string(),
             },

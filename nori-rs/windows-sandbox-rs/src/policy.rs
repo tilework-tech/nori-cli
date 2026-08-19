@@ -1,5 +1,5 @@
 use anyhow::Result;
-pub use codex_protocol::protocol::SandboxPolicy;
+pub use nori_config::SandboxPolicy;
 
 pub fn parse_policy(value: &str) -> Result<SandboxPolicy> {
     match value {

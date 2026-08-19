@@ -1,0 +1,20 @@
+---
+source: tui-components/src/menu/tests.rs
+expression: "snapshot(&mut consequences, 54, 16, \"Remove local session?\",\nSome(\"Remote history will remain available\"))"
+---
+"                                                      "
+"    Remove local session?                             "
+"    Remote history will remain available              "
+"                                                      "
+"    ↑ 1 more                                          "
+"    ▏ Delete local transcript                    ▕    "
+"    ▏ Supporting copy for Delete local           ▕    "
+"    ▏ transcript                                 ▕    "
+"                                                      "
+"      Archive before deleting                         "
+"      Supporting copy for Archive before              "
+"      deleting                                        "
+"    ↓ 1 more                                          "
+"                                                      "
+"           ↑↓/jk move  enter select  q close          "
+"                                                      "

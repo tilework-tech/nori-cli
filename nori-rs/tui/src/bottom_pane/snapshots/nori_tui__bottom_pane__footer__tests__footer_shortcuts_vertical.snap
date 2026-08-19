@@ -4,7 +4,7 @@ expression: terminal.backend()
 ---
 "  ⎇ feature/test                                                                "
 "  +10 -3                                                                        "
-"  Context 72%                                                                   "
+"  72%                                                                           "
 "  Approvals: Agent                                                              "
 "  Skillset: clifford                                                            "
 "  Skillsets v19.1.1                                                             "

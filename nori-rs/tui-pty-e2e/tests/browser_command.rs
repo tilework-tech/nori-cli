@@ -105,7 +105,7 @@ fn extract_cdp_port_from_screen(screen: &str) -> Option<u16> {
 #[cfg(target_os = "linux")]
 fn browser_command_agent_modifies_page() {
     let config = SessionConfig::new()
-        .with_model("mock-model".to_owned())
+        .with_agent("mock-model".to_owned())
         .with_agent_env("MOCK_AGENT_BROWSER_MODIFY", "1");
 
     let mut session = TuiSession::spawn_with_config(30, 120, config).expect("Failed to spawn nori");

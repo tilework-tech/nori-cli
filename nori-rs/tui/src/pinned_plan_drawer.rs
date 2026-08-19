@@ -5,8 +5,9 @@
 //! - **Expanded**: full checklist (via `PinnedPlanDrawer`)
 //! - **Collapsed**: single-line progress summary (via `PinnedPlanDrawerCollapsed`)
 
-use codex_protocol::plan_tool::StepStatus;
-use codex_protocol::plan_tool::UpdatePlanArgs;
+use crate::ui_types::PlanItem;
+use crate::ui_types::PlanUpdate;
+use crate::ui_types::StepStatus;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -22,11 +23,11 @@ use crate::render::renderable::Renderable;
 
 /// A viewport-pinned widget that displays the latest plan as a checklist.
 pub(crate) struct PinnedPlanDrawer<'a> {
-    plan: &'a UpdatePlanArgs,
+    plan: &'a PlanUpdate,
 }
 
 impl<'a> PinnedPlanDrawer<'a> {
-    pub(crate) fn new(plan: &'a UpdatePlanArgs) -> Self {
+    pub(crate) fn new(plan: &'a PlanUpdate) -> Self {
         Self { plan }
     }
 }
@@ -49,11 +50,11 @@ impl Renderable for PinnedPlanDrawer<'_> {
 
 /// A viewport-pinned widget that displays a one-line plan progress summary.
 pub(crate) struct PinnedPlanDrawerCollapsed<'a> {
-    plan: &'a UpdatePlanArgs,
+    plan: &'a PlanUpdate,
 }
 
 impl<'a> PinnedPlanDrawerCollapsed<'a> {
-    pub(crate) fn new(plan: &'a UpdatePlanArgs) -> Self {
+    pub(crate) fn new(plan: &'a PlanUpdate) -> Self {
         Self { plan }
     }
 }
@@ -72,10 +73,7 @@ impl Renderable for PinnedPlanDrawerCollapsed<'_> {
 /// Build the collapsed summary line for the plan.
 ///
 /// Format: `Plan: X/Y completed  *  > Current: step_name`
-fn build_collapsed_line(
-    plan: &[codex_protocol::plan_tool::PlanItemArg],
-    width: usize,
-) -> Line<'static> {
+fn build_collapsed_line(plan: &[PlanItem], width: usize) -> Line<'static> {
     let total = plan.len();
     let completed = plan
         .iter()

@@ -1,0 +1,19 @@
+---
+source: tui/src/nori/resume_session_picker.rs
+expression: "component_picker_snapshot(&params, 124, 15)"
+---
+"                                                                                                                            "
+"  Sessions                                                                                                                  "
+"  Resume a live session or start a new one                                                                                  "
+"  ⌕  Title, path, status, or session id                                            Details                                  "
+"    Session                     Source     Working directory    Updated                                                     "
+"  › Start a new session         CLI        Not reported         now                        Action │ Create a fresh ACP s…   "
+"    Build TUI components        Local      /workspace/nori/cli  2020-01-15 10:30   Existing sess… │ No session will be c…   "
+"    slack · claude              Unknown    Not reported         2020-01-14 10:30                                            "
+"                                                                                                                            "
+"                                                                                                                            "
+"                                                                                                                            "
+"                                                                                                                            "
+"                                                                                                                            "
+"                                              ↑↓ move  enter select  esc close                                              "
+"                                                                                                                            "

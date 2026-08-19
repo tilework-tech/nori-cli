@@ -8,6 +8,7 @@ use ratatui::style::Stylize;
 use ratatui::text::Line as RtLine;
 use ratatui::text::Span as RtSpan;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Widget;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -21,8 +22,7 @@ use crate::render::line_utils::prefix_lines;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::InsetRenderable;
 use crate::render::renderable::Renderable;
-use codex_core::git_info::get_git_repo_root;
-use codex_protocol::protocol::FileChange;
+use crate::ui_types::FileChange;
 
 // ---------------------------------------------------------------------------
 // Color-level and theme detection
@@ -142,7 +142,7 @@ pub struct DiffSummary {
 }
 
 impl DiffSummary {
-    pub fn new(changes: HashMap<PathBuf, FileChange>, cwd: PathBuf) -> Self {
+    pub(crate) fn new(changes: HashMap<PathBuf, FileChange>, cwd: PathBuf) -> Self {
         Self { changes, cwd }
     }
 }
@@ -521,7 +521,10 @@ fn render_change_with_ctx(
 }
 
 pub(crate) fn display_path_for(path: &Path, cwd: &Path) -> String {
-    let path_in_same_repo = match (get_git_repo_root(cwd), get_git_repo_root(path)) {
+    let path_in_same_repo = match (
+        nori_config::resolve_root_git_project_for_trust(cwd),
+        nori_config::resolve_root_git_project_for_trust(path),
+    ) {
         (Some(cwd_repo), Some(path_repo)) => cwd_repo == path_repo,
         _ => false,
     };
@@ -802,7 +805,6 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::text::Text;
     use ratatui::widgets::Paragraph;
-    use ratatui::widgets::WidgetRef;
     use ratatui::widgets::Wrap;
     use unicode_width::UnicodeWidthStr;
 
@@ -816,7 +818,7 @@ mod tests {
             .draw(|f| {
                 Paragraph::new(Text::from(lines))
                     .wrap(Wrap { trim: false })
-                    .render_ref(f.area(), f.buffer_mut())
+                    .render(f.area(), f.buffer_mut())
             })
             .expect("draw");
         assert_snapshot!(name, terminal.backend());
@@ -1126,7 +1128,7 @@ mod tests {
         let lines = prefix_lines(diff_lines, "    ".into(), "    ".into());
 
         let mut buf = Buffer::empty(area);
-        Paragraph::new(Text::from(lines)).render_ref(area, &mut buf);
+        Paragraph::new(Text::from(lines)).render(area, &mut buf);
 
         // Every cell in the row should have the green background
         for col in 0..total_width {

@@ -1,4 +1,4 @@
-use nori_harness as acp;
+use nori_protocol::acp::v1 as acp;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AcpModeConfigValue {
@@ -17,22 +17,6 @@ pub(crate) struct AcpModeConfig {
 }
 
 impl AcpModeConfig {
-    #[cfg(test)]
-    pub(crate) fn from_values(
-        config_id: String,
-        current_value: String,
-        values: Vec<(String, String)>,
-    ) -> Option<Self> {
-        Self::new(
-            config_id,
-            current_value,
-            values
-                .into_iter()
-                .map(|(value, label)| AcpModeConfigValue { value, label })
-                .collect(),
-        )
-    }
-
     fn new(
         config_id: String,
         current_value: String,

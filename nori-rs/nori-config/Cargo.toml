@@ -14,10 +14,11 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-codex-protocol = { workspace = true }
 dirs = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true }
+toml_edit = { workspace = true }
+wildmatch = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

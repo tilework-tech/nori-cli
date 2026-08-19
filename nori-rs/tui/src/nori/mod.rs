@@ -13,11 +13,12 @@ pub(crate) mod session_config_history;
 pub(crate) mod session_config_mode;
 pub(crate) mod session_config_picker;
 pub(crate) mod session_header;
+pub(crate) mod session_info;
+mod session_info_codex;
+mod session_info_state;
 pub(crate) mod skillset_picker;
 pub(crate) mod token_count;
 pub(crate) mod viewonly_session_picker;
-
-pub(crate) mod config_adapter;
 
 pub(crate) mod config_picker;
 

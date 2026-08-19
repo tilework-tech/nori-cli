@@ -747,6 +747,23 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_vim_mode_enter_behavior_picker() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let params = crate::nori::config_picker::vim_mode_picker_params(
+            nori_config::VimEnterBehavior::AlwaysSubmit,
+            tx.clone(),
+            false,
+        );
+        let view = ListSelectionView::new(params, tx);
+
+        assert_snapshot!(
+            "vim_mode_enter_behavior_picker",
+            render_lines_with_width(&view, 80)
+        );
+    }
+
+    #[test]
     fn renders_right_aligned_footer_hint_without_extra_height() {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
