@@ -269,6 +269,12 @@ pub(crate) enum AppEvent {
         option: SessionConfigOption,
     },
 
+    /// Open the custom model text input so the user can type any model ID.
+    OpenCustomModelInput {
+        config_id: String,
+        option_name: String,
+    },
+
     /// Set an ACP session config option value.
     SetAcpSessionConfigOption {
         config_id: String,

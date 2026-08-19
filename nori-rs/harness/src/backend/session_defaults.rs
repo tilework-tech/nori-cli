@@ -38,20 +38,6 @@ async fn apply_via_config_option(
         debug!("Default model '{default_model}' is already active");
         return;
     }
-    let available = match &select.options {
-        acp::SessionConfigSelectOptions::Ungrouped(values) => values
-            .iter()
-            .any(|value| value.value.to_string() == default_model),
-        acp::SessionConfigSelectOptions::Grouped(groups) => groups
-            .iter()
-            .flat_map(|group| group.options.iter())
-            .any(|value| value.value.to_string() == default_model),
-        _ => false,
-    };
-    if !available {
-        warn!("Default model '{default_model}' not in config option values, skipping");
-        return;
-    }
 
     match connection
         .set_config_option(session_id, option.id.clone(), default_model.to_string())

@@ -1,0 +1,12 @@
+---
+source: tui/src/nori/custom_model_input.rs
+expression: terminal.backend()
+---
+┌ Custom Model ──────────────────────────────────┐
+│ Enter a model ID (e.g. claude-opus-4-8)        │
+│                                                │
+│ › claude-opus-4-8│                             │
+│                                                │
+│ Enter to submit · Esc to cancel                │
+│                                                │
+└────────────────────────────────────────────────┘

@@ -726,6 +726,15 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    pub(crate) fn open_custom_model_input(&mut self, config_id: String, option_name: String) {
+        let view = crate::nori::custom_model_input::CustomModelInputView::new(
+            config_id,
+            option_name,
+            self.app_event_tx.clone(),
+        );
+        self.bottom_pane.show_view(Box::new(view));
+    }
+
     /// Set an ACP session config option via the agent handle.
     pub(crate) fn set_acp_session_config_option(
         &mut self,

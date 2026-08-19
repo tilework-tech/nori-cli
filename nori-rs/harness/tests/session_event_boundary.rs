@@ -310,6 +310,66 @@ async fn setup_notifications_and_default_config_response_precede_session_start()
 
 #[tokio::test]
 #[serial]
+async fn unknown_default_model_is_attempted_on_session_start() {
+    let temp = tempfile::tempdir().expect("create session directory");
+    let mut config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    config.default_models.insert(
+        "mock-model".to_string(),
+        "model-that-does-not-exist-yet".to_string(),
+    );
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    let events = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("setup event stream closed");
+            let started = matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)));
+            events.push(event);
+            if started {
+                return events;
+            }
+        }
+    })
+    .await
+    .expect("session setup should complete even with an unknown default model");
+
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(_)),
+                ..
+            })
+        )),
+        "set_config_option should be attempted for unknown models"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)))),
+        "session should start regardless of model validation outcome"
+    );
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
 async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
     let temp = tempfile::tempdir().expect("create session directory");
     let config = NoriConfig {

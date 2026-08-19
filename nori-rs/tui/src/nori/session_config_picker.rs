@@ -133,6 +133,24 @@ pub(crate) fn acp_session_config_value_picker_params(
         _ => {}
     }
 
+    if option.category == Some(acp::SessionConfigOptionCategory::Model) {
+        let config_id = option.id.to_string();
+        let option_name = option.name.clone();
+        items.push(SelectionItem {
+            name: "Use custom model...".to_string(),
+            description: Some("Enter any model ID".to_string()),
+            actions: vec![Box::new(move |tx| {
+                tx.send(AppEvent::OpenCustomModelInput {
+                    config_id: config_id.clone(),
+                    option_name: option_name.clone(),
+                });
+            })],
+            dismiss_on_select: true,
+            search_value: Some("custom model".to_string()),
+            ..Default::default()
+        });
+    }
+
     if initial_selected_idx.is_none() {
         initial_selected_idx = items.iter().position(|item| !item.actions.is_empty());
     }
@@ -393,5 +411,33 @@ mod tests {
         assert_eq!(params.title.as_deref(), Some("Session Config"));
         assert_eq!(params.items.len(), 1);
         assert!(params.items[0].actions.is_empty());
+    }
+
+    #[test]
+    fn model_picker_includes_custom_model_entry() {
+        let params = super::acp_session_config_value_picker_params(&model_option());
+        let names: Vec<&str> = params.items.iter().map(|i| i.name.as_str()).collect();
+
+        assert_eq!(
+            names,
+            vec![
+                "Mock Default Model",
+                "Mock Fast Model",
+                "Use custom model..."
+            ]
+        );
+        let custom_item = params.items.last().unwrap();
+        assert!(
+            !custom_item.actions.is_empty(),
+            "custom entry should have an action"
+        );
+        assert!(!custom_item.is_current);
+    }
+
+    #[test]
+    fn non_model_picker_does_not_include_custom_entry() {
+        let params = super::acp_session_config_value_picker_params(&grouped_mode_option());
+
+        assert!(!params.items.iter().any(|i| i.name == "Use custom model..."));
     }
 }

@@ -169,6 +169,13 @@ identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
   `/config` open), the multi-toggle Footer Segments sub-picker (which already
   stays open by replacing itself), and the bespoke Hotkeys view. Failed persists
   never reopen.
+- For Model-category config options, `acp_session_config_value_picker_params()`
+  appends a "Use custom model..." entry. Selecting it emits
+  `AppEvent::OpenCustomModelInput`, which opens a `CustomModelInputView`
+  (`@/nori-rs/tui/src/nori/custom_model_input.rs`) — a `BottomPaneView` text
+  input for free-form model IDs. On submit it emits
+  `AppEvent::SetAcpSessionConfigOption` and follows the same
+  `session/set_config_option` path as selecting from the advertised list.
 
 #### The `/browser` profile picker
 
