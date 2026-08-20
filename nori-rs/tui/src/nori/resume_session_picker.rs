@@ -21,13 +21,13 @@ use crate::bottom_pane::SelectionAction;
 use crate::nori::viewonly_session_picker::SessionPickerInfo;
 use crate::nori::viewonly_session_picker::format_relative_time;
 use crate::nori::viewonly_session_picker::format_session_name;
-use codex_tui_components::PickerColumn;
-use codex_tui_components::PickerColumnWidth;
-use codex_tui_components::PickerDensity;
-use codex_tui_components::PickerDetail;
-use codex_tui_components::PickerItem;
-use codex_tui_components::PickerState;
-use codex_tui_components::SearchMode;
+use nori_tui_components::PickerColumn;
+use nori_tui_components::PickerColumnWidth;
+use nori_tui_components::PickerDensity;
+use nori_tui_components::PickerDetail;
+use nori_tui_components::PickerItem;
+use nori_tui_components::PickerState;
+use nori_tui_components::SearchMode;
 
 /// Build the local transcript resume screen with the shared component picker.
 /// Domain actions remain in this adapter; the reusable crate only returns the
@@ -428,7 +428,7 @@ pub async fn load_resumable_sessions(
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use codex_tui_components::Picker;
+    use nori_tui_components::Picker;
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;

@@ -1,16 +1,16 @@
 mod support;
 
 use anyhow::Result;
-use codex_tui_components::Picker;
-use codex_tui_components::PickerAction;
-use codex_tui_components::PickerColumn;
-use codex_tui_components::PickerColumnWidth;
-use codex_tui_components::PickerDetail;
-use codex_tui_components::PickerItem;
-use codex_tui_components::PickerMode;
-use codex_tui_components::PickerOutcome;
-use codex_tui_components::PickerState;
-use codex_tui_components::SearchMode;
+use nori_tui_components::Picker;
+use nori_tui_components::PickerAction;
+use nori_tui_components::PickerColumn;
+use nori_tui_components::PickerColumnWidth;
+use nori_tui_components::PickerDetail;
+use nori_tui_components::PickerItem;
+use nori_tui_components::PickerMode;
+use nori_tui_components::PickerOutcome;
+use nori_tui_components::PickerState;
+use nori_tui_components::SearchMode;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;

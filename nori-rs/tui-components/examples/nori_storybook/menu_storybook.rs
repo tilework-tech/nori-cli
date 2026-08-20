@@ -2,12 +2,12 @@
 
 mod fixtures;
 
-use codex_tui_components::MenuModelError;
-use codex_tui_components::MenuOutcome;
-use codex_tui_components::MenuShortcut;
-use codex_tui_components::MenuState;
-use codex_tui_components::OverlayMenu;
-use codex_tui_components::Theme;
+use nori_tui_components::MenuModelError;
+use nori_tui_components::MenuOutcome;
+use nori_tui_components::MenuShortcut;
+use nori_tui_components::MenuState;
+use nori_tui_components::OverlayMenu;
+use nori_tui_components::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -18,7 +18,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::Widget;
 
-pub(super) use codex_tui_components::MenuAction;
+pub(super) use nori_tui_components::MenuAction;
 
 #[derive(Clone, Copy)]
 pub(super) enum MenuStory {

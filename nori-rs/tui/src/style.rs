@@ -1,7 +1,7 @@
 use crate::color::blend;
 use crate::color::is_light;
 use crate::terminal_palette::default_bg;
-use codex_tui_components::Theme;
+use nori_tui_components::Theme;
 use ratatui::style::Color;
 use ratatui::style::Style;
 

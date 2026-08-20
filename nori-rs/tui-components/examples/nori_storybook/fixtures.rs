@@ -1,9 +1,9 @@
 use super::MenuStory;
-use codex_tui_components::KeyHint;
-use codex_tui_components::MenuItem;
-use codex_tui_components::MenuItemTone;
-use codex_tui_components::MenuModelError;
-use codex_tui_components::MenuState;
+use nori_tui_components::KeyHint;
+use nori_tui_components::MenuItem;
+use nori_tui_components::MenuItemTone;
+use nori_tui_components::MenuModelError;
+use nori_tui_components::MenuState;
 
 pub(super) struct MenuPresentation {
     pub(super) title: &'static str,

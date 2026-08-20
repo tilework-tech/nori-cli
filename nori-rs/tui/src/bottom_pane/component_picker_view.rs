@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use codex_tui_components::Picker;
-use codex_tui_components::PickerAction;
-use codex_tui_components::PickerDensity;
-use codex_tui_components::PickerOutcome;
-use codex_tui_components::PickerState;
+use nori_tui_components::Picker;
+use nori_tui_components::PickerAction;
+use nori_tui_components::PickerDensity;
+use nori_tui_components::PickerOutcome;
+use nori_tui_components::PickerState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -226,8 +226,8 @@ impl Renderable for ComponentPickerView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_tui_components::PickerColumn;
-    use codex_tui_components::PickerItem;
+    use nori_tui_components::PickerColumn;
+    use nori_tui_components::PickerItem;
     use pretty_assertions::assert_eq;
 
     fn params() -> ComponentPickerParams {

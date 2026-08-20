@@ -1,12 +1,12 @@
-use codex_tui_components::KeyHint;
-use codex_tui_components::Picker;
-use codex_tui_components::PickerColumn;
-use codex_tui_components::PickerColumnWidth;
-use codex_tui_components::PickerDensity;
-use codex_tui_components::PickerDetail;
-use codex_tui_components::PickerItem;
-use codex_tui_components::PickerState as ComponentPickerState;
-use codex_tui_components::SearchMode;
+use nori_tui_components::KeyHint;
+use nori_tui_components::Picker;
+use nori_tui_components::PickerColumn;
+use nori_tui_components::PickerColumnWidth;
+use nori_tui_components::PickerDensity;
+use nori_tui_components::PickerDetail;
+use nori_tui_components::PickerItem;
+use nori_tui_components::PickerState as ComponentPickerState;
+use nori_tui_components::SearchMode;
 use ratatui::widgets::Widget;
 
 use super::PickerState;

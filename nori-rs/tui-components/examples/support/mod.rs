@@ -2,7 +2,7 @@ use std::io::Stdout;
 use std::time::Duration;
 
 use anyhow::Result;
-use codex_tui_components::Theme;
+use nori_tui_components::Theme;
 use crossterm::event;
 use crossterm::execute;
 use crossterm::terminal::EnterAlternateScreen;

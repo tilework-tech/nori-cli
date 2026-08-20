@@ -4,7 +4,7 @@ Path: @/nori-rs/tui-components
 
 ### Overview
 
-- `codex-tui-components` provides reusable, domain-free Ratatui presentation
+- `nori-tui-components` provides reusable, domain-free Ratatui presentation
   and interaction state for Nori terminal applications.
 - Components accept caller-owned rectangles and caller-provided data or state.
   Interactive state machines return typed outcomes; presentation-only widgets
@@ -22,7 +22,7 @@ consumer application
                          |
                          | domain-free action, state, and Rect
                          v
-                codex-tui-components
+                nori-tui-components
              menu / picker / detail / primitives
                          |
                          | typed outcome, when interactive
