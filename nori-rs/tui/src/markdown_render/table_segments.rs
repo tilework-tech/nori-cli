@@ -1,7 +1,7 @@
 //! Splits markdown source into prose and GFM table blocks.
 //!
 //! The TUI renders tables with the shared adaptive renderer in
-//! `codex-tui-components` and everything else with the local writer, so the source has to be cut
+//! `nori-tui-components` and everything else with the local writer, so the source has to be cut
 //! into segments before either renderer runs.
 //!
 //! The same scanner answers a second question for the streaming path: where is it safe to stop.

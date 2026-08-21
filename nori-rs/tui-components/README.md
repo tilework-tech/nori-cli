@@ -1,6 +1,6 @@
 # Nori TUI components
 
-`codex-tui-components` is the public, domain-free component library used by
+`nori-tui-components` is the public, domain-free component library used by
 Nori terminal applications. Components render inside caller-owned rectangles
 from caller-provided data or state; interactive state machines return typed
 outcomes. Applications remain responsible for terminal setup, event
@@ -24,7 +24,7 @@ The enforceable visual contract lives in [`DESIGN.md`](DESIGN.md).
 Run the storybook examples from `nori-rs/`:
 
 ```console
-cargo run -p codex-tui-components --example nori_storybook
+cargo run -p nori-tui-components --example nori_storybook
 ```
 
 The canonical storybook contains Picker, Markdown, Primitives, States, Detail
@@ -37,9 +37,9 @@ and the right arrow wraps to Picker.
 The focused examples remain useful while developing one component:
 
 ```console
-cargo run -p codex-tui-components --example picker_storybook
-cargo run -p codex-tui-components --example markdown_storybook
-cargo run -p codex-tui-components --example component_storybook
+cargo run -p nori-tui-components --example picker_storybook
+cargo run -p nori-tui-components --example markdown_storybook
+cargo run -p nori-tui-components --example component_storybook
 ```
 
 Press `q` or `Esc` to leave an example.

@@ -6,7 +6,9 @@ We only care about the ACP backend and the code that compiles into the nori bin.
 
 In the nori-rs folder where the rust code lives:
 
-- Crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`
+- Crate names are prefixed with `nori-`. For example, the `tui` folder's crate is named `nori-tui`. New crates must always use the `nori-` prefix.
+  - Crates still named `codex-*` (for example `codex-core`) are inherited fork residue, not a convention to follow. Per [`docs/specs/crate-layering.md`](docs/specs/crate-layering.md), rename them as they are adopted/touched, not in churn-only PRs.
+  - `codex` is only correct when it refers to the actual OpenAI Codex agent we integrate with as an ACP subprocess — for example `AgentKind::Codex`, the `@openai/codex` package, or reads of the agent's own `~/.codex` directory.
 - When using format! and you can inline variables into {}, always do that.
 - Install any commands the repo relies on (for example `just`, `rg`, or `cargo-insta`) if they aren't already available before running instructions here.
 - Never add or modify any code related to `CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR` or `CODEX_SANDBOX_ENV_VAR`.

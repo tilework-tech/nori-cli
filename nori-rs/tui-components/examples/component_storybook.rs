@@ -1,14 +1,14 @@
 mod support;
 
 use anyhow::Result;
-use codex_tui_components::EmptyState;
-use codex_tui_components::KeyHint;
-use codex_tui_components::KeyHints;
-use codex_tui_components::MessageLevel;
-use codex_tui_components::SemanticMessage;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
+use nori_tui_components::EmptyState;
+use nori_tui_components::KeyHint;
+use nori_tui_components::KeyHints;
+use nori_tui_components::MessageLevel;
+use nori_tui_components::SemanticMessage;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
 use ratatui::layout::Margin;

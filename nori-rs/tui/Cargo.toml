@@ -47,7 +47,7 @@ codex-rmcp-client = { workspace = true }
 nori-installed = { workspace = true }
 nori-protocol = { workspace = true }
 codex-file-search = { workspace = true }
-codex-tui-components = { workspace = true }
+nori-tui-components = { workspace = true }
 codex-login = { workspace = true }
 codex-utils-pty = { workspace = true, optional = true }
 color-eyre = { workspace = true }

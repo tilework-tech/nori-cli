@@ -111,7 +111,7 @@ pub(crate) fn render_markdown_text_with_width_and_cwd(
         for segment in segments {
             let source = &input[segment.range];
             let rendered = if segment.is_table {
-                let mut markdown = codex_tui_components::Markdown::new(source);
+                let mut markdown = nori_tui_components::Markdown::new(source);
                 if let Some(width) = width.and_then(|width| u16::try_from(width).ok()) {
                     markdown = markdown.width(width);
                 }

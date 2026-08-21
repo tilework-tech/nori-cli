@@ -1140,22 +1140,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "codex-tui-components"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "crossterm",
- "insta",
- "nucleo-matcher",
- "pretty_assertions",
- "pulldown-cmark",
- "ratatui",
- "supports-color",
- "textwrap 0.16.2",
- "unicode-width 0.2.1",
-]
-
-[[package]]
 name = "codex-utils-cache"
 version = "0.0.0"
 dependencies = [
@@ -3788,7 +3772,6 @@ dependencies = [
  "codex-login",
  "codex-rmcp-client",
  "codex-sandbox",
- "codex-tui-components",
  "codex-utils-pty",
  "codex-windows-sandbox",
  "color-eyre",
@@ -3807,6 +3790,7 @@ dependencies = [
  "nori-harness",
  "nori-installed",
  "nori-protocol",
+ "nori-tui-components",
  "pathdiff",
  "pretty_assertions",
  "pulldown-cmark",
@@ -3838,6 +3822,22 @@ dependencies = [
  "url",
  "vt100 0.16.2",
  "which",
+]
+
+[[package]]
+name = "nori-tui-components"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "insta",
+ "nucleo-matcher",
+ "pretty_assertions",
+ "pulldown-cmark",
+ "ratatui",
+ "supports-color",
+ "textwrap 0.16.2",
+ "unicode-width 0.2.1",
 ]
 
 [[package]]

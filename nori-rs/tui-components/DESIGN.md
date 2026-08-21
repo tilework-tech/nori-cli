@@ -154,7 +154,7 @@ placement.
 Run the single full-screen design reference from `nori-rs/`:
 
 ```console
-cargo run -p codex-tui-components --example nori_storybook
+cargo run -p nori-tui-components --example nori_storybook
 ```
 
 The Picker, Markdown, Primitives, States, Detail pane, and Overlay menu pages
