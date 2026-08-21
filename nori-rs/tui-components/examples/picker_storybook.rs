@@ -1,6 +1,10 @@
 mod support;
 
 use anyhow::Result;
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use nori_tui_components::Picker;
 use nori_tui_components::PickerAction;
 use nori_tui_components::PickerColumn;
@@ -11,10 +15,6 @@ use nori_tui_components::PickerMode;
 use nori_tui_components::PickerOutcome;
 use nori_tui_components::PickerState;
 use nori_tui_components::SearchMode;
-use crossterm::event::Event;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
 use ratatui::layout::Alignment;
 use ratatui::text::Line;
 

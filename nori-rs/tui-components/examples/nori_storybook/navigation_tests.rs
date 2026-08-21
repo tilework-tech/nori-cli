@@ -1,11 +1,11 @@
 use super::Page;
 use super::overlay_menu_action;
 use super::overlay_page_navigation;
-use nori_tui_components::MenuAction;
-use nori_tui_components::MenuShortcut;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use nori_tui_components::MenuAction;
+use nori_tui_components::MenuShortcut;
 use pretty_assertions::assert_eq;
 
 #[test]

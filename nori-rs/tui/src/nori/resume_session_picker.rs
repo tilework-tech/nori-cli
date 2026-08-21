@@ -428,8 +428,8 @@ pub async fn load_resumable_sessions(
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use nori_tui_components::Picker;
     use insta::assert_snapshot;
+    use nori_tui_components::Picker;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use std::io::Write;

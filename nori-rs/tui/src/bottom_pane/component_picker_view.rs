@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 use nori_tui_components::Picker;
 use nori_tui_components::PickerAction;
 use nori_tui_components::PickerDensity;
 use nori_tui_components::PickerOutcome;
 use nori_tui_components::PickerState;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
