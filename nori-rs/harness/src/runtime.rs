@@ -65,8 +65,9 @@ impl SessionEventFanout {
     }
 
     /// Deliver to every subscriber, then the primary receiver. Errors only
-    /// when the primary receiver is gone, mirroring `UnboundedSender::send`.
-    fn send(&self, event: SessionEvent) -> Result<(), mpsc::error::SendError<SessionEvent>> {
+    /// when the primary receiver is gone, mirroring `UnboundedSender::send`
+    /// (boxed: a `SessionEvent` is too large to carry in an `Err` directly).
+    fn send(&self, event: SessionEvent) -> Result<(), Box<mpsc::error::SendError<SessionEvent>>> {
         if let Ok(mut subscribers) = self.subscribers.lock() {
             subscribers.retain(|subscriber| match subscriber.try_send(event.clone()) {
                 Ok(()) => true,
@@ -77,7 +78,7 @@ impl SessionEventFanout {
                 Err(mpsc::error::TrySendError::Closed(_)) => false,
             });
         }
-        self.primary.send(event)
+        self.primary.send(event).map_err(Box::new)
     }
 
     fn subscribe(&self) -> mpsc::Receiver<SessionEvent> {
