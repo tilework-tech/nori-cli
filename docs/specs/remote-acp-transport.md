@@ -13,7 +13,9 @@ WebSocket profile of the upstream remote transport RFD.
 
 The server belongs in `nori-acp-host`, which already owns the ACP SDK,
 subprocess connection, and wire lifecycle. It is disabled unless remote mode
-is explicitly enabled. No separate session-host crate is introduced.
+is explicitly enabled. When enabled, the listener binds loopback by default;
+a non-loopback bind requires its own explicit opt-in. No separate
+session-host crate is introduced.
 
 This is separate from `nori exec --acp`. That command remains a bounded,
 terminal-independent stdio facade. Remote mode exposes the long-lived harness
@@ -59,6 +61,16 @@ separate consumers of that post-harness stream. A slow remote consumer must
 never block the harness or TUI; its connection is closed if its bounded queue
 overflows.
 
+The remote Agent forwards the post-harness ACP stream rather than translating
+it. `session/update` notifications pass through unmodified except for the
+outward session ID. Responses are correlated at the boundary: the transport
+tracks the harness request it issued and answers under the remote client's
+own request ID, as `nori exec --acp` does today. Delegated agent-to-client
+requests such as `session/request_permission` go to the remote controller
+after harness policy. `SessionEnded` and `RequestFailed` surface as JSON-RPC
+errors on the affected request or close the connection; no other `NoriEvent`
+is forwarded in this version.
+
 ## 4. WebSocket contract
 
 The first implementation is WebSocket-only, which the upstream RFD permits
@@ -73,12 +85,22 @@ for servers. Streamable HTTP/SSE is not required.
 - ACP methods, notifications, request IDs, and session IDs retain their normal
   protocol semantics.
 
+The remote surface issues Nori conversation IDs as its ACP session IDs.
+Downstream agent session swaps (compact, fork, restore) are invisible to
+remote clients; the outward session ID never changes for a continuing
+conversation.
+
 The transport adapts WebSocket frames to the same ACP Agent handler used by
 the host. It does not introduce a Nori-specific message envelope.
 
 ## 5. Detach, reconnect, and close
 
 A WebSocket connection and an ACP session have separate lifetimes.
+
+The server accepts one remote connection at a time. A newer connection
+replaces the current one — last connect wins — and the replaced socket is
+closed. Broadcasting one session's stream to several concurrent remote
+connections is on the roadmap, not in this version.
 
 - Socket EOF or network loss detaches the remote client. It does not close the
   Nori harness session, stop the downstream agent, or exit the TUI.
@@ -92,7 +114,9 @@ A WebSocket connection and an ACP session have separate lifetimes.
 
 The first version follows the RFD's v1 reliability model: no sequence numbers,
 no replay of messages missed while disconnected, and no transparent retry of
-an in-flight JSON-RPC request. The harness and transcript continue recording
+an in-flight JSON-RPC request. The minimal implementation must therefore
+advertise `loadSession`: `session/load` replays history from the Nori
+transcript and is the recovery path after a reconnect. The harness and transcript continue recording
 activity while no remote client is attached. A disconnected controller's
 unanswered delegated requests are cancelled so they cannot wedge the agent;
 the active prompt is not cancelled merely because the socket disappeared.
@@ -106,8 +130,11 @@ and results appear in the existing TUI state.
 
 Opening the microVM terminal therefore reveals the already-running Nori TUI;
 it does not reconstruct a second frontend or replace the WebSocket
-controller. Harness commands serialize mutations. Detailed policy for
-simultaneous local and remote input is deferred.
+controller. While a remote controller is connected, the TUI acts as an
+observer. An observer sees a turn's `session/update` notifications but not
+its stop reason, which travels in the prompt response to the initiator.
+Harness commands serialize mutations. Detailed policy for simultaneous local
+and remote input is deferred.
 
 ## 7. Implementation boundary
 
