@@ -65,5 +65,8 @@ under the same Nori home and can be resumed through `nori resume`.
 - The crate-layering decision and the exact protocol contract are documented
   in `@/docs/specs/crate-layering.md` and
   `@/docs/specs/protocol-unification.md`.
+- The proposed optional WebSocket Agent surface is specified in
+  `@/docs/specs/remote-acp-transport.md`; it is separate from the bounded
+  `nori exec --acp` stdio facade.
 
 Created and maintained by Nori.
