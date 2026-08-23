@@ -1,6 +1,6 @@
 # Remote ACP Transport
 
-**Status:** Draft
+**Status:** Implemented (v1)
 
 **Date:** 2026-08-23
 
@@ -141,24 +141,30 @@ and remote input is deferred.
 ```text
 nori-rs/
 ├── acp-host/
-│   ├── Cargo.toml                         # Optional remote transport deps
+│   ├── Cargo.toml                         # Remote transport deps (axum ws)
 │   └── src/
-│       ├── lib.rs                        # Feature/runtime entrypoint
+│       ├── lib.rs                        # Exposes the remote module
 │       └── remote/
 │           ├── mod.rs                    # Public server API
 │           ├── hosted_agent.rs           # Downward-facing control interface
-│           ├── server.rs                 # Listener and WS upgrade
-│           ├── connection.rs             # Initialize and controller state
-│           └── wire.rs                   # Frames, queues, ping/pong
+│           ├── server.rs                 # Listener, WS upgrade, bind policy
+│           ├── connection.rs             # Initialize gate, handlers, forwarding
+│           └── wire.rs                   # Frame/line adapters, bounded output
 ├── harness/src/
 │   ├── runtime.rs                        # Subscribable SessionEvent fan-out
 │   └── remote_agent.rs                   # HostedAgent over HarnessHandle
-├── tui/src/chatwidget/agent.rs            # Share the launched harness
-├── cli/src/
-│   ├── main.rs                           # Remote-mode activation
-│   └── remote.rs                         # Listener configuration and wiring
+├── tui/src/
+│   ├── cli.rs                            # --remote / --remote-allow-nonloopback
+│   ├── lib.rs                            # Remote-mode activation at startup
+│   └── chatwidget/agent.rs               # Attach the launched harness
 └── exec/src/lib.rs                        # Existing facade remains unchanged
 ```
+
+The `--remote` flag lives on the interactive CLI surface (`nori --remote
+<ADDR>`), so activation happens in the TUI startup path rather than a separate
+`cli/src/remote.rs`; the `cli` crate itself is unchanged. A remote prompt's
+own text is not yet rendered by the observing TUI (its updates, tool calls,
+and results are); surfacing the initiating message locally is follow-up work.
 
 Authentication, TLS, endpoint discovery, broker routing, Handroll federation,
 capability aggregation across hosts, Streamable HTTP/SSE, and reliable replay

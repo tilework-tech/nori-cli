@@ -294,6 +294,34 @@ Quitting an attached cloud session detaches through connection teardown;
 `/close` is available only in cloud mode and remains gated by the facade's
 `session/close` support.
 
+#### Remote ACP transport activation
+
+`--remote <ADDR>` (in [`cli.rs`](src/cli.rs)) serves the running interactive
+session as a remote ACP agent over WebSocket, per
+`@/docs/specs/remote-acp-transport.md`. A bare port binds loopback; `IP:PORT`
+binds that address; a non-loopback bind additionally requires
+`--remote-allow-nonloopback` because the surface is unauthenticated.
+
+`run_main` (in [`lib.rs`](src/lib.rs)) parses the bind spec, binds the
+`RemoteAcpServer`, and installs the process-global `HarnessRemoteHost` via
+`set_active_host` before the app runs, so a controller can connect as soon as
+the session launches. The server value is held for the whole app run.
+
+Every harness launch in [`chatwidget/agent.rs`](src/chatwidget/agent.rs)
+attaches its new `HarnessHandle` to the active remote host when one is
+installed, so the remote surface follows session respawns — new session, agent
+switch, and resume — without reconnecting logic in the transport. All remote
+types reach the TUI through `nori_harness::remote_agent` re-exports, preserving
+the rule that the TUI never imports the ACP host crate directly.
+
+While a remote controller drives the session, the TUI stays attached to the
+same handle and ordered event stream and renders remote-driven activity as an
+observer. The fan-out delivers every event to both consumers: the remote host
+forwards a delegated permission request to its controller only when the remote
+controller owns the turn, while the TUI continues to observe the same request
+on its own stream. Policy for simultaneous local and remote input is
+deliberately deferred by the spec.
+
 #### Footer configuration
 
 `[tui.footer_layout]` accepts the same layout entries in `footer_left`,

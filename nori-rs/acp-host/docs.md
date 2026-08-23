@@ -9,14 +9,24 @@ SDK connection, subprocess and wire lifecycle, agent registry, delegated client
 requests, MCP forwarding, and ACP error categorization. It owns no TUI or
 session-product state.
 
+It also owns the optional remote ACP transport (`remote/`): a WebSocket server
+implementing the WebSocket profile of the upstream ACP "Streamable HTTP &
+WebSocket Transport" RFD, serving the hosted harness session outward as an ACP
+Agent (see `@/docs/specs/remote-acp-transport.md`).
+
 ### How it fits into the larger codebase
 
 ```text
-nori-harness
+remote ACP client -- WebSocket /acp --> remote::RemoteAcpServer (this crate)
+                                              |  calls
+                                              v
+                                        remote::HostedAgent (trait, this crate)
+                                              ^
+                                              |  implemented by
+nori-harness ---------------------------------+
       |
       v
 nori-acp-host <----> ACP agent subprocess
-      |
       +---- nori-protocol (schema and public envelopes)
       +---- nori-config (agent and MCP configuration)
       +---- codex-rmcp-client (stored MCP credentials)
@@ -25,6 +35,12 @@ nori-acp-host <----> ACP agent subprocess
 The host is the only client-side product crate that directly uses the
 `agent-client-protocol` SDK. Schema values are still imported through
 `nori_protocol::acp`, never through the SDK or schema crate directly.
+
+The remote server inverts the runtime call direction (a remote client drives
+the harness through this crate) without inverting the crate dependency:
+`remote/hosted_agent.rs` defines the downward-facing `HostedAgent` trait in
+`nori-protocol` types, and `nori-harness` implements it over `HarnessHandle`.
+The dependency direction stays `nori-harness -> nori-acp-host`.
 
 ### Core Implementation
 
@@ -51,11 +67,35 @@ The host is the only client-side product crate that directly uses the
   `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
   MCP server. `error_category.rs` preserves structured ACP errors before
   falling back to message classification.
+- `remote/` serves one axum-based `/acp` endpoint: a fresh `Acp-Connection-Id`
+  header on each 101 upgrade, `426 Upgrade Required` for plain HTTP, one
+  JSON-RPC message per UTF-8 text frame adapted into the SDK's `Lines`
+  transport (`remote/wire.rs`), binary frames ignored, and a bounded outgoing
+  queue whose writer finishes with a best-effort close frame. `initialize`
+  must be the first message on the socket, otherwise close code 1002. One
+  connection is live at a time; a newer connection replaces the current one
+  (last connect wins).
+- The remote Agent advertises `loadSession` plus session list/resume/close
+  capabilities and serves the corresponding session methods; `session/load`
+  replays recorded history as `session/update` notifications ahead of its
+  response. `session/new` is rejected with guidance: the remote surface
+  exposes the running session, discovered via `session/list`.
+- Responses are correlated at the boundary: `HostedAgent::prompt` returns the
+  harness-issued request id, and the turn's final response arrives in stream
+  order through the hosted event subscription, so a turn's `session/update`
+  notifications always precede its response. Delegated permission requests
+  round-trip through the remote controller; the subscription channel closing
+  (queue overflow or replacement) tears the connection down. Wire behavior is
+  exercised in `@/nori-rs/acp-host/tests/remote_ws.rs` against a fake
+  `HostedAgent`.
 
 ### Things to Know
 
 - The dependency direction is `nori-harness -> nori-acp-host`, never the
-  reverse.
+  reverse. The remote module preserves it: its handlers call only the
+  `HostedAgent` interface, never the downstream `AcpConnection`, whose direct
+  use would bypass harness-owned hooks, transcripts, goals, and permission
+  policy.
 - Disabling native goals is a policy of Nori's built-in Codex launch only.
   User-defined agent processes retain their explicit command and environment;
   goal ownership and routing remain a harness concern.
@@ -65,6 +105,16 @@ The host is the only client-side product crate that directly uses the
 - Terminal and extension request families are not advertised by the current
   host. Adding them requires an explicit host-policy decision, not a generic
   protocol mirror.
+- The remote WebSocket server is unauthenticated. `parse_bind_addr` treats a
+  bare port as a loopback bind and refuses non-loopback addresses without the
+  caller's explicit opt-in flag.
+- A remote disconnect detaches the controller but never ends the harness
+  session. Per the RFD's v1 reliability model there are no sequence numbers and
+  no replay of missed messages; `session/load` from the transcript is the
+  recovery path after reconnect, so the server must advertise `loadSession`.
+- `nori exec --acp` remains a separate, bounded stdio facade (see
+  `@/nori-rs/exec/docs.md`); the remote module instead exposes the long-lived
+  interactive harness session.
 - The `agent-client-protocol` SDK is built with the `unstable` feature so the
   host can call `session/fork` (branch-at-head). See `fork_session` in
   `@/nori-rs/acp-host/src/connection/docs.md`.

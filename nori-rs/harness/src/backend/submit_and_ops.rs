@@ -1,6 +1,15 @@
 use super::*;
 
 impl AcpBackend {
+    /// Flush the active transcript recorder to disk (write barrier). A
+    /// missing recorder (transcripts disabled) flushes trivially.
+    pub(crate) async fn flush_transcript(&self) -> Result<()> {
+        if let Some(recorder) = self.transcript_recorder.read().await.clone() {
+            recorder.flush().await?;
+        }
+        Ok(())
+    }
+
     pub(crate) async fn cancel(&self) -> Result<()> {
         self.session_event_tx
             .send(session_runtime_driver::SessionRuntimeInput::Reducer(

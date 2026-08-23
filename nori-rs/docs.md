@@ -32,10 +32,16 @@ used in production.
   bounded standard ACP-over-stdio agent facade.
 - `tui/` renders events and forwards user intent through typed harness methods.
 - `harness/` owns session orchestration, private reduction, transcripts, goals,
-  undo, hooks, worktrees, history, and the embeddable runtime API.
+  undo, hooks, worktrees, history, and the embeddable runtime API. Its public
+  event stream is an ordered fan-out: one primary frontend receiver plus
+  bounded subscribers such as the remote ACP host.
 - `acp-host/` owns the client-side ACP SDK, subprocess lifecycle, JSON-RPC
   connection, agent registry, delegated requests, and host-handled filesystem
-  operations.
+  operations. It also owns the optional remote ACP transport: a WebSocket
+  server (`nori --remote`) that serves the running interactive session outward
+  as an ACP Agent through a `HostedAgent` trait that `harness/` implements,
+  preserving the `nori-harness -> nori-acp-host` dependency direction (see
+  `@/docs/specs/remote-acp-transport.md`).
 - `nori-protocol/` owns no behavior. It exports `nori_protocol::acp` and
   `SessionEvent::{Acp, Nori}`.
 - `nori-config/` owns CLI configuration and the approval, sandbox, MCP, trust,
@@ -63,6 +69,11 @@ product crates.
 - ACP capabilities describe an agent facade's operations, not whether the
   deployment is local or cloud. The top-level `nori cloud` launch carries that
   identity explicitly into the TUI.
+- There are two outward ACP agent surfaces: `nori exec --acp` (a bounded,
+  one-session stdio facade) and the remote WebSocket transport (the long-lived
+  interactive session, loopback by default, stable Nori conversation ids as
+  outward session ids). They are deliberately separate; neither replaces the
+  other.
 - Rust 2024 and strict workspace lints apply. Add only the derive traits a
   public boundary type actually needs.
 

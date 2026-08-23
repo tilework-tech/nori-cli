@@ -84,6 +84,20 @@ pub struct Cli {
     #[arg(long = "skip-trust-directory", default_value_t = false)]
     pub skip_trust_directory: bool,
 
+    /// Serve this session as a remote ACP agent over the WebSocket transport
+    /// on ADDR (a bare PORT binds loopback; IP:PORT binds that address).
+    #[arg(long = "remote", value_name = "ADDR")]
+    pub remote: Option<String>,
+
+    /// Allow --remote to bind a non-loopback address, exposing the
+    /// unauthenticated ACP surface beyond this machine.
+    #[arg(
+        long = "remote-allow-nonloopback",
+        default_value_t = false,
+        requires = "remote"
+    )]
+    pub remote_allow_nonloopback: bool,
+
     /// Extra agent registry entries injected by the caller, appended after
     /// the config's `[[agents]]`. Used by `nori cloud` to pin the
     /// handroll-backed agent. Not a CLI flag.
