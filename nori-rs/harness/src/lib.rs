@@ -29,6 +29,7 @@ pub(crate) mod normalized;
 pub use nori_acp_host::registry;
 pub mod remote_agent;
 pub mod runtime;
+pub(crate) mod session_event_fanout;
 pub mod tracing_setup;
 pub mod transcript;
 pub mod transcript_discovery;

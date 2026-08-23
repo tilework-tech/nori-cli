@@ -18,10 +18,14 @@ use futures::stream::SplitSink;
 use futures::stream::SplitStream;
 use tokio_util::sync::CancellationToken;
 
-/// Bounded outgoing frame queue. A consumer that stops reading fills this
-/// queue and stalls the JSON-RPC writer, which in turn overflows the host's
-/// bounded event queue — the overflow policy that closes slow consumers.
+/// Bounded outgoing frame queue between the JSON-RPC writer and the socket.
 const OUTGOING_QUEUE_FRAMES: usize = 256;
+
+/// How long one frame may take to reach the peer before the consumer is
+/// considered stalled. The SDK's internal outgoing queue is unbounded, so a
+/// client that stops reading is dropped on this deadline instead of growing
+/// that queue without limit.
+const SEND_STALL_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Adapt the outgoing socket half into a line sink: one line, one text frame.
 ///
@@ -40,8 +44,20 @@ pub(super) fn outgoing_lines(
                 () = cancel.cancelled() => break,
                 line = rx.next() => match line {
                     Some(line) => {
-                        if sink.send(Message::Text(line.into())).await.is_err() {
-                            break;
+                        let send = sink.send(Message::Text(line.into()));
+                        tokio::select! {
+                            result = send => {
+                                if result.is_err() {
+                                    break;
+                                }
+                            }
+                            () = tokio::time::sleep(SEND_STALL_LIMIT) => {
+                                tracing::warn!(
+                                    "remote ACP consumer stalled; closing its connection"
+                                );
+                                cancel.cancel();
+                                break;
+                            }
                         }
                     }
                     None => break,

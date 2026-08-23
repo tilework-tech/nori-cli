@@ -348,3 +348,120 @@ async fn delegated_permission_requests_reach_the_remote_controller_for_remote_tu
     assert!(outcome.is_ok(), "turn failed: {outcome:?}");
     fixture.session.handle.shutdown().await.expect("shutdown");
 }
+
+#[tokio::test]
+#[serial]
+async fn queued_remote_prompt_does_not_freeze_the_host() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_DELAY_MS", "3000") };
+    let _guard = EnvGuard("MOCK_AGENT_DELAY_MS");
+
+    let fixture = launch_attached().await;
+    let info = wait_for_session(&fixture.host).await;
+    let session_id = info.session_id.clone();
+    let mut subscription = fixture.host.subscribe().await;
+
+    // The first remote turn takes several seconds to finish.
+    let first_request_id = fixture
+        .host
+        .prompt(
+            &session_id,
+            vec![acp::ContentBlock::Text(acp::TextContent::new("first"))],
+        )
+        .await
+        .expect("submit the first prompt");
+
+    // A second prompt queues behind the active turn; its submission resolves
+    // only when the queue drains, so it must not hold the host hostage.
+    let queued = {
+        let host = fixture.host.clone();
+        let session_id = session_id.clone();
+        tokio::spawn(async move {
+            host.prompt(
+                &session_id,
+                vec![acp::ContentBlock::Text(acp::TextContent::new("second"))],
+            )
+            .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Regression (H1): while the second prompt is queued, other host methods
+    // must stay responsive instead of blocking until the turn ends.
+    let sessions = tokio::time::timeout(Duration::from_secs(2), fixture.host.list_sessions())
+        .await
+        .expect("list_sessions must not block behind a queued prompt")
+        .expect("list sessions");
+    assert_eq!(sessions.len(), 1);
+
+    // Both turns then complete in order once the queue drains.
+    let second_request_id = tokio::time::timeout(Duration::from_secs(15), queued)
+        .await
+        .expect("the queued prompt should be issued when the first turn ends")
+        .expect("prompt task")
+        .expect("submit the second prompt");
+    let mut outcomes = Vec::new();
+    tokio::time::timeout(Duration::from_secs(15), async {
+        while outcomes.len() < 2 {
+            let event = subscription
+                .events
+                .recv()
+                .await
+                .expect("subscription closed before both turns ended");
+            if let SessionEvent::Acp(AcpEvent::Response { request_id, .. }) = event {
+                outcomes.push(request_id);
+            }
+        }
+    })
+    .await
+    .expect("both turns should complete");
+    assert_eq!(outcomes, vec![first_request_id, second_request_id]);
+
+    fixture.session.handle.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
+#[serial]
+async fn a_stale_detach_does_not_break_the_replacement_subscription() {
+    let fixture = launch_attached().await;
+    let info = wait_for_session(&fixture.host).await;
+    let session_id = info.session_id.clone();
+
+    let mut first = fixture.host.subscribe().await;
+    let mut second = fixture.host.subscribe().await;
+    assert_ne!(first.id, second.id);
+
+    // Last connect wins: the replaced subscription's receiver closes.
+    let closed = tokio::time::timeout(Duration::from_secs(5), first.events.recv())
+        .await
+        .expect("replaced receiver should close");
+    assert!(closed.is_none());
+
+    // The replaced connection detaches with its stale id; the replacement
+    // must keep receiving events.
+    fixture.host.detach(first.id).await;
+    fixture
+        .host
+        .prompt(
+            &session_id,
+            vec![acp::ContentBlock::Text(acp::TextContent::new("hello"))],
+        )
+        .await
+        .expect("submit remote prompt");
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let event = second
+                .events
+                .recv()
+                .await
+                .expect("replacement subscription must stay attached");
+            if matches!(event, SessionEvent::Acp(AcpEvent::Response { .. })) {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("the replacement subscription should see the turn");
+
+    fixture.session.handle.shutdown().await.expect("shutdown");
+}

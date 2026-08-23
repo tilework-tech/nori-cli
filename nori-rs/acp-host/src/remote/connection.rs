@@ -36,6 +36,18 @@ const CLOSE_PROTOCOL_ERROR: u16 = 1002;
 pub(super) async fn serve_connection<H: HostedAgent>(
     socket: WebSocket,
     hosted: Arc<H>,
+    subscription: super::hosted_agent::HostedSubscription,
+    cancel: CancellationToken,
+) {
+    let subscription_id = subscription.id;
+    serve_gated_connection(socket, hosted.clone(), subscription.events, cancel).await;
+    hosted.detach(subscription_id).await;
+}
+
+async fn serve_gated_connection<H: HostedAgent>(
+    socket: WebSocket,
+    hosted: Arc<H>,
+    events: HostedEventReceiver,
     cancel: CancellationToken,
 ) {
     let (ws_sink, ws_stream) = socket.split();
@@ -44,7 +56,9 @@ pub(super) async fn serve_connection<H: HostedAgent>(
 
     // RFD: `initialize` must be the first JSON-RPC message on the socket.
     // Unparseable frames get a JSON-RPC parse error and the gate keeps
-    // waiting; the first valid message decides.
+    // waiting; the first valid message decides. The params are validated
+    // here too, so a connection whose initialize the SDK would reject never
+    // idles without a forward loop.
     let first_line = loop {
         let Some(line) = incoming.next().await else {
             return;
@@ -56,11 +70,14 @@ pub(super) async fn serve_connection<H: HostedAgent>(
             Ok(message) => {
                 let is_initialize_request = message.get("method")
                     == Some(&serde_json::Value::String("initialize".to_owned()))
-                    && message.get("id").is_some_and(|id| !id.is_null());
+                    && message.get("id").is_some_and(|id| !id.is_null())
+                    && message.get("params").is_some_and(|params| {
+                        serde_json::from_value::<acp::InitializeRequest>(params.clone()).is_ok()
+                    });
                 if !is_initialize_request {
                     let close = CloseFrame {
                         code: CLOSE_PROTOCOL_ERROR,
-                        reason: "First message must be initialize".into(),
+                        reason: "First message must be a valid initialize request".into(),
                     };
                     let _ = ws_sink.send(Message::Close(Some(close))).await;
                     return;
@@ -84,10 +101,7 @@ pub(super) async fn serve_connection<H: HostedAgent>(
         }
     };
 
-    let subscription = hosted.subscribe().await;
-    let subscription_id = subscription.id;
-    let events_cell: Arc<Mutex<Option<HostedEventReceiver>>> =
-        Arc::new(Mutex::new(Some(subscription.events)));
+    let events_cell: Arc<Mutex<Option<HostedEventReceiver>>> = Arc::new(Mutex::new(Some(events)));
     // Harness requests this connection issued, awaiting their outcome from
     // the event stream. The lock is held across submit-and-register so the
     // forward loop cannot observe a response before its responder exists.
@@ -199,15 +213,23 @@ pub(super) async fn serve_connection<H: HostedAgent>(
                 let pending_prompts = pending_prompts.clone();
                 async move |request: acp::PromptRequest,
                             responder: Responder<acp::PromptResponse>,
-                            _cx: ConnectionTo<Client>| {
-                    let mut pending = pending_prompts.lock().await;
-                    match hosted.prompt(&request.session_id, request.prompt).await {
-                        Ok(request_id) => {
-                            pending.push((request_id, responder));
-                            Ok(())
+                            cx: ConnectionTo<Client>| {
+                    // Spawned: a prompt queued behind an active turn resolves
+                    // only when it is issued, and other incoming messages
+                    // (notably session/cancel) must keep dispatching.
+                    let hosted = hosted.clone();
+                    let pending_prompts = pending_prompts.clone();
+                    cx.spawn(async move {
+                        let mut pending = pending_prompts.lock().await;
+                        match hosted.prompt(&request.session_id, request.prompt).await {
+                            Ok(request_id) => {
+                                pending.push((request_id, responder));
+                                Ok(())
+                            }
+                            Err(error) => responder.respond_with_error(error),
                         }
-                        Err(error) => responder.respond_with_error(error),
-                    }
+                    })?;
+                    Ok(())
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -242,7 +264,6 @@ pub(super) async fn serve_connection<H: HostedAgent>(
     if let Err(error) = connection_result {
         tracing::debug!("remote ACP connection ended: {error}");
     }
-    hosted.detach(subscription_id).await;
 }
 
 /// Capabilities the remote surface advertises. `loadSession` is required by

@@ -86,9 +86,11 @@ for servers. Streamable HTTP/SSE is not required.
   protocol semantics.
 
 The remote surface issues Nori conversation IDs as its ACP session IDs.
-Downstream agent session swaps (compact, fork, restore) are invisible to
-remote clients; the outward session ID never changes for a continuing
-conversation.
+Downstream agent session swaps that continue the same conversation (compact,
+restore) are invisible to remote clients; the outward session ID never
+changes for a continuing conversation. A fork starts a new conversation with
+a new ID: the server closes the remote connection, and a reconnecting client
+rediscovers the forked session through `session/list`.
 
 The transport adapts WebSocket frames to the same ACP Agent handler used by
 the host. It does not introduce a Nori-specific message envelope.
@@ -116,7 +118,10 @@ The first version follows the RFD's v1 reliability model: no sequence numbers,
 no replay of messages missed while disconnected, and no transparent retry of
 an in-flight JSON-RPC request. The minimal implementation must therefore
 advertise `loadSession`: `session/load` replays history from the Nori
-transcript and is the recovery path after a reconnect. The harness and transcript continue recording
+transcript and is the recovery path after a reconnect. A client that calls
+`session/load` while a turn is still streaming may see live updates
+interleaved with the replayed prefix; without sequence numbers, v1 provides
+no deduplication. The harness and transcript continue recording
 activity while no remote client is attached. A disconnected controller's
 unanswered delegated requests are cancelled so they cannot wedge the agent;
 the active prompt is not cancelled merely because the socket disappeared.

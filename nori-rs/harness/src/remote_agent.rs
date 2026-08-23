@@ -32,6 +32,11 @@ use crate::transcript::TranscriptLoader;
 /// forward loop. Overflow drops the consumer, which closes its connection.
 const REMOTE_SINK_EVENTS: usize = 256;
 
+/// Turn outcomes retained for submitters that have not registered yet (the
+/// event loop can observe a response before `prompt` finishes registering
+/// its request id). Local-frontend outcomes cycle through and are evicted.
+const UNCLAIMED_OUTCOME_LIMIT: usize = 8;
+
 /// The active harness session as seen by the remote surface.
 struct ActiveSession {
     handle: HarnessHandle,
@@ -50,6 +55,9 @@ struct HostShared {
     subscription_seq: i64,
     /// Harness request ids of remote-submitted prompts awaiting completion.
     remote_turns: Vec<acp::RequestId>,
+    /// Turn outcomes (responses and failures) seen while no submitter had
+    /// registered their request id; bounded, oldest evicted first.
+    unclaimed_outcomes: Vec<SessionEvent>,
     /// Delegated requests forwarded to the remote controller, unanswered.
     forwarded_requests: Vec<acp::RequestId>,
     /// The request id owning the current turn, from `SessionPhaseChanged`.
@@ -87,9 +95,14 @@ impl HarnessRemoteHost {
     /// Follow a newly launched harness session. Call immediately after
     /// `launch_session`, before awaiting anything else, so the subscription
     /// registers ahead of the session's startup events.
+    ///
+    /// Any connected remote controller is disconnected: its session is being
+    /// replaced, and a reconnecting client rediscovers the new one through
+    /// `session/list`.
     pub async fn attach(&self, handle: HarnessHandle, nori_home: PathBuf) -> anyhow::Result<()> {
         let events = handle.subscribe_events().await?;
         let mut state = self.state.lock().await;
+        drop_sink(&mut state);
         if let Some(task) = state.event_task.take() {
             task.abort();
         }
@@ -100,7 +113,7 @@ impl HarnessRemoteHost {
             cwd: None,
         });
         state.remote_turns.clear();
-        state.forwarded_requests.clear();
+        state.unclaimed_outcomes.clear();
         state.current_turn = None;
         state.event_task = Some(tokio::spawn(run_event_loop(self.state.clone(), events)));
         Ok(())
@@ -146,11 +159,88 @@ async fn cancel_forwarded(handle: &HarnessHandle, request_ids: Vec<acp::RequestI
     }
 }
 
+/// Drop the remote consumer (its receiver closes, which closes the
+/// connection) and cancel the delegated requests it can no longer answer.
+fn drop_sink(shared: &mut HostShared) {
+    shared.sink = None;
+    let request_ids = std::mem::take(&mut shared.forwarded_requests);
+    if request_ids.is_empty() {
+        return;
+    }
+    if let Some(session) = shared.session.as_ref() {
+        let handle = session.handle.clone();
+        tokio::spawn(async move {
+            cancel_forwarded(&handle, request_ids).await;
+        });
+    }
+}
+
+/// The request id a turn outcome event settles, if any.
+fn outcome_request_id(event: &SessionEvent) -> Option<&acp::RequestId> {
+    match event {
+        SessionEvent::Acp(AcpEvent::Response { request_id, .. }) => Some(request_id),
+        SessionEvent::Nori(NoriEvent::RequestFailed(failure)) => failure.request_id.as_ref(),
+        SessionEvent::Acp(AcpEvent::Notification(_) | AcpEvent::Request { .. })
+        | SessionEvent::Nori(_) => None,
+    }
+}
+
+/// Route a turn outcome: forward it when the turn is remote-owned, otherwise
+/// park it briefly so a submitter racing its registration can still claim it.
+fn handle_turn_outcome(shared: &mut HostShared, event: SessionEvent) {
+    let Some(request_id) = outcome_request_id(&event) else {
+        return;
+    };
+    let position = shared.remote_turns.iter().position(|id| id == request_id);
+    match position {
+        Some(position) => {
+            shared.remote_turns.remove(position);
+            forward_to_sink(shared, event);
+        }
+        None => {
+            shared.unclaimed_outcomes.push(event);
+            if shared.unclaimed_outcomes.len() > UNCLAIMED_OUTCOME_LIMIT {
+                shared.unclaimed_outcomes.remove(0);
+            }
+        }
+    }
+}
+
 /// Follow the harness event stream: track session identity, rewrite outward
 /// session ids, decide what the remote consumer sees, and keep remote-owned
-/// turn state.
+/// turn state. If the subscription closes without `SessionEnded` (for
+/// example fan-out overflow), the current consumer is dropped and the host
+/// re-subscribes; the client recovers missed history through `session/load`.
 async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receiver<SessionEvent>) {
-    while let Some(event) = events.recv().await {
+    loop {
+        let Some(event) = events.recv().await else {
+            let handle = {
+                let mut shared = state.lock().await;
+                drop_sink(&mut shared);
+                shared
+                    .session
+                    .as_ref()
+                    .map(|session| session.handle.clone())
+            };
+            let Some(handle) = handle else {
+                return;
+            };
+            match handle.subscribe_events().await {
+                Ok(new_events) => {
+                    tracing::warn!("remote host lost its event subscription; re-subscribed");
+                    events = new_events;
+                    continue;
+                }
+                Err(_) => {
+                    let mut shared = state.lock().await;
+                    shared.session = None;
+                    shared.remote_turns.clear();
+                    shared.unclaimed_outcomes.clear();
+                    shared.current_turn = None;
+                    return;
+                }
+            }
+        };
         let mut shared = state.lock().await;
         match event {
             SessionEvent::Nori(NoriEvent::SessionStarted(started)) => {
@@ -165,9 +255,13 @@ async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receive
                 }
             }
             SessionEvent::Nori(NoriEvent::SessionForked(forked)) => {
+                // A fork starts a new conversation with a new outward id.
+                // Close the remote connection; a reconnecting client
+                // rediscovers the forked session through session/list.
                 if let Some(session) = shared.session.as_mut() {
                     session.conversation_id = Some(forked.new_conversation_id.clone());
                 }
+                drop_sink(&mut shared);
             }
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(phase)) => {
                 shared.current_turn = match phase {
@@ -214,35 +308,9 @@ async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receive
                     );
                 }
             }
-            SessionEvent::Acp(AcpEvent::Response {
-                request_id,
-                response,
-            }) => {
-                let position = shared.remote_turns.iter().position(|id| id == &request_id);
-                if let Some(position) = position {
-                    shared.remote_turns.remove(position);
-                    forward_to_sink(
-                        &mut shared,
-                        SessionEvent::Acp(AcpEvent::Response {
-                            request_id,
-                            response,
-                        }),
-                    );
-                }
-            }
-            SessionEvent::Nori(NoriEvent::RequestFailed(failure)) => {
-                let remote_owned = failure.request_id.as_ref().is_some_and(|request_id| {
-                    shared.remote_turns.iter().any(|id| id == request_id)
-                });
-                if remote_owned {
-                    shared
-                        .remote_turns
-                        .retain(|id| Some(id) != failure.request_id.as_ref());
-                    forward_to_sink(
-                        &mut shared,
-                        SessionEvent::Nori(NoriEvent::RequestFailed(failure)),
-                    );
-                }
+            SessionEvent::Acp(AcpEvent::Response { .. })
+            | SessionEvent::Nori(NoriEvent::RequestFailed(_)) => {
+                handle_turn_outcome(&mut shared, event);
             }
             SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => {
                 forward_to_sink(
@@ -251,11 +319,24 @@ async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receive
                 );
                 shared.session = None;
                 shared.remote_turns.clear();
+                shared.unclaimed_outcomes.clear();
                 shared.forwarded_requests.clear();
                 shared.current_turn = None;
-                break;
+                return;
             }
-            SessionEvent::Nori(_) => {}
+            SessionEvent::Nori(
+                NoriEvent::QueueChanged(_)
+                | NoriEvent::ReplayStarted(_)
+                | NoriEvent::ReplayFinished
+                | NoriEvent::ContextCompacted(_)
+                | NoriEvent::GoalChanged(_)
+                | NoriEvent::CapabilitiesChanged(_)
+                | NoriEvent::Undo(_)
+                | NoriEvent::UserShell(_)
+                | NoriEvent::HookOutput(_)
+                | NoriEvent::PromptSummaryUpdated(_)
+                | NoriEvent::Notice(_),
+            ) => {}
         }
     }
 }
@@ -270,10 +351,10 @@ fn forward_to_sink(shared: &mut HostShared, event: SessionEvent) {
         Ok(()) => {}
         Err(mpsc::error::TrySendError::Full(_)) => {
             tracing::warn!("remote ACP consumer fell behind; dropping it");
-            shared.sink = None;
+            drop_sink(shared);
         }
         Err(mpsc::error::TrySendError::Closed(_)) => {
-            shared.sink = None;
+            drop_sink(shared);
         }
     }
 }
@@ -350,18 +431,27 @@ impl HostedAgent for HarnessRemoteHost {
         session_id: &acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
     ) -> Result<acp::RequestId, acp::Error> {
-        // Hold the state lock across submit-and-register so the event loop
-        // cannot see this turn's response before it is marked remote-owned.
-        let mut state = self.state.lock().await;
-        let Some(session) = state.session.as_ref() else {
-            return Err(unknown_session());
-        };
-        if session.conversation_id.as_deref() != Some(session_id.0.as_ref()) {
-            return Err(unknown_session());
-        }
-        let handle = session.handle.clone();
+        // Do not hold the state lock across the submission: a prompt queued
+        // behind an active turn resolves only when it is issued, and holding
+        // the lock that long would freeze every other host method and the
+        // event loop.
+        let handle = self.checked_handle(session_id).await?;
         let request_id = handle.prompt(prompt).await.map_err(internal_error)?;
-        state.remote_turns.push(request_id.clone());
+
+        let mut state = self.state.lock().await;
+        let raced = state
+            .unclaimed_outcomes
+            .iter()
+            .position(|event| outcome_request_id(event) == Some(&request_id));
+        match raced {
+            // The outcome was observed before this registration; deliver it
+            // now instead of registering a turn that already ended.
+            Some(position) => {
+                let event = state.unclaimed_outcomes.remove(position);
+                forward_to_sink(&mut state, event);
+            }
+            None => state.remote_turns.push(request_id.clone()),
+        }
         Ok(request_id)
     }
 
@@ -381,47 +471,41 @@ impl HostedAgent for HarnessRemoteHost {
         response: Result<acp::ClientResponse, acp::Error>,
     ) -> Result<(), acp::Error> {
         let handle = {
-            let mut state = self.state.lock().await;
-            let position = state
-                .forwarded_requests
-                .iter()
-                .position(|id| id == &request_id)
-                .ok_or_else(|| {
-                    acp::Error::new(-32600, "no delegated request with this id is pending")
-                })?;
-            state.forwarded_requests.remove(position);
+            let state = self.state.lock().await;
+            if !state.forwarded_requests.contains(&request_id) {
+                return Err(acp::Error::new(
+                    -32600,
+                    "no delegated request with this id is pending",
+                ));
+            }
             let Some(session) = state.session.as_ref() else {
                 return Err(unknown_session());
             };
             session.handle.clone()
         };
         handle
-            .respond_to_agent(request_id, response)
+            .respond_to_agent(request_id.clone(), response)
             .await
-            .map_err(internal_error)
+            .map_err(internal_error)?;
+        // Remove only after the answer was accepted, so a failed delivery
+        // leaves the request eligible for detach cancellation.
+        self.state
+            .lock()
+            .await
+            .forwarded_requests
+            .retain(|id| id != &request_id);
+        Ok(())
     }
 
     async fn subscribe(&self) -> HostedSubscription {
         let (sink, events) = mpsc::channel(REMOTE_SINK_EVENTS);
-        let (subscription_id, replaced) = {
-            let mut state = self.state.lock().await;
-            state.subscription_seq += 1;
-            let subscription_id = state.subscription_seq;
-            state.sink = Some((subscription_id, sink));
-            let replaced = if state.forwarded_requests.is_empty() {
-                None
-            } else {
-                let request_ids = std::mem::take(&mut state.forwarded_requests);
-                state
-                    .session
-                    .as_ref()
-                    .map(|session| (session.handle.clone(), request_ids))
-            };
-            (subscription_id, replaced)
-        };
-        if let Some((handle, request_ids)) = replaced {
-            cancel_forwarded(&handle, request_ids).await;
-        }
+        let mut state = self.state.lock().await;
+        // Last connect wins: the replaced controller's connection closes and
+        // its unanswered delegated requests are cancelled.
+        drop_sink(&mut state);
+        state.subscription_seq += 1;
+        let subscription_id = state.subscription_seq;
+        state.sink = Some((subscription_id, sink));
         HostedSubscription {
             id: subscription_id,
             events,
@@ -429,24 +513,13 @@ impl HostedAgent for HarnessRemoteHost {
     }
 
     async fn detach(&self, subscription_id: i64) {
-        let cancelled = {
-            let mut state = self.state.lock().await;
-            let is_current = state
-                .sink
-                .as_ref()
-                .is_some_and(|(current, _)| *current == subscription_id);
-            if !is_current {
-                return;
-            }
-            state.sink = None;
-            let request_ids = std::mem::take(&mut state.forwarded_requests);
-            state
-                .session
-                .as_ref()
-                .map(|session| (session.handle.clone(), request_ids))
-        };
-        if let Some((handle, request_ids)) = cancelled {
-            cancel_forwarded(&handle, request_ids).await;
+        let mut state = self.state.lock().await;
+        let is_current = state
+            .sink
+            .as_ref()
+            .is_some_and(|(current, _)| *current == subscription_id);
+        if is_current {
+            drop_sink(&mut state);
         }
     }
 }

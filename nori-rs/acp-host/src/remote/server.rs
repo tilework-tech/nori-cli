@@ -145,13 +145,17 @@ async fn acp_route<H: HostedAgent>(
     let mut response = upgrade.on_upgrade(move |socket| async move {
         let cancel = CancellationToken::new();
         let generation = state.generation.fetch_add(1, Ordering::Relaxed);
-        {
+        // Replace the live connection and take the hosted subscription under
+        // the same lock, so subscriptions always follow socket-accept order
+        // and a superseded connection can never displace its replacement.
+        let subscription = {
             let mut active = state.active.lock().await;
             if let Some((_, previous)) = active.replace((generation, cancel.clone())) {
                 previous.cancel();
             }
-        }
-        connection::serve_connection(socket, state.hosted.clone(), cancel).await;
+            state.hosted.subscribe().await
+        };
+        connection::serve_connection(socket, state.hosted.clone(), subscription, cancel).await;
         let mut active = state.active.lock().await;
         if active
             .as_ref()

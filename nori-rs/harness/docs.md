@@ -177,20 +177,23 @@ types so frontends reach the whole remote surface through
   It must be called immediately after `launch_session` so the subscription
   registers ahead of the session's startup events.
 - The outward ACP session id is the stable Nori conversation id (transcript
-  id), captured from `SessionStarted` and updated on `SessionForked`.
-  Downstream agent session swaps from compact fallback or fork stay invisible
-  to remote clients; forwarded `session/update` notifications have their
-  session ids rewritten to the outward id.
+  id), captured from `SessionStarted`. Downstream swaps that continue the
+  conversation (compact, restore) stay invisible to remote clients; forwarded
+  `session/update` notifications have their session ids rewritten to the
+  outward id. A fork mints a new conversation id, so the host closes the
+  remote connection and a reconnecting client rediscovers the forked session
+  through `session/list`.
 - `session/load` flushes the transcript, loads it from disk through
   `TranscriptLoader`, and projects it with
   `transcript_to_replay_session_events`, keeping only session notifications
   and restamping them with the outward id.
-- Turn ownership is tracked by harness request id: `prompt` registers the
-  returned id as remote-owned (under the state lock, so the event loop cannot
-  observe the response first), and only remote-owned turns forward their
-  final response, `RequestFailed`, and delegated permission requests to the
-  remote controller. A locally initiated turn's permission requests stay with
-  the TUI.
+- Turn ownership is tracked by harness request id: `prompt` submits without
+  holding the state lock (a queued prompt resolves only when issued), then
+  registers the returned id as remote-owned; an outcome that raced ahead of
+  the registration is claimed from a small unclaimed-outcome buffer instead.
+  Only remote-owned turns forward their final response, `RequestFailed`, and
+  delegated permission requests to the remote controller. A locally initiated
+  turn's permission requests stay with the TUI.
 - When the remote controller detaches or is replaced, its unanswered delegated
   requests are answered with a cancelled permission outcome so they cannot
   wedge the agent.

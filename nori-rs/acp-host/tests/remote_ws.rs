@@ -627,3 +627,24 @@ fn parse_bind_addr_defaults_to_loopback_and_gates_nonloopback() {
     );
     assert!(parse_bind_addr("not-an-addr", false).is_err());
 }
+
+#[tokio::test]
+async fn malformed_initialize_params_close_the_connection() {
+    let test = start_server().await;
+    let (mut client, _) = WsClient::connect(test.server.local_addr()).await;
+    client
+        .send_json(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": { "bogus": true },
+        }))
+        .await;
+
+    match client.next_frame().await {
+        Some(Message::Close(Some(frame))) => {
+            assert_eq!(frame.code, CloseCode::Protocol);
+        }
+        other => panic!("expected protocol-error close, got: {other:?}"),
+    }
+}

@@ -17,7 +17,6 @@ use codex_rmcp_client::OAuthCredentialsStoreMode;
 use futures::future::BoxFuture;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 
@@ -25,6 +24,7 @@ use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
 use crate::backend::SessionContext;
+use crate::session_event_fanout::SessionEventFanout;
 use crate::transcript::Transcript;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
@@ -41,54 +41,6 @@ use nori_protocol::acp::v1::SessionConfigOption;
 const CONNECT_WARNING_SECS: u64 = 8;
 /// Duration after the warning before forcibly aborting the connection attempt.
 const CONNECT_ABORT_SECS: u64 = 30;
-
-/// Bounded queue capacity for each additional [`SessionEvent`] subscriber.
-const SUBSCRIBER_QUEUE_EVENTS: usize = 1024;
-
-/// Ordered fan-out for public session events: one primary unbounded consumer
-/// (the launching frontend) plus bounded subscribers such as the remote ACP
-/// transport. A subscriber whose queue overflows is dropped so it can never
-/// block the harness or the primary frontend; its receiver closing tells that
-/// consumer to tear down.
-#[derive(Clone)]
-struct SessionEventFanout {
-    primary: UnboundedSender<SessionEvent>,
-    subscribers: Arc<std::sync::Mutex<Vec<mpsc::Sender<SessionEvent>>>>,
-}
-
-impl SessionEventFanout {
-    fn new(primary: UnboundedSender<SessionEvent>) -> Self {
-        Self {
-            primary,
-            subscribers: Arc::new(std::sync::Mutex::new(Vec::new())),
-        }
-    }
-
-    /// Deliver to every subscriber, then the primary receiver. Errors only
-    /// when the primary receiver is gone, mirroring `UnboundedSender::send`
-    /// (boxed: a `SessionEvent` is too large to carry in an `Err` directly).
-    fn send(&self, event: SessionEvent) -> Result<(), Box<mpsc::error::SendError<SessionEvent>>> {
-        if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.retain(|subscriber| match subscriber.try_send(event.clone()) {
-                Ok(()) => true,
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("dropping session event subscriber that fell behind");
-                    false
-                }
-                Err(mpsc::error::TrySendError::Closed(_)) => false,
-            });
-        }
-        self.primary.send(event).map_err(Box::new)
-    }
-
-    fn subscribe(&self) -> mpsc::Receiver<SessionEvent> {
-        let (subscriber_tx, subscriber_rx) = mpsc::channel(SUBSCRIBER_QUEUE_EVENTS);
-        if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.push(subscriber_tx);
-        }
-        subscriber_rx
-    }
-}
 
 /// Two-phase timeout: warn after `CONNECT_WARNING_SECS`, abort after an
 /// additional `CONNECT_ABORT_SECS`.
