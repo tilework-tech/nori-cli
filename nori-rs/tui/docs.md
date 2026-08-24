@@ -169,8 +169,37 @@ identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
   `/config` open), the multi-toggle Footer Segments sub-picker (which already
   stays open by replacing itself), and the bespoke Hotkeys view. Failed persists
   never reopen.
-- For Model-category config options, `acp_session_config_value_picker_params()`
-  appends a "Use custom model..." entry. Selecting it emits
+- Model-category value pickers (`acp_session_config_value_picker_params()`)
+  split into two labeled sections when both have content. **Recommended** lists
+  the values the agent advertises over ACP, exactly as reported. **Other** lists
+  a curated, per-agent set of real models the adapter does *not* advertise but
+  that generally run when forced via spawn-time injection; it comes from
+  `nori_harness::AgentKind::other_models()`, resolved in
+  `@/nori-rs/tui/src/chatwidget/pickers.rs` via `AgentKind::from_slug` on the
+  active agent (custom/unknown agents resolve to an empty list → no Other
+  section). The Other list is deduplicated at render time against the advertised
+  values so a model an account already sees under Recommended never appears
+  twice. When either side is empty — no advertised catalog, no curated
+  complement, or a non-model option — the picker renders one flat list exactly as
+  before and the labeled headers do not appear. The durable-complement design is
+  intentional: the advertised set is agent/version/account-dependent, so the
+  curated list plus runtime dedup avoids a second, drift-prone source of truth.
+- An Other row whose id already equals the session's injected `currentValue` is
+  marked `(current)` and carries no action; every other Other row emits
+  `AppEvent::SetAcpSessionConfigOption { is_custom_model: true }` — the same event
+  a free-text custom entry emits — so it follows the identical
+  reject → persist-to-`[default_models]` → restart-with-injection recovery path
+  (below). `initial_selected_idx` prefers the current row.
+- Section labels are a non-selectable header primitive shared by every
+  `ListSelectionView` (`is_header` on `SelectionItem` and `GenericDisplayRow`, in
+  `@/nori-rs/tui/src/bottom_pane/list_selection_view.rs` and
+  `@/nori-rs/tui/src/bottom_pane/selection_popup_common.rs`): headers render bold
+  with no number or `›` cursor, keyboard navigation and default selection skip
+  them, and the `1..N` numbering counts only selectable rows. Grouped non-model
+  config options reuse the same primitive for their group labels (previously
+  drawn as bracketed `[Group]` text).
+- `acp_session_config_value_picker_params()` also pins a "Use custom model..."
+  entry at the bottom of every Model-category picker. Selecting it emits
   `AppEvent::OpenCustomModelInput`, which opens a `CustomModelInputView`
   (`@/nori-rs/tui/src/nori/custom_model_input.rs`) — a `BottomPaneView` text
   input for free-form model IDs. On submit it emits

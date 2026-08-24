@@ -43,6 +43,9 @@ pub(crate) struct SelectionItem {
     pub actions: Vec<SelectionAction>,
     pub dismiss_on_select: bool,
     pub search_value: Option<String>,
+    /// When true, this row is a non-selectable section header: navigation skips
+    /// it, it shows no number or cursor, and it renders as a bold section label.
+    pub is_header: bool,
 }
 
 pub(crate) struct SelectionViewParams {
@@ -221,6 +224,7 @@ impl ListSelectionView {
         }
 
         let len = self.filtered_indices.len();
+        let first_selectable = self.first_selectable_visible_idx();
         self.state.selected_idx = self
             .state
             .selected_idx
@@ -236,7 +240,14 @@ impl ListSelectionView {
                         .position(|idx| *idx == actual_idx)
                 })
             })
-            .or_else(|| (len > 0).then_some(0));
+            .or(first_selectable);
+
+        // Never rest the cursor on a non-selectable section header.
+        if let Some(sel) = self.state.selected_idx
+            && self.is_header_visible(sel)
+        {
+            self.state.selected_idx = first_selectable;
+        }
 
         let visible = Self::max_visible_rows(len);
         self.state.clamp_selection(len);
@@ -244,54 +255,108 @@ impl ListSelectionView {
     }
 
     fn build_rows(&self) -> Vec<GenericDisplayRow> {
+        let show_numbers = !self.is_searchable || (self.vim_mode && !self.search_active);
+        let mut rows = Vec::with_capacity(self.filtered_indices.len());
+        // Numbers count only selectable rows so section headers do not consume
+        // a position in the 1..N sequence.
+        let mut number = 0usize;
+        for (visible_idx, actual_idx) in self.filtered_indices.iter().enumerate() {
+            let Some(item) = self.items.get(*actual_idx) else {
+                continue;
+            };
+            if item.is_header {
+                rows.push(GenericDisplayRow {
+                    name: item.name.clone(),
+                    display_shortcut: None,
+                    match_indices: None,
+                    description: None,
+                    styled_description: None,
+                    disabled: false,
+                    is_header: true,
+                });
+                continue;
+            }
+            number += 1;
+            let is_selected = self.state.selected_idx == Some(visible_idx);
+            let prefix = if is_selected { '›' } else { ' ' };
+            let name = item.name.as_str();
+            let name_with_marker = if item.is_current {
+                format!("{name} (current)")
+            } else {
+                item.name.clone()
+            };
+            let display_name = if show_numbers {
+                format!("{prefix} {number}. {name_with_marker}")
+            } else {
+                format!("{prefix} {name_with_marker}")
+            };
+            let description = is_selected
+                .then(|| item.selected_description.clone())
+                .flatten()
+                .or_else(|| item.description.clone());
+            rows.push(GenericDisplayRow {
+                name: display_name,
+                display_shortcut: item.display_shortcut,
+                match_indices: None,
+                description,
+                styled_description: None,
+                disabled: false,
+                is_header: false,
+            });
+        }
+        rows
+    }
+
+    /// Whether the visible row at `visible_idx` is a non-selectable header.
+    fn is_header_visible(&self, visible_idx: usize) -> bool {
         self.filtered_indices
-            .iter()
-            .enumerate()
-            .filter_map(|(visible_idx, actual_idx)| {
-                self.items.get(*actual_idx).map(|item| {
-                    let is_selected = self.state.selected_idx == Some(visible_idx);
-                    let prefix = if is_selected { '›' } else { ' ' };
-                    let name = item.name.as_str();
-                    let name_with_marker = if item.is_current {
-                        format!("{name} (current)")
-                    } else {
-                        item.name.clone()
-                    };
-                    let n = visible_idx + 1;
-                    let show_numbers =
-                        !self.is_searchable || (self.vim_mode && !self.search_active);
-                    let display_name = if show_numbers {
-                        format!("{prefix} {n}. {name_with_marker}")
-                    } else {
-                        format!("{prefix} {name_with_marker}")
-                    };
-                    let description = is_selected
-                        .then(|| item.selected_description.clone())
-                        .flatten()
-                        .or_else(|| item.description.clone());
-                    GenericDisplayRow {
-                        name: display_name,
-                        display_shortcut: item.display_shortcut,
-                        match_indices: None,
-                        description,
-                        styled_description: None,
-                        disabled: false,
-                    }
-                })
-            })
-            .collect()
+            .get(visible_idx)
+            .and_then(|actual| self.items.get(*actual))
+            .is_some_and(|item| item.is_header)
+    }
+
+    /// The first visible row that is not a header, if any.
+    fn first_selectable_visible_idx(&self) -> Option<usize> {
+        (0..self.filtered_indices.len()).find(|&idx| !self.is_header_visible(idx))
+    }
+
+    /// Visible index of the `n`-th (1-based) selectable row, matching the numbers
+    /// shown in the list. Headers are unnumbered, so digit selection must count
+    /// only selectable rows.
+    fn nth_selectable_visible_idx(&self, n: usize) -> Option<usize> {
+        n.checked_sub(1).and_then(|skip| {
+            (0..self.filtered_indices.len())
+                .filter(|&idx| !self.is_header_visible(idx))
+                .nth(skip)
+        })
     }
 
     fn move_up(&mut self) {
         let len = self.visible_len();
-        self.state.move_up_wrap(len);
+        if len == 0 {
+            return;
+        }
+        for _ in 0..len {
+            self.state.move_up_wrap(len);
+            if !self.is_header_visible(self.state.selected_idx.unwrap_or(0)) {
+                break;
+            }
+        }
         let visible = Self::max_visible_rows(len);
         self.state.ensure_visible(len, visible);
     }
 
     fn move_down(&mut self) {
         let len = self.visible_len();
-        self.state.move_down_wrap(len);
+        if len == 0 {
+            return;
+        }
+        for _ in 0..len {
+            self.state.move_down_wrap(len);
+            if !self.is_header_visible(self.state.selected_idx.unwrap_or(0)) {
+                break;
+            }
+        }
         let visible = Self::max_visible_rows(len);
         self.state.ensure_visible(len, visible);
     }
@@ -457,8 +522,7 @@ impl BottomPaneView for ListSelectionView {
                         if let Some(idx) = c
                             .to_digit(10)
                             .map(|d| d as usize)
-                            .and_then(|d| d.checked_sub(1))
-                            && idx < self.items.len()
+                            .and_then(|n| self.nth_selectable_visible_idx(n))
                         {
                             self.state.selected_idx = Some(idx);
                             self.accept();
@@ -495,8 +559,7 @@ impl BottomPaneView for ListSelectionView {
                         if let Some(idx) = c
                             .to_digit(10)
                             .map(|d| d as usize)
-                            .and_then(|d| d.checked_sub(1))
-                            && idx < self.items.len()
+                            .and_then(|n| self.nth_selectable_visible_idx(n))
                         {
                             self.state.selected_idx = Some(idx);
                             self.accept();
@@ -1075,6 +1138,161 @@ mod tests {
         );
         assert_snapshot!(
             "list_selection_model_picker_width_80",
+            render_lines_with_width(&view, 80)
+        );
+    }
+
+    fn sectioned_items() -> Vec<SelectionItem> {
+        vec![
+            SelectionItem {
+                name: "Recommended".to_string(),
+                is_header: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Alpha".to_string(),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Other".to_string(),
+                is_header: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Beta".to_string(),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ]
+    }
+
+    #[test]
+    fn digit_keys_select_numbered_selectable_row_skipping_headers() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        // sectioned_items renders as: Recommended (header), 1. Alpha,
+        // Other (header), 2. Beta. Headers are unnumbered.
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items: sectioned_items(),
+                is_searchable: false,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
+
+        assert_eq!(
+            view.take_last_selected_index(),
+            Some(3),
+            "pressing '2' should accept the row shown as 2 (Beta), not a header or Alpha"
+        );
+    }
+
+    #[test]
+    fn navigation_skips_header_rows() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Test".to_string()),
+                items: sectioned_items(),
+                is_searchable: false,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        assert_eq!(
+            view.state.selected_idx,
+            Some(1),
+            "initial selection skips the leading header and lands on the first selectable"
+        );
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(3),
+            "down should skip the 'Other' header and land on Beta"
+        );
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(1),
+            "down from the last selectable should wrap to the first selectable"
+        );
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(
+            view.state.selected_idx,
+            Some(3),
+            "up from the first selectable should wrap to the last, skipping both headers"
+        );
+    }
+
+    #[test]
+    fn snapshot_model_picker_sections_width_80() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let items = vec![
+            SelectionItem {
+                name: "Recommended".to_string(),
+                is_header: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Opus 5".to_string(),
+                description: Some("Most capable".to_string()),
+                is_current: true,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Sonnet 5".to_string(),
+                description: Some("Fast and capable".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Other".to_string(),
+                is_header: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Opus 4.6".to_string(),
+                description: Some("claude-opus-4-6".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Sonnet 4.6".to_string(),
+                description: Some("claude-sonnet-4-6".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Use custom model...".to_string(),
+                description: Some("Enter any model ID".to_string()),
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        let view = ListSelectionView::new(
+            SelectionViewParams {
+                title: Some("Model".to_string()),
+                subtitle: Some("Select a value for this ACP session setting".to_string()),
+                items,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        assert_snapshot!(
+            "list_selection_model_picker_sections_width_80",
             render_lines_with_width(&view, 80)
         );
     }

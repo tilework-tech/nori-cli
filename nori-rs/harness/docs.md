@@ -94,7 +94,10 @@ this is best-effort — a failure is logged and never blocks startup. After spaw
 `currentValue`; when injection already made the model current, that RPC is skipped
 (no config response is emitted), and for agents with no injection channel the RPC
 remains the only mechanism. Injection is how an out-of-catalog model becomes the
-session's current model, because the post-spawn RPC would reject it.
+session's current model, because the post-spawn RPC would reject it. The harness
+re-exports `AgentKind::other_models()` / `OtherModel` so the TUI's `/model`
+picker can offer a curated list of these injectable, unadvertised models (see
+[`nori-acp-host`](../acp-host/docs.md) and [`nori-tui`](../tui/docs.md)).
 
 #### Typed control surface
 

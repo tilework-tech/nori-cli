@@ -33,6 +33,8 @@ pub(crate) struct GenericDisplayRow {
     pub description: Option<String>,       // optional grey text after the name
     pub styled_description: Option<Line<'static>>,
     pub disabled: bool,
+    /// Non-selectable section header: rendered bold with no selection cursor.
+    pub is_header: bool,
 }
 
 /// Compute a shared description-column start based on the widest filtered name
@@ -236,7 +238,13 @@ pub(crate) fn render_rows(
 
         let mut wrapped = wrap_row(row, desc_col, area.width as usize);
 
-        if row.disabled {
+        if row.is_header {
+            for line in &mut wrapped {
+                line.spans.iter_mut().for_each(|span| {
+                    span.style = span.style.bold();
+                });
+            }
+        } else if row.disabled {
             for line in &mut wrapped {
                 line.spans.iter_mut().for_each(|span| {
                     span.style = span.style.dim();
@@ -328,6 +336,7 @@ mod tests {
             description: Some("recording ● on".to_string()),
             styled_description: Some(Line::from(vec!["recording ".dim(), "●".red(), " on".dim()])),
             disabled: false,
+            is_header: false,
         }];
         let mut state = ScrollState::new();
         state.clamp_selection(rows.len());
@@ -371,6 +380,7 @@ mod tests {
                 description: Some("§ first".to_string()),
                 styled_description: None,
                 disabled: false,
+                is_header: false,
             },
             GenericDisplayRow {
                 name: "a".to_string(),
@@ -379,6 +389,7 @@ mod tests {
                 description: Some("§ second".to_string()),
                 styled_description: None,
                 disabled: false,
+                is_header: false,
             },
             GenericDisplayRow {
                 name: "b".to_string(),
@@ -387,6 +398,7 @@ mod tests {
                 description: Some("§ third".to_string()),
                 styled_description: None,
                 disabled: false,
+                is_header: false,
             },
         ];
         let area = Rect::new(0, 0, 50, 2);
