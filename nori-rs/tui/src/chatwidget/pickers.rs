@@ -742,6 +742,7 @@ impl ChatWidget {
         value: String,
         option_name: String,
         value_name: String,
+        is_custom_model: bool,
     ) {
         if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
@@ -774,6 +775,7 @@ impl ChatWidget {
                             value: value_for_result,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
+                            is_custom_model,
                             config_options: Some(config_options),
                             error: None,
                         });
@@ -786,6 +788,7 @@ impl ChatWidget {
                             value: value_for_result,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
+                            is_custom_model,
                             config_options: None,
                             error: Some(err.to_string()),
                         });

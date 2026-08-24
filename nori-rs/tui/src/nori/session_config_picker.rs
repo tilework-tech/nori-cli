@@ -221,6 +221,7 @@ fn value_item(
                 value: value.clone(),
                 option_name: option_name.clone(),
                 value_name: value_name.clone(),
+                is_custom_model: false,
             });
         })]
     };
@@ -396,10 +397,12 @@ mod tests {
                 value,
                 option_name,
                 value_name,
+                is_custom_model,
             } if config_id == "model"
                 && value == "mock-model-fast"
                 && option_name == "Model"
                 && value_name == "Mock Fast Model"
+                && !is_custom_model
         ));
         assert!(rx.try_recv().is_err(), "expected a single config event");
     }

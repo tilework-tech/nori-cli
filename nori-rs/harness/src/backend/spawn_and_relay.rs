@@ -36,6 +36,23 @@ pub(super) async fn spawn_connection_with_public_initialize(
     }
 }
 
+/// Force the persisted default model into the agent's spawn configuration via
+/// its out-of-band channel (see `ModelInjection`). Best-effort: a failure is
+/// logged and never blocks startup. Both the fresh-spawn and resume paths call
+/// this because each spawns a new subprocess and env-based injection is
+/// per-process — a resumed session must re-apply it or it would silently run
+/// the adapter default instead of the persisted model.
+pub(super) fn inject_default_model(
+    agent_config: &mut crate::registry::AcpAgentConfig,
+    default_model: Option<&str>,
+) {
+    if let Some(default_model) = default_model
+        && let Err(err) = agent_config.inject_model(default_model)
+    {
+        warn!(%err, "failed to inject default model into agent spawn config");
+    }
+}
+
 async fn forward_setup_event(
     backend_event_tx: &mpsc::Sender<BackendEvent>,
     event: crate::connection::ConnectionEvent,
@@ -126,7 +143,8 @@ impl AcpBackend {
     ) -> Result<Self> {
         let cwd = config.cwd.clone();
 
-        let agent_config = get_agent_config(&config.agent)?;
+        let mut agent_config = get_agent_config(&config.agent)?;
+        inject_default_model(&mut agent_config, config.default_model.as_deref());
         debug!("Spawning ACP backend for agent: {}", config.agent);
         let mut connection = spawn_connection_with_public_initialize(
             &agent_config,

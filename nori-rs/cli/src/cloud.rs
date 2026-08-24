@@ -96,6 +96,7 @@ pub fn cloud_agent_config(
         context_window_size: None,
         auth_hint: Some("run: nori-handroll login".to_string()),
         transcript_base_dir: None,
+        model_override: None,
     }
 }
 

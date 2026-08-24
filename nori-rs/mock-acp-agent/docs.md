@@ -48,5 +48,9 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   sweeps the inherited process group without relying on a shell wrapper.
 - Local tests expect `target/debug/mock_acp_agent` unless
   `MOCK_ACP_AGENT_BIN` is set.
+- The mock honors `MOCK_AGENT_INJECTED_MODEL` as its model config option's
+  current value (its own model-injection channel), so tests can verify that an
+  out-of-catalog model forced through spawn-time injection becomes the session's
+  current model.
 
 Created and maintained by Nori.

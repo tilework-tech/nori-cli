@@ -140,7 +140,8 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
-        let agent_config = get_agent_config(&config.agent)?;
+        let mut agent_config = get_agent_config(&config.agent)?;
+        spawn_and_relay::inject_default_model(&mut agent_config, config.default_model.as_deref());
         let mut connection = spawn_and_relay::spawn_connection_with_public_initialize(
             &agent_config,
             &cwd,

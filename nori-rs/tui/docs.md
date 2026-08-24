@@ -176,6 +176,20 @@ identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
   input for free-form model IDs. On submit it emits
   `AppEvent::SetAcpSessionConfigOption` and follows the same
   `session/set_config_option` path as selecting from the advertised list.
+- The config-set events (`SetAcpSessionConfigOption` and
+  `AcpSessionConfigSetResult` in `@/nori-rs/tui/src/app_event.rs`) carry an
+  `is_custom_model` flag that distinguishes a free-text custom entry from an
+  advertised picker choice. When the live RPC rejects a custom model and the
+  active agent `supports_model_injection()`, the handler in
+  `@/nori-rs/tui/src/app/event_handling.rs` treats the rejection as recoverable:
+  `persist_custom_default_model` (in
+  `@/nori-rs/tui/src/app/config_persistence.rs`) writes the value to
+  `[default_models]` unconditionally (no config-options snapshot to categorize —
+  it is a model by construction), an info message
+  ("Saved '<model>' as the default model for <agent> — restarting the session to
+  apply it.") is shown, and `AppEvent::NewSession` restarts the session so the
+  model is injected at spawn. If the agent has no injection channel, the original
+  error is surfaced instead.
 
 #### The `/browser` profile picker
 

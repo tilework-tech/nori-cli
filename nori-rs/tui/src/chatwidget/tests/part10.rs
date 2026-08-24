@@ -1421,6 +1421,7 @@ async fn config_value_selection_reopens_panel_focused_on_edited_option() {
         "high".to_string(),
         "Thought Level".to_string(),
         "High".to_string(),
+        false,
     );
 
     let focus = tokio::time::timeout(std::time::Duration::from_secs(10), async {

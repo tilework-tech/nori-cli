@@ -206,20 +206,17 @@ async fn resume_error_remains_raw_without_a_nori_failure_mirror() {
 
 #[tokio::test]
 #[serial]
-async fn setup_notifications_and_default_config_response_precede_session_start() {
+async fn setup_notifications_precede_session_start() {
     // SAFETY: tests that mutate the mock-agent environment run serially.
     unsafe { std::env::set_var("MOCK_AGENT_NEW_SESSION_NOTIFICATION", "1") };
     let _guard = EnvGuard("MOCK_AGENT_NEW_SESSION_NOTIFICATION");
     let temp = tempfile::tempdir().expect("create session directory");
-    let mut config = NoriConfig {
+    let config = NoriConfig {
         active_agent: "mock-model".to_string(),
         cwd: temp.path().to_path_buf(),
         nori_home: temp.path().to_path_buf(),
         ..Default::default()
     };
-    config
-        .default_models
-        .insert("mock-model".to_string(), "mock-model-fast".to_string());
     let mut session = launch_session(SessionLaunchSpec {
         config: Arc::new(config),
         cli_version: "boundary-test".to_string(),
@@ -284,33 +281,20 @@ async fn setup_notifications_and_default_config_response_precede_session_start()
         },
         "new-session response should be observable",
     );
-    let config_index = index_of(
-        &|event| {
-            matches!(
-                event,
-                SessionEvent::Acp(AcpEvent::Response {
-                    response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(_)),
-                    ..
-                })
-            )
-        },
-        "default-model config response should be observable",
-    );
     let started_index = index_of(
         &|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_))),
         "session should start",
     );
     assert!(initialize_index < notification_index);
     assert!(notification_index < new_session_index);
-    assert!(new_session_index < config_index);
-    assert!(config_index < started_index);
+    assert!(new_session_index < started_index);
 
     session.handle.shutdown().await.expect("shutdown session");
 }
 
 #[tokio::test]
 #[serial]
-async fn unknown_default_model_is_attempted_on_session_start() {
+async fn out_of_catalog_default_model_is_injected_at_spawn() {
     let temp = tempfile::tempdir().expect("create session directory");
     let mut config = NoriConfig {
         active_agent: "mock-model".to_string(),
@@ -318,6 +302,9 @@ async fn unknown_default_model_is_attempted_on_session_start() {
         nori_home: temp.path().to_path_buf(),
         ..Default::default()
     };
+    // A model the agent does not advertise in its picker catalog. It can only
+    // become the session's current model by being forced through the spawn-time
+    // injection channel, not the post-spawn set_config_option RPC.
     config.default_models.insert(
         "mock-model".to_string(),
         "model-that-does-not-exist-yet".to_string(),
@@ -346,23 +333,183 @@ async fn unknown_default_model_is_attempted_on_session_start() {
         }
     })
     .await
-    .expect("session setup should complete even with an unknown default model");
+    .expect("session setup should complete even with an out-of-catalog default model");
 
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
+    let new_session = events
+        .iter()
+        .find_map(|event| match event {
             SessionEvent::Acp(AcpEvent::Response {
-                response: Ok(acp::v1::AgentResponse::SetSessionConfigOptionResponse(_)),
+                response: Ok(acp::v1::AgentResponse::NewSessionResponse(resp)),
                 ..
-            })
-        )),
-        "set_config_option should be attempted for unknown models"
+            }) => Some(resp),
+            _ => None,
+        })
+        .expect("new-session response should be observable");
+
+    let current_model = new_session
+        .config_options
+        .iter()
+        .flatten()
+        .find(|option| option.category == Some(acp::v1::SessionConfigOptionCategory::Model))
+        .and_then(|option| match &option.kind {
+            acp::v1::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
+            _ => None,
+        })
+        .expect("model config option should be advertised");
+    assert_eq!(
+        current_model, "model-that-does-not-exist-yet",
+        "the out-of-catalog default model must be injected as the session's current model"
     );
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn out_of_catalog_default_model_is_injected_when_resuming() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1") };
+    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let mut config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    // Resuming spawns a fresh subprocess, so env-based injection must be
+    // re-applied on the resume path or the resumed agent silently runs the
+    // adapter default instead of the persisted out-of-catalog model.
+    config.default_models.insert(
+        "mock-model".to_string(),
+        "model-that-does-not-exist-yet".to_string(),
+    );
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: Some(SessionResume {
+            acp_session_id: Some("resume-inject-session".to_string()),
+            transcript: None,
+        }),
+    });
+
+    let events = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("resume event stream closed");
+            let started = matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)));
+            events.push(event);
+            if started {
+                return events;
+            }
+        }
+    })
+    .await
+    .expect("resume should complete with an out-of-catalog default model");
+
+    let load = events
+        .iter()
+        .find_map(|event| match event {
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::LoadSessionResponse(resp)),
+                ..
+            }) => Some(resp),
+            _ => None,
+        })
+        .expect("load-session response should be observable");
+
+    let current_model = load
+        .config_options
+        .iter()
+        .flatten()
+        .find(|option| option.category == Some(acp::v1::SessionConfigOptionCategory::Model))
+        .and_then(|option| match &option.kind {
+            acp::v1::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
+            _ => None,
+        })
+        .expect("model config option should be advertised on resume");
+    assert_eq!(
+        current_model, "model-that-does-not-exist-yet",
+        "the out-of-catalog default model must be injected into the resumed session too"
+    );
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn rejected_config_option_error_is_not_mirrored_on_public_boundary() {
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    // Drain setup until the session is running.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("setup event stream closed");
+            if matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_))) {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("session should start");
+
+    // The mock rejects this model; the error must reach the caller.
+    let set_result = session
+        .handle
+        .set_session_config_option("model".to_string(), "mock-model-rejected".to_string())
+        .await;
     assert!(
-        events
-            .iter()
-            .any(|event| matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)))),
-        "session should start regardless of model validation outcome"
+        set_result.is_err(),
+        "the mock must reject an out-of-catalog model over set_config_option"
+    );
+
+    // But the rejection must NOT be mirrored onto the public boundary as a raw
+    // error response — the `/model` flow renders the outcome itself, so a
+    // mirrored error would surface a confusing duplicate cell.
+    let mut saw_error_response = false;
+    loop {
+        match tokio::time::timeout(Duration::from_millis(500), session.events.recv()).await {
+            Ok(Some(event)) => {
+                if matches!(
+                    event,
+                    SessionEvent::Acp(AcpEvent::Response {
+                        response: Err(_),
+                        ..
+                    })
+                ) {
+                    saw_error_response = true;
+                }
+            }
+            Ok(None) => break,
+            Err(_) => break,
+        }
+    }
+    assert!(
+        !saw_error_response,
+        "a rejected config-option error must not be mirrored on the public boundary"
     );
 
     session.handle.shutdown().await.expect("shutdown session");

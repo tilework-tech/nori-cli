@@ -17,7 +17,10 @@ the harness. Session launch, resume, and probing do not reload ambient config.
 
 The crate owns:
 
-- agent registry and distribution configuration;
+- agent registry and distribution configuration, including per-agent
+  `[default_models]` and the optional `[[agents]].model_override`
+  (`ModelOverrideToml { env, arg }`) declaring how a custom agent accepts a
+  forced model id at spawn time (see below);
 - `AskForApproval`, `SandboxPolicy`, `SandboxMode`, and `TrustLevel`;
 - `McpServerConfig` and MCP transport configuration;
 - `ShellEnvironmentPolicy` and related environment patterns;
@@ -32,6 +35,16 @@ file. Project trust resolves against the effective cwd and primary git root.
 scrollback after width changes. It defaults to `true`; the `/settings` toggle
 persists to this same key, so startup configuration and runtime changes share
 one source of truth.
+
+`[default_models]` maps an agent slug to a model id. This crate only stores the
+value; the id is not validated here (an agent may accept models its ACP picker
+never advertised). `nori-acp-host` reads `model_override` to build a
+`ModelInjection` strategy — `env` names an environment variable, `arg` a CLI
+flag, and `env` wins if both are set — so an out-of-catalog default model can be
+forced through the agent subprocess at spawn. Built-in agents (Claude, Codex,
+Gemini) know their own channel and ignore `model_override`. The user-facing
+`config.toml` schema, including these tables and the `[[agents]]` fields, is
+described in [`config.md`](../config.md).
 
 ### Things to Know
 
