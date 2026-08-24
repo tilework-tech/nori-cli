@@ -1760,6 +1760,13 @@ async fn main() -> acp::Result<()> {
                             .or_insert_with(default_session_config);
 
                         match arguments.config_id.to_string().as_str() {
+                            // Simulate a real adapter rejecting a model outside
+                            // its advertised catalog, so tests can exercise the
+                            // rejection path.
+                            "model" if value == "mock-model-rejected" => Err(acp::Error::new(
+                                -32603,
+                                "Invalid value for config option model: mock-model-rejected",
+                            )),
                             "model" => {
                                 cfg.model_id = value;
                                 if cfg.model_id == "mock-model-fast" {

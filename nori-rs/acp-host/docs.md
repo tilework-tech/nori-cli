@@ -83,6 +83,11 @@ The host is the only client-side product crate that directly uses the
   injected value takes precedence over the agent's own configured model (e.g.
   `~/.claude/settings.json`) for nori-spawned sessions — nori's `[default_models]`
   is authoritative here by design.
+- `set_config_option` mirrors only a *successful* response onto the public event
+  boundary. Its error is returned to the caller (the `/model` flow renders a
+  friendly message and may persist-and-restart), so mirroring the raw JSON-RPC
+  error too would surface a confusing duplicate "Internal error" cell. Raw wire
+  errors are still captured by ACP wire recording, which taps stdio separately.
 - Terminal and extension request families are not advertised by the current
   host. Adding them requires an explicit host-policy decision, not a generic
   protocol mirror.

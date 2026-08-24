@@ -444,6 +444,79 @@ async fn out_of_catalog_default_model_is_injected_when_resuming() {
 
 #[tokio::test]
 #[serial]
+async fn rejected_config_option_error_is_not_mirrored_on_public_boundary() {
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    // Drain setup until the session is running.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("setup event stream closed");
+            if matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_))) {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("session should start");
+
+    // The mock rejects this model; the error must reach the caller.
+    let set_result = session
+        .handle
+        .set_session_config_option("model".to_string(), "mock-model-rejected".to_string())
+        .await;
+    assert!(
+        set_result.is_err(),
+        "the mock must reject an out-of-catalog model over set_config_option"
+    );
+
+    // But the rejection must NOT be mirrored onto the public boundary as a raw
+    // error response — the `/model` flow renders the outcome itself, so a
+    // mirrored error would surface a confusing duplicate cell.
+    let mut saw_error_response = false;
+    loop {
+        match tokio::time::timeout(Duration::from_millis(500), session.events.recv()).await {
+            Ok(Some(event)) => {
+                if matches!(
+                    event,
+                    SessionEvent::Acp(AcpEvent::Response {
+                        response: Err(_),
+                        ..
+                    })
+                ) {
+                    saw_error_response = true;
+                }
+            }
+            Ok(None) => break,
+            Err(_) => break,
+        }
+    }
+    assert!(
+        !saw_error_response,
+        "a rejected config-option error must not be mirrored on the public boundary"
+    );
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
 async fn public_boundary_preserves_bootstrap_and_prompt_acp_envelopes() {
     let temp = tempfile::tempdir().expect("create session directory");
     let config = NoriConfig {
