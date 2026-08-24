@@ -44,6 +44,22 @@ pub(super) async fn persist_default_model_selection(
     Ok(true)
 }
 
+/// Persist a model as the agent's default without inspecting the advertised
+/// config options. Used when the agent rejected a free-text custom model from
+/// its live picker: there is no options snapshot to categorize, but the value
+/// is a model by construction, and it will be forced through the agent's
+/// spawn-time injection channel on the next session start.
+pub(super) async fn persist_default_model_value(
+    nori_home: &Path,
+    agent: &str,
+    value: &str,
+) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(nori_home)
+        .set_default_model(agent, value)
+        .apply()
+        .await
+}
+
 impl App {
     fn sync_runtime_config(&mut self) {
         self.chat_widget.set_config(self.config.clone());
@@ -71,6 +87,27 @@ impl App {
             self.sync_runtime_config();
         }
         Ok(persisted)
+    }
+
+    /// Persist a custom model as the agent's default, unconditionally.
+    ///
+    /// Used when the agent rejected the model from its live picker: there is no
+    /// config-options snapshot to categorize, but the model came from the
+    /// free-text custom-model input, so it is a model by construction. On the
+    /// next session start it is forced through the agent's spawn-time injection
+    /// channel. Returns `true` when the value was persisted.
+    pub(super) async fn persist_custom_default_model(&mut self, agent: &str, value: &str) -> bool {
+        if let Err(err) = persist_default_model_value(&self.config.nori_home, agent, value).await {
+            tracing::error!(error = %err, "failed to persist custom default model");
+            self.chat_widget
+                .add_error_message(format!("Failed to save model '{value}': {err}"));
+            return false;
+        }
+        self.config
+            .default_models
+            .insert(agent.to_string(), value.to_string());
+        self.sync_runtime_config();
+        true
     }
 
     /// Persist a TUI config setting to config.toml and apply it immediately.
@@ -765,6 +802,28 @@ mod tests {
                 .and_then(|section| section.get("claude-code"))
                 .and_then(toml::Value::as_str),
             Some("opus")
+        );
+    }
+
+    #[tokio::test]
+    async fn rejected_custom_model_is_persisted_without_config_options() {
+        let temp = TempDir::new().expect("temp home");
+
+        persist_default_model_value(temp.path(), "claude-code", "claude-opus-4-6")
+            .await
+            .expect("persist rejected custom model");
+
+        let content = std::fs::read_to_string(temp.path().join("config.toml"))
+            .expect("read persisted config");
+        let parsed: toml::Value = toml::from_str(&content).expect("config toml");
+        assert_eq!(
+            parsed
+                .get("default_models")
+                .and_then(|section| section.get("claude-code"))
+                .and_then(toml::Value::as_str),
+            Some("claude-opus-4-6"),
+            "a custom model the agent rejected must still be saved as the default so the \
+             restart can inject it"
         );
     }
 

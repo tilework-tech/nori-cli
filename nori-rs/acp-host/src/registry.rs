@@ -48,6 +48,52 @@ fn codex_config_with_native_goals_disabled(config: Option<&str>) -> Result<Strin
     serde_json::to_string(config).context("failed to serialize CODEX_CONFIG")
 }
 
+/// Merge a `model` key into a `CODEX_CONFIG` JSON object, preserving any other
+/// keys already present (e.g. the goals-disabled flag).
+fn codex_config_with_model(config: Option<&str>, model: &str) -> Result<String> {
+    let mut value = match config {
+        Some(config) => serde_json::from_str::<serde_json::Value>(config)
+            .context("CODEX_CONFIG must be valid JSON")?,
+        None => serde_json::json!({}),
+    };
+    value
+        .as_object_mut()
+        .context("CODEX_CONFIG must contain a JSON object")?
+        .insert("model".to_string(), model.into());
+    serde_json::to_string(&value).context("failed to serialize CODEX_CONFIG")
+}
+
+/// How a chosen model id is delivered to an agent subprocess at spawn time.
+///
+/// Runtime model changes go over the live ACP `session/set_config_option` RPC,
+/// but adapters reject models outside their advertised catalog. To run such a
+/// model, nori forces it through the agent's own out-of-band channel at spawn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModelInjection {
+    /// Set an environment variable to the model id.
+    Env { var: String },
+    /// Append a CLI flag followed by the model id.
+    Arg { flag: String },
+    /// Merge the model id into the `CODEX_CONFIG` JSON object.
+    CodexConfig,
+    /// No known channel; the model can only be set via the live ACP RPC.
+    None,
+}
+
+impl ModelInjection {
+    /// Resolve a custom agent's declared model-override config into a strategy.
+    /// `env` wins if both `env` and `arg` are set.
+    fn from_override(over: &nori_config::ModelOverrideToml) -> Self {
+        if let Some(var) = &over.env {
+            ModelInjection::Env { var: var.clone() }
+        } else if let Some(flag) = &over.arg {
+            ModelInjection::Arg { flag: flag.clone() }
+        } else {
+            ModelInjection::None
+        }
+    }
+}
+
 // =============================================================================
 // Core Enums
 // =============================================================================
@@ -129,6 +175,22 @@ impl AgentKind {
     /// Get all agent variants
     pub fn all() -> &'static [AgentKind] {
         &[AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::Gemini]
+    }
+
+    /// The out-of-band channel this built-in agent uses to receive a forced
+    /// model id at spawn time. Verified against each adapter: Claude honors
+    /// `ANTHROPIC_MODEL`, Gemini honors `GEMINI_MODEL` (both in ACP mode), and
+    /// Codex reads the `model` key from its `CODEX_CONFIG` JSON.
+    pub fn model_injection(&self) -> ModelInjection {
+        match self {
+            AgentKind::ClaudeCode => ModelInjection::Env {
+                var: "ANTHROPIC_MODEL".to_string(),
+            },
+            AgentKind::Gemini => ModelInjection::Env {
+                var: "GEMINI_MODEL".to_string(),
+            },
+            AgentKind::Codex => ModelInjection::CodexConfig,
+        }
     }
 
     /// Get the base directory for transcript files, relative to home directory.
@@ -265,6 +327,9 @@ pub struct RegisteredAgent {
     pub auth_hint: Option<String>,
     /// Transcript base directory (relative to home)
     pub transcript_base_dir: Option<String>,
+    /// How to force a model on this agent at spawn time (custom agents only;
+    /// built-in agents derive this from their `AgentKind`).
+    pub model_injection: ModelInjection,
 }
 
 /// Global agent registry. Protected by RwLock so tests can reset it.
@@ -282,6 +347,7 @@ pub fn build_default_agents() -> Vec<RegisteredAgent> {
             context_window_size: Some(kind.context_window_size()),
             auth_hint: Some(kind.auth_hint().to_string()),
             transcript_base_dir: Some(kind.transcript_base_dir().to_string()),
+            model_injection: kind.model_injection(),
         })
         .collect()
 }
@@ -317,6 +383,11 @@ pub fn build_registry(custom_agents: Vec<AgentConfigToml>) -> Result<Vec<Registe
             context_window_size: custom.context_window_size,
             auth_hint: custom.auth_hint,
             transcript_base_dir: custom.transcript_base_dir,
+            model_injection: custom
+                .model_override
+                .as_ref()
+                .map(ModelInjection::from_override)
+                .unwrap_or(ModelInjection::None),
         };
 
         // Override built-in if slug matches, otherwise append
@@ -560,9 +631,40 @@ pub struct AcpAgentConfig {
     pub display_name: String,
     /// Install command hint for error messages (e.g. "npm install -g @pkg" or "ensure /usr/bin/x is in PATH")
     pub install_hint: String,
+    /// How to force a model on this agent at spawn time.
+    pub model_injection: ModelInjection,
 }
 
 impl AcpAgentConfig {
+    /// Force `model` into this agent's spawn configuration via its out-of-band
+    /// channel (env var, CLI flag, or `CODEX_CONFIG` merge). A no-op for agents
+    /// with no known channel, so callers may apply it unconditionally.
+    pub fn inject_model(&mut self, model: &str) -> Result<()> {
+        match &self.model_injection {
+            ModelInjection::Env { var } => {
+                self.env.insert(var.clone(), model.to_string());
+            }
+            ModelInjection::Arg { flag } => {
+                if !self.args.iter().any(|arg| arg == flag) {
+                    self.args.push(flag.clone());
+                    self.args.push(model.to_string());
+                }
+            }
+            ModelInjection::CodexConfig => {
+                let current = self.env.get("CODEX_CONFIG").cloned();
+                let merged = codex_config_with_model(current.as_deref(), model)?;
+                self.env.insert("CODEX_CONFIG".to_string(), merged);
+            }
+            ModelInjection::None => {}
+        }
+        Ok(())
+    }
+
+    /// Whether this agent has a spawn-time channel to force a model.
+    pub fn supports_model_injection(&self) -> bool {
+        !matches!(self.model_injection, ModelInjection::None)
+    }
+
     /// Context window size for this agent, if known.
     pub fn context_window_size(&self) -> Option<i64> {
         // Check registry first (may have custom override)
@@ -716,6 +818,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             auth_hint: registered.auth_hint.clone().unwrap_or_default(),
             display_name: registered.name.clone(),
             install_hint,
+            model_injection: registered.model_injection.clone(),
         });
     }
 
@@ -775,6 +878,7 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
             auth_hint: agent.auth_hint().to_string(),
             display_name: agent.display_name().to_string(),
             install_hint: format!("npm install -g {}", agent.npm_package()),
+            model_injection: agent.model_injection(),
         });
     }
 
@@ -871,6 +975,9 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 auth_hint: "Mock agent - no authentication required.".to_string(),
                 display_name: "Mock ACP".to_string(),
                 install_hint: "Mock agent - no installation required".to_string(),
+                model_injection: ModelInjection::Env {
+                    var: "MOCK_AGENT_INJECTED_MODEL".to_string(),
+                },
             })
         }
         "mock-model-alt" => {
@@ -919,6 +1026,9 @@ fn get_mock_agent_config(normalized: &str) -> Option<AcpAgentConfig> {
                 auth_hint: "Mock agent - no authentication required.".to_string(),
                 display_name: "Mock ACP Alt".to_string(),
                 install_hint: "Mock agent - no installation required".to_string(),
+                model_injection: ModelInjection::Env {
+                    var: "MOCK_AGENT_INJECTED_MODEL".to_string(),
+                },
             })
         }
         _ => None,
@@ -1105,6 +1215,185 @@ mod tests {
                 .to_string()
                 .contains("CODEX_CONFIG must be valid JSON")
         );
+    }
+
+    #[test]
+    fn claude_injects_model_via_anthropic_model_env() {
+        let mut config = get_agent_config("claude-code").expect("claude config");
+
+        config
+            .inject_model("claude-opus-4-6")
+            .expect("model injection should succeed");
+
+        assert_eq!(
+            config.env.get("ANTHROPIC_MODEL").map(String::as_str),
+            Some("claude-opus-4-6"),
+            "the spawned Claude subprocess must receive the model via ANTHROPIC_MODEL"
+        );
+    }
+
+    #[test]
+    fn gemini_injects_model_via_gemini_model_env() {
+        let mut config = get_agent_config("gemini").expect("gemini config");
+
+        config
+            .inject_model("gemini-2.5-pro")
+            .expect("model injection should succeed");
+
+        assert_eq!(
+            config.env.get("GEMINI_MODEL").map(String::as_str),
+            Some("gemini-2.5-pro"),
+            "the spawned Gemini subprocess must receive the model via GEMINI_MODEL"
+        );
+    }
+
+    #[test]
+    fn codex_injects_model_into_codex_config_preserving_goals_flag() {
+        let mut config = get_agent_config("codex").expect("codex config");
+
+        config
+            .inject_model("gpt-5.1-codex")
+            .expect("model injection should succeed");
+
+        let codex_config = config
+            .env
+            .get("CODEX_CONFIG")
+            .expect("CODEX_CONFIG should be present for codex");
+        let parsed: serde_json::Value =
+            serde_json::from_str(codex_config).expect("CODEX_CONFIG should be valid JSON");
+        assert_eq!(
+            parsed.get("model").and_then(serde_json::Value::as_str),
+            Some("gpt-5.1-codex"),
+            "the model must be merged into CODEX_CONFIG"
+        );
+        assert_eq!(
+            parsed.pointer("/features/goals"),
+            Some(&serde_json::Value::Bool(false)),
+            "injecting a model must not clobber the goals-disabled flag"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn custom_agent_env_override_injects_model() {
+        reset_registry();
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::LocalDistribution;
+        use nori_config::ModelOverrideToml;
+        let custom = AgentConfigToml {
+            name: "Custom Env".to_string(),
+            slug: "custom-env".to_string(),
+            distribution: AgentDistributionToml {
+                local: Some(LocalDistribution {
+                    command: "/usr/bin/agent".to_string(),
+                    args: vec!["acp".to_string()],
+                    env: std::collections::HashMap::new(),
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: None,
+            transcript_base_dir: None,
+            model_override: Some(ModelOverrideToml {
+                env: Some("MY_MODEL".to_string()),
+                arg: None,
+            }),
+        };
+        initialize_registry(vec![custom]).unwrap();
+
+        let mut config = get_agent_config("custom-env").expect("custom-env config");
+        config.inject_model("some-model").expect("inject");
+
+        assert_eq!(
+            config.env.get("MY_MODEL").map(String::as_str),
+            Some("some-model"),
+            "a BYO agent declaring an env override must receive the model there"
+        );
+        reset_registry();
+    }
+
+    #[test]
+    #[serial]
+    fn custom_agent_arg_override_appends_model_flag() {
+        reset_registry();
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::LocalDistribution;
+        use nori_config::ModelOverrideToml;
+        let custom = AgentConfigToml {
+            name: "Custom Arg".to_string(),
+            slug: "custom-arg".to_string(),
+            distribution: AgentDistributionToml {
+                local: Some(LocalDistribution {
+                    command: "/usr/bin/agent".to_string(),
+                    args: vec!["acp".to_string()],
+                    env: std::collections::HashMap::new(),
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: None,
+            transcript_base_dir: None,
+            model_override: Some(ModelOverrideToml {
+                env: None,
+                arg: Some("--model".to_string()),
+            }),
+        };
+        initialize_registry(vec![custom]).unwrap();
+
+        let mut config = get_agent_config("custom-arg").expect("custom-arg config");
+        config.inject_model("some-model").expect("inject");
+
+        assert_eq!(
+            config.args,
+            vec!["acp", "--model", "some-model"],
+            "a BYO agent declaring an arg override must receive the model as a CLI flag"
+        );
+        reset_registry();
+    }
+
+    #[test]
+    #[serial]
+    fn custom_agent_without_override_leaves_spawn_config_unchanged() {
+        reset_registry();
+        use nori_config::AgentConfigToml;
+        use nori_config::AgentDistributionToml;
+        use nori_config::LocalDistribution;
+        let custom = AgentConfigToml {
+            name: "Custom None".to_string(),
+            slug: "custom-none".to_string(),
+            distribution: AgentDistributionToml {
+                local: Some(LocalDistribution {
+                    command: "/usr/bin/agent".to_string(),
+                    args: vec!["acp".to_string()],
+                    env: std::collections::HashMap::from([("K".to_string(), "v".to_string())]),
+                }),
+                ..Default::default()
+            },
+            context_window_size: None,
+            auth_hint: None,
+            transcript_base_dir: None,
+            model_override: None,
+        };
+        initialize_registry(vec![custom]).unwrap();
+
+        let mut config = get_agent_config("custom-none").expect("custom-none config");
+        let env_before = config.env.clone();
+        let args_before = config.args.clone();
+        config
+            .inject_model("some-model")
+            .expect("inject should be a no-op");
+
+        assert_eq!(
+            config.env, env_before,
+            "an agent with no model channel must not have its env mutated"
+        );
+        assert_eq!(
+            config.args, args_before,
+            "an agent with no model channel must not have its args mutated"
+        );
+        reset_registry();
     }
 
     #[test]
@@ -1306,6 +1595,7 @@ mod tests {
             context_window_size: None,
             auth_hint: None,
             transcript_base_dir: None,
+            model_override: None,
         };
         let registry = build_registry(vec![custom]).unwrap();
         assert_eq!(registry.len(), 4);
@@ -1333,6 +1623,7 @@ mod tests {
             context_window_size: Some(300_000),
             auth_hint: Some("Use my auth".to_string()),
             transcript_base_dir: None,
+            model_override: None,
         };
         let registry = build_registry(vec![custom_claude]).unwrap();
         // Should still be 3 agents (override, not add)
@@ -1361,6 +1652,7 @@ mod tests {
                 context_window_size: None,
                 auth_hint: None,
                 transcript_base_dir: None,
+                model_override: None,
             },
             AgentConfigToml {
                 name: "Agent B".to_string(),
@@ -1375,6 +1667,7 @@ mod tests {
                 context_window_size: None,
                 auth_hint: None,
                 transcript_base_dir: None,
+                model_override: None,
             },
         ];
         let result = build_registry(agents);
@@ -1401,6 +1694,7 @@ mod tests {
             context_window_size: None,
             auth_hint: None,
             transcript_base_dir: None,
+            model_override: None,
         };
         initialize_registry(vec![custom]).unwrap();
         let config = get_agent_config("kimi").expect("should find kimi");
@@ -1431,6 +1725,7 @@ mod tests {
             context_window_size: None,
             auth_hint: Some("Set KEY env var".to_string()),
             transcript_base_dir: None,
+            model_override: None,
         };
         initialize_registry(vec![custom]).unwrap();
         let config = get_agent_config("local-test").expect("should find local-test");
@@ -1461,6 +1756,7 @@ mod tests {
             context_window_size: None,
             auth_hint: None,
             transcript_base_dir: None,
+            model_override: None,
         };
         initialize_registry(vec![custom]).unwrap();
         let agents = list_available_agents();
@@ -1491,6 +1787,7 @@ mod tests {
             context_window_size: None,
             auth_hint: None,
             transcript_base_dir: None,
+            model_override: None,
         };
         initialize_registry(vec![custom]).unwrap();
         assert_eq!(get_agent_display_name("my-custom"), "My Custom Agent");

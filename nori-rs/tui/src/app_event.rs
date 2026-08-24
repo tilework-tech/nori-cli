@@ -281,6 +281,11 @@ pub(crate) enum AppEvent {
         value: String,
         option_name: String,
         value_name: String,
+        /// True when the value came from the free-text "custom model" input
+        /// rather than an advertised picker choice. A custom model the agent
+        /// rejects can still be run by persisting it and restarting with the
+        /// model injected at spawn.
+        is_custom_model: bool,
     },
 
     /// Result of setting an ACP session config option.
@@ -293,6 +298,8 @@ pub(crate) enum AppEvent {
         value: String,
         option_name: String,
         value_name: String,
+        /// Whether the value came from the free-text custom model input.
+        is_custom_model: bool,
         config_options: Option<Vec<SessionConfigOption>>,
         error: Option<String>,
     },

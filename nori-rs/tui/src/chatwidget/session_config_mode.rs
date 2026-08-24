@@ -105,6 +105,7 @@ impl ChatWidget {
                             value: value_for_result,
                             option_name: "Mode".to_string(),
                             value_name,
+                            is_custom_model: false,
                             config_options: Some(config_options),
                             error: None,
                         });
@@ -117,6 +118,7 @@ impl ChatWidget {
                             value: value_for_result,
                             option_name: "Mode".to_string(),
                             value_name: value_name.clone(),
+                            is_custom_model: false,
                             config_options: None,
                             error: Some(err.to_string()),
                         });
@@ -168,6 +170,7 @@ impl ChatWidget {
                         value: mode.next_value,
                         option_name: "Mode".to_string(),
                         value_name,
+                        is_custom_model: false,
                         config_options: Some(config_options),
                         error: None,
                     });
@@ -180,6 +183,7 @@ impl ChatWidget {
                         value: mode.next_value,
                         option_name: "Mode".to_string(),
                         value_name: mode.next_label,
+                        is_custom_model: false,
                         config_options: None,
                         error: Some(err.to_string()),
                     });
