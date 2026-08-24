@@ -1,0 +1,16 @@
+---
+source: tui/src/bottom_pane/list_selection_view.rs
+assertion_line: 1277
+expression: "render_lines_with_width(&view, 80)"
+---
+                                                                                
+  Model                                                                         
+  Select a value for this ACP session setting                                   
+                                                                                
+Recommended                                                                     
+› 1. Opus 5 (current)     Most capable                                          
+  2. Sonnet 5             Fast and capable                                      
+Other                                                                           
+  3. Opus 4.6             claude-opus-4-6                                       
+  4. Sonnet 4.6           claude-sonnet-4-6                                     
+  5. Use custom model...  Enter any model ID

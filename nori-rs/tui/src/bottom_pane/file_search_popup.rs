@@ -133,6 +133,7 @@ impl WidgetRef for &FileSearchPopup {
                     description: None,
                     styled_description: None,
                     disabled: false,
+                    is_header: false,
                 })
                 .collect()
         };

@@ -65,6 +65,15 @@ The host is the only client-side product crate that directly uses the
   `AcpAgentConfig::inject_model` applies the resolved strategy to the spawn env
   or args and is a no-op for `None`, so callers (the harness) may invoke it
   unconditionally; `supports_model_injection()` reports whether a channel exists.
+- `AgentKind::other_models()` returns a curated, per-agent
+  `&'static [OtherModel]` (`{ id, label }`) of real models the adapter does *not*
+  advertise but that generally run when forced through injection. It is the
+  durable complement to the advertised catalog: the advertised set is
+  agent/version/account-dependent and adapters do not hardcode it, so this static
+  list plus render-time dedup against the live catalog is how the TUI populates
+  the `/model` picker's "Other" section without a second source of truth.
+  Selecting one routes through injection exactly like a `[default_models]` custom
+  id. `OtherModel` is re-exported from `nori-harness` for that picker.
 
 ### Things to Know
 

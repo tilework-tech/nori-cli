@@ -98,6 +98,17 @@ impl ModelInjection {
 // Core Enums
 // =============================================================================
 
+/// A model that an agent's ACP adapter does not advertise but that generally
+/// works when forced via spawn-time model injection. Surfaced under the model
+/// picker's "Other" section and deduplicated against the advertised catalog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OtherModel {
+    /// The model id forced through the agent's injection channel.
+    pub id: &'static str,
+    /// Friendly label shown in the picker.
+    pub label: &'static str,
+}
+
 /// ACP agent identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AgentKind {
@@ -223,6 +234,51 @@ impl AgentKind {
             "codex" | "codex-acp" => Some(AgentKind::Codex),
             "gemini" | "gemini-acp" | "gemini-2.5-flash" => Some(AgentKind::Gemini),
             _ => None,
+        }
+    }
+
+    /// Curated models this agent's ACP adapter does not advertise but that
+    /// generally work when forced via spawn-time injection. Shown under the
+    /// model picker's "Other" section; deduplicated at render time against the
+    /// agent's advertised catalog.
+    pub fn other_models(self) -> &'static [OtherModel] {
+        match self {
+            AgentKind::ClaudeCode => &[
+                OtherModel {
+                    id: "claude-opus-4-8",
+                    label: "Opus 4.8",
+                },
+                OtherModel {
+                    id: "claude-opus-4-7",
+                    label: "Opus 4.7",
+                },
+                OtherModel {
+                    id: "claude-opus-4-6",
+                    label: "Opus 4.6",
+                },
+                OtherModel {
+                    id: "claude-sonnet-4-6",
+                    label: "Sonnet 4.6",
+                },
+            ],
+            AgentKind::Codex => &[OtherModel {
+                id: "gpt-5.3-codex",
+                label: "GPT-5.3-Codex",
+            }],
+            AgentKind::Gemini => &[
+                OtherModel {
+                    id: "gemini-3.7-flash",
+                    label: "Gemini 3.7 Flash",
+                },
+                OtherModel {
+                    id: "gemini-3.5-flash",
+                    label: "Gemini 3.5 Flash",
+                },
+                OtherModel {
+                    id: "gemini-3.5-flash-lite",
+                    label: "Gemini 3.5 Flash-Lite",
+                },
+            ],
         }
     }
 }

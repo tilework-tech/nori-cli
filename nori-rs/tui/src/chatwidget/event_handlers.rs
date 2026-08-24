@@ -579,6 +579,7 @@ impl ChatWidget {
                     })],
                     dismiss_on_select: true,
                     search_value: None,
+                    is_header: false,
                 }
             })
             .collect();

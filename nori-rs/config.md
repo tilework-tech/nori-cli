@@ -37,7 +37,10 @@ recovery is manual (pick another model via `/model`).
 
 When you pick a custom model with `/model` and the agent rejects it, Nori writes
 the value here and restarts the session so the model is injected on the next
-spawn.
+spawn. The `/model` picker also surfaces a curated per-agent **Other** section of
+known-good models the adapter does not advertise, so you can select one instead
+of typing its id; choosing one follows the same reject → persist-here → restart
+path.
 
 ## Custom agents: `[[agents]]`
 

@@ -111,6 +111,7 @@ impl SkillPopup {
                 description: Some(item.description),
                 styled_description: None,
                 disabled: false,
+                is_header: false,
             })
             .collect()
     }
