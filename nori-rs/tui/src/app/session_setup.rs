@@ -1,5 +1,24 @@
 use super::*;
 
+const AGENT_PREPARATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+async fn prepare_agent_with_timeout(
+    spec: nori_harness::runtime::AgentPrepareSpec,
+) -> Result<nori_harness::runtime::PreparedAgent, String> {
+    match tokio::time::timeout(
+        AGENT_PREPARATION_TIMEOUT,
+        nori_harness::runtime::prepare_agent(spec),
+    )
+    .await
+    {
+        Ok(result) => result.map_err(|error| format!("{error:#}")),
+        Err(_) => Err(format!(
+            "timed out preparing agent after {}s",
+            AGENT_PREPARATION_TIMEOUT.as_secs(),
+        )),
+    }
+}
+
 pub(super) fn onboarding_resume_event(
     sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
 ) -> Option<AppEvent> {
@@ -40,19 +59,7 @@ impl App {
         let spec = crate::chatwidget::agent::agent_prepare_spec(self.config.clone(), None);
         let tx = self.app_event_tx.clone();
         let task = tokio::spawn(async move {
-            const PREPARATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
-            let agent = match tokio::time::timeout(
-                PREPARATION_TIMEOUT,
-                nori_harness::runtime::prepare_agent(spec),
-            )
-            .await
-            {
-                Ok(result) => result.map_err(|error| format!("{error:#}")),
-                Err(_) => Err(format!(
-                    "timed out preparing agent after {}s",
-                    PREPARATION_TIMEOUT.as_secs(),
-                )),
-            };
+            let agent = prepare_agent_with_timeout(spec).await;
             tx.send(AppEvent::AgentPrepared {
                 generation,
                 agent,
@@ -84,9 +91,7 @@ impl App {
         let tx = self.app_event_tx.clone();
         let prepared_agent_name = agent_name.clone();
         let task = tokio::spawn(async move {
-            let agent = nori_harness::runtime::prepare_agent(spec)
-                .await
-                .map_err(|error| format!("{error:#}"));
+            let agent = prepare_agent_with_timeout(spec).await;
             tx.send(AppEvent::AgentPrepared {
                 generation,
                 agent,

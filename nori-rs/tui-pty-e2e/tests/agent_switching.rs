@@ -628,6 +628,59 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
         .expect("current session should remain promptable after candidate failure");
 }
 
+/// A candidate whose initialize never completes must time out, be reaped, and
+/// leave the current session available for another prompt.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_candidate_preparation_timeout_keeps_current_session_promptable() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT", "60000");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    let log_path = session.acp_log_path().expect("log path");
+    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Select Agent", Duration::from_secs(8))
+        .expect("agent picker");
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    let pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 2, Duration::from_secs(10));
+    let candidate_pid = pids
+        .iter()
+        .copied()
+        .find(|pid| *pid != current_pid)
+        .expect("candidate process pid");
+
+    session
+        .wait_for_text(
+            "timed out preparing agent after 20s",
+            Duration::from_secs(25),
+        )
+        .expect("hung candidate preparation should time out");
+    session
+        .wait_for(|_| !process_exists(candidate_pid), Duration::from_secs(10))
+        .expect("timed-out candidate should be reaped");
+    assert!(
+        process_exists_and_not_zombie(current_pid),
+        "current process must survive candidate preparation timeout"
+    );
+
+    session.send_str("still current after timeout").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Test message", Duration::from_secs(10))
+        .expect("current session should remain promptable after candidate timeout");
+}
+
 // ============================================================================
 // Test: /agent - No Switch During Active Prompt Turn
 // ============================================================================
