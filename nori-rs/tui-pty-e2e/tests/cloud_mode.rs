@@ -53,6 +53,13 @@ impl FakeHandroll {
              printf '%s\\n' \"$@\" > '{dir}/argv'\n\
              printenv NORI_BROKER_URL > '{dir}/broker_url' 2>/dev/null\n\
              echo $$ >> '{dir}/pids'\n\
+             if [ -n \"$MOCK_AGENT_FIRST_STARTUP_DELAY_MS\" ]; then\n\
+               if mkdir '{dir}/first_startup_delay_claimed' 2>/dev/null; then\n\
+                 export MOCK_AGENT_STARTUP_DELAY_MS=\"$MOCK_AGENT_FIRST_STARTUP_DELAY_MS\"\n\
+               else\n\
+                 unset MOCK_AGENT_STARTUP_DELAY_MS\n\
+               fi\n\
+             fi\n\
              '{mock}' 2>>'{dir}/agent_stderr'\n\
              status=$?\n\
              echo eof >> '{dir}/released'\n\
@@ -457,7 +464,7 @@ fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
     let fake = FakeHandroll::new();
     let deferred_prompt = "preserve this prompt across local resume";
     let config = cloud_lifecycle_config(&fake)
-        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "6000")
+        .with_agent_env("MOCK_AGENT_FIRST_STARTUP_DELAY_MS", "6000")
         .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
         .with_mock_response("deferred prompt reached the locally resumed session")
         .with_arg(deferred_prompt);
