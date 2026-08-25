@@ -522,8 +522,7 @@ fn picker_action(key: KeyEvent, search_active: bool) -> Option<PickerAction> {
         KeyCode::Tab => Some(PickerAction::NextCategory),
         KeyCode::BackTab => Some(PickerAction::PreviousCategory),
         KeyCode::Char('f')
-            if !search_active
-                && key.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+            if !search_active && key.modifiers == crossterm::event::KeyModifiers::CONTROL =>
         {
             Some(PickerAction::ActivateSearch)
         }

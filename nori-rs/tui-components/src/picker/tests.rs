@@ -117,9 +117,7 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
     let backend = TestBackend::new(100, 16);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
-        .draw(|frame| {
-            frame.render_widget(Picker::new(&normal_state).theme(theme), frame.area())
-        })
+        .draw(|frame| frame.render_widget(Picker::new(&normal_state).theme(theme), frame.area()))
         .expect("draw picker");
     let buffer = terminal.backend().buffer();
 
