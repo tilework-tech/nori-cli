@@ -129,6 +129,11 @@ publishes `SessionStarted`. A preparation or activation failure destroys the
 candidate and leaves the current agent usable. Superseding one candidate with
 another destroys only the older candidate.
 
+Primary and switch-candidate preparation share the TUI's 20-second wall-clock
+bound. Expiration is handled as preparation failure: the in-flight future is
+dropped so connection ownership reaps any spawned child, while an existing
+active session remains promptable.
+
 TUI candidate orchestration must not retain a separate full `NoriConfig`
 snapshot. Before activation, it refreshes session-time configuration from
 current `App` state. The agent identity, cwd, ACP proxy settings, and default
@@ -160,6 +165,12 @@ results. If listing is unsupported, the product may retain its existing
 compatibility policy, but any `session/new` remains a separate, explicit
 harness transition rather than part of initialization.
 
+An initial positional prompt and image attachments remain with the deferred
+frontend state while that picker is open. Choosing a new session transfers the
+input to the replacement widget before retiring the deferred widget, and
+automatic submission waits for `SessionConfigured` from the prepared
+connection.
+
 Onboarding may automatically choose a broker-tagged onboarding session or the
 documented compatibility fallback. That product decision happens after
 preparation and reuses the prepared connection.
@@ -190,7 +201,8 @@ process.
 - No session directive is recorded while the startup or switch picker waits
   for a choice.
 - The current agent process remains alive throughout candidate preparation.
-- Candidate failure leaves the current session promptable.
+- Candidate failure, including preparation timeout, reaps the candidate and
+  leaves the current session promptable.
 - Successful candidate activation reaps the replaced process only after
   `SessionStarted`.
 - Cancelling or superseding a prepared candidate reaps only that candidate.

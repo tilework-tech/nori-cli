@@ -346,8 +346,12 @@ boolean in-flight flag. Explicit new/resume selection, close, candidate
 preparation, and exit invalidate it before changing lifecycle state. An
 `AgentPrepared` result is accepted only when its generation still matches the
 owned primary preparation; a late successful result is explicitly shut down.
-This prevents a cancelled initialize/list task from repopulating the picker or
-leaking its child after a newer user decision.
+Primary and switch-candidate preparation both use the same 20-second
+wall-clock bound in [`session_setup.rs`](src/app/session_setup.rs). A timeout is
+reported as preparation failure, drops the in-flight preparation so its child
+is reaped, and leaves any current session available. Together these rules keep
+a cancelled or hung initialize/list task from repopulating the picker, leaking
+its child, or displacing a usable session.
 
 Candidate state retains the candidate identity and opaque prepared connection;
 it does not separately snapshot the full `NoriConfig`. When the user chooses
@@ -429,8 +433,12 @@ components. An initialization or advertised-list failure is shown as a
 preparation failure rather than being treated as an empty catalog. `/new`
 repeats this onboarding preparation; `/close` retains its ordinary picker-first
 lifecycle. Because the `--onboard` argv is part of the process-wide agent
-registry entry, every fallback acquisition remains onboarding-only. Initial
-positional prompts still auto-send on `SessionConfigured` for all entry paths.
+registry entry, every fallback acquisition remains onboarding-only. While a
+picker-first launch waits for a choice, its initial positional prompt and image
+attachments remain owned by the deferred widget. Choosing Start new transfers
+that input into the replacement widget before the deferred widget shuts down,
+so it auto-sends on `SessionConfigured` for the prepared session just like
+other entry paths.
 
 The shared ACP resume picker treats session source as first-class presentation
 instead of requiring users to inspect raw metadata. Cloud rows with a typed
