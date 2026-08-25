@@ -32,6 +32,8 @@ pub enum DetailTone {
 pub enum ProviderKind {
     Claude,
     Codex,
+    Gemini,
+    Antigravity,
     Pi,
     Nori,
     #[default]
@@ -226,13 +228,24 @@ fn tone_style(tone: DetailTone, theme: Theme) -> Style {
     match tone {
         DetailTone::Default => theme.text,
         DetailTone::Muted => theme.muted,
-        DetailTone::Info
-        | DetailTone::Provider(ProviderKind::Codex)
-        | DetailTone::Provider(ProviderKind::Nori) => theme.info,
-        DetailTone::Success | DetailTone::Provider(ProviderKind::Claude) => theme.success,
+        DetailTone::Info => theme.info,
+        DetailTone::Success => theme.success,
         DetailTone::Warning | DetailTone::Provider(ProviderKind::Pi) => theme.warning,
         DetailTone::Error => theme.error,
         DetailTone::Provider(ProviderKind::Other) => theme.text,
+        DetailTone::Provider(provider) => provider_tone_style(provider, theme),
+    }
+}
+
+pub(crate) fn provider_tone_style(provider: ProviderKind, theme: Theme) -> Style {
+    match provider {
+        ProviderKind::Claude => theme.provider_claude,
+        ProviderKind::Codex => theme.provider_codex,
+        ProviderKind::Gemini => theme.provider_gemini,
+        ProviderKind::Antigravity => theme.provider_antigravity,
+        ProviderKind::Nori => theme.provider_nori,
+        ProviderKind::Pi => theme.warning,
+        ProviderKind::Other => theme.text,
     }
 }
 

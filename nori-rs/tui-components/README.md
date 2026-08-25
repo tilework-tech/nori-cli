@@ -29,14 +29,14 @@ cargo run -p nori-tui-components --example nori_storybook
 
 The canonical storybook contains Picker, Markdown, Primitives, States, Detail
 pane, and the production Overlay menu. Use `1-6` to change page, `d` to switch
-picker density, and `Tab`/`Shift-Tab` to compare overlay-menu states. While the
-Picker page search is inactive, `/`, `f`, or Ctrl-F activates search; its
-concise footer mentions only `/`. While search is active, every printable key
-belongs to the query instead of the surrounding page shortcuts. While the
-overlay page is active, use arrows or `j`/`k` to move, `Enter` to activate, and
-`1-5` or `r`/`s`/`i`/`a` to invoke displayed shortcuts. Overlay shortcuts take
-precedence over numbered page navigation; the left arrow returns to Detail pane
-and the right arrow wraps to Picker.
+picker density, and `Tab`/`Shift-Tab` to compare overlay-menu states. Picker
+search owns every printable key while active, so page, quit, density, mode, and
+state shortcuts resume after search deactivates. `/`, `f`, and Ctrl-F all
+activate picker search; the visible subtitle and footer mention only `/` to
+keep the hint concise. While the overlay page is active, use arrows or `j`/`k`
+to move, `Enter` to activate, and `1-5` or `r`/`s`/`i`/`a` to invoke displayed
+shortcuts. Overlay shortcuts take precedence over numbered page navigation;
+the left arrow returns to Detail pane and the right arrow wraps to Picker.
 The focused examples remain useful while developing one component:
 
 ```console
@@ -45,4 +45,5 @@ cargo run -p nori-tui-components --example markdown_storybook
 cargo run -p nori-tui-components --example component_storybook
 ```
 
-Press `q` or `Esc` to leave an example while picker search is inactive.
+Press `q` or `Esc` to leave an example. In picker examples, active search owns
+printable keys and the first Escape, so deactivate search before quitting.

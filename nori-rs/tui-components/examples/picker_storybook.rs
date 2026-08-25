@@ -14,6 +14,7 @@ use nori_tui_components::PickerItem;
 use nori_tui_components::PickerMode;
 use nori_tui_components::PickerOutcome;
 use nori_tui_components::PickerState;
+use nori_tui_components::ProviderKind;
 use nori_tui_components::SearchMode;
 use ratatui::layout::Alignment;
 use ratatui::text::Line;
@@ -144,30 +145,35 @@ fn story_state() -> PickerState<String> {
             max: 40,
             weight: 3,
         }),
+        PickerColumn::fixed("type", "Type", 12),
         PickerColumn::flexible("project", "Project").hide_below(58),
         PickerColumn::fixed("updated", "Updated", 10),
         PickerColumn::fixed("status", "Turn status", 13).hide_below(82),
     ];
     let items = [
         PickerItem::new("new".to_string(), "title", "Start a new session")
+            .cell("type", "Nori")
+            .cell_tone("type", ProviderKind::Nori)
             .cell("project", "Not reported")
             .cell("updated", "now")
             .cell("status", "ready")
             .search_text("start create new")
             .pinned(true)
-            .category("Local")
+            .category("Nori")
             .description("Create a fresh ACP session")
             .details([
                 PickerDetail::new("Action", "Create a fresh ACP session"),
                 PickerDetail::new("Transcript", "No transcript will be loaded"),
             ]),
         PickerItem::new("parser".to_string(), "title", "Fix parser recovery")
+            .cell("type", "Codex")
+            .cell_tone("type", ProviderKind::Codex)
             .cell("project", "nori-cli")
             .cell("updated", "2m ago")
             .cell("status", "working")
             .search_text("fix parser recovery nori cli session 019f")
             .current(true)
-            .category("Local")
+            .category("Codex")
             .description("Codex is implementing parser recovery")
             .details([
                 PickerDetail::new("Agent", "Codex"),
@@ -175,39 +181,50 @@ fn story_state() -> PickerState<String> {
                 PickerDetail::new("Current turn", "Implementing parser recovery"),
             ]),
         PickerItem::new("markdown".to_string(), "title", "Improve Markdown tables")
+            .cell("type", "Gemini")
+            .cell_tone("type", ProviderKind::Gemini)
             .cell("project", "external-codex")
             .cell("updated", "18m ago")
             .cell("status", "waiting")
             .search_text("markdown tables codex waiting")
-            .category("Local")
+            .category("Gemini")
             .description("Waiting for user input")
             .details([
                 PickerDetail::new("Agent", "Codex"),
                 PickerDetail::new("Turn", "Waiting for user input"),
             ]),
         PickerItem::new("cloud".to_string(), "title", "Slack · Claude")
+            .cell("type", "Claude")
+            .cell_tone("type", ProviderKind::Claude)
             .cell("project", "Nori Sessions")
             .cell("updated", "1h ago")
             .cell("status", "ready")
             .search_text("slack claude cloud sessions")
-            .category("Cloud")
+            .category("Claude")
             .description("The broker owns this remote session")
             .details([
                 PickerDetail::new("Origin", "Nori cloud"),
                 PickerDetail::new("Ownership", "The broker owns the remote session"),
             ]),
         PickerItem::new("offline".to_string(), "title", "Unavailable legacy session")
+            .cell("type", "Antigravity")
+            .cell_tone("type", ProviderKind::Antigravity)
             .cell("project", "handroll")
             .cell("updated", "3d ago")
             .cell("status", "offline")
             .search_text("legacy handroll offline")
             .disabled(true)
-            .category("Cloud"),
+            .category("Antigravity"),
     ];
     PickerState::new("Picker storybook", columns, items)
         .subtitle("/ searches · tab changes category · enter selects · q exits")
         .mode(PickerMode::Single)
         .search_mode(SearchMode::Fuzzy)
-        .categories(["Local", "Cloud"])
+        .categories(["Claude", "Codex", "Gemini", "Antigravity", "Nori"])
+        .category_tone("Claude", ProviderKind::Claude)
+        .category_tone("Codex", ProviderKind::Codex)
+        .category_tone("Gemini", ProviderKind::Gemini)
+        .category_tone("Antigravity", ProviderKind::Antigravity)
+        .category_tone("Nori", ProviderKind::Nori)
         .search_placeholder("Title, project, or session id")
 }

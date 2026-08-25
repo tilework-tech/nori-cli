@@ -9,6 +9,8 @@ use nucleo_matcher::pattern::Normalization;
 use nucleo_matcher::pattern::Pattern;
 use ratatui::text::Line;
 
+use crate::ProviderKind;
+
 mod render;
 
 pub use render::Picker;
@@ -69,6 +71,7 @@ impl PickerColumn {
 pub struct PickerItem<K> {
     pub key: K,
     pub cells: BTreeMap<String, String>,
+    pub cell_tones: BTreeMap<String, ProviderKind>,
     pub search_text: String,
     pub category: Option<String>,
     pub detail: Vec<Line<'static>>,
@@ -87,6 +90,7 @@ impl<K> PickerItem<K> {
         Self {
             key,
             cells: BTreeMap::from([(primary_column.into(), label.clone())]),
+            cell_tones: BTreeMap::new(),
             search_text: label,
             category: None,
             detail: Vec::new(),
@@ -102,6 +106,12 @@ impl<K> PickerItem<K> {
 
     pub fn cell(mut self, column: impl Into<String>, value: impl Into<String>) -> Self {
         self.cells.insert(column.into(), value.into());
+        self
+    }
+
+    /// Apply an agent/provider tone to one rendered cell.
+    pub fn cell_tone(mut self, column: impl Into<String>, provider: ProviderKind) -> Self {
+        self.cell_tones.insert(column.into(), provider);
         self
     }
 
@@ -276,6 +286,7 @@ pub struct PickerState<K> {
     pub search_active: bool,
     pub query: String,
     pub categories: Vec<String>,
+    pub category_tones: BTreeMap<String, ProviderKind>,
     pub active_category: Option<String>,
     pub selected_index: Option<usize>,
     pub selected_keys: Vec<K>,
@@ -300,6 +311,7 @@ impl<K: Clone + Eq> PickerState<K> {
             search_active: false,
             query: String::new(),
             categories: Vec::new(),
+            category_tones: BTreeMap::new(),
             active_category: None,
             selected_index: None,
             selected_keys: Vec::new(),
@@ -332,6 +344,12 @@ impl<K: Clone + Eq> PickerState<K> {
 
     pub fn categories(mut self, categories: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.categories = categories.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Apply an agent/provider tone to one category tab.
+    pub fn category_tone(mut self, category: impl Into<String>, provider: ProviderKind) -> Self {
+        self.category_tones.insert(category.into(), provider);
         self
     }
 
