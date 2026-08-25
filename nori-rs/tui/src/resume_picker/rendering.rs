@@ -22,15 +22,27 @@ pub(super) fn draw_picker(tui: &mut Tui, state: &PickerState) -> std::io::Result
 }
 
 pub(super) fn picker(state: &ComponentPickerState<usize>) -> Picker<'_, usize> {
-    Picker::new(state)
-        .theme(crate::style::component_theme())
-        .density(PickerDensity::Compact)
-        .footer_hints([
+    let hints = if state.search_active {
+        vec![
             KeyHint::new("↑↓", "browse"),
+            KeyHint::new("type", "filter"),
+            KeyHint::new("enter", "resume"),
+            KeyHint::new("esc", "stop search"),
+            KeyHint::new("ctrl+c", "quit"),
+        ]
+    } else {
+        vec![
+            KeyHint::new("↑↓/j/k", "browse"),
+            KeyHint::new("f, /, ctrl+f", "search"),
             KeyHint::new("enter", "resume"),
             KeyHint::new("esc", "start new"),
             KeyHint::new("ctrl+c", "quit"),
-        ])
+        ]
+    };
+    Picker::new(state)
+        .theme(crate::style::component_theme())
+        .density(PickerDensity::Compact)
+        .footer_hints(hints)
 }
 
 pub(super) fn component_state(state: &PickerState) -> ComponentPickerState<usize> {
@@ -105,6 +117,7 @@ pub(super) fn component_state(state: &PickerState) -> ComponentPickerState<usize
         .search_mode(SearchMode::Custom(include_filtered_item))
         .search_placeholder("Session id or conversation");
     picker.query.clone_from(&state.query);
+    picker.search_active = state.search_active;
     picker.selected_index = (!picker.items.is_empty()).then_some(state.selected);
     picker
 }

@@ -37,6 +37,10 @@ consumer application
   [`picker`](src/picker/) remains the search and filtering surface for
   potentially large data sets; centered overlay placement does not turn one
   into the other.
+- Picker consumers translate their terminal keymap into domain-free
+  [`PickerAction`](src/picker/) values. The shared state machine owns whether
+  filtering is active and returns typed outcomes; consumers retain dismissal,
+  command dispatch, and application focus.
 - [`DetailPane`](src/detail.rs) is a stateless definition-list renderer for
   caller-positioned side or bottom regions. Its caller retains placement,
   scrolling, focus, loading, key handling, and application routing.
@@ -65,6 +69,16 @@ consumer application
   and cancellation actions. Navigation wraps and skips disabled items;
   activation and cancellation are returned as `MenuOutcome` values for the
   consumer to route.
+- [`PickerState`](src/picker/) separates navigation from filtering with an
+  explicit `search_active` state. Search-capable pickers begin inactive;
+  `ActivateSearch` and `DeactivateSearch` produce `SearchModeChanged`, while
+  query mutation actions are ignored outside active search. Deactivation
+  clears the query and selects the first available visible item, and selecting
+  `SearchMode::None` also clears both search state and query.
+- The [`picker` renderer](src/picker/render.rs) shows its input row only during
+  active search and derives footer hints from the same state. This keeps the
+  state machine and presentation synchronized while leaving the consumer free
+  to choose which raw keys activate search.
 - `OverlayMenu` centers a content-derived, maximum-width surface inside the
   supplied rectangle. Rendering reconciles only menu-local viewport offset and
   capacity so the selection stays visible when content exceeds the available
@@ -87,6 +101,10 @@ consumer application
 - The consumer owns terminal initialization and restoration, input polling and
   raw-key mapping, render cadence, application actions and routing, focus and
   modal stacks, confirmation policy, asynchronous loading, and persistence.
+- Search state is independent of a consumer's editing mode. A consumer must
+  explicitly map activation and deactivation keys to picker actions; printable
+  query input has no effect until activation, so navigation shortcuts remain
+  available while search is inactive.
 - A shortcut invokes its matching enabled item immediately. When an item has
   both shortcut families, either maps to the same stable key; precedence among
   raw input meanings belongs to the consumer adapter.

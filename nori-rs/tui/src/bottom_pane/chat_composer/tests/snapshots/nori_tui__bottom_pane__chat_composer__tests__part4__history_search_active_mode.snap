@@ -1,0 +1,7 @@
+---
+source: tui/src/bottom_pane/chat_composer/tests/part4.rs
+expression: render_history_search(&composer)
+---
+  search: second
+  second entry
+  esc stop search  enter select  up/down move  type to filter

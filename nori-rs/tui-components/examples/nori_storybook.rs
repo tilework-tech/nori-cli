@@ -173,6 +173,9 @@ fn main() -> Result<()> {
             continue;
         }
         match key.code {
+            KeyCode::Esc if page == Page::Picker && state.search_active => {
+                state.handle(PickerAction::DeactivateSearch);
+            }
             KeyCode::Esc | KeyCode::Char('q') => break,
             KeyCode::Char('1') => page = Page::Picker,
             KeyCode::Char('2') => page = Page::Markdown,
@@ -206,7 +209,7 @@ fn main() -> Result<()> {
                 };
             }
             _ if page == Page::Picker => {
-                if let Some(action) = picker_action(key) {
+                if let Some(action) = picker_action(key, state.search_active) {
                     match state.handle(action) {
                         PickerOutcome::Selected(key) => notice = format!("Selected {key}"),
                         PickerOutcome::Submitted(keys) => {
@@ -216,6 +219,7 @@ fn main() -> Result<()> {
                         PickerOutcome::Unchanged
                         | PickerOutcome::SelectionChanged(_)
                         | PickerOutcome::Toggled { .. }
+                        | PickerOutcome::SearchModeChanged(_)
                         | PickerOutcome::QueryChanged(_)
                         | PickerOutcome::CategoryChanged(_) => {}
                     }
@@ -484,7 +488,7 @@ fn render_page_footer(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Them
         );
 }
 
-fn picker_action(key: KeyEvent) -> Option<PickerAction> {
+fn picker_action(key: KeyEvent, search_active: bool) -> Option<PickerAction> {
     match key.code {
         KeyCode::Up => Some(PickerAction::MoveUp),
         KeyCode::Down => Some(PickerAction::MoveDown),
@@ -493,11 +497,26 @@ fn picker_action(key: KeyEvent) -> Option<PickerAction> {
         KeyCode::Home => Some(PickerAction::First),
         KeyCode::End => Some(PickerAction::Last),
         KeyCode::Enter => Some(PickerAction::Submit),
-        KeyCode::Char(' ') => Some(PickerAction::Toggle),
-        KeyCode::Backspace => Some(PickerAction::Backspace),
+        KeyCode::Char(' ') if !search_active => Some(PickerAction::Toggle),
+        KeyCode::Backspace if search_active => Some(PickerAction::Backspace),
         KeyCode::Tab => Some(PickerAction::NextCategory),
         KeyCode::BackTab => Some(PickerAction::PreviousCategory),
-        KeyCode::Char(character) => Some(PickerAction::AppendQuery(character)),
+        KeyCode::Char('f')
+            if !search_active
+                && key.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
+            Some(PickerAction::ActivateSearch)
+        }
+        KeyCode::Char('f' | '/') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::ActivateSearch)
+        }
+        KeyCode::Char('k') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::MoveUp)
+        }
+        KeyCode::Char('j') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::MoveDown)
+        }
+        KeyCode::Char(character) if search_active => Some(PickerAction::AppendQuery(character)),
         _ => None,
     }
 }

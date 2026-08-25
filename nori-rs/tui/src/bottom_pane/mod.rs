@@ -86,7 +86,6 @@ pub(crate) struct BottomPane {
     /// Agent slug (e.g., "claude-code") used as prefix for agent commands.
     agent_slug: String,
     /// Whether vim mode is enabled, used to configure selection view behavior.
-    vim_mode_enabled: bool,
     /// Whether ACP wire JSONL recording is enabled for future child subprocesses.
     acp_wire_recording_enabled: bool,
 }
@@ -166,7 +165,6 @@ impl BottomPane {
             custom_working_message_list,
             agent_display_name,
             agent_slug,
-            vim_mode_enabled: false,
             acp_wire_recording_enabled: false,
         };
 
@@ -482,7 +480,6 @@ impl BottomPane {
     }
 
     pub(crate) fn set_vim_mode(&mut self, value: nori_config::VimEnterBehavior) {
-        self.vim_mode_enabled = value.is_enabled();
         self.composer.set_vim_mode(value);
     }
 
@@ -502,13 +499,8 @@ impl BottomPane {
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(
         &mut self,
-        mut params: list_selection_view::SelectionViewParams,
+        params: list_selection_view::SelectionViewParams,
     ) {
-        // Automatically inject vim mode for searchable views so all callers
-        // get the correct behavior without having to pass it explicitly.
-        if params.is_searchable {
-            params.vim_mode = self.vim_mode_enabled;
-        }
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
         self.push_view(Box::new(view));
     }
