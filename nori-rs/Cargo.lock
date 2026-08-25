@@ -3596,6 +3596,7 @@ dependencies = [
  "codex-rmcp-client",
  "codex-utils-string",
  "diffy",
+ "dirs",
  "futures",
  "libc",
  "nori-config",
