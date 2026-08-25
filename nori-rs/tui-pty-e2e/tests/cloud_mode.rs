@@ -327,6 +327,28 @@ fn test_cloud_mode_boots_into_session_picker_without_claiming() {
     );
 }
 
+/// Picker-first entry must retain the CLI's positional prompt until the user
+/// explicitly starts a new session on the prepared connection.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_start_new_preserves_the_deferred_positional_prompt() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake)
+        .with_mock_response("deferred prompt reached the prepared session")
+        .with_arg("continue from this positional prompt");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("deferred prompt reached the prepared session", TIMEOUT)
+        .expect("starting new should submit the deferred positional prompt");
+}
+
 /// An explicit `/new` supersedes picker-first preparation. A late result from
 /// the cancelled preparation must not reopen the picker over the new session.
 #[test]

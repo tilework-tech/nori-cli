@@ -149,11 +149,12 @@ impl App {
                 self.cancel_primary_agent_preparation();
                 if let Some(agent) = self.prepared_agent.take() {
                     self.deferred_spawn_pending = false;
+                    let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
                     self.shutdown_current_conversation();
                     let mut init = self.chat_widget_init(
                         tui.frame_requester(),
-                        None,
-                        Vec::new(),
+                        initial_prompt,
+                        initial_images,
                         None,
                         false,
                         None,
