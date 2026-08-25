@@ -566,6 +566,7 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
     );
 
     session.send_str("still current").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("Test message", Duration::from_secs(10))
@@ -616,6 +617,7 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
     );
 
     session.send_str("still current").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("Test message", Duration::from_secs(10))
