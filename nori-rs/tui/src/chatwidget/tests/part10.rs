@@ -72,6 +72,32 @@ fn switch_candidate_can_clone_deferred_input_without_consuming_the_rollback_copy
     assert_eq!(cloned.1, vec![PathBuf::from("diagram.png")]);
 }
 
+#[test]
+fn switch_candidate_defers_initial_input_until_commit() {
+    let (mut chat, _rx, _op_rx) = make_cloud_candidate_chatwidget_manual();
+    chat.initial_user_message = Some(UserMessage {
+        text: "Continue remotely".to_string(),
+        image_paths: vec![PathBuf::from("diagram.png")],
+    });
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(generation, session_started_event("candidate-session"));
+
+    let retained = chat
+        .initial_user_message
+        .as_ref()
+        .expect("candidate input must remain deferred until the remote host attaches");
+    assert_eq!(retained.text, "Continue remotely");
+    assert_eq!(retained.image_paths, vec![PathBuf::from("diagram.png")]);
+
+    chat.submit_candidate_initial_user_message();
+
+    assert!(
+        chat.initial_user_message.is_none(),
+        "committing the candidate should release its deferred input"
+    );
+}
+
 /// Deliver a prompt completion through the real client-event entry point.
 fn deliver_completion(chat: &mut ChatWidget, failure: Option<crate::presentation::TurnFailure>) {
     chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(

@@ -507,6 +507,7 @@ impl App {
                         self.chat_widget
                             .attach_remote_host_after_start(started)
                             .await;
+                        self.chat_widget.submit_candidate_initial_user_message();
                         old_widget.shutdown_harness_session();
                         if let Err(error) = ConfigEditsBuilder::new(&self.config.nori_home)
                             .set_agent(&self.config.active_agent)

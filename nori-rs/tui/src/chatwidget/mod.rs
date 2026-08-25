@@ -176,6 +176,9 @@ pub(crate) struct ChatWidget {
     config: Config,
     auth_manager: Arc<AuthManager>,
     initial_user_message: Option<UserMessage>,
+    /// Hidden switch candidates retain launch input until the app commits the
+    /// candidate and attaches the process-wide remote host.
+    defer_initial_user_message_until_commit: bool,
     // Stream lifecycle controller
     stream_controller: Option<StreamController>,
     session_generation: crate::app_event::SessionGeneration,
