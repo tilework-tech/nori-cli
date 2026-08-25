@@ -112,12 +112,12 @@ fn picker_compact_uses_single_height_rows_snapshot() {
 #[allow(clippy::disallowed_methods)]
 fn picker_applies_density_surfaces_search_input_and_selection() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
+    let mut normal_state = session_picker();
+    normal_state.handle(PickerAction::ActivateSearch);
     let backend = TestBackend::new(100, 16);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
-        .draw(|frame| {
-            frame.render_widget(Picker::new(&session_picker()).theme(theme), frame.area())
-        })
+        .draw(|frame| frame.render_widget(Picker::new(&normal_state).theme(theme), frame.area()))
         .expect("draw picker");
     let buffer = terminal.backend().buffer();
 
@@ -134,11 +134,13 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
     assert_eq!(buffer[(3, 14)].bg, Color::Reset);
 
     let backend = TestBackend::new(86, 13);
+    let mut compact_state = session_picker();
+    compact_state.handle(PickerAction::ActivateSearch);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
         .draw(|frame| {
             frame.render_widget(
-                Picker::new(&session_picker())
+                Picker::new(&compact_state)
                     .theme(theme)
                     .density(PickerDensity::Compact),
                 frame.area(),
@@ -153,6 +155,7 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
 #[test]
 fn picker_fuzzy_filter_snapshot() {
     let mut state = session_picker();
+    state.handle(PickerAction::ActivateSearch);
     for character in "mdtab".chars() {
         state.handle(PickerAction::AppendQuery(character));
     }
@@ -214,6 +217,7 @@ fn caller_can_supply_a_custom_matcher() {
     }
 
     let mut state = session_picker().search_mode(SearchMode::Custom(prefix_score));
+    state.handle(PickerAction::ActivateSearch);
     state.handle(PickerAction::AppendQuery('m'));
 
     assert_eq!(

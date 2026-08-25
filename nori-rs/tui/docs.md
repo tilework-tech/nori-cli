@@ -4,9 +4,12 @@ Path: @/nori-rs/tui
 
 ### Overview
 
-`nori-tui` is the Ratatui frontend for the headless Nori harness. It owns input,
-rendering, presentation-only state, pickers, approvals, and terminal lifecycle.
-It does not own ACP transport or expose a second protocol vocabulary.
+- `nori-tui` is the Ratatui frontend for the headless Nori harness. It owns
+  input, rendering, presentation-only state, pickers, approvals, and terminal
+  lifecycle.
+- The crate adapts terminal events and shared component outcomes into
+  application events. It does not own ACP transport or expose a second
+  protocol vocabulary.
 
 ### How it fits into the larger codebase
 
@@ -92,6 +95,46 @@ into display cells and friendly labels. These view models are allowed to be
 lossy and UI-specific; they are not fed back into the harness or exported from
 `nori-protocol`.
 
+#### Picker navigation and search state
+
+Searchable pickers use two explicit interaction states instead of interpreting
+every printable key as a query. They open in navigation state, where arrows and
+`j`/`k` move the cursor. `f`, `/`, or Ctrl-F activates search without inserting
+the activation key; active search accepts printable characters, including the
+navigation and activation characters. Escape first clears and exits search,
+then dismisses the picker if pressed again. The input row is present only while
+search is active. Inactive footers intentionally show only the compact
+`/ search` affordance; `f` and Ctrl-F remain supported aliases rather than
+additional visible hint text. Active footers describe typing and search exit.
+
+- [`BottomPane`](src/bottom_pane/mod.rs) routes Escape through the active
+  [`BottomPaneView::on_escape`](src/bottom_pane/bottom_pane_view.rs) hook before
+  ordinary key handling. The hook defaults to the existing Ctrl-C cancellation
+  behavior, while searchable component and generic selection views override it
+  to consume the first Escape without completing the view. This keeps
+  multi-stage Escape state transitions independent from Ctrl-C cancellation;
+  the next Escape follows the view's normal dismissal path.
+- [`ComponentPickerView`](src/bottom_pane/component_picker_view.rs) maps
+  Crossterm events into the domain-free `PickerAction` vocabulary from
+  [`nori-tui-components`](../tui-components/docs.md). Shared ACP and local
+  resume pickers use this adapter, so the component's `search_active`, query,
+  filtering, and typed outcomes remain the source of truth.
+- [`ListSelectionView`](src/bottom_pane/list_selection_view.rs) applies the same
+  state transition contract to existing generic selection panels. Search
+  behavior is independent of composer Vim mode; while inactive, numbered
+  selection remains available and unrelated printable keys are consumed
+  without changing the filter.
+- Transcript search remains composer-owned because it loads `HistoryEntry`
+  values asynchronously. [`HistorySearchPopup`](src/bottom_pane/history_search_popup.rs)
+  owns its search and filtered-selection state, while
+  [`ChatComposer`](src/bottom_pane/chat_composer/key_handling.rs) applies the
+  shared keyboard contract and routes an accepted entry back into the composer.
+
+The pre-TUI [`resume_picker`](src/resume_picker/) cannot use a bottom-pane
+adapter, but it mirrors the same transitions and projects its active state and
+query into the reusable picker renderer. This keeps launch-time transcript
+selection consistent with in-TUI ACP and local session selection.
+
 #### Structured session information
 
 Ordinary ACP `SessionInfoUpdate` normalization retains `title`, `updatedAt`,
@@ -153,6 +196,12 @@ user change several settings in one visit instead of reopening the slash command
 after every change. Each panel re-derives its `initial_selected_idx` from a row
 identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
 `/config`.
+
+`/settings` is searchable through the generic selection adapter. Each setting
+builds its search value from the displayed name and optional description before
+the panel opens, so filtering can match either the setting identity or its
+user-facing explanation without coupling `ListSelectionView` to configuration
+types.
 
 - For `/settings`, each `App::persist_*` success path in
   `@/nori-rs/tui/src/app/config_persistence.rs` calls

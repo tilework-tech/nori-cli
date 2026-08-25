@@ -240,6 +240,8 @@ pub enum PickerAction {
     Submit,
     Toggle,
     Cancel,
+    ActivateSearch,
+    DeactivateSearch,
     AppendQuery(char),
     Backspace,
     ClearQuery,
@@ -255,6 +257,7 @@ pub enum PickerOutcome<K> {
     Selected(K),
     Toggled { key: K, selected: bool },
     Submitted(Vec<K>),
+    SearchModeChanged(bool),
     QueryChanged(String),
     CategoryChanged(Option<String>),
     Cancelled,
@@ -270,6 +273,7 @@ pub struct PickerState<K> {
     pub items: Vec<PickerItem<K>>,
     pub mode: PickerMode,
     pub search_mode: SearchMode,
+    pub search_active: bool,
     pub query: String,
     pub categories: Vec<String>,
     pub active_category: Option<String>,
@@ -293,6 +297,7 @@ impl<K: Clone + Eq> PickerState<K> {
             items: items.into_iter().collect(),
             mode: PickerMode::Single,
             search_mode: SearchMode::Substring,
+            search_active: false,
             query: String::new(),
             categories: Vec::new(),
             active_category: None,
@@ -318,6 +323,10 @@ impl<K: Clone + Eq> PickerState<K> {
 
     pub fn search_mode(mut self, search_mode: SearchMode) -> Self {
         self.search_mode = search_mode;
+        if matches!(search_mode, SearchMode::None) {
+            self.search_active = false;
+            self.query.clear();
+        }
         self
     }
 
@@ -398,8 +407,24 @@ impl<K: Clone + Eq> PickerState<K> {
             PickerAction::Submit => self.submit(),
             PickerAction::Toggle => self.toggle(),
             PickerAction::Cancel => PickerOutcome::Cancelled,
+            PickerAction::ActivateSearch => {
+                if matches!(self.search_mode, SearchMode::None) || self.search_active {
+                    return PickerOutcome::Unchanged;
+                }
+                self.search_active = true;
+                PickerOutcome::SearchModeChanged(true)
+            }
+            PickerAction::DeactivateSearch => {
+                if !self.search_active {
+                    return PickerOutcome::Unchanged;
+                }
+                self.search_active = false;
+                self.query.clear();
+                self.select_first_available();
+                PickerOutcome::SearchModeChanged(false)
+            }
             PickerAction::AppendQuery(character) => {
-                if matches!(self.search_mode, SearchMode::None) {
+                if !self.search_active {
                     return PickerOutcome::Unchanged;
                 }
                 self.query.push(character);
@@ -407,6 +432,9 @@ impl<K: Clone + Eq> PickerState<K> {
                 PickerOutcome::QueryChanged(self.query.clone())
             }
             PickerAction::Backspace => {
+                if !self.search_active {
+                    return PickerOutcome::Unchanged;
+                }
                 if self.query.pop().is_none() {
                     return PickerOutcome::Unchanged;
                 }
@@ -414,7 +442,7 @@ impl<K: Clone + Eq> PickerState<K> {
                 PickerOutcome::QueryChanged(self.query.clone())
             }
             PickerAction::ClearQuery => {
-                if self.query.is_empty() {
+                if !self.search_active || self.query.is_empty() {
                     return PickerOutcome::Unchanged;
                 }
                 self.query.clear();

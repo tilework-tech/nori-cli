@@ -45,6 +45,8 @@ as they move into this crate.
     terminal setup, event loops, commands, or application actions.
 20. Mark search with a text magnifying-glass character, not an emoji. Shade
     only the editable input region after the marker.
+21. Keep inactive search affordances concise: show `/ search` as the canonical
+    hint even when a consumer supports additional activation aliases.
 
 ## Overlay menus
 

@@ -1,5 +1,8 @@
 use super::*;
 use pretty_assertions::assert_eq;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::widgets::WidgetRef;
 
 #[test]
 fn custom_prompt_missing_required_args_reports_error() {
@@ -446,6 +449,168 @@ fn test_ctrl_r_history_search_escape_closes_popup() {
     assert!(
         matches!(composer.active_popup, ActivePopup::None),
         "Escape should close the history search popup"
+    );
+}
+
+fn populate_history_search(composer: &mut ChatComposer) {
+    let ActivePopup::HistorySearch(popup) = &mut composer.active_popup else {
+        panic!("expected history search popup");
+    };
+    popup.set_entries(vec![
+        nori_harness::HistoryEntry {
+            session_id: "sess-1".to_string(),
+            ts: 1,
+            text: "first entry".to_string(),
+        },
+        nori_harness::HistoryEntry {
+            session_id: "sess-2".to_string(),
+            ts: 2,
+            text: "second entry".to_string(),
+        },
+    ]);
+}
+
+fn render_history_search(composer: &ChatComposer) -> String {
+    let ActivePopup::HistorySearch(popup) = &composer.active_popup else {
+        panic!("expected history search popup");
+    };
+    let area = Rect::new(0, 0, 64, popup.calculate_required_height());
+    let mut buffer = Buffer::empty(area);
+    popup.render_ref(area, &mut buffer);
+    (area.top()..area.bottom())
+        .map(|y| {
+            (area.left()..area.right())
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn inactive_history_search_uses_jk_for_navigation() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    populate_history_search(&mut composer);
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+    composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(composer.current_text(), "second entry");
+}
+
+#[test]
+fn history_search_supports_all_activation_keys_and_printable_input() {
+    let activation_keys = [
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ];
+
+    for activation_key in activation_keys {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer =
+            ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+        populate_history_search(&mut composer);
+
+        composer.handle_key_event(activation_key);
+        for (character, modifiers) in [
+            ('j', KeyModifiers::NONE),
+            ('k', KeyModifiers::NONE),
+            ('f', KeyModifiers::NONE),
+            ('/', KeyModifiers::NONE),
+            ('A', KeyModifiers::SHIFT),
+            ('7', KeyModifiers::NONE),
+            (' ', KeyModifiers::NONE),
+            ('?', KeyModifiers::NONE),
+            ('λ', KeyModifiers::NONE),
+        ] {
+            composer.handle_key_event(KeyEvent::new(KeyCode::Char(character), modifiers));
+        }
+        let ActivePopup::HistorySearch(popup) = &composer.active_popup else {
+            panic!("expected history search popup for {activation_key:?}");
+        };
+        assert_eq!(
+            popup.query(),
+            "jkf/A7 ?λ",
+            "activation key: {activation_key:?}"
+        );
+
+        composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        let ActivePopup::HistorySearch(popup) = &composer.active_popup else {
+            panic!("Escape should only exit search for {activation_key:?}");
+        };
+        assert_eq!(popup.query(), "", "activation key: {activation_key:?}");
+
+        composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(matches!(composer.active_popup, ActivePopup::None));
+    }
+}
+
+#[test]
+fn empty_active_history_search_exits_before_the_popup_closes() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
+    composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(matches!(
+        composer.active_popup,
+        ActivePopup::HistorySearch(_)
+    ));
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(matches!(composer.active_popup, ActivePopup::None));
+}
+
+#[test]
+fn activated_history_search_filters_before_selecting() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    populate_history_search(&mut composer);
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+    for character in "second".chars() {
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+    composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(composer.current_text(), "second entry");
+}
+
+#[test]
+fn history_search_navigation_and_search_modes_snapshot() {
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(true, sender, false, "Ask a question".to_string(), true);
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    populate_history_search(&mut composer);
+
+    insta::assert_snapshot!(
+        "history_search_navigation_mode",
+        render_history_search(&composer)
+    );
+
+    composer.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    for character in "second".chars() {
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+    insta::assert_snapshot!(
+        "history_search_active_mode",
+        render_history_search(&composer)
     );
 }
 

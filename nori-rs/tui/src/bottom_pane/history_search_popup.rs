@@ -15,20 +15,18 @@ pub(crate) struct HistorySearchPopup {
     all_entries: Vec<HistoryEntry>,
     filtered_indices: Vec<usize>,
     scroll: ScrollState,
-    pub(crate) vim_mode: bool,
-    vim_normal_mode: bool,
+    search_active: bool,
     loading: bool,
 }
 
 impl HistorySearchPopup {
-    pub(crate) fn new(vim_mode: bool) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             query: String::new(),
             all_entries: Vec::new(),
             filtered_indices: Vec::new(),
             scroll: ScrollState::new(),
-            vim_mode,
-            vim_normal_mode: false,
+            search_active: false,
             loading: true,
         }
     }
@@ -83,21 +81,26 @@ impl HistorySearchPopup {
         self.filtered_indices.len()
     }
 
-    pub(crate) fn is_vim_normal_mode(&self) -> bool {
-        self.vim_normal_mode
+    pub(crate) fn is_search_active(&self) -> bool {
+        self.search_active
     }
 
-    pub(crate) fn set_vim_normal_mode(&mut self, normal: bool) {
-        self.vim_normal_mode = normal;
+    pub(crate) fn activate_search(&mut self) {
+        self.search_active = true;
+    }
+
+    pub(crate) fn deactivate_search(&mut self) {
+        self.search_active = false;
+        self.query.clear();
+        self.refilter();
     }
 
     pub(crate) fn calculate_required_height(&self) -> u16 {
-        // 1 line for search input + result rows (capped) + 1 line for status
         let result_rows = self
             .filtered_indices
             .len()
-            .min(super::popup_consts::MAX_POPUP_ROWS);
-        (2 + result_rows) as u16
+            .clamp(1, super::popup_consts::MAX_POPUP_ROWS);
+        (1 + result_rows + usize::from(self.search_active)) as u16
     }
 
     fn refilter(&mut self) {
@@ -119,39 +122,27 @@ impl WidgetRef for HistorySearchPopup {
             return;
         }
 
-        // Row 0: search input line
-        let mode_label = if self.vim_mode {
-            if self.vim_normal_mode {
-                "NORMAL"
-            } else {
-                "INSERT"
+        let search_height = u16::from(self.search_active);
+        if self.search_active {
+            let mut search_spans: Vec<Span> = vec!["search: ".dim()];
+            if !self.query.is_empty() {
+                search_spans.push(self.query.clone().into());
             }
-        } else {
-            ""
-        };
-
-        let mut search_spans: Vec<Span> = Vec::new();
-        search_spans.push("search: ".dim());
-        if !self.query.is_empty() {
-            search_spans.push(self.query.clone().into());
+            Line::from(search_spans).render(
+                Rect {
+                    x: area.x + 2,
+                    y: area.y,
+                    width: area.width.saturating_sub(2),
+                    height: 1,
+                },
+                buf,
+            );
         }
-        if self.vim_mode {
-            search_spans.push("  ".into());
-            search_spans.push(format!("[{mode_label}]").dim());
-        }
-        Line::from(search_spans).render(
-            Rect {
-                x: area.x + 2,
-                y: area.y,
-                width: area.width.saturating_sub(2),
-                height: 1,
-            },
-            buf,
-        );
 
-        // Rows 1..N-1: filtered results
-        let result_area_y = area.y + 1;
-        let result_rows = (area.height as usize).saturating_sub(2).min(MAX_POPUP_ROWS);
+        let result_area_y = area.y + search_height;
+        let result_rows = (area.height as usize)
+            .saturating_sub(1 + search_height as usize)
+            .min(MAX_POPUP_ROWS);
         let filtered_len = self.filtered_indices.len();
 
         if filtered_len == 0 {
@@ -220,12 +211,10 @@ impl WidgetRef for HistorySearchPopup {
         // Last row: status line
         let status_y = area.y + area.height - 1;
         if status_y > area.y {
-            let hint = if self.vim_mode && self.vim_normal_mode {
-                "esc: close  enter: select  i: insert mode  j/k: navigate"
-            } else if self.vim_mode {
-                "esc: normal mode  enter: select  up/down: navigate"
+            let hint = if self.search_active {
+                "esc stop search  enter select  up/down move  type to filter"
             } else {
-                "esc: close  enter: select  up/down: navigate"
+                "esc close  enter select  j/k move  / search"
             };
             Line::from(hint.dim()).render(
                 Rect {
@@ -255,16 +244,16 @@ mod tests {
 
     #[test]
     fn new_popup_has_empty_state() {
-        let popup = HistorySearchPopup::new(false);
+        let popup = HistorySearchPopup::new();
         assert_eq!(popup.query(), "");
         assert_eq!(popup.filtered_count(), 0);
         assert!(popup.selected_text().is_none());
-        assert!(!popup.is_vim_normal_mode());
+        assert!(!popup.is_search_active());
     }
 
     #[test]
     fn set_entries_shows_all_when_no_query() {
-        let mut popup = HistorySearchPopup::new(false);
+        let mut popup = HistorySearchPopup::new();
         popup.set_entries(vec![
             make_entry("hello world", 1),
             make_entry("foo bar", 2),
@@ -275,7 +264,7 @@ mod tests {
 
     #[test]
     fn set_query_filters_entries_case_insensitive() {
-        let mut popup = HistorySearchPopup::new(false);
+        let mut popup = HistorySearchPopup::new();
         popup.set_entries(vec![
             make_entry("Hello World", 1),
             make_entry("foo bar", 2),
@@ -286,23 +275,17 @@ mod tests {
     }
 
     #[test]
-    fn vim_normal_mode_toggle() {
-        let mut popup = HistorySearchPopup::new(true);
-        assert!(!popup.is_vim_normal_mode());
-        popup.set_vim_normal_mode(true);
-        assert!(popup.is_vim_normal_mode());
-        popup.set_vim_normal_mode(false);
-        assert!(!popup.is_vim_normal_mode());
-    }
-
-    #[test]
     fn calculate_required_height_accounts_for_entries() {
-        let mut popup = HistorySearchPopup::new(false);
-        // Empty: search line + status line = 2
+        let mut popup = HistorySearchPopup::new();
+        // Empty result row + status line.
         assert_eq!(popup.calculate_required_height(), 2);
 
         popup.set_entries(vec![make_entry("a", 1), make_entry("b", 2)]);
-        // 2 entries + search line + status line = 4
+        // Two entries + status line while navigating.
+        assert_eq!(popup.calculate_required_height(), 3);
+
+        popup.activate_search();
+        // Two entries + search line + status line while filtering.
         assert_eq!(popup.calculate_required_height(), 4);
     }
 }

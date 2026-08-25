@@ -49,10 +49,10 @@ fn main() -> Result<()> {
         if key.kind != KeyEventKind::Press {
             continue;
         }
-        if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
+        if should_quit(key, state.search_active) {
             break;
         }
-        let Some(action) = picker_action(key) else {
+        let Some(action) = picker_action(key, state.search_active) else {
             continue;
         };
         match state.handle(action) {
@@ -62,6 +62,7 @@ fn main() -> Result<()> {
             PickerOutcome::Unchanged
             | PickerOutcome::SelectionChanged(_)
             | PickerOutcome::Toggled { .. }
+            | PickerOutcome::SearchModeChanged(_)
             | PickerOutcome::QueryChanged(_)
             | PickerOutcome::CategoryChanged(_) => {}
         }
@@ -69,7 +70,24 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn picker_action(key: KeyEvent) -> Option<PickerAction> {
+fn should_quit(key: KeyEvent, search_active: bool) -> bool {
+    matches!(key.code, KeyCode::Char('q')) && !search_active
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_search_owns_the_q_shortcut() {
+        let q = KeyEvent::new(KeyCode::Char('q'), crossterm::event::KeyModifiers::NONE);
+
+        assert!(!should_quit(q, true));
+        assert!(should_quit(q, false));
+    }
+}
+
+fn picker_action(key: KeyEvent, search_active: bool) -> Option<PickerAction> {
     match key.code {
         KeyCode::Up => Some(PickerAction::MoveUp),
         KeyCode::Down => Some(PickerAction::MoveDown),
@@ -78,13 +96,28 @@ fn picker_action(key: KeyEvent) -> Option<PickerAction> {
         KeyCode::Home => Some(PickerAction::First),
         KeyCode::End => Some(PickerAction::Last),
         KeyCode::Enter => Some(PickerAction::Submit),
-        KeyCode::Char(' ') => Some(PickerAction::Toggle),
-        KeyCode::Backspace => Some(PickerAction::Backspace),
+        KeyCode::Char(' ') if !search_active => Some(PickerAction::Toggle),
+        KeyCode::Backspace if search_active => Some(PickerAction::Backspace),
         KeyCode::Tab => Some(PickerAction::NextCategory),
         KeyCode::BackTab => Some(PickerAction::PreviousCategory),
-        KeyCode::Char(character) => Some(PickerAction::AppendQuery(character)),
-        KeyCode::Esc
-        | KeyCode::Left
+        KeyCode::Char('f')
+            if !search_active && key.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
+            Some(PickerAction::ActivateSearch)
+        }
+        KeyCode::Char('f' | '/') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::ActivateSearch)
+        }
+        KeyCode::Char('k') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::MoveUp)
+        }
+        KeyCode::Char('j') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::MoveDown)
+        }
+        KeyCode::Char(character) if search_active => Some(PickerAction::AppendQuery(character)),
+        KeyCode::Esc if search_active => Some(PickerAction::DeactivateSearch),
+        KeyCode::Esc => Some(PickerAction::Cancel),
+        KeyCode::Left
         | KeyCode::Right
         | KeyCode::Delete
         | KeyCode::Insert
@@ -98,7 +131,9 @@ fn picker_action(key: KeyEvent) -> Option<PickerAction> {
         | KeyCode::Menu
         | KeyCode::KeypadBegin
         | KeyCode::Media(_)
-        | KeyCode::Modifier(_) => None,
+        | KeyCode::Modifier(_)
+        | KeyCode::Backspace
+        | KeyCode::Char(_) => None,
     }
 }
 
@@ -170,7 +205,7 @@ fn story_state() -> PickerState<String> {
             .category("Cloud"),
     ];
     PickerState::new("Picker storybook", columns, items)
-        .subtitle("Type to fuzzy-find · tab changes category · enter selects · q exits")
+        .subtitle("/ searches · tab changes category · enter selects · q exits")
         .mode(PickerMode::Single)
         .search_mode(SearchMode::Fuzzy)
         .categories(["Local", "Cloud"])

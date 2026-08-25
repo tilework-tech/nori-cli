@@ -342,13 +342,24 @@ pub fn config_picker_params(
     ];
 
     let focus_idx = focus.and_then(|focus| entries.iter().position(|(id, _)| *id == focus));
-    let items: Vec<SelectionItem> = entries.into_iter().map(|(_, item)| item).collect();
+    let items: Vec<SelectionItem> = entries
+        .into_iter()
+        .map(|(_, mut item)| {
+            item.search_value = Some(match &item.description {
+                Some(description) => format!("{} {description}", item.name),
+                None => item.name.clone(),
+            });
+            item
+        })
+        .collect();
 
     SelectionViewParams {
         title: Some("Configuration".to_string()),
         subtitle: Some("Toggle TUI settings (changes saved to config.toml)".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
+        is_searchable: true,
+        search_placeholder: Some("Search settings".to_string()),
         initial_selected_idx: Some(focus_idx.unwrap_or(0)),
         ..Default::default()
     }

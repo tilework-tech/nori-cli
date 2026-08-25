@@ -116,7 +116,9 @@ impl<K: Clone + Eq> Picker<'_, K> {
     fn render_list(&self, area: Rect, buf: &mut Buffer) {
         let subtitle_height = u16::from(self.state.subtitle.is_some());
         let category_height = u16::from(!self.state.categories.is_empty());
-        let search_height = u16::from(!matches!(self.state.search_mode, SearchMode::None));
+        let search_height = u16::from(
+            self.state.search_active && !matches!(self.state.search_mode, SearchMode::None),
+        );
         let fixed_height = subtitle_height + category_height + search_height;
         let content_height = area.height.saturating_sub(fixed_height);
         let chunks = Layout::vertical([
@@ -425,11 +427,27 @@ impl<K: Clone + Eq> Picker<'_, K> {
             "toggle"
         };
         let hints = self.footer_hints.clone().unwrap_or_else(|| {
-            vec![
-                KeyHint::new("↑↓", "move"),
-                KeyHint::new("enter", select_action),
-                KeyHint::new("esc", "close"),
-            ]
+            if self.state.search_active {
+                vec![
+                    KeyHint::new("↑↓", "move"),
+                    KeyHint::new("type", "filter"),
+                    KeyHint::new("enter", select_action),
+                    KeyHint::new("esc", "stop search"),
+                ]
+            } else if !matches!(self.state.search_mode, SearchMode::None) {
+                vec![
+                    KeyHint::new("↑↓/j/k", "move"),
+                    KeyHint::new("/", "search"),
+                    KeyHint::new("enter", select_action),
+                    KeyHint::new("esc", "close"),
+                ]
+            } else {
+                vec![
+                    KeyHint::new("↑↓/j/k", "move"),
+                    KeyHint::new("enter", select_action),
+                    KeyHint::new("esc", "close"),
+                ]
+            }
         });
         KeyHints::new(hints).theme(self.theme).render(area, buf);
     }

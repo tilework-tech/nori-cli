@@ -87,7 +87,8 @@ pub async fn run_resume_picker(
             }
             TuiEvent::Draw => {
                 if let Ok(size) = alt.tui.terminal.size() {
-                    let list_height = size.height.saturating_sub(7) as usize;
+                    let chrome_height = 6 + u16::from(state.search_active);
+                    let list_height = size.height.saturating_sub(chrome_height) as usize;
                     state.update_view_rows(list_height);
                 }
                 rendering::draw_picker(alt.tui, &state)?;
@@ -142,6 +143,7 @@ struct PickerState {
     pub(super) seen_paths: HashSet<PathBuf>,
     pub(super) selected: usize,
     pub(super) scroll_top: usize,
+    pub(super) search_active: bool,
     pub(super) query: String,
     pub(super) view_rows: Option<usize>,
     pub(super) agent_filter: Option<String>,

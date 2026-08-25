@@ -1,0 +1,24 @@
+---
+source: tui/src/bottom_pane/list_selection_view.rs
+expression: "render_lines_with_width(&view, 90)"
+---
+                                                                                          
+  Configuration                                                                           
+  Toggle TUI settings (changes saved to config.toml)                                      
+                                                                                          
+› 1. Pinned Plan Drawer (off)                Pin plan updates to a drawer in the          
+                                             viewport instead of history                  
+  2. Resize Reflow (on) (current)            Reflow transcript history when the terminal  
+                                             width changes                                
+  3. Custom Working Messages (on) (current)  Rotate playful status messages while the     
+                                             agent is working                             
+  4. Vertical Footer (off)                   Stack footer segments vertically instead     
+                                             of horizontally                              
+  5. Terminal Notifications (on) (current)   Send OSC 9 escape sequences to notify the    
+                                             terminal on events                           
+  6. OS Notifications (on) (current)         Send native desktop notifications on events  
+  7. Vim Mode (off)                          Enable vim-style navigation in the textarea  
+                                             (Escape enters normal mode)                  
+  8. Auto Worktree (off)                     Create a git worktree at session start       
+                                                                                          
+  ↑/k ↓/j navigate, / search, enter confirm, esc go back

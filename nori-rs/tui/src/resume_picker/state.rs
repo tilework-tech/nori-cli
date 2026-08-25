@@ -17,6 +17,7 @@ impl PickerState {
             seen_paths: HashSet::new(),
             selected: 0,
             scroll_top: 0,
+            search_active: false,
             query: String::new(),
             view_rows: None,
             agent_filter,
@@ -30,13 +31,19 @@ impl PickerState {
     }
 
     pub(super) async fn handle_key(&mut self, key: KeyEvent) -> Result<Option<ResumeSelection>> {
+        let has_control = key
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::CONTROL);
+        let has_alt = key.modifiers.contains(crossterm::event::KeyModifiers::ALT);
+
         match key.code {
+            KeyCode::Esc if self.search_active => {
+                self.search_active = false;
+                self.set_query(String::new());
+                self.request_frame();
+            }
             KeyCode::Esc => return Ok(Some(ResumeSelection::StartFresh)),
-            KeyCode::Char('c')
-                if key
-                    .modifiers
-                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
-            {
+            KeyCode::Char('c') if has_control => {
                 return Ok(Some(ResumeSelection::Exit));
             }
             KeyCode::Enter => {
@@ -75,22 +82,40 @@ impl PickerState {
                     self.request_frame();
                 }
             }
-            KeyCode::Backspace => {
+            KeyCode::Backspace if self.search_active => {
                 let mut new_query = self.query.clone();
                 new_query.pop();
                 self.set_query(new_query);
             }
-            KeyCode::Char(c) => {
-                // basic text input for search
-                if !key
-                    .modifiers
-                    .contains(crossterm::event::KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
-                {
-                    let mut new_query = self.query.clone();
-                    new_query.push(c);
-                    self.set_query(new_query);
+            KeyCode::Char('f')
+                if !self.search_active
+                    && key.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+            {
+                self.search_active = true;
+                self.request_frame();
+            }
+            KeyCode::Char('f' | '/') if !self.search_active && !has_control && !has_alt => {
+                self.search_active = true;
+                self.request_frame();
+            }
+            KeyCode::Char('k') if !self.search_active && !has_control && !has_alt => {
+                if self.selected > 0 {
+                    self.selected -= 1;
+                    self.ensure_selected_visible();
                 }
+                self.request_frame();
+            }
+            KeyCode::Char('j') if !self.search_active && !has_control && !has_alt => {
+                if self.selected + 1 < self.filtered_rows.len() {
+                    self.selected += 1;
+                    self.ensure_selected_visible();
+                }
+                self.request_frame();
+            }
+            KeyCode::Char(c) if self.search_active && !has_control && !has_alt => {
+                let mut new_query = self.query.clone();
+                new_query.push(c);
+                self.set_query(new_query);
             }
             _ => {}
         }
