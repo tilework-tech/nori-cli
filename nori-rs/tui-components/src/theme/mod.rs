@@ -13,6 +13,7 @@ pub struct Theme {
     pub accent: Style,
     pub backdrop: Style,
     pub menu_surface: Style,
+    pub menu_item_surface: Style,
     pub surface: Style,
     pub input: Style,
     pub row: Style,
@@ -31,6 +32,11 @@ pub struct Theme {
     pub link: Style,
     pub table_header: Style,
     pub table_rule: Style,
+    pub provider_claude: Style,
+    pub provider_codex: Style,
+    pub provider_gemini: Style,
+    pub provider_antigravity: Style,
+    pub provider_nori: Style,
 }
 
 impl Default for Theme {
@@ -41,6 +47,7 @@ impl Default for Theme {
             accent: Style::new().fg(Color::Cyan),
             backdrop: Style::new(),
             menu_surface: Style::new(),
+            menu_item_surface: Style::new(),
             surface: Style::new(),
             input: Style::new(),
             row: Style::new(),
@@ -61,6 +68,11 @@ impl Default for Theme {
                 .add_modifier(Modifier::UNDERLINED),
             table_header: Style::new().add_modifier(Modifier::BOLD),
             table_rule: Style::new().fg(Color::DarkGray),
+            provider_claude: Style::new().fg(Color::Yellow),
+            provider_codex: Style::new().fg(Color::White),
+            provider_gemini: Style::new().fg(Color::Blue),
+            provider_antigravity: Style::new().fg(Color::Blue),
+            provider_nori: Style::new().fg(Color::Green),
         }
     }
 }
@@ -79,13 +91,27 @@ impl Theme {
         };
 
         theme.backdrop = theme.backdrop.bg(relative_surface(background, 4));
-        theme.menu_surface = theme.menu_surface.bg(relative_surface(background, 8));
+        let menu_surface = relative_surface(background, 8);
+        theme.menu_surface = theme.menu_surface.bg(menu_surface);
+        theme.menu_item_surface = theme.menu_item_surface.bg(darken_surface(menu_surface, 3));
         theme.row = theme.row.bg(relative_surface(background, 4));
         theme.row_alt = theme.row_alt.bg(relative_surface(background, 7));
         theme.input = theme.input.bg(relative_surface(background, 8));
         theme.detail_surface = theme.detail_surface.bg(relative_surface(background, 8));
         theme.selected = theme.selected.bg(relative_surface(background, 10));
         theme
+    }
+}
+
+#[allow(clippy::disallowed_methods)]
+fn darken_surface(surface: Color, amount: u8) -> Color {
+    match surface {
+        Color::Rgb(red, green, blue) => Color::Rgb(
+            red.saturating_sub(amount),
+            green.saturating_sub(amount),
+            blue.saturating_sub(amount),
+        ),
+        other => other,
     }
 }
 

@@ -128,6 +128,140 @@ fn search_filters_by_session_id() {
 }
 
 #[test]
+fn inactive_resume_picker_uses_jk_for_navigation() {
+    let mut state = state_with_rows(
+        vec![row("session-alpha", None), row("session-beta", None)],
+        true,
+        None,
+    );
+
+    block_on_future(async {
+        state
+            .handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE))
+            .await
+            .unwrap();
+        state
+            .handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE))
+            .await
+            .unwrap();
+        state
+            .handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
+            .await
+            .unwrap();
+    });
+    assert_eq!(state.selected, 1);
+    assert_eq!(state.query, "");
+
+    block_on_future(async {
+        state
+            .handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE))
+            .await
+            .unwrap();
+    });
+    assert_eq!(state.selected, 0);
+    assert_eq!(state.query, "");
+}
+
+#[test]
+fn resume_picker_supports_all_search_activation_keys() {
+    let activation_keys = [
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ];
+
+    for activation_key in activation_keys {
+        let mut state = state_with_rows(vec![row("alpha", None), row("beta", None)], true, None);
+
+        let activation = block_on_future(state.handle_key(activation_key)).unwrap();
+        assert!(activation.is_none(), "activation key: {activation_key:?}");
+
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)))
+            .unwrap();
+        assert_eq!(state.query, "b", "activation key: {activation_key:?}");
+
+        let exit_search =
+            block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+                .unwrap();
+        assert!(exit_search.is_none(), "activation key: {activation_key:?}");
+        assert_eq!(state.query, "", "activation key: {activation_key:?}");
+
+        let dismiss =
+            block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+                .unwrap();
+        assert!(
+            matches!(dismiss, Some(ResumeSelection::StartFresh)),
+            "activation key: {activation_key:?}"
+        );
+    }
+}
+
+#[test]
+fn empty_active_resume_search_exits_before_the_picker_dismisses() {
+    let mut state = state_with_rows(vec![row("session", None)], true, None);
+
+    block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL)))
+        .unwrap();
+    let exit_search =
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))).unwrap();
+    assert!(exit_search.is_none());
+
+    let dismiss =
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))).unwrap();
+    assert!(matches!(dismiss, Some(ResumeSelection::StartFresh)));
+}
+
+#[test]
+fn active_resume_search_receives_reserved_and_general_printable_characters() {
+    let mut state = state_with_rows(vec![row("session", None)], true, None);
+
+    block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)))
+        .unwrap();
+    for (character, modifiers) in [
+        ('j', KeyModifiers::NONE),
+        ('k', KeyModifiers::NONE),
+        ('f', KeyModifiers::NONE),
+        ('/', KeyModifiers::NONE),
+        ('A', KeyModifiers::SHIFT),
+        ('7', KeyModifiers::NONE),
+        (' ', KeyModifiers::NONE),
+        ('?', KeyModifiers::NONE),
+        ('λ', KeyModifiers::NONE),
+    ] {
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char(character), modifiers)))
+            .unwrap();
+    }
+
+    assert_eq!(state.query, "jkf/A7 ?λ");
+}
+
+#[test]
+fn activated_resume_search_filters_before_selecting() {
+    let mut state = state_with_rows(
+        vec![row("session-alpha", None), row("session-beta", None)],
+        true,
+        None,
+    );
+
+    block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)))
+        .unwrap();
+    for character in "beta".chars() {
+        block_on_future(
+            state.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)),
+        )
+        .unwrap();
+    }
+    let selection =
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)))
+            .unwrap();
+
+    let Some(ResumeSelection::Resume(target)) = selection else {
+        panic!("expected filtered resume selection");
+    };
+    assert_eq!(target.session_id, "session-beta");
+}
+
+#[test]
 fn enter_selects_resume_target() {
     let mut state = state_with_rows(
         vec![row("session-alpha", None), row("session-beta", None)],

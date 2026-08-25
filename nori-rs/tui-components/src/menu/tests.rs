@@ -371,6 +371,66 @@ fn derived_surfaces_style_the_backdrop_menu_and_title() {
 
 #[test]
 #[allow(clippy::disallowed_methods)]
+fn unselected_enabled_items_use_a_deeper_surface_than_disabled_items() {
+    let theme = Theme::for_terminal_background(Some((20, 20, 20)));
+    let mut state = MenuState::try_new([
+        basic_item("selected", "Selected action"),
+        basic_item("enabled", "Enabled action"),
+        basic_item("disabled", "Disabled action").disabled(true),
+    ])
+    .expect("valid surface menu");
+    let buffer = rendered_buffer(
+        &mut state,
+        80,
+        24,
+        "Surface depth",
+        None,
+        theme,
+        Color::Blue,
+    );
+
+    let selected = find_ascii_text(&buffer, "Selected action").expect("selected item");
+    let enabled = find_ascii_text(&buffer, "Enabled action").expect("enabled item");
+    let disabled = find_ascii_text(&buffer, "Disabled action").expect("disabled item");
+
+    assert_eq!(buffer[selected].bg, Color::Rgb(43, 43, 43));
+    assert_eq!(buffer[enabled].bg, Color::Rgb(35, 35, 35));
+    assert_eq!(buffer[disabled].bg, Color::Rgb(38, 38, 38));
+    assert_eq!(buffer[disabled].fg, Color::DarkGray);
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn enabled_items_stay_darker_than_disabled_items_on_light_backgrounds() {
+    let theme = Theme::for_terminal_background(Some((240, 240, 240)));
+    let mut state = MenuState::try_new([
+        basic_item("selected", "Selected action"),
+        basic_item("enabled", "Enabled action"),
+        basic_item("disabled", "Disabled action").disabled(true),
+    ])
+    .expect("valid light surface menu");
+    let buffer = rendered_buffer(
+        &mut state,
+        80,
+        24,
+        "Surface depth",
+        None,
+        theme,
+        Color::Blue,
+    );
+
+    let selected = find_ascii_text(&buffer, "Selected action").expect("selected item");
+    let enabled = find_ascii_text(&buffer, "Enabled action").expect("enabled item");
+    let disabled = find_ascii_text(&buffer, "Disabled action").expect("disabled item");
+
+    assert_eq!(buffer[selected].bg, Color::Rgb(216, 216, 216));
+    assert_eq!(buffer[enabled].bg, Color::Rgb(217, 217, 217));
+    assert_eq!(buffer[disabled].bg, Color::Rgb(220, 220, 220));
+    assert_eq!(buffer[disabled].fg, Color::DarkGray);
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
 fn selection_fills_every_item_row_and_uses_symmetric_accent_rails() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
     let mut state = consequence_state();

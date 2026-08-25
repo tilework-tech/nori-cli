@@ -173,28 +173,47 @@ fn main() -> Result<()> {
             continue;
         }
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => break,
-            KeyCode::Char('1') => page = Page::Picker,
-            KeyCode::Char('2') => page = Page::Markdown,
-            KeyCode::Char('3') => page = Page::Primitives,
-            KeyCode::Char('4') => page = Page::States,
-            KeyCode::Char('5') => page = Page::Details,
-            KeyCode::Char('6') => page = Page::OverlayMenu,
-            KeyCode::Char('d') if page == Page::Picker => {
+            KeyCode::Esc if page == Page::Picker && state.search_active => {
+                state.handle(PickerAction::DeactivateSearch);
+            }
+            KeyCode::Esc | KeyCode::Char('q')
+                if !picker_owns_global_shortcuts(page, state.search_active) =>
+            {
+                break;
+            }
+            KeyCode::Char('1') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Picker;
+            }
+            KeyCode::Char('2') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Markdown;
+            }
+            KeyCode::Char('3') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Primitives;
+            }
+            KeyCode::Char('4') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::States;
+            }
+            KeyCode::Char('5') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Details;
+            }
+            KeyCode::Char('6') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::OverlayMenu;
+            }
+            KeyCode::Char('d') if page == Page::Picker && !state.search_active => {
                 density = match density {
                     PickerDensity::Compact => PickerDensity::Normal,
                     PickerDensity::Normal => PickerDensity::Compact,
                 };
                 notice = format!("Density changed to {density:?}").to_lowercase();
             }
-            KeyCode::Char('m') if page == Page::Picker => {
+            KeyCode::Char('m') if page == Page::Picker && !state.search_active => {
                 state.mode = match state.mode {
                     PickerMode::Single => PickerMode::Multi,
                     PickerMode::Toggle | PickerMode::Multi => PickerMode::Single,
                 };
                 notice = format!("Selection mode changed to {:?}", state.mode).to_lowercase();
             }
-            KeyCode::Char('s') if page == Page::Picker => {
+            KeyCode::Char('s') if page == Page::Picker && !state.search_active => {
                 state.load_state = match &state.load_state {
                     PickerLoadState::Ready => {
                         PickerLoadState::Loading("Refreshing ACP sessions...".to_string())
@@ -206,7 +225,7 @@ fn main() -> Result<()> {
                 };
             }
             _ if page == Page::Picker => {
-                if let Some(action) = picker_action(key) {
+                if let Some(action) = picker_action(key, state.search_active) {
                     match state.handle(action) {
                         PickerOutcome::Selected(key) => notice = format!("Selected {key}"),
                         PickerOutcome::Submitted(keys) => {
@@ -216,6 +235,7 @@ fn main() -> Result<()> {
                         PickerOutcome::Unchanged
                         | PickerOutcome::SelectionChanged(_)
                         | PickerOutcome::Toggled { .. }
+                        | PickerOutcome::SearchModeChanged(_)
                         | PickerOutcome::QueryChanged(_)
                         | PickerOutcome::CategoryChanged(_) => {}
                     }
@@ -225,6 +245,10 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn picker_owns_global_shortcuts(page: Page, search_active: bool) -> bool {
+    page == Page::Picker && search_active
 }
 
 fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, theme: Theme) {
@@ -484,7 +508,7 @@ fn render_page_footer(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Them
         );
 }
 
-fn picker_action(key: KeyEvent) -> Option<PickerAction> {
+fn picker_action(key: KeyEvent, search_active: bool) -> Option<PickerAction> {
     match key.code {
         KeyCode::Up => Some(PickerAction::MoveUp),
         KeyCode::Down => Some(PickerAction::MoveDown),
@@ -493,11 +517,25 @@ fn picker_action(key: KeyEvent) -> Option<PickerAction> {
         KeyCode::Home => Some(PickerAction::First),
         KeyCode::End => Some(PickerAction::Last),
         KeyCode::Enter => Some(PickerAction::Submit),
-        KeyCode::Char(' ') => Some(PickerAction::Toggle),
-        KeyCode::Backspace => Some(PickerAction::Backspace),
+        KeyCode::Char(' ') if !search_active => Some(PickerAction::Toggle),
+        KeyCode::Backspace if search_active => Some(PickerAction::Backspace),
         KeyCode::Tab => Some(PickerAction::NextCategory),
         KeyCode::BackTab => Some(PickerAction::PreviousCategory),
-        KeyCode::Char(character) => Some(PickerAction::AppendQuery(character)),
+        KeyCode::Char('f')
+            if !search_active && key.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
+            Some(PickerAction::ActivateSearch)
+        }
+        KeyCode::Char('f' | '/') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::ActivateSearch)
+        }
+        KeyCode::Char('k') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::MoveUp)
+        }
+        KeyCode::Char('j') if !search_active && key.modifiers.is_empty() => {
+            Some(PickerAction::MoveDown)
+        }
+        KeyCode::Char(character) if search_active => Some(PickerAction::AppendQuery(character)),
         _ => None,
     }
 }
@@ -509,30 +547,35 @@ fn picker_state() -> PickerState<String> {
             max: 40,
             weight: 3,
         }),
+        PickerColumn::fixed("type", "Type", 12),
         PickerColumn::flexible("project", "Project").hide_below(58),
         PickerColumn::fixed("updated", "Updated", 10),
         PickerColumn::fixed("status", "Turn status", 13).hide_below(82),
     ];
     let items = [
         PickerItem::new("new".to_string(), "title", "Start a new session")
+            .cell("type", "Nori")
+            .cell_tone("type", ProviderKind::Nori)
             .cell("project", "Not reported")
             .cell("updated", "now")
             .cell("status", "ready")
             .search_text("start create new")
             .pinned(true)
-            .category("Local")
+            .category("Nori")
             .description("Create a fresh ACP session")
             .details([
                 PickerDetail::new("Action", "Create a fresh ACP session"),
                 PickerDetail::new("Transcript", "No transcript will be loaded"),
             ]),
         PickerItem::new("parser".to_string(), "title", "Fix parser recovery")
+            .cell("type", "Codex")
+            .cell_tone("type", ProviderKind::Codex)
             .cell("project", "nori-cli")
             .cell("updated", "2m ago")
             .cell("status", "working")
             .search_text("fix parser recovery nori cli session 019f")
             .current(true)
-            .category("Local")
+            .category("Codex")
             .description("Codex is implementing parser recovery")
             .details([
                 PickerDetail::new("Agent", "Codex"),
@@ -540,41 +583,52 @@ fn picker_state() -> PickerState<String> {
                 PickerDetail::new("Current turn", "Implementing parser recovery"),
             ]),
         PickerItem::new("markdown".to_string(), "title", "Improve Markdown tables")
+            .cell("type", "Gemini")
+            .cell_tone("type", ProviderKind::Gemini)
             .cell("project", "external-codex")
             .cell("updated", "18m ago")
             .cell("status", "waiting")
             .search_text("markdown tables codex waiting")
-            .category("Local")
+            .category("Gemini")
             .description("Waiting for user input")
             .details([
                 PickerDetail::new("Agent", "Codex"),
                 PickerDetail::new("Current turn", "Waiting for user input"),
             ]),
         PickerItem::new("cloud".to_string(), "title", "Slack · Claude")
+            .cell("type", "Claude")
+            .cell_tone("type", ProviderKind::Claude)
             .cell("project", "Nori Sessions")
             .cell("updated", "1h ago")
             .cell("status", "ready")
             .search_text("slack claude cloud sessions")
-            .category("Cloud")
+            .category("Claude")
             .description("The broker owns this remote session")
             .details([
                 PickerDetail::new("Origin", "Nori cloud"),
                 PickerDetail::new("Ownership", "Broker-managed remote session"),
             ]),
         PickerItem::new("offline".to_string(), "title", "Unavailable legacy session")
+            .cell("type", "Antigravity")
+            .cell_tone("type", ProviderKind::Antigravity)
             .cell("project", "handroll")
             .cell("updated", "3d ago")
             .cell("status", "offline")
             .search_text("legacy handroll offline")
             .disabled(true)
-            .category("Cloud")
+            .category("Antigravity")
             .description("This legacy session cannot be resumed"),
     ];
     PickerState::new("Nori component storybook", columns, items)
         .subtitle("Search ACP sessions or start fresh")
         .mode(PickerMode::Single)
         .search_mode(SearchMode::Fuzzy)
-        .categories(["Local", "Cloud"])
+        .categories(["Claude", "Codex", "Gemini", "Antigravity", "Nori"])
+        .category_tone("Claude", ProviderKind::Claude)
+        .category_tone("Codex", ProviderKind::Codex)
+        .category_tone("Gemini", ProviderKind::Gemini)
+        .category_tone("Antigravity", ProviderKind::Antigravity)
+        .category_tone("Nori", ProviderKind::Nori)
         .search_placeholder("Title, project, or session id")
 }
 

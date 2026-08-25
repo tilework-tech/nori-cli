@@ -86,7 +86,6 @@ pub(crate) struct BottomPane {
     /// Agent slug (e.g., "claude-code") used as prefix for agent commands.
     agent_slug: String,
     /// Whether vim mode is enabled, used to configure selection view behavior.
-    vim_mode_enabled: bool,
     /// Whether ACP wire JSONL recording is enabled for future child subprocesses.
     acp_wire_recording_enabled: bool,
 }
@@ -166,7 +165,6 @@ impl BottomPane {
             custom_working_message_list,
             agent_display_name,
             agent_slug,
-            vim_mode_enabled: false,
             acp_wire_recording_enabled: false,
         };
 
@@ -207,12 +205,13 @@ impl BottomPane {
         }
         // If a modal/view is active, handle it here; otherwise forward to composer.
         if let Some(view) = self.view_stack.last_mut() {
-            if key_event.code == KeyCode::Esc
-                && matches!(view.on_ctrl_c(), CancellationEvent::Handled)
-                && view.is_complete()
-            {
-                self.view_stack.pop();
-                self.on_active_view_complete();
+            let escape_handled = key_event.code == KeyCode::Esc
+                && matches!(view.on_escape(), CancellationEvent::Handled);
+            if escape_handled {
+                if view.is_complete() {
+                    self.view_stack.pop();
+                    self.on_active_view_complete();
+                }
             } else {
                 view.handle_key_event(key_event);
                 if view.is_complete() {
@@ -482,7 +481,6 @@ impl BottomPane {
     }
 
     pub(crate) fn set_vim_mode(&mut self, value: nori_config::VimEnterBehavior) {
-        self.vim_mode_enabled = value.is_enabled();
         self.composer.set_vim_mode(value);
     }
 
@@ -500,15 +498,7 @@ impl BottomPane {
     }
 
     /// Show a generic list selection view with the provided items.
-    pub(crate) fn show_selection_view(
-        &mut self,
-        mut params: list_selection_view::SelectionViewParams,
-    ) {
-        // Automatically inject vim mode for searchable views so all callers
-        // get the correct behavior without having to pass it explicitly.
-        if params.is_searchable {
-            params.vim_mode = self.vim_mode_enabled;
-        }
+    pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
         let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
         self.push_view(Box::new(view));
     }
@@ -868,6 +858,10 @@ mod tests {
     use super::*;
     use crate::app_event::AppEvent;
     use insta::assert_snapshot;
+    use nori_tui_components::PickerColumn;
+    use nori_tui_components::PickerDensity;
+    use nori_tui_components::PickerItem;
+    use nori_tui_components::PickerState;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use tokio::sync::mpsc::error::TryRecvError;
@@ -946,6 +940,85 @@ mod tests {
 
     fn test_bottom_pane() -> BottomPane {
         test_bottom_pane_with_events().0
+    }
+
+    #[test]
+    fn searchable_selection_view_consumes_escape_before_bottom_pane_dismissal() {
+        let mut pane = test_bottom_pane();
+        pane.show_selection_view(SelectionViewParams {
+            items: vec![SelectionItem {
+                name: "Alpha".to_string(),
+                search_value: Some("alpha".to_string()),
+                ..Default::default()
+            }],
+            is_searchable: true,
+            ..Default::default()
+        });
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('/'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('a'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert!(
+            pane.has_active_view(),
+            "first Escape should leave the searchable selection view open"
+        );
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(!pane.has_active_view());
+    }
+
+    #[test]
+    fn searchable_component_picker_consumes_escape_before_bottom_pane_dismissal() {
+        let mut pane = test_bottom_pane();
+        pane.show_component_picker(ComponentPickerParams {
+            state: PickerState::new(
+                "Sessions",
+                [PickerColumn::flexible("session", "Session")],
+                [PickerItem::new("alpha".to_string(), "session", "Alpha")],
+            ),
+            actions: std::collections::BTreeMap::new(),
+            on_dismiss: None,
+            primary_column: "session".to_string(),
+            detail_column: None,
+            density: PickerDensity::Compact,
+        });
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('f'),
+            crossterm::event::KeyModifiers::CONTROL,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Char('a'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert!(
+            pane.has_active_view(),
+            "first Escape should leave the component picker open"
+        );
+
+        pane.handle_key_event(KeyEvent::new(
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(!pane.has_active_view());
     }
 
     #[test]

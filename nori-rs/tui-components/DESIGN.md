@@ -46,6 +46,16 @@ as they move into this crate.
 20. Mark search with a text magnifying-glass character, not an emoji. Shade
     only the editable input region after the marker.
 
+Keep the inactive search affordance concise: display `/ search`, even when a
+consumer accepts additional activation aliases such as `f` and Ctrl-F. The
+visible hint communicates the conventional binding without becoming an
+exhaustive keymap; once search is active, printable keys belong to the query.
+
+Provider identity is explicit metadata, never inferred from display labels.
+Provider-toned category tabs retain their identity color when active and add
+bold emphasis. Provider-toned cells use the same identity mapping, while
+selection and disabled styles remain the stronger interaction signals.
+
 ## Overlay menus
 
 An overlay menu is a bounded list of actions, not a picker with different
@@ -107,11 +117,15 @@ Overlay menu layout responds to the caller's rectangle:
 
 The overlay may shade only the caller-provided area. `backdrop` and
 `menu_surface` are terminal-relative neutral theme tokens: derive them from a
-reported RGB terminal background only when true-color support is known. Leave
-their backgrounds unset otherwise. Never replace them with indexed grays. A
-selected item fills its complete rendered height and padding with the selected
-neutral surface, then receives matching one-cell thin accent rails on both
-edges. Ordinary rows use the menu surface; they are not zebra striped.
+reported RGB terminal background only when true-color support is known. The
+`menu_item_surface` token starts from that derived menu surface and lowers each
+RGB channel by a small fixed amount, keeping enabled items slightly darker on
+both dark and light terminals. Leave all of these backgrounds unset otherwise,
+and never replace them with indexed grays. A selected item fills its complete
+rendered height and padding with the selected neutral surface, then receives
+matching one-cell thin accent rails on both edges. Unselected enabled rows use
+`menu_item_surface`; disabled rows remain faded on `menu_surface`. Menu rows are
+not zebra striped.
 
 There is intentionally no public `SelectableListState` abstraction. The menu
 and picker both expose caller-held state and typed outcomes, but their
@@ -163,4 +177,6 @@ are the visual acceptance target for this crate. Detail pane is page `5`; page
 activate, `Tab`/`Shift-Tab` to change the menu case, and the displayed number or
 character shortcuts to invoke actions. The example owns its terminal and event
 loop, adapts raw keys to domain-free actions, and uses production components
-only.
+only. While Picker search is active, printable keys belong exclusively to the
+query: global page, quit, density, mode, and state shortcuts resume only after
+search deactivates, and Escape deactivates search before leaving the example.

@@ -297,6 +297,9 @@ fn render_item<K>(
         return;
     }
     let selected_style = theme.selected.remove_modifier(Modifier::BOLD);
+    if !item.disabled {
+        buf.set_style(area, theme.menu_item_surface);
+    }
     if selected {
         buf.set_style(area, selected_style);
         for y in area.y..area.bottom() {

@@ -63,9 +63,6 @@ pub(crate) struct SelectionViewParams {
     pub on_dismiss: Option<SelectionAction>,
     /// Optional callback fired when Shift-Tab is pressed while the picker is open.
     pub on_shift_tab: Option<SelectionAction>,
-    /// When true, j/k navigate and `/` toggles search mode.
-    /// When false (default), typing goes directly to search if `is_searchable`.
-    pub vim_mode: bool,
 }
 
 impl Default for SelectionViewParams {
@@ -82,7 +79,6 @@ impl Default for SelectionViewParams {
             initial_selected_idx: None,
             on_dismiss: None,
             on_shift_tab: None,
-            vim_mode: false,
         }
     }
 }
@@ -103,7 +99,6 @@ pub(crate) struct ListSelectionView {
     initial_selected_idx: Option<usize>,
     on_dismiss: Option<SelectionAction>,
     on_shift_tab: Option<SelectionAction>,
-    vim_mode: bool,
     search_active: bool,
 }
 
@@ -143,7 +138,6 @@ impl ListSelectionView {
             initial_selected_idx: params.initial_selected_idx,
             on_dismiss: params.on_dismiss,
             on_shift_tab: params.on_shift_tab,
-            vim_mode: params.vim_mode,
             search_active: false,
         };
         s.apply_filter();
@@ -255,7 +249,7 @@ impl ListSelectionView {
     }
 
     fn build_rows(&self) -> Vec<GenericDisplayRow> {
-        let show_numbers = !self.is_searchable || (self.vim_mode && !self.search_active);
+        let show_numbers = !self.is_searchable || !self.search_active;
         let mut rows = Vec::with_capacity(self.filtered_indices.len());
         // Numbers count only selectable rows so section headers do not consume
         // a position in the 1..N sequence.
@@ -380,6 +374,7 @@ impl ListSelectionView {
 
     #[cfg(test)]
     pub(crate) fn set_search_query(&mut self, query: String) {
+        self.search_active = true;
         self.search_query = query;
         self.apply_filter();
     }
@@ -389,42 +384,27 @@ impl ListSelectionView {
     }
 
     /// Whether the search input row should be shown.
-    /// In vim mode, only show when search is active. In non-vim mode, always show if searchable.
     fn show_search_row(&self) -> bool {
-        self.is_searchable && (!self.vim_mode || self.search_active)
+        self.is_searchable && self.search_active
     }
 
     /// Compute the effective footer hint based on current state.
     fn effective_footer_hint(&self) -> Option<Line<'static>> {
-        // If a static footer was provided, use it.
-        if self.footer_hint.is_some() {
+        if !self.is_searchable {
             return self.footer_hint.clone();
         }
-        // For searchable views, generate a context-sensitive hint.
-        if !self.is_searchable {
-            return None;
-        }
-        if self.vim_mode && self.search_active {
+        if self.search_active {
             Some(Line::from(vec![
-                "type to filter, ".into(),
+                "type to filter, ↑/↓ navigate, ".into(),
                 key_hint::plain(KeyCode::Enter).into(),
                 " confirm, ".into(),
                 key_hint::plain(KeyCode::Esc).into(),
-                " cancel search".into(),
-            ]))
-        } else if self.vim_mode {
-            Some(Line::from(vec![
-                "↑/k ↓/j navigate, ".into(),
-                "/ ".into(),
-                "search, ".into(),
-                key_hint::plain(KeyCode::Enter).into(),
-                " confirm, ".into(),
-                key_hint::plain(KeyCode::Esc).into(),
-                " go back".into(),
+                " stop search".into(),
             ]))
         } else {
             Some(Line::from(vec![
-                "↑/↓ navigate, type to filter, ".into(),
+                "↑/k ↓/j navigate, ".into(),
+                "/ search, ".into(),
                 key_hint::plain(KeyCode::Enter).into(),
                 " confirm, ".into(),
                 key_hint::plain(KeyCode::Esc).into(),
@@ -457,14 +437,13 @@ impl BottomPaneView for ListSelectionView {
             KeyEvent {
                 code: KeyCode::Backspace,
                 ..
-            } if self.is_searchable && (!self.vim_mode || self.search_active) => {
+            } if self.is_searchable && self.search_active => {
                 self.search_query.pop();
                 self.apply_filter();
             }
             KeyEvent {
                 code: KeyCode::Esc, ..
-            } if self.vim_mode && self.search_active => {
-                // Exit search mode without dismissing the popup.
+            } if self.search_active => {
                 self.search_active = false;
                 self.search_query.clear();
                 self.apply_filter();
@@ -487,13 +466,11 @@ impl BottomPaneView for ListSelectionView {
                     action(&self.app_event_tx);
                 }
             }
-            // Vim mode + searchable + search active: chars go to search query.
             KeyEvent {
                 code: KeyCode::Char(c),
                 modifiers,
                 ..
             } if self.is_searchable
-                && self.vim_mode
                 && self.search_active
                 && !modifiers.contains(KeyModifiers::CONTROL)
                 && !modifiers.contains(KeyModifiers::ALT) =>
@@ -501,23 +478,29 @@ impl BottomPaneView for ListSelectionView {
                 self.search_query.push(c);
                 self.apply_filter();
             }
-            // Vim mode + searchable + NOT searching: j/k navigate, / starts search, digits select.
+            KeyEvent {
+                code: KeyCode::Char('f'),
+                modifiers,
+                ..
+            } if self.is_searchable
+                && !self.search_active
+                && modifiers == KeyModifiers::CONTROL =>
+            {
+                self.search_active = true;
+            }
             KeyEvent {
                 code: KeyCode::Char(c),
                 modifiers,
                 ..
             } if self.is_searchable
-                && self.vim_mode
                 && !self.search_active
                 && !modifiers.contains(KeyModifiers::CONTROL)
                 && !modifiers.contains(KeyModifiers::ALT) =>
             {
                 match c {
+                    'f' | '/' => self.search_active = true,
                     'k' => self.move_up(),
                     'j' => self.move_down(),
-                    '/' => {
-                        self.search_active = true;
-                    }
                     _ => {
                         if let Some(idx) = c
                             .to_digit(10)
@@ -530,20 +513,7 @@ impl BottomPaneView for ListSelectionView {
                     }
                 }
             }
-            // Non-vim searchable: chars go directly to search query.
-            KeyEvent {
-                code: KeyCode::Char(c),
-                modifiers,
-                ..
-            } if self.is_searchable
-                && !self.vim_mode
-                && !modifiers.contains(KeyModifiers::CONTROL)
-                && !modifiers.contains(KeyModifiers::ALT) =>
-            {
-                self.search_query.push(c);
-                self.apply_filter();
-            }
-            // Not searchable: j/k navigate, digits select.
+            // Non-searchable lists keep their direct navigation and selection shortcuts.
             KeyEvent {
                 code: KeyCode::Char(c),
                 modifiers,
@@ -585,6 +555,17 @@ impl BottomPaneView for ListSelectionView {
             cb(&self.app_event_tx);
         }
         self.complete = true;
+        CancellationEvent::Handled
+    }
+
+    fn on_escape(&mut self) -> CancellationEvent {
+        if self.search_active {
+            self.search_active = false;
+            self.search_query.clear();
+            self.apply_filter();
+        } else {
+            self.on_ctrl_c();
+        }
         CancellationEvent::Handled
     }
 
@@ -1399,55 +1380,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_jk_goes_to_search_when_searchable() {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let items = vec![
-            SelectionItem {
-                name: "Item 1".to_string(),
-                search_value: Some("junk".to_string()), // contains 'j' so it won't be filtered
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "Item 2".to_string(),
-                search_value: Some("kite".to_string()), // contains 'k' so it won't be filtered
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-        ];
-        let mut view = ListSelectionView::new(
-            SelectionViewParams {
-                title: Some("Test".to_string()),
-                items,
-                is_searchable: true, // searchable mode
-                ..Default::default()
-            },
-            tx,
-        );
-
-        // Initial selection should be at index 0
-        assert_eq!(view.state.selected_idx, Some(0));
-
-        // Press 'j' - should go to search query, not navigate
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
-        assert_eq!(view.search_query, "j", "j should be added to search query");
-        // After filtering for 'j', only "junk" matches, so selection stays at 0
-        assert_eq!(
-            view.state.selected_idx,
-            Some(0),
-            "selection should stay at first match"
-        );
-
-        // Clear search and try 'k'
-        view.search_query.clear();
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
-        assert_eq!(view.search_query, "k", "k should be added to search query");
-    }
-
-    /// Helper to build a searchable list with vim_mode set.
-    fn make_vim_searchable_view() -> ListSelectionView {
+    fn make_searchable_view() -> ListSelectionView {
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let items = vec![
@@ -1475,43 +1408,6 @@ mod tests {
                 title: Some("Test".to_string()),
                 items,
                 is_searchable: true,
-                vim_mode: true,
-                ..Default::default()
-            },
-            tx,
-        )
-    }
-
-    /// Helper to build a searchable list WITHOUT vim_mode.
-    fn make_nonvim_searchable_view() -> ListSelectionView {
-        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let items = vec![
-            SelectionItem {
-                name: "alpha".to_string(),
-                search_value: Some("alpha".to_string()),
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "beta".to_string(),
-                search_value: Some("beta".to_string()),
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "gamma".to_string(),
-                search_value: Some("gamma".to_string()),
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-        ];
-        ListSelectionView::new(
-            SelectionViewParams {
-                title: Some("Test".to_string()),
-                items,
-                is_searchable: true,
-                vim_mode: false,
                 ..Default::default()
             },
             tx,
@@ -1519,8 +1415,8 @@ mod tests {
     }
 
     #[test]
-    fn vim_searchable_jk_navigates_not_searches() {
-        let mut view = make_vim_searchable_view();
+    fn searchable_list_uses_jk_for_navigation_until_search_is_active() {
+        let mut view = make_searchable_view();
         assert_eq!(view.state.selected_idx, Some(0));
 
         // 'j' should move down, NOT add 'j' to search query
@@ -1549,8 +1445,8 @@ mod tests {
     }
 
     #[test]
-    fn vim_searchable_slash_activates_search_then_chars_filter() {
-        let mut view = make_vim_searchable_view();
+    fn searchable_slash_activates_search_then_chars_filter() {
+        let mut view = make_searchable_view();
 
         // Press '/' to activate search
         view.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
@@ -1572,8 +1468,8 @@ mod tests {
     }
 
     #[test]
-    fn vim_searchable_esc_in_search_exits_search_not_dismiss() {
-        let mut view = make_vim_searchable_view();
+    fn searchable_esc_in_search_exits_search_not_dismiss() {
+        let mut view = make_searchable_view();
 
         // Activate search and type something
         view.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
@@ -1597,8 +1493,8 @@ mod tests {
     }
 
     #[test]
-    fn vim_searchable_esc_outside_search_dismisses() {
-        let mut view = make_vim_searchable_view();
+    fn searchable_esc_outside_search_dismisses() {
+        let mut view = make_searchable_view();
 
         // Esc when NOT in search mode should dismiss
         view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -1609,8 +1505,8 @@ mod tests {
     }
 
     #[test]
-    fn vim_searchable_digits_direct_select_when_not_searching() {
-        let mut view = make_vim_searchable_view();
+    fn searchable_digits_direct_select_when_not_searching() {
+        let mut view = make_searchable_view();
 
         // Press '2' — should select item at index 1 and accept
         view.handle_key_event(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
@@ -1619,8 +1515,8 @@ mod tests {
     }
 
     #[test]
-    fn vim_searchable_backspace_in_search_pops_char() {
-        let mut view = make_vim_searchable_view();
+    fn searchable_backspace_in_search_pops_char() {
+        let mut view = make_searchable_view();
 
         // Activate search and type
         view.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
@@ -1634,24 +1530,129 @@ mod tests {
     }
 
     #[test]
-    fn nonvim_searchable_chars_go_to_search_immediately() {
-        let mut view = make_nonvim_searchable_view();
+    fn searchable_list_ignores_unbound_printable_keys_while_inactive() {
+        let mut view = make_searchable_view();
 
-        // Typing 'j' should go to search query, not navigate
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
-        assert_eq!(
-            view.search_query, "j",
-            "chars should go to search in non-vim mode"
-        );
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+        assert_eq!(view.state.selected_idx, Some(0));
+        assert_eq!(view.search_query, "");
     }
 
     #[test]
-    fn nonvim_searchable_esc_dismisses() {
-        let mut view = make_nonvim_searchable_view();
+    fn searchable_esc_dismisses_when_search_is_inactive() {
+        let mut view = make_searchable_view();
 
-        // Esc should dismiss immediately (no search_active state)
         view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(view.is_complete(), "Esc should dismiss in non-vim mode");
+        assert!(view.is_complete());
+    }
+
+    #[test]
+    fn searchable_list_supports_all_search_activation_keys() {
+        let activation_keys = [
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+            KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+        ];
+
+        for activation_key in activation_keys {
+            let mut view = make_searchable_view();
+
+            view.handle_key_event(activation_key);
+            view.handle_key_event(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+            assert_eq!(view.search_query, "a", "activation key: {activation_key:?}");
+
+            view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+            assert_eq!(view.search_query, "", "activation key: {activation_key:?}");
+            assert!(!view.is_complete(), "activation key: {activation_key:?}");
+
+            view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+            assert!(view.is_complete(), "activation key: {activation_key:?}");
+        }
+    }
+
+    #[test]
+    fn empty_active_search_exits_before_the_picker_dismisses() {
+        let mut view = make_searchable_view();
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
+        view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!view.is_complete());
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(view.is_complete());
+    }
+
+    #[test]
+    fn active_list_search_receives_reserved_and_general_printable_characters() {
+        let mut view = make_searchable_view();
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for (character, modifiers) in [
+            ('j', KeyModifiers::NONE),
+            ('k', KeyModifiers::NONE),
+            ('f', KeyModifiers::NONE),
+            ('/', KeyModifiers::NONE),
+            ('A', KeyModifiers::SHIFT),
+            ('7', KeyModifiers::NONE),
+            (' ', KeyModifiers::NONE),
+            ('?', KeyModifiers::NONE),
+            ('λ', KeyModifiers::NONE),
+        ] {
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), modifiers));
+        }
+
+        assert_eq!(view.search_query, "jkf/A7 ?λ");
+    }
+
+    #[test]
+    fn settings_picker_filters_by_description_and_runs_the_selected_action() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let params = crate::nori::config_picker::config_picker_params(
+            &nori_config::NoriConfig::default(),
+            tx.clone(),
+            None,
+        );
+        let mut view = ListSelectionView::new(params, tx);
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        for character in "native desktop".chars() {
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(AppEvent::SetConfigOsNotifications(_))
+        ));
+    }
+
+    #[test]
+    fn settings_picker_navigation_and_search_modes_snapshot() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let params = crate::nori::config_picker::config_picker_params(
+            &nori_config::NoriConfig::default(),
+            tx.clone(),
+            None,
+        );
+        let mut view = ListSelectionView::new(params, tx);
+
+        assert_snapshot!(
+            "settings_picker_navigation_mode",
+            render_lines_with_width(&view, 90)
+        );
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "native desktop".chars() {
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        assert_snapshot!(
+            "settings_picker_search_mode",
+            render_lines_with_width(&view, 90)
+        );
     }
 
     #[test]

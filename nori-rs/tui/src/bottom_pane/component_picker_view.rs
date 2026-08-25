@@ -71,6 +71,7 @@ impl ComponentPickerView {
             | PickerOutcome::SelectionChanged(_)
             | PickerOutcome::Toggled { .. }
             | PickerOutcome::Submitted(_)
+            | PickerOutcome::SearchModeChanged(_)
             | PickerOutcome::QueryChanged(_)
             | PickerOutcome::CategoryChanged(_) => {}
         }
@@ -79,12 +80,16 @@ impl ComponentPickerView {
 
 impl BottomPaneView for ComponentPickerView {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
+        let search_active = self.state.search_active;
         let action = match key_event {
             KeyEvent {
                 code: KeyCode::Char('c'),
                 modifiers,
                 ..
             } if modifiers.contains(KeyModifiers::CONTROL) => PickerAction::Cancel,
+            KeyEvent {
+                code: KeyCode::Esc, ..
+            } if search_active => PickerAction::DeactivateSearch,
             KeyEvent {
                 code: KeyCode::Esc, ..
             } => PickerAction::Cancel,
@@ -117,7 +122,7 @@ impl BottomPaneView for ComponentPickerView {
             KeyEvent {
                 code: KeyCode::Backspace,
                 ..
-            } => PickerAction::Backspace,
+            } if search_active => PickerAction::Backspace,
             KeyEvent {
                 code: KeyCode::Tab, ..
             } => PickerAction::NextCategory,
@@ -126,10 +131,32 @@ impl BottomPaneView for ComponentPickerView {
                 ..
             } => PickerAction::PreviousCategory,
             KeyEvent {
+                code: KeyCode::Char('f'),
+                modifiers,
+                ..
+            } if modifiers == KeyModifiers::CONTROL && !search_active => {
+                PickerAction::ActivateSearch
+            }
+            KeyEvent {
+                code: KeyCode::Char('f' | '/'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !search_active => PickerAction::ActivateSearch,
+            KeyEvent {
+                code: KeyCode::Char('k'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !search_active => PickerAction::MoveUp,
+            KeyEvent {
+                code: KeyCode::Char('j'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !search_active => PickerAction::MoveDown,
+            KeyEvent {
                 code: KeyCode::Char(character),
                 modifiers,
                 ..
-            } if modifiers.is_empty() || modifiers == KeyModifiers::SHIFT => {
+            } if search_active && (modifiers.is_empty() || modifiers == KeyModifiers::SHIFT) => {
                 PickerAction::AppendQuery(character)
             }
             _ => return,
@@ -146,7 +173,20 @@ impl BottomPaneView for ComponentPickerView {
         CancellationEvent::Handled
     }
 
+    fn on_escape(&mut self) -> CancellationEvent {
+        let action = if self.state.search_active {
+            PickerAction::DeactivateSearch
+        } else {
+            PickerAction::Cancel
+        };
+        self.handle_action(action);
+        CancellationEvent::Handled
+    }
+
     fn handle_paste(&mut self, pasted: String) -> bool {
+        if !self.state.search_active {
+            return true;
+        }
         for character in pasted.chars().filter(|character| !character.is_control()) {
             self.state.handle(PickerAction::AppendQuery(character));
         }
@@ -218,7 +258,7 @@ impl Renderable for ComponentPickerView {
             PickerDensity::Normal => 2,
         };
         rows.saturating_mul(row_height)
-            .saturating_add(7)
+            .saturating_add(6 + u16::from(self.state.search_active))
             .clamp(9, 18)
     }
 }
@@ -226,6 +266,7 @@ impl Renderable for ComponentPickerView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app_event::AppEvent;
     use nori_tui_components::PickerColumn;
     use nori_tui_components::PickerItem;
     use pretty_assertions::assert_eq;
@@ -235,7 +276,11 @@ mod tests {
             state: PickerState::new(
                 "Sessions",
                 [PickerColumn::flexible("session", "Session")],
-                [PickerItem::new("one".to_string(), "session", "First")],
+                [
+                    PickerItem::new("one".to_string(), "session", "First").search_text("alpha"),
+                    PickerItem::new("two".to_string(), "session", "Second").search_text("beta"),
+                    PickerItem::new("three".to_string(), "session", "Third").search_text("gamma"),
+                ],
             ),
             actions: BTreeMap::new(),
             on_dismiss: None,
@@ -261,5 +306,110 @@ mod tests {
             Some("Updated")
         );
         assert_eq!(view.state.items[0].search_text, "updated search");
+    }
+
+    #[test]
+    fn inactive_searchable_picker_uses_jk_for_navigation() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut view = ComponentPickerView::new(params(), AppEventSender::new(tx));
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(view.state.selected_index, Some(1));
+        assert_eq!(view.state.query, "");
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(view.state.selected_index, Some(0));
+        assert_eq!(view.state.query, "");
+    }
+
+    #[test]
+    fn inactive_searchable_picker_ignores_other_printable_characters() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut view = ComponentPickerView::new(params(), AppEventSender::new(tx));
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+
+        assert_eq!(view.state.query, "");
+        assert_eq!(view.state.selected_index, Some(0));
+    }
+
+    #[test]
+    fn picker_search_activation_keys_do_not_enter_the_query() {
+        let activation_keys = [
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+            KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+        ];
+
+        for activation_key in activation_keys {
+            let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+            let mut view = ComponentPickerView::new(params(), AppEventSender::new(tx));
+
+            view.handle_key_event(activation_key);
+            view.handle_key_event(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+            assert_eq!(view.state.query, "a", "activation key: {activation_key:?}");
+
+            view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+            assert_eq!(view.state.query, "", "activation key: {activation_key:?}");
+            assert!(!view.is_complete(), "activation key: {activation_key:?}");
+
+            view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+            assert!(view.is_complete(), "activation key: {activation_key:?}");
+        }
+    }
+
+    #[test]
+    fn empty_active_picker_search_exits_before_the_picker_dismisses() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut view = ComponentPickerView::new(params(), AppEventSender::new(tx));
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
+        view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!view.is_complete());
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(view.is_complete());
+    }
+
+    #[test]
+    fn active_picker_search_receives_reserved_and_general_printable_characters() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut view = ComponentPickerView::new(params(), AppEventSender::new(tx));
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for (character, modifiers) in [
+            ('j', KeyModifiers::NONE),
+            ('k', KeyModifiers::NONE),
+            ('f', KeyModifiers::NONE),
+            ('/', KeyModifiers::NONE),
+            ('A', KeyModifiers::SHIFT),
+            ('7', KeyModifiers::NONE),
+            (' ', KeyModifiers::NONE),
+            ('?', KeyModifiers::NONE),
+            ('λ', KeyModifiers::NONE),
+        ] {
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), modifiers));
+        }
+
+        assert_eq!(view.state.query, "jkf/A7 ?λ");
+    }
+
+    #[test]
+    fn picker_search_filters_before_running_the_selected_action() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut params = params();
+        params.actions.insert(
+            "two".to_string(),
+            Box::new(|tx| tx.send(AppEvent::BeginExit)),
+        );
+        let mut view = ComponentPickerView::new(params, AppEventSender::new(tx));
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        for character in "beta".chars() {
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(matches!(rx.try_recv(), Ok(AppEvent::BeginExit)));
     }
 }

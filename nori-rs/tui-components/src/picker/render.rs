@@ -4,6 +4,8 @@ use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Margin;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
@@ -27,6 +29,7 @@ use crate::KeyHints;
 use crate::MessageLevel;
 use crate::SemanticMessage;
 use crate::Theme;
+use crate::detail::provider_tone_style;
 
 /// Stateless renderer for a caller-owned [`PickerState`].
 pub struct Picker<'a, K> {
@@ -116,7 +119,9 @@ impl<K: Clone + Eq> Picker<'_, K> {
     fn render_list(&self, area: Rect, buf: &mut Buffer) {
         let subtitle_height = u16::from(self.state.subtitle.is_some());
         let category_height = u16::from(!self.state.categories.is_empty());
-        let search_height = u16::from(!matches!(self.state.search_mode, SearchMode::None));
+        let search_height = u16::from(
+            self.state.search_active && !matches!(self.state.search_mode, SearchMode::None),
+        );
         let fixed_height = subtitle_height + category_height + search_height;
         let content_height = area.height.saturating_sub(fixed_height);
         let chunks = Layout::vertical([
@@ -139,23 +144,36 @@ impl<K: Clone + Eq> Picker<'_, K> {
         if area.height == 0 {
             return;
         }
-        let options = std::iter::once(("All", self.state.active_category.is_none())).chain(
+        let options = std::iter::once(("All", None, self.state.active_category.is_none())).chain(
             self.state.categories.iter().map(|category| {
                 (
                     category.as_str(),
+                    Some(category.as_str()),
                     self.state.active_category.as_ref() == Some(category),
                 )
             }),
         );
         let spans = options
             .enumerate()
-            .flat_map(|(index, (label, active))| {
+            .flat_map(|(index, (label, category, active))| {
                 let gap = (index > 0).then(|| Span::raw("  "));
-                let style = if active {
-                    self.theme.accent
-                } else {
-                    self.theme.muted
-                };
+                let style = category
+                    .and_then(|category| self.state.category_tones.get(category))
+                    .map(|provider| provider_tone_style(*provider, self.theme))
+                    .map(|style| {
+                        if active {
+                            style.add_modifier(Modifier::BOLD)
+                        } else {
+                            style
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        if active {
+                            self.theme.accent
+                        } else {
+                            self.theme.muted
+                        }
+                    });
                 gap.into_iter()
                     .chain([Span::styled(label.to_string(), style)])
             })
@@ -243,7 +261,9 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 buf,
                 &columns,
                 &widths,
-                columns.iter().map(|column| column.header.as_str()),
+                columns
+                    .iter()
+                    .map(|column| (column.header.as_str(), self.theme.table_header)),
                 self.theme.table_header,
                 " ",
             );
@@ -329,7 +349,16 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 buf,
                 &columns,
                 &widths,
-                values.iter().map(String::as_str),
+                columns.iter().zip(&values).map(|(column, value)| {
+                    let cell_style = if selected || item.disabled {
+                        style
+                    } else {
+                        item.cell_tones.get(&column.key).map_or(style, |provider| {
+                            surface.patch(provider_tone_style(*provider, self.theme))
+                        })
+                    };
+                    (value.as_str(), cell_style)
+                }),
                 style,
                 marker,
             );
@@ -361,16 +390,16 @@ impl<K: Clone + Eq> Picker<'_, K> {
         buf: &mut Buffer,
         columns: &[&PickerColumn],
         widths: &[u16],
-        values: impl IntoIterator<Item = &'a str>,
-        style: ratatui::style::Style,
+        values: impl IntoIterator<Item = (&'a str, Style)>,
+        style: Style,
         marker: &str,
     ) {
         let mut x = area.x;
         buf.set_string(x, area.y, marker, style);
         x = x.saturating_add(2);
-        for ((column, width), value) in columns.iter().zip(widths).zip(values) {
+        for ((column, width), (value, value_style)) in columns.iter().zip(widths).zip(values) {
             let value = truncate(value, *width as usize);
-            buf.set_string(x, area.y, value, style);
+            buf.set_string(x, area.y, value, value_style);
             x = x.saturating_add(*width);
             if column.key
                 != columns
@@ -425,11 +454,27 @@ impl<K: Clone + Eq> Picker<'_, K> {
             "toggle"
         };
         let hints = self.footer_hints.clone().unwrap_or_else(|| {
-            vec![
-                KeyHint::new("↑↓", "move"),
-                KeyHint::new("enter", select_action),
-                KeyHint::new("esc", "close"),
-            ]
+            if self.state.search_active {
+                vec![
+                    KeyHint::new("↑↓", "move"),
+                    KeyHint::new("type", "filter"),
+                    KeyHint::new("enter", select_action),
+                    KeyHint::new("esc", "stop search"),
+                ]
+            } else if !matches!(self.state.search_mode, SearchMode::None) {
+                vec![
+                    KeyHint::new("↑↓/j/k", "move"),
+                    KeyHint::new("/", "search"),
+                    KeyHint::new("enter", select_action),
+                    KeyHint::new("esc", "close"),
+                ]
+            } else {
+                vec![
+                    KeyHint::new("↑↓/j/k", "move"),
+                    KeyHint::new("enter", select_action),
+                    KeyHint::new("esc", "close"),
+                ]
+            }
         });
         KeyHints::new(hints).theme(self.theme).render(area, buf);
     }

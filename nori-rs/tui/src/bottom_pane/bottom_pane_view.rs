@@ -23,6 +23,12 @@ pub(crate) trait BottomPaneView: Renderable {
         CancellationEvent::NotHandled
     }
 
+    /// Handle Escape while this view is active. Views with multi-stage Escape
+    /// behavior can override this independently from Ctrl-C cancellation.
+    fn on_escape(&mut self) -> CancellationEvent {
+        self.on_ctrl_c()
+    }
+
     /// Optional paste handler. Return true if the view modified its state and
     /// needs a redraw.
     fn handle_paste(&mut self, _pasted: String) -> bool {

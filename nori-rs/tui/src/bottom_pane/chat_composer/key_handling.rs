@@ -566,18 +566,19 @@ impl ChatComposer {
             unreachable!();
         };
 
-        let in_vim_normal = popup.is_vim_normal_mode();
+        let search_active = popup.is_search_active();
 
         match key_event {
-            // Esc: in vim mode, first press enters normal mode; second press closes
+            KeyEvent {
+                code: KeyCode::Esc, ..
+            } if search_active => {
+                popup.deactivate_search();
+                (InputResult::None, true)
+            }
             KeyEvent {
                 code: KeyCode::Esc, ..
             } => {
-                if popup.vim_mode && !in_vim_normal {
-                    popup.set_vim_normal_mode(true);
-                } else {
-                    self.active_popup = ActivePopup::None;
-                }
+                self.active_popup = ActivePopup::None;
                 (InputResult::None, true)
             }
             // Enter: select the highlighted entry and close
@@ -592,7 +593,7 @@ impl ChatComposer {
                 }
                 (InputResult::None, true)
             }
-            // Up / Ctrl+P / k (in vim normal): move selection up
+            // Arrow and readline bindings navigate in either mode.
             KeyEvent {
                 code: KeyCode::Up, ..
             }
@@ -604,14 +605,6 @@ impl ChatComposer {
                 popup.move_up();
                 (InputResult::None, true)
             }
-            KeyEvent {
-                code: KeyCode::Char('k'),
-                ..
-            } if in_vim_normal => {
-                popup.move_up();
-                (InputResult::None, true)
-            }
-            // Down / Ctrl+N / j (in vim normal): move selection down
             KeyEvent {
                 code: KeyCode::Down,
                 ..
@@ -625,34 +618,49 @@ impl ChatComposer {
                 (InputResult::None, true)
             }
             KeyEvent {
-                code: KeyCode::Char('j'),
+                code: KeyCode::Char('f'),
+                modifiers,
                 ..
-            } if in_vim_normal => {
+            } if !search_active && modifiers == KeyModifiers::CONTROL => {
+                popup.activate_search();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Char('f' | '/'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !search_active => {
+                popup.activate_search();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Char('k'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !search_active => {
+                popup.move_up();
+                (InputResult::None, true)
+            }
+            KeyEvent {
+                code: KeyCode::Char('j'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !search_active => {
                 popup.move_down();
                 (InputResult::None, true)
             }
-            // i in vim normal: enter insert mode
-            KeyEvent {
-                code: KeyCode::Char('i'),
-                ..
-            } if in_vim_normal => {
-                popup.set_vim_normal_mode(false);
-                (InputResult::None, true)
-            }
-            // Backspace: remove last char from search query
             KeyEvent {
                 code: KeyCode::Backspace,
                 ..
-            } if !in_vim_normal => {
+            } if search_active => {
                 popup.pop_char();
                 (InputResult::None, true)
             }
-            // Printable character input (insert mode): append to search query
             KeyEvent {
                 code: KeyCode::Char(ch),
                 modifiers,
                 ..
-            } if !in_vim_normal && !has_ctrl_or_alt(modifiers) => {
+            } if search_active && !has_ctrl_or_alt(modifiers) => {
                 popup.push_char(ch);
                 (InputResult::None, true)
             }
@@ -767,8 +775,7 @@ impl ChatComposer {
                         &key_event,
                     ) =>
             {
-                let vim_mode = self.textarea.vim_mode_state_if_enabled().is_some();
-                self.active_popup = ActivePopup::HistorySearch(HistorySearchPopup::new(vim_mode));
+                self.active_popup = ActivePopup::HistorySearch(HistorySearchPopup::new());
                 self.app_event_tx.send(AppEvent::HarnessAction(
                     crate::app_event::HarnessAction::SearchHistory { max_results: 500 },
                 ));

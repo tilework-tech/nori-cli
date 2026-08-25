@@ -9,6 +9,8 @@ use nucleo_matcher::pattern::Normalization;
 use nucleo_matcher::pattern::Pattern;
 use ratatui::text::Line;
 
+use crate::ProviderKind;
+
 mod render;
 
 pub use render::Picker;
@@ -69,6 +71,7 @@ impl PickerColumn {
 pub struct PickerItem<K> {
     pub key: K,
     pub cells: BTreeMap<String, String>,
+    pub cell_tones: BTreeMap<String, ProviderKind>,
     pub search_text: String,
     pub category: Option<String>,
     pub detail: Vec<Line<'static>>,
@@ -87,6 +90,7 @@ impl<K> PickerItem<K> {
         Self {
             key,
             cells: BTreeMap::from([(primary_column.into(), label.clone())]),
+            cell_tones: BTreeMap::new(),
             search_text: label,
             category: None,
             detail: Vec::new(),
@@ -102,6 +106,12 @@ impl<K> PickerItem<K> {
 
     pub fn cell(mut self, column: impl Into<String>, value: impl Into<String>) -> Self {
         self.cells.insert(column.into(), value.into());
+        self
+    }
+
+    /// Apply an agent/provider tone to one rendered cell.
+    pub fn cell_tone(mut self, column: impl Into<String>, provider: ProviderKind) -> Self {
+        self.cell_tones.insert(column.into(), provider);
         self
     }
 
@@ -240,6 +250,8 @@ pub enum PickerAction {
     Submit,
     Toggle,
     Cancel,
+    ActivateSearch,
+    DeactivateSearch,
     AppendQuery(char),
     Backspace,
     ClearQuery,
@@ -255,6 +267,7 @@ pub enum PickerOutcome<K> {
     Selected(K),
     Toggled { key: K, selected: bool },
     Submitted(Vec<K>),
+    SearchModeChanged(bool),
     QueryChanged(String),
     CategoryChanged(Option<String>),
     Cancelled,
@@ -270,8 +283,10 @@ pub struct PickerState<K> {
     pub items: Vec<PickerItem<K>>,
     pub mode: PickerMode,
     pub search_mode: SearchMode,
+    pub search_active: bool,
     pub query: String,
     pub categories: Vec<String>,
+    pub category_tones: BTreeMap<String, ProviderKind>,
     pub active_category: Option<String>,
     pub selected_index: Option<usize>,
     pub selected_keys: Vec<K>,
@@ -293,8 +308,10 @@ impl<K: Clone + Eq> PickerState<K> {
             items: items.into_iter().collect(),
             mode: PickerMode::Single,
             search_mode: SearchMode::Substring,
+            search_active: false,
             query: String::new(),
             categories: Vec::new(),
+            category_tones: BTreeMap::new(),
             active_category: None,
             selected_index: None,
             selected_keys: Vec::new(),
@@ -318,11 +335,21 @@ impl<K: Clone + Eq> PickerState<K> {
 
     pub fn search_mode(mut self, search_mode: SearchMode) -> Self {
         self.search_mode = search_mode;
+        if matches!(search_mode, SearchMode::None) {
+            self.search_active = false;
+            self.query.clear();
+        }
         self
     }
 
     pub fn categories(mut self, categories: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.categories = categories.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Apply an agent/provider tone to one category tab.
+    pub fn category_tone(mut self, category: impl Into<String>, provider: ProviderKind) -> Self {
+        self.category_tones.insert(category.into(), provider);
         self
     }
 
@@ -398,8 +425,24 @@ impl<K: Clone + Eq> PickerState<K> {
             PickerAction::Submit => self.submit(),
             PickerAction::Toggle => self.toggle(),
             PickerAction::Cancel => PickerOutcome::Cancelled,
+            PickerAction::ActivateSearch => {
+                if matches!(self.search_mode, SearchMode::None) || self.search_active {
+                    return PickerOutcome::Unchanged;
+                }
+                self.search_active = true;
+                PickerOutcome::SearchModeChanged(true)
+            }
+            PickerAction::DeactivateSearch => {
+                if !self.search_active {
+                    return PickerOutcome::Unchanged;
+                }
+                self.search_active = false;
+                self.query.clear();
+                self.select_first_available();
+                PickerOutcome::SearchModeChanged(false)
+            }
             PickerAction::AppendQuery(character) => {
-                if matches!(self.search_mode, SearchMode::None) {
+                if !self.search_active {
                     return PickerOutcome::Unchanged;
                 }
                 self.query.push(character);
@@ -407,6 +450,9 @@ impl<K: Clone + Eq> PickerState<K> {
                 PickerOutcome::QueryChanged(self.query.clone())
             }
             PickerAction::Backspace => {
+                if !self.search_active {
+                    return PickerOutcome::Unchanged;
+                }
                 if self.query.pop().is_none() {
                     return PickerOutcome::Unchanged;
                 }
@@ -414,7 +460,7 @@ impl<K: Clone + Eq> PickerState<K> {
                 PickerOutcome::QueryChanged(self.query.clone())
             }
             PickerAction::ClearQuery => {
-                if self.query.is_empty() {
+                if !self.search_active || self.query.is_empty() {
                     return PickerOutcome::Unchanged;
                 }
                 self.query.clear();

@@ -565,11 +565,6 @@ fn test_resume_viewonly_shows_transcript() {
         .wait_for_text("View previous session", Duration::from_secs(5))
         .expect("Should show viewonly session picker");
 
-    // The picker should show navigation hints
-    session
-        .wait_for_text("to navigate", Duration::from_secs(2))
-        .expect("Should show picker footer hint");
-
     std::thread::sleep(Duration::from_millis(200));
 
     // The picker lists sessions with newest first. Empty sessions (0 messages) are

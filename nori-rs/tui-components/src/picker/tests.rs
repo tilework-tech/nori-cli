@@ -1,10 +1,13 @@
 use super::*;
+use crate::ProviderKind;
 use crate::Theme;
 use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
 use ratatui::style::Color;
+use ratatui::style::Modifier;
 
 fn session_picker() -> PickerState<String> {
     let columns = [
@@ -112,12 +115,12 @@ fn picker_compact_uses_single_height_rows_snapshot() {
 #[allow(clippy::disallowed_methods)]
 fn picker_applies_density_surfaces_search_input_and_selection() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
+    let mut normal_state = session_picker();
+    normal_state.handle(PickerAction::ActivateSearch);
     let backend = TestBackend::new(100, 16);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
-        .draw(|frame| {
-            frame.render_widget(Picker::new(&session_picker()).theme(theme), frame.area())
-        })
+        .draw(|frame| frame.render_widget(Picker::new(&normal_state).theme(theme), frame.area()))
         .expect("draw picker");
     let buffer = terminal.backend().buffer();
 
@@ -134,11 +137,13 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
     assert_eq!(buffer[(3, 14)].bg, Color::Reset);
 
     let backend = TestBackend::new(86, 13);
+    let mut compact_state = session_picker();
+    compact_state.handle(PickerAction::ActivateSearch);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
         .draw(|frame| {
             frame.render_widget(
-                Picker::new(&session_picker())
+                Picker::new(&compact_state)
                     .theme(theme)
                     .density(PickerDensity::Compact),
                 frame.area(),
@@ -151,8 +156,99 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
 }
 
 #[test]
+fn picker_maps_agent_tones_to_category_tabs_and_type_cells() {
+    let columns = [
+        PickerColumn::fixed("title", "Agent", 16),
+        PickerColumn::fixed("type", "Type", 16),
+    ];
+    let items = [
+        PickerItem::new("selected", "title", "Selected row").cell("type", "Neutral"),
+        PickerItem::new("claude", "title", "Agent one")
+            .cell("type", "Claude")
+            .cell_tone("type", ProviderKind::Claude),
+        PickerItem::new("codex", "title", "Agent two")
+            .cell("type", "Codex")
+            .cell_tone("type", ProviderKind::Codex),
+        PickerItem::new("gemini", "title", "Agent three")
+            .cell("type", "Gemini")
+            .cell_tone("type", ProviderKind::Gemini),
+        PickerItem::new("antigravity", "title", "Agent four")
+            .cell("type", "Antigravity")
+            .cell_tone("type", ProviderKind::Antigravity),
+        PickerItem::new("nori", "title", "Agent five")
+            .cell("type", "Nori")
+            .cell_tone("type", ProviderKind::Nori),
+    ];
+    let state = PickerState::new("Agent picker", columns, items)
+        .categories(["Claude", "Codex", "Gemini", "Antigravity", "Nori"])
+        .category_tone("Claude", ProviderKind::Claude)
+        .category_tone("Codex", ProviderKind::Codex)
+        .category_tone("Gemini", ProviderKind::Gemini)
+        .category_tone("Antigravity", ProviderKind::Antigravity)
+        .category_tone("Nori", ProviderKind::Nori);
+
+    let buffer = rendered_picker_buffer(&state, 110, 22);
+    let expected = [
+        ("Claude", Color::Yellow),
+        ("Codex", Color::White),
+        ("Gemini", Color::Blue),
+        ("Antigravity", Color::Blue),
+        ("Nori", Color::Green),
+    ];
+    for (label, color) in expected {
+        let category = find_ascii_text_at_or_below(&buffer, label, 2).expect("category tab");
+        assert_eq!(buffer[category].fg, color, "{label} category tone");
+        assert!(!buffer[category].modifier.contains(Modifier::BOLD));
+
+        let cell = find_ascii_text_at_or_below(&buffer, label, 4).expect("type cell");
+        assert_eq!(buffer[cell].fg, color, "{label} type tone");
+    }
+    let mut active_state = state;
+    assert_eq!(
+        active_state.handle(PickerAction::NextCategory),
+        PickerOutcome::CategoryChanged(Some("Claude".to_string()))
+    );
+    let active_buffer = rendered_picker_buffer(&active_state, 110, 22);
+    let active_claude =
+        find_ascii_text_at_or_below(&active_buffer, "Claude", 2).expect("active Claude tab");
+    assert_eq!(active_buffer[active_claude].fg, Color::Yellow);
+    assert!(
+        active_buffer[active_claude]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+}
+
+#[test]
+fn selection_and_disabled_styles_override_provider_cell_tones() {
+    let columns = [
+        PickerColumn::fixed("title", "Agent", 16),
+        PickerColumn::fixed("type", "Type", 16),
+    ];
+    let items = [
+        PickerItem::new("selected", "title", "Selected row")
+            .cell("type", "Selected tone")
+            .cell_tone("type", ProviderKind::Claude),
+        PickerItem::new("disabled", "title", "Disabled row")
+            .cell("type", "Disabled tone")
+            .cell_tone("type", ProviderKind::Nori)
+            .disabled(true),
+    ];
+    let state = PickerState::new("Agent picker", columns, items);
+
+    let buffer = rendered_picker_buffer(&state, 64, 12);
+    let selected_tone =
+        find_ascii_text_at_or_below(&buffer, "Selected tone", 2).expect("selected type cell");
+    assert_eq!(buffer[selected_tone].fg, Color::Cyan);
+    let disabled_tone =
+        find_ascii_text_at_or_below(&buffer, "Disabled tone", 2).expect("disabled type cell");
+    assert_eq!(buffer[disabled_tone].fg, Color::DarkGray);
+}
+
+#[test]
 fn picker_fuzzy_filter_snapshot() {
     let mut state = session_picker();
+    state.handle(PickerAction::ActivateSearch);
     for character in "mdtab".chars() {
         state.handle(PickerAction::AppendQuery(character));
     }
@@ -214,6 +310,7 @@ fn caller_can_supply_a_custom_matcher() {
     }
 
     let mut state = session_picker().search_mode(SearchMode::Custom(prefix_score));
+    state.handle(PickerAction::ActivateSearch);
     state.handle(PickerAction::AppendQuery('m'));
 
     assert_eq!(
@@ -224,4 +321,35 @@ fn caller_can_supply_a_custom_matcher() {
             .collect::<Vec<_>>(),
         vec!["tables"]
     );
+}
+
+fn rendered_picker_buffer<K: Clone + Eq>(
+    state: &PickerState<K>,
+    width: u16,
+    height: u16,
+) -> Buffer {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| frame.render_widget(Picker::new(state), frame.area()))
+        .expect("draw picker");
+    terminal.backend().buffer().clone()
+}
+
+fn find_ascii_text_at_or_below(buffer: &Buffer, text: &str, minimum_y: u16) -> Option<(u16, u16)> {
+    assert!(text.is_ascii());
+    let characters = text.chars().collect::<Vec<_>>();
+    for y in minimum_y.max(buffer.area.y)..buffer.area.bottom() {
+        for x in buffer.area.x..buffer.area.right() {
+            if x.saturating_add(characters.len() as u16) > buffer.area.right() {
+                break;
+            }
+            if characters.iter().enumerate().all(|(offset, character)| {
+                buffer[(x + offset as u16, y)].symbol() == character.to_string()
+            }) {
+                return Some((x, y));
+            }
+        }
+    }
+    None
 }

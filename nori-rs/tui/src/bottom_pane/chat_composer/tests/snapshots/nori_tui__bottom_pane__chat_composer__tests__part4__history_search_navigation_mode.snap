@@ -1,0 +1,7 @@
+---
+source: tui/src/bottom_pane/chat_composer/tests/part4.rs
+expression: render_history_search(&composer)
+---
+  first entry
+  second entry
+  esc close  enter select  j/k move  / search
