@@ -53,7 +53,7 @@ use crate::session_stats::SessionStats;
 use crate::slash_command::SlashCommand;
 use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
-mod agent;
+pub(crate) mod agent;
 pub(crate) use self::agent::HarnessHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
@@ -154,6 +154,8 @@ pub(crate) struct ChatWidgetInit {
     /// Optional conversation context to inject into the first prompt.
     /// Used by `/fork` to pass prior conversation history to the new session.
     pub(crate) fork_context: Option<String>,
+    /// A live initialized connection to consume instead of spawning one.
+    pub(crate) prepared_agent: Option<nori_harness::runtime::PreparedAgent>,
 }
 
 /// Controls the pinned plan drawer visibility and display mode.
@@ -214,8 +216,6 @@ pub(crate) struct ChatWidget {
     pending_client_tool_cells: HashMap<String, ClientToolCell>,
     // Tracks the effective CWD based on tool call locations for footer updates.
     effective_cwd_tracker: EffectiveCwdTracker,
-    // Pending agent selection for next prompt submission
-    pending_agent: Option<PendingAgentInfo>,
     // Whether SessionConfigured has been received for this widget.
     session_configured_received: bool,
     // Typed handle for the active harness session.
@@ -237,6 +237,9 @@ pub(crate) struct ChatWidget {
     assistant_stream_seen_for_stats: bool,
     // Login handler for /login command
     login_handler: Option<LoginHandler>,
+    // Failed/selected switch target used only to route a bare /login. This
+    // does not imply a pending agent switch.
+    login_agent_override: Option<String>,
     active_resume_picker_generation: Option<u64>,
     // The first user prompt text, preserved for /first-prompt command
     first_prompt_text: Option<String>,
@@ -282,13 +285,6 @@ pub(crate) struct ChatWidget {
     terminal_title_animation_origin: Instant,
     // Terminal title state: cache to avoid redundant OSC writes.
     last_terminal_title: Option<String>,
-}
-
-/// Information about a pending agent switch in ChatWidget.
-#[derive(Debug, Clone)]
-pub(crate) struct PendingAgentInfo {
-    pub agent_name: String,
-    pub display_name: String,
 }
 
 struct UserMessage {

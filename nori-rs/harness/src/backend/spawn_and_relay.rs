@@ -10,38 +10,24 @@ async fn forward_public_acp_event(
         .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))
 }
 
-pub(super) async fn spawn_connection_with_public_initialize(
-    agent_config: &crate::registry::AcpAgentConfig,
-    cwd: &std::path::Path,
-    acp_proxy: crate::config::AcpProxyConfig,
+async fn forward_public_session_events(
     backend_event_tx: &mpsc::Sender<BackendEvent>,
-) -> Result<AcpConnection> {
-    let (initialize_event_tx, mut initialize_event_rx) = mpsc::channel(1);
-    let connection_result = AcpConnection::spawn_with_initialize_event_sender(
-        agent_config,
-        cwd,
-        acp_proxy,
-        initialize_event_tx,
-    )
-    .await;
-    let initialize_event = initialize_event_rx.recv().await;
-    let initialize_observed = initialize_event.is_some();
-    if let Some(initialize_event) = initialize_event {
-        forward_public_acp_event(backend_event_tx, initialize_event).await?;
+    events: impl IntoIterator<Item = SessionEvent>,
+) -> Result<()> {
+    for event in events {
+        backend_event_tx
+            .send(BackendEvent::Public(event))
+            .await
+            .map_err(|_| anyhow::anyhow!("session event receiver closed during bootstrap"))?;
     }
-    match connection_result {
-        Ok(connection) if initialize_observed => Ok(connection),
-        Ok(_) => anyhow::bail!("ACP agent produced no initialize response"),
-        Err(error) => Err(enhance_agent_error(error, agent_config)),
-    }
+    Ok(())
 }
 
 /// Force the persisted default model into the agent's spawn configuration via
 /// its out-of-band channel (see `ModelInjection`). Best-effort: a failure is
-/// logged and never blocks startup. Both the fresh-spawn and resume paths call
-/// this because each spawns a new subprocess and env-based injection is
-/// per-process — a resumed session must re-apply it or it would silently run
-/// the adapter default instead of the persisted model.
+/// logged and never blocks startup. Preparation calls this before spawning the
+/// subprocess so new, loaded, and resumed sessions all use the model injected
+/// into the exact connection they later activate.
 pub(super) fn inject_default_model(
     agent_config: &mut crate::registry::AcpAgentConfig,
     default_model: Option<&str>,
@@ -122,38 +108,39 @@ impl AcpBackend {
         }
     }
 
-    /// Spawn an ACP backend for the given configuration.
+    /// Activate a prepared ACP connection with a new session.
     ///
     /// This will:
-    /// 1. Look up the agent config from the registry
-    /// 2. Spawn the ACP connection
-    /// 3. Create a session
-    /// 4. Send a synthetic `SessionConfigured` event
-    /// 5. Start background tasks for control-plane forwarding, approvals, and normalized session updates
+    /// 1. Consume the already initialized connection
+    /// 2. Create a session on that connection
+    /// 3. Send a synthetic `SessionConfigured` event
+    /// 4. Start background tasks for control-plane forwarding, approvals, and normalized session updates
     ///
     /// # Arguments
-    /// * `config` - The ACP backend configuration
+    /// * `prepared` - The uniquely owned initialized ACP connection
     /// * `backend_event_tx` - Channel to send ACP backend events to the TUI
     ///
     /// # Returns
     /// A connected `AcpBackend` ready to receive operations.
     pub async fn spawn(
-        config: &AcpBackendConfig,
+        prepared: super::prepared::PreparedAgent,
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
+        let super::prepared::PreparedAgentParts {
+            connection,
+            mut event_rx,
+            config,
+            setup_events,
+        } = prepared.into_parts();
+        let config = &config;
         let cwd = config.cwd.clone();
 
-        let mut agent_config = get_agent_config(&config.agent)?;
-        inject_default_model(&mut agent_config, config.default_model.as_deref());
-        debug!("Spawning ACP backend for agent: {}", config.agent);
-        let mut connection = spawn_connection_with_public_initialize(
-            &agent_config,
-            &cwd,
-            config.acp_proxy.clone(),
-            &backend_event_tx,
-        )
-        .await?;
-        let mut event_rx = connection.take_event_receiver();
+        let agent_config = get_agent_config(&config.agent)?;
+        debug!(
+            "Activating prepared ACP backend for agent: {}",
+            config.agent
+        );
+        forward_public_session_events(&backend_event_tx, setup_events).await?;
 
         let thread_goal_state = Arc::new(Mutex::new(thread_goal::ThreadGoalState::default()));
         let goal_mcp_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));

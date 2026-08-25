@@ -51,6 +51,11 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
 - Initialization can route its raw response to the harness independently of
   connection construction, preserving schema errors even when construction
   fails without duplicating successful initialize events.
+- Spawn transfers the child to its watcher and immediately installs a
+  `ChildHandle` cancellation guard before awaiting ACP initialization. If the
+  initialization future is aborted, dropping that guard kills the process
+  group and lets the watcher reap it instead of orphaning a half-initialized
+  agent.
 - Each prompt call issues exactly one ACP `session/prompt` request and publishes
   its transport-assigned ID. Cancellation does not trigger a hidden resend or
   cancel-tail absorption loop. A successful empty `EndTurn` response is a
@@ -156,7 +161,9 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
 - Shutdown closes stdin and optionally waits for a caller-selected grace period.
   The child owner then kills the process group before reaping its leader, so
   MCP servers and other descendants cannot survive a cooperative agent exit.
-  A nonzero grace is reserved for flows such as cloud detach.
+  A nonzero grace is reserved for bounded cooperative cleanup, including the
+  short pre-session grace for an abandoned prepared connection and the longer
+  cloud-detach path.
 - The removed ACP-to-Codex translator must not be recreated. Display-friendly
   projection belongs privately in a consumer such as the TUI.
 

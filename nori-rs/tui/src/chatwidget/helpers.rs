@@ -311,13 +311,38 @@ impl ChatWidget {
     }
 
     pub(crate) fn shutdown_harness_session(&self) {
-        if self.harness_handle.is_some() {
-            let child_grace = if self.cloud_mode {
-                CLOUD_EXIT_CHILD_GRACE
-            } else {
-                std::time::Duration::ZERO
-            };
-            self.submit_harness_action(crate::app_event::HarnessAction::Shutdown { child_grace });
+        let Some(handle) = self.harness_handle.clone() else {
+            return;
+        };
+        let child_grace = if self.cloud_mode {
+            CLOUD_EXIT_CHILD_GRACE
+        } else {
+            std::time::Duration::ZERO
+        };
+        tokio::spawn(async move {
+            if let Err(error) = handle.shutdown_with_grace(child_grace).await {
+                tracing::warn!(%error, "failed to shut down replaced harness session");
+            }
+        });
+    }
+
+    /// Move the process-wide remote surface to a switch candidate after the
+    /// app has accepted its `SessionStarted` commit event.
+    pub(crate) async fn attach_remote_host_after_start(
+        &self,
+        started: nori_protocol::SessionStarted,
+    ) {
+        let Some(remote_host) = nori_harness::remote_agent::active_host() else {
+            return;
+        };
+        let Some(handle) = self.harness_handle.clone() else {
+            return;
+        };
+        if let Err(error) = remote_host
+            .attach_started(handle, self.config.nori_home.clone(), started)
+            .await
+        {
+            tracing::warn!(%error, "failed to attach committed candidate to remote ACP host");
         }
     }
 

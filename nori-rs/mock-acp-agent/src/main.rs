@@ -897,8 +897,17 @@ impl MockAgent {
             }
         }
 
-        // Support custom response text for TUI testing
-        if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
+        // Support custom response text for TUI testing. A model-specific
+        // variable lets multi-agent tests distinguish which subprocess
+        // produced a response while retaining the generic fallback.
+        let model_name = std::env::var("MOCK_AGENT_MODEL_NAME").unwrap_or_default();
+        let model_response_var = format!(
+            "MOCK_AGENT_RESPONSE_{}",
+            model_name.replace('-', "_").to_uppercase()
+        );
+        if let Ok(response) =
+            std::env::var(&model_response_var).or_else(|_| std::env::var("MOCK_AGENT_RESPONSE"))
+        {
             // MOCK_AGENT_RESPONSE_CHUNK_CHARS splits the response into small chunks the way a real
             // model streams it, so tests can cover incremental rendering instead of a single chunk
             // that always parses as complete markdown.
@@ -1506,6 +1515,18 @@ async fn main() -> acp::Result<()> {
                             responder: Responder<acp::NewSessionResponse>,
                             cx: ConnectionTo<Client>| {
                     let session_id = state.next_session_id.fetch_add(1, Ordering::SeqCst);
+                    let model_name = std::env::var("MOCK_AGENT_MODEL_NAME").unwrap_or_default();
+                    if std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_MODEL")
+                        .is_ok_and(|failed_model| failed_model == model_name)
+                    {
+                        eprintln!(
+                            "Mock agent: simulating new_session failure for model={model_name}"
+                        );
+                        return responder.respond_with_error(acp::Error::new(
+                            -32002,
+                            "Mock model-specific new_session failure for testing",
+                        ));
+                    }
                     if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
                         && let Ok(fail_from) = fail_from.parse::<i64>()
                         && session_id >= fail_from

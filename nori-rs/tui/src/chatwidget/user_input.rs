@@ -139,18 +139,6 @@ impl ChatWidget {
                 agent: Some(self.config.active_agent.clone()),
             });
 
-        // Check if there's a pending agent switch - if so, send the message through
-        // the App to trigger the switch first
-        if let Some(pending) = self.pending_agent.take() {
-            self.app_event_tx.send(AppEvent::SubmitWithAgentSwitch {
-                agent_name: pending.agent_name,
-                display_name: pending.display_name,
-                message_text: text,
-                image_paths,
-            });
-            return;
-        }
-
         // Special-case: "!cmd" executes a local shell command instead of sending to the model.
         if let Some(stripped) = text.strip_prefix('!') {
             let cmd = stripped.trim();

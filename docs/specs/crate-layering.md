@@ -85,7 +85,8 @@ Layer 1 — configuration
 Layer 2 — ACP host
 └── nori-acp-host     ACP host-side library over nori-protocol and nori-config:
                       agent registry, subprocess spawn, JSON-RPC/stdio
-                      connection, session lifecycle, permission plumbing.
+                      connection, session RPCs, permission plumbing. Connection
+                      initialization does not imply an active session.
 
 Layer 3 — headless runtime (the harness product)
 └── nori-harness      Session runtime over nori-acp-host: backend reducer,
@@ -118,6 +119,10 @@ may depend upward.
 4. New functionality lands in a new module or crate before it grows an
    existing one ("resist adding code to core", inherited and kept).
 5. No cargo feature may change which crate owns a responsibility.
+6. Connection and session lifetimes remain separate. `nori-acp-host` owns the
+   initialized connection; `nori-harness` may retain it without a session and
+   consumes it exactly once to construct a session-bound backend. See
+   `docs/specs/acp-connection-lifecycle.md`.
 
 ### Non-goals
 

@@ -254,6 +254,10 @@ impl TuiSession {
             cmd.arg("--skip-trust-directory");
         }
 
+        for arg in &config.args {
+            cmd.arg(arg);
+        }
+
         // Set TERM to enable terminal features
         cmd.env("TERM", "xterm-256color");
 
@@ -698,6 +702,8 @@ pub struct SessionConfig {
     pub agent: String,
     /// Subcommand to run before the flags (e.g. "cloud" for `nori cloud`).
     pub subcommand: Option<String>,
+    /// Positional arguments appended after the standard test flags.
+    pub args: Vec<String>,
     pub mock_agent_env: HashMap<String, String>,
     pub no_color: bool,
     /// Skip the trust directory prompt (passes --skip-trust-directory flag).
@@ -737,6 +743,7 @@ impl SessionConfig {
         Self {
             agent: "mock-model".to_string(),
             subcommand: None,
+            args: Vec::new(),
             mock_agent_env: HashMap::new(),
             no_color: true,
             skip_trust_directory: true, // Skip trust prompt by default for E2E tests
@@ -765,6 +772,11 @@ impl SessionConfig {
     /// Run `nori <subcommand>` instead of plain `nori` (e.g. "cloud").
     pub fn with_subcommand(mut self, subcommand: impl Into<String>) -> Self {
         self.subcommand = Some(subcommand.into());
+        self
+    }
+
+    pub fn with_arg(mut self, arg: impl Into<String>) -> Self {
+        self.args.push(arg.into());
         self
     }
 

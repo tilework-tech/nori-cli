@@ -436,15 +436,17 @@ fn test_agent_command_shows_available_agents() {
 }
 
 // ============================================================================
-// Test: /agent Slash Command - Pending Selection
+// Test: /agent Slash Command - Activate Candidate
 // ============================================================================
 
-/// Test that selecting an agent in /agent tracks it as pending and doesn't
-/// switch immediately
+/// Choosing a session activates the prepared candidate without waiting for a
+/// prompt to trigger another spawn.
 #[test]
 #[cfg(target_os = "linux")]
-fn test_agent_command_pending_selection() {
-    let config = SessionConfig::new().with_agent("mock-model".to_string());
+fn test_agent_switch_activates_prepared_candidate() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -476,90 +478,207 @@ fn test_agent_command_pending_selection() {
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(Duration::from_millis(500));
-
-    // After selecting, the OLD agent should still be running (pending selection)
-    let pids_after_selection = extract_mock_agent_pids_from_log(&log_path);
-    assert_eq!(
-        pids_after_selection.len(),
-        initial_pids.len(),
-        "No new subprocess should be spawned yet - selection is pending until next prompt"
-    );
-
-    // The original process should still be alive
-    assert!(
-        process_exists_and_not_zombie(initial_pid),
-        "Original agent should still be running after pending selection"
-    );
-}
-
-// ============================================================================
-// Test: /agent Slash Command - Switch on Prompt Submission
-// ============================================================================
-
-/// Test that agent switch happens on next prompt submission
-#[test]
-#[cfg(target_os = "linux")]
-fn test_agent_switch_on_prompt_submission() {
-    let config = SessionConfig::new().with_agent("mock-model".to_string());
-
-    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
-
     session
-        .wait_for_text("›", TIMEOUT)
-        .expect("TUI should start");
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
-    let initial_pid = initial_pids[0];
-
-    // Open agent picker with /agent command
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    // Wait for agent picker to appear (8 seconds - CI detection is slow)
-    session
-        .wait_for(
-            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
-            Duration::from_secs(8),
-        )
-        .expect("Agent picker should appear");
-
-    // Select a different agent (mock-model-alt)
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(Duration::from_millis(500));
-
-    // Now submit a prompt - this should trigger the agent switch
-    session.send_str("hello").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-
-    // Wait for the response from the new agent to appear on screen, confirming
-    // the agent switch + spawn actually happened.
-    session
-        .wait_for_text("Test message", Duration::from_secs(10))
-        .expect("Response from switched agent should appear");
-
-    // Poll the log through the TUI harness so terminal control-sequence
-    // responses are still handled while the async log writer catches up.
-    let post_prompt_pids = wait_for_mock_agent_pid_count(
+        .wait_for_text("Start a new session", Duration::from_secs(10))
+        .expect("the candidate session picker should open");
+    let prepared_pids = wait_for_mock_agent_pid_count(
         &mut session,
         &log_path,
         initial_pids.len() + 1,
         Duration::from_secs(10),
     );
+    let new_pid = prepared_pids
+        .iter()
+        .copied()
+        .find(|pid| !initial_pids.contains(pid))
+        .expect("preparation should add one candidate process");
+    assert!(
+        process_exists_and_not_zombie(initial_pid),
+        "the current agent must remain alive until candidate activation"
+    );
 
-    let new_pid = *post_prompt_pids.last().unwrap();
+    // Row 0 explicitly starts a new session on the prepared connection.
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("›", Duration::from_secs(10))
+        .expect("candidate activation should return to the composer");
     assert_ne!(
         initial_pid, new_pid,
-        "New agent should have different PID after prompt submission"
+        "the prepared candidate must be a distinct process"
     );
+    let activated_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert_eq!(
+        activated_pids, prepared_pids,
+        "activation must reuse the prepared child instead of spawning a third process"
+    );
+    assert!(
+        process_exists_and_not_zombie(new_pid),
+        "the prepared child must become the active agent"
+    );
+    session
+        .wait_for(|_| !process_exists(initial_pid), Duration::from_secs(10))
+        .expect("the replaced process should be reaped after candidate SessionStarted");
+
+    session.send_str("hello").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Test message", Duration::from_secs(10))
+        .expect("the activated candidate should answer prompts");
+}
+
+/// Cancelling a prepared candidate destroys only that candidate and restores
+/// the still-live current session.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_candidate_cancel_keeps_current_session_promptable() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    let log_path = session.acp_log_path().expect("log path");
+    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Select Agent", Duration::from_secs(8))
+        .expect("agent picker");
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Start a new session", Duration::from_secs(10))
+        .expect("candidate session picker");
+    let pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 2, Duration::from_secs(10));
+    let candidate_pid = *pids.last().unwrap();
+
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for_text("›", Duration::from_secs(10))
+        .expect("cancelling should restore the current composer");
+    session
+        .wait_for(|_| !process_exists(candidate_pid), Duration::from_secs(10))
+        .expect("cancelled candidate should be reaped");
+    assert!(
+        process_exists_and_not_zombie(current_pid),
+        "current process must survive candidate cancellation"
+    );
+
+    session.send_str("still current").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Test message", Duration::from_secs(10))
+        .expect("current session should remain promptable after cancellation");
+}
+
+/// A session-directive failure reaps the candidate and leaves the current
+/// session available for another prompt.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
+        .with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_MODEL", "mock-model-alt");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    let log_path = session.acp_log_path().expect("log path");
+    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Select Agent", Duration::from_secs(8))
+        .expect("agent picker");
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Start a new session", Duration::from_secs(10))
+        .expect("candidate session picker");
+    let pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 2, Duration::from_secs(10));
+    let candidate_pid = *pids.last().unwrap();
+
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Failed to start ACP session", Duration::from_secs(10))
+        .expect("candidate activation failure should be visible");
+    session
+        .wait_for(|_| !process_exists(candidate_pid), Duration::from_secs(10))
+        .expect("failed candidate should be reaped");
+    assert!(
+        process_exists_and_not_zombie(current_pid),
+        "current process must survive candidate activation failure"
+    );
+
+    session.send_str("still current").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Test message", Duration::from_secs(10))
+        .expect("current session should remain promptable after candidate failure");
+}
+
+/// A candidate whose initialize never completes must time out, be reaped, and
+/// leave the current session available for another prompt.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_agent_candidate_preparation_timeout_keeps_current_session_promptable() {
+    let config = SessionConfig::new()
+        .with_agent("mock-model".to_string())
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS_MOCK_MODEL_ALT", "60000");
+    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("spawn TUI");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    let log_path = session.acp_log_path().expect("log path");
+    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Select Agent", Duration::from_secs(8))
+        .expect("agent picker");
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    let pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 2, Duration::from_secs(10));
+    let candidate_pid = pids
+        .iter()
+        .copied()
+        .find(|pid| *pid != current_pid)
+        .expect("candidate process pid");
+
+    session
+        .wait_for_text(
+            "timed out preparing agent after 20s",
+            Duration::from_secs(25),
+        )
+        .expect("hung candidate preparation should time out");
+    session
+        .wait_for(|_| !process_exists(candidate_pid), Duration::from_secs(10))
+        .expect("timed-out candidate should be reaped");
+    assert!(
+        process_exists_and_not_zombie(current_pid),
+        "current process must survive candidate preparation timeout"
+    );
+
+    session.send_str("still current after timeout").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Test message", Duration::from_secs(10))
+        .expect("current session should remain promptable after candidate timeout");
 }
 
 // ============================================================================
@@ -665,100 +784,16 @@ fn test_model_command_shows_disabled_in_acp_mode() {
 }
 
 // ============================================================================
-// Test: /agent Slash Command - Cleanup After Switch
-// ============================================================================
-
-/// Test that old agent subprocess is cleaned up after switch on prompt
-#[test]
-#[cfg(target_os = "linux")]
-fn test_agent_cleanup_after_switch_on_prompt() {
-    let config = SessionConfig::new().with_agent("mock-model".to_string());
-
-    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
-
-    session
-        .wait_for_text("›", TIMEOUT)
-        .expect("TUI should start");
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
-    let initial_pid = initial_pids[0];
-
-    // Verify initial process exists
-    assert!(
-        process_exists_and_not_zombie(initial_pid),
-        "Initial agent should exist"
-    );
-
-    // Open agent picker and select a different agent
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    // Wait for agent picker to appear (8 seconds - CI detection is slow)
-    session
-        .wait_for(
-            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
-            Duration::from_secs(8),
-        )
-        .expect("Agent picker should appear");
-
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(Duration::from_millis(500));
-
-    // Submit prompt to trigger switch
-    session.send_str("trigger switch").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-
-    // Wait for the new agent's response to confirm the switch completed.
-    session
-        .wait_for_text("Test message", Duration::from_secs(10))
-        .expect("Response from switched agent should appear");
-
-    session
-        .wait_for(
-            |_| !process_exists(initial_pid) || !process_exists_and_not_zombie(initial_pid),
-            Duration::from_secs(10),
-        )
-        .unwrap_or_else(|err| {
-            panic!("Old agent subprocess {initial_pid} should be cleaned up after switch: {err}")
-        });
-}
-
-// ============================================================================
 // Test: Agent Switch Message Flow - Verifies NEW agent receives and responds
 // ============================================================================
-
-/// Helper to extract agent messages from log file
-/// Each mock agent logs to stderr which is captured in the ACP log
-fn extract_agent_messages_from_log(log_path: &std::path::Path) -> Vec<String> {
-    std::fs::read_to_string(log_path)
-        .unwrap_or_default()
-        .lines()
-        .filter(|line| {
-            line.contains("Mock agent:")
-                || line.contains("cancel")
-                || line.contains("shutdown")
-                || line.contains("prompt")
-        })
-        .map(|s| s.to_string())
-        .collect()
-}
 
 /// Test that when switching agents via /agent command, the NEW agent
 /// correctly receives and responds to the submitted prompt.
 ///
-/// This test explicitly verifies the message flow:
-/// 1. OLD agent should receive a cancel/shutdown signal
-/// 2. NEW agent should receive a new_session request
-/// 3. NEW agent should receive the prompt and respond
-/// 4. Response from NEW agent appears on screen
+/// This keeps the unique user-visible workflow at the PTY boundary: the old
+/// agent answers, the switch commits under the selected display name, and the
+/// new conversation answers independently. Exact ACP request ordering belongs
+/// to the harness wire-boundary tests.
 ///
 /// This catches the race condition bug where events from the OLD agent
 /// could leak into the NEW widget, causing the prompt to be lost.
@@ -767,7 +802,11 @@ fn extract_agent_messages_from_log(log_path: &std::path::Path) -> Vec<String> {
 fn test_agent_switch_message_flow_mock_to_mock_alt() {
     let config = SessionConfig::new()
         .with_agent("mock-model".to_string())
-        .with_agent_env("MOCK_AGENT_ECHO_PROMPT", "1");
+        .with_mock_response("initial agent response marker")
+        .with_agent_env(
+            "MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT",
+            "switched agent response marker",
+        );
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -776,21 +815,15 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    let log_path = session.acp_log_path().expect("Should have log path");
-
-    // First, verify initial agent works - send a prompt
+    // First, verify the initial agent works.
     session.send_str("test initial").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
     // Wait for the initial agent's echoed prompt.
     session
-        .wait_for_text("test initial", Duration::from_secs(5))
+        .wait_for_text("initial agent response marker", Duration::from_secs(5))
         .expect("Initial agent should respond");
-
-    // Log messages before switch
-    let msgs_before_switch = extract_agent_messages_from_log(&log_path);
-    eprintln!("Messages before switch: {:?}", msgs_before_switch);
 
     // Open agent picker with /agent command
     session.send_str("/agent").unwrap();
@@ -810,79 +843,26 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(Duration::from_millis(500));
+    session
+        .wait_for_text("Start a new session", Duration::from_secs(10))
+        .expect("candidate session picker should open");
 
-    // Messages after selection (but before prompt submission)
-    let msgs_after_selection = extract_agent_messages_from_log(&log_path);
-    eprintln!("Messages after selection: {:?}", msgs_after_selection);
+    // Activate the prepared candidate before submitting a prompt.
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text(
+            "Started new conversation with agent: Mock ACP Alt",
+            Duration::from_secs(10),
+        )
+        .expect("prepared candidate should commit before accepting the next prompt");
 
-    // Now submit a prompt - this should trigger the actual agent switch
-    // The NEW agent (mock-model-alt) should receive this prompt and respond
+    // The new active agent should receive this prompt and respond.
     session.send_str("test after switch").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Poll the log through the TUI harness so terminal control-sequence
-    // responses are still handled while the async log writer catches up.
-    let latest_msgs = RefCell::new(Vec::new());
     session
-        .wait_for(
-            |_| {
-                let msgs = extract_agent_messages_from_log(&log_path);
-                let prompt_count = msgs
-                    .iter()
-                    .filter(|m| m.contains("Mock agent: prompt"))
-                    .count();
-                let new_session_count = msgs.iter().filter(|m| m.contains("new_session")).count();
-                let ready = prompt_count >= 2 && new_session_count >= 2;
-                *latest_msgs.borrow_mut() = msgs;
-                ready
-            },
-            Duration::from_secs(10),
-        )
-        .unwrap_or_else(|err| {
-            let screen = session.screen_contents();
-            let msgs = latest_msgs.borrow();
-            let prompt_count = msgs
-                .iter()
-                .filter(|m| m.contains("Mock agent: prompt"))
-                .count();
-            let new_session_count = msgs.iter().filter(|m| m.contains("new_session")).count();
-            panic!(
-                "Expected 2 prompt and 2 new_session calls, got prompts={prompt_count}, sessions={new_session_count}.\n\
-                 Screen contents: {screen}\n\
-                 Agent messages in log: {msgs:?}: {err}"
-            );
-        });
-    let msgs_after_prompt = latest_msgs.into_inner();
-    eprintln!("Messages after prompt submission: {:?}", msgs_after_prompt);
-
-    // Verify message flow in logs:
-    // 1. Should see "Mock agent: new_session" for the NEW agent
-    // 2. Should see "Mock agent: prompt" for the NEW agent
-    let new_session_count = msgs_after_prompt
-        .iter()
-        .filter(|m| m.contains("new_session"))
-        .count();
-    let prompt_count = msgs_after_prompt
-        .iter()
-        .filter(|m| m.contains("Mock agent: prompt"))
-        .count();
-
-    assert!(
-        new_session_count >= 2,
-        "Should have new_session calls for both agents, messages: {:?}",
-        msgs_after_prompt
-    );
-    assert!(
-        prompt_count >= 2,
-        "Should have prompt calls for both agents, messages: {:?}",
-        msgs_after_prompt
-    );
-    // Final verification: wait for the response itself rather than assuming it
-    // has rendered immediately after the mock logs receipt of the prompt.
-    session
-        .wait_for_text("test after switch", TIMEOUT)
+        .wait_for_text("switched agent response marker", TIMEOUT)
         .expect("Screen should contain response text");
 }
 
@@ -977,132 +957,6 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
         "Expected at least 4 distinct agents in picker, found approximately: {}. Screen: {}",
         agent_count,
         screen
-    );
-}
-
-/// Test that verifies the expected sequence of operations when switching agents
-/// This is a more focused test that checks specific message ordering
-#[test]
-#[cfg(target_os = "linux")]
-fn test_agent_switch_logs_correct_sequence() {
-    let config = SessionConfig::new().with_agent("mock-model".to_string());
-
-    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
-
-    session
-        .wait_for_text("›", TIMEOUT)
-        .expect("TUI should start");
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
-
-    // Select new agent via /agent
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    // Wait for agent picker to appear (8 seconds - CI detection is slow)
-    session
-        .wait_for(
-            |screen| screen.contains("Select Agent"),
-            Duration::from_secs(8),
-        )
-        .expect("Agent picker should appear");
-
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    std::thread::sleep(Duration::from_millis(300));
-
-    // Submit prompt to trigger switch
-    session.send_str("trigger").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-
-    // Wait for response
-    session
-        .wait_for_text("Test message", Duration::from_secs(10))
-        .expect("Should see response from new agent");
-
-    // Poll the log through the TUI harness so terminal control-sequence
-    // responses are still handled while the async log writer catches up.
-    let latest_log_content = RefCell::new(String::new());
-    session
-        .wait_for(
-            |_| {
-                let content = std::fs::read_to_string(&log_path).unwrap_or_default();
-                let spawn_count = content
-                    .lines()
-                    .filter(|l| l.contains("ACP agent spawned"))
-                    .count();
-                let new_session_count = content
-                    .lines()
-                    .filter(|l| l.contains("Mock agent:") && l.contains("new_session"))
-                    .count();
-                let prompt_count = content
-                    .lines()
-                    .filter(|l| l.contains("Mock agent:") && l.contains("prompt"))
-                    .count();
-                let ready = spawn_count >= 2 && new_session_count >= 2 && prompt_count >= 1;
-                *latest_log_content.borrow_mut() = content;
-                ready
-            },
-            Duration::from_secs(10),
-        )
-        .unwrap_or_else(|err| {
-            let content = latest_log_content.borrow();
-            let spawn_count = content
-                .lines()
-                .filter(|l| l.contains("ACP agent spawned"))
-                .count();
-            let new_session_count = content
-                .lines()
-                .filter(|l| l.contains("Mock agent:") && l.contains("new_session"))
-                .count();
-            let prompt_count = content
-                .lines()
-                .filter(|l| l.contains("Mock agent:") && l.contains("prompt"))
-                .count();
-            panic!(
-                "Expected spawns>=2, sessions>=2, prompts>=1; got spawns={spawn_count}, sessions={new_session_count}, prompts={prompt_count}. Log:\n{content}: {err}"
-            );
-        });
-    let log_content = latest_log_content.into_inner();
-
-    // Verify new_session and prompt sequence
-    let agent_messages: Vec<&str> = log_content
-        .lines()
-        .filter(|l| l.contains("Mock agent:"))
-        .collect();
-
-    eprintln!("Agent message sequence:");
-    for (i, msg) in agent_messages.iter().enumerate() {
-        eprintln!("  {}: {}", i, msg);
-    }
-
-    // Should have: initialize, new_session, prompt (first agent)
-    // Then: initialize, new_session, prompt (second agent)
-    let new_session_count = agent_messages
-        .iter()
-        .filter(|m| m.contains("new_session"))
-        .count();
-    let prompt_count = agent_messages
-        .iter()
-        .filter(|m| m.contains("prompt"))
-        .count();
-
-    assert!(
-        new_session_count >= 2,
-        "Should have at least 2 new_session calls, got: {}",
-        new_session_count
-    );
-    assert!(
-        prompt_count >= 1,
-        "Should have at least 1 prompt call, got: {}",
-        prompt_count
     );
 }
 
@@ -1208,7 +1062,7 @@ fn test_slash_popup_shows_current_approval_mode_in_description() {
     );
 }
 
-/// Test that "Connecting to [Agent]" status appears during slow agent startup.
+/// Test that candidate preparation feedback appears during slow agent startup.
 ///
 /// When an ACP agent takes time to start (e.g., npx/bunx resolving dependencies),
 /// the TUI should show a "Connecting" status indicator with shimmer animation
@@ -1217,9 +1071,9 @@ fn test_slash_popup_shows_current_approval_mode_in_description() {
 /// This test works by:
 /// 1. Starting with mock-model (no delay) so TUI initializes normally
 /// 2. Selecting mock-model-alt via the agent picker
-/// 3. Submitting a prompt to trigger the agent switch
+/// 3. Candidate preparation starts immediately
 /// 4. mock-model-alt has a 6-second startup delay configured
-/// 5. Verifying "Connecting" appears during that delay
+/// 5. Verifying preparation feedback appears during that delay
 #[test]
 #[cfg(target_os = "linux")]
 fn test_connecting_status_during_slow_agent_startup() {
@@ -1257,19 +1111,14 @@ fn test_connecting_status_during_slow_agent_startup() {
     session.send_key(Key::Enter).unwrap();
     std::thread::sleep(Duration::from_millis(500));
 
-    // Submit a prompt to trigger the agent switch
-    session.send_str("test").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-
-    // Should see "Connecting" status while the new agent is starting up
+    // Preparation starts immediately when the agent row is selected.
     // The 6-second delay gives us plenty of time to catch this
     session
-        .wait_for_text("Connecting", Duration::from_secs(3))
-        .expect("Should show 'Connecting' status during slow agent startup");
+        .wait_for_text("Preparing", Duration::from_secs(3))
+        .expect("Should show preparation feedback during slow agent startup");
 
-    // Eventually the agent should be ready (prompt appears after startup delay)
+    // Eventually the prepared agent's explicit session picker should appear.
     session
-        .wait_for_text("›", Duration::from_secs(15))
-        .expect("TUI should eventually show prompt after agent connects");
+        .wait_for_text("Start a new session", Duration::from_secs(15))
+        .expect("TUI should eventually show the candidate session picker");
 }

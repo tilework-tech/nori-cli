@@ -10,9 +10,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nori_config::NoriConfig;
+use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::LaunchedSession;
 use nori_harness::runtime::SessionLaunchSpec;
+use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::launch_session;
+use nori_harness::runtime::prepare_agent;
 use nori_harness::transcript::Transcript;
 use nori_harness::transcript::TranscriptLoader;
 use nori_harness::transcript::TranscriptRecord;
@@ -32,19 +35,28 @@ impl Drop for EnvGuard {
     }
 }
 
-fn launch(cwd: &Path) -> LaunchedSession {
+#[expect(
+    clippy::expect_used,
+    reason = "focused failure for an agent preparation failure"
+)]
+async fn launch(cwd: &Path) -> LaunchedSession {
     let config = NoriConfig {
         active_agent: "mock-model".to_string(),
         cwd: cwd.to_path_buf(),
         nori_home: cwd.to_path_buf(),
         ..Default::default()
     };
-    launch_session(SessionLaunchSpec {
+    let agent = prepare_agent(AgentPrepareSpec {
         config: Arc::new(config),
         cli_version: "transcript-fork-test".to_string(),
         session_context: None,
         initial_context: None,
-        resume: None,
+    })
+    .await
+    .expect("prepare mock agent");
+    launch_session(SessionLaunchSpec {
+        agent,
+        start: SessionStart::New,
     })
 }
 
@@ -149,7 +161,7 @@ async fn branch_forks_transcript_and_freezes_parent() {
 
     let temp = tempfile::tempdir().expect("create session directory");
     let nori_home = temp.path().to_path_buf();
-    let mut session = launch(temp.path());
+    let mut session = launch(temp.path()).await;
 
     let parent_conversation_id = wait_for_started(&mut session).await;
 

@@ -4,6 +4,16 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn new(common: ChatWidgetInit) -> Self {
+        Self::new_with_remote_attachment(common, true)
+    }
+
+    /// Build a hidden switch candidate without replacing the process-wide
+    /// remote attachment before the app commits its `SessionStarted` event.
+    pub(crate) fn new_candidate(common: ChatWidgetInit) -> Self {
+        Self::new_with_remote_attachment(common, false)
+    }
+
+    fn new_with_remote_attachment(common: ChatWidgetInit, attach_remote_host: bool) -> Self {
         let ChatWidgetInit {
             config,
             frame_requester,
@@ -18,13 +28,23 @@ impl ChatWidget {
             cloud_mode,
             deferred_spawn,
             fork_context,
+            prepared_agent,
         } = common;
         let mut rng = rand::rng();
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
         let session_generation = next_session_generation();
-        let spawn_result = if deferred_spawn {
+        let spawn_result = if let Some(agent) = prepared_agent {
+            super::agent::launch_prepared_agent(
+                agent,
+                nori_harness::runtime::SessionStart::New,
+                app_event_tx.clone(),
+                session_generation,
+                config.nori_home.clone(),
+                attach_remote_host,
+            )
+        } else if deferred_spawn {
             SpawnAgentResult { handle: None }
         } else {
             spawn_agent(
@@ -90,7 +110,6 @@ impl ChatWidget {
             current_rollout_path: None,
             pending_client_tool_cells: HashMap::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
-            pending_agent: None,
             session_configured_received: false,
             harness_handle: spawn_result.handle,
             session_close_in_flight: false,
@@ -102,6 +121,7 @@ impl ChatWidget {
             session_stats: SessionStats::new(),
             assistant_stream_seen_for_stats: false,
             login_handler: None,
+            login_agent_override: None,
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
@@ -140,6 +160,37 @@ impl ChatWidget {
         title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
     ) -> Self {
+        Self::new_resumed_acp_with_remote_attachment(
+            common,
+            acp_session_id,
+            title,
+            transcript,
+            true,
+        )
+    }
+
+    pub(crate) fn new_resumed_acp_candidate(
+        common: ChatWidgetInit,
+        acp_session_id: Option<String>,
+        title: Option<String>,
+        transcript: Option<nori_harness::transcript::Transcript>,
+    ) -> Self {
+        Self::new_resumed_acp_with_remote_attachment(
+            common,
+            acp_session_id,
+            title,
+            transcript,
+            false,
+        )
+    }
+
+    fn new_resumed_acp_with_remote_attachment(
+        common: ChatWidgetInit,
+        acp_session_id: Option<String>,
+        title: Option<String>,
+        transcript: Option<nori_harness::transcript::Transcript>,
+        attach_remote_host: bool,
+    ) -> Self {
         let ChatWidgetInit {
             config,
             frame_requester,
@@ -154,19 +205,34 @@ impl ChatWidget {
             cloud_mode,
             deferred_spawn: _,
             fork_context: _,
+            prepared_agent,
         } = common;
         let mut rng = rand::rng();
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
         .to_string();
         let session_generation = next_session_generation();
-        let spawn_result = spawn_acp_agent_resume(
-            config.clone(),
-            acp_session_id.clone(),
-            transcript,
-            app_event_tx.clone(),
-            session_generation,
-        );
+        let spawn_result = if let Some(agent) = prepared_agent {
+            super::agent::launch_prepared_agent(
+                agent,
+                nori_harness::runtime::SessionStart::Resume(nori_harness::runtime::SessionResume {
+                    acp_session_id: acp_session_id.clone(),
+                    transcript,
+                }),
+                app_event_tx.clone(),
+                session_generation,
+                config.nori_home.clone(),
+                attach_remote_host,
+            )
+        } else {
+            spawn_acp_agent_resume(
+                config.clone(),
+                acp_session_id.clone(),
+                transcript,
+                app_event_tx.clone(),
+                session_generation,
+            )
+        };
 
         let first_prompt_text = initial_prompt.clone();
         let acp_wire_recording_enabled = config.acp_proxy.enabled;
@@ -223,7 +289,6 @@ impl ChatWidget {
             current_rollout_path: None,
             pending_client_tool_cells: HashMap::new(),
             effective_cwd_tracker: EffectiveCwdTracker::with_initial_cwd(config.cwd),
-            pending_agent: None,
             session_configured_received: false,
             harness_handle: spawn_result.handle,
             session_close_in_flight: false,
@@ -235,6 +300,7 @@ impl ChatWidget {
             session_stats: SessionStats::new(),
             assistant_stream_seen_for_stats: false,
             login_handler: None,
+            login_agent_override: None,
             active_resume_picker_generation: None,
             first_prompt_text,
             current_goal: None,
@@ -264,18 +330,6 @@ impl ChatWidget {
         widget
     }
 
-    /// Set a pending agent to switch to on the next prompt submission.
-    pub(crate) fn set_pending_agent(&mut self, agent_name: String, display_name: String) {
-        // Update the bottom pane's model display name for approval dialogs
-        self.bottom_pane
-            .set_agent_display_name(display_name.clone());
-        self.bottom_pane.set_agent_slug(agent_name.clone());
-        self.pending_agent = Some(PendingAgentInfo {
-            agent_name,
-            display_name,
-        });
-    }
-
     /// Spawn the agent that was deferred during construction.
     ///
     /// This should be called after pre-session setup (e.g., skillset switch)
@@ -283,5 +337,9 @@ impl ChatWidget {
     pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
         let spawn_result = spawn_agent(config, app_event_tx, self.session_generation, None);
         self.harness_handle = spawn_result.handle;
+    }
+
+    pub(crate) fn session_generation(&self) -> crate::app_event::SessionGeneration {
+        self.session_generation
     }
 }

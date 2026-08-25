@@ -571,13 +571,6 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Set the agent slug used as prefix for agent commands (e.g., "claude-code").
-    /// Also refreshes the prefix on any already-stored agent commands.
-    pub(crate) fn set_agent_slug(&mut self, slug: String) {
-        self.agent_slug = slug.clone();
-        self.composer.update_agent_command_prefix(slug);
-    }
-
     /// Update system info displayed in the footer (for background refresh).
     pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
         self.composer.set_system_info(info);

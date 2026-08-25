@@ -9,10 +9,14 @@ use nori_config::NoriConfig as Config;
 use nori_harness::SessionContext;
 use nori_harness::get_agent_display_name;
 use nori_harness::list_available_agents;
+use nori_harness::runtime::AgentPrepareSpec;
 pub(crate) use nori_harness::runtime::HarnessHandle;
+use nori_harness::runtime::PreparedAgent;
 use nori_harness::runtime::SessionLaunchSpec;
 use nori_harness::runtime::SessionResume;
+use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::launch_session;
+use nori_harness::runtime::prepare_and_launch_session;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -22,7 +26,7 @@ use crate::app_event_sender::AppEventSender;
 
 static NEXT_SESSION_GENERATION: AtomicI64 = AtomicI64::new(1);
 
-pub(super) fn next_session_generation() -> crate::app_event::SessionGeneration {
+pub(crate) fn next_session_generation() -> crate::app_event::SessionGeneration {
     NEXT_SESSION_GENERATION.fetch_add(1, Ordering::Relaxed)
 }
 
@@ -42,7 +46,13 @@ pub(crate) fn spawn_agent(
     fork_context: Option<String>,
 ) -> SpawnAgentResult {
     match nori_harness::get_agent_config(&config.active_agent) {
-        Ok(_) => launch_acp_agent(config, app_event_tx, generation, fork_context, None),
+        Ok(_) => prepare_and_launch_acp_agent(
+            config,
+            app_event_tx,
+            generation,
+            fork_context,
+            SessionStart::New,
+        ),
         Err(_) => {
             let agent_name = config.active_agent;
             let known: Vec<String> = list_available_agents()
@@ -71,12 +81,12 @@ pub(crate) fn spawn_acp_agent_resume(
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
 ) -> SpawnAgentResult {
-    launch_acp_agent(
+    prepare_and_launch_acp_agent(
         config,
         app_event_tx,
         generation,
         None,
-        Some(SessionResume {
+        SessionStart::Resume(SessionResume {
             acp_session_id,
             transcript,
         }),
@@ -99,35 +109,69 @@ fn spawn_error_agent(agent_name: String, error_msg: String, app_event_tx: AppEve
 
 /// Launch a session via the harness runtime and forward its events into the
 /// TUI event loop.
-fn launch_acp_agent(
+fn prepare_and_launch_acp_agent(
     config: Config,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
     fork_context: Option<String>,
-    resume: Option<SessionResume>,
+    start: SessionStart,
 ) -> SpawnAgentResult {
-    // Emit "Connecting" status before spawning the backend
     let display_name = get_agent_display_name(&config.active_agent);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     let nori_home = config.nori_home.clone();
-    let spec = SessionLaunchSpec {
+    let prepare_spec = agent_prepare_spec(config, fork_context);
+    let session = prepare_and_launch_session(prepare_spec, start);
+    forward_launched_session(session, app_event_tx, generation, nori_home, true)
+}
+
+pub(crate) fn agent_prepare_spec(
+    config: Config,
+    initial_context: Option<String>,
+) -> AgentPrepareSpec {
+    AgentPrepareSpec {
         config: Arc::new(config),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
         session_context: Some(SessionContext {
             with_http_mcp: include_str!("../../session_context_http_mcp.md").to_string(),
             without_http_mcp: include_str!("../../session_context.md").to_string(),
         }),
-        initial_context: fork_context,
-        resume,
-    };
-    let mut session = launch_session(spec);
+        initial_context,
+    }
+}
+
+/// Activate an already prepared connection and forward its session events.
+pub(crate) fn launch_prepared_agent(
+    agent: PreparedAgent,
+    start: SessionStart,
+    app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
+    nori_home: std::path::PathBuf,
+    attach_remote_host: bool,
+) -> SpawnAgentResult {
+    let session = launch_session(SessionLaunchSpec { agent, start });
+    forward_launched_session(
+        session,
+        app_event_tx,
+        generation,
+        nori_home,
+        attach_remote_host,
+    )
+}
+
+fn forward_launched_session(
+    mut session: nori_harness::runtime::LaunchedSession,
+    app_event_tx: AppEventSender,
+    generation: crate::app_event::SessionGeneration,
+    nori_home: std::path::PathBuf,
+    attach_remote_host: bool,
+) -> SpawnAgentResult {
     let handle = Some(session.handle.clone());
 
     // Remote mode: let the remote ACP surface follow this session too. The
     // attach subscribes well before the backend finishes connecting, so the
     // remote host observes the session's startup events.
-    if let Some(remote_host) = nori_harness::remote_agent::active_host() {
+    if attach_remote_host && let Some(remote_host) = nori_harness::remote_agent::active_host() {
         let remote_handle = session.handle.clone();
         tokio::spawn(async move {
             if let Err(error) = remote_host.attach(remote_handle, nori_home).await {

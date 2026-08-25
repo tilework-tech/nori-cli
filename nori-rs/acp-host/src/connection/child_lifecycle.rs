@@ -61,6 +61,15 @@ impl ChildHandle {
     }
 }
 
+impl Drop for ChildHandle {
+    fn drop(&mut self) {
+        // The handle is also the cancellation guard during `spawn_inner`:
+        // once the child moves into the exit watcher, dropping the unfinished
+        // spawn future must still signal that watcher to kill and reap it.
+        self.request_kill();
+    }
+}
+
 /// Own the direct child through exit, process-group cleanup, and reaping.
 ///
 /// Unix process-group identity is anchored by the leader's PID. Reaping the

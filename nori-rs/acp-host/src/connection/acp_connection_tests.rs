@@ -875,6 +875,47 @@ async fn wait_for_process_to_stop(pid: libc::pid_t) -> bool {
     }
 }
 
+/// Cancelling `spawn` during the initialization handshake must still kill and
+/// reap the child that has already been moved into the exit watcher.
+#[tokio::test]
+#[cfg(unix)]
+async fn test_cancelled_spawn_reaps_child_during_initialization() {
+    let temp_dir = tempdir().expect("temp dir");
+    let pidfile = temp_dir.path().join("pid");
+    let config = script_agent_config(
+        temp_dir.path(),
+        &format!(
+            "#!/bin/sh\necho $$ > '{pidfile}'\nsleep 600\n",
+            pidfile = pidfile.display(),
+        ),
+    );
+    let cwd = temp_dir.path().to_path_buf();
+    let spawn = tokio::spawn(async move {
+        AcpConnection::spawn(&config, &cwd, nori_config::AcpProxyConfig::disabled()).await
+    });
+
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !pidfile.exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("script agent should record its pid during initialization");
+    let pid = std::fs::read_to_string(&pidfile)
+        .expect("read pid")
+        .trim()
+        .parse()
+        .expect("pid parses");
+
+    spawn.abort();
+    let _ = spawn.await;
+
+    assert!(
+        wait_for_process_to_stop(pid).await,
+        "child {pid} survived cancellation of the initialization handshake"
+    );
+}
+
 /// Shutdown must close the child's stdin and wait for it to exit on its own —
 /// not SIGKILL the process group. The script writes a marker after the mock
 /// agent exits (which it does on stdin EOF); a killed group never writes it.

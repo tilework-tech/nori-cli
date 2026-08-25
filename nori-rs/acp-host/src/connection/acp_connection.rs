@@ -551,6 +551,16 @@ impl AcpConnection {
                     .await;
             }
         });
+        // Install ownership immediately after the child moves into the exit
+        // watcher. Until this handle is transferred into `AcpConnection`, its
+        // Drop implementation makes cancellation of the initialization future
+        // kill and reap the already-spawned process.
+        let child_handle = ChildHandle {
+            pid,
+            exit_rx,
+            kill: kill_notify,
+            group_cleanup_complete,
+        };
 
         let outgoing_logger = wire_logger.clone();
         let outgoing_sink = futures::sink::unfold(
@@ -585,7 +595,7 @@ impl AcpConnection {
         // Race initialization against the child dying: an agent that exits
         // immediately (e.g. unauthenticated) must fail spawn fast, with its
         // stderr as the cause — not hang the handshake forever.
-        let mut exit_watch = exit_rx.clone();
+        let mut exit_watch = child_handle.exit_rx.clone();
         // The watch Ref returned by wait_for is !Send; discard it inside the
         // branch future so the whole select stays Send.
         let child_died = async move {
@@ -604,7 +614,8 @@ impl AcpConnection {
                 // symptom). Give the watcher and stderr reader a moment to
                 // observe the exit, then prefer the child's status + stderr.
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-                let exited = exit_rx
+                let exited = child_handle
+                    .exit_rx
                     .borrow()
                     .as_ref()
                     .map(std::process::ExitStatus::code);
@@ -628,12 +639,7 @@ impl AcpConnection {
                 );
             }
         };
-        connection.child = Some(ChildHandle {
-            pid,
-            exit_rx,
-            kill: kill_notify,
-            group_cleanup_complete,
-        });
+        connection.child = Some(child_handle);
         connection.stderr_task = Some(stderr_task);
         Ok(connection)
     }
