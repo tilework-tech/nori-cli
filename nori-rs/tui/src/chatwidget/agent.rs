@@ -110,6 +110,7 @@ fn launch_acp_agent(
     let display_name = get_agent_display_name(&config.active_agent);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
+    let nori_home = config.nori_home.clone();
     let spec = SessionLaunchSpec {
         config: Arc::new(config),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -122,6 +123,18 @@ fn launch_acp_agent(
     };
     let mut session = launch_session(spec);
     let handle = Some(session.handle.clone());
+
+    // Remote mode: let the remote ACP surface follow this session too. The
+    // attach subscribes well before the backend finishes connecting, so the
+    // remote host observes the session's startup events.
+    if let Some(remote_host) = nori_harness::remote_agent::active_host() {
+        let remote_handle = session.handle.clone();
+        tokio::spawn(async move {
+            if let Err(error) = remote_host.attach(remote_handle, nori_home).await {
+                tracing::warn!("failed to attach the remote ACP host: {error}");
+            }
+        });
+    }
 
     tokio::spawn(async move {
         while let Some(event) = session.events.recv().await {

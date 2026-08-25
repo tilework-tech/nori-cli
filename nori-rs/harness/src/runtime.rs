@@ -17,7 +17,6 @@ use codex_rmcp_client::OAuthCredentialsStoreMode;
 use futures::future::BoxFuture;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 
@@ -25,6 +24,7 @@ use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
 use crate::backend::SessionContext;
+use crate::session_event_fanout::SessionEventFanout;
 use crate::transcript::Transcript;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
@@ -44,7 +44,7 @@ const CONNECT_ABORT_SECS: u64 = 30;
 
 /// Two-phase timeout: warn after `CONNECT_WARNING_SECS`, abort after an
 /// additional `CONNECT_ABORT_SECS`.
-async fn spawn_timeout_sequence(event_tx: &UnboundedSender<SessionEvent>) {
+async fn spawn_timeout_sequence(event_tx: &SessionEventFanout) {
     tokio::time::sleep(Duration::from_secs(CONNECT_WARNING_SECS)).await;
     let _ = event_tx.send(SessionEvent::Nori(NoriEvent::Notice(Notice {
         message: format!(
@@ -56,7 +56,7 @@ async fn spawn_timeout_sequence(event_tx: &UnboundedSender<SessionEvent>) {
 }
 
 fn forward_connect_event(
-    event_tx: &UnboundedSender<SessionEvent>,
+    event_tx: &SessionEventFanout,
     event: SessionEvent,
     raw_acp_error_observed: &mut bool,
 ) {
@@ -163,6 +163,14 @@ enum HarnessCommand {
     },
     /// Close (release) the active session via ACP `session/close`.
     CloseSession {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    /// Register an additional bounded consumer of the public event stream.
+    SubscribeEvents {
+        response_tx: oneshot::Sender<mpsc::Receiver<SessionEvent>>,
+    },
+    /// Flush the session transcript to disk (write barrier).
+    FlushTranscript {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
 }
@@ -432,6 +440,26 @@ impl HarnessHandle {
             .await
             .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
     }
+
+    /// Subscribe to the ordered public event stream as an additional bounded
+    /// consumer. The primary receiver from [`launch_session`] is unaffected.
+    /// A subscriber that falls a full queue behind is dropped and its
+    /// receiver closes.
+    pub async fn subscribe_events(&self) -> anyhow::Result<mpsc::Receiver<SessionEvent>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::SubscribeEvents { response_tx })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+    }
+
+    /// Flush the session transcript to disk and wait for the write barrier.
+    pub async fn flush_transcript(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::FlushTranscript { response_tx })
+            .await
+    }
 }
 
 /// Resume parameters for reattaching to a previous session.
@@ -471,7 +499,8 @@ pub struct LaunchedSession {
 /// calls queue until the backend is ready.
 pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
     let (agent_cmd_tx, mut agent_cmd_rx) = unbounded_channel::<HarnessCommand>();
-    let (event_tx, event_rx) = unbounded_channel::<SessionEvent>();
+    let (primary_event_tx, event_rx) = unbounded_channel::<SessionEvent>();
+    let event_tx = SessionEventFanout::new(primary_event_tx);
 
     let handle = HarnessHandle {
         command_tx: agent_cmd_tx,
@@ -620,6 +649,12 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                         )));
                         return;
                     }
+                    // Register immediately (not queued) so a subscriber
+                    // attached right after launch cannot miss startup events
+                    // such as `SessionStarted`.
+                    Some(HarnessCommand::SubscribeEvents { response_tx }) => {
+                        let _ = response_tx.send(event_tx.subscribe());
+                    }
                     Some(command) => pending_commands.push_back(command),
                     None => return,
                 }
@@ -653,6 +688,7 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
         // events would keep landing in the frozen parent transcript.
         let transcript_recorder_cell = backend.transcript_recorder_cell();
         let backend_for_agent = Arc::clone(&backend);
+        let event_fanout = event_tx.clone();
         tokio::spawn(async move {
             loop {
                 let cmd = match pending_commands.pop_front() {
@@ -788,6 +824,12 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                         if close_complete {
                             break;
                         }
+                    }
+                    HarnessCommand::SubscribeEvents { response_tx } => {
+                        let _ = response_tx.send(event_fanout.subscribe());
+                    }
+                    HarnessCommand::FlushTranscript { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.flush_transcript().await);
                     }
                 }
             }

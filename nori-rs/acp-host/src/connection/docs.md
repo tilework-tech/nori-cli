@@ -30,7 +30,10 @@ signals:
 `AcpConnection` exposes ACP initialize/session creation or loading, prompt,
 cancel, session config, list, resume, fork, close, and shutdown behavior. Method
 responses are published as raw `AcpEvent::Response` values; request IDs are
-assigned by the SDK transport and retained end to end. Each call to `prompt`
+assigned by the SDK transport and retained end to end. A failed session-config
+write is the deliberate exception: its error is returned to the caller but not
+mirrored onto the public event boundary, where the caller's friendly failure
+handling would otherwise produce a duplicate raw error. Each call to `prompt`
 issues one `session/prompt` request. A later response is never swallowed to
 justify resending the prompt after cancellation; a successful empty `EndTurn`
 is returned as that prompt's terminal result.
