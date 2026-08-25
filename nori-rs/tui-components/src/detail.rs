@@ -5,6 +5,7 @@
 //! scrolling state.
 
 use ratatui::buffer::Buffer;
+use ratatui::layout::Margin;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -102,12 +103,66 @@ impl Default for LabelWidth {
     }
 }
 
+/// Vertical spacing between adjacent detail entries.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DetailDensity {
+    /// Render adjacent entries without an intervening blank row.
+    #[default]
+    Compact,
+    /// Leave one blank row between adjacent key/value entries.
+    Normal,
+}
+
+/// Horizontal organization for detail labels and values.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DetailLayout {
+    /// Render labels and values in two aligned columns.
+    #[default]
+    Columns,
+    /// Render each label above a two-cell-inset value.
+    Stacked,
+    /// Stack below the caller-rectangle width and use columns otherwise.
+    Responsive { stack_below: u16 },
+}
+
+/// Background treatment for logical key/value entries.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DetailRowPattern {
+    /// Keep every entry on the pane surface.
+    #[default]
+    Plain,
+    /// Alternate `Theme::row` and `Theme::row_alt` by logical entry.
+    Zebra,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResolvedDetailLayout {
+    Columns,
+    Stacked,
+}
+
+impl DetailLayout {
+    fn resolve(self, width: u16) -> ResolvedDetailLayout {
+        match self {
+            Self::Columns => ResolvedDetailLayout::Columns,
+            Self::Stacked => ResolvedDetailLayout::Stacked,
+            Self::Responsive { stack_below } if width < stack_below => {
+                ResolvedDetailLayout::Stacked
+            }
+            Self::Responsive { .. } => ResolvedDetailLayout::Columns,
+        }
+    }
+}
+
 /// A presentation-only definition-list widget.
 pub struct DetailPane<'a> {
     entries: &'a [DetailEntry],
     heading: Option<Line<'static>>,
     theme: Theme,
     label_width: LabelWidth,
+    density: DetailDensity,
+    layout: DetailLayout,
+    row_pattern: DetailRowPattern,
 }
 
 impl<'a> DetailPane<'a> {
@@ -117,6 +172,9 @@ impl<'a> DetailPane<'a> {
             heading: None,
             theme: Theme::default(),
             label_width: LabelWidth::default(),
+            density: DetailDensity::default(),
+            layout: DetailLayout::default(),
+            row_pattern: DetailRowPattern::default(),
         }
     }
 
@@ -134,38 +192,84 @@ impl<'a> DetailPane<'a> {
         self.label_width = label_width;
         self
     }
+
+    pub fn density(mut self, density: DetailDensity) -> Self {
+        self.density = density;
+        self
+    }
+
+    pub fn layout(mut self, layout: DetailLayout) -> Self {
+        self.layout = layout;
+        self
+    }
+
+    pub fn row_pattern(mut self, row_pattern: DetailRowPattern) -> Self {
+        self.row_pattern = row_pattern;
+        self
+    }
+
+    /// Returns the rows required to render this pane at the caller rectangle width.
+    pub fn required_height(&self, width: u16) -> u16 {
+        let Some(content_width) = detail_content_width(width) else {
+            return 0;
+        };
+        let layout = self.layout.resolve(width);
+        let gutter = gutter_width(self.entries, self.label_width, content_width);
+        let mut height = u16::from(self.heading.is_some()) * 2;
+        for (index, entry) in self.entries.iter().enumerate() {
+            height = height.saturating_add(entry_height(entry, layout, content_width, gutter));
+            if self.density == DetailDensity::Normal
+                && matches!(entry, DetailEntry::KeyValue { .. })
+                && matches!(
+                    self.entries.get(index + 1),
+                    Some(DetailEntry::KeyValue { .. })
+                )
+            {
+                height = height.saturating_add(1);
+            }
+        }
+        height
+    }
 }
 
 impl Widget for DetailPane<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        if area.width < 4 || area.height == 0 {
+        if detail_content_width(area.width).is_none() || area.height == 0 {
             return;
         }
-        let mut y = area.y;
+        let surface = Rect::new(
+            area.x.saturating_add(1),
+            area.y,
+            area.width.saturating_sub(2),
+            area.height,
+        );
+        buf.set_style(surface, self.theme.detail_surface);
+        let content = surface.inner(Margin {
+            horizontal: 1,
+            vertical: 0,
+        });
+        if content.width == 0 {
+            return;
+        }
+
+        let layout = self.layout.resolve(area.width);
+        let mut y = content.y;
         if let Some(heading) = self.heading {
-            buf.set_style(
-                Rect::new(area.x, y, area.width, 1),
-                self.theme.detail_surface,
-            );
             Paragraph::new(heading)
                 .style(self.theme.title)
-                .render(Rect::new(area.x, y, area.width, 1), buf);
+                .render(Rect::new(content.x, y, content.width, 1), buf);
             y = y.saturating_add(2);
         }
-        let gutter = gutter_width(self.entries, self.label_width, area.width);
-        for entry in self.entries {
-            if y >= area.bottom() {
+        let gutter = gutter_width(self.entries, self.label_width, content.width);
+        let mut zebra_index = 0usize;
+        for (index, entry) in self.entries.iter().enumerate() {
+            if y >= content.bottom() {
                 break;
             }
             match entry {
                 DetailEntry::Rule => {
-                    buf.set_string(
-                        area.x,
-                        y,
-                        "─".repeat(area.width as usize),
-                        self.theme.separator,
-                    );
                     y = y.saturating_add(1);
+                    zebra_index = 0;
                 }
                 DetailEntry::KeyValue {
                     label,
@@ -173,42 +277,182 @@ impl Widget for DetailPane<'_> {
                     tone,
                     wrap,
                 } => {
-                    let value_width = area.width.saturating_sub(gutter).saturating_sub(3);
-                    let row_height = if *wrap {
-                        line_height(value, value_width as usize)
-                    } else {
-                        1
-                    }
-                    .min(area.bottom().saturating_sub(y));
-                    let label = pad_left(&truncate(label, gutter as usize), gutter as usize);
-                    buf.set_string(area.x, y, label, self.theme.muted);
-                    let separator_x = area.x.saturating_add(gutter).saturating_add(1);
-                    buf.set_string(separator_x, y, "│", self.theme.separator);
-                    let value_x = separator_x.saturating_add(2);
-                    let value_width = area.right().saturating_sub(value_x);
-                    if value_width == 0 {
-                        break;
-                    }
-                    let value_area =
-                        Rect::new(value_x, y, value_width, area.bottom().saturating_sub(y));
-                    let rendered = if *wrap {
-                        value.clone()
-                    } else {
-                        truncate_line(value, value_width as usize)
+                    let full_height = key_value_height(value, *wrap, layout, content.width, gutter);
+                    let row_height = full_height.min(content.bottom().saturating_sub(y));
+                    let row_style = match self.row_pattern {
+                        DetailRowPattern::Plain => self.theme.detail_surface,
+                        DetailRowPattern::Zebra if zebra_index.is_multiple_of(2) => {
+                            self.theme.detail_surface.patch(self.theme.row)
+                        }
+                        DetailRowPattern::Zebra => {
+                            self.theme.detail_surface.patch(self.theme.row_alt)
+                        }
                     };
-                    Paragraph::new(rendered)
-                        .style(tone_style(*tone, self.theme))
-                        .wrap(ratatui::widgets::Wrap { trim: false })
-                        .render(value_area, buf);
+                    let zebra_background = (self.row_pattern == DetailRowPattern::Zebra)
+                        .then(|| row_style.bg.map(|color| Style::new().bg(color)))
+                        .flatten();
+                    buf.set_style(
+                        Rect::new(surface.x, y, surface.width, row_height),
+                        row_style,
+                    );
+
+                    match layout {
+                        ResolvedDetailLayout::Columns => {
+                            let label =
+                                pad_right(&truncate(label, gutter as usize), gutter as usize);
+                            buf.set_string(
+                                content.x,
+                                y,
+                                label,
+                                content_style(row_style, self.theme.muted, zebra_background),
+                            );
+                            let value_x = content.x.saturating_add(gutter).saturating_add(2);
+                            let value_width = content.right().saturating_sub(value_x);
+                            render_value(
+                                value,
+                                *wrap,
+                                Rect::new(value_x, y, value_width, row_height),
+                                content_style(
+                                    row_style,
+                                    tone_style(*tone, self.theme),
+                                    zebra_background,
+                                ),
+                                zebra_background,
+                                buf,
+                            );
+                        }
+                        ResolvedDetailLayout::Stacked => {
+                            buf.set_string(
+                                content.x,
+                                y,
+                                truncate(label, content.width as usize),
+                                content_style(row_style, self.theme.muted, zebra_background),
+                            );
+                            let value_x = content.x.saturating_add(2);
+                            let value_width = content.right().saturating_sub(value_x);
+                            render_value(
+                                value,
+                                *wrap,
+                                Rect::new(
+                                    value_x,
+                                    y.saturating_add(1),
+                                    value_width,
+                                    row_height.saturating_sub(1),
+                                ),
+                                content_style(
+                                    row_style,
+                                    tone_style(*tone, self.theme),
+                                    zebra_background,
+                                ),
+                                zebra_background,
+                                buf,
+                            );
+                        }
+                    }
+
                     y = y.saturating_add(row_height);
+                    zebra_index = zebra_index.saturating_add(1);
+                    if row_height == full_height
+                        && self.density == DetailDensity::Normal
+                        && matches!(
+                            self.entries.get(index + 1),
+                            Some(DetailEntry::KeyValue { .. })
+                        )
+                    {
+                        y = y.saturating_add(1);
+                    }
                 }
             }
         }
     }
 }
 
+fn detail_content_width(width: u16) -> Option<u16> {
+    (width >= 7).then(|| width.saturating_sub(4))
+}
+
+fn entry_height(
+    entry: &DetailEntry,
+    layout: ResolvedDetailLayout,
+    content_width: u16,
+    gutter: u16,
+) -> u16 {
+    match entry {
+        DetailEntry::Rule => 1,
+        DetailEntry::KeyValue { value, wrap, .. } => {
+            key_value_height(value, *wrap, layout, content_width, gutter)
+        }
+    }
+}
+
+fn key_value_height(
+    value: &Line<'static>,
+    wrap: bool,
+    layout: ResolvedDetailLayout,
+    content_width: u16,
+    gutter: u16,
+) -> u16 {
+    match layout {
+        ResolvedDetailLayout::Columns => {
+            value_height(value, wrap, content_width.saturating_sub(gutter + 2)).max(1)
+        }
+        ResolvedDetailLayout::Stacked => {
+            1u16.saturating_add(value_height(value, wrap, content_width.saturating_sub(2)))
+        }
+    }
+}
+
+fn value_height(value: &Line<'static>, wrap: bool, width: u16) -> u16 {
+    if width == 0 {
+        return 0;
+    }
+    if !wrap {
+        return 1;
+    }
+    u16::try_from(
+        Paragraph::new(value.clone())
+            .wrap(ratatui::widgets::Wrap { trim: false })
+            .line_count(width)
+            .max(1),
+    )
+    .unwrap_or(u16::MAX)
+}
+
+fn render_value(
+    value: &Line<'static>,
+    wrap: bool,
+    area: Rect,
+    style: Style,
+    background: Option<Style>,
+    buf: &mut Buffer,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let mut rendered = if wrap {
+        value.clone()
+    } else {
+        truncate_line(value, area.width as usize)
+    };
+    if let Some(background) = background {
+        rendered.style = rendered.style.patch(background);
+        for span in &mut rendered.spans {
+            span.style = span.style.patch(background);
+        }
+    }
+    Paragraph::new(rendered)
+        .style(style)
+        .wrap(ratatui::widgets::Wrap { trim: false })
+        .render(area, buf);
+}
+
+fn content_style(row_style: Style, semantic_style: Style, background: Option<Style>) -> Style {
+    let style = row_style.patch(semantic_style);
+    background.map_or(style, |background| style.patch(background))
+}
+
 fn gutter_width(entries: &[DetailEntry], policy: LabelWidth, width: u16) -> u16 {
-    let available = width.saturating_sub(4) / 2;
+    let available = width.saturating_sub(2) / 2;
     match policy {
         LabelWidth::Fixed(width) => width.min(available),
         LabelWidth::Auto { max } => entries
@@ -249,31 +493,30 @@ pub(crate) fn provider_tone_style(provider: ProviderKind, theme: Theme) -> Style
     }
 }
 
-fn line_height(line: &Line<'_>, width: usize) -> u16 {
-    if width == 0 {
-        return 1;
-    }
-    let text = line.to_string();
-    ((text.width().saturating_add(width - 1) / width).max(1)) as u16
-}
-
 fn truncate(value: &str, width: usize) -> String {
     if value.width() <= width {
         return value.to_string();
     }
-    value
-        .chars()
-        .take(width.saturating_sub(1))
-        .collect::<String>()
-        + "…"
+    if width == 0 {
+        return String::new();
+    }
+
+    let content_width = width.saturating_sub(1);
+    let end = value
+        .char_indices()
+        .map(|(index, character)| index + character.len_utf8())
+        .take_while(|end| value[..*end].width() <= content_width)
+        .last()
+        .unwrap_or(0);
+    format!("{}…", &value[..end])
 }
 
 fn truncate_line(line: &Line<'static>, width: usize) -> Line<'static> {
     Line::from(truncate(&line.to_string(), width))
 }
 
-fn pad_left(value: &str, width: usize) -> String {
-    format!("{value:>width$}")
+fn pad_right(value: &str, width: usize) -> String {
+    format!("{value:<width$}")
 }
 
 #[cfg(test)]

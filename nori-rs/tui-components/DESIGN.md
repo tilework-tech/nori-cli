@@ -7,19 +7,33 @@ as they move into this crate.
 
 ## Composition
 
-1. Do not draw perimeter boxes around Nori content.
+1. Never box ordinary Nori content. Reserve perimeter frames for exceptional
+   containment: an overlay modal or popover, a complex inline diff note, or the
+   prompt-card motif in chat. Use spacing, background surfaces, and alignment
+   for ordinary grouping.
 2. Establish hierarchy with spacing, background layers, and alignment.
 3. Make information-dense pickers full screen. Center only bounded dialogs and
    short action menus.
 4. Place page content inside a consistent two-cell horizontal inset.
-5. Use bold, left-aligned, sentence-case titles.
+5. Use bold, left-aligned, sentence-case titles in the terminal foreground.
+   Titles establish hierarchy and never consume a functional accent color.
 6. Keep context-sensitive key hints centered on the last row.
 
 ## Color and emphasis
 
-7. Use one primary accent for focus, navigation, titles, and hint keys.
-8. Reserve additional colors for semantic state or identity only.
-9. Keep primary copy in the terminal foreground and supporting copy muted.
+7. Green is the primary pointer accent. Reserve it for compact indicators on
+   interactable elements and current focus, such as row indicators, shortcut
+   keys, focused borders, and equivalent interaction signals. Do not color an
+   entire control, title, or passive structure green solely to establish
+   hierarchy.
+8. Cyan is a targeted informational or secondary accent, not a supporting-copy
+   color. Apply cyan and colors that communicate semantic state or identity to
+   the smallest meaningful target: a marker, key, value, status, or compact
+   cell. Color may be loud at that target; it must not wash unrelated copy or
+   structural regions.
+9. Keep titles and primary copy in the terminal foreground, supporting copy
+   readable but muted, and disabled copy distinctly dimmer than supporting
+   text.
 10. Derive neutral surface layers by blending a small contrasting tint into
     the reported terminal background. Use this only when the
     consumer has both the RGB background and true-color support. Otherwise,
@@ -30,10 +44,13 @@ as they move into this crate.
 
 12. Alternate close neutral background shades only in compact, data-dense
     lists. Normal lists use the page background and vertical spacing.
-13. Highlight the selected row with primary-accent text and a neutral
-    background only slightly brighter than compact row shades. Fill the
-    complete data row, including padding, but do not extend row backgrounds
-    into titles, headers, search controls, or footer space.
+13. Highlight the selected row with a neutral background only slightly brighter
+    than compact row shades, terminal-foreground primary text, and the
+    theme's green pointer accent. Fill the complete data row,
+    including padding, but do not extend row backgrounds into titles, headers,
+    search controls, or footer space. Do not introduce a universal leading
+    rail or repeated edge glyphs in transcript, history, file, command-output,
+    or other copyable rows.
 14. Give lists explicit `Compact` and `Normal` density modes.
 15. Render compact items as one row. Render normal items as a primary row plus
     an indented description row or equivalent vertical space.
@@ -92,7 +109,7 @@ Overlay menus follow these interaction rules:
    whether an input is navigation, a character mnemonic, or a number shortcut,
    so no additional precedence exists inside the component.
 4. Consequence tones color an unselected item's identity. Selection always
-   uses the primary accent, even for warning and destructive actions.
+   uses the green pointer accent, even for warning and destructive actions.
 
 Overlay menu layout responds to the caller's rectangle:
 
@@ -122,10 +139,14 @@ reported RGB terminal background only when true-color support is known. The
 RGB channel by a small fixed amount, keeping enabled items slightly darker on
 both dark and light terminals. Leave all of these backgrounds unset otherwise,
 and never replace them with indexed grays. A selected item fills its complete
-rendered height and padding with the selected neutral surface, then receives
-matching one-cell thin accent rails on both edges. Unselected enabled rows use
-`menu_item_surface`; disabled rows remain faded on `menu_surface`. Menu rows are
-not zebra striped.
+rendered height and padding with the selected neutral surface. Symmetric rails
+are a caller-level full-screen overlay treatment, not the default menu-row
+treatment: a caller composing this menu in its application's full-screen
+overlay layer may opt into matching one-cell accent rails on both edges. The
+shared widget never infers full-screen context from its `Rect`. This exception
+never applies to embedded menus or copyable content. Unselected enabled rows
+use `menu_item_surface`; disabled rows remain faded on `menu_surface`. Menu rows
+are not zebra striped.
 
 There is intentionally no public `SelectableListState` abstraction. The menu
 and picker both expose caller-held state and typed outcomes, but their
@@ -135,9 +156,10 @@ information design; adopting it there remains separate consumer work.
 
 ## Details and copy
 
-21. Render metadata as an aligned definition list: right-aligned label gutter,
-    structural separator, then value. Do not use trailing colons.
-22. Group related metadata with spacing or a subtle rule, not another box.
+21. Render metadata as a two-column definition list with left-aligned labels
+    and values, a two-cell gap between them, and a ragged-right edge. Do not use
+    trailing colons or structural separator glyphs.
+22. Group related metadata with one blank row, not another box or a rule glyph.
 23. Never use em dashes in user-visible TUI copy. Use a hyphen, middot, blank
     value, or explicit phrase such as `Not reported`.
 24. Use sentence case and concise action labels.
@@ -150,10 +172,24 @@ key handling, loading, routing, and application actions. It intentionally does
 not make breakpoints or overlay decisions. Handroll adoption is deferred to a
 separate consumer migration.
 
-The body stays transparent. When the caller supplies the optional heading, the
-component renders it on one neutral heading band and leaves one row of space
-before the definition list. The caller still owns the surrounding page and
-placement.
+The component shades one continuous `detail_surface` pane, inset one cell from
+the caller-owned rectangle on both horizontal edges. Content has one additional
+cell of horizontal padding inside that surface. When the caller supplies the
+optional heading, the component renders it at the same left edge as the two
+columns and leaves one row of space before the definition list. The caller
+still owns the surrounding page and placement.
+
+Compact density, two-column layout, and a plain pane surface are the defaults.
+Normal density inserts one blank row only between adjacent key/value entries;
+it does not add space beside an explicit `Rule`. Optional zebra styling fills
+the complete surface width of every physical line belonging to a logical
+entry, alternates `row` and `row_alt`, and restarts after a `Rule`.
+
+Stacked layout places each label above its value and insets the value by two
+cells. Responsive layout selects that stacked form below the caller-provided
+outer-width threshold and uses columns at or above it. `required_height(width)`
+uses the same layout resolution and wrapping measurement as rendering so
+callers can reserve an exact-height region before placing the pane.
 
 ## Verification
 
@@ -172,11 +208,14 @@ cargo run -p nori-tui-components --example nori_storybook
 ```
 
 The Picker, Markdown, Primitives, States, Detail pane, and Overlay menu pages
-are the visual acceptance target for this crate. Detail pane is page `5`; page
-`6`, Overlay menu, is interactive. Use arrows or `j`/`k` to move, `Enter` to
-activate, `Tab`/`Shift-Tab` to change the menu case, and the displayed number or
-character shortcuts to invoke actions. The example owns its terminal and event
-loop, adapts raw keys to domain-free actions, and uses production components
-only. While Picker search is active, printable keys belong exclusively to the
-query: global page, quit, density, mode, and state shortcuts resume only after
-search deactivates, and Escape deactivates search before leaving the example.
+are the visual acceptance target for this crate. Detail pane is page `5`; use
+`Tab`/`Shift-Tab` there to compare compact columns, zebra bands, normal density,
+responsive stacking, fixed label width, and an omitted heading. Page `6`,
+Overlay menu, is interactive. Use arrows or `j`/`k`
+to move, `Enter` to activate, `Tab`/`Shift-Tab` to change the menu case, and the
+displayed number or character shortcuts to invoke actions. The example owns its
+terminal and event loop, adapts raw keys to domain-free actions, and uses
+production components only. While Picker search is active, printable keys
+belong exclusively to the query: global page, quit, density, mode, and state
+shortcuts resume only after search deactivates, and Escape deactivates search
+before leaving the example.

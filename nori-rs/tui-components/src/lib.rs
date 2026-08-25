@@ -11,8 +11,11 @@ pub mod picker;
 pub mod primitives;
 pub mod theme;
 
+pub use detail::DetailDensity;
 pub use detail::DetailEntry;
+pub use detail::DetailLayout;
 pub use detail::DetailPane;
+pub use detail::DetailRowPattern;
 pub use detail::DetailTone;
 pub use detail::LabelWidth;
 pub use detail::ProviderKind;

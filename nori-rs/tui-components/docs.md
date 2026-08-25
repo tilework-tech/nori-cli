@@ -11,8 +11,9 @@ Path: @/nori-rs/tui-components
   render without taking over application behavior.
 - [`DESIGN.md`](DESIGN.md) is the visual contract, while the production
   [`nori_storybook`](examples/nori_storybook.rs) is the interactive acceptance
-  reference. Detail pane is page `5`, followed by the interactive Overlay menu
-  on page `6`.
+  reference. Its Details page uses Tab and Shift-Tab to compare the default,
+  zebra, normal-density, responsive-stacked, fixed-label, and heading-omitted
+  presentations, and reports the height each case requires at its render width.
 
 ### How it fits into the larger codebase
 
@@ -42,13 +43,18 @@ consumer application
   filtering is active and returns typed outcomes; consumers retain dismissal,
   command dispatch, and application focus.
 - [`DetailPane`](src/detail.rs) is a stateless definition-list renderer for
-  caller-positioned side or bottom regions. Its caller retains placement,
-  scrolling, focus, loading, key handling, and application routing.
+  caller-positioned side or bottom regions. It owns the inset pane surface and
+  caller-selected internal presentation, while its caller retains placement,
+  scrolling, focus, loading, key handling, and application routing. The
+  [`picker` renderer](src/picker/render.rs) adapts selected-item details into
+  entries, supplies the `Details` heading, and otherwise uses the pane's
+  compatibility defaults.
 - [`theme`](src/theme/) supplies semantic styles shared across components,
-  including agent identity tones selected through [`ProviderKind`](src/detail.rs).
-  Neutral backgrounds, including the distinct overlay item layer, are derived
-  from a reported terminal RGB background only when the consumer knows true
-  color is supported; otherwise those backgrounds remain unset.
+  including the detail-pane surface and agent identity tones selected through
+  [`ProviderKind`](src/detail.rs). Neutral backgrounds, including the distinct
+  overlay item layer, are derived from a reported terminal RGB background only
+  when the consumer knows true color is supported; otherwise those backgrounds
+  remain unset.
 - Ratatui provides the rendering types and caller rectangles. Crossterm is an
   example-only development dependency, so the public library does not bind a
   consumer to one raw event source.
@@ -103,8 +109,40 @@ consumer application
   height.
 - `DetailPane` accepts key/value entries and structural rules, trims trailing
   colons from labels, and maps semantic or provider tones through the shared
-  theme. Its auto or fixed label gutter stays within the caller's width;
-  callers explicitly choose whether each value wraps or truncates.
+  theme. It styles the full pane surface one horizontal cell inside the caller's
+  rectangle, then places content behind one more horizontal padding cell.
+- The public builder policies [`DetailDensity`](src/detail.rs),
+  [`DetailLayout`](src/detail.rs), and [`DetailRowPattern`](src/detail.rs)
+  default to compact, two-column, and plain presentation. Other compatibility
+  defaults remain [`Theme::default`](src/theme/mod.rs), no heading, and an
+  automatic label width capped at 14 cells. Column labels and values are
+  left-aligned with two blank cells between them; auto and fixed label gutters
+  are bounded against padded content width so a value column remains.
+- `DetailLayout` can instead select a stacked form, which places each label
+  above a value inset by two cells, or a responsive form. Responsive resolution
+  uses the outer caller rectangle and stacks only when its width is below the
+  supplied threshold; values retain their caller-selected wrap-or-truncate
+  behavior in either layout. Labels truncate by terminal display-cell width, so
+  wide Unicode labels remain inside the caller-owned rectangle when stacked.
+- `DetailDensity::Normal` inserts one blank row only between adjacent key/value
+  entries and adds no spacing before or after an explicit structural rule.
+  `DetailRowPattern::Zebra` alternates [`Theme::row`](src/theme/mod.rs) and
+  [`Theme::row_alt`](src/theme/mod.rs) across the full surface of each logical
+  key/value entry, including all wrapped lines, and restarts after a rule. The
+  chosen row background remains continuous across label and value semantics and
+  nested line or span backgrounds, while their foregrounds and modifiers remain
+  composed.
+- An optional heading occupies the first content row and leaves the next row
+  blank before entries. Structural rules draw no glyph and instead reserve a
+  blank grouping row.
+- [`DetailPane::required_height`](src/detail.rs) measures the unclipped rows a
+  caller must allocate at a given outer width. It shares rendering's responsive
+  layout resolution, content inset, label gutter, wrapping, heading, rule, and
+  density calculations; widths below seven cells are not renderable and
+  therefore require zero rows because the four-cell horizontal inset and
+  two-cell label/value separation leave no positive-width value area. Its `u16`
+  result saturates at `u16::MAX` when oversized wrapped content exceeds the
+  representable height.
 - The overlay renderer preserves titles and primary labels first, suppresses
   optional subtitles on constrained rectangles, wraps descriptions by Unicode
   display width, and emits overflow markers when not all items fit. Key hints
@@ -148,6 +186,11 @@ consumer application
 - `backdrop` styles only the caller-provided rectangle. Without a derived RGB
   theme, the backdrop, menu surface, and menu-item surface remain unset instead
   of substituting an absolute neutral color.
+- Detail-pane surface styling is independent of heading presence and fills the
+  pane's inset height, including blank heading and rule spacing. Only the outer
+  horizontal caller gutters remain outside `Theme::detail_surface`; a selected
+  zebra pattern patches logical row surfaces without moving that ownership to
+  the component's caller rectangle.
 - No public selectable-list core is extracted: menu and picker semantics do
   not yet have another proven shared consumer beyond their existing
   state-in/typed-outcome-out convention.
