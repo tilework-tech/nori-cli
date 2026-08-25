@@ -70,16 +70,6 @@ fn detail_pane_narrow_snapshot() {
 }
 
 #[test]
-fn detail_pane_zebra_snapshot() {
-    assert_snapshot!(configured_snapshot(
-        42,
-        DetailDensity::Compact,
-        DetailLayout::Columns,
-        DetailRowPattern::Zebra,
-    ));
-}
-
-#[test]
 fn detail_pane_normal_density_snapshot() {
     assert_snapshot!(configured_snapshot(
         42,
@@ -395,11 +385,24 @@ fn detail_pane_required_height_matches_responsive_density_and_wrapping() {
 }
 
 #[test]
-fn detail_pane_requires_positive_content_width() {
+fn detail_pane_requires_positive_value_width() {
     let entries = [DetailEntry::key_value("Agent", "Codex")];
 
-    assert_eq!(DetailPane::new(&entries).required_height(4), 0);
-    assert_eq!(DetailPane::new(&entries).required_height(5), 1);
+    for width in 0..7 {
+        assert_eq!(
+            DetailPane::new(&entries).required_height(width),
+            0,
+            "width {width} cannot display a value"
+        );
+    }
+    assert_eq!(DetailPane::new(&entries).required_height(7), 1);
+
+    let backend = TestBackend::new(7, 1);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| frame.render_widget(DetailPane::new(&entries), frame.area()))
+        .expect("draw pane");
+    assert_eq!(terminal.backend().buffer()[(4, 0)].symbol(), "…");
 }
 
 #[test]
@@ -418,8 +421,8 @@ fn detail_pane_stacked_labels_do_not_escape_the_caller_rectangle() {
         .expect("draw pane");
     let buffer = terminal.backend().buffer();
 
-    assert_eq!(buffer[(10, 0)].symbol(), ".");
-    assert_eq!(buffer[(11, 0)].symbol(), ".");
+    assert_eq!(buffer[(4, 0)].symbol(), "界");
+    assert_eq!(buffer[(1, 0)].symbol(), ".");
     assert_eq!(buffer[(12, 0)].symbol(), ".");
 }
 

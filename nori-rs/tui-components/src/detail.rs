@@ -234,7 +234,7 @@ impl<'a> DetailPane<'a> {
 
 impl Widget for DetailPane<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        if area.width < 4 || area.height == 0 {
+        if detail_content_width(area.width).is_none() || area.height == 0 {
             return;
         }
         let surface = Rect::new(
@@ -368,7 +368,7 @@ impl Widget for DetailPane<'_> {
 }
 
 fn detail_content_width(width: u16) -> Option<u16> {
-    (width > 4).then(|| width.saturating_sub(4))
+    (width >= 7).then(|| width.saturating_sub(4))
 }
 
 fn entry_height(

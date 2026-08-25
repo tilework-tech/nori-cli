@@ -138,9 +138,11 @@ consumer application
 - [`DetailPane::required_height`](src/detail.rs) measures the unclipped rows a
   caller must allocate at a given outer width. It shares rendering's responsive
   layout resolution, content inset, label gutter, wrapping, heading, rule, and
-  density calculations; widths of four cells or fewer are not renderable and
-  therefore require zero rows. Its `u16` result saturates at `u16::MAX` when
-  oversized wrapped content exceeds the representable height.
+  density calculations; widths below seven cells are not renderable and
+  therefore require zero rows because the four-cell horizontal inset and
+  two-cell label/value separation leave no positive-width value area. Its `u16`
+  result saturates at `u16::MAX` when oversized wrapped content exceeds the
+  representable height.
 - The overlay renderer preserves titles and primary labels first, suppresses
   optional subtitles on constrained rectangles, wraps descriptions by Unicode
   display width, and emits overflow markers when not all items fit. Key hints
