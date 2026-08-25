@@ -457,7 +457,7 @@ fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
     let fake = FakeHandroll::new();
     let deferred_prompt = "preserve this prompt across local resume";
     let config = cloud_lifecycle_config(&fake)
-        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1200")
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "6000")
         .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
         .with_mock_response("deferred prompt reached the locally resumed session")
         .with_arg(deferred_prompt);
@@ -529,8 +529,10 @@ fn test_cloud_candidate_start_new_preserves_the_deferred_positional_prompt() {
         .wait_for_text("Select Agent", TIMEOUT)
         .expect("agent picker should open after dismissing cloud entry");
 
-    // Cloud's synthetic agent is not a picker row. Row 0 is mock-model and
-    // row 1 is mock-model-alt.
+    // Cloud's synthetic agent is not a picker row. Selection starts before
+    // row 0 (mock-model), so two Downs select row 1 (mock-model-alt).
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
@@ -593,6 +595,9 @@ fn test_cloud_candidate_resume_preserves_the_deferred_positional_prompt() {
     session
         .wait_for_text("Select Agent", TIMEOUT)
         .expect("agent picker should open after dismissing cloud entry");
+    // Selection starts before row 0, so two Downs select mock-model-alt.
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
