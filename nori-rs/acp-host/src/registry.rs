@@ -790,6 +790,32 @@ pub fn list_available_agents() -> Vec<AcpAgentInfo> {
     agents
 }
 
+/// Remove stale `@zed-industries/claude-agent-acp*` and `codex-acp*` entries
+/// from bun's install cache. These packages were renamed to the
+/// `@agentclientprotocol` scope but leftover cache entries under the old scope
+/// can interfere with resolution.
+fn clean_stale_acp_cache(cache_dir: &std::path::Path) {
+    let zed_scope = cache_dir.join("@zed-industries");
+    let entries = match std::fs::read_dir(&zed_scope) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("claude-agent-acp") || name.starts_with("codex-acp") {
+            let path = entry.path();
+            tracing::info!("removing stale ACP cache entry: {}", path.display());
+            if let Err(e) = std::fs::remove_dir_all(&path) {
+                tracing::warn!(
+                    "failed to remove stale ACP cache entry {}: {e}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
 /// Get ACP agent configuration for a given agent name
 ///
 /// # Arguments
@@ -881,6 +907,23 @@ pub fn get_agent_config(agent_name: &str) -> Result<AcpAgentConfig> {
     // Try to parse as a built-in AgentKind (auto-detection path)
     if let Some(agent) = AgentKind::from_slug(&normalized) {
         let package_manager = detect_preferred_package_manager();
+
+        if matches!(agent, AgentKind::ClaudeCode | AgentKind::Codex)
+            && package_manager == PackageManager::Bun
+        {
+            let cache_dir = std::env::var("BUN_INSTALL_CACHE_DIR")
+                .map(std::path::PathBuf::from)
+                .or_else(|_| {
+                    std::env::var("BUN_INSTALL")
+                        .map(|p| std::path::PathBuf::from(p).join("install/cache"))
+                })
+                .unwrap_or_else(|_| {
+                    dirs::home_dir()
+                        .unwrap_or_default()
+                        .join(".bun/install/cache")
+                });
+            clean_stale_acp_cache(&cache_dir);
+        }
 
         let (command, args) = match agent {
             // Claude and Codex use external ACP adapters
@@ -1853,6 +1896,52 @@ mod tests {
     #[test]
     fn test_claude_code_context_window_is_1m() {
         assert_eq!(AgentKind::ClaudeCode.context_window_size(), 1_000_000);
+    }
+
+    #[test]
+    fn test_clean_stale_acp_cache_removes_zed_entries() {
+        let cache_dir = tempfile::tempdir().unwrap();
+        let zed_scope = cache_dir.path().join("@zed-industries");
+        std::fs::create_dir_all(zed_scope.join("claude-agent-acp@0.23.1@@@1")).unwrap();
+        std::fs::create_dir_all(zed_scope.join("claude-agent-acp@0.20.0@@@1")).unwrap();
+        std::fs::create_dir_all(zed_scope.join("codex-acp@0.5.0@@@1")).unwrap();
+        // Unrelated package under the same scope should be preserved
+        std::fs::create_dir_all(zed_scope.join("some-other-package@1.0.0@@@1")).unwrap();
+
+        let acp_scope = cache_dir.path().join("@agentclientprotocol");
+        std::fs::create_dir_all(acp_scope.join("claude-agent-acp@0.70.0@@@1")).unwrap();
+        std::fs::create_dir_all(acp_scope.join("codex-acp@0.10.0@@@1")).unwrap();
+
+        clean_stale_acp_cache(cache_dir.path());
+
+        // Stale @zed-industries entries should be gone
+        assert!(!zed_scope.join("claude-agent-acp@0.23.1@@@1").exists());
+        assert!(!zed_scope.join("claude-agent-acp@0.20.0@@@1").exists());
+        assert!(!zed_scope.join("codex-acp@0.5.0@@@1").exists());
+        // Unrelated package should be preserved
+        assert!(zed_scope.join("some-other-package@1.0.0@@@1").exists());
+        // @agentclientprotocol entries should be untouched
+        assert!(acp_scope.join("claude-agent-acp@0.70.0@@@1").exists());
+        assert!(acp_scope.join("codex-acp@0.10.0@@@1").exists());
+    }
+
+    #[test]
+    fn test_clean_stale_acp_cache_noop_when_no_zed_scope() {
+        let cache_dir = tempfile::tempdir().unwrap();
+        let acp_scope = cache_dir.path().join("@agentclientprotocol");
+        std::fs::create_dir_all(acp_scope.join("claude-agent-acp@0.70.0@@@1")).unwrap();
+
+        // Should not panic or error when @zed-industries doesn't exist
+        clean_stale_acp_cache(cache_dir.path());
+
+        assert!(acp_scope.join("claude-agent-acp@0.70.0@@@1").exists());
+    }
+
+    #[test]
+    fn test_clean_stale_acp_cache_noop_when_cache_dir_missing() {
+        let cache_dir = std::path::PathBuf::from("/tmp/nonexistent-bun-cache-test-dir");
+        // Should not panic or error
+        clean_stale_acp_cache(&cache_dir);
     }
 
     #[test]

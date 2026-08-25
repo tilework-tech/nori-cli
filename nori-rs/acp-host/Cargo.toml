@@ -23,6 +23,7 @@ base64 = { workspace = true }
 codex-rmcp-client = { workspace = true }
 codex-utils-string = { workspace = true }
 diffy = { workspace = true }
+dirs = { workspace = true }
 futures = { workspace = true }
 libc = { workspace = true }
 nori-config = { workspace = true }
