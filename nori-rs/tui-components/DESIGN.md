@@ -135,9 +135,10 @@ information design; adopting it there remains separate consumer work.
 
 ## Details and copy
 
-21. Render metadata as an aligned definition list: right-aligned label gutter,
-    structural separator, then value. Do not use trailing colons.
-22. Group related metadata with spacing or a subtle rule, not another box.
+21. Render metadata as a two-column definition list with left-aligned labels
+    and values, a two-cell gap between them, and a ragged-right edge. Do not use
+    trailing colons or structural separator glyphs.
+22. Group related metadata with one blank row, not another box or a rule glyph.
 23. Never use em dashes in user-visible TUI copy. Use a hyphen, middot, blank
     value, or explicit phrase such as `Not reported`.
 24. Use sentence case and concise action labels.
@@ -150,10 +151,12 @@ key handling, loading, routing, and application actions. It intentionally does
 not make breakpoints or overlay decisions. Handroll adoption is deferred to a
 separate consumer migration.
 
-The body stays transparent. When the caller supplies the optional heading, the
-component renders it on one neutral heading band and leaves one row of space
-before the definition list. The caller still owns the surrounding page and
-placement.
+The component shades one continuous `detail_surface` pane, inset one cell from
+the caller-owned rectangle on both horizontal edges. Content has one additional
+cell of horizontal padding inside that surface. When the caller supplies the
+optional heading, the component renders it at the same left edge as the two
+columns and leaves one row of space before the definition list. The caller
+still owns the surrounding page and placement.
 
 ## Verification
 
@@ -172,11 +175,13 @@ cargo run -p nori-tui-components --example nori_storybook
 ```
 
 The Picker, Markdown, Primitives, States, Detail pane, and Overlay menu pages
-are the visual acceptance target for this crate. Detail pane is page `5`; page
-`6`, Overlay menu, is interactive. Use arrows or `j`/`k` to move, `Enter` to
-activate, `Tab`/`Shift-Tab` to change the menu case, and the displayed number or
-character shortcuts to invoke actions. The example owns its terminal and event
-loop, adapts raw keys to domain-free actions, and uses production components
-only. While Picker search is active, printable keys belong exclusively to the
-query: global page, quit, density, mode, and state shortcuts resume only after
-search deactivates, and Escape deactivates search before leaving the example.
+are the visual acceptance target for this crate. Detail pane is page `5`; use
+`Tab`/`Shift-Tab` there to compare automatic and fixed label widths with an
+optional heading. Page `6`, Overlay menu, is interactive. Use arrows or `j`/`k`
+to move, `Enter` to activate, `Tab`/`Shift-Tab` to change the menu case, and the
+displayed number or character shortcuts to invoke actions. The example owns its
+terminal and event loop, adapts raw keys to domain-free actions, and uses
+production components only. While Picker search is active, printable keys
+belong exclusively to the query: global page, quit, density, mode, and state
+shortcuts resume only after search deactivates, and Escape deactivates search
+before leaving the example.

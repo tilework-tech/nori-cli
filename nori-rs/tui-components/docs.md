@@ -11,8 +11,8 @@ Path: @/nori-rs/tui-components
   render without taking over application behavior.
 - [`DESIGN.md`](DESIGN.md) is the visual contract, while the production
   [`nori_storybook`](examples/nori_storybook.rs) is the interactive acceptance
-  reference. Detail pane is page `5`, followed by the interactive Overlay menu
-  on page `6`.
+  reference. Its Details page uses Tab and Shift-Tab to exercise auto and fixed
+  label widths with a heading, plus the heading-omitted layout.
 
 ### How it fits into the larger codebase
 
@@ -42,13 +42,17 @@ consumer application
   filtering is active and returns typed outcomes; consumers retain dismissal,
   command dispatch, and application focus.
 - [`DetailPane`](src/detail.rs) is a stateless definition-list renderer for
-  caller-positioned side or bottom regions. Its caller retains placement,
-  scrolling, focus, loading, key handling, and application routing.
+  caller-positioned side or bottom regions. It owns the inset pane surface and
+  internal column layout, while its caller retains placement, scrolling, focus,
+  loading, key handling, and application routing. The
+  [`picker` renderer](src/picker/render.rs) adapts selected-item details into
+  entries and supplies the `Details` heading.
 - [`theme`](src/theme/) supplies semantic styles shared across components,
-  including agent identity tones selected through [`ProviderKind`](src/detail.rs).
-  Neutral backgrounds, including the distinct overlay item layer, are derived
-  from a reported terminal RGB background only when the consumer knows true
-  color is supported; otherwise those backgrounds remain unset.
+  including the detail-pane surface and agent identity tones selected through
+  [`ProviderKind`](src/detail.rs). Neutral backgrounds, including the distinct
+  overlay item layer, are derived from a reported terminal RGB background only
+  when the consumer knows true color is supported; otherwise those backgrounds
+  remain unset.
 - Ratatui provides the rendering types and caller rectangles. Crossterm is an
   example-only development dependency, so the public library does not bind a
   consumer to one raw event source.
@@ -103,8 +107,17 @@ consumer application
   height.
 - `DetailPane` accepts key/value entries and structural rules, trims trailing
   colons from labels, and maps semantic or provider tones through the shared
-  theme. Its auto or fixed label gutter stays within the caller's width;
-  callers explicitly choose whether each value wraps or truncates.
+  theme. It styles the full pane surface one horizontal cell inside the caller's
+  rectangle, then places content behind one more horizontal padding cell.
+- Detail labels and values are both left-aligned with two blank cells between
+  their columns. Auto and fixed label widths are calculated from the padded
+  content width and bounded so a value column remains; callers explicitly
+  choose whether each value wraps or truncates. Wrapped values reserve rows
+  using the same Ratatui layout semantics that render them, so later entries
+  begin after the rendered value.
+- An optional heading occupies the first content row and leaves the next row
+  blank before entries. Structural rules draw no glyph and instead reserve a
+  blank grouping row.
 - The overlay renderer preserves titles and primary labels first, suppresses
   optional subtitles on constrained rectangles, wraps descriptions by Unicode
   display width, and emits overflow markers when not all items fit. Key hints
@@ -148,6 +161,9 @@ consumer application
 - `backdrop` styles only the caller-provided rectangle. Without a derived RGB
   theme, the backdrop, menu surface, and menu-item surface remain unset instead
   of substituting an absolute neutral color.
+- Detail-pane surface styling is independent of heading presence and fills the
+  pane's inset height, including blank heading and rule spacing. Only the outer
+  horizontal caller gutters remain outside `Theme::detail_surface`.
 - No public selectable-list core is extracted: menu and picker semantics do
   not yet have another proven shared consumer beyond their existing
   state-in/typed-outcome-out convention.

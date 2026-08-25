@@ -13,6 +13,7 @@ use nori_tui_components::DetailTone;
 use nori_tui_components::EmptyState;
 use nori_tui_components::KeyHint;
 use nori_tui_components::KeyHints;
+use nori_tui_components::LabelWidth;
 use nori_tui_components::Markdown;
 use nori_tui_components::MenuShortcut;
 use nori_tui_components::MessageLevel;
@@ -69,6 +70,32 @@ enum Page {
     OverlayMenu,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum DetailStory {
+    #[default]
+    AutoWithHeading,
+    FixedWithHeading,
+    WithoutHeading,
+}
+
+impl DetailStory {
+    fn next(self) -> Self {
+        match self {
+            Self::AutoWithHeading => Self::FixedWithHeading,
+            Self::FixedWithHeading => Self::WithoutHeading,
+            Self::WithoutHeading => Self::AutoWithHeading,
+        }
+    }
+
+    fn previous(self) -> Self {
+        match self {
+            Self::AutoWithHeading => Self::WithoutHeading,
+            Self::FixedWithHeading => Self::AutoWithHeading,
+            Self::WithoutHeading => Self::FixedWithHeading,
+        }
+    }
+}
+
 fn overlay_menu_action(page: Page, key: KeyEvent) -> Option<menu_storybook::MenuAction> {
     if page != Page::OverlayMenu {
         return None;
@@ -121,6 +148,7 @@ fn main() -> Result<()> {
     let theme = terminal.theme;
     let mut page = Page::default();
     let mut density = PickerDensity::Normal;
+    let mut detail_story = DetailStory::default();
     let mut state = picker_state();
     let mut menu_state = menu_storybook::MenuStoryState::new(menu_storybook::MenuStory::Action)?;
     let mut notice = "Resize the terminal to exercise responsive layout".to_string();
@@ -142,7 +170,7 @@ fn main() -> Result<()> {
                 Page::Markdown => render_markdown(content, frame.buffer_mut(), theme),
                 Page::Primitives => render_primitives(content, frame.buffer_mut(), theme),
                 Page::States => render_states(content, frame.buffer_mut(), theme),
-                Page::Details => render_details(content, frame.buffer_mut(), theme),
+                Page::Details => render_details(content, frame.buffer_mut(), theme, detail_story),
                 Page::OverlayMenu => {
                     menu_storybook::render(content, frame.buffer_mut(), theme, &mut menu_state)
                 }
@@ -198,6 +226,12 @@ fn main() -> Result<()> {
             }
             KeyCode::Char('6') if !picker_owns_global_shortcuts(page, state.search_active) => {
                 page = Page::OverlayMenu;
+            }
+            KeyCode::Tab if page == Page::Details => {
+                detail_story = detail_story.next();
+            }
+            KeyCode::BackTab if page == Page::Details => {
+                detail_story = detail_story.previous();
             }
             KeyCode::Char('d') if page == Page::Picker && !state.search_active => {
                 density = match density {
@@ -417,44 +451,55 @@ fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
     render_page_footer(area, buf, theme);
 }
 
-fn render_details(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
+fn render_details(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme, story: DetailStory) {
     let inner = page_frame(area, buf, "Detail pane", theme);
-    let areas =
-        Layout::vertical([Constraint::Percentage(52), Constraint::Percentage(48)]).split(inner);
-    let cli = Layout::horizontal([
-        Constraint::Percentage(58),
-        Constraint::Length(2),
-        Constraint::Percentage(42),
-    ])
-    .split(areas[0]);
+    let sections = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(inner);
+    let (story_name, story_description) = match story {
+        DetailStory::AutoWithHeading => (
+            "Default · auto label width + heading",
+            "Labels and values are left aligned on one inset pane surface.",
+        ),
+        DetailStory::FixedWithHeading => (
+            "Fixed label width + heading",
+            "A caller-selected gutter keeps the value column stable across panes.",
+        ),
+        DetailStory::WithoutHeading => (
+            "Default · heading omitted",
+            "The pane surface and two-column alignment do not depend on a heading.",
+        ),
+    };
     Paragraph::new(vec![
-        Line::styled("Nori CLI session picker", theme.title),
-        Line::styled("Caller owns the side-pane split", theme.muted),
-        Line::from(""),
-        Line::from("› Fix parser recovery"),
-        Line::styled("  nori-cli · 2m ago · working", theme.muted),
+        Line::styled(story_name, theme.title),
+        Line::styled(story_description, theme.muted),
     ])
-    .render(cli[0], buf);
-    DetailPane::new(&detail_entries())
-        .heading("Session details")
-        .theme(theme)
-        .render(cli[2], buf);
-    Paragraph::new(Line::styled(
-        "Handroll-style bottom panel - caller owns its reserved rows",
-        theme.muted,
-    ))
-    .render(areas[1], buf);
-    let bottom = Rect::new(
-        areas[1].x,
-        areas[1].y.saturating_add(2),
-        areas[1].width,
-        areas[1].height.saturating_sub(2),
+    .render(sections[0], buf);
+
+    let entries = detail_entries();
+    let pane = DetailPane::new(&entries).theme(theme);
+    let pane = match story {
+        DetailStory::AutoWithHeading => pane.heading("Session details"),
+        DetailStory::FixedWithHeading => pane
+            .heading("Session details")
+            .label_width(LabelWidth::Fixed(12)),
+        DetailStory::WithoutHeading => pane,
+    };
+    pane.render(sections[1], buf);
+
+    KeyHints::new([
+        KeyHint::new("Tab/Shift-Tab", "detail story"),
+        KeyHint::new("1-6", "page"),
+        KeyHint::new("q", "close"),
+    ])
+    .theme(theme)
+    .render(
+        Rect::new(
+            area.x.saturating_add(2),
+            area.bottom().saturating_sub(2),
+            area.width.saturating_sub(4),
+            1,
+        ),
+        buf,
     );
-    DetailPane::new(&detail_entries())
-        .heading("Current session")
-        .theme(theme)
-        .render(bottom, buf);
-    render_page_footer(area, buf, theme);
 }
 
 fn detail_entries() -> Vec<DetailEntry> {

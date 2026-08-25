@@ -1,3 +1,4 @@
+use super::DetailStory;
 use super::Page;
 use super::overlay_menu_action;
 use super::overlay_page_navigation;
@@ -83,6 +84,16 @@ fn active_picker_search_owns_storybook_shortcut_characters() {
             Some(PickerAction::AppendQuery(character))
         );
     }
+}
+
+#[test]
+fn detail_stories_cycle_through_each_configurable_presentation() {
+    let story = DetailStory::default();
+    assert_eq!(story, DetailStory::AutoWithHeading);
+    assert_eq!(story.next(), DetailStory::FixedWithHeading);
+    assert_eq!(story.next().next(), DetailStory::WithoutHeading);
+    assert_eq!(story.next().next().next(), DetailStory::AutoWithHeading);
+    assert_eq!(story.previous(), DetailStory::WithoutHeading);
 }
 
 fn key(code: KeyCode) -> KeyEvent {

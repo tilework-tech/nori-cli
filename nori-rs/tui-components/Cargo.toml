@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 nucleo-matcher = { workspace = true }
 pulldown-cmark = { workspace = true }
-ratatui = { workspace = true }
+ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
 textwrap = { workspace = true }
 unicode-width = { workspace = true }
 
