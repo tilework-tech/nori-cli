@@ -38,8 +38,9 @@ keep the hint concise. While the overlay page is active, use arrows or `j`/`k`
 to move, `Enter` to activate, and `1-5` or `r`/`s`/`i`/`a` to invoke displayed
 shortcuts. Overlay shortcuts take precedence over numbered page navigation;
 the left arrow returns to Detail pane and the right arrow wraps to Picker. On
-the Detail pane page, `Tab`/`Shift-Tab` compares automatic and fixed label
-widths with an optional heading.
+the Detail pane page, `Tab`/`Shift-Tab` compares compact columns, zebra bands,
+normal density, responsive stacking, fixed label width, and an omitted heading.
+Each story reports its required height at the current pane width.
 The focused examples remain useful while developing one component:
 
 ```console

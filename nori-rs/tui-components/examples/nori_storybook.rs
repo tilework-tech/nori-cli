@@ -7,8 +7,11 @@ use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use nori_tui_components::DetailDensity;
 use nori_tui_components::DetailEntry;
+use nori_tui_components::DetailLayout;
 use nori_tui_components::DetailPane;
+use nori_tui_components::DetailRowPattern;
 use nori_tui_components::DetailTone;
 use nori_tui_components::EmptyState;
 use nori_tui_components::KeyHint;
@@ -74,6 +77,9 @@ enum Page {
 enum DetailStory {
     #[default]
     AutoWithHeading,
+    Zebra,
+    NormalDensity,
+    ResponsiveStacked,
     FixedWithHeading,
     WithoutHeading,
 }
@@ -81,7 +87,10 @@ enum DetailStory {
 impl DetailStory {
     fn next(self) -> Self {
         match self {
-            Self::AutoWithHeading => Self::FixedWithHeading,
+            Self::AutoWithHeading => Self::Zebra,
+            Self::Zebra => Self::NormalDensity,
+            Self::NormalDensity => Self::ResponsiveStacked,
+            Self::ResponsiveStacked => Self::FixedWithHeading,
             Self::FixedWithHeading => Self::WithoutHeading,
             Self::WithoutHeading => Self::AutoWithHeading,
         }
@@ -90,7 +99,10 @@ impl DetailStory {
     fn previous(self) -> Self {
         match self {
             Self::AutoWithHeading => Self::WithoutHeading,
-            Self::FixedWithHeading => Self::AutoWithHeading,
+            Self::Zebra => Self::AutoWithHeading,
+            Self::NormalDensity => Self::Zebra,
+            Self::ResponsiveStacked => Self::NormalDensity,
+            Self::FixedWithHeading => Self::ResponsiveStacked,
             Self::WithoutHeading => Self::FixedWithHeading,
         }
     }
@@ -453,11 +465,23 @@ fn render_states(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme) {
 
 fn render_details(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme, story: DetailStory) {
     let inner = page_frame(area, buf, "Detail pane", theme);
-    let sections = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(inner);
+    let sections = Layout::vertical([Constraint::Length(4), Constraint::Min(1)]).split(inner);
     let (story_name, story_description) = match story {
         DetailStory::AutoWithHeading => (
-            "Default · auto label width + heading",
-            "Labels and values are left aligned on one inset pane surface.",
+            "Default · compact columns + heading",
+            "Automatic label width with the approved compact two-column layout.",
+        ),
+        DetailStory::Zebra => (
+            "Zebra · compact columns + heading",
+            "Full-width row bands group wrapped logical entries and reset by section.",
+        ),
+        DetailStory::NormalDensity => (
+            "Normal density · columns + heading",
+            "Adjacent entries receive one blank row without doubling section spacing.",
+        ),
+        DetailStory::ResponsiveStacked => (
+            "Responsive · stack below 120 columns",
+            "Narrow labels sit above values, which retain a two-cell inset.",
         ),
         DetailStory::FixedWithHeading => (
             "Fixed label width + heading",
@@ -468,21 +492,39 @@ fn render_details(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme, s
             "The pane surface and two-column alignment do not depend on a heading.",
         ),
     };
-    Paragraph::new(vec![
-        Line::styled(story_name, theme.title),
-        Line::styled(story_description, theme.muted),
-    ])
-    .render(sections[0], buf);
 
     let entries = detail_entries();
     let pane = DetailPane::new(&entries).theme(theme);
     let pane = match story {
         DetailStory::AutoWithHeading => pane.heading("Session details"),
+        DetailStory::Zebra => pane
+            .heading("Session details")
+            .row_pattern(DetailRowPattern::Zebra),
+        DetailStory::NormalDensity => pane
+            .heading("Session details")
+            .density(DetailDensity::Normal),
+        DetailStory::ResponsiveStacked => pane
+            .heading("Session details")
+            .layout(DetailLayout::Responsive { stack_below: 120 })
+            .row_pattern(DetailRowPattern::Zebra),
         DetailStory::FixedWithHeading => pane
             .heading("Session details")
             .label_width(LabelWidth::Fixed(12)),
         DetailStory::WithoutHeading => pane,
     };
+    let required_height = pane.required_height(sections[1].width);
+    Paragraph::new(vec![
+        Line::styled(story_name, theme.title),
+        Line::styled(story_description, theme.muted),
+        Line::styled(
+            format!(
+                "Required height at {} columns: {required_height} rows",
+                sections[1].width
+            ),
+            theme.muted,
+        ),
+    ])
+    .render(sections[0], buf);
     pane.render(sections[1], buf);
 
     KeyHints::new([

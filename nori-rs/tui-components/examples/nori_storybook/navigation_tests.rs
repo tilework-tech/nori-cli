@@ -88,12 +88,45 @@ fn active_picker_search_owns_storybook_shortcut_characters() {
 
 #[test]
 fn detail_stories_cycle_through_each_configurable_presentation() {
-    let story = DetailStory::default();
-    assert_eq!(story, DetailStory::AutoWithHeading);
-    assert_eq!(story.next(), DetailStory::FixedWithHeading);
-    assert_eq!(story.next().next(), DetailStory::WithoutHeading);
-    assert_eq!(story.next().next().next(), DetailStory::AutoWithHeading);
-    assert_eq!(story.previous(), DetailStory::WithoutHeading);
+    assert_eq!(DetailStory::default(), DetailStory::AutoWithHeading);
+
+    let transitions = [
+        (
+            DetailStory::AutoWithHeading,
+            DetailStory::Zebra,
+            DetailStory::WithoutHeading,
+        ),
+        (
+            DetailStory::Zebra,
+            DetailStory::NormalDensity,
+            DetailStory::AutoWithHeading,
+        ),
+        (
+            DetailStory::NormalDensity,
+            DetailStory::ResponsiveStacked,
+            DetailStory::Zebra,
+        ),
+        (
+            DetailStory::ResponsiveStacked,
+            DetailStory::FixedWithHeading,
+            DetailStory::NormalDensity,
+        ),
+        (
+            DetailStory::FixedWithHeading,
+            DetailStory::WithoutHeading,
+            DetailStory::ResponsiveStacked,
+        ),
+        (
+            DetailStory::WithoutHeading,
+            DetailStory::AutoWithHeading,
+            DetailStory::FixedWithHeading,
+        ),
+    ];
+
+    for (current, next, previous) in transitions {
+        assert_eq!(current.next(), next);
+        assert_eq!(current.previous(), previous);
+    }
 }
 
 fn key(code: KeyCode) -> KeyEvent {

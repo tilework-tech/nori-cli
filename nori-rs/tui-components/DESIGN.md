@@ -158,6 +158,18 @@ optional heading, the component renders it at the same left edge as the two
 columns and leaves one row of space before the definition list. The caller
 still owns the surrounding page and placement.
 
+Compact density, two-column layout, and a plain pane surface are the defaults.
+Normal density inserts one blank row only between adjacent key/value entries;
+it does not add space beside an explicit `Rule`. Optional zebra styling fills
+the complete surface width of every physical line belonging to a logical
+entry, alternates `row` and `row_alt`, and restarts after a `Rule`.
+
+Stacked layout places each label above its value and insets the value by two
+cells. Responsive layout selects that stacked form below the caller-provided
+outer-width threshold and uses columns at or above it. `required_height(width)`
+uses the same layout resolution and wrapping measurement as rendering so
+callers can reserve an exact-height region before placing the pane.
+
 ## Verification
 
 25. Snapshot every component at representative wide and narrow widths.
@@ -176,8 +188,9 @@ cargo run -p nori-tui-components --example nori_storybook
 
 The Picker, Markdown, Primitives, States, Detail pane, and Overlay menu pages
 are the visual acceptance target for this crate. Detail pane is page `5`; use
-`Tab`/`Shift-Tab` there to compare automatic and fixed label widths with an
-optional heading. Page `6`, Overlay menu, is interactive. Use arrows or `j`/`k`
+`Tab`/`Shift-Tab` there to compare compact columns, zebra bands, normal density,
+responsive stacking, fixed label width, and an omitted heading. Page `6`,
+Overlay menu, is interactive. Use arrows or `j`/`k`
 to move, `Enter` to activate, `Tab`/`Shift-Tab` to change the menu case, and the
 displayed number or character shortcuts to invoke actions. The example owns its
 terminal and event loop, adapts raw keys to domain-free actions, and uses
