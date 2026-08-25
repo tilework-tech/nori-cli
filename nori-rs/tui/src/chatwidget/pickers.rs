@@ -91,7 +91,7 @@ impl ChatWidget {
             let Some(handle) = self.harness_handle.clone() else {
                 // Deferred widget (picker-first entry, post-/close): there is
                 // no live connection to list over — re-run the pre-session
-                // probe at the app layer instead.
+                // preparation flow at the app layer instead.
                 self.app_event_tx
                     .send(crate::app_event::AppEvent::OpenAgentSessionPicker);
                 return;
@@ -221,10 +221,17 @@ impl ChatWidget {
     pub(crate) fn show_acp_resume_session_picker(
         &mut self,
         sessions: Vec<nori_protocol::acp::v1::SessionInfo>,
+        cancel_candidate_on_dismiss: bool,
     ) {
-        let params = crate::nori::resume_session_picker::acp_resume_session_component_picker_params(
-            sessions,
-        );
+        let mut params =
+            crate::nori::resume_session_picker::acp_resume_session_component_picker_params(
+                sessions,
+            );
+        if cancel_candidate_on_dismiss {
+            params.on_dismiss = Some(Box::new(|tx| {
+                tx.send(crate::app_event::AppEvent::CancelAgentCandidate);
+            }));
+        }
         self.bottom_pane.show_component_picker(params);
     }
 
@@ -644,16 +651,6 @@ impl ChatWidget {
     /// Model-category config option, open the value picker for it. Otherwise
     /// show a static "not supported" message.
     pub(crate) fn open_model_popup(&mut self) {
-        // An agent switch is pending: the new session hasn't started, so the new
-        // agent's (session-scoped) models aren't available yet. Querying the live
-        // handle would show the OLD agent's models, so explain instead.
-        if let Some(pending) = self.pending_agent.as_ref() {
-            let params = crate::nori::agent_picker::acp_model_picker_pending_agent_params(
-                &pending.display_name,
-            );
-            self.bottom_pane.show_selection_view(params);
-            return;
-        }
         if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {

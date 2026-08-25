@@ -28,7 +28,9 @@ Scenarios cover representative raw ACP messages, tools, plans, permissions and
 responses; Nori lifecycle and failure behavior; query-driven pickers; cloud
 list/resume/close/detach; transcript persistence and view-only selection; MCP
 and browser workflows; and ordering races between streaming text and tool
-updates.
+updates. Agent-switch coverage observes real child PIDs to prove that the
+current and prepared candidate coexist, activation reuses the prepared child,
+and cancellation or activation failure leaves the current session usable.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
@@ -44,5 +46,8 @@ typed `HarnessHandle` methods available to headless embedders.
   least one user turn; lifecycle records alone do not make it resumable.
 - Timing-sensitive scenarios use bounded waits, but assertions target visible
   behavior rather than private reducer calls.
+- Prepared-lifecycle scenarios assert process ownership as well as terminal
+  output because a correct-looking picker can otherwise hide a disposable
+  inspection subprocess.
 
 Created and maintained by Nori.

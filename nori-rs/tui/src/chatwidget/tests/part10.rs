@@ -1,6 +1,29 @@
 use super::*;
 
 #[test]
+fn candidate_login_target_survives_failure_and_clears_after_success() {
+    let (mut chat, _rx, _unused_rx) = make_chatwidget_manual();
+    chat.config.active_agent = "claude-code".to_string();
+    chat.set_login_agent_override(Some("codex".to_string()));
+    chat.login_handler = Some(crate::login_handler::LoginHandler::new());
+
+    chat.handle_login_complete(false);
+    assert_eq!(
+        chat.login_target_agent(),
+        "codex",
+        "a failed login should keep routing a retry to the candidate"
+    );
+
+    chat.login_handler = Some(crate::login_handler::LoginHandler::new());
+    chat.handle_login_complete(true);
+    assert_eq!(
+        chat.login_target_agent(),
+        "claude-code",
+        "successful authentication should restore bare /login to the active agent"
+    );
+}
+
+#[test]
 fn deferred_startup_input_preserves_prompt_and_image_only_semantics_for_resume() {
     let (mut chat, _rx, _unused_rx) = make_cloud_chatwidget_manual();
     chat.first_prompt_text = Some("Continue onboarding".to_string());
@@ -1387,13 +1410,18 @@ async fn start_mock_session() -> nori_harness::runtime::LaunchedSession {
         nori_home: temp.path().to_path_buf(),
         ..Default::default()
     };
+    let agent = nori_harness::runtime::prepare_agent(nori_harness::runtime::AgentPrepareSpec {
+        config: std::sync::Arc::new(config),
+        cli_version: "tui-test".to_string(),
+        session_context: None,
+        initial_context: None,
+    })
+    .await
+    .expect("prepare test agent");
     let mut session =
         nori_harness::runtime::launch_session(nori_harness::runtime::SessionLaunchSpec {
-            config: std::sync::Arc::new(config),
-            cli_version: "tui-test".to_string(),
-            session_context: None,
-            initial_context: None,
-            resume: None,
+            agent,
+            start: nori_harness::runtime::SessionStart::New,
         });
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         while !matches!(

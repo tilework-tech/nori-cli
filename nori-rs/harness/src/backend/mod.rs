@@ -371,7 +371,7 @@ pub mod browser_session;
 mod goal_ext;
 mod nori_client_context;
 mod nori_client_mcp;
-pub mod probe;
+pub mod prepared;
 mod session;
 mod session_defaults;
 pub(crate) mod session_reducer;

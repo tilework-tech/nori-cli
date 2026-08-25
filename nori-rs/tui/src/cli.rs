@@ -43,7 +43,7 @@ pub struct Cli {
     #[clap(skip)]
     pub cloud_mode: bool,
 
-    /// Internal: `nori cloud --onboard` — skip the picker and probe for the
+    /// Internal: `nori cloud --onboard` — skip the picker and prepare the
     /// org's onboarding session before resuming or acquiring it.
     /// Not exposed as a public flag.
     #[clap(skip)]

@@ -10,9 +10,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nori_config::NoriConfig;
+use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::LaunchedSession;
 use nori_harness::runtime::SessionLaunchSpec;
+use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::launch_session;
+use nori_harness::runtime::prepare_agent;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
@@ -31,7 +34,11 @@ impl Drop for EnvGuard {
 
 /// Launch a mock-agent session with ACP wire recording enabled so tests can
 /// observe the exact prompts and session ids that reached the agent.
-fn launch_with_wire_log(cwd: &Path, wire_log_dir: &Path) -> LaunchedSession {
+#[expect(
+    clippy::expect_used,
+    reason = "focused failure for an agent preparation failure"
+)]
+async fn launch_with_wire_log(cwd: &Path, wire_log_dir: &Path) -> LaunchedSession {
     let config = NoriConfig {
         active_agent: "mock-model".to_string(),
         cwd: cwd.to_path_buf(),
@@ -42,12 +49,17 @@ fn launch_with_wire_log(cwd: &Path, wire_log_dir: &Path) -> LaunchedSession {
         },
         ..Default::default()
     };
-    launch_session(SessionLaunchSpec {
+    let agent = prepare_agent(AgentPrepareSpec {
         config: Arc::new(config),
         cli_version: "native-compact-branch-test".to_string(),
         session_context: None,
         initial_context: None,
-        resume: None,
+    })
+    .await
+    .expect("prepare mock agent");
+    launch_session(SessionLaunchSpec {
+        agent,
+        start: SessionStart::New,
     })
 }
 
@@ -167,7 +179,7 @@ async fn native_compact_forwards_without_swapping_session() {
     unsafe { std::env::set_var("MOCK_AGENT_ADVERTISE_COMPACT", "1") };
     let _guard = EnvGuard("MOCK_AGENT_ADVERTISE_COMPACT");
     let (temp, wire) = temp_dirs();
-    let mut session = launch_with_wire_log(temp.path(), &wire);
+    let mut session = launch_with_wire_log(temp.path(), &wire).await;
 
     let bootstrap_session_id = wait_for_started(&mut session).await;
 
@@ -216,7 +228,7 @@ async fn native_compact_forwards_without_swapping_session() {
 #[serial]
 async fn compact_without_native_support_swaps_and_injects_summary() {
     let (temp, wire) = temp_dirs();
-    let mut session = launch_with_wire_log(temp.path(), &wire);
+    let mut session = launch_with_wire_log(temp.path(), &wire).await;
 
     let bootstrap_session_id = wait_for_started(&mut session).await;
 
@@ -265,7 +277,7 @@ async fn branch_forks_active_session() {
     unsafe { std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_FORK", "1") };
     let _guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_FORK");
     let (temp, wire) = temp_dirs();
-    let mut session = launch_with_wire_log(temp.path(), &wire);
+    let mut session = launch_with_wire_log(temp.path(), &wire).await;
 
     let bootstrap_session_id = wait_for_started(&mut session).await;
 
@@ -310,7 +322,7 @@ async fn branch_forks_active_session() {
 #[serial]
 async fn branch_unsupported_agent_errors() {
     let (temp, wire) = temp_dirs();
-    let mut session = launch_with_wire_log(temp.path(), &wire);
+    let mut session = launch_with_wire_log(temp.path(), &wire).await;
 
     let bootstrap_session_id = wait_for_started(&mut session).await;
 
@@ -346,7 +358,7 @@ async fn branch_leaves_session_intact_when_fork_rpc_fails() {
     let _support_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_FORK");
     let _fail_guard = EnvGuard("MOCK_AGENT_FORK_SESSION_FAIL");
     let (temp, wire) = temp_dirs();
-    let mut session = launch_with_wire_log(temp.path(), &wire);
+    let mut session = launch_with_wire_log(temp.path(), &wire).await;
 
     let bootstrap_session_id = wait_for_started(&mut session).await;
 

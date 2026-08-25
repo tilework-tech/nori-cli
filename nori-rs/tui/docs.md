@@ -330,6 +330,64 @@ pending replay.
 
 #### Lifecycle behavior
 
+Connection preparation is separate from session activation. Picker-first entry
+stores the harness's opaque `PreparedAgent` in `App` while the user chooses a
+new or existing session, so `initialize`, optional `session/list`, and the
+chosen `session/new`, `session/load`, or `session/resume` all use one child
+process. Unsupported listing is distinct from an empty successful catalog;
+preparation or advertised-list failure leaves the deferred widget without an
+active session and offers an explicit retry/new path. This orchestration lives
+in [`session_setup.rs`](src/app/session_setup.rs), while
+[`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes a
+prepared connection into the harness runtime.
+
+Primary preparation is owned as a generation plus task abort handle, not a
+boolean in-flight flag. Explicit new/resume selection, close, candidate
+preparation, and exit invalidate it before changing lifecycle state. An
+`AgentPrepared` result is accepted only when its generation still matches the
+owned primary preparation; a late successful result is explicitly shut down.
+This prevents a cancelled initialize/list task from repopulating the picker or
+leaking its child after a newer user decision.
+
+Candidate state retains the candidate identity and opaque prepared connection;
+it does not separately snapshot the full `NoriConfig`. When the user chooses
+New or Resume, the TUI derives activation config from the latest `App` config
+and asks the harness to refresh the prepared agent. Session-time settings
+therefore include changes made while the picker was open. Agent identity,
+working directory, ACP proxy/wire-recording settings, and the resolved default
+model must still match preparation because they determine the existing process
+or transport; a mismatch tears down the candidate and asks the user to retry
+the switch. On `SessionStarted`, only the active-agent identity is committed
+into `App`, so other current settings are never overwritten by candidate-era
+state.
+
+Agent switching is transactional. Selecting an `/agent` row immediately starts
+a live candidate without changing the active `ChatWidget`; the private
+`CandidateAgent` state records preparation, picker-ready, and activation
+phases. The current and candidate subprocesses coexist while the candidate
+initializes and while its session picker is open. Choosing a session activates
+the candidate in a separate widget, and `SessionStarted` is the commit event:
+only then does `App` swap widgets, persist the selected agent, and shut down the
+replaced process. Preparation failure, activation failure, picker dismissal,
+supersession, or application exit tears down only the candidate and leaves the
+current session promptable. Prompt submission always targets the current
+widget; there is no pending switch-on-next-prompt state.
+
+Bare `/login` has a narrow candidate-target override. Selecting a candidate
+sets it, and preparation or activation failure leaves it available so the user
+can authenticate that attempted agent without recreating pending-switch state.
+Explicit cancellation and successful authentication clear the override; a
+successful switch replaces the widget and returns bare `/login` to the active
+agent. The override affects login resolution only—prompts and lifecycle actions
+continue to target the current session unless a real candidate state exists.
+
+The process-wide `HarnessRemoteHost` follows the same commit boundary. A
+candidate widget starts with remote attachment disabled, so a failed or
+cancelled candidate cannot displace the current remotely controlled session.
+After `SessionStarted`, the committed widget attaches with the observed start
+record to seed identity that its new subscription could no longer replay; only
+then is the old remote attachment replaced.
+
 An orderly ACP close completes the typed close call, leaves the raw close
 response observable on the stream, observes `SessionEnded(Closed)`, and then
 handles stream closure. The TUI does not render a successful close-response
@@ -338,10 +396,12 @@ exit requests immediate owned ACP process-group cleanup; cloud exit allows a
 short detach grace. The TUI exits when cleanup publishes `SessionEnded`, rather
 than using an independent timer that can abandon reaping.
 
-Events entering the application are tagged with their session generation. When
-a session is replaced, events from older generations are discarded.
+Events entering the application are tagged with their session generation.
+Candidate events are routed to the candidate widget until activation commits;
+after a session is replaced, events from older generations are discarded.
 Replacement shutdown is based on the live harness handle rather than transcript
-recorder or conversation-ID availability.
+recorder or conversation-ID availability. Preparation generations apply the
+same stale-result rule before a widget or active session exists.
 
 Unexpected child or transport loss emits a request failure when work was in
 flight followed by `SessionEnded(ConnectionLost)`. The TUI stays open so the
@@ -349,21 +409,25 @@ user can read the failure and choose the next action; connection loss is not
 treated as a successful quit.
 
 Cloud sessions use standard ACP `session/list`, `session/resume`,
-`session/load`, and `session/close`. Capabilities describe what the active ACP
-facade supports; they are not a sound test for whether its process represents a
-remote VM. The top-level `nori cloud` launch supplies explicit `cloud_mode`
-state through `TuiCli`, `App`, and `ChatWidget`. Cloud entry is normally
-picker-first: `App::run` opens the agent session picker before anything can
-claim a VM, with "Start a new session" as an explicit pick. The clap-skipped
+`session/load`, and `session/close`. Capabilities describe what an initialized
+ACP facade supports; they are not a sound test for whether its process
+represents a remote VM. The top-level `nori cloud` launch supplies explicit
+`cloud_mode` state through `TuiCli`, `App`, and `ChatWidget`. Cloud entry is
+normally picker-first: `App::run` prepares one connection and opens its session
+picker before any session directive can claim a VM, with "Start a new session"
+as an explicit pick. The prepared child remains alive behind that picker and
+the selection consumes it rather than spawning a second agent. The clap-skipped
 `cloud_onboard` flag (`nori cloud --onboard`, for customer onboarding) skips
-the picker but runs the same bounded `session/list` probe. The broker projects
+the picker but runs the same bounded connection preparation. The broker projects
 the config-pinned onboarding session as `_meta.nori.purpose = "onboarding"`;
 when that tag is present, the TUI emits the existing resume action and the
 harness uses `session/load`, including recorded-history replay. If no tagged
-session is present, or listing is unsupported or fails, the deferred handroll
-child still spawns as `cloud-acp --onboard`, preserving the broker's serialized
-acquire-or-resume behavior and compatibility with older components. `/new`
-repeats this onboarding probe; `/close` retains its ordinary picker-first
+session is present, or listing is unsupported, onboarding explicitly starts a
+new session on that same prepared `cloud-acp --onboard` connection, preserving
+the broker's serialized acquire-or-resume behavior and compatibility with older
+components. An initialization or advertised-list failure is shown as a
+preparation failure rather than being treated as an empty catalog. `/new`
+repeats this onboarding preparation; `/close` retains its ordinary picker-first
 lifecycle. Because the `--onboard` argv is part of the process-wide agent
 registry entry, every fallback acquisition remains onboarding-only. Initial
 positional prompts still auto-send on `SessionConfigured` for all entry paths.
@@ -400,12 +464,16 @@ binds that address; a non-loopback bind additionally requires
 `set_active_host` before the app runs, so a controller can connect as soon as
 the session launches. The server value is held for the whole app run.
 
-Every harness launch in [`chatwidget/agent.rs`](src/chatwidget/agent.rs)
-attaches its new `HarnessHandle` to the active remote host when one is
-installed, so the remote surface follows session respawns — new session, agent
-switch, and resume. Attaching the replacement session closes any current remote
-controller; after reconnecting, the controller discovers the replacement
-through `session/list`. All remote types reach the TUI through
+Ordinary harness launches in
+[`chatwidget/agent.rs`](src/chatwidget/agent.rs) attach their new
+`HarnessHandle` immediately so the remote host subscribes before startup
+events. Switch-candidate launches suppress that attachment until their
+`SessionStarted` commit, then use the observed start record to attach the
+committed handle without losing its outward identity. Thus new-session and
+resume paths remain eager, while a failed or cancelled candidate cannot replace
+the current remote session. Attaching the committed replacement closes any
+current remote controller; after reconnecting, the controller discovers the
+replacement through `session/list`. All remote types reach the TUI through
 `nori_harness::remote_agent` re-exports, preserving the rule that the TUI never
 imports the ACP host crate directly.
 

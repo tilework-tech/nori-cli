@@ -12,22 +12,38 @@ Path: @/nori-rs/exec
 
 - `nori-cli` resolves configuration, selects the mode (`nori exec` or its `-p` / `--print` alias), and owns process stdin, stdout, stderr, and exit status.
 - Prompt ingestion is entirely a `nori-cli` concern: it composes the argument prompt and any piped stdin into one string and hands `run_plaintext` a fully resolved prompt. `nori-exec` never reads a prompt from the process itself.
-- `nori-exec` launches and controls sessions through `nori-harness`; it does not spawn agents or reduce ACP state independently.
+- `nori-exec` prepares and activates sessions through `nori-harness`; it does not spawn agents or reduce ACP state independently.
 - `nori-harness` supplies the ordered `SessionEvent` stream and preserves exact ACP request IDs used for prompt and permission correlation.
 - Plaintext mode projects text `agent_message_chunk` updates into one final answer.
 - ACP mode uses the upstream ACP SDK to present an agent endpoint while acting as a client of the configured downstream ACP agent.
 
 ### Core Implementation
 
-- `run_plaintext` creates one session, submits one text prompt, collects text chunks until the correlated prompt response, and shuts down the session.
+- `run_plaintext` passes `AgentPrepareSpec` and the already-chosen
+  `SessionStart::New` to `prepare_and_launch_session`, submits one text prompt,
+  collects text chunks until the correlated prompt response, and shuts down the
+  session.
 - Unattended permission requests are rejected immediately using a schema-provided reject option, with cancellation as the safe fallback.
-- `run_acp` handles standard `initialize`, `session/new`, `session/set_config_option`, `session/prompt`, and `session/cancel` traffic over line-delimited JSON-RPC stdio.
+- `run_acp` handles standard `initialize`, `session/new`,
+  `session/set_config_option`, `session/prompt`, and `session/cancel` traffic
+  over line-delimited JSON-RPC stdio. Its downstream `session/new` also uses
+  `prepare_and_launch_session` with the explicit New choice.
 - The ACP facade exposes the downstream session ID and effective configuration options, then emits one complete `agent_message_chunk` before the correlated prompt response.
 - Delegated permission requests are forwarded to the upstream ACP caller and their responses are returned to the downstream agent under the original downstream request ID.
 
 ### Things to Know
 
 - The facade is intentionally bounded to one downstream session and one prompt per process.
+- Both headless surfaces choose `SessionStart::New` before activation and use
+  `prepare_and_launch_session`. Preparation and activation retain one
+  downstream subprocess even though the API keeps those lifecycle phases
+  distinct.
+- The combined harness path returns its handle immediately and keeps
+  preparation inside the runtime's connect lifecycle: commands queue until the
+  backend is ready, shutdown can win the race, the runtime emits a warning
+  event after eight seconds, and an unresponsive connection is aborted after
+  another thirty.
+  `nori-exec` must not await `prepare_agent` outside that bounded lifecycle.
 - Caller-provided MCP servers and additional directories are rejected in the first version because Nori cannot merge those inputs into an already resolved client configuration safely.
 - ACP mode is a facade, not a transport trace: internal notifications and Nori-owned lifecycle events are not passed through wholesale.
 - Only assistant text is projected into the final facade update. The prompt response retains the downstream ACP stop reason.

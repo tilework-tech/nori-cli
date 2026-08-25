@@ -9,9 +9,12 @@ use std::time::Duration;
 use nori_config::NoriConfig;
 use nori_harness::remote_agent::HarnessRemoteHost;
 use nori_harness::remote_agent::HostedAgent;
+use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::LaunchedSession;
 use nori_harness::runtime::SessionLaunchSpec;
+use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::launch_session;
+use nori_harness::runtime::prepare_agent;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
@@ -46,12 +49,17 @@ async fn launch_attached() -> RemoteFixture {
         nori_home: temp.path().to_path_buf(),
         ..Default::default()
     };
-    let session = launch_session(SessionLaunchSpec {
+    let agent = prepare_agent(AgentPrepareSpec {
         config: Arc::new(config),
         cli_version: "remote-host-test".to_string(),
         session_context: None,
         initial_context: None,
-        resume: None,
+    })
+    .await
+    .expect("prepare mock agent");
+    let session = launch_session(SessionLaunchSpec {
+        agent,
+        start: SessionStart::New,
     });
     let host = Arc::new(HarnessRemoteHost::new());
     host.attach(session.handle.clone(), temp.path().to_path_buf())
@@ -464,4 +472,81 @@ async fn a_stale_detach_does_not_break_the_replacement_subscription() {
     .expect("the replacement subscription should see the turn");
 
     fixture.session.handle.shutdown().await.expect("shutdown");
+}
+
+/// A switch candidate is already started when the TUI commits it. Attaching
+/// at that boundary must seed the outward identity from the observed
+/// `SessionStarted` instead of requiring the host to have replaced the current
+/// session during hidden candidate startup.
+#[tokio::test]
+#[serial]
+async fn attaching_started_replacement_preserves_current_until_commit() {
+    let current = launch_attached().await;
+    let current_info = wait_for_session(&current.host).await;
+
+    let replacement_home = tempfile::tempdir().expect("replacement directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: replacement_home.path().to_path_buf(),
+        nori_home: replacement_home.path().to_path_buf(),
+        ..Default::default()
+    };
+    let agent = prepare_agent(AgentPrepareSpec {
+        config: Arc::new(config),
+        cli_version: "remote-host-replacement-test".to_string(),
+        session_context: None,
+        initial_context: None,
+    })
+    .await
+    .expect("prepare replacement");
+    let mut replacement = launch_session(SessionLaunchSpec {
+        agent,
+        start: SessionStart::New,
+    });
+    let started = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if let Some(SessionEvent::Nori(NoriEvent::SessionStarted(started))) =
+                replacement.events.recv().await
+            {
+                return started;
+            }
+        }
+    })
+    .await
+    .expect("replacement should start");
+
+    assert_eq!(
+        current.host.list_sessions().await.expect("list current"),
+        vec![current_info],
+        "an uncommitted replacement must not disturb the current remote session"
+    );
+
+    current
+        .host
+        .attach_started(
+            replacement.handle.clone(),
+            replacement_home.path().to_path_buf(),
+            started.clone(),
+        )
+        .await
+        .expect("commit replacement attachment");
+
+    let replacement_info = wait_for_session(&current.host).await;
+    assert_eq!(
+        replacement_info.session_id.to_string(),
+        started.transcript_id.unwrap()
+    );
+    assert_eq!(replacement_info.cwd, started.cwd);
+
+    current
+        .session
+        .handle
+        .shutdown()
+        .await
+        .expect("shutdown current");
+    replacement
+        .handle
+        .shutdown()
+        .await
+        .expect("shutdown replacement");
 }

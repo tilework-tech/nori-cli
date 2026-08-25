@@ -16,9 +16,10 @@ use agent_client_protocol::Responder;
 use anyhow::Context;
 use futures::io::AsyncRead;
 use nori_config::NoriConfig;
+use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::HarnessHandle;
-use nori_harness::runtime::SessionLaunchSpec;
-use nori_harness::runtime::launch_session;
+use nori_harness::runtime::SessionStart;
+use nori_harness::runtime::prepare_and_launch_session;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
@@ -42,13 +43,15 @@ pub async fn run_plaintext(
     cli_version: String,
     prompt: String,
 ) -> anyhow::Result<PlaintextOutcome> {
-    let mut launched = launch_session(SessionLaunchSpec {
-        config,
-        cli_version,
-        session_context: None,
-        initial_context: None,
-        resume: None,
-    });
+    let mut launched = prepare_and_launch_session(
+        AgentPrepareSpec {
+            config,
+            cli_version,
+            session_context: None,
+            initial_context: None,
+        },
+        SessionStart::New,
+    );
     let request_id = launched
         .handle
         .prompt(vec![acp::ContentBlock::Text(acp::TextContent::new(prompt))])
@@ -292,13 +295,15 @@ pub async fn run_acp(config: Arc<NoriConfig>, cli_version: String) -> anyhow::Re
                         ((*state.base_config).clone(), state.cli_version.clone())
                     };
                     config.cwd = request.cwd;
-                    let mut launched = launch_session(SessionLaunchSpec {
-                        config: Arc::new(config),
-                        cli_version,
-                        session_context: None,
-                        initial_context: None,
-                        resume: None,
-                    });
+                    let mut launched = prepare_and_launch_session(
+                        AgentPrepareSpec {
+                            config: Arc::new(config),
+                            cli_version,
+                            session_context: None,
+                            initial_context: None,
+                        },
+                        SessionStart::New,
+                    );
                     let session_id = loop {
                         match launched.events.recv().await {
                             Some(SessionEvent::Nori(NoriEvent::SessionStarted(started))) => {

@@ -24,8 +24,9 @@ environment variables select deterministic streams for:
 - permission round trips with schema-native success and error responses;
 - host-handled filesystem reads and writes;
 - session load/list/resume/close and structured ACP failures;
-- initialize/new-session failures, setup notifications, partial failed-load
-  history, and prompt-time child exit;
+- initialize/new-session failures (including candidate-only activation
+  failure), setup notifications, partial failed-load history, and prompt-time
+  child exit;
 - cancellation, disconnects, EOF teardown, stalled children, and
   interleaved tool/message ordering; and
 - cloud, MCP, browser, transcript, and presentation regressions.

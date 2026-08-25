@@ -128,11 +128,18 @@ impl AcpBackend {
     /// the transcript, and a summary is stored in `pending_compact_summary` so
     /// it gets prepended to the first prompt.
     pub async fn resume_session(
-        config: &AcpBackendConfig,
+        prepared: super::prepared::PreparedAgent,
         acp_session_id: Option<&str>,
         transcript: Option<&crate::transcript::Transcript>,
         backend_event_tx: mpsc::Sender<BackendEvent>,
     ) -> Result<Self> {
+        let super::prepared::PreparedAgentParts {
+            connection,
+            event_rx,
+            config,
+            setup_events,
+        } = prepared.into_parts();
+        let config = &config;
         let cwd = config.cwd.clone();
 
         debug!(
@@ -140,16 +147,9 @@ impl AcpBackend {
             acp_session_id, config.agent
         );
 
-        let mut agent_config = get_agent_config(&config.agent)?;
-        spawn_and_relay::inject_default_model(&mut agent_config, config.default_model.as_deref());
-        let mut connection = spawn_and_relay::spawn_connection_with_public_initialize(
-            &agent_config,
-            &cwd,
-            config.acp_proxy.clone(),
-            &backend_event_tx,
-        )
-        .await?;
-        let mut event_rx = connection.take_event_receiver();
+        let agent_config = get_agent_config(&config.agent)?;
+        forward_setup_session_events(&backend_event_tx, setup_events).await?;
+        let mut event_rx = event_rx;
 
         let supports_load_session = connection.capabilities().load_session;
         let supports_session_resume = connection

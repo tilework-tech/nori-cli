@@ -141,6 +141,16 @@ its stop reason, which travels in the prompt response to the initiator.
 Harness commands serialize mutations. Detailed policy for simultaneous local
 and remote input is deferred.
 
+An agent switch uses the TUI's transactional session boundary. The remote host
+continues following the current `HarnessHandle` while a candidate initializes,
+lists sessions, or attempts activation. Candidate failure or cancellation is
+therefore invisible to the remote attachment. Only the candidate's
+`SessionStarted` commits the replacement; the harness seeds the new hosted
+session from that already-observed event and subscribes from the commit
+boundary onward. Replacing the hosted session disconnects the current remote
+controller under the existing hosted-session replacement behavior, so it
+reconnects and rediscovers the newly committed conversation.
+
 ## 7. Implementation boundary
 
 ```text
@@ -161,7 +171,7 @@ nori-rs/
 ├── tui/src/
 │   ├── cli.rs                            # --remote / --remote-allow-nonloopback
 │   ├── lib.rs                            # Remote-mode activation at startup
-│   └── chatwidget/agent.rs               # Attach the launched harness
+│   └── chatwidget/agent.rs               # Attach ordinary launches; defer candidates
 └── exec/src/lib.rs                        # Existing facade remains unchanged
 ```
 

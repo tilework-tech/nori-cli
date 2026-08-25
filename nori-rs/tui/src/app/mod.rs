@@ -8,7 +8,6 @@ use crate::client_tool_cell;
 use crate::diff_render::DiffSummary;
 use crate::file_search::FileSearchManager;
 use crate::history_cell::HistoryCell;
-use crate::nori::agent_picker::PendingAgentSelection;
 use crate::pager_overlay::Overlay;
 use crate::render::renderable::Renderable;
 use crate::resume_picker::ResumeSelection;
@@ -117,9 +116,16 @@ pub(crate) struct App {
     // One-shot suppression of the next world-writable scan after user confirmation.
     skip_world_writable_scan_once: bool,
 
-    /// Pending agent selection. When set, the agent will switch on the next
-    /// prompt submission. This avoids disrupting active prompt turns.
-    pending_agent: Option<PendingAgentSelection>,
+    /// Prepared startup/post-close connection waiting for an explicit session choice.
+    prepared_agent: Option<nori_harness::runtime::PreparedAgent>,
+
+    /// Owned startup/post-close preparation. Its generation prevents a late
+    /// result from replacing a newer session decision.
+    primary_agent_preparation: Option<PrimaryAgentPreparation>,
+
+    /// Live agent-switch candidate. The active widget remains usable until an
+    /// activating candidate publishes `SessionStarted`.
+    candidate_agent: Option<CandidateAgent>,
 
     /// Ephemeral per-session loop count override (set via /settings menu).
     /// Outer Option: whether overridden; inner Option<i32>: the value.
@@ -146,13 +152,31 @@ pub(crate) struct App {
     /// switch). Cleared on the first successful skillset switch or picker
     /// dismissal. Guards against re-spawning the agent on later switches.
     deferred_spawn_pending: bool,
-    /// True while the pre-session agent probe (session/list) is running —
-    /// guards against concurrent probes and against skillset events
-    /// resolving the deferred spawn out from under the picker flow.
-    agent_session_probe_in_flight: bool,
-
     /// Cancel sender for an in-progress MCP OAuth login flow.
     mcp_oauth_cancel_tx: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+struct PrimaryAgentPreparation {
+    generation: crate::app_event::SessionGeneration,
+    abort: tokio::task::AbortHandle,
+}
+
+enum CandidateAgent {
+    Preparing {
+        generation: crate::app_event::SessionGeneration,
+        agent_name: String,
+        abort: tokio::task::AbortHandle,
+    },
+    Prepared {
+        agent_name: String,
+        display_name: String,
+        agent: Box<nori_harness::runtime::PreparedAgent>,
+    },
+    Activating {
+        agent_name: String,
+        display_name: String,
+        widget: Box<ChatWidget>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -207,6 +231,7 @@ impl App {
                 cloud_mode,
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
+                prepared_agent: None,
             };
             match resume_selection {
                 ResumeSelection::Resume(target) => {
@@ -252,7 +277,9 @@ impl App {
             backtrack: BacktrackState::default(),
             pending_update_action: None,
             skip_world_writable_scan_once: false,
-            pending_agent: None,
+            prepared_agent: None,
+            primary_agent_preparation: None,
+            candidate_agent: None,
             loop_count_override: None,
             hotkey_config: nori_config::HotkeyConfig::default(),
             vim_mode: nori_config::VimEnterBehavior::Off,
@@ -262,7 +289,6 @@ impl App {
             system_info_tx,
             worktree_warning_shown: false,
             deferred_spawn_pending: needs_deferred_spawn,
-            agent_session_probe_in_flight: false,
             mcp_oauth_cancel_tx: None,
         };
 
@@ -293,13 +319,11 @@ impl App {
         // skillset.
         if cloud_mode {
             if cloud_onboard {
-                app.begin_agent_session_probe(
-                    crate::app_event::AgentSessionProbeIntent::Onboarding,
-                );
+                app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Onboarding);
             } else {
                 // Picker-first entry: list live sessions before anything can
                 // claim one; "start new" is an explicit row in the picker.
-                app.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
                     fallback_to_spawn: true,
                 });
             }
@@ -363,6 +387,12 @@ impl App {
             }
         } {}
 
+        app.cancel_primary_agent_preparation();
+        if let Some(agent) = app.prepared_agent.take() {
+            agent.shutdown().await;
+        }
+        app.discard_candidate();
+
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;
 
@@ -397,6 +427,7 @@ impl App {
             cloud_mode: self.cloud_mode,
             deferred_spawn,
             fork_context,
+            prepared_agent: None,
         }
     }
 

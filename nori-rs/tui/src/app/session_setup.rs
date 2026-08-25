@@ -19,44 +19,115 @@ pub(super) fn onboarding_resume_event(
 }
 
 impl App {
-    /// Kick off the pre-session agent probe (spawn → initialize →
-    /// `session/list` → teardown; never `session/new`) and report the result
-    /// as [`AppEvent::AgentSessionListProbed`]. Used by picker-first entry
+    /// Prepare a live pre-session agent (spawn → initialize → optional
+    /// `session/list`) and report the still-owned connection as
+    /// [`AppEvent::AgentPrepared`]. Used by picker-first entry
     /// (`nori cloud`), the post-`/close` return to the picker, and /resume
     /// retries on a deferred widget. Bounded by a wall-clock timeout so a
     /// hung broker can never wedge the boot with no way forward.
-    pub(crate) fn begin_agent_session_probe(
-        &mut self,
-        intent: crate::app_event::AgentSessionProbeIntent,
-    ) {
-        if self.agent_session_probe_in_flight {
+    pub(crate) fn begin_agent_preparation(&mut self, intent: crate::app_event::AgentPrepareIntent) {
+        if self.primary_agent_preparation.is_some() {
             return;
         }
-        self.agent_session_probe_in_flight = true;
+        let generation = crate::chatwidget::agent::next_session_generation();
         let display_name = nori_harness::get_agent_display_name(&self.config.active_agent);
         self.chat_widget
             .add_info_message(format!("Listing {display_name} sessions…"), None);
 
-        let agent = self.config.active_agent.clone();
-        let cwd = self.config.cwd.clone();
-        let acp_proxy = self.config.acp_proxy.clone();
+        if let Some(agent) = self.prepared_agent.take() {
+            tokio::spawn(agent.shutdown());
+        }
+        let spec = crate::chatwidget::agent::agent_prepare_spec(self.config.clone(), None);
         let tx = self.app_event_tx.clone();
-        tokio::spawn(async move {
-            const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
-            let probe = match tokio::time::timeout(
-                PROBE_TIMEOUT,
-                nori_harness::probe_agent_sessions_for(&agent, &cwd, acp_proxy),
+        let task = tokio::spawn(async move {
+            const PREPARATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+            let agent = match tokio::time::timeout(
+                PREPARATION_TIMEOUT,
+                nori_harness::runtime::prepare_agent(spec),
             )
             .await
             {
-                Ok(result) => result,
-                Err(_) => Err(nori_harness::ProbeError::Failed(format!(
-                    "timed out listing sessions after {}s",
-                    PROBE_TIMEOUT.as_secs()
-                ))),
+                Ok(result) => result.map_err(|error| format!("{error:#}")),
+                Err(_) => Err(format!(
+                    "timed out preparing agent after {}s",
+                    PREPARATION_TIMEOUT.as_secs(),
+                )),
             };
-            tx.send(AppEvent::AgentSessionListProbed { probe, intent });
+            tx.send(AppEvent::AgentPrepared {
+                generation,
+                agent,
+                intent,
+            });
         });
+        self.primary_agent_preparation = Some(PrimaryAgentPreparation {
+            generation,
+            abort: task.abort_handle(),
+        });
+    }
+
+    /// Start preparing a switch candidate immediately. Replacing this state
+    /// drops and tears down any older candidate without touching the active session.
+    pub(crate) fn begin_agent_candidate(&mut self, agent_name: String, display_name: String) {
+        self.cancel_primary_agent_preparation();
+        if let Some(agent) = self.prepared_agent.take() {
+            tokio::spawn(agent.shutdown());
+        }
+        self.discard_candidate();
+        self.chat_widget
+            .set_login_agent_override(Some(agent_name.clone()));
+        let generation = crate::chatwidget::agent::next_session_generation();
+        let config = self.config_for_agent(&agent_name);
+        self.chat_widget
+            .add_info_message(format!("Preparing {display_name}…"), None);
+
+        let spec = crate::chatwidget::agent::agent_prepare_spec(config, None);
+        let tx = self.app_event_tx.clone();
+        let prepared_agent_name = agent_name.clone();
+        let task = tokio::spawn(async move {
+            let agent = nori_harness::runtime::prepare_agent(spec)
+                .await
+                .map_err(|error| format!("{error:#}"));
+            tx.send(AppEvent::AgentPrepared {
+                generation,
+                agent,
+                intent: crate::app_event::AgentPrepareIntent::Candidate {
+                    agent_name,
+                    display_name,
+                },
+            });
+        });
+        self.candidate_agent = Some(CandidateAgent::Preparing {
+            generation,
+            agent_name: prepared_agent_name,
+            abort: task.abort_handle(),
+        });
+    }
+
+    pub(crate) fn cancel_primary_agent_preparation(&mut self) {
+        if let Some(preparation) = self.primary_agent_preparation.take() {
+            preparation.abort.abort();
+        }
+    }
+
+    pub(crate) fn discard_candidate(&mut self) {
+        match self.candidate_agent.take() {
+            Some(CandidateAgent::Preparing { abort, .. }) => abort.abort(),
+            Some(CandidateAgent::Prepared { agent, .. }) => {
+                tokio::spawn((*agent).shutdown());
+            }
+            Some(CandidateAgent::Activating { widget, .. }) => {
+                widget.shutdown_harness_session();
+            }
+            None => {}
+        }
+        self.chat_widget.set_login_agent_override(None);
+    }
+
+    pub(super) fn config_for_agent(&self, agent_name: &str) -> NoriConfig {
+        let mut config = self.config.clone();
+        config.active_agent = agent_name.to_string();
+        config.agent = agent_name.to_string();
+        config
     }
 
     pub(super) fn shutdown_current_conversation(&mut self) {

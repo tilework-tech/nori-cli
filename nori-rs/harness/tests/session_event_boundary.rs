@@ -3,15 +3,41 @@ use std::time::Duration;
 
 use nori_config::NoriConfig;
 use nori_harness::SessionContext;
-use nori_harness::runtime::SessionLaunchSpec;
+use nori_harness::runtime::AgentPrepareSpec;
+use nori_harness::runtime::LaunchedSession;
 use nori_harness::runtime::SessionResume;
-use nori_harness::runtime::launch_session;
+use nori_harness::runtime::SessionStart;
+use nori_harness::runtime::prepare_and_launch_session;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
 use nori_protocol::acp;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
+
+struct SessionLaunchSpec {
+    config: Arc<NoriConfig>,
+    cli_version: String,
+    session_context: Option<SessionContext>,
+    initial_context: Option<String>,
+    resume: Option<SessionResume>,
+}
+
+fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
+    let start = spec
+        .resume
+        .map(SessionStart::Resume)
+        .unwrap_or(SessionStart::New);
+    prepare_and_launch_session(
+        AgentPrepareSpec {
+            config: spec.config,
+            cli_version: spec.cli_version,
+            session_context: spec.session_context,
+            initial_context: spec.initial_context,
+        },
+        start,
+    )
+}
 
 struct EnvGuard(&'static str);
 
@@ -128,6 +154,35 @@ async fn initialize_error_remains_raw_without_a_nori_failure_mirror() {
     // SAFETY: tests that mutate the mock-agent environment run serially.
     unsafe { std::env::set_var("MOCK_AGENT_INITIALIZE_FAIL", "1") };
     let _guard = EnvGuard("MOCK_AGENT_INITIALIZE_FAIL");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    let events = collect_until_session_ended(&mut session).await;
+    assert_acp_bootstrap_error_is_not_mirrored(&events);
+}
+
+#[tokio::test]
+#[serial]
+async fn list_sessions_error_remains_raw_without_a_nori_failure_mirror() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
+        std::env::set_var("MOCK_AGENT_LIST_SESSIONS_FAIL", "1");
+    }
+    let _support_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_LIST");
+    let _failure_guard = EnvGuard("MOCK_AGENT_LIST_SESSIONS_FAIL");
     let temp = tempfile::tempdir().expect("create session directory");
     let config = NoriConfig {
         active_agent: "mock-model".to_string(),

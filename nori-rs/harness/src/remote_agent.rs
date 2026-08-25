@@ -15,6 +15,7 @@ use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
 use nori_protocol::SessionPhase;
+use nori_protocol::SessionStarted;
 use nori_protocol::acp::v1 as acp;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -100,7 +101,41 @@ impl HarnessRemoteHost {
     /// replaced, and a reconnecting client rediscovers the new one through
     /// `session/list`.
     pub async fn attach(&self, handle: HarnessHandle, nori_home: PathBuf) -> anyhow::Result<()> {
+        self.attach_inner(handle, nori_home, None).await
+    }
+
+    /// Commit a session that was intentionally kept hidden until its
+    /// [`SessionStarted`] event.
+    ///
+    /// The host subscribes from this point forward and seeds the identity from
+    /// the already-observed start event, so a switch candidate never has to
+    /// replace the current remote session before the UI commits it.
+    pub async fn attach_started(
+        &self,
+        handle: HarnessHandle,
+        nori_home: PathBuf,
+        started: SessionStarted,
+    ) -> anyhow::Result<()> {
+        self.attach_inner(handle, nori_home, Some(started)).await
+    }
+
+    async fn attach_inner(
+        &self,
+        handle: HarnessHandle,
+        nori_home: PathBuf,
+        started: Option<SessionStarted>,
+    ) -> anyhow::Result<()> {
         let events = handle.subscribe_events().await?;
+        let (conversation_id, cwd) = started.map_or((None, None), |started| {
+            (
+                Some(
+                    started
+                        .transcript_id
+                        .unwrap_or_else(|| started.acp_session_id.to_string()),
+                ),
+                Some(started.cwd),
+            )
+        });
         let mut state = self.state.lock().await;
         drop_sink(&mut state);
         if let Some(task) = state.event_task.take() {
@@ -109,8 +144,8 @@ impl HarnessRemoteHost {
         state.session = Some(ActiveSession {
             handle,
             nori_home,
-            conversation_id: None,
-            cwd: None,
+            conversation_id,
+            cwd,
         });
         state.remote_turns.clear();
         state.unclaimed_outcomes.clear();
