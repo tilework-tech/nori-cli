@@ -53,5 +53,9 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   current value (its own model-injection channel), so tests can verify that an
   out-of-catalog model forced through spawn-time injection becomes the session's
   current model.
+- `MOCK_AGENT_RESPONSE_<MODEL>` overrides the generic `MOCK_AGENT_RESPONSE`.
+  The suffix uppercases the model name and replaces hyphens with underscores
+  (for example, `MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT`). Multi-agent PTY tests
+  use this to prove which subprocess produced a visible response.
 
 Created and maintained by Nori.

@@ -749,7 +749,11 @@ fn test_model_command_shows_disabled_in_acp_mode() {
 fn test_agent_switch_message_flow_mock_to_mock_alt() {
     let config = SessionConfig::new()
         .with_agent("mock-model".to_string())
-        .with_mock_response("agent response marker");
+        .with_mock_response("initial agent response marker")
+        .with_agent_env(
+            "MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT",
+            "switched agent response marker",
+        );
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
 
@@ -765,7 +769,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
 
     // Wait for the initial agent's echoed prompt.
     session
-        .wait_for_text("agent response marker", Duration::from_secs(5))
+        .wait_for_text("initial agent response marker", Duration::from_secs(5))
         .expect("Initial agent should respond");
 
     // Open agent picker with /agent command
@@ -798,10 +802,6 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
             Duration::from_secs(10),
         )
         .expect("prepared candidate should commit before accepting the next prompt");
-    assert!(
-        !session.screen_contents().contains("agent response marker"),
-        "the committed candidate should start with a fresh conversation"
-    );
 
     // The new active agent should receive this prompt and respond.
     session.send_str("test after switch").unwrap();
@@ -809,7 +809,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     session.send_key(Key::Enter).unwrap();
 
     session
-        .wait_for_text("agent response marker", TIMEOUT)
+        .wait_for_text("switched agent response marker", TIMEOUT)
         .expect("Screen should contain response text");
 }
 

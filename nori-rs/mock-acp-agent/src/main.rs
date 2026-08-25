@@ -897,8 +897,17 @@ impl MockAgent {
             }
         }
 
-        // Support custom response text for TUI testing
-        if let Ok(response) = std::env::var("MOCK_AGENT_RESPONSE") {
+        // Support custom response text for TUI testing. A model-specific
+        // variable lets multi-agent tests distinguish which subprocess
+        // produced a response while retaining the generic fallback.
+        let model_name = std::env::var("MOCK_AGENT_MODEL_NAME").unwrap_or_default();
+        let model_response_var = format!(
+            "MOCK_AGENT_RESPONSE_{}",
+            model_name.replace('-', "_").to_uppercase()
+        );
+        if let Ok(response) =
+            std::env::var(&model_response_var).or_else(|_| std::env::var("MOCK_AGENT_RESPONSE"))
+        {
             // MOCK_AGENT_RESPONSE_CHUNK_CHARS splits the response into small chunks the way a real
             // model streams it, so tests can cover incremental rendering instead of a single chunk
             // that always parses as complete markdown.
