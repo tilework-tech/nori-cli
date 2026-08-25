@@ -14,10 +14,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codex_rmcp_client::OAuthCredentialsStoreMode;
-use futures::future::BoxFuture;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 
@@ -25,6 +23,9 @@ use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
 use crate::backend::SessionContext;
+pub use crate::backend::prepared::PreparedAgent;
+pub use crate::backend::prepared::SessionCatalog;
+use crate::session_event_fanout::SessionEventFanout;
 use crate::transcript::Transcript;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
@@ -44,7 +45,7 @@ const CONNECT_ABORT_SECS: u64 = 30;
 
 /// Two-phase timeout: warn after `CONNECT_WARNING_SECS`, abort after an
 /// additional `CONNECT_ABORT_SECS`.
-async fn spawn_timeout_sequence(event_tx: &UnboundedSender<SessionEvent>) {
+async fn spawn_timeout_sequence(event_tx: &SessionEventFanout) {
     tokio::time::sleep(Duration::from_secs(CONNECT_WARNING_SECS)).await;
     let _ = event_tx.send(SessionEvent::Nori(NoriEvent::Notice(Notice {
         message: format!(
@@ -56,7 +57,7 @@ async fn spawn_timeout_sequence(event_tx: &UnboundedSender<SessionEvent>) {
 }
 
 fn forward_connect_event(
-    event_tx: &UnboundedSender<SessionEvent>,
+    event_tx: &SessionEventFanout,
     event: SessionEvent,
     raw_acp_error_observed: &mut bool,
 ) {
@@ -165,10 +166,18 @@ enum HarnessCommand {
     CloseSession {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
+    /// Register an additional bounded consumer of the public event stream.
+    SubscribeEvents {
+        response_tx: oneshot::Sender<mpsc::Receiver<SessionEvent>>,
+    },
+    /// Flush the session transcript to disk (write barrier).
+    FlushTranscript {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
 }
 
 /// Typed handle for controlling one Nori harness session.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HarnessHandle {
     command_tx: mpsc::UnboundedSender<HarnessCommand>,
 }
@@ -432,6 +441,26 @@ impl HarnessHandle {
             .await
             .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))?
     }
+
+    /// Subscribe to the ordered public event stream as an additional bounded
+    /// consumer. The primary receiver from [`launch_session`] is unaffected.
+    /// A subscriber that falls a full queue behind is dropped and its
+    /// receiver closes.
+    pub async fn subscribe_events(&self) -> anyhow::Result<mpsc::Receiver<SessionEvent>> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(HarnessCommand::SubscribeEvents { response_tx })
+            .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
+        response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP agent did not respond"))
+    }
+
+    /// Flush the session transcript to disk and wait for the write barrier.
+    pub async fn flush_transcript(&self) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::FlushTranscript { response_tx })
+            .await
+    }
 }
 
 /// Resume parameters for reattaching to a previous session.
@@ -443,18 +472,37 @@ pub struct SessionResume {
     pub transcript: Option<Transcript>,
 }
 
-/// Everything a frontend must supply to launch a session.
-pub struct SessionLaunchSpec {
+/// Everything a frontend must supply to initialize and inspect an ACP agent.
+pub struct AgentPrepareSpec {
     /// Fully resolved process configuration supplied by the frontend.
     pub config: Arc<crate::config::NoriConfig>,
-    /// Frontend version recorded in transcript metadata.
+    /// Frontend version recorded in transcript metadata after activation.
     pub cli_version: String,
-    /// Product-level context injected into the first prompt.
+    /// Product-level context injected into the first prompt after activation.
     pub session_context: Option<SessionContext>,
-    /// Conversation history injected into the first prompt (used by fork).
+    /// Conversation history injected into the first prompt after activation.
     pub initial_context: Option<String>,
-    /// When set, resume the given session instead of starting fresh.
-    pub resume: Option<SessionResume>,
+}
+
+/// Explicit session directive applied to a prepared ACP connection.
+#[derive(Debug, Clone)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "SessionStart is a one-shot control value and keeps the public resume API direct"
+)]
+pub enum SessionStart {
+    /// Create a fresh ACP session.
+    New,
+    /// Load, resume, or replay an existing session.
+    Resume(SessionResume),
+}
+
+/// Everything a frontend must supply to activate a prepared connection.
+pub struct SessionLaunchSpec {
+    /// Uniquely owned initialized ACP connection.
+    pub agent: PreparedAgent,
+    /// Session action chosen after inspecting the agent.
+    pub start: SessionStart,
 }
 
 /// A running session and its ordered event stream.
@@ -465,112 +513,170 @@ pub struct LaunchedSession {
     pub events: UnboundedReceiver<SessionEvent>,
 }
 
-/// Launch an ACP agent session (or resume one, when `spec.resume` is set).
+/// Initialize an ACP connection and inspect its session catalog without
+/// creating, loading, or resuming a session.
+pub async fn prepare_agent(spec: AgentPrepareSpec) -> anyhow::Result<PreparedAgent> {
+    PreparedAgent::prepare(build_backend_config(spec))
+        .await
+        .map_err(|failure| failure.error)
+}
+
+/// Refresh session-time configuration after preparation but before activation.
 ///
-/// Returns immediately; connection happens on a background task and handle
-/// calls queue until the backend is ready.
+/// The initialized transport remains unchanged. The agent identity and working
+/// directory must still match the connection that was prepared.
+pub fn refresh_prepared_agent(
+    agent: &mut PreparedAgent,
+    spec: AgentPrepareSpec,
+) -> anyhow::Result<()> {
+    agent.replace_activation_config(build_backend_config(spec))
+}
+
+fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
+    let AgentPrepareSpec {
+        config,
+        cli_version,
+        session_context,
+        initial_context,
+    } = spec;
+
+    // Detect auto-worktree repo root from the cwd path.
+    // When auto_worktree is enabled, cwd is {repo_root}/.worktrees/{name},
+    // so we can derive repo_root by going up two directories.
+    let auto_worktree_repo_root = if config.auto_worktree.is_enabled() {
+        config
+            .cwd
+            .parent()
+            .filter(|path| path.file_name().is_some_and(|name| name == ".worktrees"))
+            .and_then(std::path::Path::parent)
+            .map(std::path::Path::to_path_buf)
+    } else {
+        None
+    };
+    // Resolve to Off if no worktree actually exists (e.g. "ask" mode
+    // where the user declined).
+    let auto_worktree = if auto_worktree_repo_root.is_some() {
+        config.auto_worktree
+    } else {
+        crate::config::AutoWorktree::Off
+    };
+    let agent = config.active_agent.clone();
+
+    AcpBackendConfig {
+        agent: agent.clone(),
+        cwd: config.cwd.clone(),
+        approval_policy: config.approval_policy,
+        sandbox_policy: config.sandbox_policy.clone(),
+        notify: config.notify.clone(),
+        os_notifications: config.os_notifications,
+        notify_after_idle: config.notify_after_idle,
+        nori_home: config.nori_home.clone(),
+        history_persistence: config.history_persistence,
+        acp_proxy: config.acp_proxy.clone(),
+        cli_version,
+        auto_worktree,
+        auto_worktree_repo_root,
+        prompt_summary_enabled: config.footer_segment_config.prompt_summary,
+        session_start_hooks: config.session_start_hooks.clone(),
+        session_end_hooks: config.session_end_hooks.clone(),
+        pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
+        post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
+        pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
+        post_tool_call_hooks: config.post_tool_call_hooks.clone(),
+        pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
+        post_agent_response_hooks: config.post_agent_response_hooks.clone(),
+        async_session_start_hooks: config.async_session_start_hooks.clone(),
+        async_session_end_hooks: config.async_session_end_hooks.clone(),
+        async_pre_user_prompt_hooks: config.async_pre_user_prompt_hooks.clone(),
+        async_post_user_prompt_hooks: config.async_post_user_prompt_hooks.clone(),
+        async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
+        async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
+        async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
+        async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
+        script_timeout: config.script_timeout.as_duration(),
+        default_model: config.default_models.get(&agent).cloned(),
+        initial_context,
+        session_context,
+        mcp_servers: config.mcp_servers.clone(),
+        mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode::default(),
+    }
+}
+
+/// Activate a prepared ACP connection with the selected session directive.
+///
+/// Returns immediately; activation happens on a background task and handle
+/// calls queue until the session is ready.
 pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
+    launch_session_from(
+        SessionAgentSource::Prepared(Box::new(spec.agent)),
+        spec.start,
+    )
+}
+
+/// Prepare an agent and activate the selected session on the same connection.
+///
+/// This convenience path is for products that have already made an explicit
+/// session choice and therefore do not need to render a pre-session picker.
+/// Preparation still happens separately and its connection is never respawned.
+pub fn prepare_and_launch_session(spec: AgentPrepareSpec, start: SessionStart) -> LaunchedSession {
+    launch_session_from(SessionAgentSource::Prepare(spec), start)
+}
+
+enum SessionAgentSource {
+    Prepared(Box<PreparedAgent>),
+    Prepare(AgentPrepareSpec),
+}
+
+fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> LaunchedSession {
     let (agent_cmd_tx, mut agent_cmd_rx) = unbounded_channel::<HarnessCommand>();
-    let (event_tx, event_rx) = unbounded_channel::<SessionEvent>();
+    let (primary_event_tx, event_rx) = unbounded_channel::<SessionEvent>();
+    let event_tx = SessionEventFanout::new(primary_event_tx);
 
     let handle = HarnessHandle {
         command_tx: agent_cmd_tx,
     };
 
     tokio::spawn(async move {
-        let SessionLaunchSpec {
-            config,
-            cli_version,
-            session_context,
-            initial_context,
-            resume,
-        } = spec;
-
         // Single ACP backend channel for both control-plane and normalized
         // session-domain events.
         let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
-        // Detect auto-worktree repo root from the cwd path.
-        // When auto_worktree is enabled, cwd is {repo_root}/.worktrees/{name},
-        // so we can derive repo_root by going up two directories.
-        let auto_worktree_repo_root = if config.auto_worktree.is_enabled() {
-            config
-                .cwd
-                .parent()
-                .filter(|p| p.file_name().is_some_and(|n| n == ".worktrees"))
-                .and_then(|p| p.parent())
-                .map(std::path::Path::to_path_buf)
-        } else {
-            None
+        let failure_label = match &start {
+            SessionStart::New => "Failed to start ACP session",
+            SessionStart::Resume(_) => "Failed to resume ACP session",
         };
-        // Resolve to Off if no worktree actually exists (e.g. "ask" mode
-        // where the user declined).
-        let auto_worktree = if auto_worktree_repo_root.is_some() {
-            config.auto_worktree
-        } else {
-            crate::config::AutoWorktree::Off
-        };
-        let agent = config.active_agent.clone();
-
-        let acp_config = AcpBackendConfig {
-            agent: agent.clone(),
-            cwd: config.cwd.clone(),
-            approval_policy: config.approval_policy,
-            sandbox_policy: config.sandbox_policy.clone(),
-            notify: config.notify.clone(),
-            os_notifications: config.os_notifications,
-            notify_after_idle: config.notify_after_idle,
-            nori_home: config.nori_home.clone(),
-            history_persistence: config.history_persistence,
-            acp_proxy: config.acp_proxy.clone(),
-            cli_version,
-            auto_worktree,
-            auto_worktree_repo_root,
-            prompt_summary_enabled: config.footer_segment_config.prompt_summary,
-            session_start_hooks: config.session_start_hooks.clone(),
-            session_end_hooks: config.session_end_hooks.clone(),
-            pre_user_prompt_hooks: config.pre_user_prompt_hooks.clone(),
-            post_user_prompt_hooks: config.post_user_prompt_hooks.clone(),
-            pre_tool_call_hooks: config.pre_tool_call_hooks.clone(),
-            post_tool_call_hooks: config.post_tool_call_hooks.clone(),
-            pre_agent_response_hooks: config.pre_agent_response_hooks.clone(),
-            post_agent_response_hooks: config.post_agent_response_hooks.clone(),
-            async_session_start_hooks: config.async_session_start_hooks.clone(),
-            async_session_end_hooks: config.async_session_end_hooks.clone(),
-            async_pre_user_prompt_hooks: config.async_pre_user_prompt_hooks.clone(),
-            async_post_user_prompt_hooks: config.async_post_user_prompt_hooks.clone(),
-            async_pre_tool_call_hooks: config.async_pre_tool_call_hooks.clone(),
-            async_post_tool_call_hooks: config.async_post_tool_call_hooks.clone(),
-            async_pre_agent_response_hooks: config.async_pre_agent_response_hooks.clone(),
-            async_post_agent_response_hooks: config.async_post_agent_response_hooks.clone(),
-            script_timeout: config.script_timeout.as_duration(),
-            default_model: config.default_models.get(&agent).cloned(),
-            initial_context,
-            session_context,
-            mcp_servers: config.mcp_servers.clone(),
-            mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode::default(),
-        };
-
-        let (connect, failure_label): (BoxFuture<'_, anyhow::Result<AcpBackend>>, &str) =
-            match &resume {
-                None => (
-                    Box::pin(AcpBackend::spawn(&acp_config, backend_event_tx)),
-                    "Failed to spawn ACP agent",
-                ),
-                Some(resume) => (
-                    Box::pin(AcpBackend::resume_session(
-                        &acp_config,
+        let connect = async move {
+            let agent = match source {
+                SessionAgentSource::Prepared(agent) => *agent,
+                SessionAgentSource::Prepare(spec) => {
+                    match PreparedAgent::prepare(build_backend_config(spec)).await {
+                        Ok(agent) => agent,
+                        Err(failure) => {
+                            for event in failure.setup_events {
+                                let _ = backend_event_tx.send(BackendEvent::Public(event)).await;
+                            }
+                            return Err(failure.error);
+                        }
+                    }
+                }
+            };
+            match start {
+                SessionStart::New => AcpBackend::spawn(agent, backend_event_tx).await,
+                SessionStart::Resume(resume) => {
+                    AcpBackend::resume_session(
+                        agent,
                         resume.acp_session_id.as_deref(),
                         resume.transcript.as_ref(),
                         backend_event_tx,
-                    )),
-                    "Failed to resume ACP session",
-                ),
-            };
+                    )
+                    .await
+                }
+            }
+        };
 
         // Race backend init against shutdown requests and a timeout.
         // This ensures the user can always exit even if the backend hangs.
-        let mut connect = connect;
+        let mut connect = std::pin::pin!(connect);
         let mut timeout = std::pin::pin!(spawn_timeout_sequence(&event_tx));
         let mut pending_commands = VecDeque::new();
         let mut raw_acp_error_observed = false;
@@ -620,6 +726,12 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                         )));
                         return;
                     }
+                    // Register immediately (not queued) so a subscriber
+                    // attached right after launch cannot miss startup events
+                    // such as `SessionStarted`.
+                    Some(HarnessCommand::SubscribeEvents { response_tx }) => {
+                        let _ = response_tx.send(event_tx.subscribe());
+                    }
                     Some(command) => pending_commands.push_back(command),
                     None => return,
                 }
@@ -653,6 +765,7 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
         // events would keep landing in the frozen parent transcript.
         let transcript_recorder_cell = backend.transcript_recorder_cell();
         let backend_for_agent = Arc::clone(&backend);
+        let event_fanout = event_tx.clone();
         tokio::spawn(async move {
             loop {
                 let cmd = match pending_commands.pop_front() {
@@ -788,6 +901,12 @@ pub fn launch_session(spec: SessionLaunchSpec) -> LaunchedSession {
                         if close_complete {
                             break;
                         }
+                    }
+                    HarnessCommand::SubscribeEvents { response_tx } => {
+                        let _ = response_tx.send(event_fanout.subscribe());
+                    }
+                    HarnessCommand::FlushTranscript { response_tx } => {
+                        let _ = response_tx.send(backend_for_agent.flush_transcript().await);
                     }
                 }
             }

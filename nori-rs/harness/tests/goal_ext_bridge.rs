@@ -13,9 +13,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nori_config::NoriConfig;
+use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::LaunchedSession;
 use nori_harness::runtime::SessionLaunchSpec;
+use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::launch_session;
+use nori_harness::runtime::prepare_agent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
 use nori_protocol::ThreadGoal;
@@ -38,7 +41,11 @@ fn set_mock_env(name: &'static str) -> EnvGuard {
     EnvGuard(name)
 }
 
-fn launch_with_wire_log(cwd: &Path, wire_log_dir: &Path) -> LaunchedSession {
+#[expect(
+    clippy::expect_used,
+    reason = "focused failure for an agent preparation failure"
+)]
+async fn launch_with_wire_log(cwd: &Path, wire_log_dir: &Path) -> LaunchedSession {
     let config = NoriConfig {
         active_agent: "mock-model".to_string(),
         cwd: cwd.to_path_buf(),
@@ -49,12 +56,17 @@ fn launch_with_wire_log(cwd: &Path, wire_log_dir: &Path) -> LaunchedSession {
         },
         ..Default::default()
     };
-    launch_session(SessionLaunchSpec {
+    let agent = prepare_agent(AgentPrepareSpec {
         config: Arc::new(config),
         cli_version: "goal-ext-bridge-test".to_string(),
         session_context: None,
         initial_context: None,
-        resume: None,
+    })
+    .await
+    .expect("prepare mock agent");
+    launch_session(SessionLaunchSpec {
+        agent,
+        start: SessionStart::New,
     })
 }
 
@@ -163,7 +175,7 @@ async fn goal_extension_drives_goal_and_suppresses_harness_continuation() {
     let _autocomplete = set_mock_env("MOCK_AGENT_GOAL_EXT_AUTOCOMPLETE");
     let (temp, wire_log_dir) = temp_dirs();
 
-    let mut session = launch_with_wire_log(temp.path(), &wire_log_dir);
+    let mut session = launch_with_wire_log(temp.path(), &wire_log_dir).await;
     wait_for_started(&mut session).await;
 
     // Setting the goal drives the extension. The mock completes the goal the
@@ -201,7 +213,7 @@ async fn goal_extension_clear_round_trips() {
     let _goal_ext = set_mock_env("MOCK_AGENT_GOAL_EXT");
     let (temp, wire_log_dir) = temp_dirs();
 
-    let mut session = launch_with_wire_log(temp.path(), &wire_log_dir);
+    let mut session = launch_with_wire_log(temp.path(), &wire_log_dir).await;
     wait_for_started(&mut session).await;
 
     let goal = session

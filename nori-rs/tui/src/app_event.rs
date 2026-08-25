@@ -73,17 +73,15 @@ pub(crate) enum AppEvent {
     /// session picker instead of auto-claiming a fresh session.
     SessionClosed,
 
-    /// The pre-session agent probe finished (picker-first entry and
-    /// post-/close). `fallback_to_spawn` says what a failure should do:
-    /// entry falls back to the plain spawn (the old `nori cloud` behavior);
-    /// post-/close must NOT — the user just released a session, so silently
-    /// claiming a fresh one is forbidden.
-    AgentSessionListProbed {
-        probe: Result<nori_harness::AgentSessionsProbe, nori_harness::ProbeError>,
-        intent: AgentSessionProbeIntent,
+    /// An agent connection finished initialization and optional session
+    /// listing. The successful value still owns that exact live connection.
+    AgentPrepared {
+        generation: SessionGeneration,
+        agent: Result<nori_harness::runtime::PreparedAgent, String>,
+        intent: AgentPrepareIntent,
     },
 
-    /// Re-run the pre-session probe and reopen the session picker (e.g.
+    /// Re-run pre-session preparation and reopen the session picker (e.g.
     /// /resume on a deferred widget that has no live agent connection).
     OpenAgentSessionPicker,
 
@@ -214,27 +212,16 @@ pub(crate) enum AppEvent {
     /// Open the approval popup.
     FullScreenApprovalRequest(ApprovalRequest),
 
-    /// Set a pending agent selection. The agent switch will happen on the next
-    /// prompt submission to avoid disrupting active prompt turns.
-    SetPendingAgent {
+    /// Immediately prepare a live candidate connection for an agent switch.
+    PrepareAgentCandidate {
         /// The agent name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
         agent_name: String,
         /// The display name for the status indicator
         display_name: String,
     },
 
-    /// Submit a message with a pending agent switch. The agent will be switched
-    /// first, then the message will be submitted to the new agent.
-    SubmitWithAgentSwitch {
-        /// The agent name of the agent to switch to
-        agent_name: String,
-        /// The display name for the status indicator
-        display_name: String,
-        /// The user message text to submit after switching
-        message_text: String,
-        /// Optional image paths to include with the message
-        image_paths: Vec<PathBuf>,
-    },
+    /// Abandon the prepared candidate while keeping the active session.
+    CancelAgentCandidate,
 
     /// Agent failed to spawn (ACP or HTTP backend). Show error and prompt user
     /// to select a different agent.
@@ -635,17 +622,14 @@ pub(crate) enum AppEvent {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum AgentSessionProbeIntent {
-    Picker { fallback_to_spawn: bool },
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum AgentPrepareIntent {
+    Picker {
+        fallback_to_spawn: bool,
+    },
     Onboarding,
-}
-
-impl AgentSessionProbeIntent {
-    pub(crate) fn fallback_to_spawn(self) -> bool {
-        match self {
-            Self::Picker { fallback_to_spawn } => fallback_to_spawn,
-            Self::Onboarding => true,
-        }
-    }
+    Candidate {
+        agent_name: String,
+        display_name: String,
+    },
 }

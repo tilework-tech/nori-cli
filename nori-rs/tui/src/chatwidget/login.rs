@@ -3,93 +3,18 @@ use super::*;
 impl ChatWidget {
     /// Handle the /login slash command
     pub(super) fn handle_login_command(&mut self) {
-        // Use pending agent if set (user selected via /agent picker but hasn't submitted yet),
-        // otherwise use the current config agent
-        let agent_name = self
-            .pending_agent
-            .as_ref()
-            .map(|p| p.agent_name.as_str())
-            .unwrap_or(&self.config.active_agent);
+        let agent_name = self.login_target_agent().to_string();
+        self.handle_login_command_with_agent(&agent_name);
+    }
 
-        match LoginHandler::check_agent_support(agent_name) {
-            AgentLoginSupport::Supported {
-                agent,
-                is_installed,
-                login_method,
-            } => {
-                if !is_installed {
-                    // Agent not installed - show installation instructions
-                    let display_name = agent.display_name();
-                    let npm_package = agent.npm_package();
-                    self.add_info_message(
-                        format!(
-                            "{display_name} is not installed. To install, run:\n\n  npm install -g {npm_package}\n\nThen run /login again to authenticate."
-                        ),
-                        Some("Install the agent first, then authenticate".to_string()),
-                    );
-                    return;
-                }
+    pub(super) fn login_target_agent(&self) -> &str {
+        self.login_agent_override
+            .as_deref()
+            .unwrap_or(&self.config.active_agent)
+    }
 
-                match login_method {
-                    LoginMethod::OAuthBrowser => {
-                        // Create and start the login handler
-                        let mut handler = LoginHandler::new();
-                        handler.start_oauth();
-
-                        // Show auth method selection message
-                        self.add_info_message(
-                            "Starting authentication...\n\nA browser window will open for you to sign in with your OpenAI account.\n\nAlternatively, you can set the OPENAI_API_KEY environment variable.".to_string(),
-                            Some("Press Esc to cancel".to_string()),
-                        );
-
-                        // Start the actual login server
-                        self.start_oauth_login_flow(handler);
-                    }
-                    LoginMethod::ExternalCli { command, args } => {
-                        // Create and start the login handler
-                        let mut handler = LoginHandler::new();
-                        let agent_display_name = agent.display_name().to_string();
-                        handler.start_external_cli(agent_display_name.clone());
-
-                        // Show starting message
-                        self.add_info_message(
-                            format!(
-                                "Starting authentication for {agent_display_name}...\n\nThe {agent_display_name} login process will run in-app.",
-                            ),
-                            Some("Press Esc to cancel".to_string()),
-                        );
-
-                        // Start the external CLI login flow
-                        self.start_external_cli_login_flow(
-                            handler,
-                            command,
-                            args,
-                            agent_display_name,
-                        );
-                    }
-                }
-            }
-            AgentLoginSupport::NotSupported { agent_name } => {
-                // Provide agent-specific instructions
-                let instructions = match agent_name.as_str() {
-                    "Claude Code" => {
-                        "In-app login for Claude Code is not yet supported.\n\n\
-                         To authenticate, run `claude` in a separate terminal and use the /login command.\n\n\
-                         Alternatively, set the ANTHROPIC_API_KEY environment variable."
-                    }
-                    _ => {
-                        "In-app login for this agent is not yet supported. Please authenticate externally using the agent's native login command or API keys."
-                    }
-                };
-                self.add_info_message(instructions.to_string(), None);
-            }
-            AgentLoginSupport::Unknown { agent_name } => {
-                self.add_info_message(
-                    format!("Unknown agent '{agent_name}'. Cannot determine login method."),
-                    None,
-                );
-            }
-        }
+    pub(crate) fn set_login_agent_override(&mut self, agent_name: Option<String>) {
+        self.login_agent_override = agent_name;
     }
 
     /// Handle the /login <agent> command with explicit agent name
@@ -318,6 +243,7 @@ impl ChatWidget {
     pub(crate) fn handle_login_complete(&mut self, success: bool) {
         if let Some(mut handler) = self.login_handler.take() {
             if success {
+                self.login_agent_override = None;
                 handler.oauth_complete();
                 self.add_info_message(
                     "Successfully authenticated with OpenAI!\n\nYou can now use Nori.".to_string(),
@@ -345,6 +271,7 @@ impl ChatWidget {
         }
 
         if success {
+            self.login_agent_override = None;
             self.add_info_message(
                 format!(
                     "Successfully authenticated with {agent_name}!\n\nYou can now use {agent_name}."

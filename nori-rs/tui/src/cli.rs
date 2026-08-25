@@ -43,7 +43,7 @@ pub struct Cli {
     #[clap(skip)]
     pub cloud_mode: bool,
 
-    /// Internal: `nori cloud --onboard` — skip the picker and probe for the
+    /// Internal: `nori cloud --onboard` — skip the picker and prepare the
     /// org's onboarding session before resuming or acquiring it.
     /// Not exposed as a public flag.
     #[clap(skip)]
@@ -83,6 +83,20 @@ pub struct Cli {
     /// Intended for testing and automation scenarios.
     #[arg(long = "skip-trust-directory", default_value_t = false)]
     pub skip_trust_directory: bool,
+
+    /// Serve this session as a remote ACP agent over the WebSocket transport
+    /// on ADDR (a bare PORT binds loopback; IP:PORT binds that address).
+    #[arg(long = "remote", value_name = "ADDR")]
+    pub remote: Option<String>,
+
+    /// Allow --remote to bind a non-loopback address, exposing the
+    /// unauthenticated ACP surface beyond this machine.
+    #[arg(
+        long = "remote-allow-nonloopback",
+        default_value_t = false,
+        requires = "remote"
+    )]
+    pub remote_allow_nonloopback: bool,
 
     /// Extra agent registry entries injected by the caller, appended after
     /// the config's `[[agents]]`. Used by `nori cloud` to pin the

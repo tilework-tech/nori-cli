@@ -289,6 +289,28 @@ pub async fn run_main(
 
     let _ = tracing_subscriber::registry().with(file_layer).try_init();
 
+    // Remote ACP transport (docs/specs/remote-acp-transport.md): bind the
+    // listener before the app runs so a controller can connect as soon as
+    // the session launches. The server lives for the whole app run.
+    let _remote_server = match cli.remote.as_deref() {
+        Some(spec) => {
+            let addr =
+                nori_harness::remote_agent::parse_bind_addr(spec, cli.remote_allow_nonloopback)
+                    .map_err(|error| std::io::Error::other(error.to_string()))?;
+            let host = std::sync::Arc::new(nori_harness::remote_agent::HarnessRemoteHost::new());
+            let server = nori_harness::remote_agent::RemoteAcpServer::bind(addr, host.clone())
+                .await
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+            nori_harness::remote_agent::set_active_host(host);
+            tracing::info!(
+                "remote ACP transport listening on ws://{}/acp",
+                server.local_addr()
+            );
+            Some(server)
+        }
+        None => None,
+    };
+
     run_ratatui_app(
         cli,
         config,

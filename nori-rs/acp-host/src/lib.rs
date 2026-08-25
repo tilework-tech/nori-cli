@@ -8,6 +8,7 @@ pub mod connection;
 mod error_category;
 pub mod patch;
 pub mod registry;
+pub mod remote;
 
 pub use error_category::AcpErrorCategory;
 pub use error_category::AcpErrorDetails;

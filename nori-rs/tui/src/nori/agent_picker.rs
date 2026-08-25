@@ -1,8 +1,7 @@
 //! Agent picker component for ACP mode.
 //!
 //! This module provides the UI for selecting between available ACP agents.
-//! Agent selection is tracked as "pending" and the actual switch happens
-//! on the next prompt submission to avoid disrupting active prompt turns.
+//! Selecting an agent immediately starts preparation of a live candidate.
 
 use nori_harness::AcpAgentInfo;
 use nori_harness::list_available_agents;
@@ -16,18 +15,6 @@ use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
-
-/// Information about a pending agent selection.
-/// This struct is stored in the App to track which agent should be switched to
-/// when the user submits their next prompt.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct PendingAgentSelection {
-    /// The agent name of the selected agent (e.g., "mock-model", "gemini-2.5-flash")
-    pub agent_name: String,
-    /// The display name for the status indicator
-    pub display_name: String,
-}
 
 /// Create selection view parameters for the agent picker.
 ///
@@ -49,9 +36,9 @@ pub fn agent_picker_params(
             let agent_name = agent.agent_name.clone();
             let display_name = agent.display_name.clone();
 
-            // Create action that sends the pending agent selection event
+            // Start preparing the selected agent as soon as the picker closes.
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::SetPendingAgent {
+                tx.send(AppEvent::PrepareAgentCandidate {
                     agent_name: agent_name.clone(),
                     display_name: display_name.clone(),
                 });
@@ -120,36 +107,6 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
         footer_hint: Some(Line::from(
             "Press esc to dismiss, or use /agent to switch agents.",
         )),
-        items,
-        ..Default::default()
-    }
-}
-
-/// Create selection view parameters for the model picker when an agent switch
-/// is pending but no new session has started yet.
-///
-/// ACP models are session-scoped: a newly-switched agent's models only become
-/// available after the next prompt creates a session. Until then the live agent
-/// handle still belongs to the OLD agent, so querying it would show the OLD
-/// agent's models. Show an explanatory message naming the pending agent instead.
-pub fn acp_model_picker_pending_agent_params(display_name: &str) -> SelectionViewParams {
-    let items: Vec<SelectionItem> = vec![SelectionItem {
-        name: format!("Switching to {display_name}"),
-        description: Some(
-            "Send a message to start a session, then /model will show its models.".to_string(),
-        ),
-        is_current: false,
-        actions: vec![],
-        dismiss_on_select: true,
-        ..Default::default()
-    }];
-
-    SelectionViewParams {
-        title: Some("Select Model".to_string()),
-        subtitle: Some(format!(
-            "{display_name}'s models load once you start a session"
-        )),
-        footer_hint: Some(Line::from("Press esc to dismiss.")),
         items,
         ..Default::default()
     }

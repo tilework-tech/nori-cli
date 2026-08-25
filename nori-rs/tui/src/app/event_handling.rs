@@ -5,11 +5,11 @@ impl App {
     ///
     /// Per-session startup defers the agent spawn until the chosen skillset's
     /// files are on disk. Returns `true` (clearing the pending flag) when a
-    /// spawn is now due; `false` while an agent-session probe is still in
+    /// spawn is now due; `false` while agent preparation is still in
     /// flight or no spawn was deferred. Shared by the skillset-applied and
     /// picker-dismissed paths so their guard cannot drift.
     pub(super) fn take_deferred_spawn(&mut self) -> bool {
-        if self.deferred_spawn_pending && !self.agent_session_probe_in_flight {
+        if self.deferred_spawn_pending && self.primary_agent_preparation.is_none() {
             self.deferred_spawn_pending = false;
             true
         } else {
@@ -103,6 +103,69 @@ impl App {
     ) -> Result<bool> {
         match event {
             AppEvent::NewSession => {
+                if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
+                    let Some(CandidateAgent::Prepared {
+                        agent_name,
+                        display_name,
+                        mut agent,
+                        ..
+                    }) = self.candidate_agent.take()
+                    else {
+                        unreachable!("candidate variant checked above")
+                    };
+                    let config = self.config_for_agent(&agent_name);
+                    if let Err(error) = nori_harness::runtime::refresh_prepared_agent(
+                        &mut agent,
+                        crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
+                    ) {
+                        tokio::spawn((*agent).shutdown());
+                        self.chat_widget.set_login_agent_override(Some(agent_name));
+                        self.chat_widget.add_error_message(format!(
+                            "Couldn't activate {display_name}: {error}"
+                        ));
+                        return Ok(true);
+                    }
+                    let mut init = self.chat_widget_init(
+                        tui.frame_requester(),
+                        None,
+                        Vec::new(),
+                        Some(config.active_agent.clone()),
+                        false,
+                        None,
+                    );
+                    init.config = config;
+                    init.prepared_agent = Some(*agent);
+                    let widget = ChatWidget::new_candidate(init);
+                    self.candidate_agent = Some(CandidateAgent::Activating {
+                        agent_name,
+                        display_name,
+                        widget: Box::new(widget),
+                    });
+                    tui.frame_requester().schedule_frame();
+                    return Ok(true);
+                }
+
+                self.discard_candidate();
+                self.cancel_primary_agent_preparation();
+                if let Some(agent) = self.prepared_agent.take() {
+                    self.deferred_spawn_pending = false;
+                    let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+                    self.shutdown_current_conversation();
+                    let mut init = self.chat_widget_init(
+                        tui.frame_requester(),
+                        initial_prompt,
+                        initial_images,
+                        None,
+                        false,
+                        None,
+                    );
+                    init.prepared_agent = Some(agent);
+                    self.chat_widget = ChatWidget::new(init);
+                    self.configure_new_chat_widget();
+                    tui.frame_requester().schedule_frame();
+                    return Ok(true);
+                }
+
                 self.deferred_spawn_pending = self.cloud_onboard;
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
@@ -121,9 +184,7 @@ impl App {
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
                 if self.cloud_onboard {
-                    self.begin_agent_session_probe(
-                        crate::app_event::AgentSessionProbeIntent::Onboarding,
-                    );
+                    self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Onboarding);
                 }
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -145,6 +206,11 @@ impl App {
                 // The session was released; land back on the session picker
                 // with a fresh deferred widget — never auto-claim a new
                 // session (on a cloud agent that would boot a new VM).
+                self.cancel_primary_agent_preparation();
+                self.discard_candidate();
+                if let Some(agent) = self.prepared_agent.take() {
+                    tokio::spawn(agent.shutdown());
+                }
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
                     None,
@@ -156,16 +222,84 @@ impl App {
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
                 self.deferred_spawn_pending = true;
-                self.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
                     fallback_to_spawn: false,
                 });
                 tui.frame_requester().schedule_frame();
             }
-            AppEvent::AgentSessionListProbed { probe, intent } => {
-                self.agent_session_probe_in_flight = false;
-                match probe {
-                    Ok(probe) => {
-                        // Seed the deferred widget with the probed agent
+            AppEvent::AgentPrepared {
+                generation,
+                agent,
+                intent,
+            } => {
+                if let crate::app_event::AgentPrepareIntent::Candidate {
+                    agent_name,
+                    display_name,
+                } = intent
+                {
+                    let is_current = matches!(
+                        &self.candidate_agent,
+                        Some(CandidateAgent::Preparing {
+                            generation: current,
+                            agent_name: current_agent,
+                            ..
+                        }) if *current == generation && *current_agent == agent_name
+                    );
+                    if !is_current {
+                        if let Ok(agent) = agent {
+                            tokio::spawn(agent.shutdown());
+                        }
+                        return Ok(true);
+                    }
+
+                    match agent {
+                        Ok(agent) => {
+                            let sessions = match agent.catalog() {
+                                nori_harness::runtime::SessionCatalog::Unsupported => Vec::new(),
+                                nori_harness::runtime::SessionCatalog::Listed(sessions) => {
+                                    sessions.clone()
+                                }
+                            };
+                            let Some(CandidateAgent::Preparing { agent_name, .. }) =
+                                self.candidate_agent.take()
+                            else {
+                                unreachable!("candidate generation checked above")
+                            };
+                            self.candidate_agent = Some(CandidateAgent::Prepared {
+                                agent_name,
+                                display_name,
+                                agent: Box::new(agent),
+                            });
+                            self.chat_widget
+                                .show_acp_resume_session_picker(sessions, true);
+                        }
+                        Err(error) => {
+                            self.candidate_agent = None;
+                            self.chat_widget.set_login_agent_override(Some(agent_name));
+                            self.chat_widget.add_error_message(format!(
+                                "Couldn't prepare {display_name}: {error}"
+                            ));
+                        }
+                    }
+                    tui.frame_requester().schedule_frame();
+                    return Ok(true);
+                }
+
+                let is_current = matches!(
+                    &self.primary_agent_preparation,
+                    Some(preparation) if preparation.generation == generation
+                );
+                if !is_current {
+                    if let Ok(agent) = agent {
+                        tokio::spawn(agent.shutdown());
+                    }
+                    return Ok(true);
+                }
+                self.primary_agent_preparation = None;
+
+                match agent {
+                    Ok(agent) => {
+                        // Seed the deferred widget with the prepared agent
                         // capabilities so capability-gated behavior (e.g. the
                         // detach wording on quit) is right before any session
                         // exists.
@@ -173,25 +307,25 @@ impl App {
                             crate::presentation::ClientEvent::SessionCapabilitiesChanged(
                                 crate::presentation::SessionCapabilitiesView {
                                     agent: crate::presentation::AgentCapabilitiesView {
-                                        http_mcp: probe.capabilities.mcp_capabilities.http,
-                                        load_session: probe.capabilities.load_session,
-                                        session_list: probe
-                                            .capabilities
+                                        http_mcp: agent.capabilities().mcp_capabilities.http,
+                                        load_session: agent.capabilities().load_session,
+                                        session_list: agent
+                                            .capabilities()
                                             .session_capabilities
                                             .list
                                             .is_some(),
-                                        session_resume: probe
-                                            .capabilities
+                                        session_resume: agent
+                                            .capabilities()
                                             .session_capabilities
                                             .resume
                                             .is_some(),
-                                        session_close: probe
-                                            .capabilities
+                                        session_close: agent
+                                            .capabilities()
                                             .session_capabilities
                                             .close
                                             .is_some(),
-                                        session_fork: probe
-                                            .capabilities
+                                        session_fork: agent
+                                            .capabilities()
                                             .session_capabilities
                                             .fork
                                             .is_some(),
@@ -200,60 +334,45 @@ impl App {
                                 },
                             ),
                         );
+                        let sessions = match agent.catalog() {
+                            nori_harness::runtime::SessionCatalog::Unsupported => None,
+                            nori_harness::runtime::SessionCatalog::Listed(sessions) => {
+                                Some(sessions.clone())
+                            }
+                        };
+                        self.prepared_agent = Some(agent);
                         match intent {
-                            crate::app_event::AgentSessionProbeIntent::Onboarding => {
+                            crate::app_event::AgentPrepareIntent::Onboarding => {
                                 if let Some(event) =
-                                    super::session_setup::onboarding_resume_event(probe.sessions)
+                                    sessions.and_then(super::session_setup::onboarding_resume_event)
                                 {
                                     self.app_event_tx.send(event);
-                                } else if self.take_deferred_spawn() {
-                                    self.chat_widget.spawn_deferred_agent(
-                                        self.config.clone(),
-                                        self.app_event_tx.clone(),
-                                    );
+                                } else {
+                                    self.app_event_tx.send(AppEvent::NewSession);
                                 }
                             }
-                            crate::app_event::AgentSessionProbeIntent::Picker { .. } => self
-                                .chat_widget
-                                .show_acp_resume_session_picker(probe.sessions),
-                        }
-                    }
-                    Err(nori_harness::ProbeError::SessionListUnsupported(message))
-                        if intent.fallback_to_spawn() =>
-                    {
-                        // Expected for agents without the session lifecycle
-                        // (older handroll, local agents): fall through to the
-                        // plain spawn quietly.
-                        tracing::debug!("agent session probe: {message}");
-                        if self.deferred_spawn_pending {
-                            self.deferred_spawn_pending = false;
-                            self.chat_widget.spawn_deferred_agent(
-                                self.config.clone(),
-                                self.app_event_tx.clone(),
-                            );
-                        }
-                    }
-                    Err(error) if intent.fallback_to_spawn() => {
-                        // Entry-path failure: surface it, then fall back to
-                        // the plain spawn — that surface owns the full error
-                        // handling (auth hints, retry wording).
-                        self.chat_widget
-                            .add_error_message(format!("Couldn't list sessions: {error}"));
-                        if self.deferred_spawn_pending {
-                            self.deferred_spawn_pending = false;
-                            self.chat_widget.spawn_deferred_agent(
-                                self.config.clone(),
-                                self.app_event_tx.clone(),
-                            );
+                            crate::app_event::AgentPrepareIntent::Picker { fallback_to_spawn } => {
+                                match sessions {
+                                    Some(sessions) => self
+                                        .chat_widget
+                                        .show_acp_resume_session_picker(sessions, false),
+                                    None if fallback_to_spawn => {
+                                        self.app_event_tx.send(AppEvent::NewSession)
+                                    }
+                                    None => self
+                                        .chat_widget
+                                        .show_acp_resume_session_picker(Vec::new(), false),
+                                }
+                            }
+                            crate::app_event::AgentPrepareIntent::Candidate { .. } => {
+                                unreachable!("candidate handled above")
+                            }
                         }
                     }
                     Err(error) => {
-                        // Post-/close failure: the user just released a
-                        // session — silently claiming a fresh one is
-                        // forbidden. Leave them at explicit next actions.
                         self.deferred_spawn_pending = false;
                         self.chat_widget
-                            .add_error_message(format!("Couldn't list sessions: {error}"));
+                            .add_error_message(format!("Couldn't prepare agent: {error}"));
                         self.chat_widget.add_info_message(
                             "No session is active — /resume retries the picker, /new starts a \
                              fresh session."
@@ -265,11 +384,17 @@ impl App {
                 tui.frame_requester().schedule_frame();
             }
             AppEvent::OpenAgentSessionPicker => {
-                self.begin_agent_session_probe(crate::app_event::AgentSessionProbeIntent::Picker {
+                self.discard_candidate();
+                self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
                     fallback_to_spawn: false,
                 });
             }
             AppEvent::BeginExit => {
+                self.cancel_primary_agent_preparation();
+                if let Some(agent) = self.prepared_agent.take() {
+                    tokio::spawn(agent.shutdown());
+                }
+                self.discard_candidate();
                 self.chat_widget.begin_exit();
             }
             AppEvent::InsertHistoryCell(cell) => {
@@ -338,12 +463,84 @@ impl App {
                 self.chat_widget.on_commit_tick();
             }
             AppEvent::SessionEvent { generation, event } => {
-                self.chat_widget.handle_session_event(generation, event);
+                let candidate_matches = matches!(
+                    &self.candidate_agent,
+                    Some(CandidateAgent::Activating { widget, .. })
+                        if widget.session_generation() == generation
+                );
+                if candidate_matches {
+                    let started = match &event {
+                        nori_protocol::SessionEvent::Nori(
+                            nori_protocol::NoriEvent::SessionStarted(started),
+                        ) => Some(started.clone()),
+                        _ => None,
+                    };
+                    let ended_message = match &event {
+                        nori_protocol::SessionEvent::Nori(
+                            nori_protocol::NoriEvent::SessionEnded(ended),
+                        ) => Some(ended.message.clone().unwrap_or_else(|| {
+                            "Candidate session ended during activation".to_string()
+                        })),
+                        _ => None,
+                    };
+                    if let Some(CandidateAgent::Activating { widget, .. }) =
+                        self.candidate_agent.as_mut()
+                    {
+                        widget.handle_session_event(generation, event);
+                    }
+
+                    if let Some(started) = started {
+                        let Some(CandidateAgent::Activating {
+                            agent_name,
+                            display_name,
+                            widget,
+                        }) = self.candidate_agent.take()
+                        else {
+                            unreachable!("candidate generation checked above")
+                        };
+                        let old_widget = std::mem::replace(&mut self.chat_widget, *widget);
+                        self.config.active_agent = agent_name.clone();
+                        self.config.agent = agent_name;
+                        self.configure_new_chat_widget();
+                        self.chat_widget
+                            .attach_remote_host_after_start(started)
+                            .await;
+                        old_widget.shutdown_harness_session();
+                        if let Err(error) = ConfigEditsBuilder::new(&self.config.nori_home)
+                            .set_agent(&self.config.active_agent)
+                            .apply()
+                            .await
+                        {
+                            tracing::error!(%error, "failed to persist activated agent selection");
+                        }
+                        self.chat_widget.add_info_message(
+                            format!("Started new conversation with agent: {display_name}"),
+                            None,
+                        );
+                    } else if let Some(message) = ended_message {
+                        let candidate = self.candidate_agent.take();
+                        if let Some(CandidateAgent::Activating {
+                            agent_name, widget, ..
+                        }) = candidate
+                        {
+                            widget.shutdown_harness_session();
+                            self.chat_widget.set_login_agent_override(Some(agent_name));
+                        }
+                        self.chat_widget.add_error_message(message);
+                    }
+                } else {
+                    self.chat_widget.handle_session_event(generation, event);
+                }
             }
             AppEvent::ConversationHistory(ev) => {
                 self.on_conversation_history_for_backtrack(tui, ev)?;
             }
             AppEvent::ExitRequest => {
+                self.cancel_primary_agent_preparation();
+                if let Some(agent) = self.prepared_agent.take() {
+                    agent.shutdown().await;
+                }
+                self.discard_candidate();
                 // Create and insert exit message cell before exiting
                 let exit_cell = self.chat_widget.create_exit_message_cell();
 
@@ -660,78 +857,16 @@ impl App {
                         Some(Overlay::new_static_with_lines(lines, "T O O L".to_string()));
                 }
             }
-            AppEvent::SetPendingAgent {
+            AppEvent::PrepareAgentCandidate {
                 agent_name,
                 display_name,
             } => {
-                // Store the pending agent selection in both App and ChatWidget
-                self.pending_agent = Some(PendingAgentSelection {
-                    agent_name: agent_name.clone(),
-                    display_name: display_name.clone(),
-                });
-                // Also set on ChatWidget so it can trigger the switch on prompt submission
-                self.chat_widget
-                    .set_pending_agent(agent_name.clone(), display_name.clone());
-                tracing::info!(
-                    "Pending agent set: {} ({}). Will switch on next prompt.",
-                    display_name,
-                    agent_name
-                );
-                self.chat_widget.add_info_message(
-                    format!(
-                        "Agent '{display_name}' selected. On next prompt, will start a new conversation with this agent (current history will not be transferred)."
-                    ),
-                    None,
-                );
+                self.begin_agent_candidate(agent_name, display_name);
             }
-            AppEvent::SubmitWithAgentSwitch {
-                agent_name,
-                display_name,
-                message_text,
-                image_paths,
-            } => {
-                tracing::info!(
-                    "Switching agent to {} ({}) and submitting message",
-                    display_name,
-                    agent_name
-                );
-
-                // Clear the pending agent since we're applying it now
-                self.pending_agent = None;
-
-                // Update the model in config
-                self.config.active_agent = agent_name.clone();
-                self.config.agent = agent_name.clone();
-
-                // Persist the agent selection to config.toml for next TUI startup
-                if let Err(err) = ConfigEditsBuilder::new(&self.config.nori_home)
-                    .set_agent(&agent_name)
-                    .apply()
-                    .await
-                {
-                    tracing::error!(error = %err, "failed to persist agent selection");
-                    // Non-fatal: continue with the switch even if persistence fails
-                }
-
-                // Shutdown current conversation
-                self.shutdown_current_conversation();
-
-                // Create the new chat widget with the new config and the message as initial prompt.
-                let init = self.chat_widget_init(
-                    tui.frame_requester(),
-                    Some(message_text),
-                    image_paths,
-                    Some(agent_name.clone()),
-                    false,
-                    None,
-                );
-                self.chat_widget = ChatWidget::new(init);
-                self.configure_new_chat_widget();
-
-                self.chat_widget.add_info_message(
-                    format!("Started new conversation with agent: {display_name}"),
-                    None,
-                );
+            AppEvent::CancelAgentCandidate => {
+                self.discard_candidate();
+                self.chat_widget
+                    .add_info_message("Agent switch cancelled.".to_string(), None);
             }
             AppEvent::AgentSpawnFailed { agent_name, error } => {
                 tracing::warn!(
@@ -1121,7 +1256,8 @@ impl App {
                     .show_resume_session_picker(params, generation);
             }
             AppEvent::ShowAcpResumeSessionPicker { sessions } => {
-                self.chat_widget.show_acp_resume_session_picker(sessions);
+                self.chat_widget
+                    .show_acp_resume_session_picker(sessions, false);
             }
             AppEvent::ResumeSessionSummaryReady {
                 generation,
@@ -1186,6 +1322,55 @@ impl App {
                 acp_session_id,
                 title,
             } => {
+                if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
+                    let Some(CandidateAgent::Prepared {
+                        agent_name,
+                        display_name,
+                        mut agent,
+                        ..
+                    }) = self.candidate_agent.take()
+                    else {
+                        unreachable!("candidate variant checked above")
+                    };
+                    let config = self.config_for_agent(&agent_name);
+                    if let Err(error) = nori_harness::runtime::refresh_prepared_agent(
+                        &mut agent,
+                        crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
+                    ) {
+                        tokio::spawn((*agent).shutdown());
+                        self.chat_widget.set_login_agent_override(Some(agent_name));
+                        self.chat_widget.add_error_message(format!(
+                            "Couldn't activate {display_name}: {error}"
+                        ));
+                        return Ok(true);
+                    }
+                    let mut init = self.chat_widget_init(
+                        tui.frame_requester(),
+                        None,
+                        Vec::new(),
+                        Some(config.active_agent.clone()),
+                        false,
+                        None,
+                    );
+                    init.config = config;
+                    init.prepared_agent = Some(*agent);
+                    let widget = ChatWidget::new_resumed_acp_candidate(
+                        init,
+                        Some(acp_session_id),
+                        title,
+                        None,
+                    );
+                    self.candidate_agent = Some(CandidateAgent::Activating {
+                        agent_name,
+                        display_name,
+                        widget: Box::new(widget),
+                    });
+                    tui.frame_requester().schedule_frame();
+                    return Ok(true);
+                }
+
+                self.discard_candidate();
+                self.cancel_primary_agent_preparation();
                 let display_name =
                     crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
                         .map(|info| info.display_name)
@@ -1194,7 +1379,7 @@ impl App {
                 self.deferred_spawn_pending = false;
                 self.shutdown_current_conversation();
 
-                let init = self.chat_widget_init(
+                let mut init = self.chat_widget_init(
                     tui.frame_requester(),
                     initial_prompt,
                     initial_images,
@@ -1202,6 +1387,7 @@ impl App {
                     false,
                     None,
                 );
+                init.prepared_agent = self.prepared_agent.take();
                 self.chat_widget = ChatWidget::new_resumed_acp(
                     init,
                     Some(acp_session_id.clone()),

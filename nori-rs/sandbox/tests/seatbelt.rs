@@ -6,6 +6,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
 
 use codex_sandbox::seatbelt::spawn_command_under_seatbelt;
 use codex_sandbox::spawn::CODEX_SANDBOX_ENV_VAR;
@@ -170,7 +172,13 @@ async fn python_getpwuid_works_under_seatbelt() {
     }
 
     // For local dev.
-    if which::which("python3").is_err() {
+    if Command::new("python3")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_err()
+    {
         eprintln!("python3 not found in PATH, skipping test.");
         return;
     }

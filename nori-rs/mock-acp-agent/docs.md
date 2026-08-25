@@ -24,8 +24,9 @@ environment variables select deterministic streams for:
 - permission round trips with schema-native success and error responses;
 - host-handled filesystem reads and writes;
 - session load/list/resume/close and structured ACP failures;
-- initialize/new-session failures, setup notifications, partial failed-load
-  history, and prompt-time child exit;
+- initialize/new-session failures (including candidate-only activation
+  failure), setup notifications, partial failed-load history, and prompt-time
+  child exit;
 - cancellation, disconnects, EOF teardown, stalled children, and
   interleaved tool/message ordering; and
 - cloud, MCP, browser, transcript, and presentation regressions.
@@ -52,5 +53,9 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   current value (its own model-injection channel), so tests can verify that an
   out-of-catalog model forced through spawn-time injection becomes the session's
   current model.
+- `MOCK_AGENT_RESPONSE_<MODEL>` overrides the generic `MOCK_AGENT_RESPONSE`.
+  The suffix uppercases the model name and replaces hyphens with underscores
+  (for example, `MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT`). Multi-agent PTY tests
+  use this to prove which subprocess produced a visible response.
 
 Created and maintained by Nori.

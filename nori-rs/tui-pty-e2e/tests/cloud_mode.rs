@@ -32,9 +32,7 @@ fn mock_agent_path() -> PathBuf {
 /// to `broker_url`, then runs the mock agent on its stdio. After the mock
 /// agent exits (it exits 0 on stdin EOF), the script APPENDS an `eof` line to
 /// the `released` marker — one line per child that saw EOF and finished its
-/// own teardown (post-#1276 that teardown is a *detach*, not a release). The
-/// picker-first entry probe spawns an extra short-lived child per boot, so
-/// tests count marker lines rather than checking existence.
+/// own teardown (post-#1276 that teardown is a *detach*, not a release).
 struct FakeHandroll {
     dir: tempfile::TempDir,
     script: PathBuf,
@@ -54,6 +52,7 @@ impl FakeHandroll {
             "#!/bin/sh\n\
              printf '%s\\n' \"$@\" > '{dir}/argv'\n\
              printenv NORI_BROKER_URL > '{dir}/broker_url' 2>/dev/null\n\
+             echo $$ >> '{dir}/pids'\n\
              '{mock}' 2>>'{dir}/agent_stderr'\n\
              status=$?\n\
              echo eof >> '{dir}/released'\n\
@@ -127,6 +126,42 @@ impl FakeHandroll {
             std::thread::sleep(Duration::from_millis(100));
         }
         false
+    }
+
+    fn wait_for_child_pid_count(&self, count: usize, timeout: Duration) -> Vec<u32> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let pids = std::fs::read_to_string(self.marker("pids"))
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|pid| pid.parse().ok())
+                .collect::<Vec<_>>();
+            if pids.len() >= count || Instant::now() >= deadline {
+                return pids;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn wait_for_child_exit(&self, pid: u32, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if !Path::new(&format!("/proc/{pid}")).exists() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
+
+    fn child_is_alive(pid: u32) -> bool {
+        let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status")) else {
+            return false;
+        };
+        status
+            .lines()
+            .find(|line| line.starts_with("State:"))
+            .is_some_and(|state| !state.contains("Z (zombie)") && !state.contains("Z ("))
     }
 
     /// Number of children that have completed their stdin-EOF path so far.
@@ -231,19 +266,13 @@ fn test_cloud_mode_sends_eof_detach_to_handroll_on_exit() {
         .wait_for_text("›", TIMEOUT)
         .expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
-    // Prove the LIVE child exists (the deferred composer renders before the
-    // probe fallback spawns it), and let the probe child's late eof line
-    // land, so the baseline below cannot race either way.
+    // Prove the prepared child was activated and is live.
     session.send_str("prove the session is live").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("alive before exit", TIMEOUT)
         .expect("session should be live before exit");
-    assert!(
-        fake.wait_for_released_above(0, Duration::from_secs(10)),
-        "the boot probe child should complete its EOF path"
-    );
     let baseline = fake.released_count();
 
     session.send_str("/exit").unwrap();
@@ -281,11 +310,13 @@ fn test_cloud_mode_boots_into_session_picker_without_claiming() {
         .wait_for_text("First mock session", TIMEOUT)
         .expect("the picker should list live sessions by their broker title");
 
-    // The probe child must be torn down once the picker is up — a leaked
-    // process per boot would never write its EOF line.
+    // The initialized child must remain alive so the selected session can be
+    // activated on this exact connection rather than a respawned one.
+    let pids = fake.wait_for_child_pid_count(1, TIMEOUT);
+    let prepared_pid = *pids.first().expect("prepared handroll child pid");
     assert!(
-        fake.wait_for_released_above(0, Duration::from_secs(10)),
-        "the probe child should be torn down after the picker opens"
+        FakeHandroll::child_is_alive(prepared_pid),
+        "the prepared child must remain alive while the picker is open"
     );
     // Belt and braces on "nothing claimed": the mock logs every session/new
     // to stderr; none may have happened.
@@ -293,6 +324,87 @@ fn test_cloud_mode_boots_into_session_picker_without_claiming() {
     assert!(
         !agent_stderr.contains("new_session id="),
         "no session/new may run before the user picks, agent stderr:\n{agent_stderr}"
+    );
+}
+
+/// Picker-first entry must retain the CLI's positional prompt until the user
+/// explicitly starts a new session on the prepared connection.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_start_new_preserves_the_deferred_positional_prompt() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake)
+        .with_mock_response("deferred prompt reached the prepared session")
+        .with_arg("continue from this positional prompt");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("deferred prompt reached the prepared session", TIMEOUT)
+        .expect("starting new should submit the deferred positional prompt");
+}
+
+/// An explicit `/new` supersedes picker-first preparation. A late result from
+/// the cancelled preparation must not reopen the picker over the new session.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_new_invalidates_in_flight_entry_preparation() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake)
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1200")
+        .with_mock_response("new session remains active");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Listing", TIMEOUT)
+        .expect("cloud entry should begin preparing the session picker");
+    let initial_pids = fake.wait_for_child_pid_count(1, TIMEOUT);
+    let stale_pid = *initial_pids.first().expect("entry-preparation child pid");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_str("/new").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    let replacement_pids = fake.wait_for_child_pid_count(2, TIMEOUT);
+    assert_eq!(
+        replacement_pids.len(),
+        2,
+        "explicit /new should replace the entry-preparation child"
+    );
+    assert!(
+        fake.wait_for_child_exit(stale_pid, TIMEOUT),
+        "the superseded entry-preparation child should be reaped"
+    );
+    // Once the stale child is gone, its delayed result can no longer reopen
+    // the picker over the explicit session.
+    let contents = session.screen_contents();
+    assert!(
+        !contents.contains("Start a new session"),
+        "a superseded preparation must not install a late picker, got:\n{contents}"
+    );
+
+    session.send_str("prove the explicit session won").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("new session remains active", TIMEOUT)
+        .expect("the explicit new session should remain usable");
+
+    let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
+    let creates = agent_stderr
+        .lines()
+        .filter(|line| line.contains("new_session id="))
+        .count();
+    assert_eq!(
+        creates, 1,
+        "only the explicit /new may claim a session, agent stderr:\n{agent_stderr}"
     );
 }
 
@@ -361,8 +473,7 @@ fn test_cloud_entry_picker_resume_row_reattaches_live() {
         .wait_for_text("hello from the reattached session", TIMEOUT)
         .expect("prompt should round-trip on the reattached session");
 
-    // The fail-new guard is per-child; the stderr log covers every child in
-    // this boot (probe AND the reattached session's process).
+    // The stderr log covers the one child used for listing and reattachment.
     let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
     assert!(
         !agent_stderr.contains("new_session id="),
@@ -435,53 +546,32 @@ fn test_cloud_close_returns_to_the_picker() {
         .expect("/close should land back on the session picker, not a fresh chat");
 }
 
-/// After /close releases a session, a failing return-to-picker probe must
-/// NOT fall back to spawning a fresh session — the user just released one;
-/// silently claiming another is forbidden. (Entry-path probe failure DOES
-/// fall back — that is the old `nori cloud` behavior, exercised implicitly
-/// here because the same list failure hits the entry probe first.)
+/// If an agent advertises `session/list` but the request fails, preparation
+/// fails loudly and must never fall through to `session/new`.
 #[test]
 #[cfg(target_os = "linux")]
-fn test_cloud_close_probe_failure_does_not_claim_a_new_session() {
+fn test_cloud_list_failure_does_not_claim_a_new_session() {
     let fake = FakeHandroll::new();
     let config = cloud_lifecycle_config(&fake).with_agent_env("MOCK_AGENT_LIST_SESSIONS_FAIL", "1");
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    // Entry: probe fails (list error) → error surfaced → fallback spawns a
-    // session (the old behavior).
     session
-        .wait_for_text("Couldn't list sessions", TIMEOUT)
-        .expect("entry probe failure should be surfaced");
-    session
-        .wait_for_text("›", TIMEOUT)
-        .expect("entry probe failure should fall back to a plain session");
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    session.send_str("/close").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-
-    session
-        .wait_for_text("Session closed", TIMEOUT)
-        .expect("/close should release the session");
-    // The return-to-picker probe fails too — the user must land on explicit
-    // next actions, not a silently claimed session.
+        .wait_for_text("Couldn't prepare agent", TIMEOUT)
+        .expect("the advertised list failure should fail preparation");
     session
         .wait_for_text("No session is active", TIMEOUT)
-        .expect("post-close probe failure must leave explicit next steps");
+        .expect("list failure must leave explicit retry and new-session choices");
 
-    // Exactly one session was ever created (the entry fallback). A second
-    // new_session here would mean /close auto-claimed a fresh VM.
     let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
     let creates = agent_stderr
         .lines()
         .filter(|line| line.contains("new_session id="))
         .count();
     assert_eq!(
-        creates, 1,
-        "post-close probe failure must not create a session, agent stderr:\n{agent_stderr}"
+        creates, 0,
+        "list failure must not create a session, agent stderr:\n{agent_stderr}"
     );
 }
 

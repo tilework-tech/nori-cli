@@ -1,4 +1,4 @@
-//! Agent Context Protocol (ACP) implementation for Nori CLI
+//! Agent Client Protocol (ACP) implementation for Nori CLI
 //!
 //! This crate provides JSON-RPC 2.0-based communication with ACP-compliant
 //! agent subprocesses over stdin/stdout (capturing stderr logs).
@@ -27,7 +27,9 @@ pub mod hooks;
 pub mod message_history;
 pub(crate) mod normalized;
 pub use nori_acp_host::registry;
+pub mod remote_agent;
 pub mod runtime;
+pub(crate) mod session_event_fanout;
 pub mod tracing_setup;
 pub mod transcript;
 pub mod transcript_discovery;
@@ -48,10 +50,6 @@ pub use backend::AcpBackend;
 pub use backend::AcpBackendConfig;
 pub use backend::BackendEvent;
 pub use backend::SessionContext;
-pub use backend::probe::AgentSessionsProbe;
-pub use backend::probe::ProbeError;
-pub use backend::probe::probe_agent_sessions;
-pub use backend::probe::probe_agent_sessions_for;
 pub use connection::acp_connection::AcpConnection;
 pub use registry::AcpAgentConfig;
 pub use registry::AcpAgentInfo;

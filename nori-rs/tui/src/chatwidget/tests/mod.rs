@@ -114,6 +114,7 @@ fn make_chatwidget_manual_for_mode(
         footer_layout_config,
         deferred_spawn: true,
         fork_context: None,
+        prepared_agent: None,
         cloud_mode,
     });
     let (_unused_tx, unused_rx) = unbounded_channel();

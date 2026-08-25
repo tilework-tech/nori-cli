@@ -30,7 +30,10 @@ signals:
 `AcpConnection` exposes ACP initialize/session creation or loading, prompt,
 cancel, session config, list, resume, fork, close, and shutdown behavior. Method
 responses are published as raw `AcpEvent::Response` values; request IDs are
-assigned by the SDK transport and retained end to end. Each call to `prompt`
+assigned by the SDK transport and retained end to end. A failed session-config
+write is the deliberate exception: its error is returned to the caller but not
+mirrored onto the public event boundary, where the caller's friendly failure
+handling would otherwise produce a duplicate raw error. Each call to `prompt`
 issues one `session/prompt` request. A later response is never swallowed to
 justify resending the prompt after cancellation; a successful empty `EndTurn`
 is returned as that prompt's terminal result.
@@ -45,7 +48,11 @@ method requires the SDK `unstable` feature, enabled in `acp-host/Cargo.toml`.
 The default spawn path publishes initialize on the ordered connection inbox.
 The harness uses the opt-in initialize sink so the same raw response survives a
 failed constructor; the two paths are exclusive, so successful initialization
-is never duplicated.
+is never duplicated. As soon as the direct child moves into the exit watcher,
+spawn installs a `ChildHandle` that owns its kill notification and exit state.
+That handle exists before the initialization await, so aborting a preparation
+drops the handle, signals teardown, and leaves the watcher responsible for
+process-group cleanup and reaping.
 
 The SDK handlers delegate permission requests but handle filesystem read/write
 inside the host. File writes are restricted to the workspace or `/tmp`; reads
@@ -63,6 +70,9 @@ remain unrestricted. Host-handled requests do not leak duplicate public
   it must not try to rediscover the group through an exited leader.
 - Startup races initialization against early child exit so authentication and
   spawn failures retain the child's stderr explanation.
+- Startup cancellation is also an owned teardown path: once the child has
+  spawned, no await point in initialization exists without a child-lifecycle
+  guard.
 - Orderly `session/close` is distinct from connection loss. The harness maps
   them to `SessionEnded(Closed)` and `SessionEnded(ConnectionLost)`
   respectively.
