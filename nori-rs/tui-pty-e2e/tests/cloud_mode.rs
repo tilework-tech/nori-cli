@@ -349,15 +349,19 @@ fn test_cloud_start_new_preserves_the_deferred_positional_prompt() {
         .expect("starting new should submit the deferred positional prompt");
 }
 
-/// An explicit `/new` supersedes picker-first preparation. A late result from
-/// the cancelled preparation must not reopen the picker over the new session.
+/// An explicit `/new` supersedes picker-first preparation without losing the
+/// deferred prompt. A late result must not reopen the picker over the new
+/// session.
 #[test]
 #[cfg(target_os = "linux")]
-fn test_cloud_new_invalidates_in_flight_entry_preparation() {
+fn test_cloud_new_cancels_in_flight_preparation_and_preserves_deferred_prompt() {
     let fake = FakeHandroll::new();
+    let deferred_prompt = "preserve this prompt while preparation is cancelled";
     let config = cloud_lifecycle_config(&fake)
         .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1200")
-        .with_mock_response("new session remains active");
+        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        .with_mock_response("deferred prompt reached the replacement session")
+        .with_arg(deferred_prompt);
 
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
@@ -390,12 +394,14 @@ fn test_cloud_new_invalidates_in_flight_entry_preparation() {
         "a superseded preparation must not install a late picker, got:\n{contents}"
     );
 
-    session.send_str("prove the explicit session won").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("new session remains active", TIMEOUT)
-        .expect("the explicit new session should remain usable");
+        .wait_for_text("deferred prompt reached the replacement session", TIMEOUT)
+        .expect("the explicit new session should receive the deferred positional prompt");
+    let contents = session.screen_contents();
+    assert!(
+        !contents.contains("Start a new session"),
+        "a late preparation result must not reclaim the UI, got:\n{contents}"
+    );
 
     let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
     let creates = agent_stderr
@@ -405,6 +411,137 @@ fn test_cloud_new_invalidates_in_flight_entry_preparation() {
     assert_eq!(
         creates, 1,
         "only the explicit /new may claim a session, agent stderr:\n{agent_stderr}"
+    );
+}
+
+/// Dismissing picker-first entry must not strand the positional prompt when
+/// the user switches agents and starts a fresh session on the candidate.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_candidate_start_new_preserves_the_deferred_positional_prompt() {
+    let fake = FakeHandroll::new();
+    let deferred_prompt = "preserve this prompt across a candidate switch";
+    let config = cloud_lifecycle_config(&fake)
+        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        .with_agent_env(
+            "MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT",
+            "deferred prompt reached the switched fresh session",
+        )
+        .with_arg(deferred_prompt);
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    session.send_key(Key::Escape).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Select Agent", TIMEOUT)
+        .expect("agent picker should open after dismissing cloud entry");
+
+    // Cloud's synthetic agent is not a picker row. Row 0 is mock-model and
+    // row 1 is mock-model-alt.
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("the prepared alternate candidate should open its session picker");
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text(
+            "deferred prompt reached the switched fresh session",
+            TIMEOUT,
+        )
+        .expect("the switched fresh session should receive the deferred positional prompt");
+
+    let log_path = session.acp_log_path().expect("ACP log path");
+    session
+        .wait_for(
+            |_| {
+                std::fs::read_to_string(&log_path)
+                    .is_ok_and(|log| log.contains("Mock agent: new_session id="))
+            },
+            TIMEOUT,
+        )
+        .expect("the prepared candidate should activate with session/new");
+    let log = std::fs::read_to_string(log_path).expect("read ACP log");
+    assert!(
+        !log.contains("Mock agent: resume_session id="),
+        "fresh candidate activation must not resume a session, log:\n{log}"
+    );
+}
+
+/// Candidate reattachment must carry the deferred positional prompt just like
+/// candidate creation does.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_candidate_resume_preserves_the_deferred_positional_prompt() {
+    let fake = FakeHandroll::new();
+    let deferred_prompt = "preserve this prompt across candidate reattachment";
+    let config = cloud_lifecycle_config(&fake)
+        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        .with_agent_env(
+            "MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT",
+            "deferred prompt reached the switched resumed session",
+        )
+        .with_arg(deferred_prompt);
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    session.send_key(Key::Escape).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Select Agent", TIMEOUT)
+        .expect("agent picker should open after dismissing cloud entry");
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("First mock session", TIMEOUT)
+        .expect("the prepared alternate candidate should list resumable sessions");
+
+    // Row 0 starts fresh; row 1 resumes the first listed ACP session.
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text(
+            "deferred prompt reached the switched resumed session",
+            TIMEOUT,
+        )
+        .expect("the switched resumed session should receive the deferred positional prompt");
+
+    let log_path = session.acp_log_path().expect("ACP log path");
+    session
+        .wait_for(
+            |_| {
+                std::fs::read_to_string(&log_path)
+                    .is_ok_and(|log| log.contains("Mock agent: resume_session id=mock-session-1"))
+            },
+            TIMEOUT,
+        )
+        .expect("the prepared candidate should reattach with session/resume");
+    let log = std::fs::read_to_string(log_path).expect("read ACP log");
+    assert!(
+        !log.contains("Mock agent: new_session id="),
+        "resumed candidate activation must not create a session, log:\n{log}"
     );
 }
 

@@ -275,6 +275,23 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_PROMPT_TEXT") {
+            let actual = arguments
+                .prompt
+                .iter()
+                .filter_map(|block| match block {
+                    acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            if actual != expected {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!("expected prompt {expected:?}, received {actual:?}"),
+                ));
+            }
+        }
         if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
             eprintln!("Mock agent: exiting during prompt");
             std::process::exit(17);

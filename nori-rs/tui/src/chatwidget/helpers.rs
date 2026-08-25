@@ -273,6 +273,15 @@ impl ChatWidget {
         (self.first_prompt_text.take(), message.image_paths)
     }
 
+    /// Copy deferred launch input into a switch candidate while the current
+    /// widget remains available as the rollback target.
+    pub(crate) fn clone_initial_input(&self) -> (Option<String>, Vec<PathBuf>) {
+        let Some(message) = self.initial_user_message.as_ref() else {
+            return (None, Vec::new());
+        };
+        (self.first_prompt_text.clone(), message.image_paths.clone())
+    }
+
     /// Returns true if a popup or custom view is currently active in the bottom pane.
     pub(crate) fn has_active_popup(&self) -> bool {
         self.bottom_pane.has_active_view()
