@@ -213,6 +213,40 @@ fn transcripts_exist(nori_home: &Path) -> bool {
         .any(|f| f.path().extension().is_some_and(|e| e == "jsonl"))
 }
 
+#[cfg(target_os = "linux")]
+fn write_local_cloud_transcript(nori_home: &Path, cwd: &Path) {
+    use std::hash::Hash;
+    use std::hash::Hasher;
+
+    let canonical_cwd = cwd.canonicalize().expect("canonical test cwd");
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    canonical_cwd.to_string_lossy().as_ref().hash(&mut hasher);
+    let project_id = format!("{:016x}", hasher.finish());
+    let session_id = "local-cloud-session";
+    let sessions_dir = nori_home
+        .join("transcripts")
+        .join("by-project")
+        .join(&project_id)
+        .join("sessions");
+    std::fs::create_dir_all(&sessions_dir).expect("create local transcript fixture directory");
+    let meta = serde_json::json!({
+        "ts": "2026-08-25T12:00:00Z",
+        "v": 2,
+        "type": "session_meta",
+        "session_id": session_id,
+        "project_id": project_id,
+        "started_at": "2026-08-25T12:00:00Z",
+        "cwd": canonical_cwd,
+        "agent": "nori-cloud",
+        "cli_version": "0.1.0"
+    });
+    std::fs::write(
+        sessions_dir.join(format!("{session_id}.jsonl")),
+        format!("{meta}\n"),
+    )
+    .expect("write local transcript fixture");
+}
+
 /// `nori cloud` spawns the handroll binary with the `cloud-acp` argument and
 /// round-trips a prompt through it like any local ACP agent.
 #[test]
@@ -411,6 +445,56 @@ fn test_cloud_new_cancels_in_flight_preparation_and_preserves_deferred_prompt() 
     assert_eq!(
         creates, 1,
         "only the explicit /new may claim a session, agent stderr:\n{agent_stderr}"
+    );
+}
+
+/// Selecting a local transcript while cloud preparation is still in flight
+/// must transfer deferred input and prevent the stale preparation from
+/// reopening the ACP picker over the resumed session.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
+    let fake = FakeHandroll::new();
+    let deferred_prompt = "preserve this prompt across local resume";
+    let config = cloud_lifecycle_config(&fake)
+        .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1200")
+        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        .with_mock_response("deferred prompt reached the locally resumed session")
+        .with_arg(deferred_prompt);
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+    let nori_home = session.nori_home_path().expect("NORI_HOME");
+    write_local_cloud_transcript(&nori_home, &nori_home);
+
+    session
+        .wait_for_text("Listing", TIMEOUT)
+        .expect("cloud entry should begin preparing the ACP session picker");
+    let initial_pids = fake.wait_for_child_pid_count(1, TIMEOUT);
+    let stale_pid = *initial_pids.first().expect("entry-preparation child pid");
+
+    session.send_str("/resume").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Resume previous session", TIMEOUT)
+        .expect("local transcript fallback should open while capabilities are unknown");
+    session.send_key(Key::Enter).unwrap();
+
+    session
+        .wait_for_text(
+            "deferred prompt reached the locally resumed session",
+            TIMEOUT,
+        )
+        .expect("local resume should receive the exact deferred positional prompt");
+    assert!(
+        fake.wait_for_child_exit(stale_pid, TIMEOUT),
+        "local resume should reap the superseded preparation child"
+    );
+    let contents = session.screen_contents();
+    assert!(
+        !contents.contains("Start a new session"),
+        "the stale preparation must not reopen its picker, got:\n{contents}"
     );
 }
 

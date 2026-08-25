@@ -1290,16 +1290,22 @@ impl App {
                                 .map(|info| info.display_name)
                                 .unwrap_or_else(|| self.config.active_agent.clone());
 
+                        self.discard_candidate();
+                        self.cancel_primary_agent_preparation();
+                        let (initial_prompt, initial_images) =
+                            self.chat_widget.take_initial_input();
+                        self.deferred_spawn_pending = false;
                         self.shutdown_current_conversation();
 
-                        let init = self.chat_widget_init(
+                        let mut init = self.chat_widget_init(
                             tui.frame_requester(),
-                            None,
-                            Vec::new(),
+                            initial_prompt,
+                            initial_images,
                             None,
                             false,
                             None,
                         );
+                        init.prepared_agent = self.prepared_agent.take();
                         self.chat_widget = ChatWidget::new_resumed_acp(
                             init,
                             acp_session_id,
