@@ -52,6 +52,7 @@ impl FakeHandroll {
             "#!/bin/sh\n\
              printf '%s\\n' \"$@\" > '{dir}/argv'\n\
              printenv NORI_BROKER_URL > '{dir}/broker_url' 2>/dev/null\n\
+             echo $$ >> '{dir}/pids'\n\
              '{mock}' 2>>'{dir}/agent_stderr'\n\
              status=$?\n\
              echo eof >> '{dir}/released'\n\
@@ -125,6 +126,42 @@ impl FakeHandroll {
             std::thread::sleep(Duration::from_millis(100));
         }
         false
+    }
+
+    fn wait_for_child_pid_count(&self, count: usize, timeout: Duration) -> Vec<u32> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let pids = std::fs::read_to_string(self.marker("pids"))
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|pid| pid.parse().ok())
+                .collect::<Vec<_>>();
+            if pids.len() >= count || Instant::now() >= deadline {
+                return pids;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn wait_for_child_exit(&self, pid: u32, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if !Path::new(&format!("/proc/{pid}")).exists() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
+
+    fn child_is_alive(pid: u32) -> bool {
+        let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status")) else {
+            return false;
+        };
+        status
+            .lines()
+            .find(|line| line.starts_with("State:"))
+            .is_some_and(|state| !state.contains("Z (zombie)") && !state.contains("Z ("))
     }
 
     /// Number of children that have completed their stdin-EOF path so far.
@@ -275,10 +312,10 @@ fn test_cloud_mode_boots_into_session_picker_without_claiming() {
 
     // The initialized child must remain alive so the selected session can be
     // activated on this exact connection rather than a respawned one.
-    std::thread::sleep(Duration::from_millis(500));
-    assert_eq!(
-        fake.released_count(),
-        0,
+    let pids = fake.wait_for_child_pid_count(1, TIMEOUT);
+    let prepared_pid = *pids.first().expect("prepared handroll child pid");
+    assert!(
+        FakeHandroll::child_is_alive(prepared_pid),
         "the prepared child must remain alive while the picker is open"
     );
     // Belt and braces on "nothing claimed": the mock logs every session/new
@@ -306,14 +343,25 @@ fn test_cloud_new_invalidates_in_flight_entry_preparation() {
     session
         .wait_for_text("Listing", TIMEOUT)
         .expect("cloud entry should begin preparing the session picker");
+    let initial_pids = fake.wait_for_child_pid_count(1, TIMEOUT);
+    let stale_pid = *initial_pids.first().expect("entry-preparation child pid");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_str("/new").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
-    // Wait beyond both delayed initialization attempts. With the stale-result
-    // bug, the first attempt reopens this picker while the second starts.
-    std::thread::sleep(Duration::from_secs(3));
+    let replacement_pids = fake.wait_for_child_pid_count(2, TIMEOUT);
+    assert_eq!(
+        replacement_pids.len(),
+        2,
+        "explicit /new should replace the entry-preparation child"
+    );
+    assert!(
+        fake.wait_for_child_exit(stale_pid, TIMEOUT),
+        "the superseded entry-preparation child should be reaped"
+    );
+    // Once the stale child is gone, its delayed result can no longer reopen
+    // the picker over the explicit session.
     let contents = session.screen_contents();
     assert!(
         !contents.contains("Start a new session"),

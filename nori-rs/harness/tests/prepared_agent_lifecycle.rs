@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(unix)]
 use nori_config::AskForApproval;
 use nori_config::NoriConfig;
 use nori_harness::runtime::AgentPrepareSpec;
@@ -80,6 +81,7 @@ fn recorded_client_methods(wire_log_dir: &Path) -> Vec<String> {
     clippy::expect_used,
     reason = "wire-log filenames are the process-boundary test fixture"
 )]
+#[cfg(unix)]
 fn recorded_agent_pid(wire_log_dir: &Path) -> u32 {
     let wire_log = std::fs::read_dir(wire_log_dir)
         .expect("wire log directory")
@@ -216,6 +218,7 @@ async fn listed_agent_loads_on_the_same_connection() {
 
 #[tokio::test]
 #[serial]
+#[cfg(unix)]
 async fn dropping_prepared_agent_reaps_its_process() {
     // SAFETY: environment-mutating mock-agent tests run serially.
     unsafe { std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1") };
@@ -241,7 +244,8 @@ async fn dropping_prepared_agent_reaps_its_process() {
 
 #[tokio::test]
 #[serial]
-async fn shutting_down_prepared_agent_uses_short_pre_session_grace() {
+#[cfg(unix)]
+async fn shutting_down_prepared_agent_promptly_reaps_an_eof_ignoring_child() {
     // SAFETY: environment-mutating mock-agent tests run serially.
     unsafe {
         std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
@@ -297,6 +301,7 @@ async fn advertised_session_list_failure_is_not_treated_as_unsupported() {
 
 #[tokio::test]
 #[serial]
+#[cfg(unix)]
 async fn activation_refreshes_mutable_policy_without_replacing_the_connection() {
     let temp = tempfile::tempdir().expect("create test directory");
     let wire_log_dir = temp.path().join("wire-logs");
@@ -371,7 +376,7 @@ async fn activation_refreshes_mutable_policy_without_replacing_the_connection() 
 
 #[tokio::test]
 #[serial]
-async fn refresh_rejects_transport_changes_without_destroying_the_prepared_agent() {
+async fn refresh_rejects_spawn_fixed_changes_without_destroying_the_prepared_agent() {
     let temp = tempfile::tempdir().expect("create test directory");
     let wire_log_dir = temp.path().join("wire-logs");
     let mut prepared = prepare_agent(prepare_spec(temp.path(), wire_log_dir.clone()))

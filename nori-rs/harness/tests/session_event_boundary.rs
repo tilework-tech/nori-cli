@@ -199,6 +199,16 @@ async fn list_sessions_error_remains_raw_without_a_nori_failure_mirror() {
     });
 
     let events = collect_until_session_ended(&mut session).await;
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Err(error),
+                ..
+            }) if error.message == "broker unreachable"
+        )),
+        "the observed ACP bootstrap error must be the forced session/list failure: {events:?}"
+    );
     assert_acp_bootstrap_error_is_not_mirrored(&events);
 }
 
