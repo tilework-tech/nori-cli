@@ -171,6 +171,31 @@ The `--remote` flag lives on the interactive CLI surface (`nori --remote
 own text is not yet rendered by the observing TUI (its updates, tool calls,
 and results are); surfacing the initiating message locally is follow-up work.
 
+## 8. Planned compatibility and lifecycle follow-up
+
+The following items are planned follow-up work rather than guarantees of the
+v1 transport:
+
+- Production attachment can miss `SessionStarted`, or an older detached
+  attachment can finish last, leaving the remote host empty or attached to a
+  stale session.
+- A remote prompt can emit an immediate permission request before remote turn
+  ownership is registered, silently dropping the request and wedging the turn.
+- The TUI and remote controller can both answer the same delegated permission
+  request and race contradictory decisions.
+- `session/close` can cancel the WebSocket after `SessionEnded` but before its
+  JSON-RPC success response is delivered.
+- The remote surface rejects mandatory ACP `session/new` requests and instead
+  requires clients to discover and attach to the running session through
+  `session/list` and `session/load`.
+- Initialization echoes unsupported requested protocol versions instead of
+  negotiating the latest protocol version the server supports.
+- `session/list`, `session/load`, and `session/resume` return success without
+  applying required request context such as `cwd`, pagination cursors, and MCP
+  server setup.
+- An initialized socket receives live session updates before it explicitly
+  attaches to the session through `session/load` or `session/resume`.
+
 Authentication, TLS, endpoint discovery, broker routing, Handroll federation,
 capability aggregation across hosts, Streamable HTTP/SSE, and reliable replay
 after disconnect are outside this spec.
