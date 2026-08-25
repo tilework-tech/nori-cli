@@ -102,6 +102,25 @@ pub struct AgentConfigToml {
     pub auth_hint: Option<String>,
     /// Optional transcript base directory (relative to home)
     pub transcript_base_dir: Option<String>,
+    /// Optional declaration of how to force a specific model on this agent at
+    /// spawn time. Custom ACP clients advertise only a subset of the models
+    /// they can actually run; this tells nori which out-of-band channel carries
+    /// the model id so a user-chosen model that the picker rejects can still be
+    /// applied by restarting the session. Built-in agents (Claude, Codex,
+    /// Gemini) know their own channel and ignore this field.
+    #[serde(default)]
+    pub model_override: Option<ModelOverrideToml>,
+}
+
+/// How a custom agent accepts a model id at spawn time. Set exactly one of
+/// `env` or `arg`; `env` wins if both are set.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ModelOverrideToml {
+    /// Environment variable name to set to the model id (e.g. "ANTHROPIC_MODEL").
+    pub env: Option<String>,
+    /// CLI flag to append followed by the model id (e.g. "--model").
+    pub arg: Option<String>,
 }
 
 /// Distribution configuration for an agent.

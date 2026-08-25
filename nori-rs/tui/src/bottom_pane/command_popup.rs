@@ -296,6 +296,7 @@ impl CommandPopup {
                         item,
                         CommandItem::Builtin(cmd) if self.disabled_builtins.contains_key(&cmd)
                     ),
+                    is_header: false,
                 }
             })
             .collect()

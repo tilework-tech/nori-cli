@@ -1,5 +1,6 @@
 //! Generic picker helpers for ACP session config options.
 
+use nori_harness::OtherModel;
 use nori_protocol::acp::v1 as acp;
 use ratatui::text::Line;
 
@@ -78,6 +79,7 @@ pub(crate) fn acp_session_config_picker_params(
 
 pub(crate) fn acp_session_config_value_picker_params(
     option: &acp::SessionConfigOption,
+    other_models: &[OtherModel],
 ) -> SelectionViewParams {
     let acp::SessionConfigKind::Select(select) = &option.kind else {
         return SelectionViewParams {
@@ -94,17 +96,14 @@ pub(crate) fn acp_session_config_value_picker_params(
         };
     };
 
-    let mut items = Vec::new();
-    let mut initial_selected_idx = None;
+    let is_model = option.category == Some(acp::SessionConfigOptionCategory::Model);
 
+    // "Recommended": the values the agent advertises, exactly as reported.
+    let mut recommended: Vec<SelectionItem> = Vec::new();
     match &select.options {
         acp::SessionConfigSelectOptions::Ungrouped(options) => {
             for option_value in options {
-                let idx = items.len();
-                if option_value.value == select.current_value && initial_selected_idx.is_none() {
-                    initial_selected_idx = Some(idx);
-                }
-                items.push(value_item(
+                recommended.push(value_item(
                     option,
                     option_value,
                     None,
@@ -114,14 +113,9 @@ pub(crate) fn acp_session_config_value_picker_params(
         }
         acp::SessionConfigSelectOptions::Grouped(groups) => {
             for group in groups {
-                items.push(group_header_item(group));
+                recommended.push(group_header_item(group));
                 for option_value in &group.options {
-                    let idx = items.len();
-                    if option_value.value == select.current_value && initial_selected_idx.is_none()
-                    {
-                        initial_selected_idx = Some(idx);
-                    }
-                    items.push(value_item(
+                    recommended.push(value_item(
                         option,
                         option_value,
                         Some(&group.name),
@@ -133,7 +127,34 @@ pub(crate) fn acp_session_config_value_picker_params(
         _ => {}
     }
 
-    if option.category == Some(acp::SessionConfigOptionCategory::Model) {
+    // "Other": curated models the agent does not advertise, forced via spawn-time
+    // injection. Deduplicated against advertised values so nothing appears twice.
+    let mut other: Vec<SelectionItem> = Vec::new();
+    if is_model {
+        let advertised = advertised_value_strings(&select.options);
+        let current_value = select.current_value.to_string();
+        for model in other_models {
+            if advertised.contains(model.id) {
+                continue;
+            }
+            other.push(other_model_item(option, model, current_value == model.id));
+        }
+    }
+
+    // Only show labeled sections when both sides have content; otherwise render a
+    // flat list exactly as before.
+    let mut items = Vec::new();
+    if !recommended.is_empty() && !other.is_empty() {
+        items.push(section_header_item("Recommended"));
+        items.append(&mut recommended);
+        items.push(section_header_item("Other"));
+        items.append(&mut other);
+    } else {
+        items.append(&mut recommended);
+        items.append(&mut other);
+    }
+
+    if is_model {
         let config_id = option.id.to_string();
         let option_name = option.name.clone();
         items.push(SelectionItem {
@@ -151,9 +172,11 @@ pub(crate) fn acp_session_config_value_picker_params(
         });
     }
 
-    if initial_selected_idx.is_none() {
-        initial_selected_idx = items.iter().position(|item| !item.actions.is_empty());
-    }
+    let initial_selected_idx = items.iter().position(|item| item.is_current).or_else(|| {
+        items
+            .iter()
+            .position(|item| !item.is_header && !item.actions.is_empty())
+    });
 
     SelectionViewParams {
         title: Some(option.name.clone()),
@@ -191,11 +214,70 @@ fn current_value_label(option: &acp::SessionConfigOption) -> Option<String> {
     }
 }
 
+fn section_header_item(label: &str) -> SelectionItem {
+    SelectionItem {
+        name: label.to_string(),
+        is_header: true,
+        dismiss_on_select: false,
+        ..Default::default()
+    }
+}
+
+fn advertised_value_strings(
+    options: &acp::SessionConfigSelectOptions,
+) -> std::collections::HashSet<String> {
+    match options {
+        acp::SessionConfigSelectOptions::Ungrouped(values) => {
+            values.iter().map(|value| value.value.to_string()).collect()
+        }
+        acp::SessionConfigSelectOptions::Grouped(groups) => groups
+            .iter()
+            .flat_map(|group| group.options.iter())
+            .map(|value| value.value.to_string())
+            .collect(),
+        _ => std::collections::HashSet::new(),
+    }
+}
+
+fn other_model_item(
+    option: &acp::SessionConfigOption,
+    model: &OtherModel,
+    is_current: bool,
+) -> SelectionItem {
+    let actions: Vec<SelectionAction> = if is_current {
+        Vec::new()
+    } else {
+        let config_id = option.id.to_string();
+        let option_name = option.name.clone();
+        let value = model.id.to_string();
+        let value_name = model.label.to_string();
+        vec![Box::new(move |tx| {
+            tx.send(AppEvent::SetAcpSessionConfigOption {
+                config_id: config_id.clone(),
+                value: value.clone(),
+                option_name: option_name.clone(),
+                value_name: value_name.clone(),
+                is_custom_model: true,
+            });
+        })]
+    };
+
+    SelectionItem {
+        name: model.label.to_string(),
+        description: Some(model.id.to_string()),
+        is_current,
+        actions,
+        dismiss_on_select: true,
+        search_value: Some(format!("{} {}", model.label, model.id)),
+        ..Default::default()
+    }
+}
+
 fn group_header_item(group: &acp::SessionConfigSelectGroup) -> SelectionItem {
     SelectionItem {
-        name: format!("[{}]", group.name),
+        name: group.name.clone(),
+        is_header: true,
         dismiss_on_select: false,
-        search_value: Some(group.name.clone()),
         ..Default::default()
     }
 }
@@ -221,6 +303,7 @@ fn value_item(
                 value: value.clone(),
                 option_name: option_name.clone(),
                 value_name: value_name.clone(),
+                is_custom_model: false,
             });
         })]
     };
@@ -336,14 +419,15 @@ mod tests {
 
     #[test]
     fn value_picker_preserves_group_order_and_current_selection() {
-        let params = super::acp_session_config_value_picker_params(&grouped_mode_option());
+        let params = super::acp_session_config_value_picker_params(&grouped_mode_option(), &[]);
         let names = params
             .items
             .iter()
             .map(|item| item.name.as_str())
             .collect::<Vec<_>>();
 
-        assert_eq!(names, vec!["[Safe]", "Ask", "[Active]", "Plan", "Build"]);
+        assert_eq!(names, vec!["Safe", "Ask", "Active", "Plan", "Build"]);
+        assert!(params.items[0].is_header, "group labels render as headers");
         assert!(params.items[3].is_current);
         assert_eq!(params.initial_selected_idx, Some(3));
     }
@@ -353,7 +437,7 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let app_event_tx = crate::app_event_sender::AppEventSender::new(tx);
         let mut current_view = crate::bottom_pane::ListSelectionView::new(
-            super::acp_session_config_value_picker_params(&model_option()),
+            super::acp_session_config_value_picker_params(&model_option(), &[]),
             app_event_tx.clone(),
         );
 
@@ -370,7 +454,7 @@ mod tests {
         );
 
         let mut alternate_view = crate::bottom_pane::ListSelectionView::new(
-            super::acp_session_config_value_picker_params(&model_option()),
+            super::acp_session_config_value_picker_params(&model_option(), &[]),
             app_event_tx,
         );
         crate::bottom_pane::BottomPaneView::handle_key_event(
@@ -396,10 +480,12 @@ mod tests {
                 value,
                 option_name,
                 value_name,
+                is_custom_model,
             } if config_id == "model"
                 && value == "mock-model-fast"
                 && option_name == "Model"
                 && value_name == "Mock Fast Model"
+                && !is_custom_model
         ));
         assert!(rx.try_recv().is_err(), "expected a single config event");
     }
@@ -415,7 +501,7 @@ mod tests {
 
     #[test]
     fn model_picker_includes_custom_model_entry() {
-        let params = super::acp_session_config_value_picker_params(&model_option());
+        let params = super::acp_session_config_value_picker_params(&model_option(), &[]);
         let names: Vec<&str> = params.items.iter().map(|i| i.name.as_str()).collect();
 
         assert_eq!(
@@ -436,8 +522,158 @@ mod tests {
 
     #[test]
     fn non_model_picker_does_not_include_custom_entry() {
-        let params = super::acp_session_config_value_picker_params(&grouped_mode_option());
+        let params = super::acp_session_config_value_picker_params(&grouped_mode_option(), &[]);
 
         assert!(!params.items.iter().any(|i| i.name == "Use custom model..."));
+    }
+
+    fn model_option_with_current(current: &'static str) -> acp::SessionConfigOption {
+        acp::SessionConfigOption::select(
+            "model",
+            "Model",
+            current,
+            vec![
+                acp::SessionConfigSelectOption::new("mock-model-default", "Mock Default Model"),
+                acp::SessionConfigSelectOption::new("mock-model-fast", "Mock Fast Model"),
+            ],
+        )
+        .category(acp::SessionConfigOptionCategory::Model)
+    }
+
+    const OTHER_MODELS: &[OtherModel] = &[
+        OtherModel {
+            id: "legacy-a",
+            label: "Legacy A",
+        },
+        OtherModel {
+            id: "legacy-b",
+            label: "Legacy B",
+        },
+    ];
+
+    fn item_names(params: &SelectionViewParams) -> Vec<&str> {
+        params.items.iter().map(|item| item.name.as_str()).collect()
+    }
+
+    #[test]
+    fn model_picker_splits_recommended_and_other_sections() {
+        let params = super::acp_session_config_value_picker_params(&model_option(), OTHER_MODELS);
+
+        assert_eq!(
+            item_names(&params),
+            vec![
+                "Recommended",
+                "Mock Default Model",
+                "Mock Fast Model",
+                "Other",
+                "Legacy A",
+                "Legacy B",
+                "Use custom model...",
+            ]
+        );
+
+        let row = |name: &str| {
+            params
+                .items
+                .iter()
+                .find(|item| item.name == name)
+                .unwrap_or_else(|| panic!("row {name} present"))
+        };
+        assert!(row("Recommended").is_header, "section labels are headers");
+        assert!(row("Other").is_header, "section labels are headers");
+        assert!(
+            !row("Mock Default Model").is_header,
+            "advertised models are selectable rows"
+        );
+        assert!(
+            !row("Legacy A").is_header,
+            "other models are selectable rows"
+        );
+    }
+
+    #[test]
+    fn model_picker_dedupes_other_against_advertised() {
+        let others: &[OtherModel] = &[
+            OtherModel {
+                id: "mock-model-fast",
+                label: "Should Not Appear",
+            },
+            OtherModel {
+                id: "legacy-b",
+                label: "Legacy B",
+            },
+        ];
+
+        let params = super::acp_session_config_value_picker_params(&model_option(), others);
+
+        assert_eq!(
+            item_names(&params),
+            vec![
+                "Recommended",
+                "Mock Default Model",
+                "Mock Fast Model",
+                "Other",
+                "Legacy B",
+                "Use custom model...",
+            ],
+            "an already-advertised id must not be duplicated in the Other section"
+        );
+    }
+
+    #[test]
+    fn selecting_other_model_requests_injected_config_change() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let app_event_tx = crate::app_event_sender::AppEventSender::new(tx);
+        let params = super::acp_session_config_value_picker_params(&model_option(), OTHER_MODELS);
+
+        let other = params
+            .items
+            .iter()
+            .find(|item| item.name == "Legacy A")
+            .expect("other model row present");
+        for action in &other.actions {
+            action(&app_event_tx);
+        }
+
+        let event = rx
+            .try_recv()
+            .expect("selecting an other model emits a config change");
+        assert!(matches!(
+            event,
+            AppEvent::SetAcpSessionConfigOption {
+                config_id,
+                value,
+                option_name,
+                value_name,
+                is_custom_model,
+            } if config_id == "model"
+                && value == "legacy-a"
+                && option_name == "Model"
+                && value_name == "Legacy A"
+                && is_custom_model
+        ));
+        assert!(rx.try_recv().is_err(), "expected a single config event");
+    }
+
+    #[test]
+    fn current_injected_other_model_is_marked_and_not_resettable() {
+        let params = super::acp_session_config_value_picker_params(
+            &model_option_with_current("legacy-a"),
+            OTHER_MODELS,
+        );
+
+        let other = params
+            .items
+            .iter()
+            .find(|item| item.name == "Legacy A")
+            .expect("other model row present");
+        assert!(
+            other.is_current,
+            "the active injected model should be current"
+        );
+        assert!(
+            other.actions.is_empty(),
+            "the already-current model should not be re-settable"
+        );
     }
 }

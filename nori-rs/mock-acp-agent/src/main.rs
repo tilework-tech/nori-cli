@@ -105,8 +105,14 @@ struct MockSessionConfig {
 }
 
 fn default_session_config() -> MockSessionConfig {
+    // A model forced through the spawn-time injection channel (see
+    // `ModelInjection` in the registry) arrives as this env var. Honoring it
+    // lets integration tests verify that an out-of-catalog model injected at
+    // spawn becomes the session's current model.
+    let model_id = std::env::var("MOCK_AGENT_INJECTED_MODEL")
+        .unwrap_or_else(|_| "mock-model-default".to_string());
     MockSessionConfig {
-        model_id: "mock-model-default".to_string(),
+        model_id,
         thought_level: Some("medium".to_string()),
         speed: None,
     }
@@ -1754,6 +1760,13 @@ async fn main() -> acp::Result<()> {
                             .or_insert_with(default_session_config);
 
                         match arguments.config_id.to_string().as_str() {
+                            // Simulate a real adapter rejecting a model outside
+                            // its advertised catalog, so tests can exercise the
+                            // rejection path.
+                            "model" if value == "mock-model-rejected" => Err(acp::Error::new(
+                                -32603,
+                                "Invalid value for config option model: mock-model-rejected",
+                            )),
                             "model" => {
                                 cfg.model_id = value;
                                 if cfg.model_id == "mock-model-fast" {

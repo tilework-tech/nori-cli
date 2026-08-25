@@ -169,13 +169,57 @@ identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
   `/config` open), the multi-toggle Footer Segments sub-picker (which already
   stays open by replacing itself), and the bespoke Hotkeys view. Failed persists
   never reopen.
-- For Model-category config options, `acp_session_config_value_picker_params()`
-  appends a "Use custom model..." entry. Selecting it emits
+- Model-category value pickers (`acp_session_config_value_picker_params()`)
+  split into two labeled sections when both have content. **Recommended** lists
+  the values the agent advertises over ACP, exactly as reported. **Other** lists
+  a curated, per-agent set of real models the adapter does *not* advertise but
+  that generally run when forced via spawn-time injection; it comes from
+  `nori_harness::AgentKind::other_models()`, resolved in
+  `@/nori-rs/tui/src/chatwidget/pickers.rs` via `AgentKind::from_slug` on the
+  active agent (custom/unknown agents resolve to an empty list → no Other
+  section). The Other list is deduplicated at render time against the advertised
+  values so a model an account already sees under Recommended never appears
+  twice. When either side is empty — no advertised catalog, no curated
+  complement, or a non-model option — the picker renders one flat list exactly as
+  before and the labeled headers do not appear. The durable-complement design is
+  intentional: the advertised set is agent/version/account-dependent, so the
+  curated list plus runtime dedup avoids a second, drift-prone source of truth.
+- An Other row whose id already equals the session's injected `currentValue` is
+  marked `(current)` and carries no action; every other Other row emits
+  `AppEvent::SetAcpSessionConfigOption { is_custom_model: true }` — the same event
+  a free-text custom entry emits — so it follows the identical
+  reject → persist-to-`[default_models]` → restart-with-injection recovery path
+  (below). `initial_selected_idx` prefers the current row.
+- Section labels are a non-selectable header primitive shared by every
+  `ListSelectionView` (`is_header` on `SelectionItem` and `GenericDisplayRow`, in
+  `@/nori-rs/tui/src/bottom_pane/list_selection_view.rs` and
+  `@/nori-rs/tui/src/bottom_pane/selection_popup_common.rs`): headers render bold
+  with no number or `›` cursor, keyboard navigation and default selection skip
+  them, and the `1..N` numbering counts only selectable rows. Grouped non-model
+  config options reuse the same primitive for their group labels (previously
+  drawn as bracketed `[Group]` text).
+- `acp_session_config_value_picker_params()` also pins a "Use custom model..."
+  entry at the bottom of every Model-category picker. Selecting it emits
   `AppEvent::OpenCustomModelInput`, which opens a `CustomModelInputView`
   (`@/nori-rs/tui/src/nori/custom_model_input.rs`) — a `BottomPaneView` text
   input for free-form model IDs. On submit it emits
   `AppEvent::SetAcpSessionConfigOption` and follows the same
   `session/set_config_option` path as selecting from the advertised list.
+- The config-set events (`SetAcpSessionConfigOption` and
+  `AcpSessionConfigSetResult` in `@/nori-rs/tui/src/app_event.rs`) carry an
+  `is_custom_model` flag that distinguishes injectable Other or free-text model
+  choices from an advertised picker choice. When the live RPC rejects one of
+  these model choices and the active agent `supports_model_injection()`, the
+  handler in `@/nori-rs/tui/src/app/event_handling.rs` treats the rejection as
+  recoverable:
+  `persist_custom_default_model` (in
+  `@/nori-rs/tui/src/app/config_persistence.rs`) writes the value to
+  `[default_models]` unconditionally (no config-options snapshot to categorize —
+  it is a model by construction), an info message
+  ("Saved '<model>' as the default model for <agent> — restarting the session to
+  apply it.") is shown, and `AppEvent::NewSession` restarts the session so the
+  model is injected at spawn. If the agent has no injection channel, the original
+  error is surfaced instead.
 
 #### The `/browser` profile picker
 
@@ -310,9 +354,11 @@ the session launches. The server value is held for the whole app run.
 Every harness launch in [`chatwidget/agent.rs`](src/chatwidget/agent.rs)
 attaches its new `HarnessHandle` to the active remote host when one is
 installed, so the remote surface follows session respawns — new session, agent
-switch, and resume — without reconnecting logic in the transport. All remote
-types reach the TUI through `nori_harness::remote_agent` re-exports, preserving
-the rule that the TUI never imports the ACP host crate directly.
+switch, and resume. Attaching the replacement session closes any current remote
+controller; after reconnecting, the controller discovers the replacement
+through `session/list`. All remote types reach the TUI through
+`nori_harness::remote_agent` re-exports, preserving the rule that the TUI never
+imports the ACP host crate directly.
 
 While a remote controller drives the session, the TUI stays attached to the
 same handle and ordered event stream and renders remote-driven activity as an

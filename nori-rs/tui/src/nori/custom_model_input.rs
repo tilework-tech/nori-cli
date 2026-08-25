@@ -51,6 +51,7 @@ impl CustomModelInputView {
             value: value.clone(),
             option_name: self.option_name.clone(),
             value_name: value,
+            is_custom_model: true,
         });
         self.complete = true;
     }
@@ -175,10 +176,12 @@ mod tests {
                 value,
                 option_name,
                 value_name,
+                is_custom_model,
             } if config_id == "model"
                 && value == "claude-opus-4-8"
                 && option_name == "Model"
                 && value_name == "claude-opus-4-8"
+                && is_custom_model
         ));
     }
 

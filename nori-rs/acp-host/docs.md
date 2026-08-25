@@ -88,6 +88,29 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   (queue overflow or replacement) tears the connection down. Wire behavior is
   exercised in `@/nori-rs/acp-host/tests/remote_ws.rs` against a fake
   `HostedAgent`.
+- `registry.rs` also owns spawn-time **model injection**. Runtime model changes
+  normally go over the live ACP `session/set_config_option` RPC, but adapters
+  advertise only a subset of the models they can run and reject anything outside
+  that catalog. `ModelInjection` ({ `Env { var }`, `Arg { flag }`, `CodexConfig`,
+  `None` }) forces a chosen model through the agent's own out-of-band channel at
+  spawn, so the model becomes the adapter's advertised `currentValue` (which ACP
+  always treats as valid), bypassing the catalog. `AgentKind::model_injection()`
+  maps built-in agents to their channel (Claude → `ANTHROPIC_MODEL` env, Gemini
+  → `GEMINI_MODEL` env, Codex → merge `model` into the `CODEX_CONFIG` JSON).
+  Custom/BYO agents resolve their strategy from `[[agents]].model_override` in
+  `nori-config`; the default is `None` (no channel → live RPC only).
+  `AcpAgentConfig::inject_model` applies the resolved strategy to the spawn env
+  or args and is a no-op for `None`, so callers (the harness) may invoke it
+  unconditionally; `supports_model_injection()` reports whether a channel exists.
+- `AgentKind::other_models()` returns a curated, per-agent
+  `&'static [OtherModel]` (`{ id, label }`) of real models the adapter does *not*
+  advertise but that generally run when forced through injection. It is the
+  durable complement to the advertised catalog: the advertised set is
+  agent/version/account-dependent and adapters do not hardcode it, so this static
+  list plus render-time dedup against the live catalog is how the TUI populates
+  the `/model` picker's "Other" section without a second source of truth.
+  Selecting one routes through injection exactly like a `[default_models]` custom
+  id. `OtherModel` is re-exported from `nori-harness` for that picker.
 
 ### Things to Know
 
@@ -102,6 +125,18 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
 - Ambient `CODEX_CONFIG` must be a JSON object whose `features` value, when
   present, is also an object. Invalid JSON or incompatible shapes fail built-in
   Codex configuration explicitly instead of silently discarding user settings.
+  Codex model injection merges only the `model` key into that same object,
+  preserving the goals-disabled flag.
+- Model injection does not validate the model id: an invalid model is accepted at
+  spawn and only fails at the first prompt. For env-based channels, nori's
+  injected value takes precedence over the agent's own configured model (e.g.
+  `~/.claude/settings.json`) for nori-spawned sessions — nori's `[default_models]`
+  is authoritative here by design.
+- `set_config_option` mirrors only a *successful* response onto the public event
+  boundary. Its error is returned to the caller (the `/model` flow renders a
+  friendly message and may persist-and-restart), so mirroring the raw JSON-RPC
+  error too would surface a confusing duplicate "Internal error" cell. Raw wire
+  errors are still captured by ACP wire recording, which taps stdio separately.
 - Terminal and extension request families are not advertised by the current
   host. Adding them requires an explicit host-policy decision, not a generic
   protocol mirror.

@@ -721,8 +721,13 @@ impl ChatWidget {
         &mut self,
         option: nori_protocol::acp::v1::SessionConfigOption,
     ) {
-        let params =
-            crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
+        let other_models = nori_harness::AgentKind::from_slug(&self.config.active_agent)
+            .map(nori_harness::AgentKind::other_models)
+            .unwrap_or(&[]);
+        let params = crate::nori::session_config_picker::acp_session_config_value_picker_params(
+            &option,
+            other_models,
+        );
         self.bottom_pane.show_selection_view(params);
     }
 
@@ -742,6 +747,7 @@ impl ChatWidget {
         value: String,
         option_name: String,
         value_name: String,
+        is_custom_model: bool,
     ) {
         if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
@@ -774,6 +780,7 @@ impl ChatWidget {
                             value: value_for_result,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
+                            is_custom_model,
                             config_options: Some(config_options),
                             error: None,
                         });
@@ -786,6 +793,7 @@ impl ChatWidget {
                             value: value_for_result,
                             option_name: option_name_for_result,
                             value_name: value_name_for_result,
+                            is_custom_model,
                             config_options: None,
                             error: Some(err.to_string()),
                         });

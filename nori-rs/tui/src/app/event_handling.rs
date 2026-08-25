@@ -775,12 +775,14 @@ impl App {
                 value,
                 option_name,
                 value_name,
+                is_custom_model,
             } => {
                 self.chat_widget.set_acp_session_config_option(
                     config_id,
                     value,
                     option_name,
                     value_name,
+                    is_custom_model,
                 );
             }
             AppEvent::AcpSessionConfigSetResult {
@@ -790,6 +792,7 @@ impl App {
                 value,
                 option_name,
                 value_name,
+                is_custom_model,
                 config_options,
                 error,
             } => {
@@ -820,6 +823,23 @@ impl App {
                     if let Some(config_options) = config_options {
                         self.chat_widget
                             .sync_acp_session_config_snapshot(&config_options);
+                    }
+                } else if is_custom_model
+                    && nori_harness::get_agent_config(&agent)
+                        .map(|config| config.supports_model_injection())
+                        .unwrap_or(false)
+                {
+                    // The agent rejected this model from its live picker, but we
+                    // can still run it: persist it as the default and restart so
+                    // it is forced through the agent's spawn-time channel.
+                    if self.persist_custom_default_model(&agent, &value).await {
+                        self.chat_widget.add_info_message(
+                            format!(
+                                "Saved '{value}' as the default model for {agent} — restarting the session to apply it."
+                            ),
+                            None,
+                        );
+                        self.app_event_tx.send(AppEvent::NewSession);
                     }
                 } else {
                     let error_msg = error.unwrap_or_else(|| "Unknown error".to_string());

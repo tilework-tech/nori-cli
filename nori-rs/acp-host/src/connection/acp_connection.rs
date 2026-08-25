@@ -972,15 +972,23 @@ impl AcpConnection {
             ));
         let request_id = schema_request_id(request.id());
         let response = request.block_task().await;
-        let _ = self
-            .event_tx
-            .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
-                request_id,
-                response: response
-                    .clone()
-                    .map(acp::AgentResponse::SetSessionConfigOptionResponse),
-            })))
-            .await;
+        // Only mirror a successful response onto the public boundary. Unlike
+        // prompt/new-session requests (whose raw errors are the user-facing
+        // surface), a config-option request's outcome is returned to the caller
+        // and rendered by the `/model` flow — which shows a friendly message and
+        // may persist-and-restart. Mirroring the raw JSON-RPC error here too
+        // would surface a confusing duplicate "Internal error" cell.
+        if let Ok(ok_response) = &response {
+            let _ = self
+                .event_tx
+                .send(ConnectionEvent::Acp(Box::new(AcpEvent::Response {
+                    request_id,
+                    response: Ok(acp::AgentResponse::SetSessionConfigOptionResponse(
+                        ok_response.clone(),
+                    )),
+                })))
+                .await;
+        }
         let response = response.context("Failed to set ACP session config option")?;
 
         if let Ok(mut state) = self.session_config_state.write() {

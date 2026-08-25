@@ -101,10 +101,25 @@ responses are all observable before the Nori session-start event; none is
 labeled as replay. Without a transcript, a failed `session/load` is surfaced
 and session setup ends without creating an empty replacement session.
 Setup follows the actual method response rather than assuming a fixed event
-count, so interleaved notifications and a configured default-model response
-also retain their transport order before session start. A raw ACP setup error
-precedes `SessionEnded(SpawnFailed)` and is not mirrored as
+count, so interleaved notifications and any post-spawn default-model config
+response also retain their transport order before session start. A raw ACP setup
+error precedes `SessionEnded(SpawnFailed)` and is not mirrored as
 `NoriEvent::RequestFailed`.
+
+The persisted `[default_models]` entry (`AcpBackendConfig.default_model`) is
+applied two ways in `harness/src/backend/spawn_and_relay.rs`. Before the subprocess
+starts, `AcpAgentConfig::inject_model` forces the model through the agent's
+spawn-time channel (see model injection in [`nori-acp-host`](../acp-host/docs.md));
+this is best-effort — a failure is logged and never blocks startup. After spawn,
+`session_defaults::apply_default_model` still issues the live
+`session/set_config_option` RPC for agents whose model differs from the advertised
+`currentValue`; when injection already made the model current, that RPC is skipped
+(no config response is emitted), and for agents with no injection channel the RPC
+remains the only mechanism. Injection is how an out-of-catalog model becomes the
+session's current model, because the post-spawn RPC would reject it. The harness
+re-exports `AgentKind::other_models()` / `OtherModel` so the TUI's `/model`
+picker can offer a curated list of these injectable, unadvertised models (see
+[`nori-acp-host`](../acp-host/docs.md) and [`nori-tui`](../tui/docs.md)).
 
 #### Typed control surface
 
