@@ -51,7 +51,9 @@ Startup and agent switching use the same ordering:
 6. Present the available choice without issuing a session directive.
 7. After an explicit product decision, issue one of `session/new`,
    `session/load`, or `session/resume` on the same connection.
-8. Only after session activation succeeds may that connection replace the
+8. Apply the live `session/set_config_option` default-model fallback when the
+   activated session still requires it.
+9. Only after session activation succeeds may that connection replace the
    current active agent.
 
 The implementation must not use a disposable probe process followed by a
@@ -138,8 +140,9 @@ TUI candidate orchestration must not retain a separate full `NoriConfig`
 snapshot. Before activation, it refreshes session-time configuration from
 current `App` state. The agent identity, cwd, ACP proxy settings, and default
 model are fixed by preparation because they determine the already-running
-process or transport; changing one invalidates that candidate and requires a
-new preparation. A successful `SessionStarted` commits only the new active-agent
+process or transport. Refresh rejects drift without consuming or changing the
+prepared connection; the TUI shuts down that stale candidate and requires a new
+preparation. A successful `SessionStarted` commits only the new active-agent
 identity, preserving all other current application settings.
 
 Authentication targeting is independent of candidate ownership. Bare `/login`
@@ -165,11 +168,13 @@ results. If listing is unsupported, the product may retain its existing
 compatibility policy, but any `session/new` remains a separate, explicit
 harness transition rather than part of initialization.
 
-An initial positional prompt and image attachments remain with the deferred
-frontend state while that picker is open. Choosing a new session transfers the
-input to the replacement widget before retiring the deferred widget, and
-automatic submission waits for `SessionConfigured` from the prepared
-connection.
+An initial positional prompt and image attachments survive every deferred
+replacement path. Ordinary new/resume replacement takes the input before
+retiring the old widget, including when it first cancels an in-flight primary
+preparation. Candidate new/resume activation instead copies the input because
+the active widget remains the rollback target until candidate `SessionStarted`;
+candidate failure therefore leaves the original input intact. Automatic
+submission from the committed widget waits for `SessionConfigured`.
 
 Onboarding may automatically choose a broker-tagged onboarding session or the
 documented compatibility fallback. That product decision happens after
@@ -208,6 +213,9 @@ process.
 - Cancelling or superseding a prepared candidate reaps only that candidate.
 - Cancelling or superseding an in-flight primary preparation rejects any stale
   result and reaps a child that has already spawned.
+- Deferred prompt text and image attachments survive ordinary replacement,
+  including cancelled primary preparation, and candidate new/resume failure
+  leaves the rollback widget's copy intact.
 - Agents without `session/list` remain usable without conflating unsupported
   listing with an empty catalog.
 - An advertised `session/list` failure is a preparation failure and never

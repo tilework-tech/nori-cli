@@ -89,9 +89,10 @@ replaces session-time policy and context from the latest resolved config while
 preserving the initialized transport. The prepared agent identity, working
 directory, ACP proxy/wire-recording configuration, and default model are
 preparation-fixed inputs; if any changed, refresh fails and the caller must
-discard the connection and prepare again. This lets mutable settings change
-during a picker without silently applying them to the wrong process or
-transport.
+choose whether to retain the unchanged prepared connection or shut it down and
+prepare again. The rejection does not consume the connection or replace its
+stored configuration. This lets mutable settings change during a picker
+without silently applying them to the wrong process or transport.
 
 Product context has HTTP-MCP and non-HTTP-MCP variants. After initialization
 reveals the connected agent's capabilities, the harness selects the matching
@@ -493,7 +494,8 @@ temp dir is removed.
   catalog, and inspection failure are separate outcomes.
 - Refreshing a prepared agent may replace session-time configuration only;
   agent identity, cwd, ACP proxy settings, and default model remain fixed to
-  the prepared process and transport.
+  the prepared process and transport. A rejected refresh leaves the prepared
+  owner usable with its original configuration.
 - Approval, sandbox, MCP, trust, and shell policy belong to `nori-config`.
 - Nori thread-goal completion is proven only by the Nori-owned status returned
   by `update_goal` from the `nori-client` MCP server; similarly named native

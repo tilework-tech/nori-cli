@@ -31,6 +31,11 @@ and browser workflows; and ordering races between streaming text and tool
 updates. Agent-switch coverage observes real child PIDs to prove that the
 current and prepared candidate coexist, activation reuses the prepared child,
 and cancellation or activation failure leaves the current session usable.
+Picker-first cloud scenarios also verify that deferred positional input reaches
+ordinary replacements and candidate new/resume activations without a stale
+preparation reclaiming the UI. The mock validates the exact prompt text before
+emitting the visible response marker, so those assertions cover delivery to the
+selected session rather than marker visibility alone.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
