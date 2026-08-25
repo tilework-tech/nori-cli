@@ -3,11 +3,19 @@ use pretty_assertions::assert_eq;
 use ratatui::style::Color;
 
 #[test]
-fn default_theme_falls_back_to_unshaded_semantic_surfaces() {
+fn default_theme_separates_pointer_information_and_text_hierarchy() {
     let theme = Theme::default();
 
     assert_eq!(theme.text.fg, None);
-    assert_eq!(theme.accent.fg, Some(Color::Cyan));
+    assert_eq!(theme.pointer.fg, Some(Color::Green));
+    assert_eq!(theme.info.fg, Some(Color::Cyan));
+    assert_eq!(theme.title.fg, None);
+    assert!(
+        theme
+            .title
+            .add_modifier
+            .contains(ratatui::style::Modifier::BOLD)
+    );
     assert_eq!(theme.backdrop.bg, None);
     assert_eq!(theme.menu_surface.bg, None);
     assert_eq!(theme.menu_item_surface.bg, None);
@@ -15,8 +23,14 @@ fn default_theme_falls_back_to_unshaded_semantic_surfaces() {
     assert_eq!(theme.input.bg, None);
     assert_eq!(theme.row.bg, None);
     assert_eq!(theme.row_alt.bg, None);
-    assert_eq!(theme.selected.fg, Some(Color::Cyan));
+    assert_eq!(theme.selected.fg, None);
     assert_eq!(theme.selected.bg, None);
+    assert!(
+        !theme
+            .selected
+            .add_modifier
+            .contains(ratatui::style::Modifier::BOLD)
+    );
     assert_eq!(theme.warning.fg, Some(Color::Yellow));
     assert_eq!(theme.error.fg, Some(Color::Red));
 }

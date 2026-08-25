@@ -4,9 +4,9 @@ expression: "snapshot(&mut unicode, 30, 12, \"続ける action\", Some(\"Unicode
 ---
 "                              "
 "  続ける action               " Hidden by multi-width symbols: [(3, " "), (5, " "), (7, " ")]
-"  ▏ Résumé 日本語 transcr… ▕  " Hidden by multi-width symbols: [(12, " "), (14, " "), (16, " ")]
-"  ▏ Continue after café    ▕  "
-"  ▏ review with wrapped…   ▕  "
+"  › Résumé 日本語 transcr…    " Hidden by multi-width symbols: [(12, " "), (14, " "), (16, " ")]
+"    Continue after café       "
+"    review with wrapped…      "
 "                              "
 "    新しい session            " Hidden by multi-width symbols: [(5, " "), (7, " "), (9, " ")]
 "    Create a clean session    "

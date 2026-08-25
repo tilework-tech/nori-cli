@@ -169,7 +169,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     })
                     .unwrap_or_else(|| {
                         if active {
-                            self.theme.accent
+                            self.theme.text.add_modifier(Modifier::BOLD)
                         } else {
                             self.theme.muted
                         }
@@ -190,7 +190,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
         } else {
             Span::styled(self.state.query.clone(), self.theme.text)
         };
-        buf.set_string(area.x, area.y, "⌕", self.theme.accent);
+        buf.set_string(area.x, area.y, "⌕", self.theme.pointer);
         let input = Rect::new(
             area.x.saturating_add(2),
             area.y,
@@ -297,13 +297,12 @@ impl<K: Clone + Eq> Picker<'_, K> {
                         " "
                     }
                 }
-                PickerMode::Toggle | PickerMode::Multi => {
-                    if checked {
-                        "●"
-                    } else {
-                        "○"
-                    }
-                }
+                PickerMode::Toggle | PickerMode::Multi => match (selected, checked) {
+                    (true, true) => "◉",
+                    (true, false) => "›",
+                    (false, true) => "●",
+                    (false, false) => "○",
+                },
             };
             let surface = match self.density {
                 PickerDensity::Compact if (start + row_offset).is_multiple_of(2) => self.theme.row,
@@ -311,7 +310,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 PickerDensity::Normal => self.theme.surface,
             };
             let style = if selected {
-                self.theme.selected
+                surface.patch(self.theme.selected)
             } else if item.disabled {
                 surface.patch(self.theme.disabled)
             } else {
@@ -359,7 +358,13 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     };
                     (value.as_str(), cell_style)
                 }),
-                style,
+                if item.disabled {
+                    style
+                } else if selected || checked {
+                    style.patch(self.theme.pointer)
+                } else {
+                    style
+                },
                 marker,
             );
             if row_height > 1
@@ -372,7 +377,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     1,
                 );
                 let description_style = if selected {
-                    self.theme.selected
+                    style.patch(self.theme.muted)
                 } else {
                     surface.patch(self.theme.muted)
                 };
@@ -391,11 +396,11 @@ impl<K: Clone + Eq> Picker<'_, K> {
         columns: &[&PickerColumn],
         widths: &[u16],
         values: impl IntoIterator<Item = (&'a str, Style)>,
-        style: Style,
+        marker_style: Style,
         marker: &str,
     ) {
         let mut x = area.x;
-        buf.set_string(x, area.y, marker, style);
+        buf.set_string(x, area.y, marker, marker_style);
         x = x.saturating_add(2);
         for ((column, width), (value, value_style)) in columns.iter().zip(widths).zip(values) {
             let value = truncate(value, *width as usize);

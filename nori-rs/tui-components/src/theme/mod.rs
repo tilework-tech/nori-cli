@@ -10,7 +10,8 @@ use ratatui::style::Style;
 pub struct Theme {
     pub text: Style,
     pub muted: Style,
-    pub accent: Style,
+    /// Compact focus and interaction indicators such as pointers, rails, and shortcuts.
+    pub pointer: Style,
     pub backdrop: Style,
     pub menu_surface: Style,
     pub menu_item_surface: Style,
@@ -44,7 +45,7 @@ impl Default for Theme {
         Self {
             text: Style::new(),
             muted: Style::new().fg(Color::DarkGray),
-            accent: Style::new().fg(Color::Cyan),
+            pointer: Style::new().fg(Color::Green),
             backdrop: Style::new(),
             menu_surface: Style::new(),
             menu_item_surface: Style::new(),
@@ -53,11 +54,11 @@ impl Default for Theme {
             row: Style::new(),
             row_alt: Style::new(),
             detail_surface: Style::new(),
-            selected: Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            selected: Style::new(),
             disabled: Style::new().fg(Color::DarkGray),
             border: Style::new().fg(Color::DarkGray),
             separator: Style::new().fg(Color::DarkGray),
-            title: Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            title: Style::new().add_modifier(Modifier::BOLD),
             info: Style::new().fg(Color::Cyan),
             success: Style::new().fg(Color::Green),
             warning: Style::new().fg(Color::Yellow),

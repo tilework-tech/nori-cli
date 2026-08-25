@@ -127,10 +127,19 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
     for x in 2..56 {
         assert_eq!(buffer[(x, 6)].bg, Color::Rgb(43, 43, 43));
     }
-    assert_eq!(buffer[(10, 6)].fg, Color::Cyan);
+    let selected = find_ascii_text_at_or_below(buffer, "Start a new session", 4)
+        .expect("selected primary copy");
+    let description = find_ascii_text_at_or_below(buffer, "Create a fresh ACP session", 4)
+        .expect("selected supporting copy");
+    let pointer = (2, selected.1);
+    assert_eq!(buffer[pointer].symbol(), "›");
+    assert_eq!(buffer[pointer].fg, Color::Green);
+    assert_eq!(buffer[selected].fg, Color::Reset);
+    assert_eq!(buffer[description].fg, Color::DarkGray);
     assert_eq!(buffer[(3, 8)].bg, Color::Reset);
     assert_eq!(buffer[(3, 10)].bg, Color::Reset);
     assert_eq!(buffer[(2, 4)].symbol(), "⌕");
+    assert_eq!(buffer[(2, 4)].fg, Color::Green);
     assert_eq!(buffer[(2, 4)].bg, Color::Reset);
     assert_eq!(buffer[(4, 4)].bg, Color::Rgb(38, 38, 38));
     assert_eq!(buffer[(3, 5)].bg, Color::Reset);
@@ -220,7 +229,7 @@ fn picker_maps_agent_tones_to_category_tabs_and_type_cells() {
 }
 
 #[test]
-fn selection_and_disabled_styles_override_provider_cell_tones() {
+fn selection_and_disabled_styles_override_provider_and_checked_tones() {
     let columns = [
         PickerColumn::fixed("title", "Agent", 16),
         PickerColumn::fixed("type", "Type", 16),
@@ -234,15 +243,18 @@ fn selection_and_disabled_styles_override_provider_cell_tones() {
             .cell_tone("type", ProviderKind::Nori)
             .disabled(true),
     ];
-    let state = PickerState::new("Agent picker", columns, items);
+    let mut state = PickerState::new("Agent picker", columns, items).mode(PickerMode::Multi);
+    state.selected_keys.push("disabled");
 
     let buffer = rendered_picker_buffer(&state, 64, 12);
     let selected_tone =
         find_ascii_text_at_or_below(&buffer, "Selected tone", 2).expect("selected type cell");
-    assert_eq!(buffer[selected_tone].fg, Color::Cyan);
+    assert_eq!(buffer[selected_tone].fg, Color::Reset);
     let disabled_tone =
         find_ascii_text_at_or_below(&buffer, "Disabled tone", 2).expect("disabled type cell");
     assert_eq!(buffer[disabled_tone].fg, Color::DarkGray);
+    assert_eq!(buffer[(2, disabled_tone.1)].symbol(), "●");
+    assert_eq!(buffer[(2, disabled_tone.1)].fg, Color::DarkGray);
 }
 
 #[test]
@@ -284,6 +296,33 @@ fn multi_picker_selection_snapshot() {
     state.handle(PickerAction::MoveDown);
     state.handle(PickerAction::Toggle);
     assert_snapshot!(snapshot(&state, 86, 13));
+}
+
+#[test]
+fn fallback_theme_distinguishes_focused_and_unfocused_checked_rows() {
+    let columns = [PickerColumn::flexible("title", "Action")];
+    let items = [
+        PickerItem::new("first", "title", "First action"),
+        PickerItem::new("second", "title", "Second action"),
+    ];
+    let mut state = PickerState::new("Choose actions", columns, items).mode(PickerMode::Multi);
+    assert!(matches!(
+        state.handle(PickerAction::Toggle),
+        PickerOutcome::Toggled { selected: true, .. }
+    ));
+    state.handle(PickerAction::MoveDown);
+    assert!(matches!(
+        state.handle(PickerAction::Toggle),
+        PickerOutcome::Toggled { selected: true, .. }
+    ));
+
+    let buffer = rendered_picker_buffer(&state, 48, 10);
+    let first = find_ascii_text_at_or_below(&buffer, "First action", 2).expect("first row");
+    let second = find_ascii_text_at_or_below(&buffer, "Second action", 2).expect("second row");
+    assert_eq!(buffer[(2, first.1)].symbol(), "●");
+    assert_eq!(buffer[(2, first.1)].fg, Color::Green);
+    assert_eq!(buffer[(2, second.1)].symbol(), "◉");
+    assert_eq!(buffer[(2, second.1)].fg, Color::Green);
 }
 
 #[test]

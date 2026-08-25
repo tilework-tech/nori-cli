@@ -49,12 +49,18 @@ consumer application
   [`picker` renderer](src/picker/render.rs) adapts selected-item details into
   entries, supplies the `Details` heading, and otherwise uses the pane's
   compatibility defaults.
-- [`theme`](src/theme/) supplies semantic styles shared across components,
-  including the detail-pane surface and agent identity tones selected through
+- [`theme`](src/theme/) supplies semantic styles shared across components. Its
+  `pointer` token is the green interaction signal, `info` is the cyan
+  informational accent, titles are bold terminal foreground, and selected
+  primary copy remains terminal foreground on a neutral surface. It also
+  includes the detail-pane surface and agent identity tones selected through
   [`ProviderKind`](src/detail.rs). Neutral backgrounds, including the distinct
   overlay item layer, are derived from a reported terminal RGB background only
   when the consumer knows true color is supported; otherwise those backgrounds
   remain unset.
+- Presentation primitives preserve the same semantic split: key labels use the
+  compact `pointer` treatment, while empty-state markers use `info`; supporting
+  copy remains muted in both cases.
 - Ratatui provides the rendering types and caller rectangles. Crossterm is an
   example-only development dependency, so the public library does not bind a
   consumer to one raw event source.
@@ -88,6 +94,10 @@ consumer application
   every raw-key alias a consumer may map. This keeps the state machine and
   presentation synchronized while leaving the consumer free to choose which
   raw keys activate search.
+- Toggle and multi-select marker glyphs encode focus separately from checked
+  state. This keeps both states visible when terminal-relative selection
+  backgrounds are unavailable and [`Theme::default`](src/theme/mod.rs) leaves
+  the selected surface unset.
 - Picker consumers may attach explicit [`ProviderKind`](src/detail.rs) values
   to category names and individual cells. Category tabs retain their provider
   foreground when active and add bold emphasis; toned cells are used only for
@@ -152,11 +162,14 @@ consumer application
   darker [`Theme::menu_item_surface`](src/theme/mod.rs) layer. Its terminal-aware
   default starts from `menu_surface` and lowers each RGB channel by a small
   fixed amount, so enabled items keep the same depth direction on dark and
-  light terminal backgrounds. Selected items retain the normal primary accent
-  across semantic tones and use symmetric thin edge rails; disabled items
-  remain faded on `menu_surface` and stay unavailable to navigation or
-  activation. Warning and destructive colors identify consequences only while
-  an item is not selected.
+  light terminal backgrounds. Selected items use terminal-foreground primary
+  copy, muted supporting copy, a neutral selected surface, and a compact green
+  pointer. Symmetric thin edge rails are available only through the explicit
+  `fullscreen_selection_rails(true)` presentation option; they replace the
+  pointer and must be used only by a caller-owned full-screen overlay layer.
+  Disabled items remain faded on `menu_surface` and stay unavailable to
+  navigation or activation. Warning and destructive colors identify
+  consequences only while an item is not selected.
 
 ### Things to Know
 
@@ -173,8 +186,8 @@ consumer application
   query, so page navigation, quit, density, mode, and state shortcuts remain
   suspended until search deactivates.
 - Provider tones are opt-in metadata rather than label inference. Untoned
-  categories keep the existing accent-or-muted active treatment, and untoned
-  cells keep the row's normal state style.
+  categories use bold terminal foreground when active and muted text when
+  inactive, and untoned cells keep the row's normal state style.
 - A shortcut invokes its matching enabled item immediately. When an item has
   both shortcut families, either maps to the same stable key; precedence among
   raw input meanings belongs to the consumer adapter.

@@ -55,7 +55,9 @@ as they move into this crate.
 15. Render compact items as one row. Render normal items as a primary row plus
     an indented description row or equivalent vertical space.
 16. Use a marker column, two-cell page inset, and at least one cell between the
-    marker and primary content.
+    marker and primary content. In toggle and multi-select pickers, the marker
+    must communicate focus independently from checked state, including with a
+    fallback theme where no selected-row background is available.
 17. Remove optional columns in declared priority order as width decreases.
 18. Truncate structured cells with `...` or `…`; wrap prose, errors, and logs.
 19. Keep selection and filtering in caller-owned state. Components do not own
@@ -108,8 +110,9 @@ Overlay menus follow these interaction rules:
    activates that item immediately. The consumer's raw-key adapter decides
    whether an input is navigation, a character mnemonic, or a number shortcut,
    so no additional precedence exists inside the component.
-4. Consequence tones color an unselected item's identity. Selection always
-   uses the green pointer accent, even for warning and destructive actions.
+4. Consequence tones color an unselected item's identity. Selected primary
+   copy returns to terminal foreground, while the compact selection signal
+   uses the green `pointer` token even for warning and destructive actions.
 
 Overlay menu layout responds to the caller's rectangle:
 
@@ -142,11 +145,12 @@ and never replace them with indexed grays. A selected item fills its complete
 rendered height and padding with the selected neutral surface. Symmetric rails
 are a caller-level full-screen overlay treatment, not the default menu-row
 treatment: a caller composing this menu in its application's full-screen
-overlay layer may opt into matching one-cell accent rails on both edges. The
-shared widget never infers full-screen context from its `Rect`. This exception
-never applies to embedded menus or copyable content. Unselected enabled rows
-use `menu_item_surface`; disabled rows remain faded on `menu_surface`. Menu rows
-are not zebra striped.
+overlay layer may opt into matching one-cell pointer rails on both edges with
+`fullscreen_selection_rails(true)`. The rails replace the compact pointer so
+selection still has one focus signal. The shared widget never infers
+full-screen context from its `Rect`. This exception never applies to embedded
+menus or copyable content. Unselected enabled rows use `menu_item_surface`;
+disabled rows remain faded on `menu_surface`. Menu rows are not zebra striped.
 
 There is intentionally no public `SelectableListState` abstraction. The menu
 and picker both expose caller-held state and typed outcomes, but their

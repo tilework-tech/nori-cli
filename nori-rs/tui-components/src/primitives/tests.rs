@@ -2,6 +2,8 @@ use super::*;
 use insta::assert_snapshot;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::style::Color;
+use ratatui::style::Style;
 
 fn snapshot_widget(widget: impl Widget, width: u16, height: u16) -> String {
     let backend = TestBackend::new(width, height);
@@ -43,6 +45,24 @@ fn empty_state_snapshot() {
         52,
         3,
     ));
+}
+
+#[test]
+fn empty_state_uses_the_informational_accent_not_the_pointer_accent() {
+    let backend = TestBackend::new(32, 2);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let theme = Theme {
+        pointer: Style::new().fg(Color::Magenta),
+        info: Style::new().fg(Color::Cyan),
+        ..Theme::default()
+    };
+    terminal
+        .draw(|frame| {
+            frame.render_widget(EmptyState::new("No sessions").theme(theme), frame.area())
+        })
+        .expect("draw empty state");
+
+    assert_eq!(terminal.backend().buffer()[(0, 0)].fg, Color::Cyan);
 }
 
 #[test]

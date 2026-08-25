@@ -4,9 +4,9 @@ expression: rendered
 ---
 "  Continue                    "
 "  ↑ 2 more                    "
-"  ▏ Open read-only         ▕  "
-"  ▏ Supporting copy for    ▕  "
-"  ▏ Open read-only         ▕  "
+"  › Open read-only            "
+"    Supporting copy for       "
+"    Open read-only            "
 "                              "
 "    Share session             "
 "    Supporting copy for       "

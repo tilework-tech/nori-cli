@@ -37,6 +37,7 @@ pub struct OverlayMenu<'a, K> {
     theme: Theme,
     max_width: u16,
     backdrop: bool,
+    fullscreen_selection_rails: bool,
     key_hints: Vec<KeyHint<'a>>,
     key: PhantomData<fn() -> K>,
 }
@@ -50,6 +51,7 @@ impl<'a, K> OverlayMenu<'a, K> {
             theme: Theme::default(),
             max_width: 58,
             backdrop: true,
+            fullscreen_selection_rails: false,
             key_hints: Vec::new(),
             key: PhantomData,
         }
@@ -77,6 +79,13 @@ impl<'a, K> OverlayMenu<'a, K> {
     /// Enables or disables styling the caller-provided area as a backdrop.
     pub fn backdrop(mut self, backdrop: bool) -> Self {
         self.backdrop = backdrop;
+        self
+    }
+
+    /// Enables symmetric selected-row rails for a caller-owned full-screen
+    /// overlay layer. Embedded and copyable content should keep this disabled.
+    pub fn fullscreen_selection_rails(mut self, enabled: bool) -> Self {
+        self.fullscreen_selection_rails = enabled;
         self
     }
 
@@ -199,6 +208,7 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
             state,
             &item_heights,
             has_numbers,
+            self.fullscreen_selection_rails,
         );
         if footer_height > 0 {
             KeyHints::new(self.key_hints).theme(self.theme).render(
@@ -216,6 +226,7 @@ fn render_items<K>(
     state: &mut MenuState<K>,
     item_heights: &[u16],
     has_numbers: bool,
+    fullscreen_selection_rails: bool,
 ) {
     if area.height == 0 || state.items.is_empty() {
         state.viewport_offset = 0;
@@ -263,6 +274,7 @@ fn render_items<K>(
             &state.items[item_index],
             state.selected_index == Some(item_index),
             has_numbers,
+            fullscreen_selection_rails,
         );
         y = y.saturating_add(height);
     }
@@ -292,6 +304,7 @@ fn render_item<K>(
     item: &MenuItem<K>,
     selected: bool,
     has_numbers: bool,
+    fullscreen_selection_rails: bool,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
@@ -302,15 +315,18 @@ fn render_item<K>(
     }
     if selected {
         buf.set_style(area, selected_style);
-        for y in area.y..area.bottom() {
-            Paragraph::new("▏")
-                .style(theme.accent)
-                .render(Rect::new(area.x, y, 1, 1), buf);
-            if area.width > 1 {
-                Paragraph::new("▕")
-                    .style(theme.accent)
-                    .render(Rect::new(area.right().saturating_sub(1), y, 1, 1), buf);
+        let pointer_style = selected_style.patch(theme.pointer);
+        if fullscreen_selection_rails {
+            for y in area.y..area.bottom() {
+                buf.set_string(area.x, y, "▏", pointer_style);
+                if area.width > 1 {
+                    buf.set_string(area.right().saturating_sub(1), y, "▕", pointer_style);
+                }
             }
+        } else {
+            Paragraph::new("›")
+                .style(pointer_style)
+                .render(Rect::new(area.x, area.y, 1, 1), buf);
         }
     }
 
@@ -326,13 +342,17 @@ fn render_item<K>(
         return;
     }
     let label_style = item_style(item, selected, theme);
+    let interaction_style = if selected {
+        selected_style
+    } else {
+        theme.menu_item_surface
+    }
+    .patch(theme.pointer);
     if has_numbers && inner_x < area.right() {
         let shortcut_style = if item.disabled {
             theme.disabled
-        } else if selected {
-            selected_style
         } else {
-            theme.accent
+            interaction_style
         };
         let number = item
             .number_shortcut
@@ -349,7 +369,12 @@ fn render_item<K>(
     };
     let suffix_width = UnicodeWidthStr::width(current_suffix) as u16;
     let label = truncate(&item.label, label_width.saturating_sub(suffix_width));
-    let label_line = mnemonic_line(&label, item.mnemonic, label_style);
+    let mnemonic_style = if item.disabled {
+        theme.disabled
+    } else {
+        interaction_style
+    };
+    let label_line = mnemonic_line(&label, item.mnemonic, label_style, mnemonic_style);
     Paragraph::new(label_line).render(Rect::new(label_x, area.y, label_width, 1), buf);
     if !current_suffix.is_empty() {
         let suffix_x = label_x.saturating_add(UnicodeWidthStr::width(label.as_str()) as u16);
@@ -370,7 +395,7 @@ fn render_item<K>(
         let description_style = if item.disabled {
             theme.disabled
         } else if selected {
-            selected_style
+            selected_style.patch(theme.muted)
         } else {
             theme.muted
         };
@@ -408,7 +433,12 @@ fn item_style<K>(item: &MenuItem<K>, selected: bool, theme: Theme) -> Style {
     }
 }
 
-fn mnemonic_line<'a>(label: &'a str, mnemonic: Option<char>, style: Style) -> Line<'a> {
+fn mnemonic_line<'a>(
+    label: &'a str,
+    mnemonic: Option<char>,
+    style: Style,
+    mnemonic_style: Style,
+) -> Line<'a> {
     let Some(mnemonic) = mnemonic else {
         return Line::styled(label, style);
     };
@@ -421,7 +451,10 @@ fn mnemonic_line<'a>(label: &'a str, mnemonic: Option<char>, style: Style) -> Li
     let end = byte_index + character.len_utf8();
     Line::from(vec![
         Span::styled(&label[..byte_index], style),
-        Span::styled(&label[byte_index..end], style.add_modifier(Modifier::BOLD)),
+        Span::styled(
+            &label[byte_index..end],
+            mnemonic_style.add_modifier(Modifier::BOLD),
+        ),
         Span::styled(&label[end..], style),
     ])
 }

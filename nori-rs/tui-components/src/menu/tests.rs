@@ -258,7 +258,7 @@ fn page_navigation_uses_the_rendered_viewport_and_keeps_selection_visible() {
         MenuOutcome::SelectionChanged(Some("three"))
     );
     let page_down = snapshot(&mut state, 30, 7, "Choose", None);
-    assert!(page_down.contains("▏ Three"));
+    assert!(page_down.contains("› Three"));
     assert!(page_down.contains('↑'));
     assert!(page_down.contains('↓'));
     assert!(state.viewport_offset() > 0);
@@ -268,7 +268,7 @@ fn page_navigation_uses_the_rendered_viewport_and_keeps_selection_visible() {
         MenuOutcome::SelectionChanged(Some("one"))
     );
     let page_up = snapshot(&mut state, 30, 7, "Choose", None);
-    assert!(page_up.contains("▏ One"));
+    assert!(page_up.contains("› One"));
 }
 
 #[test]
@@ -366,6 +366,7 @@ fn derived_surfaces_style_the_backdrop_menu_and_title() {
     assert_eq!(buffer[(0, 0)].bg, Color::Rgb(29, 29, 29));
     let title = find_ascii_text(&buffer, "Remove local session?").expect("title");
     assert_eq!(buffer[title].bg, Color::Rgb(38, 38, 38));
+    assert_eq!(buffer[title].fg, Color::Reset);
     assert!(buffer[title].modifier.contains(Modifier::BOLD));
 }
 
@@ -431,7 +432,7 @@ fn enabled_items_stay_darker_than_disabled_items_on_light_backgrounds() {
 
 #[test]
 #[allow(clippy::disallowed_methods)]
-fn selection_fills_every_item_row_and_uses_symmetric_accent_rails() {
+fn default_selection_uses_a_surface_and_pointer_without_edge_rails() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
     let mut state = consequence_state();
     let buffer = rendered_buffer(
@@ -445,24 +446,46 @@ fn selection_fills_every_item_row_and_uses_symmetric_accent_rails() {
     );
 
     let selected = find_ascii_text(&buffer, "Keep session").expect("selected label");
-    let left_rail = find_symbol_on_row(&buffer, selected.1, "▏").expect("left rail");
-    let right_rail = find_symbol_on_row(&buffer, selected.1, "▕").expect("right rail");
-    assert_eq!(buffer[left_rail].fg, Color::Cyan);
-    assert_eq!(buffer[right_rail].fg, Color::Cyan);
-    assert_eq!(
-        find_symbol_on_row(&buffer, selected.1 + 1, "▏"),
-        Some((left_rail.0, selected.1 + 1))
-    );
-    assert_eq!(
-        find_symbol_on_row(&buffer, selected.1 + 1, "▕"),
-        Some((right_rail.0, selected.1 + 1))
-    );
-    for y in selected.1..=selected.1 + 1 {
-        for x in left_rail.0..=right_rail.0 {
-            assert_eq!(buffer[(x, y)].bg, Color::Rgb(43, 43, 43));
-        }
+    let pointer = find_symbol_on_row(&buffer, selected.1, "›").expect("selection pointer");
+    assert_eq!(buffer[pointer].fg, Color::Green);
+    assert_eq!(buffer[selected].fg, Color::Reset);
+    let description =
+        find_ascii_text(&buffer, "Supporting copy for Keep session").expect("description");
+    assert_eq!(buffer[description].fg, Color::DarkGray);
+    for row in selected.1..=description.1 {
+        assert_eq!(find_symbol_on_row(&buffer, row, "▏"), None);
+        assert_eq!(find_symbol_on_row(&buffer, row, "▕"), None);
     }
-    assert_eq!(buffer[selected].fg, Color::Cyan);
+    for cell in [pointer, selected, description] {
+        assert_eq!(buffer[cell].bg, Color::Rgb(43, 43, 43));
+    }
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn fullscreen_selection_rails_are_explicit_and_replace_the_pointer() {
+    let theme = Theme::for_terminal_background(Some((20, 20, 20)));
+    let mut state = consequence_state();
+    let buffer = rendered_buffer_with_selection_rails(
+        &mut state,
+        80,
+        24,
+        "Remove local session?",
+        None,
+        theme,
+        Color::Blue,
+    );
+
+    let selected = find_ascii_text(&buffer, "Keep session").expect("selected label");
+    let description =
+        find_ascii_text(&buffer, "Supporting copy for Keep session").expect("description");
+    for row in selected.1..=description.1 {
+        let left = find_symbol_on_row(&buffer, row, "▏").expect("left selection rail");
+        let right = find_symbol_on_row(&buffer, row, "▕").expect("right selection rail");
+        assert_eq!(buffer[left].fg, Color::Green);
+        assert_eq!(buffer[right].fg, Color::Green);
+        assert_eq!(find_symbol_on_row(&buffer, row, "›"), None);
+    }
 }
 
 #[test]
@@ -505,7 +528,7 @@ fn semantic_tones_disabled_copy_and_current_state_keep_distinct_styles() {
 }
 
 #[test]
-fn selected_destructive_items_keep_the_primary_focus_accent() {
+fn selected_destructive_items_move_color_to_the_pointer() {
     let mut state = consequence_state();
     state.select_key(&"delete");
     let buffer = rendered_buffer(
@@ -520,10 +543,13 @@ fn selected_destructive_items_keep_the_primary_focus_accent() {
 
     let selected =
         find_ascii_text(&buffer, "Delete local transcript").expect("selected destructive");
-    assert_eq!(buffer[selected].fg, Color::Cyan);
+    assert_eq!(buffer[selected].fg, Color::Reset);
+    let pointer = find_symbol_on_row(&buffer, selected.1, "›").expect("selection pointer");
+    assert_eq!(buffer[pointer].fg, Color::Green);
 }
 
 #[test]
+#[allow(clippy::disallowed_methods)]
 fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
     let mut state = MenuState::try_new([
         MenuItem::new("resume", "Resume session")
@@ -539,13 +565,14 @@ fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
     ])
     .expect("valid shortcut menu");
     state.select_key(&"share");
+    let theme = Theme::for_terminal_background(Some((20, 20, 20)));
     let buffer = rendered_buffer(
         &mut state,
         80,
         24,
         "Choose a session action",
         None,
-        Theme::default(),
+        theme,
         Color::Blue,
     );
 
@@ -557,6 +584,12 @@ fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
     assert_eq!(buffer[(resume.0 - 3, resume.1)].symbol(), "1");
     assert_eq!(buffer[(inspect.0 - 3, inspect.1)].symbol(), " ");
     assert_eq!(buffer[(share.0 - 3, share.1)].symbol(), "3");
+    assert_eq!(buffer[(resume.0 - 3, resume.1)].fg, Color::Green);
+    assert_eq!(buffer[resume].fg, Color::Green);
+    assert_eq!(buffer[(resume.0 + 1, resume.1)].fg, Color::Reset);
+    assert_eq!(buffer[(resume.0 - 3, resume.1)].bg, Color::Rgb(35, 35, 35));
+    assert_eq!(buffer[resume].bg, Color::Rgb(35, 35, 35));
+    assert_eq!(buffer[(share.0 - 3, share.1)].bg, Color::Rgb(43, 43, 43));
     assert!(buffer[resume].modifier.contains(Modifier::BOLD));
     assert!(buffer[inspect].modifier.contains(Modifier::BOLD));
     assert!(!buffer[share].modifier.contains(Modifier::BOLD));
@@ -664,7 +697,9 @@ fn empty_disabled_and_descriptionless_menus_render_without_fake_selection() {
         MenuState::try_new([MenuItem::new("plain", "No description")]).expect("plain menu");
     let plain_render = snapshot(&mut descriptionless, 40, 12, "Actions", None);
     assert!(plain_render.contains("No description"));
-    assert!(plain_render.contains('▏'));
+    assert!(plain_render.contains('›'));
+    assert!(!plain_render.contains('▏'));
+    assert!(!plain_render.contains('▕'));
 }
 
 #[test]
@@ -731,6 +766,50 @@ fn rendered_buffer(
     theme: Theme,
     host_background: Color,
 ) -> Buffer {
+    rendered_buffer_with_options(
+        state,
+        width,
+        height,
+        title,
+        subtitle,
+        theme,
+        host_background,
+        false,
+    )
+}
+
+fn rendered_buffer_with_selection_rails(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    title: &'static str,
+    subtitle: Option<&'static str>,
+    theme: Theme,
+    host_background: Color,
+) -> Buffer {
+    rendered_buffer_with_options(
+        state,
+        width,
+        height,
+        title,
+        subtitle,
+        theme,
+        host_background,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rendered_buffer_with_options(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    title: &'static str,
+    subtitle: Option<&'static str>,
+    theme: Theme,
+    host_background: Color,
+    fullscreen_selection_rails: bool,
+) -> Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
@@ -740,7 +819,8 @@ fn rendered_buffer(
                 .render(frame.area(), frame.buffer_mut());
             let mut menu = OverlayMenu::new(title)
                 .key_hints(default_hints())
-                .theme(theme);
+                .theme(theme)
+                .fullscreen_selection_rails(fullscreen_selection_rails);
             if let Some(subtitle) = subtitle {
                 menu = menu.subtitle(subtitle);
             }

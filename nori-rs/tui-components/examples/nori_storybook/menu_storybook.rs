@@ -143,6 +143,7 @@ pub(super) fn render(area: Rect, buf: &mut Buffer, theme: Theme, state: &mut Men
     let mut menu = OverlayMenu::new(presentation.title)
         .theme(theme)
         .max_width(presentation.max_width)
+        .fullscreen_selection_rails(!matches!(state.story, MenuStory::Narrow))
         .key_hints(fixtures::footer_hints(state.story));
     if let Some(subtitle) = state.notice.as_deref().or(presentation.subtitle) {
         menu = menu.subtitle(subtitle);
@@ -167,7 +168,7 @@ fn render_host(area: Rect, buf: &mut Buffer, theme: Theme, state: &MenuStoryStat
             Span::styled(format!("  {story_name}"), theme.muted),
         ]),
         Line::styled("tab next example   shift-tab previous example", theme.muted),
-        Line::styled(state.notice.as_deref().unwrap_or_default(), theme.accent),
+        Line::styled(state.notice.as_deref().unwrap_or_default(), theme.info),
         Line::styled("Session transcript", theme.text),
         Line::styled("[host] transcript remains beneath the overlay", theme.muted),
         Line::styled("[host] status stays visible outside the menu", theme.muted),
