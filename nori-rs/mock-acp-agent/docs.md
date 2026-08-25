@@ -57,5 +57,10 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   The suffix uppercases the model name and replaces hyphens with underscores
   (for example, `MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT`). Multi-agent PTY tests
   use this to prove which subprocess produced a visible response.
+- `MOCK_AGENT_EXPECT_PROMPT_TEXT` newline-joins the prompt's text blocks and
+  returns an ACP prompt error when they do not exactly match the configured
+  value. Configured response emission happens only after this validation, so
+  lifecycle PTY response markers prove deferred CLI input reached the selected
+  session unchanged.
 
 Created and maintained by Nori.

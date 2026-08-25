@@ -360,10 +360,10 @@ and asks the harness to refresh the prepared agent. Session-time settings
 therefore include changes made while the picker was open. Agent identity,
 working directory, ACP proxy/wire-recording settings, and the resolved default
 model must still match preparation because they determine the existing process
-or transport; a mismatch tears down the candidate and asks the user to retry
-the switch. On `SessionStarted`, only the active-agent identity is committed
-into `App`, so other current settings are never overwritten by candidate-era
-state.
+or transport. Harness refresh rejection leaves that owner intact, but the TUI
+tears down the stale candidate and asks the user to retry the switch. On
+`SessionStarted`, only the active-agent identity is committed into `App`, so
+other current settings are never overwritten by candidate-era state.
 
 Agent switching is transactional. Selecting an `/agent` row immediately starts
 a live candidate without changing the active `ChatWidget`; the private
@@ -376,6 +376,14 @@ replaced process. Preparation failure, activation failure, picker dismissal,
 supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
+
+Deferred launch input follows widget ownership across these transitions. An
+ordinary new/resume replacement takes the initial positional prompt and image
+attachments before shutting down the old widget, including when `/new`
+cancels primary preparation. Candidate new/resume activation copies that input
+into the candidate widget because the current widget remains the rollback
+target until `SessionStarted`. Candidate failure destroys only the copy with
+the candidate; successful commit swaps widgets and then retires the old owner.
 
 Bare `/login` has a narrow candidate-target override. Selecting a candidate
 sets it, and preparation or activation failure leaves it available so the user
@@ -435,10 +443,10 @@ repeats this onboarding preparation; `/close` retains its ordinary picker-first
 lifecycle. Because the `--onboard` argv is part of the process-wide agent
 registry entry, every fallback acquisition remains onboarding-only. While a
 picker-first launch waits for a choice, its initial positional prompt and image
-attachments remain owned by the deferred widget. Choosing Start new transfers
-that input into the replacement widget before the deferred widget shuts down,
-so it auto-sends on `SessionConfigured` for the prepared session just like
-other entry paths.
+attachments remain owned by the deferred widget. The lifecycle replacement
+rules above preserve that input through explicit new, candidate new, and
+candidate resume choices, and the committed widget auto-sends it on
+`SessionConfigured`.
 
 The shared ACP resume picker treats session source as first-class presentation
 instead of requiring users to inspect raw metadata. Cloud rows with a typed
