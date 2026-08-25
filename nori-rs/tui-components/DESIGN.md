@@ -135,9 +135,10 @@ information design; adopting it there remains separate consumer work.
 
 ## Details and copy
 
-21. Render metadata as an aligned definition list: right-aligned label gutter,
-    structural separator, then value. Do not use trailing colons.
-22. Group related metadata with spacing or a subtle rule, not another box.
+21. Render metadata as a two-column definition list with left-aligned labels
+    and values, a two-cell gap between them, and a ragged-right edge. Do not use
+    trailing colons or structural separator glyphs.
+22. Group related metadata with one blank row, not another box or a rule glyph.
 23. Never use em dashes in user-visible TUI copy. Use a hyphen, middot, blank
     value, or explicit phrase such as `Not reported`.
 24. Use sentence case and concise action labels.
@@ -150,10 +151,24 @@ key handling, loading, routing, and application actions. It intentionally does
 not make breakpoints or overlay decisions. Handroll adoption is deferred to a
 separate consumer migration.
 
-The body stays transparent. When the caller supplies the optional heading, the
-component renders it on one neutral heading band and leaves one row of space
-before the definition list. The caller still owns the surrounding page and
-placement.
+The component shades one continuous `detail_surface` pane, inset one cell from
+the caller-owned rectangle on both horizontal edges. Content has one additional
+cell of horizontal padding inside that surface. When the caller supplies the
+optional heading, the component renders it at the same left edge as the two
+columns and leaves one row of space before the definition list. The caller
+still owns the surrounding page and placement.
+
+Compact density, two-column layout, and a plain pane surface are the defaults.
+Normal density inserts one blank row only between adjacent key/value entries;
+it does not add space beside an explicit `Rule`. Optional zebra styling fills
+the complete surface width of every physical line belonging to a logical
+entry, alternates `row` and `row_alt`, and restarts after a `Rule`.
+
+Stacked layout places each label above its value and insets the value by two
+cells. Responsive layout selects that stacked form below the caller-provided
+outer-width threshold and uses columns at or above it. `required_height(width)`
+uses the same layout resolution and wrapping measurement as rendering so
+callers can reserve an exact-height region before placing the pane.
 
 ## Verification
 
@@ -172,11 +187,14 @@ cargo run -p nori-tui-components --example nori_storybook
 ```
 
 The Picker, Markdown, Primitives, States, Detail pane, and Overlay menu pages
-are the visual acceptance target for this crate. Detail pane is page `5`; page
-`6`, Overlay menu, is interactive. Use arrows or `j`/`k` to move, `Enter` to
-activate, `Tab`/`Shift-Tab` to change the menu case, and the displayed number or
-character shortcuts to invoke actions. The example owns its terminal and event
-loop, adapts raw keys to domain-free actions, and uses production components
-only. While Picker search is active, printable keys belong exclusively to the
-query: global page, quit, density, mode, and state shortcuts resume only after
-search deactivates, and Escape deactivates search before leaving the example.
+are the visual acceptance target for this crate. Detail pane is page `5`; use
+`Tab`/`Shift-Tab` there to compare compact columns, zebra bands, normal density,
+responsive stacking, fixed label width, and an omitted heading. Page `6`,
+Overlay menu, is interactive. Use arrows or `j`/`k`
+to move, `Enter` to activate, `Tab`/`Shift-Tab` to change the menu case, and the
+displayed number or character shortcuts to invoke actions. The example owns its
+terminal and event loop, adapts raw keys to domain-free actions, and uses
+production components only. While Picker search is active, printable keys
+belong exclusively to the query: global page, quit, density, mode, and state
+shortcuts resume only after search deactivates, and Escape deactivates search
+before leaving the example.

@@ -1,0 +1,23 @@
+---
+source: tui-components/src/detail/tests.rs
+expression: "configured_snapshot(22, DetailDensity::Compact, DetailLayout::Responsive\n{ stack_below: 30 }, DetailRowPattern::Plain,)"
+---
+"  Session details     "
+"                      "
+"  Agent               "
+"    Codex             "
+"  Created             "
+"    2026-08-15 12:00  "
+"                      "
+"  Latest prompt       "
+"    Investigate the   "
+"    reusable          "
+"    component         "
+"    boundary without  "
+"    changing          "
+"    Handroll.         "
+"  Latest response     "
+"    The component     "
+"    stays stateless   "
+"    and               "
+"    consumer-owned.   "

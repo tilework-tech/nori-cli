@@ -1,3 +1,4 @@
+use super::DetailStory;
 use super::Page;
 use super::overlay_menu_action;
 use super::overlay_page_navigation;
@@ -82,6 +83,49 @@ fn active_picker_search_owns_storybook_shortcut_characters() {
             super::picker_action(key(KeyCode::Char(character)), true),
             Some(PickerAction::AppendQuery(character))
         );
+    }
+}
+
+#[test]
+fn detail_stories_cycle_through_each_configurable_presentation() {
+    assert_eq!(DetailStory::default(), DetailStory::AutoWithHeading);
+
+    let transitions = [
+        (
+            DetailStory::AutoWithHeading,
+            DetailStory::Zebra,
+            DetailStory::WithoutHeading,
+        ),
+        (
+            DetailStory::Zebra,
+            DetailStory::NormalDensity,
+            DetailStory::AutoWithHeading,
+        ),
+        (
+            DetailStory::NormalDensity,
+            DetailStory::ResponsiveStacked,
+            DetailStory::Zebra,
+        ),
+        (
+            DetailStory::ResponsiveStacked,
+            DetailStory::FixedWithHeading,
+            DetailStory::NormalDensity,
+        ),
+        (
+            DetailStory::FixedWithHeading,
+            DetailStory::WithoutHeading,
+            DetailStory::ResponsiveStacked,
+        ),
+        (
+            DetailStory::WithoutHeading,
+            DetailStory::AutoWithHeading,
+            DetailStory::FixedWithHeading,
+        ),
+    ];
+
+    for (current, next, previous) in transitions {
+        assert_eq!(current.next(), next);
+        assert_eq!(current.previous(), previous);
     }
 }
 
