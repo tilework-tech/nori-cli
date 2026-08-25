@@ -6,6 +6,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use nori_tui_components::MenuAction;
 use nori_tui_components::MenuShortcut;
+use nori_tui_components::PickerAction;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -68,6 +69,20 @@ fn overlay_page_translates_navigation_activation_and_shortcuts_before_page_keys(
         overlay_menu_action(Page::Picker, key(KeyCode::Char('1'))),
         None
     );
+}
+
+#[test]
+fn active_picker_search_owns_storybook_shortcut_characters() {
+    assert!(super::picker_owns_global_shortcuts(Page::Picker, true));
+    assert!(!super::picker_owns_global_shortcuts(Page::Picker, false));
+    assert!(!super::picker_owns_global_shortcuts(Page::Markdown, true));
+
+    for character in ['q', '1', '6', 'd', 'm', 's'] {
+        assert_eq!(
+            super::picker_action(key(KeyCode::Char(character)), true),
+            Some(PickerAction::AppendQuery(character))
+        );
+    }
 }
 
 fn key(code: KeyCode) -> KeyEvent {

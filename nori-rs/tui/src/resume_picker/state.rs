@@ -34,9 +34,7 @@ impl PickerState {
         let has_control = key
             .modifiers
             .contains(crossterm::event::KeyModifiers::CONTROL);
-        let has_alt = key
-            .modifiers
-            .contains(crossterm::event::KeyModifiers::ALT);
+        let has_alt = key.modifiers.contains(crossterm::event::KeyModifiers::ALT);
 
         match key.code {
             KeyCode::Esc if self.search_active => {

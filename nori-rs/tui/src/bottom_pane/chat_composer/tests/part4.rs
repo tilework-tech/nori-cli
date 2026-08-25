@@ -584,10 +584,7 @@ fn activated_history_search_filters_before_selecting() {
 
     composer.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
     for character in "second".chars() {
-        composer.handle_key_event(KeyEvent::new(
-            KeyCode::Char(character),
-            KeyModifiers::NONE,
-        ));
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
     }
     composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -609,10 +606,7 @@ fn history_search_navigation_and_search_modes_snapshot() {
 
     composer.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     for character in "second".chars() {
-        composer.handle_key_event(KeyEvent::new(
-            KeyCode::Char(character),
-            KeyModifiers::NONE,
-        ));
+        composer.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
     }
     insta::assert_snapshot!(
         "history_search_active_mode",

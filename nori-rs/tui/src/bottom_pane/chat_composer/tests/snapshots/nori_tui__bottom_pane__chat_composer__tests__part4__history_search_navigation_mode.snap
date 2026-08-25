@@ -4,4 +4,4 @@ expression: render_history_search(&composer)
 ---
   first entry
   second entry
-  esc close  enter select  j/k move  f, /, ctrl+f search
+  esc close  enter select  j/k move  / search

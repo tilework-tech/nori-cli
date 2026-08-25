@@ -176,28 +176,44 @@ fn main() -> Result<()> {
             KeyCode::Esc if page == Page::Picker && state.search_active => {
                 state.handle(PickerAction::DeactivateSearch);
             }
-            KeyCode::Esc | KeyCode::Char('q') => break,
-            KeyCode::Char('1') => page = Page::Picker,
-            KeyCode::Char('2') => page = Page::Markdown,
-            KeyCode::Char('3') => page = Page::Primitives,
-            KeyCode::Char('4') => page = Page::States,
-            KeyCode::Char('5') => page = Page::Details,
-            KeyCode::Char('6') => page = Page::OverlayMenu,
-            KeyCode::Char('d') if page == Page::Picker => {
+            KeyCode::Esc | KeyCode::Char('q')
+                if !picker_owns_global_shortcuts(page, state.search_active) =>
+            {
+                break;
+            }
+            KeyCode::Char('1') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Picker;
+            }
+            KeyCode::Char('2') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Markdown;
+            }
+            KeyCode::Char('3') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Primitives;
+            }
+            KeyCode::Char('4') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::States;
+            }
+            KeyCode::Char('5') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::Details;
+            }
+            KeyCode::Char('6') if !picker_owns_global_shortcuts(page, state.search_active) => {
+                page = Page::OverlayMenu;
+            }
+            KeyCode::Char('d') if page == Page::Picker && !state.search_active => {
                 density = match density {
                     PickerDensity::Compact => PickerDensity::Normal,
                     PickerDensity::Normal => PickerDensity::Compact,
                 };
                 notice = format!("Density changed to {density:?}").to_lowercase();
             }
-            KeyCode::Char('m') if page == Page::Picker => {
+            KeyCode::Char('m') if page == Page::Picker && !state.search_active => {
                 state.mode = match state.mode {
                     PickerMode::Single => PickerMode::Multi,
                     PickerMode::Toggle | PickerMode::Multi => PickerMode::Single,
                 };
                 notice = format!("Selection mode changed to {:?}", state.mode).to_lowercase();
             }
-            KeyCode::Char('s') if page == Page::Picker => {
+            KeyCode::Char('s') if page == Page::Picker && !state.search_active => {
                 state.load_state = match &state.load_state {
                     PickerLoadState::Ready => {
                         PickerLoadState::Loading("Refreshing ACP sessions...".to_string())
@@ -229,6 +245,10 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn picker_owns_global_shortcuts(page: Page, search_active: bool) -> bool {
+    page == Page::Picker && search_active
 }
 
 fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, theme: Theme) {

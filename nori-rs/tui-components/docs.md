@@ -76,9 +76,11 @@ consumer application
   clears the query and selects the first available visible item, and selecting
   `SearchMode::None` also clears both search state and query.
 - The [`picker` renderer](src/picker/render.rs) shows its input row only during
-  active search and derives footer hints from the same state. This keeps the
-  state machine and presentation synchronized while leaving the consumer free
-  to choose which raw keys activate search.
+  active search and derives footer hints from the same state. Inactive pickers
+  intentionally show the concise conventional `/ search` affordance instead
+  of an exhaustive consumer keymap. This keeps the state machine and
+  presentation synchronized while leaving the consumer free to choose which
+  raw keys activate search; Nori also accepts `f` and Ctrl-F.
 - `OverlayMenu` centers a content-derived, maximum-width surface inside the
   supplied rectangle. Rendering reconciles only menu-local viewport offset and
   capacity so the selection stays visible when content exceeds the available
@@ -104,7 +106,8 @@ consumer application
 - Search state is independent of a consumer's editing mode. A consumer must
   explicitly map activation and deactivation keys to picker actions; printable
   query input has no effect until activation, so navigation shortcuts remain
-  available while search is inactive.
+  available while search is inactive. Once active, all printable input belongs
+  to the query, including characters used by surrounding storybook shortcuts.
 - A shortcut invokes its matching enabled item immediately. When an item has
   both shortcut families, either maps to the same stable key; precedence among
   raw input meanings belongs to the consumer adapter.

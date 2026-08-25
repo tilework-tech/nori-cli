@@ -13,5 +13,5 @@ expression: "snapshot_with_density(&session_picker(), 86, 13, PickerDensity::Com
 "    Legacy unavailable session           handroll            3d ago      offline      "
 "                                                                                      "
 "                                                                                      "
-"               ↑↓/j/k move  f, /, ctrl+f search  enter select  esc close              "
+"                    ↑↓/j/k move  / search  enter select  esc close                    "
 "                                                                                      "

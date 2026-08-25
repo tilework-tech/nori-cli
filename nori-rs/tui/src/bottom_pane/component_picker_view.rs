@@ -156,9 +156,7 @@ impl BottomPaneView for ComponentPickerView {
                 code: KeyCode::Char(character),
                 modifiers,
                 ..
-            } if search_active
-                && (modifiers.is_empty() || modifiers == KeyModifiers::SHIFT) =>
-            {
+            } if search_active && (modifiers.is_empty() || modifiers == KeyModifiers::SHIFT) => {
                 PickerAction::AppendQuery(character)
             }
             _ => return,
@@ -172,6 +170,16 @@ impl BottomPaneView for ComponentPickerView {
 
     fn on_ctrl_c(&mut self) -> CancellationEvent {
         self.handle_action(PickerAction::Cancel);
+        CancellationEvent::Handled
+    }
+
+    fn on_escape(&mut self) -> CancellationEvent {
+        let action = if self.state.search_active {
+            PickerAction::DeactivateSearch
+        } else {
+            PickerAction::Cancel
+        };
+        self.handle_action(action);
         CancellationEvent::Handled
     }
 
@@ -269,12 +277,9 @@ mod tests {
                 "Sessions",
                 [PickerColumn::flexible("session", "Session")],
                 [
-                    PickerItem::new("one".to_string(), "session", "First")
-                        .search_text("alpha"),
-                    PickerItem::new("two".to_string(), "session", "Second")
-                        .search_text("beta"),
-                    PickerItem::new("three".to_string(), "session", "Third")
-                        .search_text("gamma"),
+                    PickerItem::new("one".to_string(), "session", "First").search_text("alpha"),
+                    PickerItem::new("two".to_string(), "session", "Second").search_text("beta"),
+                    PickerItem::new("three".to_string(), "session", "Third").search_text("gamma"),
                 ],
             ),
             actions: BTreeMap::new(),
@@ -401,10 +406,7 @@ mod tests {
 
         view.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
         for character in "beta".chars() {
-            view.handle_key_event(KeyEvent::new(
-                KeyCode::Char(character),
-                KeyModifiers::NONE,
-            ));
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
         view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 

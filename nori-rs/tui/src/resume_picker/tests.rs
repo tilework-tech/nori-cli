@@ -171,32 +171,24 @@ fn resume_picker_supports_all_search_activation_keys() {
     ];
 
     for activation_key in activation_keys {
-        let mut state = state_with_rows(
-            vec![row("alpha", None), row("beta", None)],
-            true,
-            None,
-        );
+        let mut state = state_with_rows(vec![row("alpha", None), row("beta", None)], true, None);
 
         let activation = block_on_future(state.handle_key(activation_key)).unwrap();
         assert!(activation.is_none(), "activation key: {activation_key:?}");
 
-        block_on_future(
-            state.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)),
-        )
-        .unwrap();
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)))
+            .unwrap();
         assert_eq!(state.query, "b", "activation key: {activation_key:?}");
 
-        let exit_search = block_on_future(
-            state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        )
-        .unwrap();
+        let exit_search =
+            block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+                .unwrap();
         assert!(exit_search.is_none(), "activation key: {activation_key:?}");
         assert_eq!(state.query, "", "activation key: {activation_key:?}");
 
-        let dismiss = block_on_future(
-            state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        )
-        .unwrap();
+        let dismiss =
+            block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+                .unwrap();
         assert!(
             matches!(dismiss, Some(ResumeSelection::StartFresh)),
             "activation key: {activation_key:?}"
@@ -208,21 +200,14 @@ fn resume_picker_supports_all_search_activation_keys() {
 fn empty_active_resume_search_exits_before_the_picker_dismisses() {
     let mut state = state_with_rows(vec![row("session", None)], true, None);
 
-    block_on_future(state.handle_key(KeyEvent::new(
-        KeyCode::Char('f'),
-        KeyModifiers::CONTROL,
-    )))
-    .unwrap();
-    let exit_search = block_on_future(
-        state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-    )
-    .unwrap();
+    block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL)))
+        .unwrap();
+    let exit_search =
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))).unwrap();
     assert!(exit_search.is_none());
 
-    let dismiss = block_on_future(
-        state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-    )
-    .unwrap();
+    let dismiss =
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))).unwrap();
     assert!(matches!(dismiss, Some(ResumeSelection::StartFresh)));
 }
 
@@ -230,11 +215,8 @@ fn empty_active_resume_search_exits_before_the_picker_dismisses() {
 fn active_resume_search_receives_reserved_and_general_printable_characters() {
     let mut state = state_with_rows(vec![row("session", None)], true, None);
 
-    block_on_future(state.handle_key(KeyEvent::new(
-        KeyCode::Char('/'),
-        KeyModifiers::NONE,
-    )))
-    .unwrap();
+    block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)))
+        .unwrap();
     for (character, modifiers) in [
         ('j', KeyModifiers::NONE),
         ('k', KeyModifiers::NONE),
@@ -247,7 +229,7 @@ fn active_resume_search_receives_reserved_and_general_printable_characters() {
         ('λ', KeyModifiers::NONE),
     ] {
         block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char(character), modifiers)))
-        .unwrap();
+            .unwrap();
     }
 
     assert_eq!(state.query, "jkf/A7 ?λ");
@@ -261,22 +243,17 @@ fn activated_resume_search_filters_before_selecting() {
         None,
     );
 
-    block_on_future(state.handle_key(KeyEvent::new(
-        KeyCode::Char('/'),
-        KeyModifiers::NONE,
-    )))
-    .unwrap();
+    block_on_future(state.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)))
+        .unwrap();
     for character in "beta".chars() {
-        block_on_future(state.handle_key(KeyEvent::new(
-            KeyCode::Char(character),
-            KeyModifiers::NONE,
-        )))
+        block_on_future(
+            state.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)),
+        )
         .unwrap();
     }
-    let selection = block_on_future(
-        state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-    )
-    .unwrap();
+    let selection =
+        block_on_future(state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)))
+            .unwrap();
 
     let Some(ResumeSelection::Resume(target)) = selection else {
         panic!("expected filtered resume selection");

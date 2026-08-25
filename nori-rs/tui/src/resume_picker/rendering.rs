@@ -33,7 +33,7 @@ pub(super) fn picker(state: &ComponentPickerState<usize>) -> Picker<'_, usize> {
     } else {
         vec![
             KeyHint::new("↑↓/j/k", "browse"),
-            KeyHint::new("f, /, ctrl+f", "search"),
+            KeyHint::new("/", "search"),
             KeyHint::new("enter", "resume"),
             KeyHint::new("esc", "start new"),
             KeyHint::new("ctrl+c", "quit"),

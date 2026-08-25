@@ -404,7 +404,7 @@ impl ListSelectionView {
         } else {
             Some(Line::from(vec![
                 "↑/k ↓/j navigate, ".into(),
-                "f, /, ctrl+f search, ".into(),
+                "/ search, ".into(),
                 key_hint::plain(KeyCode::Enter).into(),
                 " confirm, ".into(),
                 key_hint::plain(KeyCode::Esc).into(),
@@ -555,6 +555,17 @@ impl BottomPaneView for ListSelectionView {
             cb(&self.app_event_tx);
         }
         self.complete = true;
+        CancellationEvent::Handled
+    }
+
+    fn on_escape(&mut self) -> CancellationEvent {
+        if self.search_active {
+            self.search_active = false;
+            self.search_query.clear();
+            self.apply_filter();
+        } else {
+            self.on_ctrl_c();
+        }
         CancellationEvent::Handled
     }
 
@@ -1608,10 +1619,7 @@ mod tests {
 
         view.handle_key_event(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
         for character in "native desktop".chars() {
-            view.handle_key_event(KeyEvent::new(
-                KeyCode::Char(character),
-                KeyModifiers::NONE,
-            ));
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
         view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -1639,10 +1647,7 @@ mod tests {
 
         view.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         for character in "native desktop".chars() {
-            view.handle_key_event(KeyEvent::new(
-                KeyCode::Char(character),
-                KeyModifiers::NONE,
-            ));
+            view.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
         assert_snapshot!(
             "settings_picker_search_mode",

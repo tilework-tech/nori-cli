@@ -21,4 +21,4 @@ expression: "render_lines_with_width(&view, 90)"
                                              (Escape enters normal mode)                  
   8. Auto Worktree (off)                     Create a git worktree at session start       
                                                                                           
-  ↑/k ↓/j navigate, f, /, ctrl+f search, enter confirm, esc go back
+  ↑/k ↓/j navigate, / search, enter confirm, esc go back

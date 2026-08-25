@@ -49,7 +49,7 @@ fn main() -> Result<()> {
         if key.kind != KeyEventKind::Press {
             continue;
         }
-        if matches!(key.code, KeyCode::Char('q')) {
+        if should_quit(key, state.search_active) {
             break;
         }
         let Some(action) = picker_action(key, state.search_active) else {
@@ -68,6 +68,23 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn should_quit(key: KeyEvent, search_active: bool) -> bool {
+    matches!(key.code, KeyCode::Char('q')) && !search_active
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_search_owns_the_q_shortcut() {
+        let q = KeyEvent::new(KeyCode::Char('q'), crossterm::event::KeyModifiers::NONE);
+
+        assert!(!should_quit(q, true));
+        assert!(should_quit(q, false));
+    }
 }
 
 fn picker_action(key: KeyEvent, search_active: bool) -> Option<PickerAction> {
@@ -189,7 +206,7 @@ fn story_state() -> PickerState<String> {
             .category("Cloud"),
     ];
     PickerState::new("Picker storybook", columns, items)
-        .subtitle("Type to fuzzy-find · tab changes category · enter selects · q exits")
+        .subtitle("/ searches · tab changes category · enter selects · q exits")
         .mode(PickerMode::Single)
         .search_mode(SearchMode::Fuzzy)
         .categories(["Local", "Cloud"])

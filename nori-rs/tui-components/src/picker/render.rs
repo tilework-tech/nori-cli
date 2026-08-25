@@ -437,7 +437,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
             } else if !matches!(self.state.search_mode, SearchMode::None) {
                 vec![
                     KeyHint::new("↑↓/j/k", "move"),
-                    KeyHint::new("f, /, ctrl+f", "search"),
+                    KeyHint::new("/", "search"),
                     KeyHint::new("enter", select_action),
                     KeyHint::new("esc", "close"),
                 ]

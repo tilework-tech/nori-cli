@@ -99,8 +99,7 @@ impl HistorySearchPopup {
         let result_rows = self
             .filtered_indices
             .len()
-            .min(super::popup_consts::MAX_POPUP_ROWS)
-            .max(1);
+            .clamp(1, super::popup_consts::MAX_POPUP_ROWS);
         (1 + result_rows + usize::from(self.search_active)) as u16
     }
 
@@ -215,7 +214,7 @@ impl WidgetRef for HistorySearchPopup {
             let hint = if self.search_active {
                 "esc stop search  enter select  up/down move  type to filter"
             } else {
-                "esc close  enter select  j/k move  f, /, ctrl+f search"
+                "esc close  enter select  j/k move  / search"
             };
             Line::from(hint.dim()).render(
                 Rect {
@@ -289,5 +288,4 @@ mod tests {
         // Two entries + search line + status line while filtering.
         assert_eq!(popup.calculate_required_height(), 4);
     }
-
 }

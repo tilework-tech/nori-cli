@@ -103,8 +103,17 @@ every printable key as a query. They open in navigation state, where arrows and
 the activation key; active search accepts printable characters, including the
 navigation and activation characters. Escape first clears and exits search,
 then dismisses the picker if pressed again. The input row is present only while
-search is active, and footer hints describe the current state's bindings.
+search is active. Inactive footers intentionally show only the compact
+`/ search` affordance; `f` and Ctrl-F remain supported aliases rather than
+additional visible hint text. Active footers describe typing and search exit.
 
+- [`BottomPane`](src/bottom_pane/mod.rs) routes Escape through the active
+  [`BottomPaneView::on_escape`](src/bottom_pane/bottom_pane_view.rs) hook before
+  ordinary key handling. The hook defaults to the existing Ctrl-C cancellation
+  behavior, while searchable component and generic selection views override it
+  to consume the first Escape without completing the view. This keeps
+  multi-stage Escape state transitions independent from Ctrl-C cancellation;
+  the next Escape follows the view's normal dismissal path.
 - [`ComponentPickerView`](src/bottom_pane/component_picker_view.rs) maps
   Crossterm events into the domain-free `PickerAction` vocabulary from
   [`nori-tui-components`](../tui-components/docs.md). Shared ACP and local
