@@ -402,7 +402,11 @@ candidate widget starts with remote attachment disabled, so a failed or
 cancelled candidate cannot displace the current remotely controlled session.
 After `SessionStarted`, the committed widget attaches with the observed start
 record to seed identity that its new subscription could no longer replay; only
-then is the old remote attachment replaced.
+then is the old remote attachment replaced. Candidate launch input stays held
+until the awaited attachment attempt completes. A successful attachment makes
+the automatic first turn visible to the new remote subscriber; a failed
+attachment is logged and still releases the input so the committed session does
+not stall.
 
 An orderly ACP close completes the typed close call, leaves the raw close
 response observable on the stream, observes `SessionEnded(Closed)`, and then
@@ -450,7 +454,8 @@ picker-first launch waits for a choice, its initial positional prompt and image
 attachments remain owned by the deferred widget. The lifecycle replacement
 rules above preserve that input through explicit new, local-transcript resume,
 candidate new, and candidate resume choices, and the committed widget auto-sends
-it on `SessionConfigured`. Before preparation has reported capabilities,
+it after `SessionStarted` (and after remote-host attachment for a committed
+switch candidate). Before preparation has reported capabilities,
 [`open_resume_session_picker`](src/chatwidget/pickers.rs) uses the local
 transcript fallback; selecting it cancels slow cloud preparation so its result
 cannot reclaim the picker.
@@ -494,11 +499,14 @@ events. Switch-candidate launches suppress that attachment until their
 `SessionStarted` commit, then use the observed start record to attach the
 committed handle without losing its outward identity. Thus new-session and
 resume paths remain eager, while a failed or cancelled candidate cannot replace
-the current remote session. Attaching the committed replacement closes any
-current remote controller; after reconnecting, the controller discovers the
-replacement through `session/list`. All remote types reach the TUI through
-`nori_harness::remote_agent` re-exports, preserving the rule that the TUI never
-imports the ACP host crate directly.
+the current remote session. The candidate's automatic launch input is released
+only after this awaited attachment attempt finishes. When attachment succeeds,
+that keeps its first turn inside the new subscription boundary; failure is
+logged and does not block the committed local turn. Attaching the committed
+replacement closes any current remote controller; after reconnecting, the
+controller discovers the replacement through `session/list`. All remote types
+reach the TUI through `nori_harness::remote_agent` re-exports, preserving the
+rule that the TUI never imports the ACP host crate directly.
 
 While a remote controller drives the session, the TUI stays attached to the
 same handle and ordered event stream and renders remote-driven activity as an

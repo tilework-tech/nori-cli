@@ -155,7 +155,10 @@ When the process-wide remote ACP host is active, candidate activation remains
 hidden from it until the same commit event. The committed candidate replaces
 the old remote attachment with the already-observed `SessionStarted` data, so
 cancellation or failure leaves both the local current session and its remote
-controller attachment intact.
+controller attachment intact. Candidate launch input remains deferred until
+the replacement attachment attempt completes. A successful attachment installs
+the subscription before the automatic first turn can outrun the remote
+observer; attachment failure is logged and does not strand the launch input.
 
 There is no "switch on next prompt" state. Prompt submission always targets
 the active `HarnessHandle`.
@@ -174,7 +177,8 @@ retiring the old widget, including when it first cancels an in-flight primary
 preparation. Candidate new/resume activation instead copies the input because
 the active widget remains the rollback target until candidate `SessionStarted`;
 candidate failure therefore leaves the original input intact. Automatic
-submission from the committed widget waits for `SessionConfigured`.
+submission from the committed widget waits for `SessionStarted` and, for a
+remote candidate, completion of the commit-time host attachment attempt.
 
 Local-transcript resume is one of those ordinary replacements. `/resume` may
 open the local fallback while primary ACP preparation is still discovering

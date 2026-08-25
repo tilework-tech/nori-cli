@@ -251,7 +251,10 @@ types so frontends reach the whole remote surface through
   TUI calls `attach_started(handle, nori_home, started)`; this replaces the old
   remote attachment and seeds the new outward identity and working directory
   from the already-consumed start event while subscribing from the commit
-  boundary onward.
+  boundary onward. The TUI releases any candidate launch input only after the
+  awaited attachment attempt returns, so a successfully installed replacement
+  subscriber observes the first turn. An attachment error is logged by the TUI
+  and does not leave the committed session's input stranded.
 - The outward ACP session id is the stable Nori conversation id (transcript
   id), captured from `SessionStarted`. Downstream swaps that continue the
   conversation (compact, restore) stay invisible to remote clients; forwarded
