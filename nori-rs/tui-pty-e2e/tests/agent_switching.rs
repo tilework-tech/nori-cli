@@ -540,6 +540,7 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
     let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
 
     session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("Select Agent", Duration::from_secs(8))
@@ -589,6 +590,7 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
     let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
 
     session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("Select Agent", Duration::from_secs(8))
@@ -812,8 +814,11 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     // Activate the prepared candidate before submitting a prompt.
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("›", Duration::from_secs(10))
-        .expect("prepared candidate should activate");
+        .wait_for_text(
+            "Started new conversation with agent: Mock ACP Alt",
+            Duration::from_secs(10),
+        )
+        .expect("prepared candidate should commit before accepting the next prompt");
 
     // The new active agent should receive this prompt and respond.
     session.send_str("test after switch").unwrap();
