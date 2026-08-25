@@ -52,7 +52,6 @@ impl FakeHandroll {
             "#!/bin/sh\n\
              printf '%s\\n' \"$@\" > '{dir}/argv'\n\
              printenv NORI_BROKER_URL > '{dir}/broker_url' 2>/dev/null\n\
-             echo $$ >> '{dir}/pids'\n\
              if [ -n \"$MOCK_AGENT_FIRST_STARTUP_DELAY_MS\" ]; then\n\
                if mkdir '{dir}/first_startup_delay_claimed' 2>/dev/null; then\n\
                  export MOCK_AGENT_STARTUP_DELAY_MS=\"$MOCK_AGENT_FIRST_STARTUP_DELAY_MS\"\n\
@@ -60,6 +59,7 @@ impl FakeHandroll {
                  unset MOCK_AGENT_STARTUP_DELAY_MS\n\
                fi\n\
              fi\n\
+             echo $$ >> '{dir}/pids'\n\
              '{mock}' 2>>'{dir}/agent_stderr'\n\
              status=$?\n\
              echo eof >> '{dir}/released'\n\
