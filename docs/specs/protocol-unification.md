@@ -389,8 +389,10 @@ Cancellation does not authorize the transport to absorb a later response and
 resend the user's next prompt; the former cancel-tail resend heuristic was
 deleted. A successful prompt response with `StopReason::EndTurn` is terminal
 even when no content notification preceded it. Initial create/load/resume
-selection belongs to `SessionLaunchSpec` rather than a post-launch
-`load_session` handle method.
+selection is an explicit transition that consumes the prepared agent
+connection; it is not part of initialization and is not a post-launch
+`load_session` handle method. The connection/session lifetime contract is
+specified in `docs/specs/acp-connection-lifecycle.md`.
 Query-style ACP methods return their typed result directly; their raw
 `AcpEvent::Response` also remains visible so the boundary stays
 schema-complete. Those callers never have to consume or correlate the stream to
