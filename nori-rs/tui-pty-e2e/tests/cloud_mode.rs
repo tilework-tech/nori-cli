@@ -486,6 +486,8 @@ fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
     session
         .wait_for_text("Resume previous session", TIMEOUT)
         .expect("local transcript fallback should open while capabilities are unknown");
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
     session
