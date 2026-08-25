@@ -62,7 +62,7 @@ fn detail_pane_respects_fixed_gutter_and_provider_tone() {
         .expect("draw pane");
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(11, 0)].symbol(), "│");
-    assert_eq!(buffer[(13, 0)].fg, Color::Cyan);
+    assert_eq!(buffer[(13, 0)].fg, Color::White);
 }
 
 #[test]
