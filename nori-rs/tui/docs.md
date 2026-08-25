@@ -379,11 +379,15 @@ widget; there is no pending switch-on-next-prompt state.
 
 Deferred launch input follows widget ownership across these transitions. An
 ordinary new/resume replacement takes the initial positional prompt and image
-attachments before shutting down the old widget, including when `/new`
-cancels primary preparation. Candidate new/resume activation copies that input
-into the candidate widget because the current widget remains the rollback
-target until `SessionStarted`. Candidate failure destroys only the copy with
-the candidate; successful commit swaps widgets and then retires the old owner.
+attachments before shutting down the old widget. For local-transcript resume,
+[`event_handling.rs`](src/app/event_handling.rs) cancels primary preparation,
+takes that input, clears deferred-spawn state, and consumes any
+prepared owner that already completed. A later result fails the generation
+check and is shut down instead of reopening its picker. Candidate new/resume
+activation instead copies the input because the current widget remains the
+rollback target until `SessionStarted`; failure destroys only the copy. See
+[`helpers.rs`](src/chatwidget/helpers.rs) and
+[`session_setup.rs`](src/app/session_setup.rs) for those ownership boundaries.
 
 Bare `/login` has a narrow candidate-target override. Selecting a candidate
 sets it, and preparation or activation failure leaves it available so the user
@@ -444,9 +448,12 @@ lifecycle. Because the `--onboard` argv is part of the process-wide agent
 registry entry, every fallback acquisition remains onboarding-only. While a
 picker-first launch waits for a choice, its initial positional prompt and image
 attachments remain owned by the deferred widget. The lifecycle replacement
-rules above preserve that input through explicit new, candidate new, and
-candidate resume choices, and the committed widget auto-sends it on
-`SessionConfigured`.
+rules above preserve that input through explicit new, local-transcript resume,
+candidate new, and candidate resume choices, and the committed widget auto-sends
+it on `SessionConfigured`. Before preparation has reported capabilities,
+[`open_resume_session_picker`](src/chatwidget/pickers.rs) uses the local
+transcript fallback; selecting it cancels slow cloud preparation so its result
+cannot reclaim the picker.
 
 The shared ACP resume picker treats session source as first-class presentation
 instead of requiring users to inspect raw metadata. Cloud rows with a typed

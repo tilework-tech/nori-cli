@@ -176,6 +176,16 @@ the active widget remains the rollback target until candidate `SessionStarted`;
 candidate failure therefore leaves the original input intact. Automatic
 submission from the committed widget waits for `SessionConfigured`.
 
+Local-transcript resume is one of those ordinary replacements. `/resume` may
+open the local fallback while primary ACP preparation is still discovering
+capabilities. After loading the transcript, the handler cancels preparation,
+takes the deferred input, clears deferred-spawn state, and rebuilds the widget
+with any `PreparedAgent` that already completed. Removing the owned generation
+first makes a later result stale, so it is shut down instead of reopening the
+ACP picker. See
+[`event_handling.rs`](../../nori-rs/tui/src/app/event_handling.rs) and
+[`session_setup.rs`](../../nori-rs/tui/src/app/session_setup.rs).
+
 Onboarding may automatically choose a broker-tagged onboarding session or the
 documented compatibility fallback. That product decision happens after
 preparation and reuses the prepared connection.
@@ -216,6 +226,9 @@ process.
 - Deferred prompt text and image attachments survive ordinary replacement,
   including cancelled primary preparation, and candidate new/resume failure
   leaves the rollback widget's copy intact.
+- Selecting a local transcript while primary preparation is in flight cancels
+  preparation, reaps any spawned child, transfers deferred input, and cannot
+  install a late ACP picker.
 - Agents without `session/list` remain usable without conflating unsupported
   listing with an empty catalog.
 - An advertised `session/list` failure is a preparation failure and never

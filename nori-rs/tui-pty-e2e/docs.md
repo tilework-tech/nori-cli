@@ -33,9 +33,13 @@ current and prepared candidate coexist, activation reuses the prepared child,
 and cancellation or activation failure leaves the current session usable.
 Picker-first cloud scenarios also verify that deferred positional input reaches
 ordinary replacements and candidate new/resume activations without a stale
-preparation reclaiming the UI. The mock validates the exact prompt text before
-emitting the visible response marker, so those assertions cover delivery to the
-selected session rather than marker visibility alone.
+preparation reclaiming the UI. The local-resume race creates a real transcript,
+opens `/resume` before delayed cloud preparation reports capabilities, selects
+the local fallback, and verifies exact prompt delivery, child reaping, and no
+late picker. The mock validates the exact user portion before emitting the
+visible response marker, proving delivery rather than marker visibility alone.
+See [`cloud_mode.rs`](tests/cloud_mode.rs) and
+[`mock-acp-agent`](../mock-acp-agent/docs.md).
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same

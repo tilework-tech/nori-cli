@@ -57,10 +57,16 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   The suffix uppercases the model name and replaces hyphens with underscores
   (for example, `MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT`). Multi-agent PTY tests
   use this to prove which subprocess produced a visible response.
-- `MOCK_AGENT_EXPECT_PROMPT_TEXT` newline-joins the prompt's text blocks and
-  returns an ACP prompt error when they do not exactly match the configured
-  value. Configured response emission happens only after this validation, so
-  lifecycle PTY response markers prove deferred CLI input reached the selected
-  session unchanged.
+- `MOCK_AGENT_EXPECT_PROMPT_TEXT` compares the prompt's exact user text with
+  the configured value. It removes at most one recognized, distinct leading
+  Nori `<context>` text block when later user text blocks exist, then
+  newline-joins the remaining text blocks. Plain, malformed, and context-like
+  user blocks are compared in full. This ignores harness-selected product
+  context without weakening the exact user-text assertion. A mismatch returns
+  an ACP prompt error, and the configured response is emitted only after
+  validation. The recognized envelopes are
+  [`session_context.md`](../tui/session_context.md) and
+  [`session_context_http_mcp.md`](../tui/session_context_http_mcp.md); see the
+  [`tui-pty-e2e` contract](../tui-pty-e2e/docs.md).
 
 Created and maintained by Nori.
