@@ -55,6 +55,23 @@ fn deferred_startup_input_preserves_prompt_and_image_only_semantics_for_resume()
     assert_eq!(chat.first_prompt_text.as_deref(), Some("Already submitted"));
 }
 
+#[test]
+fn switch_candidate_can_clone_deferred_input_without_consuming_the_rollback_copy() {
+    let (mut chat, _rx, _unused_rx) = make_cloud_chatwidget_manual();
+    chat.first_prompt_text = Some("Continue onboarding".to_string());
+    chat.initial_user_message = Some(UserMessage {
+        text: "Continue onboarding".to_string(),
+        image_paths: vec![PathBuf::from("diagram.png")],
+    });
+
+    let cloned = chat.clone_initial_input();
+    let retained = chat.take_initial_input();
+
+    assert_eq!(cloned, retained);
+    assert_eq!(cloned.0.as_deref(), Some("Continue onboarding"));
+    assert_eq!(cloned.1, vec![PathBuf::from("diagram.png")]);
+}
+
 /// Deliver a prompt completion through the real client-event entry point.
 fn deliver_completion(chat: &mut ChatWidget, failure: Option<crate::presentation::TurnFailure>) {
     chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(

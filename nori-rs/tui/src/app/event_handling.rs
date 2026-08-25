@@ -125,10 +125,11 @@ impl App {
                         ));
                         return Ok(true);
                     }
+                    let (initial_prompt, initial_images) = self.chat_widget.clone_initial_input();
                     let mut init = self.chat_widget_init(
                         tui.frame_requester(),
-                        None,
-                        Vec::new(),
+                        initial_prompt,
+                        initial_images,
                         Some(config.active_agent.clone()),
                         false,
                         None,
@@ -172,11 +173,12 @@ impl App {
                     self.chat_widget.conversation_id(),
                     self.chat_widget.session_stats().has_activity(),
                 );
+                let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
                 self.shutdown_current_conversation();
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
-                    None,
-                    Vec::new(),
+                    initial_prompt,
+                    initial_images,
                     None,
                     self.cloud_onboard,
                     None,
@@ -1344,10 +1346,11 @@ impl App {
                         ));
                         return Ok(true);
                     }
+                    let (initial_prompt, initial_images) = self.chat_widget.clone_initial_input();
                     let mut init = self.chat_widget_init(
                         tui.frame_requester(),
-                        None,
-                        Vec::new(),
+                        initial_prompt,
+                        initial_images,
                         Some(config.active_agent.clone()),
                         false,
                         None,
