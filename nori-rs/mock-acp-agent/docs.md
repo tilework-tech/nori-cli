@@ -70,7 +70,7 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   [`tui-pty-e2e` contract](../tui-pty-e2e/docs.md).
 - `MOCK_AGENT_EXPECT_PROMPT_SUFFIX` checks that the same normalized prompt text
   ends with the configured value. Exact matching takes precedence when both
-  variables are set. Resume tests use suffix matching because client-side
-  transcript replay intentionally precedes newly deferred positional input.
+  variables are set. Suffix matching is used when client-side transcript replay
+  intentionally precedes newly deferred positional input.
 
 Created and maintained by Nori.
