@@ -10,24 +10,23 @@ use crossterm::event::KeyModifiers;
 use nori_config::HotkeyAction;
 use nori_config::HotkeyBinding;
 use nori_config::HotkeyConfig;
+use nori_tui_components::KeyHint;
+use nori_tui_components::Picker;
+use nori_tui_components::PickerColumn;
+use nori_tui_components::PickerColumnWidth;
+use nori_tui_components::PickerDensity;
+use nori_tui_components::PickerItem;
+use nori_tui_components::PickerState;
+use nori_tui_components::SearchMode;
 use ratatui::buffer::Buffer;
-use ratatui::layout::Constraint;
-use ratatui::layout::Layout;
 use ratatui::layout::Rect;
-use ratatui::style::Stylize;
-use ratatui::text::Line;
-use ratatui::text::Span;
-use ratatui::widgets::Block;
 use ratatui::widgets::Widget;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 use crate::bottom_pane::BottomPaneView;
 use crate::bottom_pane::CancellationEvent;
-use crate::render::Insets;
-use crate::render::RectExt as _;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
 
 use super::hotkey_match::key_event_to_binding;
 
@@ -154,6 +153,38 @@ impl HotkeyPickerView {
     pub(crate) fn is_rebinding(&self) -> bool {
         self.rebinding
     }
+
+    fn picker_state(&self) -> PickerState<usize> {
+        let items = self
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(index, (action, binding))| {
+                let binding = if self.rebinding && index == self.selected_idx {
+                    "(press key...)".to_string()
+                } else {
+                    binding.display_name()
+                };
+                PickerItem::new(index, "action", action.display_name()).cell("binding", binding)
+            })
+            .collect::<Vec<_>>();
+        let mut state = PickerState::new(
+            "Hotkeys",
+            [
+                PickerColumn::flexible("action", "Action").width(PickerColumnWidth::Flexible {
+                    min: 18,
+                    max: 48,
+                    weight: 1,
+                }),
+                PickerColumn::fixed("binding", "Binding", 20),
+            ],
+            items,
+        )
+        .subtitle("Configure keyboard shortcuts")
+        .search_mode(SearchMode::None);
+        state.selected_index = Some(self.selected_idx);
+        state
+    }
 }
 
 impl BottomPaneView for HotkeyPickerView {
@@ -242,98 +273,30 @@ impl BottomPaneView for HotkeyPickerView {
 
 impl Renderable for HotkeyPickerView {
     fn desired_height(&self, _width: u16) -> u16 {
-        // Content: title + subtitle + blank + entries + blank + footer hint = 3 + entries + 2
-        // Plus vertical inset: 1 top + 1 bottom = 2
-        (3 + self.entries.len() + 2 + 2) as u16
+        (self.entries.len() as u16).saturating_add(6)
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        if area.height == 0 || area.width == 0 {
-            return;
-        }
-
-        Block::default()
-            .style(user_message_style())
-            .render(area, buf);
-
-        let content_area = area.inset(Insets::vh(1, 2));
-        if content_area.height == 0 || content_area.width == 0 {
-            return;
-        }
-
-        let mut constraints = vec![
-            Constraint::Length(1), // title
-            Constraint::Length(1), // subtitle
-            Constraint::Length(1), // blank line
-        ];
-        for _ in &self.entries {
-            constraints.push(Constraint::Length(1));
-        }
-        constraints.push(Constraint::Length(1)); // blank line
-        constraints.push(Constraint::Length(1)); // footer hint
-
-        let areas = Layout::vertical(constraints).split(content_area);
-        let mut row = 0;
-
-        // Title
-        Line::from("Hotkeys".bold()).render(areas[row], buf);
-        row += 1;
-
-        // Subtitle
-        Line::from("Configure keyboard shortcuts".dim()).render(areas[row], buf);
-        row += 1;
-
-        // Blank
-        row += 1;
-
-        // Entries
-        for (idx, (action, binding)) in self.entries.iter().enumerate() {
-            let is_selected = idx == self.selected_idx;
-            let prefix = if is_selected { "› " } else { "  " };
-
-            let action_name = action.display_name();
-            let binding_display = if self.rebinding && is_selected {
-                "(press key...)".to_string()
-            } else {
-                binding.display_name()
-            };
-
-            // Calculate padding for right-alignment of binding
-            let left_len = prefix.len() + action_name.len();
-            let right_len = binding_display.len();
-            let total_width = areas[row].width as usize;
-            let padding = total_width.saturating_sub(left_len + right_len);
-
-            let spans: Vec<Span<'static>> = if is_selected {
-                vec![
-                    prefix.to_string().bold(),
-                    action_name.to_string().bold(),
-                    " ".repeat(padding).into(),
-                    binding_display.cyan(),
-                ]
-            } else {
-                vec![
-                    prefix.to_string().into(),
-                    action_name.to_string().into(),
-                    " ".repeat(padding).into(),
-                    binding_display.dim(),
-                ]
-            };
-
-            Line::from(spans).render(areas[row], buf);
-            row += 1;
-        }
-
-        // Blank
-        row += 1;
-
-        // Footer hint
-        let hint = if self.rebinding {
-            "esc cancel"
+        let state = self.picker_state();
+        let hints = if self.rebinding {
+            vec![
+                KeyHint::new("press", "new binding"),
+                KeyHint::new("esc", "cancel"),
+            ]
         } else {
-            "↑↓ select · enter rebind · r reset · esc close"
+            vec![
+                KeyHint::new("↑↓/j/k", "move"),
+                KeyHint::new("enter", "rebind"),
+                KeyHint::new("r", "reset"),
+                KeyHint::new("esc", "close"),
+            ]
         };
-        Line::from(hint.dim()).render(areas[row], buf);
+        Picker::new(&state)
+            .theme(crate::style::component_theme())
+            .density(PickerDensity::Compact)
+            .fullscreen_selection_rails(true)
+            .footer_hints(hints)
+            .render(area, buf);
     }
 }
 
@@ -400,6 +363,33 @@ mod tests {
 
         picker.handle_key_event(key(KeyCode::Char('k'), KeyModifiers::NONE));
         assert_eq!(picker.selected_idx(), 0);
+    }
+
+    #[test]
+    fn picker_render_uses_shared_symmetric_selection_rails() {
+        let (picker, _rx) = make_picker();
+        let area = Rect::new(0, 0, 80, picker.desired_height(80));
+        let mut buffer = Buffer::empty(area);
+
+        picker.render(area, &mut buffer);
+
+        let label = picker.entries()[0].0.display_name();
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains(label)
+            })
+            .expect("selected hotkey row");
+        assert!(
+            (area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▏"),
+            "selected row should have a left rail"
+        );
+        assert!(
+            (area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▕"),
+            "selected row should have a right rail"
+        );
     }
 
     #[test]
