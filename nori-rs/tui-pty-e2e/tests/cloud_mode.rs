@@ -247,9 +247,17 @@ fn write_local_cloud_transcript(nori_home: &Path, cwd: &Path) {
         "agent": "nori-cloud",
         "cli_version": "0.1.0"
     });
+    let user = serde_json::json!({
+        "ts": "2026-08-25T12:00:01Z",
+        "v": 2,
+        "type": "user",
+        "id": "local-cloud-message",
+        "content": "resume this local cloud transcript",
+        "attachments": []
+    });
     std::fs::write(
         sessions_dir.join(format!("{session_id}.jsonl")),
-        format!("{meta}\n"),
+        format!("{meta}\n{user}\n"),
     )
     .expect("write local transcript fixture");
 }
