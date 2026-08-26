@@ -104,68 +104,23 @@ impl App {
         match event {
             AppEvent::NewSession => {
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
-                    let Some(CandidateAgent::Prepared {
-                        agent_name,
-                        display_name,
-                        mut agent,
-                        ..
-                    }) = self.candidate_agent.take()
-                    else {
-                        unreachable!("candidate variant checked above")
-                    };
-                    let config = self.config_for_agent(&agent_name);
-                    if let Err(error) = nori_harness::runtime::refresh_prepared_agent(
-                        &mut agent,
-                        crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
-                    ) {
-                        tokio::spawn((*agent).shutdown());
-                        self.chat_widget.set_login_agent_override(Some(agent_name));
-                        self.chat_widget.add_error_message(format!(
-                            "Couldn't activate {display_name}: {error}"
-                        ));
-                        return Ok(true);
-                    }
-                    let mut init = self.chat_widget_init(
+                    self.activate_prepared_candidate(
                         tui.frame_requester(),
-                        None,
-                        Vec::new(),
-                        Some(config.active_agent.clone()),
-                        false,
-                        None,
+                        ChatWidget::new_candidate,
                     );
-                    init.config = config;
-                    init.prepared_agent = Some(*agent);
-                    let widget = ChatWidget::new_candidate(init);
-                    self.candidate_agent = Some(CandidateAgent::Activating {
-                        agent_name,
-                        display_name,
-                        widget: Box::new(widget),
-                    });
-                    tui.frame_requester().schedule_frame();
                     return Ok(true);
                 }
 
-                self.discard_candidate();
-                self.cancel_primary_agent_preparation();
-                if let Some(agent) = self.prepared_agent.take() {
-                    self.deferred_spawn_pending = false;
-                    let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
-                    self.shutdown_current_conversation();
-                    let mut init = self.chat_widget_init(
-                        tui.frame_requester(),
-                        initial_prompt,
-                        initial_images,
-                        None,
-                        false,
-                        None,
-                    );
-                    init.prepared_agent = Some(agent);
+                if self.prepared_agent.is_some() {
+                    let init = self.take_over_current_widget(tui.frame_requester());
                     self.chat_widget = ChatWidget::new(init);
                     self.configure_new_chat_widget();
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
                 }
 
+                self.discard_candidate();
+                self.cancel_primary_agent_preparation();
                 self.deferred_spawn_pending = self.cloud_onboard;
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
@@ -1295,22 +1250,7 @@ impl App {
                                 .map(|info| info.display_name)
                                 .unwrap_or_else(|| self.config.active_agent.clone());
 
-                        self.discard_candidate();
-                        self.cancel_primary_agent_preparation();
-                        let (initial_prompt, initial_images) =
-                            self.chat_widget.take_initial_input();
-                        self.deferred_spawn_pending = false;
-                        self.shutdown_current_conversation();
-
-                        let mut init = self.chat_widget_init(
-                            tui.frame_requester(),
-                            initial_prompt,
-                            initial_images,
-                            None,
-                            false,
-                            None,
-                        );
-                        init.prepared_agent = self.prepared_agent.take();
+                        let init = self.take_over_current_widget(tui.frame_requester());
                         self.chat_widget = ChatWidget::new_resumed_acp(
                             init,
                             acp_session_id,
@@ -1336,71 +1276,17 @@ impl App {
                 title,
             } => {
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
-                    let Some(CandidateAgent::Prepared {
-                        agent_name,
-                        display_name,
-                        mut agent,
-                        ..
-                    }) = self.candidate_agent.take()
-                    else {
-                        unreachable!("candidate variant checked above")
-                    };
-                    let config = self.config_for_agent(&agent_name);
-                    if let Err(error) = nori_harness::runtime::refresh_prepared_agent(
-                        &mut agent,
-                        crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
-                    ) {
-                        tokio::spawn((*agent).shutdown());
-                        self.chat_widget.set_login_agent_override(Some(agent_name));
-                        self.chat_widget.add_error_message(format!(
-                            "Couldn't activate {display_name}: {error}"
-                        ));
-                        return Ok(true);
-                    }
-                    let mut init = self.chat_widget_init(
-                        tui.frame_requester(),
-                        None,
-                        Vec::new(),
-                        Some(config.active_agent.clone()),
-                        false,
-                        None,
-                    );
-                    init.config = config;
-                    init.prepared_agent = Some(*agent);
-                    let widget = ChatWidget::new_resumed_acp_candidate(
-                        init,
-                        Some(acp_session_id),
-                        title,
-                        None,
-                    );
-                    self.candidate_agent = Some(CandidateAgent::Activating {
-                        agent_name,
-                        display_name,
-                        widget: Box::new(widget),
+                    self.activate_prepared_candidate(tui.frame_requester(), |init| {
+                        ChatWidget::new_resumed_acp_candidate(init, Some(acp_session_id), title, None)
                     });
-                    tui.frame_requester().schedule_frame();
                     return Ok(true);
                 }
 
-                self.discard_candidate();
-                self.cancel_primary_agent_preparation();
                 let display_name =
                     crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
                         .map(|info| info.display_name)
                         .unwrap_or_else(|| self.config.active_agent.clone());
-                let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
-                self.deferred_spawn_pending = false;
-                self.shutdown_current_conversation();
-
-                let mut init = self.chat_widget_init(
-                    tui.frame_requester(),
-                    initial_prompt,
-                    initial_images,
-                    None,
-                    false,
-                    None,
-                );
-                init.prepared_agent = self.prepared_agent.take();
+                let init = self.take_over_current_widget(tui.frame_requester());
                 self.chat_widget = ChatWidget::new_resumed_acp(
                     init,
                     Some(acp_session_id.clone()),

@@ -128,6 +128,81 @@ impl App {
         self.chat_widget.set_login_agent_override(None);
     }
 
+    /// Activate a `Prepared` switch candidate: refresh its session-time
+    /// configuration, then hand the prepared connection to `build` for the
+    /// hidden candidate widget. Refresh rejection shuts the candidate down,
+    /// reports the failure, and leaves the current session untouched.
+    /// Deferred launch input stays with the current widget, which remains
+    /// the rollback target until the candidate's `SessionStarted` commit.
+    pub(super) fn activate_prepared_candidate(
+        &mut self,
+        frame_requester: crate::tui::FrameRequester,
+        build: impl FnOnce(crate::chatwidget::ChatWidgetInit) -> ChatWidget,
+    ) {
+        let Some(CandidateAgent::Prepared {
+            agent_name,
+            display_name,
+            mut agent,
+            ..
+        }) = self.candidate_agent.take()
+        else {
+            unreachable!("callers check for a prepared candidate")
+        };
+        let config = self.config_for_agent(&agent_name);
+        if let Err(error) = nori_harness::runtime::refresh_prepared_agent(
+            &mut agent,
+            crate::chatwidget::agent::agent_prepare_spec(config.clone(), None),
+        ) {
+            tokio::spawn((*agent).shutdown());
+            self.chat_widget.set_login_agent_override(Some(agent_name));
+            self.chat_widget
+                .add_error_message(format!("Couldn't activate {display_name}: {error}"));
+            return;
+        }
+        let mut init = self.chat_widget_init(
+            frame_requester.clone(),
+            None,
+            Vec::new(),
+            Some(config.active_agent.clone()),
+            false,
+            None,
+        );
+        init.config = config;
+        init.prepared_agent = Some(*agent);
+        let widget = build(init);
+        self.candidate_agent = Some(CandidateAgent::Activating {
+            agent_name,
+            display_name,
+            widget: Box::new(widget),
+        });
+        frame_requester.schedule_frame();
+    }
+
+    /// Tear down the current widget's session state and build the init for
+    /// its replacement, carrying the deferred launch input and any prepared
+    /// connection forward. Shared by every ordinary (non-candidate)
+    /// replacement path so the teardown order cannot drift.
+    pub(super) fn take_over_current_widget(
+        &mut self,
+        frame_requester: crate::tui::FrameRequester,
+    ) -> crate::chatwidget::ChatWidgetInit {
+        self.discard_candidate();
+        self.cancel_primary_agent_preparation();
+        self.deferred_spawn_pending = false;
+        let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+        self.shutdown_current_conversation();
+        let mut init = self.chat_widget_init(
+            frame_requester,
+            initial_prompt,
+            initial_images,
+            None,
+            false,
+            None,
+        );
+        init.prepared_agent = self.prepared_agent.take();
+        init
+    }
+
     pub(super) fn config_for_agent(&self, agent_name: &str) -> NoriConfig {
         let mut config = self.config.clone();
         config.active_agent = agent_name.to_string();
