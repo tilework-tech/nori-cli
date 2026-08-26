@@ -627,26 +627,17 @@ mod tests {
         assert!(text.contains("Loop Count"), "should contain title");
         assert!(text.contains("Disabled"), "should contain Disabled option");
         assert!(text.contains("Custom"), "should contain Custom option");
-    }
-
-    #[test]
-    fn picker_render_uses_shared_symmetric_selection_rails() {
-        let (picker, _rx) = make_picker(None);
-        let area = Rect::new(0, 0, 60, picker.desired_height(60));
-        let mut buffer = Buffer::empty(area);
-
-        picker.render(area, &mut buffer);
-
+        let selected_label = picker.item_label(picker.selected_idx());
         let selected_row = (area.y..area.bottom())
             .find(|&y| {
                 (area.x..area.right())
-                    .map(|x| buffer[(x, y)].symbol())
+                    .map(|x| buf[(x, y)].symbol())
                     .collect::<String>()
-                    .contains("Disabled")
+                    .contains(&selected_label)
             })
             .expect("selected loop-count row");
-        assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▏"));
-        assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▕"));
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
     }
 
     #[test]

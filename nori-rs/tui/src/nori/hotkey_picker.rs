@@ -366,33 +366,6 @@ mod tests {
     }
 
     #[test]
-    fn picker_render_uses_shared_symmetric_selection_rails() {
-        let (picker, _rx) = make_picker();
-        let area = Rect::new(0, 0, 80, picker.desired_height(80));
-        let mut buffer = Buffer::empty(area);
-
-        picker.render(area, &mut buffer);
-
-        let label = picker.entries()[0].0.display_name();
-        let selected_row = (area.y..area.bottom())
-            .find(|&y| {
-                (area.x..area.right())
-                    .map(|x| buffer[(x, y)].symbol())
-                    .collect::<String>()
-                    .contains(label)
-            })
-            .expect("selected hotkey row");
-        assert!(
-            (area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▏"),
-            "selected row should have a left rail"
-        );
-        assert!(
-            (area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▕"),
-            "selected row should have a right rail"
-        );
-    }
-
-    #[test]
     fn picker_enter_starts_rebinding() {
         let (mut picker, _rx) = make_picker();
         assert!(!picker.is_rebinding());
@@ -541,5 +514,15 @@ mod tests {
             text.contains("Open Editor"),
             "should contain second action name"
         );
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("Open Transcript")
+            })
+            .expect("selected hotkey row");
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
     }
 }

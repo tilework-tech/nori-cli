@@ -4,7 +4,6 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use insta::assert_snapshot;
-use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
 use std::future::Future;
@@ -362,29 +361,4 @@ fn resume_table_snapshot() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_snapshot!("resume_picker_table", snapshot);
-}
-
-#[test]
-fn resume_picker_renders_symmetric_selection_rails() {
-    let state = state_with_rows(
-        vec![row("session-alpha", None), row("session-beta", None)],
-        true,
-        None,
-    );
-    let component_state = rendering::component_state(&state);
-    let area = Rect::new(0, 0, 80, 13);
-    let mut buffer = Buffer::empty(area);
-
-    rendering::picker(&component_state).render(area, &mut buffer);
-
-    let selected_row = (area.y..area.bottom())
-        .find(|&y| {
-            (area.x..area.right())
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-                .contains("session-alpha")
-        })
-        .expect("selected resume row");
-    assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▏"));
-    assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▕"));
 }

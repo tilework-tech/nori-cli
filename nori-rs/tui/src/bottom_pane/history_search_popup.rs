@@ -299,6 +299,18 @@ mod tests {
 
         popup.render_ref(area, &mut buffer);
 
-        assert_eq!(buffer[(2, 0)].fg, Color::Green);
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("selected entry")
+            })
+            .expect("selected history row");
+        let label_start = (area.x..area.right())
+            .find(|&x| buffer[(x, selected_row)].symbol() == "s")
+            .expect("selected history label");
+
+        assert_eq!(buffer[(label_start, selected_row)].fg, Color::Green);
     }
 }

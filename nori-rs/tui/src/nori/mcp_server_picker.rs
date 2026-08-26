@@ -1316,26 +1316,6 @@ mod tests {
     }
 
     #[test]
-    fn list_render_uses_shared_symmetric_selection_rails() {
-        let (picker, _rx) = picker_with_servers();
-        let area = Rect::new(0, 0, 80, picker.desired_height(80));
-        let mut buffer = Buffer::empty(area);
-
-        picker.render(area, &mut buffer);
-
-        let selected_row = (area.y..area.bottom())
-            .find(|&y| {
-                (area.x..area.right())
-                    .map(|x| buffer[(x, y)].symbol())
-                    .collect::<String>()
-                    .contains("Add new")
-            })
-            .expect("selected MCP row");
-        assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▏"));
-        assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▕"));
-    }
-
-    #[test]
     fn toggle_enabled_on_server() {
         let (mut picker, mut rx) = picker_with_servers();
 
@@ -1592,6 +1572,16 @@ mod tests {
         assert!(text.contains("MCP Servers"), "should contain title");
         assert!(text.contains("Add new"), "should contain Add new option");
         assert!(text.contains("docs"), "should contain server name");
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("Add new")
+            })
+            .expect("selected MCP row");
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
     }
 
     #[test]
@@ -1619,6 +1609,16 @@ mod tests {
 
         assert!(text.contains("Stdio"), "should contain Stdio option");
         assert!(text.contains("HTTP"), "should contain HTTP option");
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("Stdio")
+            })
+            .expect("selected MCP transport row");
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
     }
 
     #[test]

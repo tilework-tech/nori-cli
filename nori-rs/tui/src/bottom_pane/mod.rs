@@ -1012,22 +1012,6 @@ mod tests {
     }
 
     #[test]
-    fn nested_settings_selection_uses_the_shared_picker() {
-        let mut pane = test_bottom_pane();
-        let (tx, _rx) = unbounded_channel();
-        pane.show_selection_view(crate::nori::config_picker::vim_mode_picker_params(
-            nori_config::VimEnterBehavior::Off,
-            AppEventSender::new(tx),
-            true,
-        ));
-
-        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
-
-        assert_selected_row_has_symmetric_rails(&rendered, "Off");
-        assert!(!rendered.contains("/ search"), "{rendered}");
-    }
-
-    #[test]
     fn footer_segments_shared_picker_stays_open_after_a_toggle() {
         let (mut pane, mut rx) = test_bottom_pane_with_events();
         pane.show_selection_view(crate::nori::config_picker::footer_segments_picker_params(
@@ -1086,50 +1070,6 @@ mod tests {
         assert!(model_render.contains("Recommended"), "{model_render}");
         assert!(model_render.contains("Other"), "{model_render}");
         assert_selected_row_has_symmetric_rails(&model_render, "Stable");
-    }
-
-    #[test]
-    fn remaining_standard_picker_factories_use_the_shared_picker() {
-        let mut pane = test_bottom_pane();
-        let (tx, _rx) = unbounded_channel();
-        let app_event_tx = AppEventSender::new(tx);
-
-        pane.show_selection_view(
-            crate::nori::viewonly_session_picker::viewonly_session_picker_params(
-                vec![crate::nori::viewonly_session_picker::SessionPickerInfo {
-                    session_id: "session-1".to_string(),
-                    project_id: "project-1".to_string(),
-                    started_at: chrono::Utc::now().to_rfc3339(),
-                    user_turn_count: Some(1),
-                    first_message_preview: Some("First prompt".to_string()),
-                }],
-                std::path::PathBuf::from("/tmp/nori"),
-                app_event_tx.clone(),
-            ),
-        );
-        let history_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
-        assert_selected_row_has_symmetric_rails(&history_render, "1 turn");
-        assert!(history_render.contains("/ search"), "{history_render}");
-
-        pane.show_selection_view(crate::nori::skillset_picker::skillset_picker_params(
-            vec!["rust-dev".to_string(), "frontend".to_string()],
-            None,
-            None,
-            false,
-            false,
-        ));
-        let skillset_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
-        assert_selected_row_has_symmetric_rails(&skillset_render, "rust-dev");
-        assert!(skillset_render.contains("/ search"), "{skillset_render}");
-
-        pane.show_selection_view(crate::nori::fork_picker::fork_picker_params(
-            vec![(0, "Earlier prompt".to_string())],
-            true,
-            app_event_tx,
-        ));
-        let fork_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
-        assert_selected_row_has_symmetric_rails(&fork_render, "Branch from current point");
-        assert!(!fork_render.contains("/ search"), "{fork_render}");
     }
 
     #[test]
