@@ -12,6 +12,26 @@ mod render;
 
 pub use render::OverlayMenu;
 
+/// Vertical spacing policy for overlay-menu items and their containing surface.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MenuDensity {
+    /// Double-height items separated by a blank row with generous surface padding.
+    #[default]
+    Normal,
+    /// The same item anatomy without inter-item rows and with tighter surface padding.
+    Dense,
+}
+
+/// Background pattern for enabled, unselected overlay-menu items.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MenuRowPattern {
+    /// Use one neutral item surface throughout the menu.
+    #[default]
+    Plain,
+    /// Alternate two close neutral item surfaces by logical item.
+    Zebra,
+}
+
 /// A shortcut explicitly assigned to one menu item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuShortcut {

@@ -10,10 +10,12 @@ use ratatui::style::Style;
 pub struct Theme {
     pub text: Style,
     pub muted: Style,
-    pub accent: Style,
+    /// Compact focus and interaction indicators such as pointers, rails, and shortcuts.
+    pub pointer: Style,
     pub backdrop: Style,
     pub menu_surface: Style,
     pub menu_item_surface: Style,
+    pub menu_item_surface_alt: Style,
     pub surface: Style,
     pub input: Style,
     pub row: Style,
@@ -44,20 +46,21 @@ impl Default for Theme {
         Self {
             text: Style::new(),
             muted: Style::new().fg(Color::DarkGray),
-            accent: Style::new().fg(Color::Cyan),
+            pointer: Style::new().fg(Color::Green),
             backdrop: Style::new(),
             menu_surface: Style::new(),
             menu_item_surface: Style::new(),
+            menu_item_surface_alt: Style::new(),
             surface: Style::new(),
             input: Style::new(),
             row: Style::new(),
             row_alt: Style::new(),
             detail_surface: Style::new(),
-            selected: Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            selected: Style::new(),
             disabled: Style::new().fg(Color::DarkGray),
             border: Style::new().fg(Color::DarkGray),
             separator: Style::new().fg(Color::DarkGray),
-            title: Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            title: Style::new().add_modifier(Modifier::BOLD),
             info: Style::new().fg(Color::Cyan),
             success: Style::new().fg(Color::Green),
             warning: Style::new().fg(Color::Yellow),
@@ -94,6 +97,9 @@ impl Theme {
         let menu_surface = relative_surface(background, 8);
         theme.menu_surface = theme.menu_surface.bg(menu_surface);
         theme.menu_item_surface = theme.menu_item_surface.bg(darken_surface(menu_surface, 3));
+        theme.menu_item_surface_alt = theme
+            .menu_item_surface_alt
+            .bg(darken_surface(menu_surface, 6));
         theme.row = theme.row.bg(relative_surface(background, 4));
         theme.row_alt = theme.row_alt.bg(relative_surface(background, 7));
         theme.input = theme.input.bg(relative_surface(background, 8));

@@ -48,7 +48,7 @@ fn main() -> Result<()> {
                 Paragraph::new(vec![
                     Line::styled("Semantic tokens", theme.title),
                     Line::from(vec![
-                        Span::styled("accent  ", theme.accent),
+                        Span::styled("pointer ", theme.pointer),
                         Span::styled("success  ", theme.success),
                         Span::styled("warning  ", theme.warning),
                         Span::styled("error  ", theme.error),

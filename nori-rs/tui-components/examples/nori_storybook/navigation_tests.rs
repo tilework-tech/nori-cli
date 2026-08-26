@@ -8,7 +8,12 @@ use crossterm::event::KeyModifiers;
 use nori_tui_components::MenuAction;
 use nori_tui_components::MenuShortcut;
 use nori_tui_components::PickerAction;
+use nori_tui_components::Theme;
 use pretty_assertions::assert_eq;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
 
 #[test]
 fn overlay_page_has_an_alternate_route_back_to_other_pages() {
@@ -129,6 +134,37 @@ fn detail_stories_cycle_through_each_configurable_presentation() {
     }
 }
 
+#[test]
+fn active_page_navigation_colors_only_its_compact_number() {
+    let area = Rect::new(0, 0, 100, 1);
+    let mut buffer = Buffer::empty(area);
+    super::render_navigation(area, &mut buffer, Page::Picker, Theme::default());
+
+    let active_number = find_ascii_text(&buffer, "1").expect("active page number");
+    let active_label = find_ascii_text(&buffer, "Picker").expect("active page label");
+    assert_eq!(buffer[active_number].fg, Color::Green);
+    assert_eq!(buffer[active_label].fg, Color::Reset);
+    assert!(buffer[active_label].modifier.contains(Modifier::BOLD));
+}
+
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
+}
+
+fn find_ascii_text(buffer: &Buffer, text: &str) -> Option<(u16, u16)> {
+    assert!(text.is_ascii());
+    let characters = text.chars().collect::<Vec<_>>();
+    for y in buffer.area.y..buffer.area.bottom() {
+        for x in buffer.area.x..buffer.area.right() {
+            if x.saturating_add(characters.len() as u16) > buffer.area.right() {
+                break;
+            }
+            if characters.iter().enumerate().all(|(offset, character)| {
+                buffer[(x + offset as u16, y)].symbol() == character.to_string()
+            }) {
+                return Some((x, y));
+            }
+        }
+    }
+    None
 }

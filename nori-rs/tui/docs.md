@@ -28,6 +28,14 @@ The TUI depends on `nori-harness`, `nori-config`, and `nori-protocol`; it does
 not import the ACP host or ACP schema crate directly. Its ACP types arrive
 through `nori_protocol::acp`.
 
+Shared pickers receive [`nori-tui-components`](../tui-components/docs.md)
+styles through [`component_theme`](src/style.rs). That adapter supplies the
+terminal's reported RGB background only when stdout supports true color, so
+neutral surfaces remain terminal-relative while the component library owns the
+green pointer, cyan information, foreground title, and neutral selected-copy
+grammar. Both bottom-pane pickers and the launch-time resume picker use this
+path; raw key routing and application actions remain owned by the TUI.
+
 At launch, the TUI supplies the harness with two Nori CLI context-envelope
 variants. Both identify the first prompt as coming from Nori CLI; the
 non-HTTP-MCP variant also explains the ACP fallback and unavailable MCP-backed
