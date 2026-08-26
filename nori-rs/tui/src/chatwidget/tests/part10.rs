@@ -74,7 +74,10 @@ async fn committed_candidate_submits_taken_launch_input_as_first_prompt() {
 
     chat.submit_launch_input(Some("Continue onboarding".to_string()), Vec::new());
 
-    assert_eq!(chat.first_prompt_text.as_deref(), Some("Continue onboarding"));
+    assert_eq!(
+        chat.first_prompt_text.as_deref(),
+        Some("Continue onboarding")
+    );
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
             match session.events.recv().await {

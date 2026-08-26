@@ -280,7 +280,11 @@ impl ChatWidget {
     /// the app after a committed switch candidate attaches the remote host, so
     /// the first turn lands inside the new session's remote subscription.
     /// Seeds `first_prompt_text` like the constructors do for other paths.
-    pub(crate) fn submit_launch_input(&mut self, prompt: Option<String>, image_paths: Vec<PathBuf>) {
+    pub(crate) fn submit_launch_input(
+        &mut self,
+        prompt: Option<String>,
+        image_paths: Vec<PathBuf>,
+    ) {
         let Some(message) =
             super::create_initial_user_message(prompt.clone().unwrap_or_default(), image_paths)
         else {

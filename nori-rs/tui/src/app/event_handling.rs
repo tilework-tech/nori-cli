@@ -1277,7 +1277,12 @@ impl App {
             } => {
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
                     self.activate_prepared_candidate(tui.frame_requester(), |init| {
-                        ChatWidget::new_resumed_acp_candidate(init, Some(acp_session_id), title, None)
+                        ChatWidget::new_resumed_acp_candidate(
+                            init,
+                            Some(acp_session_id),
+                            title,
+                            None,
+                        )
                     });
                     return Ok(true);
                 }
