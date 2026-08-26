@@ -126,7 +126,7 @@ impl<'a> EmptyState<'a> {
 impl Widget for EmptyState<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let mut lines = vec![Line::from(vec![
-            Span::styled(format!("{} ", self.marker), self.theme.accent),
+            Span::styled(format!("{} ", self.marker), self.theme.info),
             Span::styled(self.title.into_owned(), self.theme.text),
         ])];
         if let Some(detail) = self.detail {
@@ -185,7 +185,7 @@ impl Widget for KeyHints<'_> {
             .flat_map(|(index, hint)| {
                 let separator = (index > 0).then(|| Span::styled("  ", self.theme.muted));
                 separator.into_iter().chain([
-                    Span::styled(hint.key.into_owned(), self.theme.accent),
+                    Span::styled(hint.key.into_owned(), self.theme.pointer),
                     Span::raw(" "),
                     Span::styled(hint.action.into_owned(), self.theme.muted),
                 ])

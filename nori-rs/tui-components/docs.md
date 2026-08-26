@@ -49,12 +49,18 @@ consumer application
   [`picker` renderer](src/picker/render.rs) adapts selected-item details into
   entries, supplies the `Details` heading, and otherwise uses the pane's
   compatibility defaults.
-- [`theme`](src/theme/) supplies semantic styles shared across components,
-  including the detail-pane surface and agent identity tones selected through
-  [`ProviderKind`](src/detail.rs). Neutral backgrounds, including the distinct
-  overlay item layer, are derived from a reported terminal RGB background only
-  when the consumer knows true color is supported; otherwise those backgrounds
+- [`theme`](src/theme/) supplies semantic styles shared across components. Its
+  `pointer` token is the green interaction signal, `info` is the cyan
+  informational accent, titles are bold terminal foreground, and selected
+  primary copy remains terminal foreground on a neutral surface. It also
+  includes the detail-pane surface and agent identity tones selected through
+  [`ProviderKind`](src/detail.rs). Neutral backgrounds, including both overlay
+  item layers, are derived from a reported terminal RGB background only when
+  the consumer knows true color is supported; otherwise those backgrounds
   remain unset.
+- Presentation primitives preserve the same semantic split: key labels use the
+  compact `pointer` treatment, while empty-state markers use `info`; supporting
+  copy remains muted in both cases.
 - Ratatui provides the rendering types and caller rectangles. Crossterm is an
   example-only development dependency, so the public library does not bind a
   consumer to one raw event source.
@@ -88,6 +94,14 @@ consumer application
   every raw-key alias a consumer may map. This keeps the state machine and
   presentation synchronized while leaving the consumer free to choose which
   raw keys activate search.
+- Toggle and multi-select marker glyphs encode focus separately from checked
+  state. This keeps both states visible when terminal-relative selection
+  backgrounds are unavailable and [`Theme::default`](src/theme/mod.rs) leaves
+  the selected surface unset. [`Picker`](src/picker/render.rs) also offers
+  opt-in symmetric focus rails for caller-owned full-screen overlays. In single
+  mode the rails replace the pointer; in toggle and multi modes they carry
+  focus while `●` and `○` preserve checked state. Embedded and copyable picker
+  content must leave the option disabled.
 - Picker consumers may attach explicit [`ProviderKind`](src/detail.rs) values
   to category names and individual cells. Category tabs retain their provider
   foreground when active and add bold emphasis; toned cells are used only for
@@ -106,7 +120,11 @@ consumer application
 - `OverlayMenu` centers a content-derived, maximum-width surface inside the
   supplied rectangle. Rendering reconciles only menu-local viewport offset and
   capacity so the selection stays visible when content exceeds the available
-  height.
+  height. Its independent [`MenuDensity`](src/menu/) and
+  [`MenuRowPattern`](src/menu/) policies default to Normal and Plain. Dense
+  retains label-plus-description anatomy while removing blank inter-item rows
+  and tightening surface padding; Zebra alternates enabled item surfaces and
+  can be combined with either density.
 - `DetailPane` accepts key/value entries and structural rules, trims trailing
   colons from labels, and maps semantic or provider tones through the shared
   theme. It styles the full pane surface one horizontal cell inside the caller's
@@ -148,15 +166,22 @@ consumer application
   display width, and emits overflow markers when not all items fit. Key hints
   occupy the bottom of the remaining surface and clamp below the title so tiny
   or non-zero-origin caller rectangles remain bounded.
-- Enabled, unselected menu items fill their complete item rectangles with the
-  darker [`Theme::menu_item_surface`](src/theme/mod.rs) layer. Its terminal-aware
-  default starts from `menu_surface` and lowers each RGB channel by a small
-  fixed amount, so enabled items keep the same depth direction on dark and
-  light terminal backgrounds. Selected items retain the normal primary accent
-  across semantic tones and use symmetric thin edge rails; disabled items
-  remain faded on `menu_surface` and stay unavailable to navigation or
-  activation. Warning and destructive colors identify consequences only while
-  an item is not selected.
+- Enabled, unselected menu items fill their complete item rectangles with
+  [`Theme::menu_item_surface`](src/theme/mod.rs), or alternate it with
+  `menu_item_surface_alt` when Zebra is selected. Terminal-aware defaults lower
+  each RGB channel from `menu_surface` by three levels for the base item layer
+  and six for the alternate; both remain unset without an eligible RGB theme.
+  Selection overrides either stripe, while disabled items remain faded on
+  `menu_surface`. Character mnemonics add bold to the label's existing
+  foreground or consequence tone and never use pointer green; number shortcut
+  cells keep the pointer treatment. Selected items use terminal-foreground
+  primary copy, muted supporting copy, a neutral selected surface, and a
+  compact green pointer. Symmetric thin edge rails are available only through
+  the explicit `fullscreen_selection_rails(true)` presentation option; they
+  replace the pointer and must be used only by a caller-owned full-screen
+  overlay layer. Disabled items stay unavailable to navigation or activation.
+  Warning and destructive colors identify consequences only while an item is
+  not selected.
 
 ### Things to Know
 
@@ -173,19 +198,20 @@ consumer application
   query, so page navigation, quit, density, mode, and state shortcuts remain
   suspended until search deactivates.
 - Provider tones are opt-in metadata rather than label inference. Untoned
-  categories keep the existing accent-or-muted active treatment, and untoned
-  cells keep the row's normal state style.
+  categories use bold terminal foreground when active and muted text when
+  inactive, and untoned cells keep the row's normal state style.
 - A shortcut invokes its matching enabled item immediately. When an item has
   both shortcut families, either maps to the same stable key; precedence among
   raw input meanings belongs to the consumer adapter.
 - Disabled items remain visible but cannot receive selection or activation.
   Empty and all-disabled menus are valid and have no selected item.
 - Surface height is content-derived and viewport-limited. Descriptions use at
-  most two rows, blank spacing separates items, and selected content remains
-  visible as the viewport changes.
+  most two rows, Normal density separates items with blank rows, Dense density
+  removes those rows, and selected content remains visible as the viewport
+  changes.
 - `backdrop` styles only the caller-provided rectangle. Without a derived RGB
-  theme, the backdrop, menu surface, and menu-item surface remain unset instead
-  of substituting an absolute neutral color.
+  theme, the backdrop, menu surface, and both menu-item surfaces remain unset
+  instead of substituting an absolute neutral color.
 - Detail-pane surface styling is independent of heading presence and fills the
   pane's inset height, including blank heading and rule spacing. Only the outer
   horizontal caller gutters remain outside `Theme::detail_surface`; a selected

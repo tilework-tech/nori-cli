@@ -1,0 +1,17 @@
+---
+source: tui-components/src/picker/tests.rs
+expression: "snapshot_with_options(&session_picker(), 86, 13, PickerDensity::Normal, true,)"
+---
+"                                                                                      "
+"  Resume a session                                                                    "
+"  Search ACP sessions or start fresh                                                  "
+"  All  Local  Cloud                                                                   "
+"     Session                              Project           Updated     Turn          "
+"  ▏  Start a new session                  Not reported      now         ready      ▕  "
+"  ▏  Create a fresh ACP session                                                    ▕  "
+"     Fix parser recovery (current)        nori-cli          2m ago      working       "
+"     Codex is implementing parser recovery                                            "
+"     Improve Markdown tables              codex             18m ago     waiting       "
+"     Waiting for user input                                                           "
+"                    ↑↓/j/k move  / search  enter select  esc close                    "
+"                                                                                      "

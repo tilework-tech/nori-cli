@@ -176,7 +176,13 @@ fn main() -> Result<()> {
             );
             match page {
                 Page::Picker => {
-                    frame.render_widget(Picker::new(&state).theme(theme).density(density), content);
+                    frame.render_widget(
+                        Picker::new(&state)
+                            .theme(theme)
+                            .density(density)
+                            .fullscreen_selection_rails(true),
+                        content,
+                    );
                     render_storybook_footer(content, frame.buffer_mut(), density, &notice, theme);
                 }
                 Page::Markdown => render_markdown(content, frame.buffer_mut(), theme),
@@ -303,7 +309,7 @@ fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, 
         Paragraph::new(Line::from(vec![
             Span::styled("← previous page", theme.muted),
             Span::raw("   "),
-            Span::styled("Overlay menu", theme.accent),
+            Span::styled("Overlay menu", theme.title),
             Span::raw("   "),
             Span::styled("next page →", theme.muted),
         ]))
@@ -312,26 +318,26 @@ fn render_navigation(area: Rect, buf: &mut ratatui::buffer::Buffer, page: Page, 
         return;
     }
     let labels = [
-        (Page::Picker, "1 Picker"),
-        (Page::Markdown, "2 Markdown"),
-        (Page::Primitives, "3 Primitives"),
-        (Page::States, "4 States"),
-        (Page::Details, "5 Details"),
-        (Page::OverlayMenu, "6 Overlay menu"),
+        (Page::Picker, "1", "Picker"),
+        (Page::Markdown, "2", "Markdown"),
+        (Page::Primitives, "3", "Primitives"),
+        (Page::States, "4", "States"),
+        (Page::Details, "5", "Details"),
+        (Page::OverlayMenu, "6", "Overlay menu"),
     ];
-    let spans = labels
-        .into_iter()
-        .enumerate()
-        .flat_map(|(index, (candidate, label))| {
-            let gap = (index > 0).then(|| Span::raw("   "));
-            let style = if candidate == page {
-                theme.accent
-            } else {
-                theme.muted
-            };
-            gap.into_iter().chain([Span::styled(label, style)])
-        })
-        .collect::<Vec<_>>();
+    let mut spans = Vec::new();
+    for (index, (candidate, number, label)) in labels.into_iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::raw("   "));
+        }
+        if candidate == page {
+            spans.push(Span::styled(number, theme.pointer));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(label, theme.title));
+        } else {
+            spans.push(Span::styled(format!("{number} {label}"), theme.muted));
+        }
+    }
     Paragraph::new(Line::from(spans))
         .alignment(Alignment::Center)
         .render(Rect::new(area.x, area.y, area.width, 1), buf);
@@ -396,7 +402,7 @@ fn render_primitives(area: Rect, buf: &mut ratatui::buffer::Buffer, theme: Theme
     Paragraph::new(vec![
         Line::styled("Semantic tokens", theme.title),
         Line::from(vec![
-            Span::styled("accent   ", theme.accent),
+            Span::styled("pointer  ", theme.pointer),
             Span::styled("success   ", theme.success),
             Span::styled("warning   ", theme.warning),
             Span::styled("error   ", theme.error),

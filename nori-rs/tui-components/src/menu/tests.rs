@@ -258,7 +258,7 @@ fn page_navigation_uses_the_rendered_viewport_and_keeps_selection_visible() {
         MenuOutcome::SelectionChanged(Some("three"))
     );
     let page_down = snapshot(&mut state, 30, 7, "Choose", None);
-    assert!(page_down.contains("▏ Three"));
+    assert!(page_down.contains("› Three"));
     assert!(page_down.contains('↑'));
     assert!(page_down.contains('↓'));
     assert!(state.viewport_offset() > 0);
@@ -268,7 +268,7 @@ fn page_navigation_uses_the_rendered_viewport_and_keeps_selection_visible() {
         MenuOutcome::SelectionChanged(Some("one"))
     );
     let page_up = snapshot(&mut state, 30, 7, "Choose", None);
-    assert!(page_up.contains("▏ One"));
+    assert!(page_up.contains("› One"));
 }
 
 #[test]
@@ -349,6 +349,23 @@ fn menu_100x30_shortcut_snapshot() {
 }
 
 #[test]
+fn menu_80x24_dense_zebra_snapshot() {
+    let mut action = action_state();
+    assert_snapshot!(
+        "menu_80x24_dense_zebra",
+        snapshot_with_presentation(
+            &mut action,
+            80,
+            24,
+            "Choose how to continue",
+            Some("Dense spacing with alternating item surfaces"),
+            MenuDensity::Dense,
+            MenuRowPattern::Zebra,
+        )
+    );
+}
+
+#[test]
 #[allow(clippy::disallowed_methods)]
 fn derived_surfaces_style_the_backdrop_menu_and_title() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
@@ -366,6 +383,7 @@ fn derived_surfaces_style_the_backdrop_menu_and_title() {
     assert_eq!(buffer[(0, 0)].bg, Color::Rgb(29, 29, 29));
     let title = find_ascii_text(&buffer, "Remove local session?").expect("title");
     assert_eq!(buffer[title].bg, Color::Rgb(38, 38, 38));
+    assert_eq!(buffer[title].fg, Color::Reset);
     assert!(buffer[title].modifier.contains(Modifier::BOLD));
 }
 
@@ -431,7 +449,7 @@ fn enabled_items_stay_darker_than_disabled_items_on_light_backgrounds() {
 
 #[test]
 #[allow(clippy::disallowed_methods)]
-fn selection_fills_every_item_row_and_uses_symmetric_accent_rails() {
+fn default_selection_uses_a_surface_and_pointer_without_edge_rails() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
     let mut state = consequence_state();
     let buffer = rendered_buffer(
@@ -445,24 +463,46 @@ fn selection_fills_every_item_row_and_uses_symmetric_accent_rails() {
     );
 
     let selected = find_ascii_text(&buffer, "Keep session").expect("selected label");
-    let left_rail = find_symbol_on_row(&buffer, selected.1, "▏").expect("left rail");
-    let right_rail = find_symbol_on_row(&buffer, selected.1, "▕").expect("right rail");
-    assert_eq!(buffer[left_rail].fg, Color::Cyan);
-    assert_eq!(buffer[right_rail].fg, Color::Cyan);
-    assert_eq!(
-        find_symbol_on_row(&buffer, selected.1 + 1, "▏"),
-        Some((left_rail.0, selected.1 + 1))
-    );
-    assert_eq!(
-        find_symbol_on_row(&buffer, selected.1 + 1, "▕"),
-        Some((right_rail.0, selected.1 + 1))
-    );
-    for y in selected.1..=selected.1 + 1 {
-        for x in left_rail.0..=right_rail.0 {
-            assert_eq!(buffer[(x, y)].bg, Color::Rgb(43, 43, 43));
-        }
+    let pointer = find_symbol_on_row(&buffer, selected.1, "›").expect("selection pointer");
+    assert_eq!(buffer[pointer].fg, Color::Green);
+    assert_eq!(buffer[selected].fg, Color::Reset);
+    let description =
+        find_ascii_text(&buffer, "Supporting copy for Keep session").expect("description");
+    assert_eq!(buffer[description].fg, Color::DarkGray);
+    for row in selected.1..=description.1 {
+        assert_eq!(find_symbol_on_row(&buffer, row, "▏"), None);
+        assert_eq!(find_symbol_on_row(&buffer, row, "▕"), None);
     }
-    assert_eq!(buffer[selected].fg, Color::Cyan);
+    for cell in [pointer, selected, description] {
+        assert_eq!(buffer[cell].bg, Color::Rgb(43, 43, 43));
+    }
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn fullscreen_selection_rails_are_explicit_and_replace_the_pointer() {
+    let theme = Theme::for_terminal_background(Some((20, 20, 20)));
+    let mut state = consequence_state();
+    let buffer = rendered_buffer_with_selection_rails(
+        &mut state,
+        80,
+        24,
+        "Remove local session?",
+        None,
+        theme,
+        Color::Blue,
+    );
+
+    let selected = find_ascii_text(&buffer, "Keep session").expect("selected label");
+    let description =
+        find_ascii_text(&buffer, "Supporting copy for Keep session").expect("description");
+    for row in selected.1..=description.1 {
+        let left = find_symbol_on_row(&buffer, row, "▏").expect("left selection rail");
+        let right = find_symbol_on_row(&buffer, row, "▕").expect("right selection rail");
+        assert_eq!(buffer[left].fg, Color::Green);
+        assert_eq!(buffer[right].fg, Color::Green);
+        assert_eq!(find_symbol_on_row(&buffer, row, "›"), None);
+    }
 }
 
 #[test]
@@ -505,7 +545,7 @@ fn semantic_tones_disabled_copy_and_current_state_keep_distinct_styles() {
 }
 
 #[test]
-fn selected_destructive_items_keep_the_primary_focus_accent() {
+fn selected_destructive_items_move_color_to_the_pointer() {
     let mut state = consequence_state();
     state.select_key(&"delete");
     let buffer = rendered_buffer(
@@ -520,11 +560,14 @@ fn selected_destructive_items_keep_the_primary_focus_accent() {
 
     let selected =
         find_ascii_text(&buffer, "Delete local transcript").expect("selected destructive");
-    assert_eq!(buffer[selected].fg, Color::Cyan);
+    assert_eq!(buffer[selected].fg, Color::Reset);
+    let pointer = find_symbol_on_row(&buffer, selected.1, "›").expect("selection pointer");
+    assert_eq!(buffer[pointer].fg, Color::Green);
 }
 
 #[test]
-fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
+#[allow(clippy::disallowed_methods)]
+fn shortcut_columns_align_numbers_and_bold_unselected_mnemonics() {
     let mut state = MenuState::try_new([
         MenuItem::new("resume", "Resume session")
             .description("Continue")
@@ -539,13 +582,14 @@ fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
     ])
     .expect("valid shortcut menu");
     state.select_key(&"share");
+    let theme = Theme::for_terminal_background(Some((20, 20, 20)));
     let buffer = rendered_buffer(
         &mut state,
         80,
         24,
         "Choose a session action",
         None,
-        Theme::default(),
+        theme,
         Color::Blue,
     );
 
@@ -557,12 +601,186 @@ fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
     assert_eq!(buffer[(resume.0 - 3, resume.1)].symbol(), "1");
     assert_eq!(buffer[(inspect.0 - 3, inspect.1)].symbol(), " ");
     assert_eq!(buffer[(share.0 - 3, share.1)].symbol(), "3");
+    assert_eq!(buffer[(resume.0 - 3, resume.1)].fg, Color::Green);
+    assert_eq!(buffer[resume].fg, Color::Reset);
+    assert_eq!(buffer[(resume.0 + 1, resume.1)].fg, Color::Reset);
+    assert_eq!(buffer[(share.0 - 3, share.1)].fg, Color::Green);
     assert!(buffer[resume].modifier.contains(Modifier::BOLD));
     assert!(buffer[inspect].modifier.contains(Modifier::BOLD));
     assert!(!buffer[share].modifier.contains(Modifier::BOLD));
-    assert_eq!(state.items()[0].label(), "Resume session");
-    assert_eq!(state.items()[1].label(), "Inspect transcript");
-    assert_eq!(state.items()[2].label(), "Share session");
+}
+
+#[test]
+fn selected_mnemonics_keep_label_color_while_numbers_stay_green() {
+    let mut state = MenuState::try_new([MenuItem::new("resume", "Resume session")
+        .mnemonic('r')
+        .number_shortcut(1)])
+    .expect("valid selected shortcut menu");
+    let selected_buffer = rendered_buffer(
+        &mut state,
+        80,
+        24,
+        "Choose a session action",
+        None,
+        Theme::default(),
+        Color::Blue,
+    );
+    let selected_resume =
+        find_ascii_text(&selected_buffer, "Resume session").expect("selected resume label");
+    assert_eq!(selected_buffer[selected_resume].fg, Color::Reset);
+    assert!(
+        selected_buffer[selected_resume]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+    assert_eq!(
+        selected_buffer[(selected_resume.0 - 3, selected_resume.1)].fg,
+        Color::Green
+    );
+}
+
+#[test]
+fn semantic_mnemonics_bold_the_existing_consequence_tone() {
+    let mut destructive_state = MenuState::try_new([
+        MenuItem::new("keep", "Keep session"),
+        MenuItem::new("delete", "Delete session")
+            .mnemonic('d')
+            .tone(MenuItemTone::Destructive),
+    ])
+    .expect("valid semantic shortcut menu");
+    let semantic_buffer = rendered_buffer(
+        &mut destructive_state,
+        80,
+        24,
+        "Choose a session action",
+        None,
+        Theme::default(),
+        Color::Blue,
+    );
+    let destructive =
+        find_ascii_text(&semantic_buffer, "Delete session").expect("destructive label");
+    assert_eq!(semantic_buffer[destructive].fg, Color::Red);
+    assert!(
+        semantic_buffer[destructive]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn dense_menu_keeps_item_anatomy_without_inter_item_rows_and_tightens_padding() {
+    let theme = Theme {
+        menu_surface: Style::new().bg(Color::Cyan),
+        menu_item_surface: Style::new().bg(Color::Black),
+        selected: Style::new().bg(Color::Magenta),
+        ..Theme::default()
+    };
+    let mut normal_state = action_state();
+    let normal = rendered_buffer_with_presentation(
+        &mut normal_state,
+        80,
+        24,
+        theme,
+        MenuDensity::Normal,
+        MenuRowPattern::Plain,
+    );
+    let mut dense_state = action_state();
+    let dense = rendered_buffer_with_presentation(
+        &mut dense_state,
+        80,
+        24,
+        theme,
+        MenuDensity::Dense,
+        MenuRowPattern::Plain,
+    );
+
+    let normal_first = find_ascii_text(&normal, "Resume the selected transcript").expect("row");
+    let normal_second = find_ascii_text(&normal, "Start a new session").expect("row");
+    let dense_first = find_ascii_text(&dense, "Resume the selected transcript").expect("row");
+    let dense_second = find_ascii_text(&dense, "Start a new session").expect("row");
+    assert_eq!(normal_second.1 - normal_first.1, 3);
+    assert_eq!(dense_second.1 - dense_first.1, 2);
+    assert!(dense_first.0 < normal_first.0);
+    assert_eq!(
+        find_ascii_text(&dense, "Continue the selected transcript")
+            .expect("dense description")
+            .1,
+        dense_first.1 + 1
+    );
+    assert_eq!(
+        selected_surface_bounds(&normal, normal_first.1, Color::Magenta),
+        Some((normal_first.0 - 2, normal_first.0 + 51))
+    );
+    assert_eq!(
+        selected_surface_bounds(&dense, dense_first.1, Color::Magenta),
+        Some((dense_first.0 - 2, dense_first.0 + 53))
+    );
+    let normal_title = find_ascii_text(&normal, "Choose how to continue").expect("normal title");
+    let dense_title = find_ascii_text(&dense, "Choose how to continue").expect("dense title");
+    assert_eq!(
+        normal_title.1,
+        menu_surface_top(&normal, normal_title.0, Color::Cyan) + 1
+    );
+    assert_eq!(
+        dense_title.1,
+        menu_surface_top(&dense, dense_title.0, Color::Cyan)
+    );
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn dense_menu_zebra_surfaces_preserve_selection_and_disabled_precedence() {
+    let theme = Theme {
+        menu_surface: Style::new().bg(Color::Blue),
+        menu_item_surface: Style::new().bg(Color::Black),
+        menu_item_surface_alt: Style::new().bg(Color::Yellow),
+        selected: Style::new().bg(Color::Magenta),
+        ..Theme::default()
+    };
+    let items = [
+        basic_item("first", "First action"),
+        basic_item("selected", "Selected alternate action"),
+        basic_item("plain", "Plain action"),
+        basic_item("alternate", "Alternate action"),
+        basic_item("disabled", "Disabled action").disabled(true),
+    ];
+    let mut state = MenuState::try_new(items.clone()).expect("valid zebra menu");
+    state.select_key(&"selected");
+    let zebra = rendered_buffer_with_presentation(
+        &mut state,
+        80,
+        24,
+        theme,
+        MenuDensity::Dense,
+        MenuRowPattern::Zebra,
+    );
+
+    let first = find_ascii_text(&zebra, "First action").expect("first row");
+    let selected =
+        find_ascii_text(&zebra, "Selected alternate action").expect("selected alternate row");
+    let plain = find_ascii_text(&zebra, "Plain action").expect("plain row");
+    let alternate = find_ascii_text(&zebra, "Alternate action").expect("alternate row");
+    let disabled = find_ascii_text(&zebra, "Disabled action").expect("disabled row");
+    assert_eq!(zebra[first].bg, Color::Black);
+    assert_eq!(zebra[selected].bg, Color::Magenta);
+    assert_eq!(zebra[plain].bg, Color::Black);
+    assert_eq!(zebra[alternate].bg, Color::Yellow);
+    assert_eq!(zebra[disabled].bg, Color::Blue);
+
+    let mut plain_state = MenuState::try_new(items).expect("valid plain menu");
+    plain_state.select_key(&"selected");
+    let plain_menu = rendered_buffer_with_presentation(
+        &mut plain_state,
+        80,
+        24,
+        theme,
+        MenuDensity::Dense,
+        MenuRowPattern::Plain,
+    );
+    let unselected_alternate =
+        find_ascii_text(&plain_menu, "Alternate action").expect("plain alternate row");
+    assert_eq!(plain_menu[unselected_alternate].bg, Color::Black);
 }
 
 #[test]
@@ -664,7 +882,9 @@ fn empty_disabled_and_descriptionless_menus_render_without_fake_selection() {
         MenuState::try_new([MenuItem::new("plain", "No description")]).expect("plain menu");
     let plain_render = snapshot(&mut descriptionless, 40, 12, "Actions", None);
     assert!(plain_render.contains("No description"));
-    assert!(plain_render.contains('▏'));
+    assert!(plain_render.contains('›'));
+    assert!(!plain_render.contains('▏'));
+    assert!(!plain_render.contains('▕'));
 }
 
 #[test]
@@ -722,6 +942,33 @@ fn snapshot(
     terminal.backend().to_string()
 }
 
+fn snapshot_with_presentation(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    title: &'static str,
+    subtitle: Option<&'static str>,
+    density: MenuDensity,
+    row_pattern: MenuRowPattern,
+) -> String {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            let mut menu = OverlayMenu::new(title)
+                .key_hints(default_hints())
+                .theme(Theme::default())
+                .density(density)
+                .row_pattern(row_pattern);
+            if let Some(subtitle) = subtitle {
+                menu = menu.subtitle(subtitle);
+            }
+            frame.render_stateful_widget(menu, frame.area(), state);
+        })
+        .expect("draw menu");
+    terminal.backend().to_string()
+}
+
 fn rendered_buffer(
     state: &mut MenuState<&'static str>,
     width: u16,
@@ -730,6 +977,50 @@ fn rendered_buffer(
     subtitle: Option<&'static str>,
     theme: Theme,
     host_background: Color,
+) -> Buffer {
+    rendered_buffer_with_options(
+        state,
+        width,
+        height,
+        title,
+        subtitle,
+        theme,
+        host_background,
+        false,
+    )
+}
+
+fn rendered_buffer_with_selection_rails(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    title: &'static str,
+    subtitle: Option<&'static str>,
+    theme: Theme,
+    host_background: Color,
+) -> Buffer {
+    rendered_buffer_with_options(
+        state,
+        width,
+        height,
+        title,
+        subtitle,
+        theme,
+        host_background,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rendered_buffer_with_options(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    title: &'static str,
+    subtitle: Option<&'static str>,
+    theme: Theme,
+    host_background: Color,
+    fullscreen_selection_rails: bool,
 ) -> Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -740,10 +1031,37 @@ fn rendered_buffer(
                 .render(frame.area(), frame.buffer_mut());
             let mut menu = OverlayMenu::new(title)
                 .key_hints(default_hints())
-                .theme(theme);
+                .theme(theme)
+                .fullscreen_selection_rails(fullscreen_selection_rails);
             if let Some(subtitle) = subtitle {
                 menu = menu.subtitle(subtitle);
             }
+            frame.render_stateful_widget(menu, frame.area(), state);
+        })
+        .expect("draw menu");
+    terminal.backend().buffer().clone()
+}
+
+fn rendered_buffer_with_presentation(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    theme: Theme,
+    density: MenuDensity,
+    row_pattern: MenuRowPattern,
+) -> Buffer {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            Block::default()
+                .style(Style::new().bg(Color::Blue))
+                .render(frame.area(), frame.buffer_mut());
+            let menu = OverlayMenu::new("Choose how to continue")
+                .key_hints(default_hints())
+                .theme(theme)
+                .density(density)
+                .row_pattern(row_pattern);
             frame.render_stateful_widget(menu, frame.area(), state);
         })
         .expect("draw menu");
@@ -765,6 +1083,23 @@ fn find_symbol_on_row(buffer: &Buffer, y: u16, symbol: &str) -> Option<(u16, u16
         }
     }
     None
+}
+
+fn selected_surface_bounds(
+    buffer: &Buffer,
+    y: u16,
+    selected_background: Color,
+) -> Option<(u16, u16)> {
+    let xs = (buffer.area.x..buffer.area.right())
+        .filter(|x| buffer[(*x, y)].bg == selected_background)
+        .collect::<Vec<_>>();
+    Some((*xs.first()?, *xs.last()?))
+}
+
+fn menu_surface_top(buffer: &Buffer, x: u16, menu_background: Color) -> u16 {
+    (buffer.area.y..buffer.area.bottom())
+        .find(|y| buffer[(x, *y)].bg == menu_background)
+        .expect("menu surface")
 }
 
 fn find_ascii_text(buffer: &Buffer, text: &str) -> Option<(u16, u16)> {

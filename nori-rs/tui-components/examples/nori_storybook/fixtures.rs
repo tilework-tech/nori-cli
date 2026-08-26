@@ -33,6 +33,16 @@ pub(super) fn presentation(story: MenuStory) -> MenuPresentation {
             subtitle: Some("Remote history will remain available"),
             max_width: 58,
         },
+        MenuStory::Dense => MenuPresentation {
+            title: "Choose how to continue",
+            subtitle: Some("Dense spacing with one neutral item surface"),
+            max_width: 58,
+        },
+        MenuStory::DenseZebra => MenuPresentation {
+            title: "Choose how to continue",
+            subtitle: Some("Dense spacing with alternating item surfaces"),
+            max_width: 58,
+        },
     }
 }
 
@@ -44,7 +54,11 @@ pub(super) fn footer_hints(story: MenuStory) -> Vec<KeyHint<'static>> {
             KeyHint::new("tab", "example"),
             KeyHint::new("q", "close"),
         ],
-        MenuStory::Action | MenuStory::Narrow | MenuStory::Destructive => vec![
+        MenuStory::Action
+        | MenuStory::Narrow
+        | MenuStory::Destructive
+        | MenuStory::Dense
+        | MenuStory::DenseZebra => vec![
             KeyHint::new("↑↓/jk", "move"),
             KeyHint::new("enter", "select"),
             KeyHint::new("tab", "example"),
@@ -55,7 +69,7 @@ pub(super) fn footer_hints(story: MenuStory) -> Vec<KeyHint<'static>> {
 
 pub(super) fn state(story: MenuStory) -> Result<MenuState<&'static str>, MenuModelError> {
     let items = match story {
-        MenuStory::Action => vec![
+        MenuStory::Action | MenuStory::Dense | MenuStory::DenseZebra => vec![
             MenuItem::new("resume", "Resume session")
                 .description("Continue the selected transcript"),
             MenuItem::new("new", "Start a new session")
