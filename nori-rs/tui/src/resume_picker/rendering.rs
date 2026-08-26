@@ -42,6 +42,7 @@ pub(super) fn picker(state: &ComponentPickerState<usize>) -> Picker<'_, usize> {
     Picker::new(state)
         .theme(crate::style::component_theme())
         .density(PickerDensity::Compact)
+        .fullscreen_selection_rails(true)
         .footer_hints(hints)
 }
 

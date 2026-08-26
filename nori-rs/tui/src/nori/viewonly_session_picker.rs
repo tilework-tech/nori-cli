@@ -216,7 +216,8 @@ pub fn viewonly_session_picker_params(
             footer_hint: Some(standard_popup_hint_line()),
             items: vec![],
             ..Default::default()
-        };
+        }
+        .picker();
     }
 
     let items: Vec<SelectionItem> = sessions
@@ -265,6 +266,7 @@ pub fn viewonly_session_picker_params(
         search_placeholder: Some("Type to search sessions".to_string()),
         ..Default::default()
     }
+    .picker()
 }
 
 pub(crate) fn format_session_name(timestamp: &str, user_turn_count: Option<usize>) -> String {

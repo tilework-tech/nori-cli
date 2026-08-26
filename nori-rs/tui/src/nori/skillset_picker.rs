@@ -235,6 +235,7 @@ pub fn skillset_picker_params(
         on_dismiss,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Filter install output to extract the meaningful message.
