@@ -302,6 +302,16 @@ impl MockAgent {
                     format!("expected user prompt {expected:?}, received {actual_user_text:?}"),
                 ));
             }
+        } else if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_PROMPT_SUFFIX") {
+            let actual_user_text = prompt_user_text(&arguments.prompt);
+            if !actual_user_text.ends_with(&expected) {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!(
+                        "expected user prompt suffix {expected:?}, received {actual_user_text:?}"
+                    ),
+                ));
+            }
         }
         if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
             eprintln!("Mock agent: exiting during prompt");

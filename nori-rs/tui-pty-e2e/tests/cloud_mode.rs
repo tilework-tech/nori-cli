@@ -473,7 +473,9 @@ fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
     let deferred_prompt = "preserve this prompt across local resume";
     let config = cloud_lifecycle_config(&fake)
         .with_agent_env("MOCK_AGENT_FIRST_STARTUP_DELAY_MS", "6000")
-        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        // Client-side transcript replay is prepended to the first wire prompt;
+        // the deferred positional input must remain its exact final segment.
+        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_SUFFIX", deferred_prompt)
         .with_mock_response("deferred prompt reached the locally resumed session")
         .with_arg(deferred_prompt);
 

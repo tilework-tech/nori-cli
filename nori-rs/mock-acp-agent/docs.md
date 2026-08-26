@@ -68,5 +68,9 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   [`session_context.md`](../tui/session_context.md) and
   [`session_context_http_mcp.md`](../tui/session_context_http_mcp.md); see the
   [`tui-pty-e2e` contract](../tui-pty-e2e/docs.md).
+- `MOCK_AGENT_EXPECT_PROMPT_SUFFIX` checks that the same normalized prompt text
+  ends with the configured value. Exact matching takes precedence when both
+  variables are set. Resume tests use suffix matching because client-side
+  transcript replay intentionally precedes newly deferred positional input.
 
 Created and maintained by Nori.
