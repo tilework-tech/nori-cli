@@ -266,20 +266,30 @@ impl ChatWidget {
         self.first_prompt_text.clone()
     }
 
+    /// Move the deferred launch input out of this widget so a replacement can
+    /// carry it. The pending message is the single source of truth; a
+    /// `first_prompt_text` without a pending message was already submitted.
     pub(crate) fn take_initial_input(&mut self) -> (Option<String>, Vec<PathBuf>) {
-        let Some(message) = self.initial_user_message.take() else {
+        let Some(UserMessage { text, image_paths }) = self.initial_user_message.take() else {
             return (None, Vec::new());
         };
-        (self.first_prompt_text.take(), message.image_paths)
+        (Some(text).filter(|text| !text.is_empty()), image_paths)
     }
 
-    /// Copy deferred launch input into a switch candidate while the current
-    /// widget remains available as the rollback target.
-    pub(crate) fn clone_initial_input(&self) -> (Option<String>, Vec<PathBuf>) {
-        let Some(message) = self.initial_user_message.as_ref() else {
-            return (None, Vec::new());
+    /// Submit launch input taken from the widget this one replaced. Called by
+    /// the app after a committed switch candidate attaches the remote host, so
+    /// the first turn lands inside the new session's remote subscription.
+    /// Seeds `first_prompt_text` like the constructors do for other paths.
+    pub(crate) fn submit_launch_input(&mut self, prompt: Option<String>, image_paths: Vec<PathBuf>) {
+        let Some(message) =
+            super::create_initial_user_message(prompt.clone().unwrap_or_default(), image_paths)
+        else {
+            return;
         };
-        (self.first_prompt_text.clone(), message.image_paths.clone())
+        if self.first_prompt_text.is_none() {
+            self.first_prompt_text = prompt;
+        }
+        self.submit_user_message(message);
     }
 
     /// Returns true if a popup or custom view is currently active in the bottom pane.

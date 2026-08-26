@@ -326,27 +326,14 @@ impl ChatWidget {
             self.show_welcome_banner,
             self.cloud_session_identity(),
         ));
-        if !self.defer_initial_user_message_until_commit {
-            self.submit_initial_user_message();
+        if let Some(user_message) = self.initial_user_message.take() {
+            self.submit_user_message(user_message);
         }
         if !self.suppress_session_configured_redraw {
             self.request_redraw();
         }
         self.refresh_acp_mode_config_snapshot();
         self.refresh_terminal_title();
-    }
-
-    fn submit_initial_user_message(&mut self) {
-        if let Some(user_message) = self.initial_user_message.take() {
-            self.submit_user_message(user_message);
-        }
-    }
-
-    /// Release launch input only after a hidden switch candidate becomes the
-    /// committed session and its remote attachment attempt completes.
-    pub(crate) fn submit_candidate_initial_user_message(&mut self) {
-        self.defer_initial_user_message_until_commit = false;
-        self.submit_initial_user_message();
     }
 
     pub(super) fn flush_answer_stream_with_separator(&mut self) {

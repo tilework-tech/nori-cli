@@ -125,11 +125,10 @@ impl App {
                         ));
                         return Ok(true);
                     }
-                    let (initial_prompt, initial_images) = self.chat_widget.clone_initial_input();
                     let mut init = self.chat_widget_init(
                         tui.frame_requester(),
-                        initial_prompt,
-                        initial_images,
+                        None,
+                        Vec::new(),
                         Some(config.active_agent.clone()),
                         false,
                         None,
@@ -500,14 +499,19 @@ impl App {
                         else {
                             unreachable!("candidate generation checked above")
                         };
-                        let old_widget = std::mem::replace(&mut self.chat_widget, *widget);
+                        let mut old_widget = std::mem::replace(&mut self.chat_widget, *widget);
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
                         self.configure_new_chat_widget();
                         self.chat_widget
                             .attach_remote_host_after_start(started)
                             .await;
-                        self.chat_widget.submit_candidate_initial_user_message();
+                        // Deferred launch input stays with the rollback widget
+                        // until commit; take it only once the candidate owns
+                        // the session and the remote host is attached.
+                        let (initial_prompt, initial_images) = old_widget.take_initial_input();
+                        self.chat_widget
+                            .submit_launch_input(initial_prompt, initial_images);
                         old_widget.shutdown_harness_session();
                         if let Err(error) = ConfigEditsBuilder::new(&self.config.nori_home)
                             .set_agent(&self.config.active_agent)
@@ -1353,11 +1357,10 @@ impl App {
                         ));
                         return Ok(true);
                     }
-                    let (initial_prompt, initial_images) = self.chat_widget.clone_initial_input();
                     let mut init = self.chat_widget_init(
                         tui.frame_requester(),
-                        initial_prompt,
-                        initial_images,
+                        None,
+                        Vec::new(),
                         Some(config.active_agent.clone()),
                         false,
                         None,

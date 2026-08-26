@@ -74,7 +74,7 @@ pub(crate) fn make_chatwidget_manual_with_footer_config(
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
     tokio::sync::mpsc::UnboundedReceiver<()>,
 ) {
-    make_chatwidget_manual_for_mode(footer_segment_config, footer_layout_config, false, false)
+    make_chatwidget_manual_for_mode(footer_segment_config, footer_layout_config, false)
 }
 
 pub(crate) fn make_cloud_chatwidget_manual() -> (
@@ -86,20 +86,6 @@ pub(crate) fn make_cloud_chatwidget_manual() -> (
         nori_config::FooterSegmentConfig::default(),
         nori_config::FooterLayoutConfig::default(),
         true,
-        false,
-    )
-}
-
-pub(crate) fn make_cloud_candidate_chatwidget_manual() -> (
-    ChatWidget,
-    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
-    tokio::sync::mpsc::UnboundedReceiver<()>,
-) {
-    make_chatwidget_manual_for_mode(
-        nori_config::FooterSegmentConfig::default(),
-        nori_config::FooterLayoutConfig::default(),
-        true,
-        true,
     )
 }
 
@@ -107,7 +93,6 @@ fn make_chatwidget_manual_for_mode(
     footer_segment_config: nori_config::FooterSegmentConfig,
     footer_layout_config: nori_config::FooterLayoutConfig,
     cloud_mode: bool,
-    candidate: bool,
 ) -> (
     ChatWidget,
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
@@ -132,11 +117,7 @@ fn make_chatwidget_manual_for_mode(
         prepared_agent: None,
         cloud_mode,
     };
-    let widget = if candidate {
-        ChatWidget::new_candidate(init)
-    } else {
-        ChatWidget::new(init)
-    };
+    let widget = ChatWidget::new(init);
     let (_unused_tx, unused_rx) = unbounded_channel();
     (widget, event_rx, unused_rx)
 }

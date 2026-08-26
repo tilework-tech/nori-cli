@@ -26,7 +26,9 @@ fn candidate_login_target_survives_failure_and_clears_after_success() {
 #[test]
 fn deferred_startup_input_preserves_prompt_and_image_only_semantics_for_resume() {
     let (mut chat, _rx, _unused_rx) = make_cloud_chatwidget_manual();
-    chat.first_prompt_text = Some("Continue onboarding".to_string());
+    // The pending message is the source of truth; a first prompt typed and
+    // submitted before the handoff must not leak into the launch input.
+    chat.first_prompt_text = Some("typed before the launch input was taken".to_string());
     chat.initial_user_message = Some(UserMessage {
         text: "Continue onboarding".to_string(),
         image_paths: vec![PathBuf::from("diagram.png")],
@@ -55,49 +57,35 @@ fn deferred_startup_input_preserves_prompt_and_image_only_semantics_for_resume()
     assert_eq!(chat.first_prompt_text.as_deref(), Some("Already submitted"));
 }
 
-#[test]
-fn switch_candidate_can_clone_deferred_input_without_consuming_the_rollback_copy() {
-    let (mut chat, _rx, _unused_rx) = make_cloud_chatwidget_manual();
-    chat.first_prompt_text = Some("Continue onboarding".to_string());
-    chat.initial_user_message = Some(UserMessage {
-        text: "Continue onboarding".to_string(),
-        image_paths: vec![PathBuf::from("diagram.png")],
-    });
+/// The app takes deferred launch input from the rollback widget only when a
+/// switch candidate commits, then submits it here. The committed widget must
+/// treat it like a constructor-seeded first prompt and start a real turn.
+#[tokio::test]
+async fn committed_candidate_submits_taken_launch_input_as_first_prompt() {
+    let mut session = start_mock_session().await;
+    let (mut chat, _rx, _op_rx) = make_cloud_chatwidget_manual();
+    chat.harness_handle = Some(session.handle.clone());
 
-    let cloned = chat.clone_initial_input();
-    let retained = chat.take_initial_input();
-
-    assert_eq!(cloned, retained);
-    assert_eq!(cloned.0.as_deref(), Some("Continue onboarding"));
-    assert_eq!(cloned.1, vec![PathBuf::from("diagram.png")]);
-}
-
-#[test]
-fn switch_candidate_session_start_retains_initial_input_until_release() {
-    let (mut chat, _rx, _op_rx) = make_cloud_candidate_chatwidget_manual();
-    chat.initial_user_message = Some(UserMessage {
-        text: "Continue remotely".to_string(),
-        image_paths: vec![PathBuf::from("diagram.png")],
-    });
-    let generation = chat.session_generation;
-
-    chat.handle_session_event(generation, session_started_event("candidate-session"));
-
-    let retained = chat
-        .initial_user_message
-        .as_ref()
-        .expect("candidate input must remain deferred until the remote host attaches");
-    assert_eq!(retained.text, "Continue remotely");
-    assert_eq!(retained.image_paths, vec![PathBuf::from("diagram.png")]);
-    assert!(chat.defer_initial_user_message_until_commit);
-
-    chat.submit_candidate_initial_user_message();
-
-    assert!(
-        chat.initial_user_message.is_none(),
-        "committing the candidate should release its deferred input"
+    chat.submit_launch_input(None, Vec::new());
+    assert_eq!(
+        chat.first_prompt_text, None,
+        "empty launch input must not seed a first prompt"
     );
-    assert!(!chat.defer_initial_user_message_until_commit);
+
+    chat.submit_launch_input(Some("Continue onboarding".to_string()), Vec::new());
+
+    assert_eq!(chat.first_prompt_text.as_deref(), Some("Continue onboarding"));
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            match session.events.recv().await {
+                Some(nori_protocol::SessionEvent::Acp(_)) => break,
+                Some(_) => {}
+                None => panic!("session event stream ended before the launch turn"),
+            }
+        }
+    })
+    .await
+    .expect("submitted launch input should start a turn on the live session");
 }
 
 /// Deliver a prompt completion through the real client-event entry point.
