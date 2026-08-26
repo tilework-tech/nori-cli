@@ -129,6 +129,31 @@ fn picker_compact_uses_single_height_rows_snapshot() {
 }
 
 #[test]
+fn picker_section_headings_are_bold_and_not_selectable() {
+    let items = [
+        PickerItem::new("recommended", "name", "Recommended").section_heading(true),
+        PickerItem::new("stable", "name", "Stable"),
+        PickerItem::new("other", "name", "Other").section_heading(true),
+        PickerItem::new("preview", "name", "Preview"),
+    ];
+    let mut state = PickerState::new("Models", [PickerColumn::flexible("name", "Model")], items)
+        .search_mode(SearchMode::None);
+
+    assert_eq!(state.selected_index, Some(1));
+    assert_eq!(
+        state.handle(PickerAction::MoveDown),
+        PickerOutcome::SelectionChanged(Some("preview"))
+    );
+
+    let buffer = rendered_picker_buffer(&state, 48, 18);
+    for label in ["Recommended", "Other"] {
+        let heading = find_ascii_text_at_or_below(&buffer, label, 3).expect("section heading");
+        assert!(buffer[heading].modifier.contains(Modifier::BOLD));
+        assert_ne!(buffer[heading].fg, Color::DarkGray);
+    }
+}
+
+#[test]
 fn picker_normal_selection_rails_snapshot() {
     assert_snapshot!(snapshot_with_options(
         &session_picker(),

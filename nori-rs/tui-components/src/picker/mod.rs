@@ -78,6 +78,7 @@ pub struct PickerItem<K> {
     pub details: Vec<PickerDetail>,
     pub description: Option<String>,
     pub disabled: bool,
+    pub section_heading: bool,
     pub current: bool,
     pub default: bool,
     pub read_only: bool,
@@ -97,6 +98,7 @@ impl<K> PickerItem<K> {
             details: Vec::new(),
             description: None,
             disabled: false,
+            section_heading: false,
             current: false,
             default: false,
             read_only: false,
@@ -147,6 +149,15 @@ impl<K> PickerItem<K> {
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Render this non-interactive row as a bold section heading.
+    pub fn section_heading(mut self, section_heading: bool) -> Self {
+        self.section_heading = section_heading;
+        if section_heading {
+            self.disabled = true;
+        }
         self
     }
 

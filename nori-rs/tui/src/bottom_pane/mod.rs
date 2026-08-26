@@ -1050,6 +1050,44 @@ mod tests {
     }
 
     #[test]
+    fn session_config_and_model_selections_use_the_shared_picker() {
+        let option = nori_protocol::acp::v1::SessionConfigOption::select(
+            "model",
+            "Model",
+            "stable",
+            vec![
+                nori_protocol::acp::v1::SessionConfigSelectOption::new("stable", "Stable"),
+                nori_protocol::acp::v1::SessionConfigSelectOption::new("preview", "Preview"),
+            ],
+        )
+        .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Model);
+        let mut pane = test_bottom_pane();
+
+        pane.show_selection_view(
+            crate::nori::session_config_picker::acp_session_config_picker_params(
+                std::slice::from_ref(&option),
+                None,
+            ),
+        );
+        let config_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
+        assert_selected_row_has_symmetric_rails(&config_render, "Model");
+
+        pane.show_selection_view(
+            crate::nori::session_config_picker::acp_session_config_value_picker_params(
+                &option,
+                &[nori_harness::OtherModel {
+                    id: "experimental",
+                    label: "Experimental",
+                }],
+            ),
+        );
+        let model_render = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        assert!(model_render.contains("Recommended"), "{model_render}");
+        assert!(model_render.contains("Other"), "{model_render}");
+        assert_selected_row_has_symmetric_rails(&model_render, "Stable");
+    }
+
+    #[test]
     fn searchable_selection_view_consumes_escape_before_bottom_pane_dismissal() {
         let mut pane = test_bottom_pane();
         pane.show_selection_view(SelectionViewParams {

@@ -60,11 +60,12 @@ impl ComponentPickerParams {
                         .map(|description| format!("{} {description}", item.name))
                         .unwrap_or_else(|| item.name.clone())
                 });
-                let disabled = item.is_header || item.actions.is_empty();
+                let disabled = item.is_header || (item.actions.is_empty() && !item.is_current);
                 let mut picker_item = PickerItem::new(key.clone(), "name", item.name)
                     .search_text(search_text)
                     .current(item.is_current)
-                    .disabled(disabled);
+                    .disabled(disabled)
+                    .section_heading(item.is_header);
                 if let Some(description) = description {
                     picker_item = picker_item
                         .cell("description", description.clone())

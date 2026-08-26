@@ -35,7 +35,8 @@ pub(crate) fn acp_session_config_picker_params(
                 ..Default::default()
             }],
             ..Default::default()
-        };
+        }
+        .picker();
     }
 
     let focus_idx = focus_config_id.and_then(|config_id| {
@@ -75,6 +76,7 @@ pub(crate) fn acp_session_config_picker_params(
         initial_selected_idx: Some(focus_idx.unwrap_or(0)),
         ..Default::default()
     }
+    .picker()
 }
 
 pub(crate) fn acp_session_config_value_picker_params(
@@ -93,7 +95,8 @@ pub(crate) fn acp_session_config_value_picker_params(
                 ..Default::default()
             }],
             ..Default::default()
-        };
+        }
+        .picker();
     };
 
     let is_model = option.category == Some(acp::SessionConfigOptionCategory::Model);
@@ -193,6 +196,7 @@ pub(crate) fn acp_session_config_value_picker_params(
         initial_selected_idx,
         ..Default::default()
     }
+    .picker()
 }
 
 fn current_value_label(option: &acp::SessionConfigOption) -> Option<String> {
