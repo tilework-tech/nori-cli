@@ -993,6 +993,7 @@ mod tests {
 
         assert_selected_row_has_symmetric_rails(&rendered, "Mock ACP");
         assert!(!rendered.contains("/ search"), "{rendered}");
+        assert!(rendered.contains("shift-tab rec on"), "{rendered}");
 
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));

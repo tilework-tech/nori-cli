@@ -145,7 +145,7 @@ impl ComponentPickerParams {
             detail_column: has_descriptions.then(|| "description".to_string()),
             density: PickerDensity::Compact,
             keep_open,
-            footer_hints: None,
+            footer_hints: params.picker_footer_hints,
         }
     }
 }

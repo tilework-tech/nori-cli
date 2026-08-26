@@ -2,6 +2,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use itertools::Itertools as _;
+use nori_tui_components::KeyHint;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -60,6 +61,7 @@ pub(crate) struct SelectionViewParams {
     pub subtitle: Option<String>,
     pub footer_hint: Option<Line<'static>>,
     pub footer_hint_right: Option<Line<'static>>,
+    pub picker_footer_hints: Option<Vec<KeyHint<'static>>>,
     pub items: Vec<SelectionItem>,
     pub is_searchable: bool,
     pub search_placeholder: Option<String>,
@@ -87,6 +89,7 @@ impl Default for SelectionViewParams {
             subtitle: None,
             footer_hint: None,
             footer_hint_right: None,
+            picker_footer_hints: None,
             items: Vec::new(),
             is_searchable: false,
             search_placeholder: None,
