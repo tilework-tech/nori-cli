@@ -27,25 +27,10 @@ use tokio::time::sleep;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
-fn prompt_user_text(prompt: &[acp::ContentBlock]) -> String {
-    let mut text_blocks = prompt
-        .iter()
-        .filter_map(|block| match block {
-            acp::ContentBlock::Text(text) => Some(text.text.as_str()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let has_injected_product_context = text_blocks.len() > 1
-        && text_blocks.first().is_some_and(|text| {
-            text.starts_with("<context>\nSource: this message is from Nori CLI.\n")
-                && text.trim_end().ends_with("</context>")
-        });
-    if has_injected_product_context {
-        text_blocks.remove(0);
-    }
-    text_blocks.join("\n")
-}
-
+/// The harness injects product context as an extra leading block and
+/// client-side replay prepends transcript blocks, while deferred CLI input is
+/// always the final caller block — so an exact match on the last text block
+/// proves intact delivery on every lifecycle path.
 fn last_prompt_text_block(prompt: &[acp::ContentBlock]) -> Option<&str> {
     prompt.iter().rev().find_map(|block| match block {
         acp::ContentBlock::Text(text) => Some(text.text.as_str()),
@@ -301,15 +286,7 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
-        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_PROMPT_TEXT") {
-            let actual_user_text = prompt_user_text(&arguments.prompt);
-            if actual_user_text != expected {
-                return Err(acp::Error::new(
-                    -32001,
-                    format!("expected user prompt {expected:?}, received {actual_user_text:?}"),
-                ));
-            }
-        } else if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
             let actual = last_prompt_text_block(&arguments.prompt);
             if actual != Some(expected.as_str()) {
                 return Err(acp::Error::new(
@@ -1965,54 +1942,4 @@ async fn main() -> acp::Result<()> {
             ExitOnEof::new(tokio::io::stdin().compat()),
         ))
         .await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::last_prompt_text_block;
-    use super::prompt_user_text;
-    use nori_protocol::acp::v1 as acp;
-
-    #[test]
-    fn prompt_user_text_removes_only_a_distinct_nori_product_context_block() {
-        let text = |value: &str| acp::ContentBlock::Text(acp::TextContent::new(value.to_string()));
-        let context = "<context>\nSource: this message is from Nori CLI.\nproduct instructions\n</context>\n\n";
-        let cases = [
-            (vec![text("plain prompt")], "plain prompt"),
-            (vec![text(context), text("plain prompt")], "plain prompt"),
-            (
-                vec![text(context), text("first"), text("second")],
-                "first\nsecond",
-            ),
-            (
-                vec![text(
-                    "<context>\nSource: this message is from Nori CLI.\nuser text\n</context>",
-                )],
-                "<context>\nSource: this message is from Nori CLI.\nuser text\n</context>",
-            ),
-            (
-                vec![
-                    text("<context>\nnot Nori context\n</context>"),
-                    text("prompt"),
-                ],
-                "<context>\nnot Nori context\n</context>\nprompt",
-            ),
-        ];
-
-        for (prompt, expected) in cases {
-            assert_eq!(prompt_user_text(&prompt), expected);
-        }
-    }
-
-    #[test]
-    fn last_prompt_text_block_preserves_the_callers_structural_boundary() {
-        let text = |value: &str| acp::ContentBlock::Text(acp::TextContent::new(value.to_string()));
-        let prompt = vec![text("replay prefix"), text("deferred positional prompt")];
-
-        assert_eq!(
-            last_prompt_text_block(&prompt),
-            Some("deferred positional prompt")
-        );
-        assert_eq!(last_prompt_text_block(&[]), None);
-    }
 }

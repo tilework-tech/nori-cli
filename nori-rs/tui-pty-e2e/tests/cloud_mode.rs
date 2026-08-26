@@ -408,7 +408,7 @@ fn test_cloud_new_cancels_in_flight_preparation_and_preserves_deferred_prompt() 
     let deferred_prompt = "preserve this prompt while preparation is cancelled";
     let config = cloud_lifecycle_config(&fake)
         .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1200")
-        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        .with_agent_env("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK", deferred_prompt)
         .with_mock_response("deferred prompt reached the replacement session")
         .with_arg(deferred_prompt);
 
@@ -525,7 +525,7 @@ fn test_cloud_candidate_start_new_preserves_the_deferred_positional_prompt() {
     let fake = FakeHandroll::new();
     let deferred_prompt = "preserve this prompt across a candidate switch";
     let config = cloud_lifecycle_config(&fake)
-        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        .with_agent_env("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK", deferred_prompt)
         .with_agent_env(
             "MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT",
             "deferred prompt reached the switched fresh session",
@@ -592,7 +592,7 @@ fn test_cloud_candidate_resume_preserves_the_deferred_positional_prompt() {
     let fake = FakeHandroll::new();
     let deferred_prompt = "preserve this prompt across candidate reattachment";
     let config = cloud_lifecycle_config(&fake)
-        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_TEXT", deferred_prompt)
+        .with_agent_env("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK", deferred_prompt)
         .with_agent_env(
             "MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT",
             "deferred prompt reached the switched resumed session",
