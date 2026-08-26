@@ -68,9 +68,10 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   [`session_context.md`](../tui/session_context.md) and
   [`session_context_http_mcp.md`](../tui/session_context_http_mcp.md); see the
   [`tui-pty-e2e` contract](../tui-pty-e2e/docs.md).
-- `MOCK_AGENT_EXPECT_PROMPT_SUFFIX` checks that the same normalized prompt text
-  ends with the configured value. Exact matching takes precedence when both
-  variables are set. Suffix matching is used when client-side transcript replay
-  intentionally precedes newly deferred positional input.
+- `MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK` compares the final ACP text block
+  exactly with the configured value. Whole-prompt exact matching takes
+  precedence when both variables are set. Client-side transcript replay tests
+  use this structural check because replay context intentionally precedes the
+  caller's distinct, newly deferred positional-input block.
 
 Created and maintained by Nori.

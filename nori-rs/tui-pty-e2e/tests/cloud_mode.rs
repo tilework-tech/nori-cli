@@ -475,7 +475,7 @@ fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
         .with_agent_env("MOCK_AGENT_FIRST_STARTUP_DELAY_MS", "6000")
         // Client-side transcript replay is prepended to the first wire prompt;
         // the deferred positional input must remain its exact final segment.
-        .with_agent_env("MOCK_AGENT_EXPECT_PROMPT_SUFFIX", deferred_prompt)
+        .with_agent_env("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK", deferred_prompt)
         .with_mock_response("deferred prompt reached the locally resumed session")
         .with_arg(deferred_prompt);
 

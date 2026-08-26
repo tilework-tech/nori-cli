@@ -46,6 +46,13 @@ fn prompt_user_text(prompt: &[acp::ContentBlock]) -> String {
     text_blocks.join("\n")
 }
 
+fn last_prompt_text_block(prompt: &[acp::ContentBlock]) -> Option<&str> {
+    prompt.iter().rev().find_map(|block| match block {
+        acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+        _ => None,
+    })
+}
+
 #[cfg(unix)]
 fn spawn_descendant_if_requested() {
     let Some(pid_file) = std::env::var_os("MOCK_AGENT_DESCENDANT_PID_FILE") else {
@@ -302,13 +309,13 @@ impl MockAgent {
                     format!("expected user prompt {expected:?}, received {actual_user_text:?}"),
                 ));
             }
-        } else if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_PROMPT_SUFFIX") {
-            let actual_user_text = prompt_user_text(&arguments.prompt);
-            if !actual_user_text.ends_with(&expected) {
+        } else if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
+            let actual = last_prompt_text_block(&arguments.prompt);
+            if actual != Some(expected.as_str()) {
                 return Err(acp::Error::new(
                     -32001,
                     format!(
-                        "expected user prompt suffix {expected:?}, received {actual_user_text:?}"
+                        "expected final user prompt text block {expected:?}, received {actual:?}"
                     ),
                 ));
             }
@@ -1962,6 +1969,7 @@ async fn main() -> acp::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::last_prompt_text_block;
     use super::prompt_user_text;
     use nori_protocol::acp::v1 as acp;
 
@@ -1994,5 +2002,17 @@ mod tests {
         for (prompt, expected) in cases {
             assert_eq!(prompt_user_text(&prompt), expected);
         }
+    }
+
+    #[test]
+    fn last_prompt_text_block_preserves_the_callers_structural_boundary() {
+        let text = |value: &str| acp::ContentBlock::Text(acp::TextContent::new(value.to_string()));
+        let prompt = vec![text("replay prefix"), text("deferred positional prompt")];
+
+        assert_eq!(
+            last_prompt_text_block(&prompt),
+            Some("deferred positional prompt")
+        );
+        assert_eq!(last_prompt_text_block(&[]), None);
     }
 }

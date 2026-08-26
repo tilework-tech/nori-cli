@@ -40,8 +40,8 @@ late picker. The fake handroll's first-child-only delay uses an atomic marker so
 the superseded preparation stays in flight while its replacement starts without
 the delay. Before emitting the visible response marker, the mock validates
 normalized user text exactly in ordinary cases; the local-resume case instead
-requires the deferred prompt as the final suffix after client-side transcript
-replay. Both prove delivery rather than marker visibility alone.
+requires the final ACP text block to equal the deferred prompt after client-side
+transcript replay. Both prove delivery rather than marker visibility alone.
 See [`cloud_mode.rs`](tests/cloud_mode.rs) and
 [`mock-acp-agent`](../mock-acp-agent/docs.md).
 
