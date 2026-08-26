@@ -57,21 +57,12 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   The suffix uppercases the model name and replaces hyphens with underscores
   (for example, `MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT`). Multi-agent PTY tests
   use this to prove which subprocess produced a visible response.
-- `MOCK_AGENT_EXPECT_PROMPT_TEXT` compares the prompt's exact user text with
-  the configured value. It removes at most one recognized, distinct leading
-  Nori `<context>` text block when later user text blocks exist, then
-  newline-joins the remaining text blocks. Plain, malformed, and context-like
-  user blocks are compared in full. This ignores harness-selected product
-  context without weakening the exact user-text assertion. A mismatch returns
-  an ACP prompt error, and the configured response is emitted only after
-  validation. The recognized envelopes are
-  [`session_context.md`](../tui/session_context.md) and
-  [`session_context_http_mcp.md`](../tui/session_context_http_mcp.md); see the
-  [`tui-pty-e2e` contract](../tui-pty-e2e/docs.md).
 - `MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK` compares the final ACP text block
-  exactly with the configured value. Normalized user-text exact matching takes
-  precedence when both variables are set. Client-side transcript replay tests
-  use this structural check because replay context intentionally precedes the
-  caller's distinct, newly deferred positional-input block.
+  exactly with the configured value; a mismatch returns an ACP prompt error,
+  and the configured response is emitted only after validation. This
+  structural check works for every lifecycle scenario because
+  harness-injected product context and client-side replay blocks always
+  precede the caller's final block, while deferred CLI input arrives as that
+  distinct final block. See the [`tui-pty-e2e` contract](../tui-pty-e2e/docs.md).
 
 Created and maintained by Nori.

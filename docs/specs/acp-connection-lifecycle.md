@@ -155,10 +155,11 @@ When the process-wide remote ACP host is active, candidate activation remains
 hidden from it until the same commit event. The committed candidate replaces
 the old remote attachment with the already-observed `SessionStarted` data, so
 cancellation or failure leaves both the local current session and its remote
-controller attachment intact. Candidate launch input remains deferred until
-the replacement attachment attempt completes. A successful attachment installs
-the subscription before the automatic first turn can outrun the remote
-observer; attachment failure is logged and does not strand the launch input.
+controller attachment intact. Deferred launch input stays with the replaced
+widget until the replacement attachment attempt completes; only then is it
+taken and submitted. A successful attachment installs the subscription before
+the automatic first turn can outrun the remote observer; attachment failure is
+logged and does not strand the launch input.
 
 There is no "switch on next prompt" state. Prompt submission always targets
 the active `HarnessHandle`.
@@ -172,13 +173,14 @@ compatibility policy, but any `session/new` remains a separate, explicit
 harness transition rather than part of initialization.
 
 An initial positional prompt and image attachments survive every deferred
-replacement path. Ordinary new/resume replacement takes the input before
-retiring the old widget, including when it first cancels an in-flight primary
-preparation. Candidate new/resume activation instead copies the input because
-the active widget remains the rollback target until candidate `SessionStarted`;
-candidate failure therefore leaves the original input intact. Automatic
-submission from the committed widget waits for `SessionStarted` and, for a
-remote candidate, completion of the commit-time host attachment attempt.
+replacement path, and exactly one widget owns them at any time. Ordinary
+new/resume replacement takes the input before retiring the old widget,
+including when it first cancels an in-flight primary preparation. Candidate
+new/resume activation leaves the input with the active widget, which remains
+the rollback target; only the candidate's `SessionStarted` commit takes the
+input — after the commit-time remote host attachment attempt — and submits it
+from the committed widget. Candidate failure therefore leaves the original
+input intact, and the input can never be submitted into two sessions.
 
 Local-transcript resume is one of those ordinary replacements. `/resume` may
 open the local fallback while primary ACP preparation is still discovering
@@ -228,8 +230,9 @@ process.
 - Cancelling or superseding an in-flight primary preparation rejects any stale
   result and reaps a child that has already spawned.
 - Deferred prompt text and image attachments survive ordinary replacement,
-  including cancelled primary preparation, and candidate new/resume failure
-  leaves the rollback widget's copy intact.
+  including cancelled primary preparation. They stay with the rollback widget
+  until a candidate commits, so candidate new/resume failure leaves them
+  intact and no path can submit them twice.
 - Selecting a local transcript while primary preparation is in flight cancels
   preparation, reaps any spawned child, transfers deferred input, and cannot
   install a late ACP picker.

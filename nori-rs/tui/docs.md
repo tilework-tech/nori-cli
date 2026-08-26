@@ -377,17 +377,20 @@ supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
 
-Deferred launch input follows widget ownership across these transitions. An
-ordinary new/resume replacement takes the initial positional prompt and image
-attachments before shutting down the old widget. For local-transcript resume,
-[`event_handling.rs`](src/app/event_handling.rs) cancels primary preparation,
-takes that input, clears deferred-spawn state, and consumes any
-prepared owner that already completed. A later result fails the generation
-check and is shut down instead of reopening its picker. Candidate new/resume
-activation instead copies the input because the current widget remains the
-rollback target until `SessionStarted`; failure destroys only the copy. See
-[`helpers.rs`](src/chatwidget/helpers.rs) and
-[`session_setup.rs`](src/app/session_setup.rs) for those ownership boundaries.
+Deferred launch input has exactly one owner across these transitions. Every
+ordinary new/resume replacement — explicit `/new`, local-transcript resume,
+and ordinary ACP resume — funnels through `take_over_current_widget` in
+[`session_setup.rs`](src/app/session_setup.rs), which cancels primary
+preparation, discards any candidate, clears deferred-spawn state, takes the
+input, and carries any prepared owner that already completed into the
+replacement init. A later preparation result fails the generation check and is
+shut down instead of reopening its picker. Candidate new/resume activation
+(`activate_prepared_candidate`) gives the candidate no input at all: the
+current widget keeps it as the rollback owner, and only the `SessionStarted`
+commit takes it and submits it into the committed widget, so candidate failure
+leaves it intact and no path can submit it twice. See
+[`helpers.rs`](src/chatwidget/helpers.rs) for `take_initial_input` and
+`submit_launch_input`.
 
 Bare `/login` has a narrow candidate-target override. Selecting a candidate
 sets it, and preparation or activation failure leaves it available so the user
@@ -402,11 +405,11 @@ candidate widget starts with remote attachment disabled, so a failed or
 cancelled candidate cannot displace the current remotely controlled session.
 After `SessionStarted`, the committed widget attaches with the observed start
 record to seed identity that its new subscription could no longer replay; only
-then is the old remote attachment replaced. Candidate launch input stays held
-until the awaited attachment attempt completes. A successful attachment makes
-the automatic first turn visible to the new remote subscriber; a failed
-attachment is logged and still releases the input so the committed session does
-not stall.
+then is the old remote attachment replaced. Deferred launch input is taken
+from the replaced widget only after the awaited attachment attempt completes.
+A successful attachment makes the automatic first turn visible to the new
+remote subscriber; a failed attachment is logged and the input is still
+submitted so the committed session does not stall.
 
 An orderly ACP close completes the typed close call, leaves the raw close
 response observable on the stream, observes `SessionEnded(Closed)`, and then
