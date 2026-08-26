@@ -220,12 +220,17 @@ fn transcripts_exist(nori_home: &Path) -> bool {
         .any(|f| f.path().extension().is_some_and(|e| e == "jsonl"))
 }
 
+/// Write a resumable local transcript for the session's cwd (NORI_HOME is the
+/// process cwd — a `TuiSession` invariant). The project id must byte-match
+/// `compute_project_id` in `harness/src/transcript/project.rs` (non-git
+/// branch: DefaultHasher over the canonical cwd) or `/resume` cannot see the
+/// fixture; the e2e crate black-box-drives the binary and cannot reuse it.
 #[cfg(target_os = "linux")]
-fn write_local_cloud_transcript(nori_home: &Path, cwd: &Path) {
+fn write_local_cloud_transcript(nori_home: &Path) {
     use std::hash::Hash;
     use std::hash::Hasher;
 
-    let canonical_cwd = cwd.canonicalize().expect("canonical test cwd");
+    let canonical_cwd = nori_home.canonicalize().expect("canonical test cwd");
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     canonical_cwd.to_string_lossy().as_ref().hash(&mut hasher);
     let project_id = format!("{:016x}", hasher.finish());
@@ -482,7 +487,7 @@ fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
     let nori_home = session.nori_home_path().expect("NORI_HOME");
-    write_local_cloud_transcript(&nori_home, &nori_home);
+    write_local_cloud_transcript(&nori_home);
 
     session
         .wait_for_text("Listing", TIMEOUT)
@@ -517,6 +522,31 @@ fn test_cloud_local_resume_cancels_preparation_and_preserves_deferred_prompt() {
     );
 }
 
+/// Dismiss picker-first cloud entry and switch to the prepared mock-model-alt
+/// candidate via `/agent`. Cloud's synthetic agent is not a picker row and
+/// selection starts before row 0 (mock-model), so two Downs select row 1
+/// (mock-model-alt).
+#[cfg(target_os = "linux")]
+fn switch_to_alt_agent_candidate(session: &mut TuiSession) {
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    session.send_key(Key::Escape).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+
+    session.send_str("/agent").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Select Agent", TIMEOUT)
+        .expect("agent picker should open after dismissing cloud entry");
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Down).unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+}
+
 /// Dismissing picker-first entry must not strand the positional prompt when
 /// the user switches agents and starts a fresh session on the candidate.
 #[test]
@@ -535,26 +565,7 @@ fn test_cloud_candidate_start_new_preserves_the_deferred_positional_prompt() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    session
-        .wait_for_text("Start a new session", TIMEOUT)
-        .expect("cloud entry should open the session picker");
-    session.send_key(Key::Escape).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    session
-        .wait_for_text("Select Agent", TIMEOUT)
-        .expect("agent picker should open after dismissing cloud entry");
-
-    // Cloud's synthetic agent is not a picker row. Selection starts before
-    // row 0 (mock-model), so two Downs select row 1 (mock-model-alt).
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    switch_to_alt_agent_candidate(&mut session);
     session
         .wait_for_text("Start a new session", TIMEOUT)
         .expect("the prepared alternate candidate should open its session picker");
@@ -602,24 +613,7 @@ fn test_cloud_candidate_resume_preserves_the_deferred_positional_prompt() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
 
-    session
-        .wait_for_text("Start a new session", TIMEOUT)
-        .expect("cloud entry should open the session picker");
-    session.send_key(Key::Escape).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-    session
-        .wait_for_text("Select Agent", TIMEOUT)
-        .expect("agent picker should open after dismissing cloud entry");
-    // Selection starts before row 0, so two Downs select mock-model-alt.
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Down).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    switch_to_alt_agent_candidate(&mut session);
     session
         .wait_for_text("First mock session", TIMEOUT)
         .expect("the prepared alternate candidate should list resumable sessions");
