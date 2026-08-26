@@ -248,6 +248,7 @@ impl Renderable for ComponentPickerView {
         Picker::new(&self.state)
             .theme(crate::style::component_theme())
             .density(self.density)
+            .fullscreen_selection_rails(true)
             .render(area, buf);
     }
 
@@ -270,6 +271,8 @@ mod tests {
     use nori_tui_components::PickerColumn;
     use nori_tui_components::PickerItem;
     use pretty_assertions::assert_eq;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
 
     fn params() -> ComponentPickerParams {
         ComponentPickerParams {
@@ -306,6 +309,43 @@ mod tests {
             Some("Updated")
         );
         assert_eq!(view.state.items[0].search_text, "updated search");
+    }
+
+    #[test]
+    fn cli_picker_renders_symmetric_selection_rails() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let view = ComponentPickerView::new(params(), AppEventSender::new(tx));
+        let area = Rect::new(0, 0, 48, 12);
+        let mut buffer = Buffer::empty(area);
+
+        view.render(area, &mut buffer);
+
+        let rendered_rows = (area.y..area.bottom())
+            .map(|y| {
+                (area.x..area.right())
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let selected_row = rendered_rows
+            .iter()
+            .find(|row| row.windows(5).any(|cells| cells.concat() == "First"))
+            .expect("selected row");
+        let left_rail = selected_row.iter().position(|symbol| *symbol == "▏");
+        let right_rail = selected_row.iter().position(|symbol| *symbol == "▕");
+        let label = selected_row
+            .windows(5)
+            .position(|cells| cells.concat() == "First")
+            .expect("selected label");
+        assert!(left_rail.is_some_and(|rail| rail < label));
+        assert!(right_rail.is_some_and(|rail| rail > label));
+
+        let unselected_row = rendered_rows
+            .iter()
+            .find(|row| row.windows(6).any(|cells| cells.concat() == "Second"))
+            .expect("unselected row");
+        assert!(!unselected_row.contains(&"▏"));
+        assert!(!unselected_row.contains(&"▕"));
     }
 
     #[test]
