@@ -188,7 +188,7 @@ impl WidgetRef for HistorySearchPopup {
                 let display: String = entry.text.chars().take(content_width).collect();
 
                 let line = if is_selected {
-                    Line::from(display.cyan().bold())
+                    Line::from(display.green().bold())
                 } else {
                     Line::from(display)
                 };
@@ -233,6 +233,7 @@ impl WidgetRef for HistorySearchPopup {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use ratatui::style::Color;
 
     fn make_entry(text: &str, ts: u64) -> HistoryEntry {
         HistoryEntry {
@@ -287,5 +288,17 @@ mod tests {
         popup.activate_search();
         // Two entries + search line + status line while filtering.
         assert_eq!(popup.calculate_required_height(), 4);
+    }
+
+    #[test]
+    fn selected_history_entry_uses_green_focus_accent() {
+        let mut popup = HistorySearchPopup::new();
+        popup.set_entries(vec![make_entry("selected entry", 1)]);
+        let area = Rect::new(0, 0, 40, popup.calculate_required_height());
+        let mut buffer = Buffer::empty(area);
+
+        popup.render_ref(area, &mut buffer);
+
+        assert_eq!(buffer[(2, 0)].fg, Color::Green);
     }
 }

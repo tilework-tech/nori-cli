@@ -256,7 +256,7 @@ pub(crate) fn render_rows(
                     let selected_fg = if span.style.fg == Some(Color::Red) {
                         Color::Red
                     } else {
-                        Color::Cyan
+                        Color::Green
                     };
                     span.style = Style::default().fg(selected_fg).bold();
                 });
@@ -349,6 +349,29 @@ mod tests {
             .find(|x| buf[(*x, 0)].symbol() == "●")
             .expect("recording dot cell");
         assert_eq!(buf[(dot_x, 0)].fg, Color::Red);
+    }
+
+    #[test]
+    fn selected_row_uses_green_focus_accent() {
+        let rows = vec![GenericDisplayRow {
+            name: "Selected action".to_string(),
+            display_shortcut: None,
+            match_indices: None,
+            description: None,
+            styled_description: None,
+            disabled: false,
+            is_header: false,
+        }];
+        let state = ScrollState {
+            selected_idx: Some(0),
+            scroll_top: 0,
+        };
+        let area = Rect::new(0, 0, 40, 1);
+        let mut buffer = Buffer::empty(area);
+
+        render_rows(area, &mut buffer, &rows, &state, 1, "no matches");
+
+        assert_eq!(buffer[(0, 0)].fg, Color::Green);
     }
 
     fn marker_x(buf: &Buffer, y: u16) -> u16 {
