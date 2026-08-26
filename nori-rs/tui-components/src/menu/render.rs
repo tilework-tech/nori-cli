@@ -14,8 +14,10 @@ use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthStr;
 
+use super::MenuDensity;
 use super::MenuItem;
 use super::MenuItemTone;
+use super::MenuRowPattern;
 use super::MenuState;
 use super::layout::truncate;
 use super::layout::wrap_lines;
@@ -38,8 +40,19 @@ pub struct OverlayMenu<'a, K> {
     max_width: u16,
     backdrop: bool,
     fullscreen_selection_rails: bool,
+    density: MenuDensity,
+    row_pattern: MenuRowPattern,
     key_hints: Vec<KeyHint<'a>>,
     key: PhantomData<fn() -> K>,
+}
+
+#[derive(Clone, Copy)]
+struct MenuRenderPolicy {
+    theme: Theme,
+    has_numbers: bool,
+    fullscreen_selection_rails: bool,
+    item_gap: u16,
+    row_pattern: MenuRowPattern,
 }
 
 impl<'a, K> OverlayMenu<'a, K> {
@@ -52,6 +65,8 @@ impl<'a, K> OverlayMenu<'a, K> {
             max_width: 58,
             backdrop: true,
             fullscreen_selection_rails: false,
+            density: MenuDensity::default(),
+            row_pattern: MenuRowPattern::default(),
             key_hints: Vec::new(),
             key: PhantomData,
         }
@@ -89,6 +104,18 @@ impl<'a, K> OverlayMenu<'a, K> {
         self
     }
 
+    /// Selects the menu's inter-item spacing and surface padding policy.
+    pub fn density(mut self, density: MenuDensity) -> Self {
+        self.density = density;
+        self
+    }
+
+    /// Selects whether enabled item surfaces are plain or zebra striped.
+    pub fn row_pattern(mut self, row_pattern: MenuRowPattern) -> Self {
+        self.row_pattern = row_pattern;
+        self
+    }
+
     /// Adds centered hints to the bottom of the menu surface.
     pub fn key_hints(mut self, hints: impl IntoIterator<Item = KeyHint<'a>>) -> Self {
         self.key_hints = hints.into_iter().collect();
@@ -107,7 +134,10 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
             buf.set_style(area, self.theme.backdrop);
         }
 
-        let outer_margin = u16::from(area.width >= 34) * 2;
+        let outer_margin = match self.density {
+            MenuDensity::Normal => u16::from(area.width >= 34) * 2,
+            MenuDensity::Dense => u16::from(area.width >= 32),
+        };
         let surface_width = area
             .width
             .saturating_sub(outer_margin.saturating_mul(2))
@@ -115,12 +145,10 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
         if surface_width == 0 {
             return;
         }
-        let horizontal_padding = if surface_width >= 8 {
-            2
-        } else if surface_width >= 4 {
-            1
-        } else {
-            0
+        let horizontal_padding = match self.density {
+            MenuDensity::Normal if surface_width >= 8 => 2,
+            MenuDensity::Normal | MenuDensity::Dense if surface_width >= 4 => 1,
+            MenuDensity::Normal | MenuDensity::Dense => 0,
         };
         let content_width = surface_width.saturating_sub(horizontal_padding * 2);
         let show_subtitle = content_width >= 40 && area.height >= 14;
@@ -131,8 +159,15 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
             .map(|subtitle| wrap_lines(subtitle, content_width, 2).len() as u16)
             .unwrap_or(0);
         let footer_rows = hint_rows(&self.key_hints, content_width);
-        let vertical_padding = u16::from(area.height >= 16);
+        let vertical_padding = match self.density {
+            MenuDensity::Normal => u16::from(area.height >= 16),
+            MenuDensity::Dense => 0,
+        };
         let gap = u16::from(area.height >= 14);
+        let item_gap = match self.density {
+            MenuDensity::Normal => 1,
+            MenuDensity::Dense => 0,
+        };
         let has_numbers = state
             .items
             .iter()
@@ -144,7 +179,7 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
             + subtitle_rows
             + gap
             + item_heights.iter().sum::<u16>()
-            + item_gaps
+            + item_gaps.saturating_mul(item_gap)
             + gap
             + footer_rows;
         let vertical_margin = u16::from(area.height >= 18);
@@ -201,14 +236,19 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
         let footer_y = content.bottom().saturating_sub(footer_height);
         let list_y = content.y.saturating_add(header_height).saturating_add(gap);
         let list_bottom = footer_y.saturating_sub(gap).max(list_y);
+        let render_policy = MenuRenderPolicy {
+            theme: self.theme,
+            has_numbers,
+            fullscreen_selection_rails: self.fullscreen_selection_rails,
+            item_gap,
+            row_pattern: self.row_pattern,
+        };
         render_items(
             Rect::new(content.x, list_y, content.width, list_bottom - list_y),
             buf,
-            self.theme,
             state,
             &item_heights,
-            has_numbers,
-            self.fullscreen_selection_rails,
+            render_policy,
         );
         if footer_height > 0 {
             KeyHints::new(self.key_hints).theme(self.theme).render(
@@ -222,11 +262,9 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
 fn render_items<K>(
     area: Rect,
     buf: &mut Buffer,
-    theme: Theme,
     state: &mut MenuState<K>,
     item_heights: &[u16],
-    has_numbers: bool,
-    fullscreen_selection_rails: bool,
+    policy: MenuRenderPolicy,
 ) {
     if area.height == 0 || state.items.is_empty() {
         state.viewport_offset = 0;
@@ -237,16 +275,29 @@ fn render_items<K>(
     let mut start = state.viewport_offset.min(selected);
     let mut end = selected.saturating_add(1).min(state.items.len());
     while start < selected
-        && window_height(start, end, item_heights, state.items.len()) > area.height
+        && window_height(start, end, item_heights, state.items.len(), policy.item_gap) > area.height
     {
         start += 1;
     }
     while end < state.items.len()
-        && window_height(start, end + 1, item_heights, state.items.len()) <= area.height
+        && window_height(
+            start,
+            end + 1,
+            item_heights,
+            state.items.len(),
+            policy.item_gap,
+        ) <= area.height
     {
         end += 1;
     }
-    while start > 0 && window_height(start - 1, end, item_heights, state.items.len()) <= area.height
+    while start > 0
+        && window_height(
+            start - 1,
+            end,
+            item_heights,
+            state.items.len(),
+            policy.item_gap,
+        ) <= area.height
     {
         start -= 1;
     }
@@ -257,30 +308,29 @@ fn render_items<K>(
     let mut y = area.y;
     if show_top_marker {
         Paragraph::new(format!("↑ {start} more"))
-            .style(theme.muted)
+            .style(policy.theme.muted)
             .render(Rect::new(area.x, y, area.width, 1), buf);
         y = y.saturating_add(1);
     }
     let items_bottom = area.bottom().saturating_sub(u16::from(show_bottom_marker));
     for (offset, item_index) in (start..end).enumerate() {
         if offset > 0 {
-            y = y.saturating_add(1).min(items_bottom);
+            y = y.saturating_add(policy.item_gap).min(items_bottom);
         }
         let height = item_heights[item_index].min(items_bottom.saturating_sub(y));
         render_item(
             Rect::new(area.x, y, area.width, height),
             buf,
-            theme,
             &state.items[item_index],
             state.selected_index == Some(item_index),
-            has_numbers,
-            fullscreen_selection_rails,
+            row_surface(policy.theme, policy.row_pattern, item_index),
+            policy,
         );
         y = y.saturating_add(height);
     }
     if show_bottom_marker {
         Paragraph::new(format!("↓ {} more", state.items.len() - end))
-            .style(theme.muted)
+            .style(policy.theme.muted)
             .render(
                 Rect::new(area.x, area.bottom().saturating_sub(1), area.width, 1),
                 buf,
@@ -290,9 +340,15 @@ fn render_items<K>(
     state.viewport_capacity = end.saturating_sub(start).max(1);
 }
 
-fn window_height(start: usize, end: usize, item_heights: &[u16], item_count: usize) -> u16 {
+fn window_height(
+    start: usize,
+    end: usize,
+    item_heights: &[u16],
+    item_count: usize,
+    item_gap: u16,
+) -> u16 {
     item_heights[start..end].iter().sum::<u16>()
-        + end.saturating_sub(start + 1) as u16
+        + (end.saturating_sub(start + 1) as u16).saturating_mul(item_gap)
         + u16::from(start > 0)
         + u16::from(end < item_count)
 }
@@ -300,23 +356,22 @@ fn window_height(start: usize, end: usize, item_heights: &[u16], item_count: usi
 fn render_item<K>(
     area: Rect,
     buf: &mut Buffer,
-    theme: Theme,
     item: &MenuItem<K>,
     selected: bool,
-    has_numbers: bool,
-    fullscreen_selection_rails: bool,
+    row_surface: Style,
+    policy: MenuRenderPolicy,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
     }
-    let selected_style = theme.selected.remove_modifier(Modifier::BOLD);
+    let selected_style = policy.theme.selected.remove_modifier(Modifier::BOLD);
     if !item.disabled {
-        buf.set_style(area, theme.menu_item_surface);
+        buf.set_style(area, row_surface);
     }
     if selected {
         buf.set_style(area, selected_style);
-        let pointer_style = selected_style.patch(theme.pointer);
-        if fullscreen_selection_rails {
+        let pointer_style = selected_style.patch(policy.theme.pointer);
+        if policy.fullscreen_selection_rails {
             for y in area.y..area.bottom() {
                 buf.set_string(area.x, y, "▏", pointer_style);
                 if area.width > 1 {
@@ -331,7 +386,7 @@ fn render_item<K>(
     }
 
     let inner_x = area.x.saturating_add(u16::from(area.width >= 3) * 2);
-    let number_width = u16::from(has_numbers) * 3;
+    let number_width = u16::from(policy.has_numbers) * 3;
     let label_x = inner_x.saturating_add(number_width);
     let right_padding = if area.width >= 3 { 2 } else { 0 };
     let label_width = area
@@ -341,16 +396,16 @@ fn render_item<K>(
     if label_width == 0 {
         return;
     }
-    let label_style = item_style(item, selected, theme);
+    let label_style = item_style(item, selected, policy.theme);
     let interaction_style = if selected {
         selected_style
     } else {
-        theme.menu_item_surface
+        row_surface
     }
-    .patch(theme.pointer);
-    if has_numbers && inner_x < area.right() {
+    .patch(policy.theme.pointer);
+    if policy.has_numbers && inner_x < area.right() {
         let shortcut_style = if item.disabled {
-            theme.disabled
+            policy.theme.disabled
         } else {
             interaction_style
         };
@@ -369,11 +424,7 @@ fn render_item<K>(
     };
     let suffix_width = UnicodeWidthStr::width(current_suffix) as u16;
     let label = truncate(&item.label, label_width.saturating_sub(suffix_width));
-    let mnemonic_style = if item.disabled {
-        theme.disabled
-    } else {
-        interaction_style
-    };
+    let mnemonic_style = label_style;
     let label_line = mnemonic_line(&label, item.mnemonic, label_style, mnemonic_style);
     Paragraph::new(label_line).render(Rect::new(label_x, area.y, label_width, 1), buf);
     if !current_suffix.is_empty() {
@@ -381,7 +432,7 @@ fn render_item<K>(
         let suffix_style = if selected {
             selected_style
         } else {
-            theme.muted
+            policy.theme.muted
         };
         Paragraph::new(current_suffix).style(suffix_style).render(
             Rect::new(suffix_x, area.y, area.right().saturating_sub(suffix_x), 1),
@@ -393,11 +444,11 @@ fn render_item<K>(
         && let Some(description) = item.description.as_deref()
     {
         let description_style = if item.disabled {
-            theme.disabled
+            policy.theme.disabled
         } else if selected {
-            selected_style.patch(theme.muted)
+            selected_style.patch(policy.theme.muted)
         } else {
-            theme.muted
+            policy.theme.muted
         };
         let lines = wrap_lines(
             description,
@@ -416,6 +467,14 @@ fn render_item<K>(
             ),
             buf,
         );
+    }
+}
+
+fn row_surface(theme: Theme, row_pattern: MenuRowPattern, item_index: usize) -> Style {
+    match row_pattern {
+        MenuRowPattern::Plain => theme.menu_item_surface,
+        MenuRowPattern::Zebra if item_index.is_multiple_of(2) => theme.menu_item_surface,
+        MenuRowPattern::Zebra => theme.menu_item_surface_alt,
     }
 }
 

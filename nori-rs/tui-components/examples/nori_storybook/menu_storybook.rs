@@ -2,8 +2,10 @@
 
 mod fixtures;
 
+use nori_tui_components::MenuDensity;
 use nori_tui_components::MenuModelError;
 use nori_tui_components::MenuOutcome;
+use nori_tui_components::MenuRowPattern;
 use nori_tui_components::MenuShortcut;
 use nori_tui_components::MenuState;
 use nori_tui_components::OverlayMenu;
@@ -26,6 +28,8 @@ pub(super) enum MenuStory {
     Shortcuts,
     Narrow,
     Destructive,
+    Dense,
+    DenseZebra,
 }
 
 impl MenuStory {
@@ -34,16 +38,20 @@ impl MenuStory {
             Self::Action => Self::Shortcuts,
             Self::Shortcuts => Self::Narrow,
             Self::Narrow => Self::Destructive,
-            Self::Destructive => Self::Action,
+            Self::Destructive => Self::Dense,
+            Self::Dense => Self::DenseZebra,
+            Self::DenseZebra => Self::Action,
         }
     }
 
     fn previous(self) -> Self {
         match self {
-            Self::Action => Self::Destructive,
+            Self::Action => Self::DenseZebra,
             Self::Shortcuts => Self::Action,
             Self::Narrow => Self::Shortcuts,
             Self::Destructive => Self::Narrow,
+            Self::Dense => Self::Destructive,
+            Self::DenseZebra => Self::Dense,
         }
     }
 }
@@ -137,12 +145,28 @@ pub(super) fn render(area: Rect, buf: &mut Buffer, theme: Theme, state: &mut Men
                 height,
             )
         }
-        MenuStory::Action | MenuStory::Shortcuts | MenuStory::Destructive => area,
+        MenuStory::Action
+        | MenuStory::Shortcuts
+        | MenuStory::Destructive
+        | MenuStory::Dense
+        | MenuStory::DenseZebra => area,
     };
     let presentation = fixtures::presentation(state.story);
     let mut menu = OverlayMenu::new(presentation.title)
         .theme(theme)
         .max_width(presentation.max_width)
+        .density(
+            if matches!(state.story, MenuStory::Dense | MenuStory::DenseZebra) {
+                MenuDensity::Dense
+            } else {
+                MenuDensity::Normal
+            },
+        )
+        .row_pattern(if matches!(state.story, MenuStory::DenseZebra) {
+            MenuRowPattern::Zebra
+        } else {
+            MenuRowPattern::Plain
+        })
         .fullscreen_selection_rails(!matches!(state.story, MenuStory::Narrow))
         .key_hints(fixtures::footer_hints(state.story));
     if let Some(subtitle) = state.notice.as_deref().or(presentation.subtitle) {
@@ -161,6 +185,8 @@ fn render_host(area: Rect, buf: &mut Buffer, theme: Theme, state: &MenuStoryStat
         MenuStory::Shortcuts => "shortcut-heavy",
         MenuStory::Narrow => "30x12 caller area",
         MenuStory::Destructive => "semantic consequence",
+        MenuStory::Dense => "dense surface",
+        MenuStory::DenseZebra => "dense zebra surface",
     };
     let lines = vec![
         Line::from(vec![

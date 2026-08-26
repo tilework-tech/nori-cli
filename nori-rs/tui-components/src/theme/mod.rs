@@ -15,6 +15,7 @@ pub struct Theme {
     pub backdrop: Style,
     pub menu_surface: Style,
     pub menu_item_surface: Style,
+    pub menu_item_surface_alt: Style,
     pub surface: Style,
     pub input: Style,
     pub row: Style,
@@ -49,6 +50,7 @@ impl Default for Theme {
             backdrop: Style::new(),
             menu_surface: Style::new(),
             menu_item_surface: Style::new(),
+            menu_item_surface_alt: Style::new(),
             surface: Style::new(),
             input: Style::new(),
             row: Style::new(),
@@ -95,6 +97,9 @@ impl Theme {
         let menu_surface = relative_surface(background, 8);
         theme.menu_surface = theme.menu_surface.bg(menu_surface);
         theme.menu_item_surface = theme.menu_item_surface.bg(darken_surface(menu_surface, 3));
+        theme.menu_item_surface_alt = theme
+            .menu_item_surface_alt
+            .bg(darken_surface(menu_surface, 6));
         theme.row = theme.row.bg(relative_surface(background, 4));
         theme.row_alt = theme.row_alt.bg(relative_surface(background, 7));
         theme.input = theme.input.bg(relative_surface(background, 8));

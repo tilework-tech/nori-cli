@@ -349,6 +349,23 @@ fn menu_100x30_shortcut_snapshot() {
 }
 
 #[test]
+fn menu_80x24_dense_zebra_snapshot() {
+    let mut action = action_state();
+    assert_snapshot!(
+        "menu_80x24_dense_zebra",
+        snapshot_with_presentation(
+            &mut action,
+            80,
+            24,
+            "Choose how to continue",
+            Some("Dense spacing with alternating item surfaces"),
+            MenuDensity::Dense,
+            MenuRowPattern::Zebra,
+        )
+    );
+}
+
+#[test]
 #[allow(clippy::disallowed_methods)]
 fn derived_surfaces_style_the_backdrop_menu_and_title() {
     let theme = Theme::for_terminal_background(Some((20, 20, 20)));
@@ -550,7 +567,7 @@ fn selected_destructive_items_move_color_to_the_pointer() {
 
 #[test]
 #[allow(clippy::disallowed_methods)]
-fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
+fn shortcut_columns_align_numbers_and_bold_unselected_mnemonics() {
     let mut state = MenuState::try_new([
         MenuItem::new("resume", "Resume session")
             .description("Continue")
@@ -585,17 +602,185 @@ fn shortcut_columns_and_mnemonic_modifiers_are_explicit_and_aligned() {
     assert_eq!(buffer[(inspect.0 - 3, inspect.1)].symbol(), " ");
     assert_eq!(buffer[(share.0 - 3, share.1)].symbol(), "3");
     assert_eq!(buffer[(resume.0 - 3, resume.1)].fg, Color::Green);
-    assert_eq!(buffer[resume].fg, Color::Green);
+    assert_eq!(buffer[resume].fg, Color::Reset);
     assert_eq!(buffer[(resume.0 + 1, resume.1)].fg, Color::Reset);
-    assert_eq!(buffer[(resume.0 - 3, resume.1)].bg, Color::Rgb(35, 35, 35));
-    assert_eq!(buffer[resume].bg, Color::Rgb(35, 35, 35));
-    assert_eq!(buffer[(share.0 - 3, share.1)].bg, Color::Rgb(43, 43, 43));
+    assert_eq!(buffer[(share.0 - 3, share.1)].fg, Color::Green);
     assert!(buffer[resume].modifier.contains(Modifier::BOLD));
     assert!(buffer[inspect].modifier.contains(Modifier::BOLD));
     assert!(!buffer[share].modifier.contains(Modifier::BOLD));
-    assert_eq!(state.items()[0].label(), "Resume session");
-    assert_eq!(state.items()[1].label(), "Inspect transcript");
-    assert_eq!(state.items()[2].label(), "Share session");
+}
+
+#[test]
+fn selected_mnemonics_keep_label_color_while_numbers_stay_green() {
+    let mut state = MenuState::try_new([MenuItem::new("resume", "Resume session")
+        .mnemonic('r')
+        .number_shortcut(1)])
+    .expect("valid selected shortcut menu");
+    let selected_buffer = rendered_buffer(
+        &mut state,
+        80,
+        24,
+        "Choose a session action",
+        None,
+        Theme::default(),
+        Color::Blue,
+    );
+    let selected_resume =
+        find_ascii_text(&selected_buffer, "Resume session").expect("selected resume label");
+    assert_eq!(selected_buffer[selected_resume].fg, Color::Reset);
+    assert!(
+        selected_buffer[selected_resume]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+    assert_eq!(
+        selected_buffer[(selected_resume.0 - 3, selected_resume.1)].fg,
+        Color::Green
+    );
+}
+
+#[test]
+fn semantic_mnemonics_bold_the_existing_consequence_tone() {
+    let mut destructive_state = MenuState::try_new([
+        MenuItem::new("keep", "Keep session"),
+        MenuItem::new("delete", "Delete session")
+            .mnemonic('d')
+            .tone(MenuItemTone::Destructive),
+    ])
+    .expect("valid semantic shortcut menu");
+    let semantic_buffer = rendered_buffer(
+        &mut destructive_state,
+        80,
+        24,
+        "Choose a session action",
+        None,
+        Theme::default(),
+        Color::Blue,
+    );
+    let destructive =
+        find_ascii_text(&semantic_buffer, "Delete session").expect("destructive label");
+    assert_eq!(semantic_buffer[destructive].fg, Color::Red);
+    assert!(
+        semantic_buffer[destructive]
+            .modifier
+            .contains(Modifier::BOLD)
+    );
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn dense_menu_keeps_item_anatomy_without_inter_item_rows_and_tightens_padding() {
+    let theme = Theme {
+        menu_surface: Style::new().bg(Color::Cyan),
+        menu_item_surface: Style::new().bg(Color::Black),
+        selected: Style::new().bg(Color::Magenta),
+        ..Theme::default()
+    };
+    let mut normal_state = action_state();
+    let normal = rendered_buffer_with_presentation(
+        &mut normal_state,
+        80,
+        24,
+        theme,
+        MenuDensity::Normal,
+        MenuRowPattern::Plain,
+    );
+    let mut dense_state = action_state();
+    let dense = rendered_buffer_with_presentation(
+        &mut dense_state,
+        80,
+        24,
+        theme,
+        MenuDensity::Dense,
+        MenuRowPattern::Plain,
+    );
+
+    let normal_first = find_ascii_text(&normal, "Resume the selected transcript").expect("row");
+    let normal_second = find_ascii_text(&normal, "Start a new session").expect("row");
+    let dense_first = find_ascii_text(&dense, "Resume the selected transcript").expect("row");
+    let dense_second = find_ascii_text(&dense, "Start a new session").expect("row");
+    assert_eq!(normal_second.1 - normal_first.1, 3);
+    assert_eq!(dense_second.1 - dense_first.1, 2);
+    assert!(dense_first.0 < normal_first.0);
+    assert_eq!(
+        find_ascii_text(&dense, "Continue the selected transcript")
+            .expect("dense description")
+            .1,
+        dense_first.1 + 1
+    );
+    assert_eq!(
+        selected_surface_bounds(&normal, normal_first.1, Color::Magenta),
+        Some((normal_first.0 - 2, normal_first.0 + 51))
+    );
+    assert_eq!(
+        selected_surface_bounds(&dense, dense_first.1, Color::Magenta),
+        Some((dense_first.0 - 2, dense_first.0 + 53))
+    );
+    let normal_title = find_ascii_text(&normal, "Choose how to continue").expect("normal title");
+    let dense_title = find_ascii_text(&dense, "Choose how to continue").expect("dense title");
+    assert_eq!(
+        normal_title.1,
+        menu_surface_top(&normal, normal_title.0, Color::Cyan) + 1
+    );
+    assert_eq!(
+        dense_title.1,
+        menu_surface_top(&dense, dense_title.0, Color::Cyan)
+    );
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn dense_menu_zebra_surfaces_preserve_selection_and_disabled_precedence() {
+    let theme = Theme {
+        menu_surface: Style::new().bg(Color::Blue),
+        menu_item_surface: Style::new().bg(Color::Black),
+        menu_item_surface_alt: Style::new().bg(Color::Yellow),
+        selected: Style::new().bg(Color::Magenta),
+        ..Theme::default()
+    };
+    let items = [
+        basic_item("first", "First action"),
+        basic_item("selected", "Selected alternate action"),
+        basic_item("plain", "Plain action"),
+        basic_item("alternate", "Alternate action"),
+        basic_item("disabled", "Disabled action").disabled(true),
+    ];
+    let mut state = MenuState::try_new(items.clone()).expect("valid zebra menu");
+    state.select_key(&"selected");
+    let zebra = rendered_buffer_with_presentation(
+        &mut state,
+        80,
+        24,
+        theme,
+        MenuDensity::Dense,
+        MenuRowPattern::Zebra,
+    );
+
+    let first = find_ascii_text(&zebra, "First action").expect("first row");
+    let selected =
+        find_ascii_text(&zebra, "Selected alternate action").expect("selected alternate row");
+    let plain = find_ascii_text(&zebra, "Plain action").expect("plain row");
+    let alternate = find_ascii_text(&zebra, "Alternate action").expect("alternate row");
+    let disabled = find_ascii_text(&zebra, "Disabled action").expect("disabled row");
+    assert_eq!(zebra[first].bg, Color::Black);
+    assert_eq!(zebra[selected].bg, Color::Magenta);
+    assert_eq!(zebra[plain].bg, Color::Black);
+    assert_eq!(zebra[alternate].bg, Color::Yellow);
+    assert_eq!(zebra[disabled].bg, Color::Blue);
+
+    let mut plain_state = MenuState::try_new(items).expect("valid plain menu");
+    plain_state.select_key(&"selected");
+    let plain_menu = rendered_buffer_with_presentation(
+        &mut plain_state,
+        80,
+        24,
+        theme,
+        MenuDensity::Dense,
+        MenuRowPattern::Plain,
+    );
+    let unselected_alternate =
+        find_ascii_text(&plain_menu, "Alternate action").expect("plain alternate row");
+    assert_eq!(plain_menu[unselected_alternate].bg, Color::Black);
 }
 
 #[test]
@@ -757,6 +942,33 @@ fn snapshot(
     terminal.backend().to_string()
 }
 
+fn snapshot_with_presentation(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    title: &'static str,
+    subtitle: Option<&'static str>,
+    density: MenuDensity,
+    row_pattern: MenuRowPattern,
+) -> String {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            let mut menu = OverlayMenu::new(title)
+                .key_hints(default_hints())
+                .theme(Theme::default())
+                .density(density)
+                .row_pattern(row_pattern);
+            if let Some(subtitle) = subtitle {
+                menu = menu.subtitle(subtitle);
+            }
+            frame.render_stateful_widget(menu, frame.area(), state);
+        })
+        .expect("draw menu");
+    terminal.backend().to_string()
+}
+
 fn rendered_buffer(
     state: &mut MenuState<&'static str>,
     width: u16,
@@ -830,6 +1042,32 @@ fn rendered_buffer_with_options(
     terminal.backend().buffer().clone()
 }
 
+fn rendered_buffer_with_presentation(
+    state: &mut MenuState<&'static str>,
+    width: u16,
+    height: u16,
+    theme: Theme,
+    density: MenuDensity,
+    row_pattern: MenuRowPattern,
+) -> Buffer {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            Block::default()
+                .style(Style::new().bg(Color::Blue))
+                .render(frame.area(), frame.buffer_mut());
+            let menu = OverlayMenu::new("Choose how to continue")
+                .key_hints(default_hints())
+                .theme(theme)
+                .density(density)
+                .row_pattern(row_pattern);
+            frame.render_stateful_widget(menu, frame.area(), state);
+        })
+        .expect("draw menu");
+    terminal.backend().buffer().clone()
+}
+
 fn default_hints() -> [KeyHint<'static>; 3] {
     [
         KeyHint::new("↑↓/jk", "move"),
@@ -845,6 +1083,23 @@ fn find_symbol_on_row(buffer: &Buffer, y: u16, symbol: &str) -> Option<(u16, u16
         }
     }
     None
+}
+
+fn selected_surface_bounds(
+    buffer: &Buffer,
+    y: u16,
+    selected_background: Color,
+) -> Option<(u16, u16)> {
+    let xs = (buffer.area.x..buffer.area.right())
+        .filter(|x| buffer[(*x, y)].bg == selected_background)
+        .collect::<Vec<_>>();
+    Some((*xs.first()?, *xs.last()?))
+}
+
+fn menu_surface_top(buffer: &Buffer, x: u16, menu_background: Color) -> u16 {
+    (buffer.area.y..buffer.area.bottom())
+        .find(|y| buffer[(x, *y)].bg == menu_background)
+        .expect("menu surface")
 }
 
 fn find_ascii_text(buffer: &Buffer, text: &str) -> Option<(u16, u16)> {

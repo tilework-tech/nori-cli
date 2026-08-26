@@ -36,6 +36,7 @@ pub struct Picker<'a, K> {
     state: &'a PickerState<K>,
     theme: Theme,
     density: PickerDensity,
+    fullscreen_selection_rails: bool,
     footer_hints: Option<Vec<KeyHint<'static>>>,
 }
 
@@ -45,6 +46,7 @@ impl<'a, K> Picker<'a, K> {
             state,
             theme: Theme::default(),
             density: PickerDensity::default(),
+            fullscreen_selection_rails: false,
             footer_hints: None,
         }
     }
@@ -56,6 +58,13 @@ impl<'a, K> Picker<'a, K> {
 
     pub fn density(mut self, density: PickerDensity) -> Self {
         self.density = density;
+        self
+    }
+
+    /// Enables symmetric selected-row rails for a caller-owned full-screen
+    /// overlay layer. Embedded and copyable content should keep this disabled.
+    pub fn fullscreen_selection_rails(mut self, enabled: bool) -> Self {
+        self.fullscreen_selection_rails = enabled;
         self
     }
 
@@ -248,8 +257,19 @@ impl<K: Clone + Eq> Picker<'_, K> {
             return;
         }
 
-        let columns = visible_columns(&self.state.columns, area.width);
-        let widths = column_widths(&columns, self.state, &visible, area.width);
+        let row_content_area = if self.fullscreen_selection_rails {
+            area.inner(Margin {
+                horizontal: 1,
+                vertical: 0,
+            })
+        } else {
+            area
+        };
+        if row_content_area.width == 0 {
+            return;
+        }
+        let columns = visible_columns(&self.state.columns, row_content_area.width);
+        let widths = column_widths(&columns, self.state, &visible, row_content_area.width);
         let row_height = match self.density {
             PickerDensity::Compact => 1,
             PickerDensity::Normal => 2,
@@ -257,7 +277,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
         let header_height = u16::from(area.height > row_height);
         if header_height > 0 {
             self.render_row(
-                Rect::new(area.x, area.y, area.width, 1),
+                Rect::new(row_content_area.x, area.y, row_content_area.width, 1),
                 buf,
                 &columns,
                 &widths,
@@ -289,15 +309,23 @@ impl<K: Clone + Eq> Picker<'_, K> {
             let item = &self.state.items[*item_index];
             let selected = self.state.selected_index == Some(*item_index);
             let checked = self.state.selected_keys.contains(&item.key);
-            let marker = match self.state.mode {
-                PickerMode::Single => {
+            let marker = match (self.fullscreen_selection_rails, self.state.mode) {
+                (true, PickerMode::Single) => " ",
+                (true, PickerMode::Toggle | PickerMode::Multi) => {
+                    if checked {
+                        "●"
+                    } else {
+                        "○"
+                    }
+                }
+                (false, PickerMode::Single) => {
                     if selected {
                         "›"
                     } else {
                         " "
                     }
                 }
-                PickerMode::Toggle | PickerMode::Multi => match (selected, checked) {
+                (false, PickerMode::Toggle | PickerMode::Multi) => match (selected, checked) {
                     (true, true) => "◉",
                     (true, false) => "›",
                     (false, true) => "●",
@@ -343,8 +371,17 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 row_height,
             );
             buf.set_style(row_area, style);
+            if selected && self.fullscreen_selection_rails {
+                let rail_style = style.patch(self.theme.pointer);
+                for y in row_area.y..row_area.bottom() {
+                    buf.set_string(row_area.x, y, "▏", rail_style);
+                    if row_area.width > 1 {
+                        buf.set_string(row_area.right().saturating_sub(1), y, "▕", rail_style);
+                    }
+                }
+            }
             self.render_row(
-                Rect::new(row_area.x, row_area.y, row_area.width, 1),
+                Rect::new(row_content_area.x, row_area.y, row_content_area.width, 1),
                 buf,
                 &columns,
                 &widths,
@@ -371,9 +408,9 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 && let Some(description) = &item.description
             {
                 let description_area = Rect::new(
-                    row_area.x.saturating_add(2),
+                    row_content_area.x.saturating_add(2),
                     row_area.y.saturating_add(1),
-                    row_area.width.saturating_sub(2),
+                    row_content_area.width.saturating_sub(2),
                     1,
                 );
                 let description_style = if selected {

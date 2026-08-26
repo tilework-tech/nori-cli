@@ -10,9 +10,11 @@ The v0 surface contains:
 
 - a centered selectable overlay menu for bounded action sets, with stable
   typed keys, validated explicit shortcuts, disabled and consequence states,
-  responsive two-row items, and typed interaction outcomes;
+  responsive label-and-description items, Normal or Dense spacing, optional
+  zebra surfaces, and typed interaction outcomes;
 - a configurable searchable picker with responsive columns, tabs, details,
-  single/toggle/multi modes, and explicit loading/empty/error states;
+  single/toggle/multi modes, opt-in full-screen focus rails, and explicit
+  loading/empty/error states;
 - a stateless detail pane for responsive, semantically styled definition lists
   in caller-positioned side or bottom regions;
 - width-aware Markdown rendering with adaptive table layouts;
@@ -40,7 +42,11 @@ shortcuts. Overlay shortcuts take precedence over numbered page navigation;
 the left arrow returns to Detail pane and the right arrow wraps to Picker. On
 full-screen overlay examples, selected rows use the explicit symmetric-rail
 treatment; the Narrow example demonstrates the copy-safe compact pointer used
-by default. On the Detail pane page, `Tab`/`Shift-Tab` compares compact columns,
+by default. The Picker page also opts into full-screen rails: they replace the
+single-select pointer, while toggle and multi-select markers continue to show
+checked state. The overlay cases include Dense and Dense Zebra presentations;
+the storybook demonstrates these presentation options while production CLI
+adoption remains deferred. On the Detail pane page, `Tab`/`Shift-Tab` compares compact columns,
 zebra bands, normal density, responsive stacking, fixed label width, and an
 omitted heading. Each story reports its required height at the current pane
 width.
