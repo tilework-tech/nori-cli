@@ -1,0 +1,12 @@
+---
+source: tui/src/nori/mcp_server_picker.rs
+expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
+---
+  MCP Servers
+  Manage MCP server connections
+     Server                          Transport   Status
+  ▏  + Add new...                                        ▕
+     docs                            stdio       on
+     remote-api                      http        on
+
+   ↑↓/j/k move  enter toggle  l login  d delete  esc close

@@ -1,0 +1,25 @@
+---
+source: tui/src/bottom_pane/mod.rs
+expression: rendered
+---
+                                                                                                    
+  Configuration                                                                                     
+  Toggle TUI settings (changes saved to config.toml)                                                
+     Option                         Details                                                         
+  ▏  Pinned Plan Drawer (off)       Pin plan updates to a drawer in the viewport instead of hist…▕  
+     Resize Reflow (on) (current)   Reflow transcript history when the terminal width changes       
+     Custom Working Messages (on)…  Rotate playful status messages while the agent is working       
+     Vertical Footer (off)          Stack footer segments vertically instead of horizontally        
+     Terminal Notifications (on) …  Send OSC 9 escape sequences to notify the terminal on events    
+     OS Notifications (on) (curre…  Send native desktop notifications on events                     
+     Vim Mode (off)                 Enable vim-style navigation in the textarea (Escape enters n…   
+     Auto Worktree (off)            Create a git worktree at session start                          
+     Per Session Skillsets (off)    Use unique skillsets for each session                           
+     Notify After Idle (5 seconds)  How long to wait before sending an idle notification            
+     Hotkeys                        Configure keyboard shortcuts for actions                        
+     Script Timeout (30s)           Timeout for custom prompt script execution                      
+     Loop Count (Disabled)          Number of times to re-run the first prompt in fresh sessions    
+     Footer Segments                Configure which segments are shown in the footer                
+     File Manager (not set)         Terminal file manager for the /browse command                   
+                                                                                                    
+                           ↑↓/j/k move  / search  enter select  esc close

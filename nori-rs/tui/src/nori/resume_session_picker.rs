@@ -512,7 +512,9 @@ mod tests {
         terminal
             .draw(|frame| {
                 frame.render_widget(
-                    Picker::new(&params.state).density(params.density),
+                    Picker::new(&params.state)
+                        .density(params.density)
+                        .fullscreen_selection_rails(true),
                     frame.area(),
                 )
             })

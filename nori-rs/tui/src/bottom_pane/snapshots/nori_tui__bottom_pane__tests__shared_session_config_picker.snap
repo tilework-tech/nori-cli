@@ -1,0 +1,19 @@
+---
+source: tui/src/bottom_pane/mod.rs
+expression: config_render
+---
+                                                                                                    
+  Session Config                                                                                    
+  Select an ACP session setting to change                                                           
+     Option                                                                                         
+  ▏  Model (Stable)                                                                              ▕  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                ↑↓/j/k move  enter select  esc close

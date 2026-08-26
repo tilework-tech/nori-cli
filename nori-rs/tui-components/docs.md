@@ -89,10 +89,10 @@ consumer application
   clears the query and selects the first available visible item, and selecting
   `SearchMode::None` also clears both search state and query.
 - [`PickerItem`](src/picker/) can represent a non-interactive section heading.
-  The builder makes that row disabled as an invariant, while the renderer
-  preserves bold primary text instead of applying the faded disabled style.
-  Consumers can therefore retain domain groupings without teaching the shared
-  state machine about their group model.
+  The state machine treats that row as non-interactive independently of its
+  disabled flag, while the renderer preserves bold primary text instead of
+  applying the faded disabled style. Consumers can therefore retain domain
+  groupings without teaching the shared state machine about their group model.
 - The [`picker` renderer](src/picker/render.rs) shows its input row only during
   active search and derives footer hints from the same state. Its inactive
   footer deliberately advertises only the concise `/ search` convention, not

@@ -1,0 +1,25 @@
+---
+source: tui/src/bottom_pane/mod.rs
+expression: filtered
+---
+                                                                                                    
+  Configuration                                                                                     
+  Toggle TUI settings (changes saved to config.toml)                                                
+  ⌕  resize reflow                                                                                  
+     Option                   Details                                                               
+  ▏  Resize Reflow (on) (cu…  Reflow transcript history when the terminal width changes          ▕  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                         ↑↓ move  type filter  enter select  esc stop search

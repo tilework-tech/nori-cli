@@ -154,6 +154,22 @@ fn picker_section_headings_are_bold_and_not_selectable() {
 }
 
 #[test]
+fn section_heading_remains_noninteractive_when_disabled_is_overridden() {
+    let items = [
+        PickerItem::new("heading", "name", "Heading")
+            .section_heading(true)
+            .disabled(false),
+        PickerItem::new("choice", "name", "Choice"),
+    ];
+    let mut state = PickerState::new("Models", [PickerColumn::flexible("name", "Model")], items)
+        .search_mode(SearchMode::None);
+
+    assert_eq!(state.selected_index, Some(1));
+    state.selected_index = Some(0);
+    assert_eq!(state.handle(PickerAction::Submit), PickerOutcome::Unchanged);
+}
+
+#[test]
 fn picker_normal_selection_rails_snapshot() {
     assert_snapshot!(snapshot_with_options(
         &session_picker(),

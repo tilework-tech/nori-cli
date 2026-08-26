@@ -1,0 +1,24 @@
+---
+source: tui/src/nori/hotkey_picker.rs
+expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
+---
+  Hotkeys
+  Configure keyboard shortcuts
+     Action                          Binding
+  ▏  Open Transcript                 ctrl + t            ▕
+     Open Editor                     ctrl + g
+     Move Backward Char              ctrl + b
+     Move Forward Char               ctrl + f
+     Move to Line Start              ctrl + a
+     Move to Line End                ctrl + e
+     Move Backward Word              alt + b
+     Move Forward Word               alt + f
+     Delete Backward Char            ctrl + h
+     Delete Forward Char             ctrl + d
+     Delete Backward Word            ctrl + w
+     Kill to Line End                ctrl + k
+     Kill to Line Start              ctrl + u
+     Yank                            ctrl + y
+     History Search                  ctrl + r
+     Toggle Plan Drawer              ctrl + o
+        ↑↓/j/k move  enter rebind  r reset  esc close

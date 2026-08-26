@@ -1189,6 +1189,7 @@ mod tests {
     use codex_rmcp_client::McpAuthStatus;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
+    use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
     use std::collections::HashMap;
     use tokio::sync::mpsc::unbounded_channel;
@@ -1582,6 +1583,13 @@ mod tests {
             .expect("selected MCP row");
         assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
         assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
+        assert_snapshot!(
+            "shared_mcp_server_picker",
+            text.lines()
+                .map(str::trim_end)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 
     #[test]
@@ -1619,6 +1627,13 @@ mod tests {
             .expect("selected MCP transport row");
         assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
         assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
+        assert_snapshot!(
+            "shared_mcp_transport_picker",
+            text.lines()
+                .map(str::trim_end)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 
     #[test]

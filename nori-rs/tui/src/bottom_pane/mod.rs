@@ -969,6 +969,7 @@ mod tests {
 
         assert_selected_row_has_symmetric_rails(&rendered, "Pinned Plan Drawer");
         assert!(rendered.contains("/ search"), "{rendered}");
+        assert_snapshot!("shared_settings_picker", rendered);
 
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         for character in "resize reflow".chars() {
@@ -977,6 +978,7 @@ mod tests {
         let filtered = render_snapshot(&pane, Rect::new(0, 0, 100, 22));
         assert!(filtered.contains("Resize Reflow"), "{filtered}");
         assert!(!filtered.contains("Pinned Plan Drawer"), "{filtered}");
+        assert_snapshot!("shared_settings_picker_search", filtered);
     }
 
     #[test]
@@ -994,6 +996,7 @@ mod tests {
         assert_selected_row_has_symmetric_rails(&rendered, "Mock ACP");
         assert!(!rendered.contains("/ search"), "{rendered}");
         assert!(rendered.contains("shift-tab rec on"), "{rendered}");
+        assert_snapshot!("shared_agent_picker", rendered);
 
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         pane.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
@@ -1056,6 +1059,7 @@ mod tests {
         );
         let config_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
         assert_selected_row_has_symmetric_rails(&config_render, "Model");
+        assert_snapshot!("shared_session_config_picker", config_render);
 
         pane.show_selection_view(
             crate::nori::session_config_picker::acp_session_config_value_picker_params(
@@ -1070,6 +1074,7 @@ mod tests {
         assert!(model_render.contains("Recommended"), "{model_render}");
         assert!(model_render.contains("Other"), "{model_render}");
         assert_selected_row_has_symmetric_rails(&model_render, "Stable");
+        assert_snapshot!("shared_model_picker", model_render);
     }
 
     #[test]

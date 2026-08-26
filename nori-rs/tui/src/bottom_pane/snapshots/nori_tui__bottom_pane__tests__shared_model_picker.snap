@@ -1,0 +1,21 @@
+---
+source: tui/src/bottom_pane/mod.rs
+expression: model_render
+---
+                                                                                                    
+  Model                                                                                             
+  Select a value for this ACP session setting                                                       
+     Option                                Details                                                  
+     Recommended                                                                                    
+  ▏  Stable (current)                                                                            ▕  
+     Preview                                                                                        
+     Other                                                                                          
+     Experimental                          experimental                                             
+     Use custom model...                   Enter any model ID                                       
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                ↑↓/j/k move  enter select  esc close

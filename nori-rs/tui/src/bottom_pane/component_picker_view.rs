@@ -186,8 +186,8 @@ impl ComponentPickerView {
             PickerOutcome::Selected(key) => {
                 if let Some(action) = self.actions.get(&key) {
                     action(&self.app_event_tx);
-                    self.complete = !self.keep_open.contains(&key);
                 }
+                self.complete = !self.keep_open.contains(&key);
             }
             PickerOutcome::Cancelled => {
                 if let Some(on_dismiss) = &self.on_dismiss {
@@ -252,10 +252,17 @@ impl BottomPaneView for ComponentPickerView {
                 ..
             } if search_active => PickerAction::Backspace,
             KeyEvent {
-                code: KeyCode::Tab, ..
-            } => PickerAction::NextCategory,
-            KeyEvent {
                 code: KeyCode::BackTab,
+                ..
+            } if self.on_shift_tab.is_some() => {
+                if let Some(on_shift_tab) = &self.on_shift_tab {
+                    on_shift_tab(&self.app_event_tx);
+                }
+                return;
+            }
+            KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::SHIFT,
                 ..
             } if self.on_shift_tab.is_some() => {
                 if let Some(on_shift_tab) = &self.on_shift_tab {
@@ -267,6 +274,14 @@ impl BottomPaneView for ComponentPickerView {
                 code: KeyCode::BackTab,
                 ..
             } => PickerAction::PreviousCategory,
+            KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::SHIFT,
+                ..
+            } => PickerAction::PreviousCategory,
+            KeyEvent {
+                code: KeyCode::Tab, ..
+            } => PickerAction::NextCategory,
             KeyEvent {
                 code: KeyCode::Char('f'),
                 modifiers,
@@ -452,6 +467,33 @@ mod tests {
             Some("Updated")
         );
         assert_eq!(view.state.items[0].search_text, "updated search");
+    }
+
+    #[test]
+    fn selecting_enabled_item_without_action_dismisses_picker() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut view = ComponentPickerView::new(params(), AppEventSender::new(tx));
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(view.is_complete());
+    }
+
+    #[test]
+    fn shift_tab_callback_accepts_both_crossterm_key_representations() {
+        for key_event in [
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+            KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT),
+        ] {
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let mut picker_params = params();
+            picker_params.on_shift_tab = Some(Box::new(|tx| tx.send(AppEvent::BeginExit)));
+            let mut view = ComponentPickerView::new(picker_params, AppEventSender::new(tx));
+
+            view.handle_key_event(key_event);
+
+            assert!(matches!(rx.try_recv(), Ok(AppEvent::BeginExit)));
+        }
     }
 
     #[test]

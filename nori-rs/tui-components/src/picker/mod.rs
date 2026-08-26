@@ -180,6 +180,10 @@ impl<K> PickerItem<K> {
         self.pinned = pinned;
         self
     }
+
+    fn is_noninteractive(&self) -> bool {
+        self.disabled || self.section_heading
+    }
 }
 
 /// One label/value entry in a picker's aligned metadata pane.
@@ -487,14 +491,14 @@ impl<K: Clone + Eq> PickerState<K> {
         self.selected_index = self
             .visible_indices()
             .into_iter()
-            .find(|index| !self.items[*index].disabled);
+            .find(|index| !self.items[*index].is_noninteractive());
     }
 
     fn move_selection(&mut self, delta: i32) -> PickerOutcome<K> {
         let visible = self.visible_indices();
         let available = visible
             .into_iter()
-            .filter(|index| !self.items[*index].disabled)
+            .filter(|index| !self.items[*index].is_noninteractive())
             .collect::<Vec<_>>();
         if available.is_empty() {
             self.selected_index = None;
@@ -515,7 +519,7 @@ impl<K: Clone + Eq> PickerState<K> {
         let available = self
             .visible_indices()
             .into_iter()
-            .filter(|index| !self.items[*index].disabled)
+            .filter(|index| !self.items[*index].is_noninteractive())
             .collect::<Vec<_>>();
         let selected = if last {
             available.last().copied()
@@ -533,7 +537,7 @@ impl<K: Clone + Eq> PickerState<K> {
         let Some(item) = self.selected_item() else {
             return PickerOutcome::Unchanged;
         };
-        if item.disabled || item.read_only {
+        if item.is_noninteractive() || item.read_only {
             return PickerOutcome::Unchanged;
         }
         PickerOutcome::Selected(item.key.clone())
@@ -546,7 +550,7 @@ impl<K: Clone + Eq> PickerState<K> {
         let Some(item) = self.selected_item() else {
             return PickerOutcome::Unchanged;
         };
-        if item.disabled || item.read_only {
+        if item.is_noninteractive() || item.read_only {
             return PickerOutcome::Unchanged;
         }
         let key = item.key.clone();
