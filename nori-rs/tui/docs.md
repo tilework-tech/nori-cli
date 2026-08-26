@@ -122,16 +122,24 @@ additional visible hint text. Active footers describe typing and search exit.
   to consume the first Escape without completing the view. This keeps
   multi-stage Escape state transitions independent from Ctrl-C cancellation;
   the next Escape follows the view's normal dismissal path.
+- [`SelectionViewParams`](src/bottom_pane/list_selection_view.rs) keeps the
+  caller-owned selection model and adds an explicit presentation choice.
+  Standard picker factories opt into the shared presentation with `picker()`;
+  [`BottomPane::show_selection_view`](src/bottom_pane/mod.rs) then adapts those
+  rows into the domain-free picker instead of moving configuration types,
+  application events, or callbacks into the component crate. Short legacy
+  action lists may retain `ListSelectionView` and its numbered-row behavior.
 - [`ComponentPickerView`](src/bottom_pane/component_picker_view.rs) maps
   Crossterm events into the domain-free `PickerAction` vocabulary from
-  [`nori-tui-components`](../tui-components/docs.md). Shared ACP and local
-  resume pickers use this adapter, so the component's `search_active`, query,
+  [`nori-tui-components`](../tui-components/docs.md). The adapter preserves
+  current and initial selection, callbacks, keep-open actions, Shift-Tab
+  actions, and typed footer hints while projecting names and descriptions into
+  picker columns and details. The component's `search_active`, query,
   filtering, and typed outcomes remain the source of truth.
-- [`ListSelectionView`](src/bottom_pane/list_selection_view.rs) applies the same
-  state transition contract to existing generic selection panels. Search
-  behavior is independent of composer Vim mode; while inactive, numbered
-  selection remains available and unrelated printable keys are consumed
-  without changing the filter.
+- Specialized picker state machines use the same renderer only for their
+  browsing states. For example, the hotkey and MCP views retain rebinding,
+  form input, validation, and application-event routing locally while their
+  selectable rows use the shared columns, surfaces, hints, and focus rails.
 - Transcript search remains composer-owned because it loads `HistoryEntry`
   values asynchronously. [`HistorySearchPopup`](src/bottom_pane/history_search_popup.rs)
   owns its search and filtered-selection state, while
@@ -140,8 +148,9 @@ additional visible hint text. Active footers describe typing and search exit.
 
 The pre-TUI [`resume_picker`](src/resume_picker/) cannot use a bottom-pane
 adapter, but it mirrors the same transitions and projects its active state and
-query into the reusable picker renderer. This keeps launch-time transcript
-selection consistent with in-TUI ACP and local session selection.
+query into the reusable picker renderer. Full-screen CLI picker surfaces use
+the component's opt-in symmetric selection rails, including this launch-time
+picker; embedded or copyable output does not inherit the rail treatment.
 
 #### Structured session information
 
@@ -205,10 +214,10 @@ after every change. Each panel re-derives its `initial_selected_idx` from a row
 identifier: a `SettingsItem` enum for `/settings`, or the ACP option id for
 `/config`.
 
-`/settings` is searchable through the generic selection adapter. Each setting
+`/settings` is searchable through the shared-picker adapter. Each setting
 builds its search value from the displayed name and optional description before
 the panel opens, so filtering can match either the setting identity or its
-user-facing explanation without coupling `ListSelectionView` to configuration
+user-facing explanation without coupling the component state to configuration
 types.
 
 - For `/settings`, each `App::persist_*` success path in
@@ -247,14 +256,13 @@ types.
   a free-text custom entry emits — so it follows the identical
   reject → persist-to-`[default_models]` → restart-with-injection recovery path
   (below). `initial_selected_idx` prefers the current row.
-- Section labels are a non-selectable header primitive shared by every
-  `ListSelectionView` (`is_header` on `SelectionItem` and `GenericDisplayRow`, in
-  `@/nori-rs/tui/src/bottom_pane/list_selection_view.rs` and
-  `@/nori-rs/tui/src/bottom_pane/selection_popup_common.rs`): headers render bold
-  with no number or `›` cursor, keyboard navigation and default selection skip
-  them, and the `1..N` numbering counts only selectable rows. Grouped non-model
-  config options reuse the same primitive for their group labels (previously
-  drawn as bracketed `[Group]` text).
+- Section labels remain non-selectable through `SelectionItem::is_header` in
+  [`list_selection_view.rs`](src/bottom_pane/list_selection_view.rs). The shared
+  adapter maps that flag to `PickerItem::section_heading`, so grouped model and
+  config rows render as bold structure rather than faded disabled choices;
+  keyboard navigation and default selection continue to skip them. Retained
+  legacy lists project the same flag into `GenericDisplayRow` and keep their
+  selectable-only numbering.
 - `acp_session_config_value_picker_params()` also pins a "Use custom model..."
   entry at the bottom of every Model-category picker. Selecting it emits
   `AppEvent::OpenCustomModelInput`, which opens a `CustomModelInputView`
