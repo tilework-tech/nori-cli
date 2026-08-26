@@ -1088,6 +1088,50 @@ mod tests {
     }
 
     #[test]
+    fn remaining_standard_picker_factories_use_the_shared_picker() {
+        let mut pane = test_bottom_pane();
+        let (tx, _rx) = unbounded_channel();
+        let app_event_tx = AppEventSender::new(tx);
+
+        pane.show_selection_view(
+            crate::nori::viewonly_session_picker::viewonly_session_picker_params(
+                vec![crate::nori::viewonly_session_picker::SessionPickerInfo {
+                    session_id: "session-1".to_string(),
+                    project_id: "project-1".to_string(),
+                    started_at: chrono::Utc::now().to_rfc3339(),
+                    user_turn_count: Some(1),
+                    first_message_preview: Some("First prompt".to_string()),
+                }],
+                std::path::PathBuf::from("/tmp/nori"),
+                app_event_tx.clone(),
+            ),
+        );
+        let history_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
+        assert_selected_row_has_symmetric_rails(&history_render, "1 turn");
+        assert!(history_render.contains("/ search"), "{history_render}");
+
+        pane.show_selection_view(crate::nori::skillset_picker::skillset_picker_params(
+            vec!["rust-dev".to_string(), "frontend".to_string()],
+            None,
+            None,
+            false,
+            false,
+        ));
+        let skillset_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
+        assert_selected_row_has_symmetric_rails(&skillset_render, "rust-dev");
+        assert!(skillset_render.contains("/ search"), "{skillset_render}");
+
+        pane.show_selection_view(crate::nori::fork_picker::fork_picker_params(
+            vec![(0, "Earlier prompt".to_string())],
+            true,
+            app_event_tx,
+        ));
+        let fork_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
+        assert_selected_row_has_symmetric_rails(&fork_render, "Branch from current point");
+        assert!(!fork_render.contains("/ search"), "{fork_render}");
+    }
+
+    #[test]
     fn searchable_selection_view_consumes_escape_before_bottom_pane_dismissal() {
         let mut pane = test_bottom_pane();
         pane.show_selection_view(SelectionViewParams {

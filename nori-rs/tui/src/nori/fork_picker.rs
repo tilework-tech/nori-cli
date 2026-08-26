@@ -90,6 +90,7 @@ pub fn fork_picker_params(
         is_searchable: false,
         ..Default::default()
     }
+    .picker()
 }
 
 #[cfg(test)]
