@@ -363,6 +363,7 @@ pub fn config_picker_params(
         initial_selected_idx: Some(focus_idx.unwrap_or(0)),
         ..Default::default()
     }
+    .picker()
 }
 
 /// Create selection view parameters for the skillset per-session worktree choice.

@@ -68,6 +68,7 @@ pub fn agent_picker_params(
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 fn recording_footer_hint(enabled: bool) -> Line<'static> {
@@ -110,6 +111,7 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Get information about an agent by agent name

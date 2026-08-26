@@ -121,9 +121,12 @@ pub fn resume_session_component_picker_params(
             .search_placeholder("First message or session id"),
         actions,
         on_dismiss: None,
+        on_shift_tab: None,
         primary_column: "session".to_string(),
         detail_column: Some("preview".to_string()),
         density: PickerDensity::Compact,
+        keep_open: std::collections::BTreeSet::new(),
+        footer_hints: None,
     }
 }
 
@@ -310,9 +313,12 @@ pub fn acp_resume_session_component_picker_params(
             .search_placeholder("Title, path, status, or session id"),
         actions,
         on_dismiss: Some(on_dismiss),
+        on_shift_tab: None,
         primary_column: "title".to_string(),
         detail_column: None,
         density: PickerDensity::Compact,
+        keep_open: std::collections::BTreeSet::new(),
+        footer_hints: None,
     }
 }
 

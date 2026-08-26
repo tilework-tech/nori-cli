@@ -1,13 +1,20 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use nori_tui_components::KeyHint;
 use nori_tui_components::Picker;
 use nori_tui_components::PickerAction;
+use nori_tui_components::PickerColumn;
+use nori_tui_components::PickerColumnWidth;
 use nori_tui_components::PickerDensity;
+use nori_tui_components::PickerDetail;
+use nori_tui_components::PickerItem;
 use nori_tui_components::PickerOutcome;
 use nori_tui_components::PickerState;
+use nori_tui_components::SearchMode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
@@ -18,25 +25,142 @@ use crate::render::renderable::Renderable;
 use super::BottomPaneView;
 use super::CancellationEvent;
 use super::SelectionAction;
+use super::SelectionViewParams;
 
 pub(crate) struct ComponentPickerParams {
     pub state: PickerState<String>,
     pub actions: BTreeMap<String, SelectionAction>,
     pub on_dismiss: Option<SelectionAction>,
+    pub on_shift_tab: Option<SelectionAction>,
     pub primary_column: String,
     pub detail_column: Option<String>,
     pub density: PickerDensity,
+    pub keep_open: BTreeSet<String>,
+    pub footer_hints: Option<Vec<KeyHint<'static>>>,
+}
+
+impl ComponentPickerParams {
+    pub(crate) fn from_selection(params: SelectionViewParams) -> Self {
+        let searchable = params.is_searchable;
+        let initial_selected_idx = params.initial_selected_idx;
+        let mut actions = BTreeMap::new();
+        let mut keep_open = BTreeSet::new();
+        let mut has_descriptions = false;
+        let items = params
+            .items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let key = format!("selection-{index}");
+                let description = item.description.clone();
+                has_descriptions |= description.is_some();
+                let search_text = item.search_value.unwrap_or_else(|| {
+                    description
+                        .as_ref()
+                        .map(|description| format!("{} {description}", item.name))
+                        .unwrap_or_else(|| item.name.clone())
+                });
+                let disabled = item.is_header || item.actions.is_empty();
+                let mut picker_item = PickerItem::new(key.clone(), "name", item.name)
+                    .search_text(search_text)
+                    .current(item.is_current)
+                    .disabled(disabled);
+                if let Some(description) = description {
+                    picker_item = picker_item
+                        .cell("description", description.clone())
+                        .description(description.clone())
+                        .details([PickerDetail::new("Description", description)]);
+                }
+                if !item.actions.is_empty() {
+                    let callbacks = item.actions;
+                    actions.insert(
+                        key.clone(),
+                        Box::new(move |tx: &AppEventSender| {
+                            for callback in &callbacks {
+                                callback(tx);
+                            }
+                        }) as SelectionAction,
+                    );
+                    if !item.dismiss_on_select {
+                        keep_open.insert(key);
+                    }
+                }
+                picker_item
+            })
+            .collect::<Vec<_>>();
+        let mut columns =
+            vec![
+                PickerColumn::flexible("name", "Option").width(PickerColumnWidth::Flexible {
+                    min: 12,
+                    max: 36,
+                    weight: 1,
+                }),
+            ];
+        if has_descriptions {
+            columns.push(
+                PickerColumn::flexible("description", "Details")
+                    .width(PickerColumnWidth::Flexible {
+                        min: 18,
+                        max: 72,
+                        weight: 2,
+                    })
+                    .hide_below(56),
+            );
+        }
+        let mut state = PickerState::new(
+            params
+                .title
+                .unwrap_or_else(|| "Select an option".to_string()),
+            columns,
+            items,
+        )
+        .search_mode(if searchable {
+            SearchMode::Substring
+        } else {
+            SearchMode::None
+        });
+        state.subtitle = params.subtitle;
+        if let Some(search_placeholder) = params.search_placeholder {
+            state.search_placeholder = search_placeholder;
+        }
+        if let Some(selected_index) = initial_selected_idx
+            .filter(|index| state.items.get(*index).is_some_and(|item| !item.disabled))
+            .or_else(|| {
+                state
+                    .items
+                    .iter()
+                    .position(|item| item.current && !item.disabled)
+            })
+        {
+            state.selected_index = Some(selected_index);
+        }
+
+        Self {
+            state,
+            actions,
+            on_dismiss: params.on_dismiss,
+            on_shift_tab: params.on_shift_tab,
+            primary_column: "name".to_string(),
+            detail_column: has_descriptions.then(|| "description".to_string()),
+            density: PickerDensity::Compact,
+            keep_open,
+            footer_hints: None,
+        }
+    }
 }
 
 pub(crate) struct ComponentPickerView {
     state: PickerState<String>,
     actions: BTreeMap<String, SelectionAction>,
     on_dismiss: Option<SelectionAction>,
+    on_shift_tab: Option<SelectionAction>,
     app_event_tx: AppEventSender,
     complete: bool,
     primary_column: String,
     detail_column: Option<String>,
     density: PickerDensity,
+    keep_open: BTreeSet<String>,
+    footer_hints: Option<Vec<KeyHint<'static>>>,
 }
 
 impl ComponentPickerView {
@@ -45,11 +169,14 @@ impl ComponentPickerView {
             state: params.state,
             actions: params.actions,
             on_dismiss: params.on_dismiss,
+            on_shift_tab: params.on_shift_tab,
             app_event_tx,
             complete: false,
             primary_column: params.primary_column,
             detail_column: params.detail_column,
             density: params.density,
+            keep_open: params.keep_open,
+            footer_hints: params.footer_hints,
         }
     }
 
@@ -58,7 +185,7 @@ impl ComponentPickerView {
             PickerOutcome::Selected(key) => {
                 if let Some(action) = self.actions.get(&key) {
                     action(&self.app_event_tx);
-                    self.complete = true;
+                    self.complete = !self.keep_open.contains(&key);
                 }
             }
             PickerOutcome::Cancelled => {
@@ -126,6 +253,15 @@ impl BottomPaneView for ComponentPickerView {
             KeyEvent {
                 code: KeyCode::Tab, ..
             } => PickerAction::NextCategory,
+            KeyEvent {
+                code: KeyCode::BackTab,
+                ..
+            } if self.on_shift_tab.is_some() => {
+                if let Some(on_shift_tab) = &self.on_shift_tab {
+                    on_shift_tab(&self.app_event_tx);
+                }
+                return;
+            }
             KeyEvent {
                 code: KeyCode::BackTab,
                 ..
@@ -245,11 +381,14 @@ impl BottomPaneView for ComponentPickerView {
 
 impl Renderable for ComponentPickerView {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        Picker::new(&self.state)
+        let mut picker = Picker::new(&self.state)
             .theme(crate::style::component_theme())
             .density(self.density)
-            .fullscreen_selection_rails(true)
-            .render(area, buf);
+            .fullscreen_selection_rails(true);
+        if let Some(footer_hints) = &self.footer_hints {
+            picker = picker.footer_hints(footer_hints.clone());
+        }
+        picker.render(area, buf);
     }
 
     fn desired_height(&self, _width: u16) -> u16 {
@@ -287,9 +426,12 @@ mod tests {
             ),
             actions: BTreeMap::new(),
             on_dismiss: None,
+            on_shift_tab: None,
             primary_column: "session".to_string(),
             detail_column: None,
             density: PickerDensity::Compact,
+            keep_open: BTreeSet::new(),
+            footer_hints: None,
         }
     }
 
