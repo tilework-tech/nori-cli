@@ -1011,6 +1011,45 @@ mod tests {
     }
 
     #[test]
+    fn nested_settings_selection_uses_the_shared_picker() {
+        let mut pane = test_bottom_pane();
+        let (tx, _rx) = unbounded_channel();
+        pane.show_selection_view(crate::nori::config_picker::vim_mode_picker_params(
+            nori_config::VimEnterBehavior::Off,
+            AppEventSender::new(tx),
+            true,
+        ));
+
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+
+        assert_selected_row_has_symmetric_rails(&rendered, "Off");
+        assert!(!rendered.contains("/ search"), "{rendered}");
+    }
+
+    #[test]
+    fn footer_segments_shared_picker_stays_open_after_a_toggle() {
+        let (mut pane, mut rx) = test_bottom_pane_with_events();
+        pane.show_selection_view(crate::nori::config_picker::footer_segments_picker_params(
+            &nori_config::FooterSegmentConfig::default(),
+            pane.app_event_tx.clone(),
+        ));
+
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        assert_selected_row_has_symmetric_rails(&rendered, "Task Summary");
+
+        pane.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(
+            pane.has_active_view(),
+            "the footer toggle picker should remain open after changing one segment"
+        );
+        assert!(
+            matches!(rx.try_recv(), Ok(AppEvent::SetConfigFooterSegment(_, _))),
+            "toggling a footer segment should still emit its config event"
+        );
+    }
+
+    #[test]
     fn searchable_selection_view_consumes_escape_before_bottom_pane_dismissal() {
         let mut pane = test_bottom_pane();
         pane.show_selection_view(SelectionViewParams {

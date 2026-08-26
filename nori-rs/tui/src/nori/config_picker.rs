@@ -413,6 +413,7 @@ pub fn skillset_worktree_choice_params(app_event_tx: AppEventSender) -> Selectio
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Build a toggle-style selection item.
@@ -494,6 +495,7 @@ pub fn vim_mode_picker_params(
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Create selection view parameters for the auto-worktree sub-picker.
@@ -539,6 +541,7 @@ pub fn auto_worktree_picker_params(
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Create selection view parameters for the notify-after-idle sub-picker.
@@ -577,6 +580,7 @@ pub fn notify_after_idle_picker_params(
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Create selection view parameters for the `/browser` profile picker.
@@ -613,6 +617,7 @@ pub fn browser_profile_picker_params(
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Create selection view parameters for the script timeout sub-picker.
@@ -652,6 +657,7 @@ pub fn script_timeout_picker_params(
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Create selection view parameters for the footer segments sub-picker.
@@ -699,6 +705,7 @@ pub fn footer_segments_picker_params(
         initial_selected_idx: Some(0),
         ..Default::default()
     }
+    .picker()
 }
 
 /// Create selection view parameters for the file manager sub-picker.
@@ -744,6 +751,7 @@ pub fn file_manager_picker_params(
         initial_selected_idx: Some(0),
         ..Default::default()
     }
+    .picker()
 }
 
 #[cfg(test)]
