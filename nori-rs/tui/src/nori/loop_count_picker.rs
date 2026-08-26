@@ -5,6 +5,13 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use nori_tui_components::KeyHint;
+use nori_tui_components::Picker;
+use nori_tui_components::PickerColumn;
+use nori_tui_components::PickerDensity;
+use nori_tui_components::PickerItem;
+use nori_tui_components::PickerState;
+use nori_tui_components::SearchMode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -21,7 +28,6 @@ use crate::bottom_pane::CancellationEvent;
 use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
 
 /// Maximum allowed custom loop count.
 const MAX_LOOP_COUNT: i32 = 1000;
@@ -169,6 +175,22 @@ impl LoopCountPickerView {
     pub(crate) fn input_buffer(&self) -> &str {
         &self.input_buffer
     }
+
+    fn picker_state(&self) -> PickerState<usize> {
+        let items = (0..self.item_count()).map(|index| {
+            PickerItem::new(index, "count", self.item_label(index))
+                .current(self.is_item_current(index))
+        });
+        let mut state = PickerState::new(
+            "Loop Count",
+            [PickerColumn::flexible("count", "Iterations")],
+            items,
+        )
+        .subtitle("Select number of loop iterations")
+        .search_mode(SearchMode::None);
+        state.selected_index = Some(self.selected_idx);
+        state
+    }
 }
 
 impl BottomPaneView for LoopCountPickerView {
@@ -246,22 +268,35 @@ impl BottomPaneView for LoopCountPickerView {
 
 impl Renderable for LoopCountPickerView {
     fn desired_height(&self, _width: u16) -> u16 {
-        // title + subtitle + blank + items + blank + footer hint + vertical inset (2)
-        let content_rows = if self.input_mode {
-            3 + 1 + 2 // title/subtitle/blank + input line + blank/footer
+        if self.input_mode {
+            8
         } else {
-            3 + self.item_count() + 2
-        };
-        (content_rows + 2) as u16
+            (self.item_count() as u16).saturating_add(6)
+        }
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        if !self.input_mode {
+            let state = self.picker_state();
+            Picker::new(&state)
+                .theme(crate::style::component_theme())
+                .density(PickerDensity::Compact)
+                .fullscreen_selection_rails(true)
+                .footer_hints([
+                    KeyHint::new("↑↓/j/k", "move"),
+                    KeyHint::new("enter", "choose"),
+                    KeyHint::new("esc", "close"),
+                ])
+                .render(area, buf);
+            return;
+        }
+
         if area.height == 0 || area.width == 0 {
             return;
         }
 
         Block::default()
-            .style(user_message_style())
+            .style(crate::style::component_theme().surface)
             .render(area, buf);
 
         let content_area = area.inset(Insets::vh(1, 2));
@@ -275,13 +310,7 @@ impl Renderable for LoopCountPickerView {
             Constraint::Length(1), // blank line
         ];
 
-        if self.input_mode {
-            constraints.push(Constraint::Length(1)); // input line
-        } else {
-            for _ in 0..self.item_count() {
-                constraints.push(Constraint::Length(1));
-            }
-        }
+        constraints.push(Constraint::Length(1)); // input line
         constraints.push(Constraint::Length(1)); // blank line
         constraints.push(Constraint::Length(1)); // footer hint
 
@@ -299,51 +328,19 @@ impl Renderable for LoopCountPickerView {
         // Blank
         row += 1;
 
-        if self.input_mode {
-            // Input mode: show prompt with typed buffer
-            let prompt = format!("Enter count (2-{MAX_LOOP_COUNT}): {}_", self.input_buffer);
-            Line::from(prompt).render(areas[row], buf);
-            row += 1;
-        } else {
-            // Normal mode: show items
-            for idx in 0..self.item_count() {
-                let is_selected = idx == self.selected_idx;
-                let is_current = self.is_item_current(idx);
-                let prefix = if is_selected { "› " } else { "  " };
-                let label = self.item_label(idx);
-
-                let line = if is_selected {
-                    Line::from(vec![
-                        prefix.to_string().bold(),
-                        label.bold(),
-                        if is_current { " ✓".dim() } else { "".into() },
-                    ])
-                } else {
-                    Line::from(vec![
-                        prefix.to_string().into(),
-                        if is_current {
-                            label.into()
-                        } else {
-                            label.dim()
-                        },
-                        if is_current { " ✓".dim() } else { "".into() },
-                    ])
-                };
-                line.render(areas[row], buf);
-                row += 1;
-            }
-        }
+        Line::from(vec![
+            format!("Enter count (2-{MAX_LOOP_COUNT}): ").into(),
+            self.input_buffer.clone().into(),
+            "_".green(),
+        ])
+        .render(areas[row], buf);
+        row += 1;
 
         // Blank
         row += 1;
 
         // Footer hint
-        let hint = if self.input_mode {
-            "enter submit · esc cancel"
-        } else {
-            "↑↓ select · enter choose · esc close"
-        };
-        Line::from(hint.dim()).render(areas[row], buf);
+        Line::from("enter submit · esc cancel".dim()).render(areas[row], buf);
     }
 }
 
@@ -630,6 +627,26 @@ mod tests {
         assert!(text.contains("Loop Count"), "should contain title");
         assert!(text.contains("Disabled"), "should contain Disabled option");
         assert!(text.contains("Custom"), "should contain Custom option");
+    }
+
+    #[test]
+    fn picker_render_uses_shared_symmetric_selection_rails() {
+        let (picker, _rx) = make_picker(None);
+        let area = Rect::new(0, 0, 60, picker.desired_height(60));
+        let mut buffer = Buffer::empty(area);
+
+        picker.render(area, &mut buffer);
+
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("Disabled")
+            })
+            .expect("selected loop-count row");
+        assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▏"));
+        assert!((area.x..area.right()).any(|x| buffer[(x, selected_row)].symbol() == "▕"));
     }
 
     #[test]
