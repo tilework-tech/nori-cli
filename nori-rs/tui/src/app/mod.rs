@@ -327,6 +327,7 @@ impl App {
         // Propagate initial hotkey config to the textarea so editing bindings
         // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
         app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
+        app.chat_widget.update_approval_mode_label();
         // Propagate initial vim mode setting.
         app.chat_widget.set_vim_mode(app.vim_mode);
         // Propagate initial pinned plan drawer setting.
