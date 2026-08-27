@@ -5,6 +5,8 @@ use std::time::Instant;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
+#[cfg(target_os = "linux")]
+use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
@@ -27,6 +29,7 @@ fn activate_new_session(session: &mut TuiSession) {
         .wait_for_text("›", TIMEOUT)
         .expect("Sessionless composer did not appear");
     session.send_str("/new").expect("Failed to enter /new");
+    std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).expect("Failed to submit /new");
     session
         .wait_for_text("Nori CLI", TIMEOUT)
