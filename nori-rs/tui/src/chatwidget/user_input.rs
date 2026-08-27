@@ -74,6 +74,18 @@ impl ChatWidget {
         if self.exiting {
             return;
         }
+        if user_message.image_paths.is_empty()
+            && let Some(request) =
+                crate::remote_control::parse_remote_control_request(&user_message.text)
+        {
+            match request {
+                Ok(request) => self
+                    .app_event_tx
+                    .send(AppEvent::RemoteControlRequested(request)),
+                Err(message) => self.add_error_message(message),
+            }
+            return;
+        }
         let UserMessage { text, image_paths } = user_message;
         if text.is_empty() && image_paths.is_empty() {
             return;

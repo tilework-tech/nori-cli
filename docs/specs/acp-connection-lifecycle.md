@@ -186,11 +186,12 @@ login-only override, but that override cannot route prompts or resurrect a
 cancelled switch. It is cleared on cancellation or successful authentication;
 after a successful switch, login naturally targets the new active agent.
 
-When the process-wide remote ACP host is active, candidate activation remains
-hidden from it until the same commit event. The committed candidate replaces
-the old remote attachment with the already-observed `SessionStarted` data, so
-cancellation or failure leaves both the local current session and its remote
-controller attachment intact.
+The TUI's app-owned remote ACP host follows the same commit boundary whether
+its listeners are enabled or disabled. Candidate activation remains hidden
+from it until `SessionStarted`; then the committed candidate replaces the old
+attachment using the already-observed start data. Cancellation or failure
+therefore leaves both the local current session and its remote attachment
+intact.
 
 There is no "switch on next prompt" state. Prompt submission always targets
 the active `HarnessHandle`.
@@ -286,6 +287,6 @@ process.
   listing with an empty catalog.
 - An advertised `session/list` failure is a preparation failure and never
   authorizes a fallback `session/new`.
-- Candidate failure or cancellation preserves the current process-wide remote
+- Candidate failure or cancellation preserves the current app-owned remote
   host attachment; it changes only after candidate `SessionStarted`.
 - No new `nori-protocol` event is required.

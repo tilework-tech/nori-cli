@@ -72,16 +72,21 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
   MCP server. `error_category.rs` preserves structured ACP errors before
   falling back to message classification.
-- `remote/` serves one axum-based `/acp` endpoint: a fresh `Acp-Connection-Id`
-  header on each 101 upgrade, `426 Upgrade Required` for plain HTTP, one
-  JSON-RPC message per UTF-8 text frame adapted into the SDK's `Lines`
-  transport (`remote/wire.rs`), binary frames ignored, and a bounded outgoing
-  queue whose writer finishes with a best-effort close frame. `initialize`
-  must be the first message on the socket, otherwise close code 1002. One
-  connection is live at a time; a newer connection replaces the current one
-  (last connect wins). The initialize handler sends its response before it
-  starts forwarding subscribed session events, preserving initialize as the
-  first server message even when the hosted session is already active.
+- `remote/` serves one logical ACP surface through one or more exact-address
+  axum listeners. `RemoteAcpServer::bind_many` binds every socket before any
+  begins serving; a zero port after the first address reuses the first
+  listener's allocated port. The listeners share one active-connection slot
+  and generation, so one connection is live across the whole surface and a
+  newer connection on any address replaces it (last connect wins).
+- Each `/acp` listener sends a fresh `Acp-Connection-Id` on a 101 upgrade and
+  `426 Upgrade Required` for plain HTTP. One JSON-RPC message occupies each
+  UTF-8 text frame, adapted into the SDK's `Lines` transport
+  (`remote/wire.rs`); binary frames are ignored, and the bounded outgoing
+  writer ends with a best-effort close frame. `initialize` must be the first
+  message on a socket, otherwise it closes with code 1002. The initialize
+  handler sends its response before it starts forwarding subscribed session
+  events, preserving initialize as the first server message even when the
+  hosted session is already active.
 - The remote Agent advertises `loadSession` plus session list/resume/close
   capabilities. Its initialize `_meta.nori.remoteControl` marker has version 1
   and includes `activeSessionId` when a running outward Nori conversation is
@@ -164,7 +169,21 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   protocol mirror.
 - The remote WebSocket server is unauthenticated. `parse_bind_addr` treats a
   bare port as a loopback bind and refuses non-loopback addresses without the
-  caller's explicit opt-in flag.
+  caller's explicit opt-in flag. Exact-address selection, wildcard rejection,
+  dangerous-exposure confirmation, endpoint reporting, and runtime listener
+  lifecycle belong to the TUI manager; this crate owns only the requested
+  sockets and protocol transport. Before a same-port replacement, that manager
+  snapshots `local_addrs()` and consumes the old server; if the new bind fails,
+  it uses `bind_many` to restore the previous exact surface. A failed restore is
+  distinct from the original bind failure and leaves no server running.
+- Every accepted upgrade receives a child of the server-wide cancellation
+  token. Consuming `RemoteAcpServer::shutdown` cancels that token before the
+  active controller, then aborts and awaits every accept task; an upgrade whose
+  callback starts during shutdown therefore cannot register a late connection.
+  `Drop` applies the same cancellation boundary and aborts the tasks when an
+  async wait is unavailable. Neither path owns or stops the `HostedAgent`, so
+  the TUI can disable and later re-enable listeners around one continuing
+  harness session.
 - A remote disconnect detaches the controller but never ends the harness
   session. Per the RFD's v1 reliability model there are no sequence numbers and
   no replay of missed messages; `session/load` from the transcript is the

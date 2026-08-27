@@ -8,8 +8,9 @@ Path: @/nori-rs/tui
   input, rendering, presentation-only state, pickers, approvals, and terminal
   lifecycle.
 - The crate adapts terminal events and shared component outcomes into
-  application events. It does not own ACP transport or expose a second
-  protocol vocabulary.
+  application events. It owns runtime policy and lifecycle for the optional
+  remote ACP surface, while WebSocket/ACP wire mechanics remain in
+  `nori-acp-host`; it does not expose a second protocol vocabulary.
 
 ### How it fits into the larger codebase
 
@@ -491,12 +492,13 @@ successful switch replaces the widget and returns bare `/login` to the active
 agent. The override affects login resolution only—prompts and lifecycle actions
 continue to target the current session unless a real candidate state exists.
 
-The process-wide `HarnessRemoteHost` follows the same commit boundary. A
-candidate widget starts with remote attachment disabled, so a failed or
-cancelled candidate cannot displace the current remotely controlled session.
-After `SessionStarted`, the committed widget attaches with the observed start
-record to seed identity that its new subscription could no longer replay; only
-then is the old remote attachment replaced.
+The app-owned `HarnessRemoteHost` follows the same commit boundary. `App`
+attaches the stable host only after the active widget publishes
+`SessionStarted`, seeding identity from that observed event. During a switch it
+keeps following the current session until the candidate reaches that same
+commit event, so a failed or cancelled candidate cannot displace the current
+remote session. Listener enablement is independent of attachment: the host
+continues following the active harness while remote control is off.
 
 An orderly ACP close completes the typed close call, leaves the raw close
 response observable on the stream, observes `SessionEnded(Closed)`, and then
@@ -571,27 +573,52 @@ Quitting an attached cloud session detaches through connection teardown;
 
 `--remote <ADDR>` (in [`cli.rs`](src/cli.rs)) serves the running interactive
 session as a remote ACP agent over WebSocket, per
-`@/docs/specs/remote-acp-transport.md`. A bare port binds loopback; `IP:PORT`
-binds that address; a non-loopback bind additionally requires
-`--remote-allow-nonloopback` because the surface is unauthenticated.
+`@/docs/specs/remote-acp-transport.md`. [`App`](src/app/) owns one
+[`RemoteControlManager`](src/remote_control.rs) for the complete run. Startup
+`--remote` and runtime commands both enter this manager, which retains one
+stable `HarnessRemoteHost`, owns every `RemoteAcpServer` listener, and shuts the
+listeners down on exit. All remote types reach the TUI through
+`nori_harness::remote_agent` re-exports, preserving the dependency boundary.
 
-`run_main` (in [`lib.rs`](src/lib.rs)) parses the bind spec, binds the
-`RemoteAcpServer`, and installs the process-global `HarnessRemoteHost` via
-`set_active_host` before the app runs, so a controller can connect as soon as
-the session launches. The server value is held for the whole app run.
+The client-owned `/remote-control` command is handled before active-session
+validation, so it never becomes an agent prompt and works while no agent is
+active. Its forms are:
 
-Ordinary harness launches in
-[`chatwidget/agent.rs`](src/chatwidget/agent.rs) attach their new
-`HarnessHandle` immediately so the remote host subscribes before startup
-events. Switch-candidate launches suppress that attachment until their
-`SessionStarted` commit, then use the observed start record to attach the
-committed handle without losing its outward identity. Thus new-session and
-resume paths remain eager, while a failed or cancelled candidate cannot replace
-the current remote session. Attaching the committed replacement closes any
-current remote controller. After reconnecting, a recognizing Nori client loads
-the stable ID from `_meta.nori.remoteControl.activeSessionId`; ordinary ACP
-clients can continue to discover the replacement through `session/list`. All
-remote types reach the TUI through
+| Form | Runtime behavior |
+| --- | --- |
+| bare or `on` | Bind exact loopback on an allocated port. |
+| `on tailnet` | Require `tailscale status --json` to report a running node and exact IPv4, then bind loopback and that address on one shared port. |
+| `on IP:PORT` | Bind loopback and the exact address; a non-loopback address first opens a red, one-shot confirmation that is not persisted. |
+| `off` | Disconnect the controller and stop all listeners while preserving the host and harness. |
+| `status` | Report scope, reachable endpoints, and controller state. |
+
+Wildcard addresses are rejected. Successful enable and status results become
+durable history cells containing every reachable `ws://.../acp` URL, always
+including loopback while enabled. Local-only mode may suggest `on tailnet` when
+Tailscale is available, but does not present a tailnet URL until it is bound.
+An explicit loopback target, including IPv6 loopback supplied at startup or at
+runtime, is still classified as local-only and receives the same hint.
+
+A bare startup port remains loopback-only. An exact non-loopback startup
+address requires `--remote-allow-nonloopback`; after that gate it is normalized
+to loopback plus the exact address on the requested port. Runtime replacement
+normally binds the complete new surface before stopping the old one. When the
+new target reuses an exact nonzero address already owned by the old surface,
+the manager must shut down and await the old listeners first so the port can be
+rebound. It first snapshots the old target and exact addresses; if the new bind
+fails, it restores that surface and returns the original error, with the old
+controller disconnected and able to reconnect. Only a restoration bind failure
+leaves remote control off, and the user-visible error includes both failures.
+Repeating the active target is idempotent.
+
+On every active session's `SessionStarted`, [`App`](src/app/event_handling.rs)
+attaches its stable host using the observed identity, even if listeners are
+disabled. During a candidate switch, the old host attachment remains until
+the replacement reaches that commit event. Committing the replacement closes
+any current controller; after reconnecting, it discovers the new conversation
+through `_meta.nori.remoteControl.activeSessionId` plus `session/load`; ordinary
+ACP clients can continue to discover it through `session/list` on the same
+configured listener endpoints. All remote types reach the TUI through
 `nori_harness::remote_agent` re-exports, preserving the rule that the TUI never
 imports the ACP host crate directly.
 

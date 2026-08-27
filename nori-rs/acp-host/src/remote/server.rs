@@ -36,6 +36,7 @@ struct RemoteState<H> {
     hosted: Arc<H>,
     active: ActiveConnection,
     generation: Arc<AtomicI64>,
+    shutdown: CancellationToken,
 }
 
 impl<H> Clone for RemoteState<H> {
@@ -44,6 +45,7 @@ impl<H> Clone for RemoteState<H> {
             hosted: self.hosted.clone(),
             active: self.active.clone(),
             generation: self.generation.clone(),
+            shutdown: self.shutdown.clone(),
         }
     }
 }
@@ -53,54 +55,110 @@ impl<H> Clone for RemoteState<H> {
 /// Dropping the server stops accepting new connections; the current
 /// connection, if any, is closed by [`RemoteAcpServer::shutdown`].
 pub struct RemoteAcpServer {
-    local_addr: SocketAddr,
-    serve_task: tokio::task::JoinHandle<()>,
+    local_addrs: Vec<SocketAddr>,
+    serve_tasks: Vec<tokio::task::JoinHandle<()>>,
     active: ActiveConnection,
+    shutdown: CancellationToken,
 }
 
 impl RemoteAcpServer {
     /// Bind the listener and start serving `/acp`.
     pub async fn bind<H: HostedAgent>(addr: SocketAddr, hosted: Arc<H>) -> anyhow::Result<Self> {
-        let listener = tokio::net::TcpListener::bind(addr).await?;
-        let local_addr = listener.local_addr()?;
+        Self::bind_many([addr], hosted).await
+    }
+
+    /// Bind one ACP surface on multiple exact addresses. A port of zero on
+    /// later addresses reuses the port allocated for the first listener.
+    pub async fn bind_many<H: HostedAgent>(
+        addrs: impl IntoIterator<Item = SocketAddr>,
+        hosted: Arc<H>,
+    ) -> anyhow::Result<Self> {
+        let mut requested = addrs.into_iter();
+        let Some(first_addr) = requested.next() else {
+            anyhow::bail!("at least one remote ACP listen address is required");
+        };
+
+        // Bind every socket before serving any of them. If one bind fails,
+        // dropping this vector closes the already-bound sockets atomically.
+        let first = tokio::net::TcpListener::bind(first_addr).await?;
+        let first_local_addr = first.local_addr()?;
+        let shared_port = first_local_addr.port();
+        let mut listeners = vec![first];
+        let mut local_addrs = vec![first_local_addr];
+        for mut addr in requested {
+            if addr.port() == 0 {
+                addr.set_port(shared_port);
+            }
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            local_addrs.push(listener.local_addr()?);
+            listeners.push(listener);
+        }
+
         let active: ActiveConnection = Arc::new(tokio::sync::Mutex::new(None));
+        let shutdown = CancellationToken::new();
         let state = RemoteState {
             hosted,
             active: active.clone(),
             generation: Arc::new(AtomicI64::new(0)),
+            shutdown: shutdown.clone(),
         };
-        let router = axum::Router::new()
-            .route("/acp", axum::routing::any(acp_route::<H>))
-            .with_state(state);
-        let serve_task = tokio::spawn(async move {
-            if let Err(error) = axum::serve(listener, router).await {
-                tracing::warn!("remote ACP server exited: {error}");
-            }
-        });
+        let serve_tasks = listeners
+            .into_iter()
+            .map(|listener| {
+                let router = axum::Router::new()
+                    .route("/acp", axum::routing::any(acp_route::<H>))
+                    .with_state(state.clone());
+                tokio::spawn(async move {
+                    if let Err(error) = axum::serve(listener, router).await {
+                        tracing::warn!("remote ACP server exited: {error}");
+                    }
+                })
+            })
+            .collect();
         Ok(Self {
-            local_addr,
-            serve_task,
+            local_addrs,
+            serve_tasks,
             active,
+            shutdown,
         })
+    }
+
+    /// Every address on which this server is listening.
+    pub fn local_addrs(&self) -> &[SocketAddr] {
+        &self.local_addrs
+    }
+
+    /// Whether a remote controller currently owns the WebSocket connection.
+    pub async fn controller_connected(&self) -> bool {
+        self.active.lock().await.is_some()
     }
 
     /// The address the listener actually bound (resolves port 0).
     pub fn local_addr(&self) -> SocketAddr {
-        self.local_addr
+        self.local_addrs[0]
     }
 
     /// Stop accepting connections and close the current one, if any.
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(mut self) {
+        // Cancel first so connections whose HTTP upgrade was accepted but
+        // whose callback has not registered yet inherit the stopped state.
+        self.shutdown.cancel();
         if let Some((_, cancel)) = self.active.lock().await.take() {
             cancel.cancel();
         }
-        self.serve_task.abort();
+        for task in self.serve_tasks.drain(..) {
+            task.abort();
+            let _ = task.await;
+        }
     }
 }
 
 impl Drop for RemoteAcpServer {
     fn drop(&mut self) {
-        self.serve_task.abort();
+        self.shutdown.cancel();
+        for task in &self.serve_tasks {
+            task.abort();
+        }
     }
 }
 
@@ -143,13 +201,16 @@ async fn acp_route<H: HostedAgent>(
     };
     let connection_id = uuid::Uuid::new_v4().to_string();
     let mut response = upgrade.on_upgrade(move |socket| async move {
-        let cancel = CancellationToken::new();
+        let cancel = state.shutdown.child_token();
         let generation = state.generation.fetch_add(1, Ordering::Relaxed);
         // Replace the live connection and take the hosted subscription under
         // the same lock, so subscriptions always follow socket-accept order
         // and a superseded connection can never displace its replacement.
         let subscription = {
             let mut active = state.active.lock().await;
+            if cancel.is_cancelled() {
+                return;
+            }
             if let Some((_, previous)) = active.replace((generation, cancel.clone())) {
                 previous.cancel();
             }
