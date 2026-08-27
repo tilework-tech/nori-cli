@@ -172,8 +172,15 @@ fn test_history_navigation_multiple_messages() {
     session.send_key(Key::Enter).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
-    // Wait for response
-    session.wait_for_text("Mock response", TIMEOUT).unwrap();
+    // Wait for the second response specifically. A plain text lookup can
+    // succeed on the first response before the second turn has committed its
+    // history entry.
+    session
+        .wait_for(
+            |screen| screen.matches("Mock response").count() >= 2,
+            TIMEOUT,
+        )
+        .unwrap();
     session
         .wait_for(|screen| !screen.contains("esc to interrupt"), TIMEOUT)
         .unwrap();
