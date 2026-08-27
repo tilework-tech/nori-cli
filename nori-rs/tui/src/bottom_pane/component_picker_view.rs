@@ -425,8 +425,13 @@ impl Renderable for ComponentPickerView {
             PickerDensity::Compact => 1,
             PickerDensity::Normal => 2,
         };
+        let picker_chrome = 5
+            + u16::from(self.state.subtitle.is_some())
+            + u16::from(!self.state.categories.is_empty())
+            + u16::from(self.state.search_active)
+            + u16::from(self.state.columns.len() > 1);
         rows.saturating_mul(row_height)
-            .saturating_add(6 + u16::from(self.state.search_active))
+            .saturating_add(picker_chrome)
             .clamp(9, 18)
     }
 }
@@ -543,6 +548,34 @@ mod tests {
             .expect("unselected row");
         assert!(!unselected_row.contains(&"▏"));
         assert!(!unselected_row.contains(&"▕"));
+    }
+
+    #[test]
+    fn desired_height_fits_every_compact_multicolumn_row() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut picker_params = params();
+        picker_params.state.subtitle = Some("Choose a session".to_string());
+        picker_params
+            .state
+            .columns
+            .push(PickerColumn::fixed("source", "Source", 10));
+        for item in &mut picker_params.state.items {
+            item.cells.insert("source".to_string(), "Local".to_string());
+        }
+        let view = ComponentPickerView::new(picker_params, AppEventSender::new(tx));
+        let height = view.desired_height(100);
+        let area = Rect::new(0, 0, 100, height);
+        let mut buffer = Buffer::empty(area);
+
+        view.render(area, &mut buffer);
+
+        let mut text = String::new();
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                text.push_str(buffer[(x, y)].symbol());
+            }
+        }
+        assert!(text.contains("Third"));
     }
 
     #[test]

@@ -143,6 +143,11 @@ additional visible hint text. Active footers describe typing and search exit.
   submit path. Direct multi-column consumers, notably resume pickers, retain
   table headings. The component's `search_active`, query, filtering, and typed
   outcomes remain the source of truth.
+- The picker adapter's [`Renderable::desired_height`](src/render/renderable.rs)
+  measures visible rows at the selected density together with optional
+  subtitle, category, active-search, and multi-column-heading chrome before the
+  bottom pane allocates its bounded height. These presentation rows therefore
+  do not silently consume the capacity reported for compact result rows.
 - [`ComponentOverlayMenuView`](src/bottom_pane/component_overlay_menu_view.rs)
   projects the same caller-owned rows into `MenuState`, assigning number
   shortcuts only to enabled action rows and preserving current-state markers,
