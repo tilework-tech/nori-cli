@@ -129,10 +129,49 @@ fn picker_compact_uses_single_height_rows_snapshot() {
 }
 
 #[test]
+fn simple_picker_uses_description_rows_without_table_headers_and_numbers_choices() {
+    let state = PickerState::new(
+        "Session Config",
+        [PickerColumn::flexible("option", "Option")],
+        [
+            PickerItem::new("mode", "option", "Mode (Agent)")
+                .description("Approval and sandboxing preset for the session"),
+            PickerItem::new("model", "option", "Model (GPT-5.6-Sol)")
+                .description("Model Codex uses for the session"),
+        ],
+    )
+    .subtitle("Select an ACP session setting to change")
+    .search_mode(SearchMode::None);
+
+    let buffer = rendered_picker_buffer(&state, 80, 14);
+
+    assert!(find_ascii_text_at_or_below(&buffer, "Option", 0).is_none());
+    assert_eq!(
+        find_ascii_text_at_or_below(&buffer, "Session Config", 0),
+        Some((2, 1))
+    );
+    assert_eq!(
+        find_ascii_text_at_or_below(&buffer, "Select an ACP session setting to change", 0),
+        Some((2, 2))
+    );
+    assert_eq!(
+        find_ascii_text_at_or_below(&buffer, "Mode (Agent)", 0),
+        Some((5, 4))
+    );
+    assert_eq!(buffer[(2, 4)].symbol(), "1");
+    assert_eq!(buffer[(3, 4)].symbol(), ".");
+    assert_eq!(
+        find_ascii_text_at_or_below(&buffer, "Approval and sandboxing preset for the session", 0,),
+        Some((5, 5))
+    );
+}
+
+#[test]
 fn picker_section_headings_are_bold_and_not_selectable() {
     let items = [
         PickerItem::new("recommended", "name", "Recommended").section_heading(true),
         PickerItem::new("stable", "name", "Stable"),
+        PickerItem::new("unavailable", "name", "Unavailable").disabled(true),
         PickerItem::new("other", "name", "Other").section_heading(true),
         PickerItem::new("preview", "name", "Preview"),
     ];
@@ -150,7 +189,17 @@ fn picker_section_headings_are_bold_and_not_selectable() {
         let heading = find_ascii_text_at_or_below(&buffer, label, 3).expect("section heading");
         assert!(buffer[heading].modifier.contains(Modifier::BOLD));
         assert_ne!(buffer[heading].fg, Color::DarkGray);
+        assert_eq!(buffer[(2, heading.1)].symbol(), " ");
+        assert_eq!(buffer[(3, heading.1)].symbol(), " ");
     }
+    let stable = find_ascii_text_at_or_below(&buffer, "Stable", 3).expect("stable choice");
+    assert_eq!(buffer[(2, stable.1)].symbol(), "1");
+    let unavailable =
+        find_ascii_text_at_or_below(&buffer, "Unavailable", 3).expect("disabled choice");
+    assert_eq!(buffer[(2, unavailable.1)].symbol(), " ");
+    assert_eq!(buffer[(3, unavailable.1)].symbol(), " ");
+    let preview = find_ascii_text_at_or_below(&buffer, "Preview", 3).expect("preview choice");
+    assert_eq!(buffer[(2, preview.1)].symbol(), "2");
 }
 
 #[test]
@@ -193,20 +242,20 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
         .expect("draw picker");
     let buffer = terminal.backend().buffer();
 
-    for x in 2..56 {
-        assert_eq!(buffer[(x, 6)].bg, Color::Rgb(43, 43, 43));
-    }
     let selected = find_ascii_text_at_or_below(buffer, "Start a new session", 4)
         .expect("selected primary copy");
     let description = find_ascii_text_at_or_below(buffer, "Create a fresh ACP session", 4)
         .expect("selected supporting copy");
     let pointer = (2, selected.1);
+    for x in 2..56 {
+        assert_eq!(buffer[(x, selected.1)].bg, Color::Rgb(43, 43, 43));
+    }
     assert_eq!(buffer[pointer].symbol(), "›");
     assert_eq!(buffer[pointer].fg, Color::Green);
     assert_eq!(buffer[selected].fg, Color::Reset);
     assert_eq!(buffer[description].fg, Color::DarkGray);
-    assert_eq!(buffer[(3, 8)].bg, Color::Reset);
-    assert_eq!(buffer[(3, 10)].bg, Color::Reset);
+    assert_eq!(buffer[(3, selected.1 + 2)].bg, Color::Reset);
+    assert_eq!(buffer[(3, selected.1 + 4)].bg, Color::Reset);
     assert_eq!(buffer[(2, 4)].symbol(), "⌕");
     assert_eq!(buffer[(2, 4)].fg, Color::Green);
     assert_eq!(buffer[(2, 4)].bg, Color::Reset);
@@ -229,8 +278,9 @@ fn picker_applies_density_surfaces_search_input_and_selection() {
         })
         .expect("draw compact picker");
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(3, 7)].bg, Color::Rgb(36, 36, 36));
-    assert_eq!(buffer[(3, 8)].bg, Color::Rgb(29, 29, 29));
+    assert_eq!(buffer[(3, 7)].bg, Color::Rgb(43, 43, 43));
+    assert_eq!(buffer[(3, 8)].bg, Color::Rgb(36, 36, 36));
+    assert_eq!(buffer[(3, 9)].bg, Color::Rgb(29, 29, 29));
 }
 
 #[test]
@@ -447,6 +497,33 @@ fn picker_selection_rails_are_explicit_and_preserve_checked_state() {
     assert!(find_symbol_on_row(&mixed_buffer, second.1, "○").is_some());
     assert!(find_symbol_on_row(&mixed_buffer, second.1, "▏").is_some());
     assert!(find_symbol_on_row(&mixed_buffer, second.1, "▕").is_some());
+}
+
+#[test]
+fn numbered_simple_picker_description_preserves_right_selection_rail() {
+    let state = PickerState::new(
+        "Choose action",
+        [PickerColumn::flexible("title", "Action")],
+        [
+            PickerItem::new("first", "title", "First action").description(
+                "This supporting description is intentionally much wider than the picker",
+            ),
+        ],
+    )
+    .search_mode(SearchMode::None);
+
+    let buffer = rendered_picker_buffer_with_rails(&state, 24, 8);
+    let title = find_ascii_text_at_or_below(&buffer, "First action", 2).expect("title row");
+    let description_y = title.1 + 1;
+
+    let title_left = find_symbol_on_row(&buffer, title.1, "▏").expect("title left rail");
+    let title_right = find_symbol_on_row(&buffer, title.1, "▕").expect("title right rail");
+    let description_left =
+        find_symbol_on_row(&buffer, description_y, "▏").expect("description left rail");
+    let description_right =
+        find_symbol_on_row(&buffer, description_y, "▕").expect("description right rail");
+    assert_eq!(description_left.0, title_left.0);
+    assert_eq!(description_right.0, title_right.0);
 }
 
 #[test]

@@ -10,7 +10,6 @@ use nori_tui_components::PickerAction;
 use nori_tui_components::PickerColumn;
 use nori_tui_components::PickerColumnWidth;
 use nori_tui_components::PickerDensity;
-use nori_tui_components::PickerDetail;
 use nori_tui_components::PickerItem;
 use nori_tui_components::PickerOutcome;
 use nori_tui_components::PickerState;
@@ -67,10 +66,7 @@ impl ComponentPickerParams {
                     .disabled(disabled)
                     .section_heading(item.is_header);
                 if let Some(description) = description {
-                    picker_item = picker_item
-                        .cell("description", description.clone())
-                        .description(description.clone())
-                        .details([PickerDetail::new("Description", description)]);
+                    picker_item = picker_item.description(description);
                 }
                 if !item.actions.is_empty() {
                     let callbacks = item.actions;
@@ -89,25 +85,14 @@ impl ComponentPickerParams {
                 picker_item
             })
             .collect::<Vec<_>>();
-        let mut columns =
+        let columns =
             vec![
                 PickerColumn::flexible("name", "Option").width(PickerColumnWidth::Flexible {
                     min: 12,
-                    max: 36,
+                    max: 72,
                     weight: 1,
                 }),
             ];
-        if has_descriptions {
-            columns.push(
-                PickerColumn::flexible("description", "Details")
-                    .width(PickerColumnWidth::Flexible {
-                        min: 18,
-                        max: 72,
-                        weight: 2,
-                    })
-                    .hide_below(56),
-            );
-        }
         let mut state = PickerState::new(
             params
                 .title
@@ -142,8 +127,12 @@ impl ComponentPickerParams {
             on_dismiss: params.on_dismiss,
             on_shift_tab: params.on_shift_tab,
             primary_column: "name".to_string(),
-            detail_column: has_descriptions.then(|| "description".to_string()),
-            density: PickerDensity::Compact,
+            detail_column: None,
+            density: if has_descriptions {
+                PickerDensity::Normal
+            } else {
+                PickerDensity::Compact
+            },
             keep_open,
             footer_hints: params.picker_footer_hints,
         }
@@ -305,6 +294,28 @@ impl BottomPaneView for ComponentPickerView {
                 ..
             } if !search_active => PickerAction::MoveDown,
             KeyEvent {
+                code: KeyCode::Char(character @ '1'..='9'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if !search_active => {
+                let position = character.to_digit(10).unwrap_or_default() as usize;
+                let selected_index = self
+                    .state
+                    .visible_indices()
+                    .into_iter()
+                    .filter(|index| {
+                        let item = &self.state.items[*index];
+                        !item.disabled && !item.section_heading
+                    })
+                    .nth(position.saturating_sub(1));
+                let Some(selected_index) = selected_index else {
+                    return;
+                };
+                self.state.selected_index = Some(selected_index);
+                self.handle_action(PickerAction::Submit);
+                return;
+            }
+            KeyEvent {
                 code: KeyCode::Char(character),
                 modifiers,
                 ..
@@ -361,6 +372,7 @@ impl BottomPaneView for ComponentPickerView {
             return false;
         };
         item.cells.insert(self.primary_column.clone(), name);
+        item.description.clone_from(&description);
         if let Some(detail_column) = &self.detail_column {
             if let Some(description) = description {
                 item.cells.insert(detail_column.clone(), description);
@@ -413,8 +425,13 @@ impl Renderable for ComponentPickerView {
             PickerDensity::Compact => 1,
             PickerDensity::Normal => 2,
         };
+        let picker_chrome = 5
+            + u16::from(self.state.subtitle.is_some())
+            + u16::from(!self.state.categories.is_empty())
+            + u16::from(self.state.search_active)
+            + u16::from(self.state.columns.len() > 1);
         rows.saturating_mul(row_height)
-            .saturating_add(6 + u16::from(self.state.search_active))
+            .saturating_add(picker_chrome)
             .clamp(9, 18)
     }
 }
@@ -534,6 +551,34 @@ mod tests {
     }
 
     #[test]
+    fn desired_height_fits_every_compact_multicolumn_row() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut picker_params = params();
+        picker_params.state.subtitle = Some("Choose a session".to_string());
+        picker_params
+            .state
+            .columns
+            .push(PickerColumn::fixed("source", "Source", 10));
+        for item in &mut picker_params.state.items {
+            item.cells.insert("source".to_string(), "Local".to_string());
+        }
+        let view = ComponentPickerView::new(picker_params, AppEventSender::new(tx));
+        let height = view.desired_height(100);
+        let area = Rect::new(0, 0, 100, height);
+        let mut buffer = Buffer::empty(area);
+
+        view.render(area, &mut buffer);
+
+        let mut text = String::new();
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                text.push_str(buffer[(x, y)].symbol());
+            }
+        }
+        assert!(text.contains("Third"));
+    }
+
+    #[test]
     fn inactive_searchable_picker_uses_jk_for_navigation() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut view = ComponentPickerView::new(params(), AppEventSender::new(tx));
@@ -556,6 +601,39 @@ mod tests {
 
         assert_eq!(view.state.query, "");
         assert_eq!(view.state.selected_index, Some(0));
+    }
+
+    #[test]
+    fn number_shortcut_activates_the_matching_visible_option() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let picker_params = ComponentPickerParams::from_selection(SelectionViewParams {
+            items: vec![
+                super::super::SelectionItem {
+                    name: "Recommended".to_string(),
+                    is_header: true,
+                    ..Default::default()
+                },
+                super::super::SelectionItem {
+                    name: "First".to_string(),
+                    actions: vec![Box::new(|tx| tx.send(AppEvent::OpenApprovalsPopup))],
+                    dismiss_on_select: true,
+                    ..Default::default()
+                },
+                super::super::SelectionItem {
+                    name: "Second".to_string(),
+                    actions: vec![Box::new(|tx| tx.send(AppEvent::BeginExit))],
+                    dismiss_on_select: true,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        });
+        let mut view = ComponentPickerView::new(picker_params, AppEventSender::new(tx));
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
+
+        assert!(matches!(rx.try_recv(), Ok(AppEvent::BeginExit)));
+        assert!(view.is_complete());
     }
 
     #[test]

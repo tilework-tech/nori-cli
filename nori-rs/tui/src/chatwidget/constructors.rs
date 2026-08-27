@@ -79,6 +79,7 @@ impl ChatWidget {
                 agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
+            active_user_message_id: None,
             config: config.clone(),
             auth_manager,
             initial_user_message: create_initial_user_message(
@@ -258,6 +259,7 @@ impl ChatWidget {
                 agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
+            active_user_message_id: None,
             config: config.clone(),
             auth_manager,
             initial_user_message: create_initial_user_message(
@@ -328,15 +330,6 @@ impl ChatWidget {
             .bottom_pane
             .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
         widget
-    }
-
-    /// Spawn the agent that was deferred during construction.
-    ///
-    /// This should be called after pre-session setup (e.g., skillset switch)
-    /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
-    pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
-        let spawn_result = spawn_agent(config, app_event_tx, self.session_generation, None);
-        self.harness_handle = spawn_result.handle;
     }
 
     pub(crate) fn session_generation(&self) -> crate::app_event::SessionGeneration {

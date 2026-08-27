@@ -3,25 +3,20 @@
 //! Shows a simple two-option popup at TUI startup asking the user whether
 //! to create a git worktree for this session.
 
-use crate::render::Insets;
-use crate::render::renderable::ColumnRenderable;
-use crate::render::renderable::Renderable;
-use crate::render::renderable::RenderableExt as _;
-use crate::selection_list::selection_option_row;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use color_eyre::Result;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
+use nori_tui_components::MenuDensity;
+use nori_tui_components::MenuItem;
+use nori_tui_components::MenuOutcome;
+use nori_tui_components::MenuRowPattern;
+use nori_tui_components::MenuState;
+use nori_tui_components::OverlayMenu;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::prelude::Widget;
-use ratatui::style::Stylize as _;
-use ratatui::text::Line;
-use ratatui::widgets::Clear;
+use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::WidgetRef;
 use tokio_stream::StreamExt;
 
@@ -92,7 +87,7 @@ enum WorktreeSelection {
 
 struct WorktreeAskScreen {
     request_frame: FrameRequester,
-    highlighted: WorktreeSelection,
+    menu: MenuState<WorktreeSelection>,
     selection: Option<WorktreeSelection>,
 }
 
@@ -100,41 +95,38 @@ impl WorktreeAskScreen {
     fn new(request_frame: FrameRequester) -> Self {
         Self {
             request_frame,
-            highlighted: WorktreeSelection::Yes,
+            menu: crate::overlay_menu::state_from_items(
+                [
+                    MenuItem::new(WorktreeSelection::Yes, "Yes, create a worktree")
+                        .description(
+                            "Start this session on an isolated branch and working directory",
+                        )
+                        .mnemonic('y')
+                        .number_shortcut(1),
+                    MenuItem::new(WorktreeSelection::No, "No, continue without a worktree")
+                        .description("Use the current working directory")
+                        .mnemonic('n')
+                        .number_shortcut(2),
+                ],
+                "worktree choice",
+            ),
             selection: None,
         }
     }
 
     fn handle_key(&mut self, key_event: KeyEvent) {
-        if key_event.kind == KeyEventKind::Release {
+        let Some(action) = crate::overlay_menu::action_from_key_event(key_event) else {
             return;
-        }
-        if key_event.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key_event.code, KeyCode::Char('c') | KeyCode::Char('d'))
-        {
-            self.select(WorktreeSelection::No);
-            return;
-        }
-        match key_event.code {
-            KeyCode::Up | KeyCode::Char('k') => self.set_highlight(self.highlighted.other()),
-            KeyCode::Down | KeyCode::Char('j') => self.set_highlight(self.highlighted.other()),
-            KeyCode::Char('1') | KeyCode::Char('y') => self.select(WorktreeSelection::Yes),
-            KeyCode::Char('2') | KeyCode::Char('n') => self.select(WorktreeSelection::No),
-            KeyCode::Enter => self.select(self.highlighted),
-            KeyCode::Esc => self.select(WorktreeSelection::No),
-            _ => {}
-        }
-    }
-
-    fn set_highlight(&mut self, highlight: WorktreeSelection) {
-        if self.highlighted != highlight {
-            self.highlighted = highlight;
-            self.request_frame.schedule_frame();
+        };
+        match self.menu.handle(action) {
+            MenuOutcome::Activated(selection) => self.select(selection),
+            MenuOutcome::Cancelled => self.select(WorktreeSelection::No),
+            MenuOutcome::SelectionChanged(_) => self.request_frame.schedule_frame(),
+            MenuOutcome::Unchanged => {}
         }
     }
 
     fn select(&mut self, selection: WorktreeSelection) {
-        self.highlighted = selection;
         self.selection = Some(selection);
         self.request_frame.schedule_frame();
     }
@@ -144,18 +136,10 @@ impl WorktreeAskScreen {
     }
 }
 
-impl WorktreeSelection {
-    fn other(self) -> Self {
-        match self {
-            Self::Yes => Self::No,
-            Self::No => Self::Yes,
-        }
-    }
-}
-
 struct WorktreeBlockedScreen {
     request_frame: FrameRequester,
     reason: String,
+    menu: MenuState<()>,
     done: bool,
 }
 
@@ -164,27 +148,25 @@ impl WorktreeBlockedScreen {
         Self {
             request_frame,
             reason,
+            menu: crate::overlay_menu::state_from_items(
+                [MenuItem::new((), "Continue without a worktree")
+                    .description("Start the session in the current working directory")
+                    .number_shortcut(1)],
+                "worktree blocked acknowledgement",
+            ),
             done: false,
         }
     }
 
     fn handle_key(&mut self, key_event: KeyEvent) {
-        if key_event.kind == KeyEventKind::Release {
-            return;
-        }
-        if key_event.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key_event.code, KeyCode::Char('c') | KeyCode::Char('d'))
-        {
-            self.done = true;
-            self.request_frame.schedule_frame();
-            return;
-        }
-        match key_event.code {
-            KeyCode::Enter | KeyCode::Esc => {
-                self.done = true;
-                self.request_frame.schedule_frame();
+        if let Some(action) = crate::overlay_menu::action_from_key_event(key_event) {
+            match self.menu.handle(action) {
+                MenuOutcome::Activated(()) | MenuOutcome::Cancelled => {
+                    self.done = true;
+                    self.request_frame.schedule_frame();
+                }
+                MenuOutcome::Unchanged | MenuOutcome::SelectionChanged(_) => {}
             }
-            _ => {}
         }
     }
 
@@ -195,63 +177,46 @@ impl WorktreeBlockedScreen {
 
 impl WidgetRef for &WorktreeBlockedScreen {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        Clear.render(area, buf);
-        let mut column = ColumnRenderable::new();
-
-        column.push("");
-        column.push(Line::from("  Worktree cannot be created".bold()));
-        column.push(Line::from(format!("  Reason: {}", self.reason)));
-        column.push("");
-        column.push(selection_option_row(
-            0,
-            "Continue without a worktree".to_string(),
-            true,
-        ));
-        column.push("");
-        column.push(
-            Line::from(vec![
-                "Press ".dim(),
-                "enter".dim().bold(),
-                " to continue".dim(),
-            ])
-            .inset(Insets::tlbr(0, 2, 0, 0)),
+        let mut state = self.menu.clone();
+        render_menu(
+            "Worktree cannot be created",
+            Some(format!("Reason: {}", self.reason)),
+            area,
+            buf,
+            &mut state,
         );
-        column.render(area, buf);
     }
 }
 
 impl WidgetRef for &WorktreeAskScreen {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        Clear.render(area, buf);
-        let mut column = ColumnRenderable::new();
-
-        column.push("");
-        column.push(Line::from(
-            "  Create a git worktree for this session?".bold(),
-        ));
-        column.push("  Each session gets an isolated branch and working directory.");
-        column.push("");
-        column.push(selection_option_row(
-            0,
-            "Yes, create a worktree".to_string(),
-            self.highlighted == WorktreeSelection::Yes,
-        ));
-        column.push(selection_option_row(
-            1,
-            "No, continue without a worktree".to_string(),
-            self.highlighted == WorktreeSelection::No,
-        ));
-        column.push("");
-        column.push(
-            Line::from(vec![
-                "Press ".dim(),
-                "enter".dim().bold(),
-                " to confirm, ".dim(),
-                "esc".dim().bold(),
-                " to skip".dim(),
-            ])
-            .inset(Insets::tlbr(0, 2, 0, 0)),
+        let mut state = self.menu.clone();
+        render_menu(
+            "Create a git worktree for this session?",
+            Some("Each session gets an isolated branch and working directory.".to_string()),
+            area,
+            buf,
+            &mut state,
         );
-        column.render(area, buf);
     }
+}
+
+fn render_menu<K: Clone + Eq>(
+    title: &str,
+    subtitle: Option<String>,
+    area: Rect,
+    buf: &mut Buffer,
+    state: &mut MenuState<K>,
+) {
+    let mut menu = OverlayMenu::new(title.to_string())
+        .theme(crate::style::component_theme())
+        .max_width(76)
+        .density(MenuDensity::Dense)
+        .row_pattern(MenuRowPattern::Zebra)
+        .fullscreen_selection_rails(true)
+        .key_hints(crate::overlay_menu::default_hints());
+    if let Some(subtitle) = subtitle {
+        menu = menu.subtitle(subtitle);
+    }
+    menu.render(area, buf, state);
 }

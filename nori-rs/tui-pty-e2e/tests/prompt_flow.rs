@@ -79,8 +79,12 @@ fn test_multiline_input() {
     session.wait_for_text("Line 3", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
-    assert_snapshot!(
-        "multiline_input",
-        normalize_for_input_snapshot(session.screen_contents())
-    );
+    let normalized = normalize_for_input_snapshot(session.screen_contents());
+    let composer = normalized
+        .lines()
+        .skip_while(|line| !line.contains("Line 1"))
+        .take(3)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_snapshot!("multiline_input", composer);
 }

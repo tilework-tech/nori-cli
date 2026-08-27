@@ -24,8 +24,22 @@ use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 /// * `app_event_tx` - The app event sender for triggering selection events
 pub fn agent_picker_params(
     current_agent: &str,
+    app_event_tx: AppEventSender,
+    recording_enabled: bool,
+) -> SelectionViewParams {
+    agent_picker_params_with_subtitle(
+        current_agent,
+        app_event_tx,
+        recording_enabled,
+        "Creates new conversation with selected agent (history not preserved)".to_string(),
+    )
+}
+
+pub fn agent_picker_params_with_subtitle(
+    current_agent: &str,
     _app_event_tx: AppEventSender,
     recording_enabled: bool,
+    subtitle: String,
 ) -> SelectionViewParams {
     let available_agents = list_available_agents();
     let current_normalized = current_agent.to_lowercase();
@@ -58,9 +72,7 @@ pub fn agent_picker_params(
 
     SelectionViewParams {
         title: Some("Select Agent".to_string()),
-        subtitle: Some(
-            "Creates new conversation with selected agent (history not preserved)".to_string(),
-        ),
+        subtitle: Some(subtitle),
         footer_hint: Some(standard_popup_hint_line()),
         footer_hint_right: Some(recording_footer_hint(recording_enabled)),
         picker_footer_hints: Some(vec![
@@ -159,6 +171,24 @@ mod tests {
         let mock_agent = params.items.iter().find(|i| i.name == "Mock ACP");
         assert!(mock_agent.is_some());
         assert!(mock_agent.unwrap().is_current);
+    }
+
+    #[test]
+    fn recovery_agent_picker_uses_spawn_failure_as_subtitle() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+
+        let params = agent_picker_params_with_subtitle(
+            "nonexistent",
+            tx,
+            false,
+            "Agent 'nonexistent' is not registered".to_string(),
+        );
+
+        assert_eq!(
+            params.subtitle.as_deref(),
+            Some("Agent 'nonexistent' is not registered")
+        );
     }
 
     #[test]

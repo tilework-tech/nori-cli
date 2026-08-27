@@ -5,30 +5,27 @@
 
 use std::path::PathBuf;
 
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use nori_config::TrustLevel;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Stylize;
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::WidgetRef;
-use ratatui::widgets::Wrap;
 
 use super::KeyboardHandler;
 use super::StepState;
 use super::StepStateProvider;
 use super::TrustDirectorySelection;
-use crate::key_hint;
-use crate::render::Insets;
-use crate::render::renderable::ColumnRenderable;
-use crate::render::renderable::Renderable;
-use crate::render::renderable::RenderableExt as _;
-use crate::selection_list::selection_option_row;
 use nori_config::NoriConfigEdits;
 use nori_config::resolve_root_git_project_for_trust;
+use nori_tui_components::KeyHint;
+use nori_tui_components::MenuDensity;
+use nori_tui_components::MenuItem;
+use nori_tui_components::MenuOutcome;
+use nori_tui_components::MenuRowPattern;
+use nori_tui_components::MenuState;
+use nori_tui_components::OverlayMenu;
 
 /// Nori-branded directory trust widget.
 pub(crate) struct NoriTrustDirectoryWidget {
@@ -40,87 +37,33 @@ pub(crate) struct NoriTrustDirectoryWidget {
     pub is_git_repo: bool,
     /// User's selection, if any.
     pub selection: Option<TrustDirectorySelection>,
-    /// Currently highlighted option.
-    pub highlighted: TrustDirectorySelection,
+    menu: MenuState<TrustDirectorySelection>,
     /// Error message to display, if any.
     pub error: Option<String>,
 }
 
 impl WidgetRef for &NoriTrustDirectoryWidget {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        let mut column = ColumnRenderable::new();
-
-        column.push(Line::from(vec![
-            "> ".into(),
-            "You are running Nori in ".bold(),
-            self.cwd.to_string_lossy().to_string().into(),
-        ]));
-        column.push("");
-
         let guidance = if self.is_git_repo {
             "Since this folder is version controlled, you may wish to allow Nori to work in this folder without asking for approval."
         } else {
             "Since this folder is not version controlled, we recommend requiring approval of all edits and commands."
         };
-
-        column.push(
-            Paragraph::new(guidance.to_string())
-                .wrap(Wrap { trim: true })
-                .inset(Insets::tlbr(0, 2, 0, 0)),
-        );
-        column.push("");
-
-        let mut options: Vec<(&str, TrustDirectorySelection)> = Vec::new();
-        if self.is_git_repo {
-            options.push((
-                "Yes, allow Nori to work in this folder without asking for approval",
-                TrustDirectorySelection::Trust,
-            ));
-            options.push((
-                "No, ask me to approve edits and commands",
-                TrustDirectorySelection::DontTrust,
-            ));
-        } else {
-            options.push((
-                "Allow Nori to work in this folder without asking for approval",
-                TrustDirectorySelection::Trust,
-            ));
-            options.push((
-                "Require approval of edits and commands",
-                TrustDirectorySelection::DontTrust,
-            ));
-        }
-
-        for (idx, (text, selection)) in options.iter().enumerate() {
-            column.push(selection_option_row(
-                idx,
-                text.to_string(),
-                self.highlighted == *selection,
-            ));
-        }
-
-        column.push("");
-
-        if let Some(error) = &self.error {
-            column.push(
-                Paragraph::new(error.to_string())
-                    .red()
-                    .wrap(Wrap { trim: true })
-                    .inset(Insets::tlbr(0, 2, 0, 0)),
-            );
-            column.push("");
-        }
-
-        column.push(
-            Line::from(vec![
-                "Press ".dim(),
-                key_hint::plain(KeyCode::Enter).into(),
-                " to continue".dim(),
+        let subtitle = self.error.as_deref().unwrap_or(guidance);
+        let mut state = self.menu.clone();
+        OverlayMenu::new(format!("You are running Nori in {}", self.cwd.display()))
+            .subtitle(subtitle.to_string())
+            .theme(crate::style::component_theme())
+            .max_width(76)
+            .density(MenuDensity::Dense)
+            .row_pattern(MenuRowPattern::Zebra)
+            .fullscreen_selection_rails(true)
+            .key_hints([
+                KeyHint::new("↑↓/j/k", "move"),
+                KeyHint::new("1-2", "select"),
+                KeyHint::new("enter", "select"),
             ])
-            .inset(Insets::tlbr(0, 2, 0, 0)),
-        );
-
-        column.render(area, buf);
+            .render(area, buf, &mut state);
     }
 }
 
@@ -130,20 +73,14 @@ impl KeyboardHandler for NoriTrustDirectoryWidget {
             return;
         }
 
-        match key_event.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.highlighted = TrustDirectorySelection::Trust;
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.highlighted = TrustDirectorySelection::DontTrust;
-            }
-            KeyCode::Char('1') | KeyCode::Char('y') => self.handle_trust(),
-            KeyCode::Char('2') | KeyCode::Char('n') => self.handle_dont_trust(),
-            KeyCode::Enter => match self.highlighted {
+        let Some(action) = crate::overlay_menu::action_from_key_event(key_event) else {
+            return;
+        };
+        if let MenuOutcome::Activated(selection) = self.menu.handle(action) {
+            match selection {
                 TrustDirectorySelection::Trust => self.handle_trust(),
                 TrustDirectorySelection::DontTrust => self.handle_dont_trust(),
-            },
-            _ => {}
+            }
         }
     }
 }
@@ -158,6 +95,37 @@ impl StepStateProvider for NoriTrustDirectoryWidget {
 }
 
 impl NoriTrustDirectoryWidget {
+    pub(crate) fn new(nori_home: PathBuf, cwd: PathBuf, is_git_repo: bool) -> Self {
+        let items = [
+            MenuItem::new(
+                TrustDirectorySelection::Trust,
+                "Yes, allow Nori to work without approval",
+            )
+            .description("Allow edits and commands in this folder")
+            .mnemonic('y')
+            .number_shortcut(1),
+            MenuItem::new(
+                TrustDirectorySelection::DontTrust,
+                "No, require approval for edits and commands",
+            )
+            .description("Ask before Nori changes files or runs commands")
+            .mnemonic('n')
+            .number_shortcut(2),
+        ];
+        let mut menu = crate::overlay_menu::state_from_items(items, "directory trust");
+        if !is_git_repo {
+            menu.select_key(&TrustDirectorySelection::DontTrust);
+        }
+        Self {
+            nori_home,
+            cwd,
+            is_git_repo,
+            selection: None,
+            menu,
+            error: None,
+        }
+    }
+
     fn handle_trust(&mut self) {
         let target =
             resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
@@ -174,7 +142,6 @@ impl NoriTrustDirectoryWidget {
     }
 
     fn handle_dont_trust(&mut self) {
-        self.highlighted = TrustDirectorySelection::DontTrust;
         let target =
             resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
 
@@ -196,23 +163,17 @@ impl NoriTrustDirectoryWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::KeyCode;
     use crossterm::event::KeyModifiers;
     use tempfile::TempDir;
 
     fn create_widget(is_git_repo: bool) -> (NoriTrustDirectoryWidget, TempDir) {
         let nori_home = TempDir::new().expect("create temp dir");
-        let widget = NoriTrustDirectoryWidget {
-            nori_home: nori_home.path().to_path_buf(),
-            cwd: PathBuf::from("/workspace/project"),
+        let widget = NoriTrustDirectoryWidget::new(
+            nori_home.path().to_path_buf(),
+            PathBuf::from("/workspace/project"),
             is_git_repo,
-            selection: None,
-            highlighted: if is_git_repo {
-                TrustDirectorySelection::Trust
-            } else {
-                TrustDirectorySelection::DontTrust
-            },
-            error: None,
-        };
+        );
         (widget, nori_home)
     }
 
@@ -266,7 +227,7 @@ mod tests {
             "Should contain Nori branding"
         );
         assert!(
-            output.contains("Allow Nori to work"),
+            output.contains("allow Nori to work"),
             "Should use Nori in options"
         );
         assert!(
@@ -282,9 +243,18 @@ mod tests {
     }
 
     #[test]
+    fn hints_do_not_advertise_cancellation() {
+        let (widget, _tmp) = create_widget(true);
+        let output = render_widget(&widget, 80, 15);
+
+        assert!(!output.contains("esc close"));
+        assert!(output.contains("1-2 select"));
+    }
+
+    #[test]
     fn completes_on_enter_trust() {
         let (mut widget, _tmp) = create_widget(true);
-        widget.highlighted = TrustDirectorySelection::Trust;
+        widget.menu.select_key(&TrustDirectorySelection::Trust);
 
         let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         widget.handle_key_event(enter);
@@ -296,7 +266,7 @@ mod tests {
     #[test]
     fn completes_on_enter_dont_trust() {
         let (mut widget, _tmp) = create_widget(true);
-        widget.highlighted = TrustDirectorySelection::DontTrust;
+        widget.menu.select_key(&TrustDirectorySelection::DontTrust);
 
         let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         widget.handle_key_event(enter);
@@ -311,11 +281,17 @@ mod tests {
 
         let down = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         widget.handle_key_event(down);
-        assert_eq!(widget.highlighted, TrustDirectorySelection::DontTrust);
+        assert_eq!(
+            widget.menu.selected_item().map(|item| *item.key()),
+            Some(TrustDirectorySelection::DontTrust)
+        );
 
         let up = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
         widget.handle_key_event(up);
-        assert_eq!(widget.highlighted, TrustDirectorySelection::Trust);
+        assert_eq!(
+            widget.menu.selected_item().map(|item| *item.key()),
+            Some(TrustDirectorySelection::Trust)
+        );
     }
 
     #[test]
@@ -324,11 +300,17 @@ mod tests {
 
         let j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         widget.handle_key_event(j);
-        assert_eq!(widget.highlighted, TrustDirectorySelection::DontTrust);
+        assert_eq!(
+            widget.menu.selected_item().map(|item| *item.key()),
+            Some(TrustDirectorySelection::DontTrust)
+        );
 
         let k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         widget.handle_key_event(k);
-        assert_eq!(widget.highlighted, TrustDirectorySelection::Trust);
+        assert_eq!(
+            widget.menu.selected_item().map(|item| *item.key()),
+            Some(TrustDirectorySelection::Trust)
+        );
     }
 
     #[test]

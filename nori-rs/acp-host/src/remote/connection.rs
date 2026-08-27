@@ -224,7 +224,10 @@ async fn serve_gated_connection<H: HostedAgent>(
                     let pending_prompts = pending_prompts.clone();
                     cx.spawn(async move {
                         let mut pending = pending_prompts.lock().await;
-                        match hosted.prompt(&request.session_id, request.prompt).await {
+                        match hosted
+                            .prompt(&request.session_id, request.prompt, request.meta)
+                            .await
+                        {
                             Ok(request_id) => {
                                 pending.push((request_id, responder));
                                 Ok(())

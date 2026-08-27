@@ -57,9 +57,9 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   group and lets the watcher reap it instead of orphaning a half-initialized
   agent.
 - Each prompt call issues exactly one ACP `session/prompt` request and publishes
-  its transport-assigned ID. Cancellation does not trigger a hidden resend or
-  cancel-tail absorption loop. A successful empty `EndTurn` response is a
-  terminal result.
+  its transport-assigned ID. Optional top-level prompt metadata is preserved on
+  that request. Cancellation does not trigger a hidden resend or cancel-tail
+  absorption loop. A successful empty `EndTurn` response is a terminal result.
 - Permission requests are delegated outward. Filesystem read/write requests are
   handled by the host and are not emitted a second time as public requests.
 - A private `SessionUpdate` copy feeds the harness reducer after the matching
@@ -90,6 +90,12 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   `session/load` replays recorded history as `session/update` notifications
   ahead of its response. `session/new` is rejected because the surface exposes
   an already-running session.
+- A remote `PromptRequest` passes its top-level `_meta` through the
+  `HostedAgent` interface with its content and session id. The harness
+  implementation retains that metadata while the prompt waits in its queue and
+  forwards it to the downstream ACP agent. This preserves the shared
+  `nori_protocol::PROMPT_ECHO_ID_META_KEY` correlation marker across composed
+  Nori hosts without making the transport interpret it.
 - Responses are correlated at the boundary: `HostedAgent::prompt` returns the
   harness-issued request id, and the turn's final response arrives in stream
   order through the hosted event subscription, so a turn's `session/update`

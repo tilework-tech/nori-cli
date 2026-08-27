@@ -103,7 +103,6 @@ pub(crate) struct App {
     pub(crate) transcript_reflow: crate::transcript_reflow::TranscriptReflowState,
 
     pub(crate) enhanced_keys_supported: bool,
-    cloud_onboard: bool,
 
     /// Controls the animation thread that sends CommitTick events.
     pub(crate) commit_anim_running: Arc<AtomicBool>,
@@ -118,10 +117,17 @@ pub(crate) struct App {
 
     /// Prepared startup/post-close connection waiting for an explicit session choice.
     prepared_agent: Option<nori_harness::runtime::PreparedAgent>,
+    /// Fork/backtrack context captured with the prepared connection and reused
+    /// when refreshing session-time configuration before activation.
+    prepared_agent_initial_context: Option<String>,
 
     /// Owned startup/post-close preparation. Its generation prevents a late
     /// result from replacing a newer session decision.
     primary_agent_preparation: Option<PrimaryAgentPreparation>,
+
+    /// A session directive chosen while the startup connection is still being
+    /// prepared. The directive consumes that exact connection when ready.
+    pub(crate) pending_session_activation: Option<PendingSessionActivation>,
 
     /// Live agent-switch candidate. The active widget remains usable until an
     /// activating candidate publishes `SessionStarted`.
@@ -159,6 +165,17 @@ pub(crate) struct App {
 struct PrimaryAgentPreparation {
     generation: crate::app_event::SessionGeneration,
     abort: tokio::task::AbortHandle,
+    intent: crate::app_event::AgentPrepareIntent,
+    initial_context: Option<String>,
+}
+
+pub(crate) enum PendingSessionActivation {
+    New,
+    Resume {
+        acp_session_id: Option<String>,
+        title: Option<String>,
+        transcript: Option<Box<nori_harness::transcript::Transcript>>,
+    },
 }
 
 enum CandidateAgent {
@@ -211,11 +228,10 @@ impl App {
 
         let enhanced_keys_supported = tui.enhanced_keys_supported();
 
-        // When skillset_per_session is enabled, defer spawning the agent until
-        // after the user picks a skillset and the switch writes
-        // `.claude/CLAUDE.md` to disk. If the user dismisses the picker, the
-        // agent spawns without a skillset.
-        let needs_deferred_spawn = cloud_mode || config.skillset_per_session;
+        // Every subprocess starts in the prepared state. Session activation is
+        // a later user/session decision, after any per-session skillset setup.
+        let needs_deferred_spawn = true;
+        let mut pending_session_activation = None;
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -240,9 +256,19 @@ impl App {
                         .load_transcript(&target.project_id, &target.session_id)
                         .await?;
                     let acp_session_id = transcript.meta.acp_session_id.clone();
-                    ChatWidget::new_resumed_acp(init, acp_session_id, None, Some(transcript))
+                    pending_session_activation = Some(PendingSessionActivation::Resume {
+                        acp_session_id,
+                        title: None,
+                        transcript: Some(Box::new(transcript)),
+                    });
+                    ChatWidget::new(init)
                 }
-                ResumeSelection::StartFresh | ResumeSelection::Exit => ChatWidget::new(init),
+                ResumeSelection::StartFresh | ResumeSelection::Exit => {
+                    if !cloud_mode && (initial_prompt.is_some() || !initial_images.is_empty()) {
+                        pending_session_activation = Some(PendingSessionActivation::New);
+                    }
+                    ChatWidget::new(init)
+                }
             }
         };
 
@@ -257,6 +283,7 @@ impl App {
             Self::spawn_system_info_worker(system_info_rx, app_event_tx.clone());
         let footer_segment_config = config.footer_segment_config.clone();
         let footer_layout_config = config.footer_layout_config.clone();
+        let skillset_per_session = config.skillset_per_session;
 
         let mut app = Self {
             app_event_tx,
@@ -267,7 +294,6 @@ impl App {
             cloud_mode,
             file_search,
             enhanced_keys_supported,
-            cloud_onboard,
             transcript_cells: Vec::new(),
             overlay: None,
             deferred_history_lines: Vec::new(),
@@ -278,7 +304,9 @@ impl App {
             pending_update_action: None,
             skip_world_writable_scan_once: false,
             prepared_agent: None,
+            prepared_agent_initial_context: None,
             primary_agent_preparation: None,
+            pending_session_activation,
             candidate_agent: None,
             loop_count_override: None,
             hotkey_config: nori_config::HotkeyConfig::default(),
@@ -288,7 +316,7 @@ impl App {
             plan_drawer_mode: crate::chatwidget::PlanDrawerMode::Off,
             system_info_tx,
             worktree_warning_shown: false,
-            deferred_spawn_pending: needs_deferred_spawn,
+            deferred_spawn_pending: skillset_per_session,
             mcp_oauth_cancel_tx: None,
         };
 
@@ -299,6 +327,7 @@ impl App {
         // Propagate initial hotkey config to the textarea so editing bindings
         // (ctrl+a, ctrl+e, etc.) respect user overrides from config.toml.
         app.chat_widget.set_hotkey_config(app.hotkey_config.clone());
+        app.chat_widget.update_approval_mode_label();
         // Propagate initial vim mode setting.
         app.chat_widget.set_vim_mode(app.vim_mode);
         // Propagate initial pinned plan drawer setting.
@@ -311,13 +340,15 @@ impl App {
         app.chat_widget.set_plan_drawer_mode(plan_mode);
 
         // If skillset_per_session is enabled, show the skillset picker. The
-        // agent spawn was deferred so that `nori-skillsets switch` can write
-        // `.claude/CLAUDE.md` before the agent reads it. Once the user picks a
-        // skillset and the switch completes, `event_handling.rs` triggers
-        // `spawn_deferred_agent()`. If the user dismisses the picker, the
-        // `SkillsetPickerDismissed` event triggers the deferred spawn without a
-        // skillset.
-        if cloud_mode {
+        // agent preparation was deferred so that `nori-skillsets switch` can
+        // write `.claude/CLAUDE.md` before the agent reads it. Applying or
+        // dismissing the picker starts preparation without activating a
+        // session.
+        if app.config.skillset_per_session {
+            app.chat_widget.handle_switch_skillset_command();
+        } else if app.pending_session_activation.is_some() {
+            app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+        } else if cloud_mode {
             if cloud_onboard {
                 app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Onboarding);
             } else {
@@ -327,8 +358,8 @@ impl App {
                     fallback_to_spawn: true,
                 });
             }
-        } else if app.config.skillset_per_session {
-            app.chat_widget.handle_switch_skillset_command();
+        } else {
+            app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
         }
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -391,6 +422,7 @@ impl App {
         if let Some(agent) = app.prepared_agent.take() {
             agent.shutdown().await;
         }
+        app.prepared_agent_initial_context = None;
         app.discard_candidate();
 
         // Don't clear terminal to allow exit message to remain visible
@@ -432,6 +464,7 @@ impl App {
     }
 
     pub(super) fn configure_new_chat_widget(&mut self) {
+        self.chat_widget.update_approval_mode_label();
         self.chat_widget
             .set_hotkey_config(self.hotkey_config.clone());
         self.chat_widget.set_vim_mode(self.vim_mode);

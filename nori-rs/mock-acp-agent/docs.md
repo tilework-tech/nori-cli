@@ -31,6 +31,12 @@ environment variables select deterministic streams for:
   interleaved tool/message ordering; and
 - cloud, MCP, browser, transcript, and presentation regressions.
 
+Prompt-fidelity fixtures may require the final text block, its matching-block
+count, image count, image MIME type, and image data through the
+`MOCK_AGENT_EXPECT_*` prompt variables. A mismatch returns a structured prompt
+error, allowing PTY lifecycle tests to verify that deferred positional or typed
+input reaches ACP exactly once without transforming text or attachments.
+
 The mock deliberately issues outbound client requests through the SDK rather
 than calling host internals. This makes the public `AcpEvent::Request` and
 `HarnessHandle::respond_to_agent` path observable end to end.

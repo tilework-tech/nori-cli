@@ -5,8 +5,8 @@ expression: config_render
                                                                                                     
   Session Config                                                                                    
   Select an ACP session setting to change                                                           
-     Option                                                                                         
-  ▏  Model (Stable)                                                                              ▕  
+                                                                                                    
+  ▏1. Model (Stable)                                                                             ▕  
                                                                                                     
                                                                                                     
                                                                                                     
@@ -16,4 +16,4 @@ expression: config_render
                                                                                                     
                                                                                                     
                                                                                                     
-                                ↑↓/j/k move  enter select  esc close
+  ↑↓/j/k move  enter select  esc close

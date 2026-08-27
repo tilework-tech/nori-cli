@@ -65,17 +65,26 @@ impl ChatWidget {
                 is_current,
                 actions,
                 dismiss_on_select: true,
+                menu_tone: if preset.id == "full-access" {
+                    nori_tui_components::MenuItemTone::Warning
+                } else {
+                    nori_tui_components::MenuItemTone::Default
+                },
                 ..Default::default()
             });
         }
 
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select Approval Mode".to_string()),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            header: Box::new(()),
-            ..Default::default()
-        });
+        self.bottom_pane.show_selection_view(
+            SelectionViewParams {
+                title: Some("Select Approval Mode".to_string()),
+                subtitle: Some("Choose what Nori can do without approval".to_string()),
+                footer_hint: Some(standard_popup_hint_line()),
+                items,
+                header: Box::new(()),
+                ..Default::default()
+            }
+            .menu(),
+        );
     }
 
     pub(super) fn approval_preset_actions(
@@ -422,7 +431,7 @@ impl ChatWidget {
     }
 
     /// Update the approval mode label displayed in the footer based on current config.
-    pub(super) fn update_approval_mode_label(&mut self) {
+    pub(crate) fn update_approval_mode_label(&mut self) {
         let label = approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
         self.bottom_pane.set_approval_mode_label(label);
     }

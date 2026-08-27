@@ -183,10 +183,6 @@ impl Renderable for ColumnRenderable<'_> {
 }
 
 impl<'a> ColumnRenderable<'a> {
-    pub fn new() -> Self {
-        Self { children: vec![] }
-    }
-
     pub fn with<I, T>(children: I) -> Self
     where
         I: IntoIterator<Item = T>,
@@ -195,10 +191,6 @@ impl<'a> ColumnRenderable<'a> {
         Self {
             children: children.into_iter().map(Into::into).collect(),
         }
-    }
-
-    pub fn push(&mut self, child: impl Into<Box<dyn Renderable + 'a>>) {
-        self.children.push(RenderableItem::Owned(child.into()));
     }
 
     #[allow(dead_code)]
@@ -367,15 +359,6 @@ impl Renderable for RowRenderable<'_> {
 }
 
 impl<'a> RowRenderable<'a> {
-    pub fn new() -> Self {
-        Self { children: vec![] }
-    }
-
-    pub fn push(&mut self, width: u16, child: impl Into<Box<dyn Renderable>>) {
-        self.children
-            .push((width, RenderableItem::Owned(child.into())));
-    }
-
     #[allow(dead_code)]
     pub fn push_ref<R>(&mut self, width: u16, child: &'a R)
     where

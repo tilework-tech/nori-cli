@@ -126,6 +126,24 @@ while ordinary commands queue until the backend is ready, so a subscriber
 attached right after launch cannot miss startup events such as
 `SessionStarted`.
 
+When a queued user prompt becomes active, the harness publishes the caller's
+original ordered ACP content as `session/update` `user_message_chunk`
+notifications before downstream agent output can enter the fan-out. Every
+chunk for that prompt carries one shared message id, so all frontends—including
+the submitter—observe and group the same canonical input. Nori-owned context
+prepended to the downstream wire prompt is not part of this public copy.
+`nori_protocol::PROMPT_ECHO_ID_META_KEY` names the
+`nori.dev/promptEchoId` correlation extension. Remote prompt metadata crosses
+`HostedAgent` and `HarnessHandle` intact; the harness supplies the marker when
+absent, retains the complete metadata while queued, and forwards it on the
+top-level downstream `session/prompt` without changing prompt content. The
+canonical user chunks carry only this marker, not the prompt's other metadata.
+A downstream user chunk is suppressed with its paired private reducer update
+only when the marker identifies the active prompt and its content matches the
+active wire prompt. Load/replay chunks, unowned activity, and unmarked user
+messages continue through unchanged; content alone is never used to guess
+ownership.
+
 The public event stream has two source-owned branches:
 
 ```rust
@@ -223,10 +241,11 @@ async fn list_sessions(PathBuf) -> Result<Vec<acp::v1::SessionInfo>>;
 async fn close_session() -> Result<()>;
 ```
 
-Prompt content is canonical as an ordered `Vec<ContentBlock>` and is forwarded
-to ACP without regrouping or reordering blocks. Text used by hooks, display,
-and persistence is a derived projection only and does not replace or
-reconstruct the wire prompt.
+Prompt content is canonical as an ordered `Vec<ContentBlock>`. The harness
+retains that caller-supplied value separately before adding private Nori
+context to the downstream wire prompt. Text used by hooks, display, and
+persistence is a derived projection only and does not replace or reconstruct
+either representation.
 
 History, prompt discovery, undo listing, goal lookup, session listing, and
 config calls return typed values directly. A consumer does not wait for a Nori
@@ -268,6 +287,11 @@ types so frontends reach the whole remote surface through
   `TranscriptLoader`, and projects it with
   `transcript_to_replay_session_events`, keeping only session notifications
   and restamping them with the outward id.
+- Live `session/update` notifications—including canonical user prompt chunks—
+  are forwarded from the shared harness fan-out without content translation;
+  only their outward session id is rewritten, so the correlation marker is
+  preserved end to end. The transport still has one controller, while the
+  fan-out remains the common source for the TUI and future bounded observers.
 - Turn ownership is tracked by harness request id: `prompt` submits without
   holding the state lock (a queued prompt resolves only when issued), then
   registers the returned id as remote-owned; an outcome that raced ahead of
@@ -430,24 +454,28 @@ the default and atomic footer context segments share that resolved state.
 Transcript schema v3 records:
 
 - session metadata;
-- explicit user-input records, because input travels client to agent; and
+- explicit user-input records when the queued prompt becomes active, because
+  input travels client to agent; and
 - exact public `SessionEvent` records in source order.
 
 It does not write a duplicate derived assistant or `ClientEvent` record beside
 the raw ACP notification. Historical request/response envelopes may be retained
 for inspection, but the public replay body contains only historical ACP
-notifications in source order. Explicit v3 user records are projected to ACP
-user-message notifications at their recorded positions. Replay never
-re-executes a historical request or completes a live request from a historical
-response. Client-side fallback after a failed server-side load is available
-only when `SessionResume` carries a local transcript. If the failed load has
-already emitted partial history, the harness emits an Agent replay batch
-followed by a distinct Transcript fallback batch; it never combines two
-sources under one marker. A resume without a local transcript must preserve
-the requested remote session identity, so load failure is terminal rather than
-calling `session/new`. Private v2 compatibility types remain in the transcript
-loader; storage enums are not exported. Public readers use
-`Transcript::records()` and `TranscriptRecord`.
+notifications in source order. A canonical raw user-message sequence supersedes
+the stable user record with the same message id during replay, preserving
+attachments without rendering the prompt twice. Stable records without a raw
+counterpart—including older transcripts—are still projected to ACP user
+notifications at their recorded positions. Replay never re-executes a
+historical request or completes a live request from a historical response.
+Client-side fallback after a failed server-side load is available only when
+`SessionResume` carries a local transcript. If the failed load has already
+emitted partial history, the harness emits an Agent replay batch followed by a
+distinct Transcript fallback batch; it never combines two sources under one
+marker. A resume without a local transcript must preserve the requested remote
+session identity, so load failure is terminal rather than calling
+`session/new`. Private v2 compatibility types remain in the transcript loader;
+storage enums are not exported. Public readers use `Transcript::records()` and
+`TranscriptRecord`.
 
 #### Browser sessions and profile tiers
 

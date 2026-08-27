@@ -12,5 +12,5 @@ expression: "snapshot(&mut shortcut_narrow, 40, 12, \"Choose a session action\",
 "         a new session                  "
 "                                        "
 "    ↓ 3 more                            "
-"       ↑↓/jk move  enter select  q      "
-"                  close                 "
+"    ↑↓/jk move  enter select  q         "
+"    close                               "

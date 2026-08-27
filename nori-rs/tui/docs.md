@@ -28,13 +28,15 @@ The TUI depends on `nori-harness`, `nori-config`, and `nori-protocol`; it does
 not import the ACP host or ACP schema crate directly. Its ACP types arrive
 through `nori_protocol::acp`.
 
-Shared pickers receive [`nori-tui-components`](../tui-components/docs.md)
-styles through [`component_theme`](src/style.rs). That adapter supplies the
-terminal's reported RGB background only when stdout supports true color, so
-neutral surfaces remain terminal-relative while the component library owns the
-green pointer, cyan information, foreground title, and neutral selected-copy
-grammar. Both bottom-pane pickers and the launch-time resume picker use this
-path; raw key routing and application actions remain owned by the TUI.
+Shared pickers and overlay menus receive
+[`nori-tui-components`](../tui-components/docs.md) styles through
+[`component_theme`](src/style.rs). That adapter supplies the terminal's
+reported RGB background only when stdout supports true color, so neutral
+surfaces remain terminal-relative while the component library owns the green
+pointer, cyan information, foreground title, and neutral selected-copy grammar.
+Bottom-pane selection adapters, launch-time pickers, and full-screen action
+prompts use this path; raw key routing and application actions remain owned by
+the TUI.
 
 At launch, the TUI supplies the harness with two Nori CLI context-envelope
 variants. Both identify the first prompt as coming from Nori CLI; the
@@ -56,6 +58,12 @@ The application event loop matches `SessionEvent::Acp` and
 
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
+- User input is rendered from the harness's canonical ACP
+  `user_message_chunk` notifications, not inserted by the submitting widget.
+  Chunks with one message id are accumulated into one user history cell, and
+  non-text image, audio, resource-link, and embedded-resource blocks receive
+  attachment placeholders. The submitter and observing frontends therefore
+  follow the same event path.
 - Request-scoped updates belong to the active local prompt or load when one
   exists; otherwise the TUI preserves and renders each update as unowned
   activity without dropping or invented attribution, regardless of source or
@@ -103,7 +111,7 @@ into display cells and friendly labels. These view models are allowed to be
 lossy and UI-specific; they are not fed back into the harness or exported from
 `nori-protocol`.
 
-#### Picker navigation and search state
+#### Picker and overlay-menu presentation
 
 Searchable pickers use two explicit interaction states instead of interpreting
 every printable key as a query. They open in navigation state, where arrows and
@@ -123,19 +131,40 @@ additional visible hint text. Active footers describe typing and search exit.
   multi-stage Escape state transitions independent from Ctrl-C cancellation;
   the next Escape follows the view's normal dismissal path.
 - [`SelectionViewParams`](src/bottom_pane/list_selection_view.rs) keeps the
-  caller-owned selection model and adds an explicit presentation choice.
-  Standard picker factories opt into the shared presentation with `picker()`;
-  [`BottomPane::show_selection_view`](src/bottom_pane/mod.rs) then adapts those
-  rows into the domain-free picker instead of moving configuration types,
-  application events, or callbacks into the component crate. Short legacy
-  action lists may retain `ListSelectionView` and its numbered-row behavior.
+  caller-owned selection model and makes presentation explicit. Searchable or
+  browsable entity collections opt into `picker()`, bounded action sets opt
+  into `menu()`, and content that depends on an application-owned rich header
+  can retain `ListSelectionView`.
+  [`BottomPane::show_selection_view`](src/bottom_pane/mod.rs) selects the
+  corresponding adapter without moving configuration types, application
+  events, or callbacks into the component crate.
 - [`ComponentPickerView`](src/bottom_pane/component_picker_view.rs) maps
   Crossterm events into the domain-free `PickerAction` vocabulary from
   [`nori-tui-components`](../tui-components/docs.md). The adapter preserves
   current and initial selection, callbacks, keep-open actions, Shift-Tab
-  actions, and typed footer hints while projecting names and descriptions into
-  picker columns and details. The component's `search_active`, query,
-  filtering, and typed outcomes remain the source of truth.
+  actions, and typed footer hints while projecting names into one primary
+  column and descriptions into supporting rows. The shared renderer suppresses
+  that single column's heading and numbers the first nine actionable choices;
+  the adapter routes an inactive-search digit to the same visible choice and
+  submit path. Direct multi-column consumers, notably resume pickers, retain
+  table headings. The component's `search_active`, query, filtering, and typed
+  outcomes remain the source of truth.
+- The picker adapter's [`Renderable::desired_height`](src/render/renderable.rs)
+  measures visible rows at the selected density together with optional
+  subtitle, category, active-search, and multi-column-heading chrome before the
+  bottom pane allocates its bounded height. These presentation rows therefore
+  do not silently consume the capacity reported for compact result rows.
+- [`ComponentOverlayMenuView`](src/bottom_pane/component_overlay_menu_view.rs)
+  projects the same caller-owned rows into `MenuState`, assigning number
+  shortcuts only to enabled action rows and preserving current-state markers,
+  consequence tone, callbacks, keep-open behavior, and dismissal callbacks.
+  It renders the shared dense, zebra-striped overlay with symmetric focus rails
+  and left-aligned hints inside the bottom-pane rectangle.
+- [`overlay_menu.rs`](src/overlay_menu.rs) is the common raw-key adapter for
+  bottom-pane and true full-screen menus. It maps arrows, `j`/`k`, paging,
+  Home/End, Enter, digits, character mnemonics, Escape, Ctrl-C, and Ctrl-D into
+  domain-free menu actions and ignores key-release events. Each caller retains
+  the meaning of activation and cancellation.
 - Specialized picker state machines use the same renderer only for their
   browsing states. For example, the hotkey and MCP views retain rebinding,
   form input, validation, and application-event routing locally while their
@@ -150,7 +179,11 @@ The pre-TUI [`resume_picker`](src/resume_picker/) cannot use a bottom-pane
 adapter, but it mirrors the same transitions and projects its active state and
 query into the reusable picker renderer. Full-screen CLI picker surfaces use
 the component's opt-in symmetric selection rails, including this launch-time
-picker; embedded or copyable output does not inherit the rail treatment.
+picker; embedded or copyable output does not inherit the rail treatment. The
+directory-trust onboarding step, worktree ask and blocked screens, and release
+update prompt are bounded full-screen actions, so they hold typed `MenuState`
+locally and use the same [`OverlayMenu`](../tui-components/src/menu/render.rs)
+and raw-key adapter instead of maintaining parallel row renderers.
 
 #### Structured session information
 
@@ -186,6 +219,13 @@ User actions call typed `HarnessHandle` methods for prompting, cancellation,
 history, prompt discovery, compaction, branching, undo, shell, goals, session
 config, session listing, close, and shutdown. The old generic operation bus is
 gone.
+
+The `/approvals` preset chooser and the replace-goal confirmation are bounded
+bottom-pane actions and therefore use the overlay-menu presentation. Warning
+tone is carried only by the consequential action; selection, number shortcuts,
+and cancellation still flow through the shared adapter. Rich confirmations
+that include explanatory cards or diffs retain their application-owned list
+composition rather than forcing ordinary content into the menu component.
 
 The `/fork` picker (`tui/src/nori/fork_picker.rs`) offers a "Branch from current
 point" entry as its first item when the agent advertises ACP `session/fork`
@@ -346,16 +386,20 @@ pending replay.
 
 #### Lifecycle behavior
 
-Connection preparation is separate from session activation. Picker-first entry
-stores the harness's opaque `PreparedAgent` in `App` while the user chooses a
-new or existing session, so `initialize`, optional `session/list`, and the
-chosen `session/new`, `session/load`, or `session/resume` all use one child
-process. Unsupported listing is distinct from an empty successful catalog;
-preparation or advertised-list failure leaves the deferred widget without an
-active session and offers an explicit retry/new path. This orchestration lives
-in [`session_setup.rs`](src/app/session_setup.rs), while
-[`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes a
-prepared connection into the harness runtime.
+Connection preparation is separate from session activation. Every subprocess
+agent starts through [`session_setup.rs`](src/app/session_setup.rs), including
+ordinary local agents and a registered `nori-handroll acp --type remote`
+adapter. `App` retains the harness's opaque `PreparedAgent` after `initialize`,
+capability inspection, and optional `session/list`; no session directive is
+issued merely because startup completed. Advertised listing runs in the same
+background preparation while the composer remains usable. Unsupported listing
+is distinct from an empty successful catalog, and preparation or
+advertised-list failure leaves the widget sessionless.
+[`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes
+the exact prepared connection into the harness runtime. An ordinary-agent
+failure reopens the existing agent picker so the user can recover by choosing
+another agent unless a live candidate already owns its picker; cloud remains on
+its sessionless `/resume` or `/new` retry flow.
 
 A prepared agent carrying the recognized Nori remote-control active-session
 marker bypasses both primary and switch-candidate pickers. The TUI emits its
@@ -364,17 +408,54 @@ uses `session/load` on that same connection without issuing `session/list` or
 `session/new`. A failed automatic load leaves the primary session unattached or
 the candidate uncommitted; it never creates a replacement session.
 
-Primary preparation is owned as a generation plus task abort handle, not a
-boolean in-flight flag. Explicit new/resume selection, close, candidate
-preparation, and exit invalidate it before changing lifecycle state. An
-`AgentPrepared` result is accepted only when its generation still matches the
-owned primary preparation; a late successful result is explicitly shut down.
+When ordinary agent startup fails, the handler records the complete failure in
+history and opens the agent picker as the recovery action. Because that
+full-height picker can place the history cell outside the viewport, the same
+spawn error is also its subtitle; the ordinary `/agent` command retains the
+generic new-conversation subtitle. This recovery path is assembled by
+[`ChatWidget`](src/chatwidget/pickers.rs) and the shared picker parameters in
+[`agent_picker.rs`](src/nori/agent_picker.rs), without changing the error value
+or treating it as picker state.
+
+Primary preparation is owned as a generation, task abort handle, current
+intent, retained fork context, and optional pending activation. `/new` and a
+first genuine user prompt record New; `/resume` changes the intent to open the
+prepared catalog and then records the selected Resume. Esc-Esc backtrack and
+transcript fork also queue deferred New while preserving their selected history
+summary as initial context. If preparation is in flight, these decisions wait
+for it instead of cancelling it; if preparation is complete, they consume the
+stored connection. Thus `initialize`, optional `session/list`, and the chosen
+`session/new`, `session/load`, or `session/resume` use one child process. This
+orchestration lives in [`event_handling.rs`](src/app/event_handling.rs).
+
+Every primary activation calls
+[`take_refreshed_prepared_agent`](src/app/session_setup.rs) before consuming the
+connection. The refresh applies current mutable approval and sandbox policy and
+retains fork context. If process-defining identity changed, the TUI reaps the
+stale child and reprepares while keeping the pending New or Resume decision;
+stale policy is never activated.
+
+The sessionless composer distinguishes activation input from local behavior.
+The first text or image prompt remains in frontend state, requests New, and is
+transferred without rewriting to the activated widget. The widget submits it
+exactly once when `SessionStarted` establishes the configured session. Initial
+positional prompts use the same path. Activation replaces the sessionless
+widget, so `SessionStarted` first applies normal history metadata to the new
+widget, then records its queued launch prompt into composer-local history
+immediately before submission. Slash commands and local shell commands are
+handled before this implicit-New decision; a shell command reports that no
+harness is active until activation. Neither can claim an ACP session. These
+ownership rules live in
+[`user_input.rs`](src/chatwidget/user_input.rs) and
+[`helpers.rs`](src/chatwidget/helpers.rs).
+
+An `AgentPrepared` result is accepted only when its generation still matches
+the owned preparation; a late successful result is explicitly shut down.
 Primary and switch-candidate preparation both use the same 20-second
-wall-clock bound in [`session_setup.rs`](src/app/session_setup.rs). A timeout is
-reported as preparation failure, drops the in-flight preparation so its child
-is reaped, and leaves any current session available. Together these rules keep
-a cancelled or hung initialize/list task from repopulating the picker, leaking
-its child, or displacing a usable session.
+wall-clock bound in [`session_setup.rs`](src/app/session_setup.rs). Close,
+cancellation, timeout, and exit invalidate preparation and reap its subprocess.
+Together these rules keep a cancelled or hung initialize/list task from
+repopulating the picker, leaking its child, or displacing a usable session.
 
 Candidate state retains the candidate identity and opaque prepared connection;
 it does not separately snapshot the full `NoriConfig`. When the user chooses
@@ -395,7 +476,9 @@ phases. The current and candidate subprocesses coexist while the candidate
 initializes and while its session picker is open. Choosing a session activates
 the candidate in a separate widget, and `SessionStarted` is the commit event:
 only then does `App` swap widgets, persist the selected agent, and shut down the
-replaced process. Preparation failure, activation failure, picker dismissal,
+replaced process. Until that event, positional or deferred input remains owned
+by the current widget; after commit it transfers to the candidate and is
+submitted once. Preparation failure, activation failure, picker dismissal,
 supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
@@ -453,15 +536,17 @@ session is present, or listing is unsupported, onboarding explicitly starts a
 new session on that same prepared `cloud-acp --onboard` connection, preserving
 the broker's serialized acquire-or-resume behavior and compatibility with older
 components. An initialization or advertised-list failure is shown as a
-preparation failure rather than being treated as an empty catalog. `/new`
-repeats this onboarding preparation; `/close` retains its ordinary picker-first
-lifecycle. Because the `--onboard` argv is part of the process-wide agent
-registry entry, every fallback acquisition remains onboarding-only. While a
+preparation failure rather than being treated as an empty catalog. A
+sessionless `/new` consumes that valid prepared onboarding connection; after an
+active session, `/new` prepares another connection with the same onboarding
+registry entry. `/close` retains its ordinary picker-first lifecycle. Because
+the `--onboard` argv is part of the process-wide agent registry entry, every
+fallback acquisition remains onboarding-only. While a
 picker-first launch waits for a choice, its initial positional prompt and image
 attachments remain owned by the deferred widget. Choosing Start new transfers
 that input into the replacement widget before the deferred widget shuts down,
-so it auto-sends on `SessionConfigured` for the prepared session just like
-other entry paths.
+so it auto-sends at the same `SessionStarted` boundary as every other entry
+path.
 
 The shared ACP resume picker treats session source as first-class presentation
 instead of requiring users to inspect raw metadata. Cloud rows with a typed
@@ -512,11 +597,13 @@ imports the ACP host crate directly.
 
 While a remote controller drives the session, the TUI stays attached to the
 same handle and ordered event stream and renders remote-driven activity as an
-observer. The fan-out delivers every event to both consumers: the remote host
-forwards a delegated permission request to its controller only when the remote
-controller owns the turn, while the TUI continues to observe the same request
-on its own stream. Policy for simultaneous local and remote input is
-deliberately deferred by the spec.
+observer. Canonical user prompt chunks reach both consumers, including the
+frontend that submitted the prompt. The remote host rewrites only the outward
+session id on forwarded updates and sends delegated permission requests to its
+controller only when that controller owns the turn; the TUI continues to
+observe the same request on its own stream. The transport retains one remote
+controller, while the fan-out can feed future bounded observers. Policy for
+simultaneous local and remote input is deliberately deferred by the spec.
 
 #### Footer configuration
 

@@ -192,13 +192,15 @@ events. The public replay sequence is:
    source order; and
 3. `NoriEvent::ReplayFinished`.
 
-For v3, an explicit `user` entry is projected to an ACP user-message
-notification at its recorded position. Stored ACP notifications remain exact,
-apart from retargeting their session ID to the active session. Stored Nori
-events, ACP requests, and ACP responses are not emitted inside replay brackets.
-In particular, the current load/new response is never mislabeled as historical
-replay. Historical requests cannot repeat side effects, and historical
-responses cannot complete live requests.
+For v3, canonical raw user-message chunks supersede the explicit `user` entry
+with the same message id during replay. This retains attachment blocks without
+duplicating the prompt. A `user` entry without matching raw chunks is projected
+to an ACP user-message notification at its recorded position for compatibility.
+Stored ACP notifications remain exact, apart from retargeting their session ID
+to the active session. Stored Nori events, ACP requests, and ACP responses are
+not emitted inside replay brackets. In particular, the current load/new
+response is never mislabeled as historical replay. Historical requests cannot
+repeat side effects, and historical responses cannot complete live requests.
 
 Agent-sourced `session/load` replay follows the same outward rule: the markers
 bracket the load-time ACP notifications in agent order, while the current load

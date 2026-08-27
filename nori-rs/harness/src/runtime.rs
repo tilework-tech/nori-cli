@@ -76,6 +76,7 @@ enum HarnessCommand {
     /// Submit one ACP prompt and return its transport request ID.
     Prompt {
         content: Vec<acp::v1::ContentBlock>,
+        meta: Option<acp::v1::Meta>,
         response_tx: oneshot::Sender<anyhow::Result<acp::v1::RequestId>>,
     },
     /// Shut down the active harness session.
@@ -188,10 +189,19 @@ impl HarnessHandle {
         &self,
         content: Vec<acp::v1::ContentBlock>,
     ) -> anyhow::Result<acp::v1::RequestId> {
+        self.prompt_with_meta(content, None).await
+    }
+
+    pub(crate) async fn prompt_with_meta(
+        &self,
+        content: Vec<acp::v1::ContentBlock>,
+        meta: Option<acp::v1::Meta>,
+    ) -> anyhow::Result<acp::v1::RequestId> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::Prompt {
                 content,
+                meta,
                 response_tx,
             })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
@@ -792,9 +802,12 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
                 match cmd {
                     HarnessCommand::Prompt {
                         content,
+                        meta,
                         response_tx,
                     } => {
-                        backend_for_agent.submit_prompt(content, response_tx).await;
+                        backend_for_agent
+                            .submit_prompt(content, meta, response_tx)
+                            .await;
                     }
                     HarnessCommand::Shutdown {
                         child_grace,
