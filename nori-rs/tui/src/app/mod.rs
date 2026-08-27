@@ -463,6 +463,7 @@ impl App {
     }
 
     pub(super) fn configure_new_chat_widget(&mut self) {
+        self.chat_widget.update_approval_mode_label();
         self.chat_widget
             .set_hotkey_config(self.hotkey_config.clone());
         self.chat_widget.set_vim_mode(self.vim_mode);
