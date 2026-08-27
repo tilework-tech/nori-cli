@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 use super::AcpBackendConfig;
 use super::enhance_agent_error;
 use super::get_agent_config;
+use super::remote_control_ext;
 use crate::connection::ConnectionEvent;
 use crate::connection::acp_connection::AcpConnection;
 
@@ -36,6 +37,7 @@ pub struct PreparedAgent {
     event_rx: Option<mpsc::Receiver<ConnectionEvent>>,
     config: Option<AcpBackendConfig>,
     catalog: SessionCatalog,
+    automatic_session_id: Option<acp::SessionId>,
     setup_events: Option<Vec<SessionEvent>>,
 }
 
@@ -45,6 +47,7 @@ impl fmt::Debug for PreparedAgent {
             .debug_struct("PreparedAgent")
             .field("agent", &self.config.as_ref().map(|config| &config.agent))
             .field("catalog", &self.catalog)
+            .field("automatic_session_id", &self.automatic_session_id)
             .finish_non_exhaustive()
     }
 }
@@ -90,9 +93,17 @@ impl PreparedAgent {
         };
         let mut event_rx = connection.take_event_receiver();
         let mut inspection_events = Vec::new();
+        let automatic_session_id = remote_control_ext::automatic_session_id(
+            connection.initialize_meta(),
+            connection.capabilities(),
+        );
 
         let catalog_result: Result<SessionCatalog> = async {
-            if connection
+            if automatic_session_id.is_some() {
+                // The Nori RC marker is itself the connection-specific index.
+                // Loading it must be the first post-initialize request.
+                Ok(SessionCatalog::Unsupported)
+            } else if connection
                 .capabilities()
                 .session_capabilities
                 .list
@@ -136,6 +147,7 @@ impl PreparedAgent {
             event_rx: Some(event_rx),
             config: Some(config),
             catalog,
+            automatic_session_id,
             setup_events: Some(setup_events),
         })
     }
@@ -155,6 +167,11 @@ impl PreparedAgent {
             .as_ref()
             .expect("prepared connection is present until activation")
             .capabilities()
+    }
+
+    /// Session selected by a recognized Nori remote-control initialize marker.
+    pub fn automatic_session_id(&self) -> Option<&acp::SessionId> {
+        self.automatic_session_id.as_ref()
     }
 
     pub(crate) fn replace_activation_config(

@@ -37,6 +37,15 @@ pub(super) fn onboarding_resume_event(
     })
 }
 
+pub(super) fn automatic_resume_event(
+    session_id: Option<&nori_protocol::acp::v1::SessionId>,
+) -> Option<AppEvent> {
+    session_id.map(|session_id| AppEvent::ResumeAcpSession {
+        acp_session_id: session_id.to_string(),
+        title: None,
+    })
+}
+
 impl App {
     /// Prepare a live pre-session agent (spawn → initialize → optional
     /// `session/list`) and report the still-owned connection as
@@ -466,6 +475,7 @@ mod tests {
 
     use nori_protocol::acp::v1::SessionInfo;
 
+    use super::automatic_resume_event;
     use super::onboarding_resume_event;
     use crate::app_event::AppEvent;
 
@@ -493,5 +503,17 @@ mod tests {
         let ordinary = SessionInfo::new("ordinary", PathBuf::from("/"));
 
         assert!(onboarding_resume_event(vec![ordinary]).is_none());
+    }
+
+    #[test]
+    fn automatic_remote_control_session_bypasses_selection_with_resume_action() {
+        let session_id = nori_protocol::acp::v1::SessionId::new("remote-active");
+
+        assert!(matches!(
+            automatic_resume_event(Some(&session_id)),
+            Some(AppEvent::ResumeAcpSession { acp_session_id, title })
+                if acp_session_id == "remote-active" && title.is_none()
+        ));
+        assert!(automatic_resume_event(None).is_none());
     }
 }

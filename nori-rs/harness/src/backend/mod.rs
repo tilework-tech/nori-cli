@@ -31,6 +31,8 @@ use crate::transcript::ContentBlock;
 use crate::transcript::TranscriptRecorder;
 use crate::undo::GhostSnapshotStack;
 
+mod remote_control_ext;
+
 // =============================================================================
 // Error Categorization
 // =============================================================================

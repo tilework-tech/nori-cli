@@ -60,8 +60,11 @@ A frontend constructs `AgentPrepareSpec` with one resolved `Arc<NoriConfig>`,
 the CLI version, and optional product/conversation context. `prepare_agent`
 resolves the persisted default model and injects it through the agent's
 spawn-time channel before spawning the ACP subprocess. It then completes
-`initialize`, reads the connection's capabilities, and calls `session/list`
-only when advertised. It returns an
+`initialize`, reads the connection's capabilities, and normally calls
+`session/list` when advertised. When a version-1
+`_meta.nori.remoteControl.activeSessionId` marker is paired with `loadSession`,
+the prepared owner records that ID, skips listing, and loads it as the first
+post-initialize request during activation. It returns an
 opaque, non-cloneable `PreparedAgent` that still owns that exact
 `AcpConnection`, its event receiver, resolved backend configuration, buffered
 initialize event, and a `SessionCatalog`. The catalog distinguishes
@@ -75,10 +78,13 @@ The frontend then chooses `SessionStart::New` or
 `SessionLaunchSpec`. `launch_session` consumes it, so a connection cannot be
 activated twice or used for pre-session prompt/config operations. Resume
 selects the existing load, live-resume, or transcript-replay path from the
-agent capabilities and supplied resume data. Frontends that have already made
-their session choice may use `prepare_and_launch_session`; it performs the two
-phases in one background lifecycle while retaining the same connection. It
-returns the handle immediately, queues ordinary commands until activation, and
+agent capabilities and supplied resume data. A recognized Nori remote-control
+ID overrides the ordinary product choice, including picker-first TUI flows;
+load failure remains terminal and never creates a replacement session.
+Frontends that have already made their session choice may use
+`prepare_and_launch_session`; it performs the two phases in one background
+lifecycle while retaining the same connection. It returns the handle
+immediately, queues ordinary commands until activation, and
 keeps preparation inside the runtime's connection warning, timeout, and
 shutdown race. Both launch paths return `LaunchedSession`, containing a
 `HarnessHandle` and the session event receiver.

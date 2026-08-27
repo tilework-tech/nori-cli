@@ -401,6 +401,13 @@ failure reopens the existing agent picker so the user can recover by choosing
 another agent unless a live candidate already owns its picker; cloud remains on
 its sessionless `/resume` or `/new` retry flow.
 
+A prepared agent carrying the recognized Nori remote-control active-session
+marker bypasses both primary and switch-candidate pickers. The TUI emits its
+existing resume action for the advertised stable session ID, and the harness
+uses `session/load` on that same connection without issuing `session/list` or
+`session/new`. A failed automatic load leaves the primary session unattached or
+the candidate uncommitted; it never creates a replacement session.
+
 When ordinary agent startup fails, the handler records the complete failure in
 history and opens the agent picker as the recovery action. Because that
 full-height picker can place the history cell outside the viewport, the same
@@ -581,8 +588,10 @@ events. Switch-candidate launches suppress that attachment until their
 committed handle without losing its outward identity. Thus new-session and
 resume paths remain eager, while a failed or cancelled candidate cannot replace
 the current remote session. Attaching the committed replacement closes any
-current remote controller; after reconnecting, the controller discovers the
-replacement through `session/list`. All remote types reach the TUI through
+current remote controller. After reconnecting, a recognizing Nori client loads
+the stable ID from `_meta.nori.remoteControl.activeSessionId`; ordinary ACP
+clients can continue to discover the replacement through `session/list`. All
+remote types reach the TUI through
 `nori_harness::remote_agent` re-exports, preserving the rule that the TUI never
 imports the ACP host crate directly.
 

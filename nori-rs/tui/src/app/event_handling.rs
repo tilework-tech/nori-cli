@@ -285,6 +285,9 @@ impl App {
 
                     match agent {
                         Ok(agent) => {
+                            let automatic_resume = super::session_setup::automatic_resume_event(
+                                agent.automatic_session_id(),
+                            );
                             let sessions = match agent.catalog() {
                                 nori_harness::runtime::SessionCatalog::Unsupported => Vec::new(),
                                 nori_harness::runtime::SessionCatalog::Listed(sessions) => {
@@ -301,8 +304,12 @@ impl App {
                                 display_name,
                                 agent: Box::new(agent),
                             });
-                            self.chat_widget
-                                .show_acp_resume_session_picker(sessions, true);
+                            if let Some(event) = automatic_resume {
+                                self.app_event_tx.send(event);
+                            } else {
+                                self.chat_widget
+                                    .show_acp_resume_session_picker(sessions, true);
+                            }
                         }
                         Err(error) => {
                             self.candidate_agent = None;
@@ -335,6 +342,9 @@ impl App {
 
                 match agent {
                     Ok(agent) => {
+                        let automatic_resume = super::session_setup::automatic_resume_event(
+                            agent.automatic_session_id(),
+                        );
                         // Seed the deferred widget with the prepared agent
                         // capabilities so capability-gated behavior (e.g. the
                         // detach wording on quit) is right before any session
@@ -380,37 +390,42 @@ impl App {
                         };
                         self.prepared_agent = Some(agent);
                         self.prepared_agent_initial_context = prepared_initial_context;
-                        if let Some(activation) = self.pending_session_activation.take() {
-                            match activation {
-                                PendingSessionActivation::New => {
-                                    self.app_event_tx.send(AppEvent::NewSession)
+                        if let Some(event) = automatic_resume {
+                            self.pending_session_activation = None;
+                            self.app_event_tx.send(event);
+                        } else {
+                            if let Some(activation) = self.pending_session_activation.take() {
+                                match activation {
+                                    PendingSessionActivation::New => {
+                                        self.app_event_tx.send(AppEvent::NewSession)
+                                    }
+                                    PendingSessionActivation::Resume {
+                                        acp_session_id,
+                                        title,
+                                        transcript,
+                                    } => self.app_event_tx.send(AppEvent::ActivatePreparedResume {
+                                        acp_session_id,
+                                        title,
+                                        transcript: transcript.map(|transcript| *transcript),
+                                    }),
                                 }
-                                PendingSessionActivation::Resume {
-                                    acp_session_id,
-                                    title,
-                                    transcript,
-                                } => self.app_event_tx.send(AppEvent::ActivatePreparedResume {
-                                    acp_session_id,
-                                    title,
-                                    transcript: transcript.map(|transcript| *transcript),
-                                }),
+                                tui.frame_requester().schedule_frame();
+                                return Ok(true);
                             }
-                            tui.frame_requester().schedule_frame();
-                            return Ok(true);
-                        }
-                        match prepare_intent {
-                            crate::app_event::AgentPrepareIntent::Idle => {}
-                            crate::app_event::AgentPrepareIntent::Onboarding => {
-                                if let Some(event) =
-                                    sessions.and_then(super::session_setup::onboarding_resume_event)
-                                {
-                                    self.app_event_tx.send(event);
-                                } else {
-                                    self.app_event_tx.send(AppEvent::NewSession);
+                            match prepare_intent {
+                                crate::app_event::AgentPrepareIntent::Idle => {}
+                                crate::app_event::AgentPrepareIntent::Onboarding => {
+                                    if let Some(event) = sessions
+                                        .and_then(super::session_setup::onboarding_resume_event)
+                                    {
+                                        self.app_event_tx.send(event);
+                                    } else {
+                                        self.app_event_tx.send(AppEvent::NewSession);
+                                    }
                                 }
-                            }
-                            crate::app_event::AgentPrepareIntent::Picker { fallback_to_spawn } => {
-                                match sessions {
+                                crate::app_event::AgentPrepareIntent::Picker {
+                                    fallback_to_spawn,
+                                } => match sessions {
                                     Some(sessions) => self
                                         .chat_widget
                                         .show_acp_resume_session_picker(sessions, false),
@@ -420,18 +435,18 @@ impl App {
                                     None => self
                                         .chat_widget
                                         .show_acp_resume_session_picker(Vec::new(), false),
+                                },
+                                crate::app_event::AgentPrepareIntent::ResumePicker => {
+                                    if can_resume_catalog && let Some(sessions) = sessions {
+                                        self.chat_widget
+                                            .show_acp_resume_session_picker(sessions, false);
+                                    } else {
+                                        self.chat_widget.open_local_resume_session_picker();
+                                    }
                                 }
-                            }
-                            crate::app_event::AgentPrepareIntent::ResumePicker => {
-                                if can_resume_catalog && let Some(sessions) = sessions {
-                                    self.chat_widget
-                                        .show_acp_resume_session_picker(sessions, false);
-                                } else {
-                                    self.chat_widget.open_local_resume_session_picker();
+                                crate::app_event::AgentPrepareIntent::Candidate { .. } => {
+                                    unreachable!("candidate handled above")
                                 }
-                            }
-                            crate::app_event::AgentPrepareIntent::Candidate { .. } => {
-                                unreachable!("candidate handled above")
                             }
                         }
                     }
@@ -447,7 +462,7 @@ impl App {
                             None,
                         );
                         if !self.cloud_mode && self.candidate_agent.is_none() {
-                            self.chat_widget.open_agent_popup();
+                            self.chat_widget.open_agent_recovery_popup(&error);
                         }
                     }
                 }

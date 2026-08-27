@@ -651,10 +651,6 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
         // session-domain events.
         let (backend_event_tx, mut backend_event_rx) = mpsc::channel(32);
 
-        let failure_label = match &start {
-            SessionStart::New => "Failed to start ACP session",
-            SessionStart::Resume(_) => "Failed to resume ACP session",
-        };
         let connect = async move {
             let agent = match source {
                 SessionAgentSource::Prepared(agent) => *agent,
@@ -665,12 +661,29 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
                             for event in failure.setup_events {
                                 let _ = backend_event_tx.send(BackendEvent::Public(event)).await;
                             }
-                            return Err(failure.error);
+                            let failure_label = match &start {
+                                SessionStart::New => "Failed to start ACP session",
+                                SessionStart::Resume(_) => "Failed to resume ACP session",
+                            };
+                            return Err((failure_label, failure.error));
                         }
                     }
                 }
             };
-            match start {
+            let start = agent
+                .automatic_session_id()
+                .map(|session_id| {
+                    SessionStart::Resume(SessionResume {
+                        acp_session_id: Some(session_id.to_string()),
+                        transcript: None,
+                    })
+                })
+                .unwrap_or(start);
+            let failure_label = match &start {
+                SessionStart::New => "Failed to start ACP session",
+                SessionStart::Resume(_) => "Failed to resume ACP session",
+            };
+            let result = match start {
                 SessionStart::New => AcpBackend::spawn(agent, backend_event_tx).await,
                 SessionStart::Resume(resume) => {
                     AcpBackend::resume_session(
@@ -681,7 +694,8 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
                     )
                     .await
                 }
-            }
+            };
+            result.map_err(|error| (failure_label, error))
         };
 
         // Race backend init against shutdown requests and a timeout.
@@ -695,7 +709,7 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
             result = &mut connect => {
                 match result {
                     Ok(b) => break Arc::new(b),
-                    Err(e) => {
+                    Err((failure_label, e)) => {
                         tracing::error!("{failure_label}: {e}");
                         let message = format!("{failure_label}: {e}");
                         while let Ok(BackendEvent::Public(event)) = backend_event_rx.try_recv() {
