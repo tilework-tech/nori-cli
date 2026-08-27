@@ -431,7 +431,7 @@ impl ChatWidget {
     }
 
     /// Update the approval mode label displayed in the footer based on current config.
-    pub(super) fn update_approval_mode_label(&mut self) {
+    pub(crate) fn update_approval_mode_label(&mut self) {
         let label = approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
         self.bottom_pane.set_approval_mode_label(label);
     }

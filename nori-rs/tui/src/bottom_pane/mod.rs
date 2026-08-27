@@ -754,6 +754,10 @@ impl BottomPane {
         self.composer.set_history_metadata(log_id, entry_count);
     }
 
+    pub(crate) fn record_local_history_submission(&mut self, text: &str) {
+        self.composer.record_local_history_submission(text);
+    }
+
     pub(crate) fn flush_paste_burst_if_due(&mut self) -> bool {
         self.composer.flush_paste_burst_if_due()
     }

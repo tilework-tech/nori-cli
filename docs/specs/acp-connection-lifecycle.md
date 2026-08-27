@@ -40,7 +40,8 @@ successful empty list and from connection/list failure.
 
 ## Required ordering
 
-Startup and agent switching use the same ordering:
+Every subprocess agent startup, including a registered
+`nori-handroll acp --type remote` adapter, uses this ordering:
 
 1. Resolve the selected agent and inject its persisted default model into the
    spawn configuration when that agent supports an out-of-band model channel.
@@ -48,8 +49,10 @@ Startup and agent switching use the same ordering:
 3. Complete ACP `initialize`.
 4. Read capabilities from the initialized connection.
 5. If advertised, issue and fully drain `session/list` on that connection.
-6. Present the available choice without issuing a session directive.
-7. After an explicit product decision, issue one of `session/new`,
+6. Retain the prepared connection without issuing a session directive. The
+   composer remains usable while advertised listing completes in the
+   background.
+7. After a product decision, issue one of `session/new`,
    `session/load`, or `session/resume` on the same connection.
 8. Only after session activation succeeds may that connection replace the
    current active agent.
@@ -107,12 +110,16 @@ rooted in
 [`runtime.rs`](../../nori-rs/harness/src/runtime.rs) and
 [`prepared.rs`](../../nori-rs/harness/src/backend/prepared.rs).
 
-The TUI keeps startup preparation and switch candidates in `App`. Candidate
-state is private to the TUI and uses existing session-generation tags to route
-asynchronous results. Primary preparation additionally retains the task abort
-handle so explicit new/resume, close, candidate preparation, and exit can
-invalidate in-flight work. Its event vocabulary therefore changes only inside
-`nori-tui`; `nori-protocol` remains unchanged. See
+The TUI keeps primary startup preparation and switch candidates in `App`.
+Primary state consists of the preparation generation, task abort handle,
+current preparation intent, retained fork context, and any pending New or
+Resume activation. `/new`, the first genuine user prompt, `/resume`, and
+backtrack/fork update that state and consume the same connection when it becomes
+ready; they do not cancel and respawn a valid preparation. Session-generation
+tags reject stale asynchronous results after close, exit, failure, or
+replacement. Candidate state is private to the TUI and keeps separate ownership
+until its activation commits. This event vocabulary remains internal to
+`nori-tui`; `nori-protocol` is unchanged. See
 [`session_setup.rs`](../../nori-rs/tui/src/app/session_setup.rs) and
 [`event_handling.rs`](../../nori-rs/tui/src/app/event_handling.rs).
 
@@ -134,13 +141,16 @@ bound. Expiration is handled as preparation failure: the in-flight future is
 dropped so connection ownership reaps any spawned child, while an existing
 active session remains promptable.
 
-TUI candidate orchestration must not retain a separate full `NoriConfig`
-snapshot. Before activation, it refreshes session-time configuration from
-current `App` state. The agent identity, cwd, ACP proxy settings, and default
-model are fixed by preparation because they determine the already-running
-process or transport; changing one invalidates that candidate and requires a
-new preparation. A successful `SessionStarted` commits only the new active-agent
-identity, preserving all other current application settings.
+TUI preparation must not retain a separate full `NoriConfig` snapshot. Before
+every primary or candidate activation, it refreshes session-time configuration
+from current `App` state, including mutable approval and sandbox policy. Agent
+identity, cwd, ACP proxy settings, and default model are fixed by preparation
+because they determine the already-running process or transport. A primary
+identity mismatch reaps the stale prepared child and restarts preparation while
+retaining its pending directive and fork context; a candidate mismatch destroys
+the candidate and requires another switch attempt. A successful
+`SessionStarted` commits only the new active-agent identity, preserving all
+other current application settings.
 
 Authentication targeting is independent of candidate ownership. Bare `/login`
 may temporarily target the selected or just-failed candidate through a private
@@ -159,17 +169,42 @@ the active `HarnessHandle`.
 
 ## Startup and compatibility
 
-Picker-first startup prepares an agent before rendering its session choices.
-If listing is supported, an empty list and a non-empty list are both successful
-results. If listing is unsupported, the product may retain its existing
-compatibility policy, but any `session/new` remains a separate, explicit
-harness transition rather than part of initialization.
+Ordinary startup prepares one agent immediately and leaves the frontend
+sessionless. Preparation may advertise and run `session/list`, but listing does
+not block typing and does not activate a session. If listing is supported, an
+empty list and a non-empty list are both successful results. Unsupported
+listing remains distinct from either result.
 
-An initial positional prompt and image attachments remain with the deferred
-frontend state while that picker is open. Choosing a new session transfers the
-input to the replacement widget before retiring the deferred widget, and
-automatic submission waits for `SessionConfigured` from the prepared
-connection.
+Sessionless user activation has three entry paths:
+
+- `/new` records a pending New decision and issues `session/new` when the
+  current preparation is ready.
+- The first genuine user prompt without an active session records the same New
+  decision. Its text and image attachments remain owned by the deferred widget,
+  transfer to the activated widget, and are submitted exactly once after the
+  session-configured (`SessionStarted`) boundary.
+- `/resume` uses the catalog gathered during preparation when the agent can
+  load or resume listed sessions. Selecting a row consumes the prepared
+  connection through the existing load, live-resume, or transcript-replay
+  policy. Agents without those catalog capabilities open the local transcript
+  picker without first creating a session; selecting a transcript then follows
+  the existing replay policy.
+
+Initial positional prompts and image attachments follow the same deferred New
+path as typed prompts. Slash commands remain local while sessionless; harness
+commands such as `!cmd` report that no harness session is active. Neither path
+implies `session/new`. Per-session skillset selection happens before preparation
+so the initialized child observes the chosen workspace state.
+
+Esc-Esc backtrack and transcript fork are also deferred New transitions. They
+prepare before activation and retain the selected fork summary through both
+preparation and the final configuration refresh.
+
+If ordinary-agent preparation fails before activation, the TUI remains
+sessionless and reopens the existing agent picker for recovery. Cloud keeps its
+sessionless retry flow because its selected facade is not replaced through the
+local agent picker. A primary failure cannot replace a live candidate's picker;
+candidate ownership remains authoritative until it commits or is discarded.
 
 Onboarding may automatically choose a broker-tagged onboarding session or the
 documented compatibility fallback. That product decision happens after
@@ -184,8 +219,9 @@ not be mistaken for the later session-directive response. Raw ACP setup events
 that belong on the public session stream remain ordered ahead of
 `SessionStarted`; inspection-only traffic may be consumed privately.
 
-Dropping a prepared agent, cancelling a candidate, quitting from a picker, or
-losing the receiving UI must close the ACP connection and reap its subprocess.
+Dropping a prepared agent, cancelling a candidate, quitting from a picker,
+timing out preparation, or losing the receiving UI must close the ACP
+connection and reap its subprocess.
 Once activation consumes the prepared value, teardown responsibility moves to
 the session-bound backend. Explicit prepared shutdown gives stdin EOF a bounded
 250 ms pre-session cleanup grace before forced process-group cleanup. Aborting
@@ -198,8 +234,17 @@ process.
 
 - One subprocess records `initialize -> session/list -> session/new|load|resume`
   for a prepared-and-activated agent.
-- No session directive is recorded while the startup or switch picker waits
-  for a choice.
+- Startup without input records no session directive, for ordinary subprocess
+  agents and the Handroll remote adapter alike.
+- `/new`, `/resume`, and the first prompt reuse an in-flight or completed
+  primary preparation instead of spawning or initializing again.
+- Primary activation refreshes mutable policy; identity mismatch reaps and
+  reprepares while retaining pending activation and fork context.
+- Backtrack/fork preserves its context across deferred preparation and New.
+- A deferred text-and-image prompt is submitted once, unmodified, only after
+  session activation commits.
+- Slash commands and local shell commands do not implicitly activate a
+  session.
 - The current agent process remains alive throughout candidate preparation.
 - Candidate failure, including preparation timeout, reaps the candidate and
   leaves the current session promptable.
@@ -208,6 +253,7 @@ process.
 - Cancelling or superseding a prepared candidate reaps only that candidate.
 - Cancelling or superseding an in-flight primary preparation rejects any stale
   result and reaps a child that has already spawned.
+- Primary preparation timeout and application exit reap the sessionless child.
 - Agents without `session/list` remain usable without conflating unsupported
   listing with an empty catalog.
 - An advertised `session/list` failure is a preparation failure and never

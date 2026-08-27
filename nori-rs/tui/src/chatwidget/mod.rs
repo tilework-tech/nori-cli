@@ -147,9 +147,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
     /// Whether the top-level CLI launched the handroll-backed cloud mode.
     pub(crate) cloud_mode: bool,
-    /// When true, skip spawning the agent in `new()`. The caller must later
-    /// call `spawn_deferred_agent()` once pre-session setup (e.g., skillset
-    /// switch) is complete.
+    /// When true, build a sessionless widget. The app prepares the agent
+    /// separately and later supplies that connection when a session activates.
     pub(crate) deferred_spawn: bool,
     /// Optional conversation context to inject into the first prompt.
     /// Used by `/fork` to pass prior conversation history to the new session.

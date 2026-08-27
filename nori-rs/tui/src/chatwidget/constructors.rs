@@ -332,15 +332,6 @@ impl ChatWidget {
         widget
     }
 
-    /// Spawn the agent that was deferred during construction.
-    ///
-    /// This should be called after pre-session setup (e.g., skillset switch)
-    /// is complete, so that the agent sees the correct `.claude/CLAUDE.md`.
-    pub(crate) fn spawn_deferred_agent(&mut self, config: Config, app_event_tx: AppEventSender) {
-        let spawn_result = spawn_agent(config, app_event_tx, self.session_generation, None);
-        self.harness_handle = spawn_result.handle;
-    }
-
     pub(crate) fn session_generation(&self) -> crate::app_event::SessionGeneration {
         self.session_generation
     }

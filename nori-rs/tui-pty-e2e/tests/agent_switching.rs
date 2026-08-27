@@ -2,8 +2,8 @@
 //!
 //! These tests verify that:
 //! 1. Agent subprocesses are spawned with unique PIDs
-//! 2. Switching agents spawns new subprocesses (different PIDs)
-//! 3. Old subprocesses are cleaned up after switching (not zombies)
+//! 2. Starting another session reuses the prepared subprocess
+//! 3. Switching agents spawns a distinct subprocess and reaps the old one
 //! 4. Cleanup happens outside of prompt turns
 //! 5. Different agents use different subprocesses
 
@@ -131,13 +131,13 @@ fn test_acp_agent_subprocess_spawned() {
 }
 
 // ============================================================================
-// Test: Agent Switch Creates New Subprocess via /new command
+// Test: /new Reuses the Prepared Subprocess
 // ============================================================================
 
-/// Test that switching agents via /new spawns a NEW subprocess with a DIFFERENT PID
+/// Test that `/new` activates the prepared connection without respawning it.
 #[test]
 #[cfg(target_os = "linux")]
-fn test_acp_agent_switch_via_new_creates_new_subprocess() {
+fn test_slash_new_reuses_prepared_subprocess() {
     let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
@@ -154,68 +154,31 @@ fn test_acp_agent_switch_via_new_creates_new_subprocess() {
     assert!(!initial_pids.is_empty(), "Should have initial PID");
     let initial_pid = initial_pids[0];
 
-    // Type /new to start a new session (this triggers agent switch)
-    session.send_str("/new").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
-
-    // Poll the TUI while waiting for the log. The prompt glyph may already be
-    // present from the previous session, so waiting for "›" can return before
-    // the /new command has been processed.
-    let post_switch_pids =
-        wait_for_mock_agent_pid_count(&mut session, &log_path, 2, Duration::from_secs(10));
-
-    let new_pid = *post_switch_pids.last().unwrap();
-    assert_ne!(
-        initial_pid, new_pid,
-        "New session should have different PID: initial={}, new={}",
-        initial_pid, new_pid
-    );
-}
-
-// ============================================================================
-// Test: Old Subprocess Cleanup
-// ============================================================================
-
-/// Test that the old subprocess is cleaned up (not zombie) after switching
-#[test]
-#[cfg(target_os = "linux")]
-fn test_acp_agent_old_subprocess_cleanup() {
-    let config = SessionConfig::new().with_agent("mock-model".to_string());
-
-    let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
-
-    session
-        .wait_for_text("›", TIMEOUT)
-        .expect("TUI should start");
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
-    let initial_pid = initial_pids[0];
-
-    // Verify initial process exists
-    assert!(
-        process_exists_and_not_zombie(initial_pid),
-        "Initial process should exist and not be zombie"
-    );
-
-    // Trigger session switch
+    // Type /new to activate the already-prepared connection.
     session.send_str("/new").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
 
     session
         .wait_for(
-            |_| !process_exists(initial_pid) || !process_exists_and_not_zombie(initial_pid),
+            |_| {
+                std::fs::read_to_string(&log_path)
+                    .unwrap_or_default()
+                    .contains("ACP session created")
+            },
             Duration::from_secs(10),
         )
-        .unwrap_or_else(|err| {
-            panic!(
-                "Old subprocess {initial_pid} should be cleaned up (terminated or gone) after switch: {err}"
-            )
-        });
+        .expect("/new should activate the prepared connection");
+
+    let activated_pids = extract_mock_agent_pids_from_log(&log_path);
+    assert_eq!(
+        activated_pids, initial_pids,
+        "/new must not spawn or initialize another child"
+    );
+    assert!(
+        process_exists_and_not_zombie(initial_pid),
+        "the prepared child must remain alive after activation"
+    );
 }
 
 // ============================================================================

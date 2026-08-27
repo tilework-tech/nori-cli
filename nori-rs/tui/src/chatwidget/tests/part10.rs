@@ -55,6 +55,27 @@ fn deferred_startup_input_preserves_prompt_and_image_only_semantics_for_resume()
     assert_eq!(chat.first_prompt_text.as_deref(), Some("Already submitted"));
 }
 
+#[test]
+fn session_started_records_queued_launch_prompt_in_composer_history() {
+    let (mut chat, _rx, _unused_rx) = make_chatwidget_manual();
+    chat.initial_user_message = Some(UserMessage {
+        text: "prompt that activated the session".to_string(),
+        image_paths: Vec::new(),
+    });
+    let generation = chat.session_generation;
+
+    chat.handle_session_event(generation, session_started_event("session-1"));
+    let _ = chat
+        .bottom_pane
+        .handle_key_event(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+
+    assert_eq!(
+        chat.composer_text(),
+        "prompt that activated the session",
+        "queued launch input should remain available to shell-style history"
+    );
+}
+
 /// Deliver a prompt completion through the real client-event entry point.
 fn deliver_completion(chat: &mut ChatWidget, failure: Option<crate::presentation::TurnFailure>) {
     chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(

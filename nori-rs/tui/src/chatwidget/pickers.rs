@@ -91,6 +91,11 @@ impl ChatWidget {
     }
 
     pub(crate) fn open_resume_session_picker(&mut self) {
+        let Some(handle) = self.harness_handle.clone() else {
+            self.app_event_tx
+                .send(crate::app_event::AppEvent::OpenAgentSessionPicker);
+            return;
+        };
         // When the live agent advertises ACP `session/list`, source the picker
         // from the agent itself (and resume over ACP) instead of the local
         // transcript store. Resuming a listed session goes over ACP via
@@ -101,14 +106,6 @@ impl ChatWidget {
             && (self.session_agent_capabilities.load_session
                 || self.session_agent_capabilities.session_resume)
         {
-            let Some(handle) = self.harness_handle.clone() else {
-                // Deferred widget (picker-first entry, post-/close): there is
-                // no live connection to list over — re-run the pre-session
-                // preparation flow at the app layer instead.
-                self.app_event_tx
-                    .send(crate::app_event::AppEvent::OpenAgentSessionPicker);
-                return;
-            };
             let cwd = self.config.cwd.clone();
             let tx = self.app_event_tx.clone();
             tokio::spawn(async move {
@@ -132,6 +129,10 @@ impl ChatWidget {
             return;
         }
 
+        self.open_local_resume_session_picker();
+    }
+
+    pub(crate) fn open_local_resume_session_picker(&mut self) {
         let started = std::time::Instant::now();
         let cwd = self.config.cwd.clone();
         let tx = self.app_event_tx.clone();
