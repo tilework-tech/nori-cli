@@ -450,13 +450,17 @@ impl HostedAgent for HarnessRemoteHost {
         &self,
         session_id: &acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
+        meta: Option<acp::Meta>,
     ) -> Result<acp::RequestId, acp::Error> {
         // Do not hold the state lock across the submission: a prompt queued
         // behind an active turn resolves only when it is issued, and holding
         // the lock that long would freeze every other host method and the
         // event loop.
         let handle = self.checked_handle(session_id).await?;
-        let request_id = handle.prompt(prompt).await.map_err(internal_error)?;
+        let request_id = handle
+            .prompt_with_meta(prompt, meta)
+            .await
+            .map_err(internal_error)?;
 
         let mut state = self.state.lock().await;
         let raced = state

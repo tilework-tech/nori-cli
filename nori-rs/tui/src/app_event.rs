@@ -88,6 +88,14 @@ pub(crate) enum AppEvent {
         intent: AgentPrepareIntent,
     },
 
+    /// Activate a local transcript resume after the startup connection has
+    /// completed preparation.
+    ActivatePreparedResume {
+        acp_session_id: Option<String>,
+        title: Option<String>,
+        transcript: Option<nori_harness::transcript::Transcript>,
+    },
+
     /// Re-run pre-session preparation and reopen the session picker (e.g.
     /// /resume on a deferred widget that has no live agent connection).
     OpenAgentSessionPicker,
@@ -631,9 +639,14 @@ pub(crate) enum AppEvent {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum AgentPrepareIntent {
+    /// Keep the initialized connection idle until input or a session command
+    /// chooses how to activate it.
+    Idle,
     Picker {
         fallback_to_spawn: bool,
     },
+    /// Open the agent catalog when supported, otherwise use local transcripts.
+    ResumePicker,
     Onboarding,
     Candidate {
         agent_name: String,

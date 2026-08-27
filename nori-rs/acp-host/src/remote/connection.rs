@@ -124,6 +124,16 @@ async fn serve_gated_connection<H: HostedAgent>(
                             responder: Responder<acp::InitializeResponse>,
                             cx: ConnectionTo<Client>| {
                     let events = events_cell.lock().ok().and_then(|mut cell| cell.take());
+                    let meta = remote_control_meta(hosted.as_ref()).await;
+                    responder.respond(
+                        acp::InitializeResponse::new(request.protocol_version)
+                            .agent_capabilities(remote_capabilities())
+                            .agent_info(
+                                acp::Implementation::new("nori", env!("CARGO_PKG_VERSION"))
+                                    .title("Nori CLI"),
+                            )
+                            .meta(meta),
+                    )?;
                     if let Some(events) = events {
                         let hosted = hosted.clone();
                         let cancel = cancel.clone();
@@ -134,14 +144,7 @@ async fn serve_gated_connection<H: HostedAgent>(
                             Ok(())
                         })?;
                     }
-                    responder.respond(
-                        acp::InitializeResponse::new(request.protocol_version)
-                            .agent_capabilities(remote_capabilities())
-                            .agent_info(
-                                acp::Implementation::new("nori", env!("CARGO_PKG_VERSION"))
-                                    .title("Nori CLI"),
-                            ),
-                    )
+                    Ok(())
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -221,7 +224,10 @@ async fn serve_gated_connection<H: HostedAgent>(
                     let pending_prompts = pending_prompts.clone();
                     cx.spawn(async move {
                         let mut pending = pending_prompts.lock().await;
-                        match hosted.prompt(&request.session_id, request.prompt).await {
+                        match hosted
+                            .prompt(&request.session_id, request.prompt, request.meta)
+                            .await
+                        {
                             Ok(request_id) => {
                                 pending.push((request_id, responder));
                                 Ok(())
@@ -277,6 +283,33 @@ fn remote_capabilities() -> acp::AgentCapabilities {
                 .resume(acp::SessionResumeCapabilities::new())
                 .close(acp::SessionCloseCapabilities::new()),
         )
+}
+
+/// Marks this agent as Nori's remote-control surface and, when present,
+/// identifies the single stable outward session that it exposes. The marker
+/// is intentionally emitted here rather than by the general ACP agent path.
+async fn remote_control_meta(hosted: &impl HostedAgent) -> acp::Meta {
+    let active_session_id = hosted
+        .list_sessions()
+        .await
+        .ok()
+        .and_then(|sessions| sessions.into_iter().next())
+        .map(|session| session.session_id.to_string());
+    let mut remote_control = serde_json::Map::new();
+    remote_control.insert("version".to_string(), serde_json::json!(1));
+    if let Some(active_session_id) = active_session_id {
+        remote_control.insert(
+            "activeSessionId".to_string(),
+            serde_json::Value::String(active_session_id),
+        );
+    }
+
+    let mut meta = acp::Meta::new();
+    meta.insert(
+        "nori".to_string(),
+        serde_json::json!({ "remoteControl": remote_control }),
+    );
+    meta
 }
 
 /// Harness requests issued by this connection, keyed by the harness-side

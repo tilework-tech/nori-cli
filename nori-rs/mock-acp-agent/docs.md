@@ -31,6 +31,12 @@ environment variables select deterministic streams for:
   interleaved tool/message ordering; and
 - cloud, MCP, browser, transcript, and presentation regressions.
 
+Prompt-fidelity fixtures may require the final text block, its matching-block
+count, image count, image MIME type, and image data through the
+`MOCK_AGENT_EXPECT_*` prompt variables. A mismatch returns a structured prompt
+error, allowing PTY lifecycle tests to verify that deferred positional or typed
+input reaches ACP exactly once without transforming text or attachments.
+
 The mock deliberately issues outbound client requests through the SDK rather
 than calling host internals. This makes the public `AcpEvent::Request` and
 `HarnessHandle::respond_to_agent` path observable end to end.
@@ -42,6 +48,10 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   among client-side product crates.
 - The mock has no catch-all dispatch handler; the SDK default must be allowed to
   forward responses to the mock's own pending client requests.
+- `MOCK_AGENT_INITIALIZE_META` accepts a JSON object for initialize-response
+  metadata. Tests use it to exercise extension recognition without making the
+  fixture itself identify as a Nori remote-control surface; invalid or
+  non-object JSON is ignored.
 - `ExitOnEof` preserves the host's stdin-EOF shutdown contract. A dedicated
   scenario can ignore EOF to test the hard-exit watchdog.
 - A Unix lifecycle fixture can leave a descendant running after the mock agent

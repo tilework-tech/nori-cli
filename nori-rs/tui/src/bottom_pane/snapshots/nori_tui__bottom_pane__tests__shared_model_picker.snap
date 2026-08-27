@@ -5,17 +5,17 @@ expression: model_render
                                                                                                     
   Model                                                                                             
   Select a value for this ACP session setting                                                       
-     Option                                Details                                                  
+                                                                                                    
      Recommended                                                                                    
-  ▏  Stable (current)                                                                            ▕  
-     Preview                                                                                        
+                                                                                                    
+  ▏1. Stable (current)                                                                           ▕  
+  ▏                                                                                              ▕  
+   2. Preview                                                                                       
+                                                                                                    
      Other                                                                                          
-     Experimental                          experimental                                             
-     Use custom model...                   Enter any model ID                                       
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                ↑↓/j/k move  enter select  esc close
+   3. Experimental                                                                                  
+      experimental                                                                                  
+   4. Use custom model...                                                                           
+      Enter any model ID                                                                            
+  ↑↓/j/k move  enter select  esc close

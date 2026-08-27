@@ -1,8 +1,12 @@
 use insta::assert_snapshot;
 use std::time::Duration;
 use std::time::Instant;
+#[cfg(target_os = "linux")]
+use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
+#[cfg(target_os = "linux")]
+use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
@@ -19,6 +23,19 @@ fn has_prompt_mode_placeholder(contents: &str) -> bool {
     .any(|placeholder| contents.contains(placeholder))
 }
 
+#[cfg(target_os = "linux")]
+fn activate_new_session(session: &mut TuiSession) {
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("Sessionless composer did not appear");
+    session.send_str("/new").expect("Failed to enter /new");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).expect("Failed to submit /new");
+    session
+        .wait_for_text("Nori CLI", TIMEOUT)
+        .expect("Activated session header did not appear");
+}
+
 #[test]
 // Testing that ACP mode with a nonexistent model shows the error in the TUI
 // and opens the agent picker for recovery, instead of fatally exiting.
@@ -31,24 +48,23 @@ fn test_startup_error_for_unregistered_model() {
     .expect("Failed to spawn");
 
     // When acp.allow_http_fallback=false (default) and the model is not registered as an ACP agent,
-    // the TUI should start, show an error message, and open the agent picker for recovery.
-    // Use a short needle that won't wrap across lines at 80 columns.
-    session.wait_for_text("is not registered", TIMEOUT).unwrap();
+    // the TUI should start and open the agent picker with the error as its
+    // subtitle. History may be outside the viewport while the picker is open.
+    session.wait_for_text("Select Agent", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
 
-    // Verify the error message appears (short needle avoids line-wrap issues)
-    assert!(
-        contents.contains("is not registered"),
-        "Missing the required error message, screen contents: {}",
-        contents
-    );
+    let mut lines = contents.lines();
+    lines
+        .find(|line| line.contains("Select Agent"))
+        .expect("Agent picker should be visible");
+    let picker_subtitle = lines.next().unwrap_or_default();
 
-    // Verify the agent picker opened for recovery
+    // Verify the recovery action itself keeps the startup error visible.
     assert!(
-        contents.contains("Select Agent"),
-        "Agent picker should open for recovery, screen contents: {}",
+        picker_subtitle.contains("Unknown ACP agent"),
+        "Recovery picker should show the startup error as its subtitle, screen contents: {}",
         contents
     );
 }
@@ -102,12 +118,7 @@ fn test_runs_in_temp_directory_by_default() {
     let mut session =
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
 
-    session
-        .wait_for(
-            |contents| contents.contains("Nori CLI") || contents.contains("Welcome to Nori"),
-            TIMEOUT,
-        )
-        .expect("Prompt did not appear");
+    activate_new_session(&mut session);
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let contents = session.screen_contents();
@@ -158,13 +169,15 @@ fn test_trust_screen_is_skipped_with_default_config() {
 #[cfg(target_os = "linux")]
 #[test]
 fn test_startup_shows_nori_banner() {
-    // This test verifies the Nori session header appears on startup
+    // This test verifies the Nori session header appears after activation
     // with the expected branding elements when nori-skillsets is NOT installed
     // (nori-skillsets is excluded from PATH by default in SessionConfig)
 
     use tui_pty_e2e::normalize_for_snapshot;
     let mut session =
         TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
+
+    activate_new_session(&mut session);
 
     // Wait for the install instructions to appear (this is the key indicator that nori-skillsets is not installed)
     // We wait for this specifically since it ensures the full banner render including the install hint
@@ -220,10 +233,7 @@ fn test_startup_hides_install_hint_when_nori_installed() {
     )
     .expect("Failed to spawn codex");
 
-    // Wait for the Nori branding to appear
-    session
-        .wait_for_text("Nori CLI", TIMEOUT)
-        .expect("Nori branding did not appear");
+    activate_new_session(&mut session);
 
     let contents = session.screen_contents();
 

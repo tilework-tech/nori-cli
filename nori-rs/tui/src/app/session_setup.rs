@@ -37,6 +37,15 @@ pub(super) fn onboarding_resume_event(
     })
 }
 
+pub(super) fn automatic_resume_event(
+    session_id: Option<&nori_protocol::acp::v1::SessionId>,
+) -> Option<AppEvent> {
+    session_id.map(|session_id| AppEvent::ResumeAcpSession {
+        acp_session_id: session_id.to_string(),
+        title: None,
+    })
+}
+
 impl App {
     /// Prepare a live pre-session agent (spawn → initialize → optional
     /// `session/list`) and report the still-owned connection as
@@ -45,40 +54,89 @@ impl App {
     /// retries on a deferred widget. Bounded by a wall-clock timeout so a
     /// hung broker can never wedge the boot with no way forward.
     pub(crate) fn begin_agent_preparation(&mut self, intent: crate::app_event::AgentPrepareIntent) {
-        if self.primary_agent_preparation.is_some() {
+        self.begin_agent_preparation_with_context(intent, None);
+    }
+
+    pub(crate) fn begin_agent_preparation_with_context(
+        &mut self,
+        intent: crate::app_event::AgentPrepareIntent,
+        initial_context: Option<String>,
+    ) {
+        if let Some(preparation) = &mut self.primary_agent_preparation {
+            if matches!(&intent, crate::app_event::AgentPrepareIntent::ResumePicker)
+                && !matches!(
+                    &preparation.intent,
+                    crate::app_event::AgentPrepareIntent::ResumePicker
+                )
+            {
+                let display_name = nori_harness::get_agent_display_name(&self.config.active_agent);
+                self.chat_widget
+                    .add_info_message(format!("Listing {display_name} sessions…"), None);
+            }
+            preparation.intent = intent;
             return;
         }
         let generation = crate::chatwidget::agent::next_session_generation();
         let display_name = nori_harness::get_agent_display_name(&self.config.active_agent);
-        self.chat_widget
-            .add_info_message(format!("Listing {display_name} sessions…"), None);
+        if !matches!(&intent, crate::app_event::AgentPrepareIntent::Idle) {
+            self.chat_widget
+                .add_info_message(format!("Listing {display_name} sessions…"), None);
+        }
 
         if let Some(agent) = self.prepared_agent.take() {
             tokio::spawn(agent.shutdown());
         }
-        let spec = crate::chatwidget::agent::agent_prepare_spec(self.config.clone(), None);
+        self.prepared_agent_initial_context = None;
+        let spec = crate::chatwidget::agent::agent_prepare_spec(
+            self.config.clone(),
+            initial_context.clone(),
+        );
         let tx = self.app_event_tx.clone();
+        let event_intent = intent.clone();
         let task = tokio::spawn(async move {
             let agent = prepare_agent_with_timeout(spec).await;
             tx.send(AppEvent::AgentPrepared {
                 generation,
                 agent,
-                intent,
+                intent: event_intent,
             });
         });
         self.primary_agent_preparation = Some(PrimaryAgentPreparation {
             generation,
             abort: task.abort_handle(),
+            intent,
+            initial_context,
         });
+    }
+
+    /// Consume the primary prepared connection only after refreshing mutable
+    /// session-time policy. On an identity-sensitive mismatch, reap it and
+    /// restart preparation while the caller's pending activation remains set.
+    pub(crate) fn take_refreshed_prepared_agent(
+        &mut self,
+    ) -> Result<Option<nori_harness::runtime::PreparedAgent>, String> {
+        let Some(mut agent) = self.prepared_agent.take() else {
+            return Ok(None);
+        };
+        let initial_context = self.prepared_agent_initial_context.take();
+        let spec = crate::chatwidget::agent::agent_prepare_spec(
+            self.config.clone(),
+            initial_context.clone(),
+        );
+        if let Err(error) = nori_harness::runtime::refresh_prepared_agent(&mut agent, spec) {
+            tokio::spawn(agent.shutdown());
+            self.begin_agent_preparation_with_context(
+                crate::app_event::AgentPrepareIntent::Idle,
+                initial_context,
+            );
+            return Err(format!("prepared agent configuration changed: {error}"));
+        }
+        Ok(Some(agent))
     }
 
     /// Start preparing a switch candidate immediately. Replacing this state
     /// drops and tears down any older candidate without touching the active session.
     pub(crate) fn begin_agent_candidate(&mut self, agent_name: String, display_name: String) {
-        self.cancel_primary_agent_preparation();
-        if let Some(agent) = self.prepared_agent.take() {
-            tokio::spawn(agent.shutdown());
-        }
         self.discard_candidate();
         self.chat_widget
             .set_login_agent_override(Some(agent_name.clone()));
@@ -128,6 +186,35 @@ impl App {
         self.chat_widget.set_login_agent_override(None);
     }
 
+    /// Replace the current widget with a sessionless one while a new child is
+    /// prepared for an already-selected resume directive.
+    pub(super) fn defer_resume_activation(
+        &mut self,
+        frame_requester: crate::tui::FrameRequester,
+        acp_session_id: Option<String>,
+        title: Option<String>,
+        transcript: Option<nori_harness::transcript::Transcript>,
+    ) {
+        let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+        self.shutdown_current_conversation();
+        let init = self.chat_widget_init(
+            frame_requester,
+            initial_prompt,
+            initial_images,
+            None,
+            true,
+            None,
+        );
+        self.chat_widget = ChatWidget::new(init);
+        self.configure_new_chat_widget();
+        self.pending_session_activation = Some(PendingSessionActivation::Resume {
+            acp_session_id,
+            title,
+            transcript: transcript.map(Box::new),
+        });
+        self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+    }
+
     pub(super) fn config_for_agent(&self, agent_name: &str) -> NoriConfig {
         let mut config = self.config.clone();
         config.active_agent = agent_name.to_string();
@@ -135,7 +222,7 @@ impl App {
         config
     }
 
-    pub(super) fn shutdown_current_conversation(&mut self) {
+    pub(crate) fn shutdown_current_conversation(&mut self) {
         self.chat_widget.shutdown_harness_session();
     }
 
@@ -388,6 +475,7 @@ mod tests {
 
     use nori_protocol::acp::v1::SessionInfo;
 
+    use super::automatic_resume_event;
     use super::onboarding_resume_event;
     use crate::app_event::AppEvent;
 
@@ -415,5 +503,17 @@ mod tests {
         let ordinary = SessionInfo::new("ordinary", PathBuf::from("/"));
 
         assert!(onboarding_resume_event(vec![ordinary]).is_none());
+    }
+
+    #[test]
+    fn automatic_remote_control_session_bypasses_selection_with_resume_action() {
+        let session_id = nori_protocol::acp::v1::SessionId::new("remote-active");
+
+        assert!(matches!(
+            automatic_resume_event(Some(&session_id)),
+            Some(AppEvent::ResumeAcpSession { acp_session_id, title })
+                if acp_session_id == "remote-active" && title.is_none()
+        ));
+        assert!(automatic_resume_event(None).is_none());
     }
 }

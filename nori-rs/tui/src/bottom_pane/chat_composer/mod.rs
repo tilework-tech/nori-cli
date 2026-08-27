@@ -243,6 +243,10 @@ impl ChatComposer {
         self.history.set_metadata(log_id, entry_count);
     }
 
+    pub(crate) fn record_local_history_submission(&mut self, text: &str) {
+        self.history.record_local_submission(text);
+    }
+
     pub(crate) fn set_vertical_footer(&mut self, vertical_footer: bool) {
         self.vertical_footer = vertical_footer;
     }

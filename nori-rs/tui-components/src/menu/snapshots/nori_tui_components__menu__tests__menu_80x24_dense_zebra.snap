@@ -19,7 +19,7 @@ expression: "snapshot_with_presentation(&mut action, 80, 24, \"Choose how to con
 "              Share session                                                     "
 "              Supporting copy for Share session                                 "
 "                                                                                "
-"                        ↑↓/jk move  enter select  q close                       "
+"            ↑↓/jk move  enter select  q close                                   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

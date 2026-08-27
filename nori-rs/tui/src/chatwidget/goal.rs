@@ -208,6 +208,7 @@ impl ChatWidget {
             SelectionItem {
                 name: "Replace current goal".to_string(),
                 description: Some("Set the new objective and start it now".to_string()),
+                menu_tone: nori_tui_components::MenuItemTone::Warning,
                 actions: vec![Box::new(move |tx| {
                     tx.send(AppEvent::HarnessAction(
                         crate::app_event::HarnessAction::SetGoal {
@@ -227,13 +228,16 @@ impl ChatWidget {
             },
         ];
 
-        self.show_selection_view(SelectionViewParams {
-            title: Some("Replace goal?".to_string()),
-            subtitle: Some(format!("New objective: {objective}")),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            ..Default::default()
-        });
+        self.show_selection_view(
+            SelectionViewParams {
+                title: Some("Replace goal?".to_string()),
+                subtitle: Some(format!("New objective: {objective}")),
+                footer_hint: Some(standard_popup_hint_line()),
+                items,
+                ..Default::default()
+            }
+            .menu(),
+        );
     }
 
     fn show_goal_summary(&mut self, goal: &nori_protocol::ThreadGoal) {

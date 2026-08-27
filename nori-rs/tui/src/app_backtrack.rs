@@ -320,16 +320,15 @@ impl App {
             Some(fork_summary)
         };
 
-        let init = self.chat_widget_init(
-            tui.frame_requester(),
-            None,
-            Vec::new(),
-            None,
-            false,
-            fork_context,
-        );
+        self.shutdown_current_conversation();
+        let init = self.chat_widget_init(tui.frame_requester(), None, Vec::new(), None, true, None);
         self.chat_widget = crate::chatwidget::ChatWidget::new(init);
         self.configure_new_chat_widget();
+        self.pending_session_activation = Some(crate::app::PendingSessionActivation::New);
+        self.begin_agent_preparation_with_context(
+            crate::app_event::AgentPrepareIntent::Idle,
+            fork_context,
+        );
         // Trim transcript up to the selected user message and re-render it.
         self.trim_transcript_for_backtrack(nth_user_message);
         self.render_transcript_once(tui);

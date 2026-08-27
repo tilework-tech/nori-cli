@@ -16,5 +16,5 @@ expression: "snapshot(&mut consequences, 54, 16, \"Remove local session?\",\nSom
 "      deleting                                        "
 "    ↓ 1 more                                          "
 "                                                      "
-"           ↑↓/jk move  enter select  q close          "
+"    ↑↓/jk move  enter select  q close                 "
 "                                                      "

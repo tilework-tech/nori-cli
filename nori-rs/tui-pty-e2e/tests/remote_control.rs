@@ -49,7 +49,7 @@ fn request(client: &mut Client, id: i64, method: &str, params: Value) -> Value {
     }
 }
 
-fn connect_and_list(port: u16) -> (Client, String) {
+fn connect_and_list(port: u16) -> (Client, Vec<String>) {
     let (mut client, _) = connect(format!("ws://127.0.0.1:{port}/acp").as_str())
         .expect("connect to remote ACP listener");
     let initialized = request(
@@ -60,11 +60,34 @@ fn connect_and_list(port: u16) -> (Client, String) {
     );
     assert!(initialized.get("result").is_some(), "{initialized}");
     let listed = request(&mut client, 2, "session/list", json!({}));
-    let session_id = listed["result"]["sessions"][0]["sessionId"]
-        .as_str()
-        .expect("one hosted session")
-        .to_string();
-    (client, session_id)
+    let session_ids = listed["result"]["sessions"]
+        .as_array()
+        .expect("session catalog")
+        .iter()
+        .map(|session| {
+            session["sessionId"]
+                .as_str()
+                .expect("session id")
+                .to_string()
+        })
+        .collect();
+    (client, session_ids)
+}
+
+fn wait_for_hosted_session(port: u16) -> (Client, String) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let (client, session_ids) = connect_and_list(port);
+        if let [session_id] = session_ids.as_slice() {
+            return (client, session_id.clone());
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for one hosted session; latest catalog: {session_ids:?}"
+        );
+        drop(client);
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 fn run_command(session: &mut TuiSession, command: &str) {
@@ -100,6 +123,11 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
     let startup_port = reserve_loopback_port();
     let config = SessionConfig::new()
         .with_agent("mock-model".to_string())
+        .with_mock_response("remote response before switch")
+        .with_agent_env(
+            "MOCK_AGENT_RESPONSE_MOCK_MODEL_ALT",
+            "remote response after switch",
+        )
         .with_arg("--remote")
         .with_arg(startup_port.to_string())
         .with_excluded_binary("tailscale");
@@ -114,7 +142,37 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
         startup_screen.contains(&format!("ws://127.0.0.1:{startup_port}/acp")),
         "startup --remote did not retain requested port {startup_port}: {startup_screen}"
     );
-    let (startup_client, original_session_id) = connect_and_list(startup_port);
+    let (startup_client, startup_sessions) = connect_and_list(startup_port);
+    assert!(
+        startup_sessions.is_empty(),
+        "prepared startup must not claim a session: {startup_sessions:?}"
+    );
+    drop(startup_client);
+
+    run_command(&mut session, "/new");
+    let (mut startup_client, original_session_id) = wait_for_hosted_session(startup_port);
+    let prompt_before_switch = "remote prompt before switch";
+    let response = request(
+        &mut startup_client,
+        3,
+        "session/prompt",
+        json!({
+            "sessionId": original_session_id,
+            "prompt": [{"type": "text", "text": prompt_before_switch}],
+        }),
+    );
+    assert_eq!(response["result"]["stopReason"], json!("end_turn"));
+    session
+        .wait_for_text("remote response before switch", Duration::from_secs(10))
+        .expect("remote turn response in observing TUI");
+    assert_eq!(
+        session
+            .screen_contents()
+            .matches(prompt_before_switch)
+            .count(),
+        1,
+        "canonical remote prompt must render exactly once"
+    );
     run_command(&mut session, "/remote-control status");
     session
         .wait_for_text("Controller: connected", Duration::from_secs(10))
@@ -146,7 +204,7 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
         )
         .expect("runtime local enable history");
     let runtime_port = latest_loopback_acp_port(&session.screen_contents());
-    let (runtime_client, current_session_id) = connect_and_list(runtime_port);
+    let (runtime_client, current_session_id) = wait_for_hosted_session(runtime_port);
     assert_eq!(current_session_id, original_session_id);
     drop(runtime_client);
 
@@ -169,6 +227,28 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
         )
         .expect("candidate SessionStarted commit");
 
-    let (_switched_client, switched_session_id) = connect_and_list(runtime_port);
+    let (mut switched_client, switched_session_id) = wait_for_hosted_session(runtime_port);
     assert_ne!(switched_session_id, original_session_id);
+    let prompt_after_switch = "remote prompt after switch";
+    let response = request(
+        &mut switched_client,
+        3,
+        "session/prompt",
+        json!({
+            "sessionId": switched_session_id,
+            "prompt": [{"type": "text", "text": prompt_after_switch}],
+        }),
+    );
+    assert_eq!(response["result"]["stopReason"], json!("end_turn"));
+    session
+        .wait_for_text("remote response after switch", Duration::from_secs(10))
+        .expect("switched remote turn response in observing TUI");
+    assert_eq!(
+        session
+            .screen_contents()
+            .matches(prompt_after_switch)
+            .count(),
+        1,
+        "switched canonical remote prompt must render exactly once"
+    );
 }

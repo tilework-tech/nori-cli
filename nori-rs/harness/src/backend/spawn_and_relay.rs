@@ -23,6 +23,18 @@ async fn forward_public_session_events(
     Ok(())
 }
 
+fn user_message_chunk(event: &nori_protocol::AcpEvent) -> Option<&acp::ContentChunk> {
+    match event {
+        nori_protocol::AcpEvent::Notification(acp::AgentNotification::SessionNotification(
+            notification,
+        )) => match &notification.update {
+            acp::SessionUpdate::UserMessageChunk(chunk) => Some(chunk),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// Force the persisted default model into the agent's spawn configuration via
 /// its out-of-band channel (see `ModelInjection`). Best-effort: a failure is
 /// logged and never blocks startup. Preparation calls this before spawning the
@@ -370,12 +382,21 @@ impl AcpBackend {
     ) {
         let approval_policy_rx = approval_policy_rx;
         let mut relay_seq = 0_i64;
+        let mut suppress_next_session_update = false;
         loop {
             tokio::select! {
                 biased;
                 maybe_event = event_rx.recv() => {
                     match maybe_event {
                         Some(crate::connection::ConnectionEvent::SessionUpdate(update)) => {
+                            if suppress_next_session_update {
+                                suppress_next_session_update = false;
+                                debug!(
+                                    target: "acp_event_flow",
+                                    "Suppressed downstream echo of the active prompt"
+                                );
+                                continue;
+                            }
                             backend.wait_for_prompt_phase().await;
                             backend.observe_session_update_for_goal_ext(&update).await;
                             relay_seq += 1;
@@ -395,12 +416,25 @@ impl AcpBackend {
                         }
                         Some(crate::connection::ConnectionEvent::Acp(event)) => {
                             backend.wait_for_prompt_phase().await;
-                            let _ = backend
-                                .backend_event_tx
-                                .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
-                                    *event,
-                                )))
-                                .await;
+                            suppress_next_session_update = if let Some(chunk) =
+                                user_message_chunk(&event)
+                            {
+                                backend
+                                    .session_driver
+                                    .lock()
+                                    .await
+                                    .owns_active_prompt_echo(chunk)
+                            } else {
+                                false
+                            };
+                            if !suppress_next_session_update {
+                                let _ = backend
+                                    .backend_event_tx
+                                    .send(BackendEvent::Public(nori_protocol::SessionEvent::Acp(
+                                        *event,
+                                    )))
+                                    .await;
+                            }
                         }
                         Some(crate::connection::ConnectionEvent::SessionClosed) => {
                             let _ = backend
@@ -524,14 +558,31 @@ impl AcpBackend {
                             while let Some(event) = event_rx.recv().await {
                                 match event {
                                     crate::connection::ConnectionEvent::Acp(event) => {
-                                        let _ = backend
-                                            .backend_event_tx
-                                            .send(BackendEvent::Public(
-                                                nori_protocol::SessionEvent::Acp(*event),
-                                            ))
-                                            .await;
+                                        suppress_next_session_update = if let Some(chunk) =
+                                            user_message_chunk(&event)
+                                        {
+                                            backend
+                                                .session_driver
+                                                .lock()
+                                                .await
+                                                .owns_active_prompt_echo(chunk)
+                                        } else {
+                                            false
+                                        };
+                                        if !suppress_next_session_update {
+                                            let _ = backend
+                                                .backend_event_tx
+                                                .send(BackendEvent::Public(
+                                                    nori_protocol::SessionEvent::Acp(*event),
+                                                ))
+                                                .await;
+                                        }
                                     }
                                     crate::connection::ConnectionEvent::SessionUpdate(update) => {
+                                        if suppress_next_session_update {
+                                            suppress_next_session_update = false;
+                                            continue;
+                                        }
                                         backend.observe_session_update_for_goal_ext(&update).await;
                                         relay_seq += 1;
                                         debug!(

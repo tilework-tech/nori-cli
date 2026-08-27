@@ -111,12 +111,8 @@ git_stats = true
     )
     .expect("Failed to spawn");
 
-    // Wait for the TUI to fully start
-    session
-        .wait_for_text("Nori CLI", TIMEOUT)
-        .expect("TUI did not start");
-
-    // Wait for footer to render
+    // Startup prepares the agent without creating a session. Wait for the
+    // sessionless composer and footer instead of the post-activation banner.
     session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
 
@@ -154,8 +150,8 @@ git_stats = true
         contents
     );
     assert!(
-        contents.contains("Nori CLI v"),
-        "Footer should contain Nori version. Contents: {}",
+        contents.contains("Skillsets v"),
+        "Footer should contain the Skillsets version. Contents: {}",
         contents
     );
 
@@ -231,11 +227,9 @@ approval_mode = false
     )
     .expect("Failed to spawn");
 
-    // Wait for the TUI to fully start (session header contains "Nori CLI")
+    // Startup prepares the agent without creating a session, so the composer
+    // is the readiness signal rather than a post-activation session header.
     session.wait_for_text("›", TIMEOUT).unwrap();
-    session
-        .wait_for_text("Nori CLI", TIMEOUT)
-        .expect("Session header should appear");
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -259,12 +253,10 @@ approval_mode = false
         contents
     );
 
-    // Session header shows "Nori CLI v{version}" which confirms version info is visible.
-    // The footer's NoriVersion segment requires nori-skillsets/nori-ai in PATH, which
-    // this test doesn't provide, so we check for the session header version instead.
+    // No session has been activated merely by startup.
     assert!(
-        contents.contains("Nori CLI v"),
-        "Session header should show Nori CLI version. Contents: {}",
+        !contents.contains("Nori CLI v"),
+        "Prepared startup should not render an active-session header. Contents: {}",
         contents
     );
 }

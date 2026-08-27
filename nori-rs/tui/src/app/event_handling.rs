@@ -27,8 +27,7 @@ impl App {
             return;
         }
         if self.take_deferred_spawn() {
-            self.chat_widget
-                .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
+            self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
         }
         self.request_system_info_refresh(
             self.config.cwd.clone(),
@@ -146,10 +145,28 @@ impl App {
                 }
 
                 self.discard_candidate();
-                self.cancel_primary_agent_preparation();
-                if let Some(agent) = self.prepared_agent.take() {
+                if let Some(preparation) = &mut self.primary_agent_preparation {
+                    preparation.intent = crate::app_event::AgentPrepareIntent::Idle;
+                    self.pending_session_activation = Some(PendingSessionActivation::New);
+                    return Ok(true);
+                }
+                if self.prepared_agent.is_some() {
+                    self.pending_session_activation = Some(PendingSessionActivation::New);
+                    let agent = match self.take_refreshed_prepared_agent() {
+                        Ok(Some(agent)) => agent,
+                        Ok(None) => return Ok(true),
+                        Err(error) => {
+                            self.chat_widget.add_error_message(format!(
+                                "Couldn't activate prepared agent: {error}"
+                            ));
+                            return Ok(true);
+                        }
+                    };
+                    self.pending_session_activation = None;
                     self.deferred_spawn_pending = false;
                     let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+                    let composer_text = self.chat_widget.composer_text();
+                    let loop_state = self.chat_widget.loop_state();
                     self.shutdown_current_conversation();
                     let mut init = self.chat_widget_init(
                         tui.frame_requester(),
@@ -162,30 +179,42 @@ impl App {
                     init.prepared_agent = Some(agent);
                     self.chat_widget = ChatWidget::new(init);
                     self.configure_new_chat_widget();
+                    if !composer_text.is_empty() {
+                        self.chat_widget.set_composer_text(composer_text);
+                    }
+                    if let Some((remaining, total)) = loop_state {
+                        self.chat_widget.set_loop_state(remaining, total);
+                    }
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
                 }
 
-                self.deferred_spawn_pending = self.cloud_onboard;
+                if !self.chat_widget.has_harness_session() {
+                    self.pending_session_activation = Some(PendingSessionActivation::New);
+                    self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+                    return Ok(true);
+                }
+
+                self.pending_session_activation = Some(PendingSessionActivation::New);
+                self.deferred_spawn_pending = false;
                 let summary = session_summary(
                     self.chat_widget.token_usage(),
                     self.chat_widget.conversation_id(),
                     self.chat_widget.session_stats().has_activity(),
                 );
+                let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
                 self.shutdown_current_conversation();
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
+                    initial_prompt,
+                    initial_images,
                     None,
-                    Vec::new(),
-                    None,
-                    self.cloud_onboard,
+                    true,
                     None,
                 );
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
-                if self.cloud_onboard {
-                    self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Onboarding);
-                }
+                self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = Vec::new();
                     if let Some(usage_line) = summary.usage_line {
@@ -208,9 +237,11 @@ impl App {
                 // session (on a cloud agent that would boot a new VM).
                 self.cancel_primary_agent_preparation();
                 self.discard_candidate();
+                self.pending_session_activation = None;
                 if let Some(agent) = self.prepared_agent.take() {
                     tokio::spawn(agent.shutdown());
                 }
+                self.prepared_agent_initial_context = None;
                 let init = self.chat_widget_init(
                     tui.frame_requester(),
                     None,
@@ -300,6 +331,9 @@ impl App {
 
                     match agent {
                         Ok(agent) => {
+                            let automatic_resume = super::session_setup::automatic_resume_event(
+                                agent.automatic_session_id(),
+                            );
                             let sessions = match agent.catalog() {
                                 nori_harness::runtime::SessionCatalog::Unsupported => Vec::new(),
                                 nori_harness::runtime::SessionCatalog::Listed(sessions) => {
@@ -316,8 +350,12 @@ impl App {
                                 display_name,
                                 agent: Box::new(agent),
                             });
-                            self.chat_widget
-                                .show_acp_resume_session_picker(sessions, true);
+                            if let Some(event) = automatic_resume {
+                                self.app_event_tx.send(event);
+                            } else {
+                                self.chat_widget
+                                    .show_acp_resume_session_picker(sessions, true);
+                            }
                         }
                         Err(error) => {
                             self.candidate_agent = None;
@@ -341,10 +379,18 @@ impl App {
                     }
                     return Ok(true);
                 }
+                let Some(primary_preparation) = self.primary_agent_preparation.as_ref() else {
+                    return Ok(true);
+                };
+                let prepare_intent = primary_preparation.intent.clone();
+                let prepared_initial_context = primary_preparation.initial_context.clone();
                 self.primary_agent_preparation = None;
 
                 match agent {
                     Ok(agent) => {
+                        let automatic_resume = super::session_setup::automatic_resume_event(
+                            agent.automatic_session_id(),
+                        );
                         // Seed the deferred widget with the prepared agent
                         // capabilities so capability-gated behavior (e.g. the
                         // detach wording on quit) is right before any session
@@ -380,6 +426,8 @@ impl App {
                                 },
                             ),
                         );
+                        let can_resume_catalog = agent.capabilities().load_session
+                            || agent.capabilities().session_capabilities.resume.is_some();
                         let sessions = match agent.catalog() {
                             nori_harness::runtime::SessionCatalog::Unsupported => None,
                             nori_harness::runtime::SessionCatalog::Listed(sessions) => {
@@ -387,18 +435,43 @@ impl App {
                             }
                         };
                         self.prepared_agent = Some(agent);
-                        match intent {
-                            crate::app_event::AgentPrepareIntent::Onboarding => {
-                                if let Some(event) =
-                                    sessions.and_then(super::session_setup::onboarding_resume_event)
-                                {
-                                    self.app_event_tx.send(event);
-                                } else {
-                                    self.app_event_tx.send(AppEvent::NewSession);
+                        self.prepared_agent_initial_context = prepared_initial_context;
+                        if let Some(event) = automatic_resume {
+                            self.pending_session_activation = None;
+                            self.app_event_tx.send(event);
+                        } else {
+                            if let Some(activation) = self.pending_session_activation.take() {
+                                match activation {
+                                    PendingSessionActivation::New => {
+                                        self.app_event_tx.send(AppEvent::NewSession)
+                                    }
+                                    PendingSessionActivation::Resume {
+                                        acp_session_id,
+                                        title,
+                                        transcript,
+                                    } => self.app_event_tx.send(AppEvent::ActivatePreparedResume {
+                                        acp_session_id,
+                                        title,
+                                        transcript: transcript.map(|transcript| *transcript),
+                                    }),
                                 }
+                                tui.frame_requester().schedule_frame();
+                                return Ok(true);
                             }
-                            crate::app_event::AgentPrepareIntent::Picker { fallback_to_spawn } => {
-                                match sessions {
+                            match prepare_intent {
+                                crate::app_event::AgentPrepareIntent::Idle => {}
+                                crate::app_event::AgentPrepareIntent::Onboarding => {
+                                    if let Some(event) = sessions
+                                        .and_then(super::session_setup::onboarding_resume_event)
+                                    {
+                                        self.app_event_tx.send(event);
+                                    } else {
+                                        self.app_event_tx.send(AppEvent::NewSession);
+                                    }
+                                }
+                                crate::app_event::AgentPrepareIntent::Picker {
+                                    fallback_to_spawn,
+                                } => match sessions {
                                     Some(sessions) => self
                                         .chat_widget
                                         .show_acp_resume_session_picker(sessions, false),
@@ -408,14 +481,23 @@ impl App {
                                     None => self
                                         .chat_widget
                                         .show_acp_resume_session_picker(Vec::new(), false),
+                                },
+                                crate::app_event::AgentPrepareIntent::ResumePicker => {
+                                    if can_resume_catalog && let Some(sessions) = sessions {
+                                        self.chat_widget
+                                            .show_acp_resume_session_picker(sessions, false);
+                                    } else {
+                                        self.chat_widget.open_local_resume_session_picker();
+                                    }
                                 }
-                            }
-                            crate::app_event::AgentPrepareIntent::Candidate { .. } => {
-                                unreachable!("candidate handled above")
+                                crate::app_event::AgentPrepareIntent::Candidate { .. } => {
+                                    unreachable!("candidate handled above")
+                                }
                             }
                         }
                     }
                     Err(error) => {
+                        self.prepared_agent_initial_context = None;
                         self.deferred_spawn_pending = false;
                         self.chat_widget
                             .add_error_message(format!("Couldn't prepare agent: {error}"));
@@ -425,21 +507,85 @@ impl App {
                                 .to_string(),
                             None,
                         );
+                        if !self.cloud_mode && self.candidate_agent.is_none() {
+                            self.chat_widget.open_agent_recovery_popup(&error);
+                        }
                     }
                 }
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::ActivatePreparedResume {
+                acp_session_id,
+                title,
+                transcript,
+            } => {
+                if self.prepared_agent.is_none() {
+                    self.pending_session_activation = Some(PendingSessionActivation::Resume {
+                        acp_session_id,
+                        title,
+                        transcript: transcript.map(Box::new),
+                    });
+                    self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
+                    return Ok(true);
+                }
+                self.pending_session_activation = Some(PendingSessionActivation::Resume {
+                    acp_session_id: acp_session_id.clone(),
+                    title: title.clone(),
+                    transcript: transcript.clone().map(Box::new),
+                });
+                let agent = match self.take_refreshed_prepared_agent() {
+                    Ok(Some(agent)) => agent,
+                    Ok(None) => return Ok(true),
+                    Err(error) => {
+                        self.chat_widget
+                            .add_error_message(format!("Couldn't resume prepared agent: {error}"));
+                        return Ok(true);
+                    }
+                };
+                self.pending_session_activation = None;
+                let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+                self.shutdown_current_conversation();
+                let mut init = self.chat_widget_init(
+                    tui.frame_requester(),
+                    initial_prompt,
+                    initial_images,
+                    None,
+                    false,
+                    None,
+                );
+                init.prepared_agent = Some(agent);
+                self.chat_widget =
+                    ChatWidget::new_resumed_acp(init, acp_session_id, title, transcript);
+                self.configure_new_chat_widget();
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::OpenAgentSessionPicker => {
                 self.discard_candidate();
-                self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
-                    fallback_to_spawn: false,
-                });
+                self.pending_session_activation = None;
+                if let Some(agent) = &self.prepared_agent {
+                    let can_resume_catalog = agent.capabilities().load_session
+                        || agent.capabilities().session_capabilities.resume.is_some();
+                    match agent.catalog() {
+                        nori_harness::runtime::SessionCatalog::Listed(sessions)
+                            if can_resume_catalog =>
+                        {
+                            self.chat_widget
+                                .show_acp_resume_session_picker(sessions.clone(), false);
+                        }
+                        _ => self.chat_widget.open_local_resume_session_picker(),
+                    }
+                } else {
+                    self.begin_agent_preparation(
+                        crate::app_event::AgentPrepareIntent::ResumePicker,
+                    );
+                }
             }
             AppEvent::BeginExit => {
                 self.cancel_primary_agent_preparation();
                 if let Some(agent) = self.prepared_agent.take() {
                     tokio::spawn(agent.shutdown());
                 }
+                self.prepared_agent_initial_context = None;
                 self.discard_candidate();
                 self.chat_widget.begin_exit();
             }
@@ -544,7 +690,7 @@ impl App {
                         else {
                             unreachable!("candidate generation checked above")
                         };
-                        let old_widget = std::mem::replace(&mut self.chat_widget, *widget);
+                        let mut old_widget = std::mem::replace(&mut self.chat_widget, *widget);
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
                         self.configure_new_chat_widget();
@@ -556,6 +702,14 @@ impl App {
                         {
                             tracing::warn!(%error, "failed to attach committed candidate to remote ACP host");
                         }
+                        let (initial_prompt, initial_images) = old_widget.take_initial_input();
+                        self.chat_widget
+                            .submit_launch_input(initial_prompt, initial_images);
+                        self.cancel_primary_agent_preparation();
+                        if let Some(agent) = self.prepared_agent.take() {
+                            tokio::spawn(agent.shutdown());
+                        }
+                        self.prepared_agent_initial_context = None;
                         old_widget.shutdown_harness_session();
                         if let Err(error) = ConfigEditsBuilder::new(&self.config.nori_home)
                             .set_agent(&self.config.active_agent)
@@ -608,6 +762,7 @@ impl App {
                 if let Some(agent) = self.prepared_agent.take() {
                     agent.shutdown().await;
                 }
+                self.prepared_agent_initial_context = None;
                 self.discard_candidate();
                 // Create and insert exit message cell before exiting
                 let exit_cell = self.chat_widget.create_exit_message_cell();
@@ -1180,12 +1335,14 @@ impl App {
                     Some(prompt),
                     Vec::new(),
                     None,
-                    false,
+                    true,
                     None,
                 );
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
                 self.chat_widget.set_loop_state(remaining, total);
+                self.pending_session_activation = Some(PendingSessionActivation::New);
+                self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
 
                 self.chat_widget
                     .add_info_message(format!("Loop iteration {iteration} of {total}"), None);
@@ -1234,8 +1391,7 @@ impl App {
                 // agent spawn was deferred, spawn it now without a skillset
                 // (behaves as if skillset_per_session is disabled).
                 if self.take_deferred_spawn() {
-                    self.chat_widget
-                        .spawn_deferred_agent(self.config.clone(), self.app_event_tx.clone());
+                    self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
                 }
             }
             AppEvent::ExecuteScript { prompt, args } => {
@@ -1356,16 +1512,51 @@ impl App {
                                 .map(|info| info.display_name)
                                 .unwrap_or_else(|| self.config.active_agent.clone());
 
+                        if self.prepared_agent.is_none() {
+                            self.defer_resume_activation(
+                                tui.frame_requester(),
+                                acp_session_id,
+                                None,
+                                Some(transcript),
+                            );
+                            self.chat_widget.add_info_message(
+                                format!("Resuming session with {display_name}..."),
+                                None,
+                            );
+                            tui.frame_requester().schedule_frame();
+                            return Ok(true);
+                        }
+
+                        self.pending_session_activation = Some(PendingSessionActivation::Resume {
+                            acp_session_id: acp_session_id.clone(),
+                            title: None,
+                            transcript: Some(Box::new(transcript.clone())),
+                        });
+                        let agent = match self.take_refreshed_prepared_agent() {
+                            Ok(Some(agent)) => agent,
+                            Ok(None) => return Ok(true),
+                            Err(error) => {
+                                self.chat_widget.add_error_message(format!(
+                                    "Couldn't resume prepared agent: {error}"
+                                ));
+                                return Ok(true);
+                            }
+                        };
+                        self.pending_session_activation = None;
+
+                        let (initial_prompt, initial_images) =
+                            self.chat_widget.take_initial_input();
                         self.shutdown_current_conversation();
 
-                        let init = self.chat_widget_init(
+                        let mut init = self.chat_widget_init(
                             tui.frame_requester(),
-                            None,
-                            Vec::new(),
+                            initial_prompt,
+                            initial_images,
                             None,
                             false,
                             None,
                         );
+                        init.prepared_agent = Some(agent);
                         self.chat_widget = ChatWidget::new_resumed_acp(
                             init,
                             acp_session_id,
@@ -1443,6 +1634,40 @@ impl App {
                     crate::nori::agent_picker::get_agent_info(&self.config.active_agent)
                         .map(|info| info.display_name)
                         .unwrap_or_else(|| self.config.active_agent.clone());
+                if self.prepared_agent.is_none() {
+                    self.defer_resume_activation(
+                        tui.frame_requester(),
+                        Some(acp_session_id.clone()),
+                        title.clone(),
+                        None,
+                    );
+                    self.chat_widget.add_info_message(
+                        reattach_info_message(
+                            &acp_session_id,
+                            title.as_deref(),
+                            self.cloud_mode,
+                            &display_name,
+                        ),
+                        None,
+                    );
+                    tui.frame_requester().schedule_frame();
+                    return Ok(true);
+                }
+                self.pending_session_activation = Some(PendingSessionActivation::Resume {
+                    acp_session_id: Some(acp_session_id.clone()),
+                    title: title.clone(),
+                    transcript: None,
+                });
+                let agent = match self.take_refreshed_prepared_agent() {
+                    Ok(Some(agent)) => agent,
+                    Ok(None) => return Ok(true),
+                    Err(error) => {
+                        self.chat_widget
+                            .add_error_message(format!("Couldn't resume prepared agent: {error}"));
+                        return Ok(true);
+                    }
+                };
+                self.pending_session_activation = None;
                 let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
                 self.deferred_spawn_pending = false;
                 self.shutdown_current_conversation();
@@ -1455,7 +1680,7 @@ impl App {
                     false,
                     None,
                 );
-                init.prepared_agent = self.prepared_agent.take();
+                init.prepared_agent = Some(agent);
                 self.chat_widget = ChatWidget::new_resumed_acp(
                     init,
                     Some(acp_session_id.clone()),
@@ -1538,11 +1763,16 @@ impl App {
                     None,
                     Vec::new(),
                     None,
-                    false,
-                    fork_context,
+                    true,
+                    None,
                 );
                 self.chat_widget = ChatWidget::new(init);
                 self.configure_new_chat_widget();
+                self.pending_session_activation = Some(PendingSessionActivation::New);
+                self.begin_agent_preparation_with_context(
+                    crate::app_event::AgentPrepareIntent::Idle,
+                    fork_context,
+                );
 
                 // Trim transcript to preserve history before the fork point
                 self.transcript_cells

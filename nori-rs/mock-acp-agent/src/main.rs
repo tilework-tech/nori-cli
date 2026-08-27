@@ -27,6 +27,13 @@ use tokio::time::sleep;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
+fn last_prompt_text_block(prompt: &[acp::ContentBlock]) -> Option<&str> {
+    prompt.iter().rev().find_map(|block| match block {
+        acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+        _ => None,
+    })
+}
+
 #[cfg(unix)]
 fn spawn_descendant_if_requested() {
     let Some(pid_file) = std::env::var_os("MOCK_AGENT_DESCENDANT_PID_FILE") else {
@@ -208,6 +215,18 @@ impl MockAgent {
         .await
     }
 
+    async fn send_user_chunk(
+        &self,
+        session_id: acp::SessionId,
+        content: acp::ContentBlock,
+    ) -> Result<(), acp::Error> {
+        self.send_update(
+            session_id,
+            acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(content)),
+        )
+        .await
+    }
+
     /// Send a tool call notification
     async fn send_tool_call(
         &self,
@@ -275,12 +294,122 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
+            let actual = last_prompt_text_block(&arguments.prompt);
+            if actual != Some(expected.as_str()) {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!(
+                        "expected final user prompt text block {expected:?}, received {actual:?}"
+                    ),
+                ));
+            }
+        }
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_IMAGE_BLOCK_COUNT") {
+            let expected = expected.parse::<usize>().map_err(|error| {
+                acp::Error::new(-32001, format!("invalid expected image count: {error}"))
+            })?;
+            let actual = arguments
+                .prompt
+                .iter()
+                .filter(|block| matches!(block, acp::ContentBlock::Image(_)))
+                .count();
+            if actual != expected {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!("expected {expected} prompt image blocks, received {actual}"),
+                ));
+            }
+        }
+        if let Ok(expected_count) = std::env::var("MOCK_AGENT_EXPECT_MATCHING_TEXT_BLOCK_COUNT") {
+            let expected_count = expected_count.parse::<usize>().map_err(|error| {
+                acp::Error::new(-32001, format!("invalid expected text count: {error}"))
+            })?;
+            let expected_text =
+                std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK").map_err(|_| {
+                    acp::Error::new(
+                        -32001,
+                        "matching text count requires an expected prompt text block",
+                    )
+                })?;
+            let actual = arguments
+                .prompt
+                .iter()
+                .filter(|block| {
+                    matches!(block, acp::ContentBlock::Text(text) if text.text == expected_text)
+                })
+                .count();
+            if actual != expected_count {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!(
+                        "expected {expected_count} matching prompt text blocks, received {actual}"
+                    ),
+                ));
+            }
+        }
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_IMAGE_MIME_TYPE") {
+            let actual = arguments.prompt.iter().find_map(|block| match block {
+                acp::ContentBlock::Image(image) => Some(image.mime_type.as_str()),
+                _ => None,
+            });
+            if actual != Some(expected.as_str()) {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!("expected prompt image MIME {expected:?}, received {actual:?}"),
+                ));
+            }
+        }
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_IMAGE_DATA") {
+            let actual = arguments.prompt.iter().find_map(|block| match block {
+                acp::ContentBlock::Image(image) => Some(image.data.as_str()),
+                _ => None,
+            });
+            if actual != Some(expected.as_str()) {
+                return Err(acp::Error::new(
+                    -32001,
+                    "prompt image data did not match the expected bytes",
+                ));
+            }
+        }
         if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
             eprintln!("Mock agent: exiting during prompt");
             std::process::exit(17);
         }
         self.state.cancel_requested.store(false, Ordering::SeqCst);
         let session_id = arguments.session_id.clone();
+
+        if std::env::var("MOCK_AGENT_PROMPT_UNOWNED_USER_NOTIFICATION").is_ok() {
+            self.send_user_chunk(
+                session_id.clone(),
+                acp::ContentBlock::Text(acp::TextContent::new("unowned user activity")),
+            )
+            .await?;
+        }
+
+        if std::env::var("MOCK_AGENT_PROMPT_MATCHING_UNOWNED_USER_NOTIFICATION").is_ok()
+            && let Some(acp::ContentBlock::Text(text)) = arguments
+                .prompt
+                .iter()
+                .find(|content| matches!(content, acp::ContentBlock::Text(_)))
+        {
+            self.send_user_chunk(
+                session_id.clone(),
+                acp::ContentBlock::Text(acp::TextContent::new(text.text.clone())),
+            )
+            .await?;
+        }
+
+        if std::env::var("MOCK_AGENT_ECHO_USER_PROMPT").is_ok() {
+            for content in &arguments.prompt {
+                let chunk = acp::ContentChunk::new(content.clone()).meta(arguments.meta.clone());
+                self.send_update(
+                    session_id.clone(),
+                    acp::SessionUpdate::UserMessageChunk(chunk),
+                )
+                .await?;
+            }
+        }
 
         // Advertise a native `compact` slash command so the harness forwards
         // `/compact` as an ordinary turn instead of summarize-and-swap.
@@ -1482,9 +1611,14 @@ async fn main() -> acp::Result<()> {
                     response = response.agent_capabilities(capabilities);
                 }
 
+                let mut meta = std::env::var("MOCK_AGENT_INITIALIZE_META")
+                    .ok()
+                    .and_then(|value| serde_json::from_str::<serde_json::Value>(&value).ok())
+                    .and_then(|value| value.as_object().cloned())
+                    .unwrap_or_default();
+
                 if std::env::var("MOCK_AGENT_GOAL_EXT").is_ok() {
                     eprintln!("Mock agent: advertising the _session/goal goal extension");
-                    let mut meta = serde_json::Map::new();
                     meta.insert(
                         "goal".to_string(),
                         serde_json::json!({
@@ -1493,6 +1627,8 @@ async fn main() -> acp::Result<()> {
                             "actions": ["set", "pause", "resume", "clear"],
                         }),
                     );
+                }
+                if !meta.is_empty() {
                     response.meta = Some(meta);
                 }
 
@@ -1557,6 +1693,19 @@ async fn main() -> acp::Result<()> {
                         )
                         .await?;
                     }
+                    if std::env::var("MOCK_AGENT_NEW_SESSION_USER_NOTIFICATION").is_ok() {
+                        MockAgent {
+                            cx: cx.clone(),
+                            state: state.clone(),
+                        }
+                        .send_user_chunk(
+                            acp::SessionId::new(session_key.clone()),
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "unowned user activity",
+                            )),
+                        )
+                        .await?;
+                    }
                     if std::env::var("MOCK_AGENT_INITIALIZE_NORI_CLIENT_DURING_NEW_SESSION").is_ok()
                         && let Err(error) =
                             initialize_advertised_nori_client(&arguments.mcp_servers).await
@@ -1605,6 +1754,19 @@ async fn main() -> acp::Result<()> {
                                 .send_text_chunk(session_id.clone(), &format!("replay chunk {i}"))
                                 .await?;
                         }
+                    }
+                    if std::env::var("MOCK_AGENT_LOAD_SESSION_USER_NOTIFICATION").is_ok() {
+                        MockAgent {
+                            cx: cx.clone(),
+                            state: state.clone(),
+                        }
+                        .send_user_chunk(
+                            arguments.session_id.clone(),
+                            acp::ContentBlock::Text(acp::TextContent::new(
+                                "loaded user activity",
+                            )),
+                        )
+                        .await?;
                     }
 
                     if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {

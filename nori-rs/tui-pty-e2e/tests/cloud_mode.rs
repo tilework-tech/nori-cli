@@ -349,11 +349,11 @@ fn test_cloud_start_new_preserves_the_deferred_positional_prompt() {
         .expect("starting new should submit the deferred positional prompt");
 }
 
-/// An explicit `/new` supersedes picker-first preparation. A late result from
-/// the cancelled preparation must not reopen the picker over the new session.
+/// An explicit `/new` waits for picker-first preparation and activates that
+/// exact child instead of cancelling, respawning, or reopening the picker.
 #[test]
 #[cfg(target_os = "linux")]
-fn test_cloud_new_invalidates_in_flight_entry_preparation() {
+fn test_cloud_new_reuses_in_flight_entry_preparation() {
     let fake = FakeHandroll::new();
     let config = cloud_lifecycle_config(&fake)
         .with_agent_env("MOCK_AGENT_STARTUP_DELAY_MS", "1200")
@@ -366,29 +366,11 @@ fn test_cloud_new_invalidates_in_flight_entry_preparation() {
         .wait_for_text("Listing", TIMEOUT)
         .expect("cloud entry should begin preparing the session picker");
     let initial_pids = fake.wait_for_child_pid_count(1, TIMEOUT);
-    let stale_pid = *initial_pids.first().expect("entry-preparation child pid");
+    let prepared_pid = *initial_pids.first().expect("entry-preparation child pid");
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_str("/new").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
-
-    let replacement_pids = fake.wait_for_child_pid_count(2, TIMEOUT);
-    assert_eq!(
-        replacement_pids.len(),
-        2,
-        "explicit /new should replace the entry-preparation child"
-    );
-    assert!(
-        fake.wait_for_child_exit(stale_pid, TIMEOUT),
-        "the superseded entry-preparation child should be reaped"
-    );
-    // Once the stale child is gone, its delayed result can no longer reopen
-    // the picker over the explicit session.
-    let contents = session.screen_contents();
-    assert!(
-        !contents.contains("Start a new session"),
-        "a superseded preparation must not install a late picker, got:\n{contents}"
-    );
 
     session.send_str("prove the explicit session won").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
@@ -396,6 +378,17 @@ fn test_cloud_new_invalidates_in_flight_entry_preparation() {
     session
         .wait_for_text("new session remains active", TIMEOUT)
         .expect("the explicit new session should remain usable");
+
+    let pids = fake.wait_for_child_pid_count(2, Duration::from_millis(300));
+    assert_eq!(
+        pids,
+        vec![prepared_pid],
+        "/new must reuse the prepared child"
+    );
+    assert!(
+        FakeHandroll::child_is_alive(prepared_pid),
+        "the prepared child should become the active session"
+    );
 
     let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
     let creates = agent_stderr

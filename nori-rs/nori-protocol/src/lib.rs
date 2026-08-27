@@ -7,3 +7,6 @@ mod session_event;
 
 pub use agent_client_protocol_schema as acp;
 pub use session_event::*;
+
+/// ACP `_meta` key correlating a prompt with user-message chunks that echo it.
+pub const PROMPT_ECHO_ID_META_KEY: &str = "nori.dev/promptEchoId";

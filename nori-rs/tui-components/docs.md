@@ -94,11 +94,16 @@ consumer application
   applying the faded disabled style. Consumers can therefore retain domain
   groupings without teaching the shared state machine about their group model.
 - The [`picker` renderer](src/picker/render.rs) shows its input row only during
-  active search and derives footer hints from the same state. Its inactive
+  active search and derives footer hints from the same state. Title metadata is
+  followed by one grouping row before results. A single-column, single-select
+  picker presents each item as primary text with optional supporting copy,
+  suppresses the redundant table heading, and numbers the first nine enabled
+  choices while skipping structural and disabled rows. Multi-column pickers,
+  including session-resume tables, retain their column headings. The inactive
   footer deliberately advertises only the concise `/ search` convention, not
   every raw-key alias a consumer may map. This keeps the state machine and
   presentation synchronized while leaving the consumer free to choose which
-  raw keys activate search.
+  raw keys activate search or numbered choices.
 - Toggle and multi-select marker glyphs encode focus separately from checked
   state. This keeps both states visible when terminal-relative selection
   backgrounds are unavailable and [`Theme::default`](src/theme/mod.rs) leaves
@@ -169,8 +174,9 @@ consumer application
 - The overlay renderer preserves titles and primary labels first, suppresses
   optional subtitles on constrained rectangles, wraps descriptions by Unicode
   display width, and emits overflow markers when not all items fit. Key hints
-  occupy the bottom of the remaining surface and clamp below the title so tiny
-  or non-zero-origin caller rectangles remain bounded.
+  occupy the bottom of the remaining surface, begin at the caller area's left
+  edge, and clamp below the title so tiny or non-zero-origin caller rectangles
+  remain bounded.
 - Enabled, unselected menu items fill their complete item rectangles with
   [`Theme::menu_item_surface`](src/theme/mod.rs), or alternate it with
   `menu_item_surface_alt` when Zebra is selected. Terminal-aware defaults lower
@@ -208,6 +214,11 @@ consumer application
 - A shortcut invokes its matching enabled item immediately. When an item has
   both shortcut families, either maps to the same stable key; precedence among
   raw input meanings belongs to the consumer adapter.
+- Picker numbering is presentation rather than a second selection state
+  machine. A consumer that accepts digit activation must map the digit to the
+  corresponding visible, enabled item and submit through the existing picker
+  outcome path; filtering and section headings therefore cannot make the
+  displayed number disagree with activation.
 - Disabled items remain visible but cannot receive selection or activation.
   Section headings share that navigation invariant while retaining their bold
   structural treatment. Empty and all-disabled menus are valid and have no

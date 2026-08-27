@@ -196,6 +196,11 @@ pub struct QueuedPrompt {
     pub event_id: String,
     pub kind: QueuedPromptKind,
     pub text: String,
+    /// Prompt-level ACP metadata forwarded to the downstream agent.
+    pub prompt_meta: Option<acp::Meta>,
+    /// Exact caller-supplied ACP content, before Nori prepends private context.
+    pub original_content: Vec<acp::ContentBlock>,
+    /// Content sent to the downstream agent, including any Nori context.
     pub content: Vec<acp::ContentBlock>,
     pub display_text: Option<String>,
 }

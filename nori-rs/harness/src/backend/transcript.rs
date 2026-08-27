@@ -25,6 +25,27 @@ pub fn transcript_to_replay_session_events(
                 )
         )
     });
+    let canonical_user_message_ids = transcript
+        .entries
+        .iter()
+        .filter_map(|line| {
+            let crate::transcript::TranscriptEntry::SessionEvent(entry) = &line.entry else {
+                return None;
+            };
+            let nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
+            )) = &entry.event
+            else {
+                return None;
+            };
+            let nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(chunk) =
+                &notification.update
+            else {
+                return None;
+            };
+            chunk.message_id.as_ref().map(ToString::to_string)
+        })
+        .collect::<std::collections::HashSet<_>>();
 
     let session_id = transcript
         .meta
@@ -48,7 +69,9 @@ pub fn transcript_to_replay_session_events(
             }
 
             let updates: Vec<_> = match &line.entry {
-                crate::transcript::TranscriptEntry::User(user) => {
+                crate::transcript::TranscriptEntry::User(user)
+                    if !canonical_user_message_ids.contains(&user.id) =>
+                {
                     vec![nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(
                         nori_protocol::acp::v1::ContentChunk::new(
                             nori_protocol::acp::v1::ContentBlock::Text(
@@ -57,6 +80,7 @@ pub fn transcript_to_replay_session_events(
                         ),
                     )]
                 }
+                crate::transcript::TranscriptEntry::User(_) => Vec::new(),
                 crate::transcript::TranscriptEntry::Assistant(assistant)
                     if !has_raw_notifications =>
                 {
@@ -451,6 +475,70 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&replay[1]).unwrap(),
             serde_json::to_value(raw_assistant_event).unwrap()
+        );
+    }
+
+    #[test]
+    fn v3_replay_uses_canonical_raw_user_chunks_without_synthesizing_a_duplicate() {
+        let message_id = nori_protocol::acp::v1::MessageId::new("user-1");
+        let raw_user_events = vec![
+            nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                    nori_protocol::acp::v1::SessionNotification::new(
+                        "recorded-session",
+                        nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(
+                            nori_protocol::acp::v1::ContentChunk::new(
+                                nori_protocol::acp::v1::ContentBlock::Text(
+                                    nori_protocol::acp::v1::TextContent::new("Stored question"),
+                                ),
+                            )
+                            .message_id(message_id.clone()),
+                        ),
+                    ),
+                ),
+            )),
+            nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                nori_protocol::acp::v1::AgentNotification::SessionNotification(
+                    nori_protocol::acp::v1::SessionNotification::new(
+                        "recorded-session",
+                        nori_protocol::acp::v1::SessionUpdate::UserMessageChunk(
+                            nori_protocol::acp::v1::ContentChunk::new(
+                                nori_protocol::acp::v1::ContentBlock::Image(
+                                    nori_protocol::acp::v1::ImageContent::new(
+                                        "aW1hZ2U=",
+                                        "image/png",
+                                    ),
+                                ),
+                            )
+                            .message_id(message_id),
+                        ),
+                    ),
+                ),
+            )),
+        ];
+        let transcript = make_transcript(vec![
+            TranscriptEntry::User(UserEntry {
+                id: "user-1".into(),
+                content: "Stored question".into(),
+                attachments: vec![],
+            }),
+            TranscriptEntry::SessionEvent(SessionEventEntry {
+                event: raw_user_events[0].clone(),
+            }),
+            TranscriptEntry::SessionEvent(SessionEventEntry {
+                event: raw_user_events[1].clone(),
+            }),
+        ]);
+
+        assert_eq!(
+            transcript_to_replay_session_events(&transcript)
+                .into_iter()
+                .map(|event| serde_json::to_value(event).unwrap())
+                .collect::<Vec<_>>(),
+            raw_user_events
+                .into_iter()
+                .map(|event| serde_json::to_value(event).unwrap())
+                .collect::<Vec<_>>()
         );
     }
 
