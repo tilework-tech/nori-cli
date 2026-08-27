@@ -9,7 +9,6 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::OnceLock;
 
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
@@ -66,26 +65,12 @@ struct HostShared {
     event_task: Option<tokio::task::JoinHandle<()>>,
 }
 
-/// Harness-side host for the remote ACP transport. Create one per process,
+/// Harness-side host for the remote ACP transport. Create one per owning app,
 /// attach it to each launched harness session, and hand it to
 /// [`RemoteAcpServer::bind`].
 #[derive(Default)]
 pub struct HarnessRemoteHost {
     state: Arc<Mutex<HostShared>>,
-}
-
-static ACTIVE_HOST: OnceLock<Arc<HarnessRemoteHost>> = OnceLock::new();
-
-/// Install the process-wide remote host (set once, at remote-mode startup).
-pub fn set_active_host(host: Arc<HarnessRemoteHost>) {
-    if ACTIVE_HOST.set(host).is_err() {
-        tracing::warn!("remote host was already installed; keeping the first one");
-    }
-}
-
-/// The process-wide remote host, when remote mode is enabled.
-pub fn active_host() -> Option<Arc<HarnessRemoteHost>> {
-    ACTIVE_HOST.get().cloned()
 }
 
 impl HarnessRemoteHost {

@@ -73,6 +73,117 @@ fn history_text(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>) -> Stri
         .collect()
 }
 
+fn drain_remote_control_requests_and_history(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+) -> (Vec<crate::remote_control::RemoteControlRequest>, String) {
+    let mut requests = Vec::new();
+    let mut history = String::new();
+    while let Ok(event) = rx.try_recv() {
+        match event {
+            AppEvent::RemoteControlRequested(request) => requests.push(request),
+            AppEvent::InsertHistoryCell(cell) => {
+                for line in cell.display_lines(80) {
+                    for span in line.spans {
+                        history.push_str(&span.content);
+                    }
+                    history.push('\n');
+                }
+            }
+            _ => {}
+        }
+    }
+    (requests, history)
+}
+
+#[test]
+fn remote_control_commands_are_client_owned_even_without_an_active_agent_session() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.submit_user_message_text("/remote-control".to_string());
+    chat.submit_user_message_text("/remote-control on tailnet".to_string());
+    let (requests, history) = drain_remote_control_requests_and_history(&mut rx);
+    assert_eq!(
+        requests,
+        vec![
+            crate::remote_control::RemoteControlRequest::EnableLocal,
+            crate::remote_control::RemoteControlRequest::EnableTailnet,
+        ]
+    );
+    assert!(!history.contains("No active session"), "{history}");
+}
+
+#[test]
+fn nonloopback_remote_control_confirmation_is_red_accepts_once_and_can_cancel() {
+    use crate::render::renderable::Renderable;
+    use crossterm::event::KeyModifiers;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+
+    let explicit = "192.0.2.10:4812".parse().expect("address");
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.open_remote_control_confirmation(explicit);
+
+    let area = Rect::new(0, 0, 84, chat.bottom_pane.desired_height(84));
+    let mut buffer = Buffer::empty(area);
+    chat.bottom_pane.render(area, &mut buffer);
+    let rendered = (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buffer[(x, y)].symbol().chars().next().unwrap_or(' '))
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!(rendered, @"
+      Expose remote control on 192.0.2.10:4812?
+      This grants unauthenticated ACP access to any client that can reach this
+      address.
+
+    › 1. Enable remote control  Allow this address for the current run only
+      2. Cancel                 Keep remote control unchanged
+
+      ↑/k ↓/j to navigate, enter to confirm, esc to go back
+    ");
+    assert!(rendered.contains("Expose remote control on 192.0.2.10:4812?"));
+    assert!(rendered.contains("unauthenticated ACP access"));
+    assert!(!rendered.contains("don't ask again"));
+    assert!(!rendered.contains("remember"));
+    let warning_row = (0..area.height)
+        .find_map(|y| {
+            let row = (0..area.width)
+                .map(|x| buffer[(x, y)].symbol().chars().next().unwrap_or(' '))
+                .collect::<String>();
+            row.find("unauthenticated").map(|x| (y, x))
+        })
+        .expect("rendered warning word");
+    for x in warning_row.1..warning_row.1 + "unauthenticated".len() {
+        assert_eq!(buffer[(x as u16, warning_row.0)].fg, Color::Red);
+    }
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let accepted: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|event| match event {
+            AppEvent::ConfirmRemoteControlExplicit(addr) => Some(addr),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(accepted, vec![explicit]);
+
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.open_remote_control_confirmation(explicit);
+    chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    while let Ok(event) = rx.try_recv() {
+        assert!(
+            !matches!(event, AppEvent::ConfirmRemoteControlExplicit(_)),
+            "cancel must not enable the listener"
+        );
+    }
+    assert!(!chat.bottom_pane.has_active_overlay_or_popup());
+}
+
 /// Scan the app-event stream for the next loop re-fire, if any.
 fn next_loop_iteration(
     rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,

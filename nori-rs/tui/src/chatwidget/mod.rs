@@ -66,6 +66,7 @@ mod helpers;
 mod key_handling;
 mod login;
 mod pickers;
+mod remote_control;
 mod session_config_mode;
 mod user_input;
 use crate::nori::session_header::CloudSessionInfo;

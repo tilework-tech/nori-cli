@@ -62,6 +62,7 @@ mod pager_overlay;
 mod pinned_plan_drawer;
 mod presentation;
 pub mod public_widgets;
+mod remote_control;
 mod render;
 mod resume_picker;
 mod selection_list;
@@ -289,28 +290,6 @@ pub async fn run_main(
 
     let _ = tracing_subscriber::registry().with(file_layer).try_init();
 
-    // Remote ACP transport (docs/specs/remote-acp-transport.md): bind the
-    // listener before the app runs so a controller can connect as soon as
-    // the session launches. The server lives for the whole app run.
-    let _remote_server = match cli.remote.as_deref() {
-        Some(spec) => {
-            let addr =
-                nori_harness::remote_agent::parse_bind_addr(spec, cli.remote_allow_nonloopback)
-                    .map_err(|error| std::io::Error::other(error.to_string()))?;
-            let host = std::sync::Arc::new(nori_harness::remote_agent::HarnessRemoteHost::new());
-            let server = nori_harness::remote_agent::RemoteAcpServer::bind(addr, host.clone())
-                .await
-                .map_err(|error| std::io::Error::other(error.to_string()))?;
-            nori_harness::remote_agent::set_active_host(host);
-            tracing::info!(
-                "remote ACP transport listening on ws://{}/acp",
-                server.local_addr()
-            );
-            Some(server)
-        }
-        None => None,
-    };
-
     run_ratatui_app(
         cli,
         config,
@@ -524,6 +503,12 @@ async fn run_ratatui_app(
         config.active_agent = agent.clone();
     }
 
+    let startup_remote_addr = cli
+        .remote
+        .as_deref()
+        .map(|spec| nori_harness::remote_agent::parse_bind_addr(spec, cli.remote_allow_nonloopback))
+        .transpose()
+        .map_err(|error| color_eyre::eyre::eyre!(error.to_string()))?;
     let Cli {
         prompt,
         images,
@@ -543,6 +528,7 @@ async fn run_ratatui_app(
         vertical_footer,
         cloud_mode,
         cloud_onboard,
+        startup_remote_addr,
     )
     .await;
 

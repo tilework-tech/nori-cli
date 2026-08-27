@@ -5,6 +5,7 @@
 //! last-connect-wins, replay ordering, and delegated-request round-trips.
 
 use std::net::SocketAddr;
+use std::net::UdpSocket;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,6 +25,8 @@ use nori_protocol::acp::v1 as acp;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio_tungstenite::MaybeTlsStream;
@@ -192,6 +195,102 @@ async fn start_server() -> TestServer {
     .await
     .expect("bind remote server");
     TestServer { server, hosted }
+}
+
+#[tokio::test]
+async fn one_server_listens_on_loopback_and_a_second_exact_address_on_one_port() {
+    let route_probe = UdpSocket::bind("0.0.0.0:0").expect("bind route probe");
+    route_probe
+        .connect("192.0.2.1:9")
+        .expect("select local route");
+    let exact_addr = SocketAddr::new(
+        route_probe.local_addr().expect("local route address").ip(),
+        0,
+    );
+    let hosted = Arc::new(FakeHosted::default());
+    let server = RemoteAcpServer::bind_many(
+        [
+            "127.0.0.1:0".parse::<SocketAddr>().expect("loopback"),
+            exact_addr,
+        ],
+        hosted,
+    )
+    .await
+    .expect("bind both exact addresses");
+
+    let addrs = server.local_addrs();
+    assert_eq!(addrs.len(), 2);
+    assert_eq!(addrs[0].port(), addrs[1].port());
+    assert_ne!(addrs[0].ip(), addrs[1].ip());
+
+    let (mut first, _) = WsClient::connect(addrs[0]).await;
+    tokio::time::timeout(RECV_TIMEOUT, async {
+        while !server.controller_connected().await {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the first controller should become visible");
+    let (mut second, _) = WsClient::connect(addrs[1]).await;
+    second.initialize().await;
+
+    let closed = tokio::time::timeout(RECV_TIMEOUT, first.ws.next())
+        .await
+        .expect("replacement should close the first controller");
+    assert!(
+        closed.is_none()
+            || closed
+                .is_some_and(|frame| frame.is_err() || frame.is_ok_and(|frame| frame.is_close()))
+    );
+
+    second
+        .ws
+        .close(None)
+        .await
+        .expect("close second controller");
+}
+
+#[tokio::test]
+async fn shutdown_closes_a_websocket_that_upgrades_after_acceptance() {
+    let test_server = start_server().await;
+    let addr = test_server.server.local_addr();
+    let mut stream = tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("connect before shutdown");
+
+    // Let axum accept the TCP connection, but deliberately delay the HTTP
+    // upgrade until after the listener has been shut down.
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    test_server.server.shutdown().await;
+
+    let request = format!(
+        "GET /acp HTTP/1.1\r\nHost: {addr}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    );
+    if stream.write_all(request.as_bytes()).await.is_err() {
+        return;
+    }
+
+    let mut response = Vec::new();
+    let closed = tokio::time::timeout(Duration::from_secs(2), async {
+        let mut buffer = [0_u8; 512];
+        loop {
+            match stream.read(&mut buffer).await {
+                Ok(0) | Err(_) => return true,
+                Ok(read) => {
+                    response.extend_from_slice(&buffer[..read]);
+                    if response.windows(4).any(|window| window == b"\r\n\r\n") {
+                        response.clear();
+                    }
+                }
+            }
+        }
+    })
+    .await
+    .unwrap_or(false);
+
+    assert!(closed, "late WebSocket upgrade survived server shutdown");
 }
 
 struct WsClient {

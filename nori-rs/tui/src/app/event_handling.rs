@@ -227,6 +227,52 @@ impl App {
                 });
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::RemoteControlRequested(request) => {
+                let tailnet = match request {
+                    crate::remote_control::RemoteControlRequest::EnableLocal
+                    | crate::remote_control::RemoteControlRequest::EnableTailnet
+                    | crate::remote_control::RemoteControlRequest::Status => {
+                        crate::remote_control::detect_tailnet_ipv4().await
+                    }
+                    crate::remote_control::RemoteControlRequest::EnableExplicit(_)
+                    | crate::remote_control::RemoteControlRequest::Disable => {
+                        Err("Tailscale was not queried.".to_string())
+                    }
+                };
+                let outcome = self
+                    .remote_control
+                    .execute_request_with_detection(request, tailnet)
+                    .await;
+                match outcome {
+                    crate::remote_control::RemoteControlOutcome::Report(report) => {
+                        self.chat_widget.add_boxed_history(Box::new(
+                            crate::history_cell::new_remote_control_event(report.lines()),
+                        ));
+                    }
+                    crate::remote_control::RemoteControlOutcome::ConfirmationRequired(addr) => {
+                        self.chat_widget.open_remote_control_confirmation(addr);
+                    }
+                    crate::remote_control::RemoteControlOutcome::Error(message) => {
+                        self.chat_widget.add_error_message(message);
+                    }
+                }
+            }
+            AppEvent::ConfirmRemoteControlExplicit(addr) => {
+                let outcome = self.remote_control.confirm_explicit(addr).await;
+                match outcome {
+                    crate::remote_control::RemoteControlOutcome::Report(report) => {
+                        self.chat_widget.add_boxed_history(Box::new(
+                            crate::history_cell::new_remote_control_event(report.lines()),
+                        ));
+                    }
+                    crate::remote_control::RemoteControlOutcome::Error(message) => {
+                        self.chat_widget.add_error_message(message);
+                    }
+                    crate::remote_control::RemoteControlOutcome::ConfirmationRequired(_) => {
+                        unreachable!("a confirmed address cannot request confirmation again")
+                    }
+                }
+            }
             AppEvent::AgentPrepared {
                 generation,
                 agent,
@@ -502,9 +548,14 @@ impl App {
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
                         self.configure_new_chat_widget();
-                        self.chat_widget
-                            .attach_remote_host_after_start(started)
-                            .await;
+                        if let Some(handle) = self.chat_widget.harness_handle()
+                            && let Err(error) = self
+                                .remote_control
+                                .attach_started(handle, self.config.nori_home.clone(), started)
+                                .await
+                        {
+                            tracing::warn!(%error, "failed to attach committed candidate to remote ACP host");
+                        }
                         old_widget.shutdown_harness_session();
                         if let Err(error) = ConfigEditsBuilder::new(&self.config.nori_home)
                             .set_agent(&self.config.active_agent)
@@ -529,7 +580,24 @@ impl App {
                         self.chat_widget.add_error_message(message);
                     }
                 } else {
+                    let started = match &event {
+                        nori_protocol::SessionEvent::Nori(
+                            nori_protocol::NoriEvent::SessionStarted(started),
+                        ) if self.chat_widget.session_generation() == generation => {
+                            Some(started.clone())
+                        }
+                        _ => None,
+                    };
                     self.chat_widget.handle_session_event(generation, event);
+                    if let Some(started) = started
+                        && let Some(handle) = self.chat_widget.harness_handle()
+                        && let Err(error) = self
+                            .remote_control
+                            .attach_started(handle, self.config.nori_home.clone(), started)
+                            .await
+                    {
+                        tracing::warn!(%error, "failed to attach session to remote ACP host");
+                    }
                 }
             }
             AppEvent::ConversationHistory(ev) => {

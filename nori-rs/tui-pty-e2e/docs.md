@@ -27,10 +27,17 @@ deadlines.
 Scenarios cover representative raw ACP messages, tools, plans, permissions and
 responses; Nori lifecycle and failure behavior; query-driven pickers; cloud
 list/resume/close/detach; transcript persistence and view-only selection; MCP
-and browser workflows; and ordering races between streaming text and tool
-updates. Agent-switch coverage observes real child PIDs to prove that the
-current and prepared candidate coexist, activation reuses the prepared child,
-and cancellation or activation failure leaves the current session usable.
+and browser workflows; runtime remote-control ownership; and ordering races
+between streaming text and tool updates. Agent-switch coverage observes real
+child PIDs to prove that the current and prepared candidate coexist, activation
+reuses the prepared child, and cancellation or activation failure leaves the
+current session usable.
+
+The remote-control workflow drives startup and runtime listener management
+through a real WebSocket ACP client, then switches agents. It proves both entry
+paths share one listener owner, disabling listeners preserves the harness, and
+the stable endpoint exposes a replacement only after its `SessionStarted`
+commit.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same

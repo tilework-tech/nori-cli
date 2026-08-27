@@ -326,24 +326,8 @@ impl ChatWidget {
         });
     }
 
-    /// Move the process-wide remote surface to a switch candidate after the
-    /// app has accepted its `SessionStarted` commit event.
-    pub(crate) async fn attach_remote_host_after_start(
-        &self,
-        started: nori_protocol::SessionStarted,
-    ) {
-        let Some(remote_host) = nori_harness::remote_agent::active_host() else {
-            return;
-        };
-        let Some(handle) = self.harness_handle.clone() else {
-            return;
-        };
-        if let Err(error) = remote_host
-            .attach_started(handle, self.config.nori_home.clone(), started)
-            .await
-        {
-            tracing::warn!(%error, "failed to attach committed candidate to remote ACP host");
-        }
+    pub(crate) fn harness_handle(&self) -> Option<HarnessHandle> {
+        self.harness_handle.clone()
     }
 
     pub(crate) fn submit_harness_action(&self, action: crate::app_event::HarnessAction) {

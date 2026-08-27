@@ -238,19 +238,25 @@ the transcript.
 [`remote_agent.rs`](src/remote_agent.rs) implements the acp-host `HostedAgent`
 trait over `HarnessHandle` as `HarnessRemoteHost`, and re-exports the server
 types so frontends reach the whole remote surface through
-`nori_harness::remote_agent` without importing `nori-acp-host`.
+`nori_harness::remote_agent` without importing `nori-acp-host`. An embedding
+frontend creates one host for its own application lifetime; the harness does
+not keep a process-global host or own listener policy.
 
 - `attach(handle, nori_home)` follows a newly launched session through a
   `subscribe_events` subscription, replacing any previously followed session.
-  It must be called immediately after `launch_session` so the subscription
-  registers ahead of the session's startup events.
-- A switch candidate deliberately does not call `attach` during activation,
-  because doing so would replace the process-wide remote session before the
-  TUI commits the switch. After observing the candidate's `SessionStarted`, the
-  TUI calls `attach_started(handle, nori_home, started)`; this replaces the old
-  remote attachment and seeds the new outward identity and working directory
-  from the already-consumed start event while subscribing from the commit
-  boundary onward.
+  Embedders that use this path call it immediately after `launch_session` so
+  the subscription registers ahead of startup events.
+- The TUI instead calls `attach_started(handle, nori_home, started)` only after
+  an active session publishes `SessionStarted`. This seeds the outward identity
+  and working directory from the already-consumed start event, then subscribes
+  from that commit boundary onward. During an agent switch the current session
+  remains attached until the candidate reaches this event, so candidate
+  preparation, failure, or cancellation cannot replace it.
+- Host attachment and listener lifetime are independent. The TUI keeps the
+  app-owned host attached while runtime remote control is disabled, allowing a
+  later enable to expose the current session without relaunching it. Stopping
+  the listeners disconnects the controller but does not shut down the host or
+  harness.
 - The outward ACP session id is the stable Nori conversation id (transcript
   id), captured from `SessionStarted`. Downstream swaps that continue the
   conversation (compact, restore) stay invisible to remote clients; forwarded
@@ -272,9 +278,6 @@ types so frontends reach the whole remote surface through
 - When the remote controller detaches or is replaced, its unanswered delegated
   requests are answered with a cancelled permission outcome so they cannot
   wedge the agent.
-- `set_active_host` / `active_host` are the process-global install point (set
-  once at remote-mode startup); the TUI attaches ordinary launches
-  immediately and candidate launches only at their `SessionStarted` commit.
 
 #### Goal ownership and MCP routing
 

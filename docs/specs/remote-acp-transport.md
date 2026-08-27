@@ -2,7 +2,7 @@
 
 **Status:** Implemented (v1)
 
-**Date:** 2026-08-23
+**Date:** 2026-08-23 (revised 2026-08-26)
 
 **Upstream:** [ACP Streamable HTTP & WebSocket Transport RFD](https://agentclientprotocol.com/rfds/streamable-http-websocket-transport)
 
@@ -12,10 +12,11 @@ Nori CLI will optionally expose its running harness as an ACP Agent over the
 WebSocket profile of the upstream remote transport RFD.
 
 The server belongs in `nori-acp-host`, which already owns the ACP SDK,
-subprocess connection, and wire lifecycle. It is disabled unless remote mode
-is explicitly enabled. When enabled, the listener binds loopback by default;
-a non-loopback bind requires its own explicit opt-in. No separate
-session-host crate is introduced.
+subprocess connection, and wire lifecycle. The interactive application owns
+one stable harness host and the complete listener lifecycle. Remote access is
+disabled unless startup configuration or a runtime command explicitly enables
+it. Every enabled surface binds exact addresses and includes loopback; no
+wildcard listener or separate session-host crate is introduced.
 
 This is separate from `nori exec --acp`. That command remains a bounded,
 terminal-independent stdio facade. Remote mode exposes the long-lived harness
@@ -44,6 +45,12 @@ terminal detach/attach. WebSocket ACP traffic terminates directly in Nori.
 - connection identity and initialization state;
 - WebSocket framing, ping/pong, bounded output, and disconnect cleanup;
 - the outward ACP Agent implementation.
+
+The TUI owns the runtime policy above that server: it selects exact listener
+addresses, retains one stable `HarnessRemoteHost`, reports reachable endpoints,
+and starts or stops all listeners without changing the harness lifetime. The
+host remains attached while listeners are disabled, so enabling remote control
+can expose the already-running session immediately.
 
 `nori-acp-host` must not depend on `nori-harness`. It defines a small
 `HostedAgent` interface using `nori-protocol` types; `nori-harness` implements
@@ -99,10 +106,11 @@ the host. It does not introduce a Nori-specific message envelope.
 
 A WebSocket connection and an ACP session have separate lifetimes.
 
-The server accepts one remote connection at a time. A newer connection
-replaces the current one — last connect wins — and the replaced socket is
-closed. Broadcasting one session's stream to several concurrent remote
-connections is on the roadmap, not in this version.
+The server accepts one remote connection at a time across all of its exact
+listeners. Those listeners share connection identity state; a newer connection
+on any address replaces the current one — last connect wins — and the replaced
+socket is closed. Broadcasting one session's stream to several concurrent
+remote connections is on the roadmap, not in this version.
 
 - Socket EOF or network loss detaches the remote client. It does not close the
   Nori harness session, stop the downstream agent, or exit the TUI.
@@ -113,6 +121,11 @@ connections is on the roadmap, not in this version.
 - `session/close` is terminal for the selected harness session.
 - Foregrounding or detaching the Handroll-owned terminal does not affect the
   WebSocket connection.
+- Disabling runtime remote control closes the active controller and stops every
+  listener. Server-wide cancellation also rejects an accepted upgrade whose
+  callback races with shutdown; consuming shutdown waits for the aborted accept
+  tasks before reporting completion. It does not detach or shut down the hosted
+  harness session.
 
 The first version follows the RFD's v1 reliability model: no sequence numbers,
 no replay of messages missed while disconnected, and no transparent retry of
@@ -151,7 +164,48 @@ boundary onward. Replacing the hosted session disconnects the current remote
 controller under the existing hosted-session replacement behavior, so it
 reconnects and rediscovers the newly committed conversation.
 
-## 7. Implementation boundary
+The app attaches the stable host only after an active session publishes
+`SessionStarted`, whether or not any listener is currently enabled. This makes
+session identity explicit, keeps runtime enable independent of launch timing,
+and applies the same commit boundary to ordinary launches and agent switches.
+
+## 7. Runtime control and bind policy
+
+The interactive TUI exposes these client-owned commands; they never become an
+agent prompt and remain available when no agent session is active:
+
+| Command | Effect |
+| --- | --- |
+| `/remote-control` or `/remote-control on` | Bind `127.0.0.1` on an allocated port. |
+| `/remote-control on tailnet` | Run `tailscale status --json`, require a running node and exact IPv4, then bind loopback and that address on one shared allocated port. |
+| `/remote-control on IP:PORT` | Bind loopback and the exact address on the requested port. A non-loopback address requires a red, one-shot confirmation that is never persisted. |
+| `/remote-control off` | Disconnect the controller and stop all listeners without stopping the harness. |
+| `/remote-control status` | Report scope, reachable endpoints, and controller state. |
+
+Wildcard addresses are rejected. Successful enable and status results are
+durable TUI history entries containing every reachable `ws://.../acp` URL;
+loopback is always included while enabled. Local-only mode may report that
+Tailscale is available and suggest `on tailnet`, but it must not present the
+tailnet address as reachable before binding it. Explicit loopback targets,
+including IPv6 loopback supplied at startup or runtime, remain local-only and
+receive the same hint. Runtime control does not invoke Handroll, mutate
+Tailscale Serve or Funnel state, discover other VPNs, or add an authentication
+layer.
+
+`nori --remote <PORT|IP:PORT>` enters the same app-owned lifecycle. A bare port
+is loopback-only. An exact non-loopback startup address still requires
+`--remote-allow-nonloopback`, then produces loopback and exact-address listeners
+on the requested port. All requested sockets bind successfully before any one
+of them begins serving, so a failure cannot leave a partial new surface.
+Replacing a surface normally binds the new set before shutting down the old
+one. If the new set reuses an exact nonzero address owned by the old set, the
+manager first consumes and awaits the old server so the port is available;
+it snapshots the old target and exact addresses before doing so. If the new
+bind fails, the manager restores that previous surface and returns the original
+error; its controller must reconnect. Only a second bind failure while
+restoring leaves remote control disabled, and that error reports both failures.
+
+## 8. Implementation boundary
 
 ```text
 nori-rs/
@@ -170,25 +224,23 @@ nori-rs/
 │   └── remote_agent.rs                   # HostedAgent over HarnessHandle
 ├── tui/src/
 │   ├── cli.rs                            # --remote / --remote-allow-nonloopback
-│   ├── lib.rs                            # Remote-mode activation at startup
-│   └── chatwidget/agent.rs               # Attach ordinary launches; defer candidates
+│   ├── remote_control.rs                 # Runtime policy and app-owned lifecycle
+│   ├── app/                              # Commands and SessionStarted attachment
+│   └── chatwidget/                       # Input parsing and exposure confirmation
 └── exec/src/lib.rs                        # Existing facade remains unchanged
 ```
 
-The `--remote` flag lives on the interactive CLI surface (`nori --remote
-<ADDR>`), so activation happens in the TUI startup path rather than a separate
-`cli/src/remote.rs`; the `cli` crate itself is unchanged. A remote prompt's
-own text is not yet rendered by the observing TUI (its updates, tool calls,
-and results are); surfacing the initiating message locally is follow-up work.
+The `--remote` flag lives on the interactive CLI surface and is normalized into
+the same TUI-owned manager as runtime commands; the `cli` crate itself remains
+unchanged. A remote prompt's own text is not yet rendered by the observing TUI
+(its updates, tool calls, and results are); surfacing the initiating message
+locally is follow-up work.
 
-## 8. Planned compatibility and lifecycle follow-up
+## 9. Planned compatibility and lifecycle follow-up
 
 The following items are planned follow-up work rather than guarantees of the
 v1 transport:
 
-- Production attachment can miss `SessionStarted`, or an older detached
-  attachment can finish last, leaving the remote host empty or attached to a
-  stale session.
 - A remote prompt can emit an immediate permission request before remote turn
   ownership is registered, silently dropping the request and wedging the turn.
 - The TUI and remote controller can both answer the same delegated permission

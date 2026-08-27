@@ -4,16 +4,16 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn new(common: ChatWidgetInit) -> Self {
-        Self::new_with_remote_attachment(common, true)
+        Self::new_inner(common)
     }
 
-    /// Build a hidden switch candidate without replacing the process-wide
-    /// remote attachment before the app commits its `SessionStarted` event.
+    /// Build a hidden switch candidate. The app commits it only after its
+    /// `SessionStarted` event.
     pub(crate) fn new_candidate(common: ChatWidgetInit) -> Self {
-        Self::new_with_remote_attachment(common, false)
+        Self::new_inner(common)
     }
 
-    fn new_with_remote_attachment(common: ChatWidgetInit, attach_remote_host: bool) -> Self {
+    fn new_inner(common: ChatWidgetInit) -> Self {
         let ChatWidgetInit {
             config,
             frame_requester,
@@ -41,8 +41,6 @@ impl ChatWidget {
                 nori_harness::runtime::SessionStart::New,
                 app_event_tx.clone(),
                 session_generation,
-                config.nori_home.clone(),
-                attach_remote_host,
             )
         } else if deferred_spawn {
             SpawnAgentResult { handle: None }
@@ -160,13 +158,7 @@ impl ChatWidget {
         title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
     ) -> Self {
-        Self::new_resumed_acp_with_remote_attachment(
-            common,
-            acp_session_id,
-            title,
-            transcript,
-            true,
-        )
+        Self::new_resumed_acp_inner(common, acp_session_id, title, transcript)
     }
 
     pub(crate) fn new_resumed_acp_candidate(
@@ -175,21 +167,14 @@ impl ChatWidget {
         title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
     ) -> Self {
-        Self::new_resumed_acp_with_remote_attachment(
-            common,
-            acp_session_id,
-            title,
-            transcript,
-            false,
-        )
+        Self::new_resumed_acp_inner(common, acp_session_id, title, transcript)
     }
 
-    fn new_resumed_acp_with_remote_attachment(
+    fn new_resumed_acp_inner(
         common: ChatWidgetInit,
         acp_session_id: Option<String>,
         title: Option<String>,
         transcript: Option<nori_harness::transcript::Transcript>,
-        attach_remote_host: bool,
     ) -> Self {
         let ChatWidgetInit {
             config,
@@ -221,8 +206,6 @@ impl ChatWidget {
                 }),
                 app_event_tx.clone(),
                 session_generation,
-                config.nori_home.clone(),
-                attach_remote_host,
             )
         } else {
             spawn_acp_agent_resume(

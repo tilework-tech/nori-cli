@@ -119,10 +119,9 @@ fn prepare_and_launch_acp_agent(
     let display_name = get_agent_display_name(&config.active_agent);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
-    let nori_home = config.nori_home.clone();
     let prepare_spec = agent_prepare_spec(config, fork_context);
     let session = prepare_and_launch_session(prepare_spec, start);
-    forward_launched_session(session, app_event_tx, generation, nori_home, true)
+    forward_launched_session(session, app_event_tx, generation)
 }
 
 pub(crate) fn agent_prepare_spec(
@@ -146,39 +145,17 @@ pub(crate) fn launch_prepared_agent(
     start: SessionStart,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
-    nori_home: std::path::PathBuf,
-    attach_remote_host: bool,
 ) -> SpawnAgentResult {
     let session = launch_session(SessionLaunchSpec { agent, start });
-    forward_launched_session(
-        session,
-        app_event_tx,
-        generation,
-        nori_home,
-        attach_remote_host,
-    )
+    forward_launched_session(session, app_event_tx, generation)
 }
 
 fn forward_launched_session(
     mut session: nori_harness::runtime::LaunchedSession,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
-    nori_home: std::path::PathBuf,
-    attach_remote_host: bool,
 ) -> SpawnAgentResult {
     let handle = Some(session.handle.clone());
-
-    // Remote mode: let the remote ACP surface follow this session too. The
-    // attach subscribes well before the backend finishes connecting, so the
-    // remote host observes the session's startup events.
-    if attach_remote_host && let Some(remote_host) = nori_harness::remote_agent::active_host() {
-        let remote_handle = session.handle.clone();
-        tokio::spawn(async move {
-            if let Err(error) = remote_host.attach(remote_handle, nori_home).await {
-                tracing::warn!("failed to attach the remote ACP host: {error}");
-            }
-        });
-    }
 
     tokio::spawn(async move {
         while let Some(event) = session.events.recv().await {
