@@ -18,6 +18,19 @@ impl ChatWidget {
         self.bottom_pane.show_selection_view(params);
     }
 
+    pub(crate) fn open_agent_recovery_popup(&mut self, error: &str) {
+        let recording_enabled = self.config.acp_proxy.enabled;
+        self.bottom_pane
+            .set_acp_wire_recording_enabled(recording_enabled);
+        let params = crate::nori::agent_picker::agent_picker_params_with_subtitle(
+            &self.config.active_agent,
+            self.app_event_tx.clone(),
+            recording_enabled,
+            error.to_string(),
+        );
+        self.bottom_pane.show_selection_view(params);
+    }
+
     pub(crate) fn set_acp_wire_recording_enabled(&mut self, enabled: bool) {
         self.bottom_pane.set_acp_wire_recording_enabled(enabled);
     }

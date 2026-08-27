@@ -214,7 +214,7 @@ impl ChatWidget {
     pub(crate) fn on_agent_spawn_failed(&mut self, agent_name: &str, error: &str) {
         self.bottom_pane.hide_status_indicator();
         self.add_error_message(format!("Failed to start agent '{agent_name}': {error}"));
-        self.open_agent_popup();
+        self.open_agent_recovery_popup(error);
     }
 
     pub(crate) fn add_memory_output(&mut self) {

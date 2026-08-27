@@ -391,6 +391,15 @@ in [`session_setup.rs`](src/app/session_setup.rs), while
 [`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes a
 prepared connection into the harness runtime.
 
+When ordinary agent startup fails, the handler records the complete failure in
+history and opens the agent picker as the recovery action. Because that
+full-height picker can place the history cell outside the viewport, the same
+spawn error is also its subtitle; the ordinary `/agent` command retains the
+generic new-conversation subtitle. This recovery path is assembled by
+[`ChatWidget`](src/chatwidget/pickers.rs) and the shared picker parameters in
+[`agent_picker.rs`](src/nori/agent_picker.rs), without changing the error value
+or treating it as picker state.
+
 Primary preparation is owned as a generation plus task abort handle, not a
 boolean in-flight flag. Explicit new/resume selection, close, candidate
 preparation, and exit invalidate it before changing lifecycle state. An
