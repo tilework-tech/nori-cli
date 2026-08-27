@@ -462,7 +462,7 @@ impl App {
                             None,
                         );
                         if !self.cloud_mode && self.candidate_agent.is_none() {
-                            self.chat_widget.open_agent_popup();
+                            self.chat_widget.open_agent_recovery_popup(&error);
                         }
                     }
                 }

@@ -48,24 +48,23 @@ fn test_startup_error_for_unregistered_model() {
     .expect("Failed to spawn");
 
     // When acp.allow_http_fallback=false (default) and the model is not registered as an ACP agent,
-    // the TUI should start, show an error message, and open the agent picker for recovery.
-    // Use a short needle that won't wrap across lines at 80 columns.
-    session.wait_for_text("Unknown ACP agent", TIMEOUT).unwrap();
+    // the TUI should start and open the agent picker with the error as its
+    // subtitle. History may be outside the viewport while the picker is open.
+    session.wait_for_text("Select Agent", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
 
-    // Verify the error message appears (short needle avoids line-wrap issues)
-    assert!(
-        contents.contains("Unknown ACP agent"),
-        "Missing the required error message, screen contents: {}",
-        contents
-    );
+    let mut lines = contents.lines();
+    lines
+        .find(|line| line.contains("Select Agent"))
+        .expect("Agent picker should be visible");
+    let picker_subtitle = lines.next().unwrap_or_default();
 
-    // Verify the agent picker opened for recovery
+    // Verify the recovery action itself keeps the startup error visible.
     assert!(
-        contents.contains("Select Agent"),
-        "Agent picker should open for recovery, screen contents: {}",
+        picker_subtitle.contains("Unknown ACP agent"),
+        "Recovery picker should show the startup error as its subtitle, screen contents: {}",
         contents
     );
 }
