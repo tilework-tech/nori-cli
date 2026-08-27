@@ -43,6 +43,7 @@ pub enum SlashCommand {
     Diff,
     Mention,
     Status,
+    RemoteControl,
     Memory,
     FirstPrompt,
     Mcp,
@@ -72,6 +73,7 @@ impl SlashCommand {
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
             SlashCommand::Status => "show current session configuration and context window usage",
+            SlashCommand::RemoteControl => "manage remote ACP access to this running session",
             SlashCommand::Memory => "show the contents of all active instruction files",
             SlashCommand::FirstPrompt => "show the first prompt from this session",
             SlashCommand::Model => "choose what model and reasoning effort to use",
@@ -121,6 +123,7 @@ impl SlashCommand {
             | SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
+            | SlashCommand::RemoteControl
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
             | SlashCommand::Goal
@@ -154,6 +157,7 @@ impl SlashCommand {
             | SlashCommand::Undo
             | SlashCommand::Mention
             | SlashCommand::Status
+            | SlashCommand::RemoteControl
             | SlashCommand::Memory
             | SlashCommand::FirstPrompt
             | SlashCommand::Mcp

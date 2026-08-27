@@ -73,6 +73,13 @@ pub(crate) enum AppEvent {
     /// session picker instead of auto-claiming a fresh session.
     SessionClosed,
 
+    /// Manage the app-owned remote ACP listener lifecycle.
+    RemoteControlRequested(crate::remote_control::RemoteControlRequest),
+
+    /// The user accepted the one-shot dangerous-exposure warning for an
+    /// explicit non-loopback address.
+    ConfirmRemoteControlExplicit(std::net::SocketAddr),
+
     /// An agent connection finished initialization and optional session
     /// listing. The successful value still owns that exact live connection.
     AgentPrepared {

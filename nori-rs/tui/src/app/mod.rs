@@ -85,6 +85,7 @@ pub(crate) struct App {
     pub(crate) app_event_tx: AppEventSender,
     pub(crate) chat_widget: ChatWidget,
     pub(crate) auth_manager: Arc<AuthManager>,
+    remote_control: crate::remote_control::RemoteControlManager,
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: NoriConfig,
@@ -220,6 +221,7 @@ impl App {
         vertical_footer: bool,
         cloud_mode: bool,
         cloud_onboard: bool,
+        startup_remote_addr: Option<std::net::SocketAddr>,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -289,6 +291,7 @@ impl App {
             app_event_tx,
             chat_widget,
             auth_manager: auth_manager.clone(),
+            remote_control: crate::remote_control::RemoteControlManager::new(),
             config,
             vertical_footer,
             cloud_mode,
@@ -319,6 +322,20 @@ impl App {
             deferred_spawn_pending: skillset_per_session,
             mcp_oauth_cancel_tx: None,
         };
+
+        if let Some(addr) = startup_remote_addr {
+            let report = app
+                .remote_control
+                .enable_startup(addr, false)
+                .await
+                .map_err(|error| color_eyre::eyre::eyre!(error))?;
+            for url in report.urls() {
+                tracing::info!("remote ACP transport listening on {url}");
+            }
+            app.chat_widget.add_boxed_history(Box::new(
+                crate::history_cell::new_remote_control_event(report.lines()),
+            ));
+        }
 
         // Propagate NoriConfig settings to the textarea.
         app.hotkey_config = app.config.hotkeys.clone();
@@ -424,6 +441,7 @@ impl App {
         }
         app.prepared_agent_initial_context = None;
         app.discard_candidate();
+        app.remote_control.disable().await;
 
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;
