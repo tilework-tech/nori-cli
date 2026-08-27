@@ -144,6 +144,15 @@ active wire prompt. Load/replay chunks, unowned activity, and unmarked user
 messages continue through unchanged; content alone is never used to guess
 ownership.
 
+Every admitted prompt is also bracketed in the shared fan-out by
+`SessionInfoUpdate` notifications carrying `_meta.nori.status`. `working` is
+published after the downstream transport assigns the prompt request id and
+before canonical user chunks or agent output; `idle` follows all completion,
+cancellation, or failure output. These are observer lifecycle hints, not prompt
+responses: a frontend that did not submit the turn can render and flush the
+complete stream without claiming the initiating request or receiving its stop
+reason.
+
 The public event stream has two source-owned branches:
 
 ```rust
@@ -287,18 +296,37 @@ types so frontends reach the whole remote surface through
   `TranscriptLoader`, and projects it with
   `transcript_to_replay_session_events`, keeping only session notifications
   and restamping them with the outward id.
-- Live `session/update` notifications—including canonical user prompt chunks—
-  are forwarded from the shared harness fan-out without content translation;
-  only their outward session id is rewritten, so the correlation marker is
-  preserved end to end. The transport still has one controller, while the
-  fan-out remains the common source for the TUI and future bounded observers.
-- Turn ownership is tracked by harness request id: `prompt` submits without
-  holding the state lock (a queued prompt resolves only when issued), then
-  registers the returned id as remote-owned; an outcome that raced ahead of
-  the registration is claimed from a small unclaimed-outcome buffer instead.
-  Only remote-owned turns forward their final response, `RequestFailed`, and
-  delegated permission requests to the remote controller. A locally initiated
-  turn's permission requests stay with the TUI.
+- Live `session/update` notifications—including canonical user prompt chunks
+  and `working`/`idle` lifecycle hints—are forwarded from the shared harness
+  fan-out without content translation; only their outward session id is
+  rewritten, so correlation and observer lifecycle survive the boundary. The
+  transport still has one controller, while the fan-out remains the common
+  source for the TUI and future bounded observers.
+- Remote prompt admission is serialized with the session runtime and rejects
+  with ACP error `-32015` while a turn is active or a local prompt is already
+  queued. Local submissions keep the ordinary harness queue. The admission
+  barrier provides a fast rejection before prompt hooks and snapshots, while
+  the reducer repeats the same decision at the state transition boundary.
+- Turn ownership is tracked by harness request id after a remote prompt is
+  admitted. An outcome that races ahead of registration is claimed from a
+  small bounded buffer. Only remote-owned turns forward their final response,
+  `RequestFailed`, and delegated permission requests to the controller; local
+  turns expose their content and lifecycle notifications but keep responses
+  and permission decisions with the local frontend.
+- Prompt registration runs in a detached host task, so dropping the calling
+  WebSocket task during disconnect does not abandon the admission operation or
+  leave the host permanently busy. Each registration carries a monotonic
+  submission token; completion may clear pending prompt and cancel state only
+  while that token still matches. Session replacement invalidates the token,
+  while controller reconnection leaves the host-owned registration running to
+  completion.
+- Remote `session/cancel` targets a harness request id rather than whichever
+  turn happens to be active. If cancel arrives while an admitted remote prompt
+  is still awaiting request-id registration, the host remembers it and sends
+  the request-scoped cancel immediately after registration. The reducer applies
+  that cancel only when the same request still owns the active turn, so a late
+  cancel cannot affect a later local turn. With no pending or registered remote
+  prompt, remote cancel is a no-op.
 - When the remote controller detaches or is replaced, its unanswered delegated
   requests are answered with a cancelled permission outcome so they cannot
   wedge the agent.
@@ -346,23 +374,27 @@ is terminal for that one prompt.
 
 An active local prompt or load owns request-scoped updates until its response.
 Without one, the reducer accepts, preserves, and projects each update as
-unowned activity. The first non-metadata update in an unowned burst emits
-`Received update with no active local request`; later updates do not repeat the
-warning until a local prompt or load starts. The warning does not create a
-synthetic request or `Prompting` phase, invent attribution, or prevent
-projection. User, agent, thought, plan, and tool updates all follow that rule;
-unowned tool snapshots retain `owner_request_id = None`, and an unknown tool
-update is normalized from a default tool call rather than discarded. This
-logic lives in
+unowned activity. The first non-metadata update in an unbounded unowned burst
+emits `Received update with no active local request`; later updates do not
+repeat the warning until a local prompt or load starts. A Nori
+`SessionInfoUpdate` with status `working` begins bounded observer activity, and
+status `idle` ends it and resets warning eligibility. Content inside that
+envelope is still unowned but does not emit the warning. The warning and
+observer state never create a synthetic request or `Prompting` phase, invent
+attribution, drain the queue, or prevent projection. User, agent, thought,
+plan, and tool updates all follow that rule; unowned tool snapshots retain
+`owner_request_id = None`, and an unknown tool update is normalized from a
+default tool call rather than discarded. This logic lives in
 [`session_reducer.rs`](src/backend/session_reducer.rs) and
 [`session_runtime_driver.rs`](src/backend/session_runtime_driver.rs).
 
-The public stream forwards raw ACP session metadata unchanged. The harness does
-not interpret metadata as prompt completion or publish an agent-turn completion
-event, so presentation of unowned updates or an agent-owned turn cannot drain
-the queue, end cancellation, or change request state. Optional presentation
-hints are interpreted only by the TUI, as described in
-[`nori-tui`](../tui/docs.md).
+Raw ACP session metadata remains public. The harness recognizes only the
+optional `_meta.nori.status` values needed to bound observer activity when no
+local request is active, and also publishes those hints around turns it
+admits. Status metadata does not complete a prompt, return a stop reason, end
+cancellation, or change local request state; the ACP prompt response remains
+the sole completion authority for the initiator. Presentation behavior is
+described in [`nori-tui`](../tui/docs.md).
 
 Session end reasons are:
 
@@ -539,5 +571,11 @@ temp dir is removed.
   (last connect wins), and a consumer whose bounded queue overflows is dropped,
   which closes its connection. Remote-host behavior is exercised in
   `@/nori-rs/harness/tests/remote_host.rs` against the mock ACP agent.
+- Remote and local frontends share notifications but not request ownership.
+  Local prompts may queue; remote prompts reject while busy, remote cancel is
+  scoped to the registered harness request id, and only the remote submitter
+  receives a correlated prompt outcome. Prompt registration belongs to
+  `HarnessRemoteHost`, so controller replacement cannot strand admission state,
+  while hosted-session replacement invalidates the old registration token.
 
 Created and maintained by Nori.

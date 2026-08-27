@@ -289,6 +289,47 @@ fn cancel_sets_cancelling_but_does_not_end_turn() {
 }
 
 #[test]
+fn request_scoped_cancel_only_cancels_the_matching_turn() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        InboundEvent::PromptSubmit(simple_prompt()),
+        &mut norm,
+    );
+    let active_request_id = rt
+        .active
+        .as_ref()
+        .expect("prompt should be active")
+        .request_id
+        .clone();
+    let stale = reduce(
+        &mut rt,
+        InboundEvent::CancelSubmitFor {
+            request_id: request_id("stale-turn"),
+        },
+        &mut norm,
+    );
+    assert!(stale.events.is_empty());
+    assert!(stale.side_effects.is_empty());
+    assert_eq!(rt.phase_view(), SessionPhaseView::Prompt);
+
+    let matching = reduce(
+        &mut rt,
+        InboundEvent::CancelSubmitFor {
+            request_id: active_request_id,
+        },
+        &mut norm,
+    );
+    assert!(has_side_effect(&matching.side_effects, |effect| matches!(
+        effect,
+        SideEffect::SendCancel
+    )));
+    assert_eq!(rt.phase_view(), SessionPhaseView::Cancelling);
+}
+
+#[test]
 fn double_cancel_is_noop() {
     let mut rt = new_runtime();
     let mut norm = new_normalizer();
@@ -393,6 +434,54 @@ fn notification_while_idle_warns_and_remains_unowned() {
     assert!(has_event(&out.events, |event| matches!(
         event,
         ClientEvent::MessageDelta(delta) if delta.delta == "proactive content"
+    )));
+    assert!(rt.active.is_none());
+    assert_eq!(rt.phase, SessionPhase::Idle);
+}
+
+#[test]
+fn nori_status_bounds_unowned_activity_without_claiming_the_turn() {
+    let mut rt = new_runtime();
+    let mut norm = new_normalizer();
+
+    reduce(
+        &mut rt,
+        notification(nori_status_update("working")),
+        &mut norm,
+    );
+    let bounded = reduce(
+        &mut rt,
+        notification(acp::SessionUpdate::AgentMessageChunk(
+            acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(
+                "observed response",
+            ))),
+        )),
+        &mut norm,
+    );
+    reduce(&mut rt, notification(nori_status_update("idle")), &mut norm);
+    let unbounded = reduce(
+        &mut rt,
+        notification(acp::SessionUpdate::AgentMessageChunk(
+            acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(
+                "truly unowned",
+            ))),
+        )),
+        &mut norm,
+    );
+
+    assert!(!has_event(&bounded.events, |event| matches!(
+        event,
+        ClientEvent::Warning(warning)
+            if warning.message == "Received update with no active local request"
+    )));
+    assert!(has_event(&bounded.events, |event| matches!(
+        event,
+        ClientEvent::MessageDelta(delta) if delta.delta == "observed response"
+    )));
+    assert!(has_event(&unbounded.events, |event| matches!(
+        event,
+        ClientEvent::Warning(warning)
+            if warning.message == "Received update with no active local request"
     )));
     assert!(rt.active.is_none());
     assert_eq!(rt.phase, SessionPhase::Idle);

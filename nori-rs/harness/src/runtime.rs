@@ -22,6 +22,7 @@ use tokio::sync::oneshot;
 use crate::backend::AcpBackend;
 use crate::backend::AcpBackendConfig;
 use crate::backend::BackendEvent;
+use crate::backend::PromptAdmission;
 use crate::backend::SessionContext;
 pub use crate::backend::prepared::PreparedAgent;
 pub use crate::backend::prepared::SessionCatalog;
@@ -77,6 +78,7 @@ enum HarnessCommand {
     Prompt {
         content: Vec<acp::v1::ContentBlock>,
         meta: Option<acp::v1::Meta>,
+        admission: PromptAdmission,
         response_tx: oneshot::Sender<anyhow::Result<acp::v1::RequestId>>,
     },
     /// Shut down the active harness session.
@@ -91,6 +93,10 @@ enum HarnessCommand {
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
     Cancel {
+        response_tx: oneshot::Sender<anyhow::Result<()>>,
+    },
+    CancelRequest {
+        request_id: acp::v1::RequestId,
         response_tx: oneshot::Sender<anyhow::Result<()>>,
     },
     AddHistory {
@@ -197,11 +203,31 @@ impl HarnessHandle {
         content: Vec<acp::v1::ContentBlock>,
         meta: Option<acp::v1::Meta>,
     ) -> anyhow::Result<acp::v1::RequestId> {
+        self.prompt_with_meta_and_admission(content, meta, PromptAdmission::Queue)
+            .await
+    }
+
+    pub(crate) async fn prompt_with_meta_if_idle(
+        &self,
+        content: Vec<acp::v1::ContentBlock>,
+        meta: Option<acp::v1::Meta>,
+    ) -> anyhow::Result<acp::v1::RequestId> {
+        self.prompt_with_meta_and_admission(content, meta, PromptAdmission::RejectIfBusy)
+            .await
+    }
+
+    async fn prompt_with_meta_and_admission(
+        &self,
+        content: Vec<acp::v1::ContentBlock>,
+        meta: Option<acp::v1::Meta>,
+        admission: PromptAdmission,
+    ) -> anyhow::Result<acp::v1::RequestId> {
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::Prompt {
                 content,
                 meta,
+                admission,
                 response_tx,
             })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
@@ -255,6 +281,17 @@ impl HarnessHandle {
     pub async fn cancel(&self) -> anyhow::Result<()> {
         self.request(|response_tx| HarnessCommand::Cancel { response_tx })
             .await
+    }
+
+    pub(crate) async fn cancel_request(
+        &self,
+        request_id: acp::v1::RequestId,
+    ) -> anyhow::Result<()> {
+        self.request(|response_tx| HarnessCommand::CancelRequest {
+            request_id,
+            response_tx,
+        })
+        .await
     }
 
     pub async fn add_history(&self, text: String) -> anyhow::Result<()> {
@@ -803,10 +840,11 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
                     HarnessCommand::Prompt {
                         content,
                         meta,
+                        admission,
                         response_tx,
                     } => {
                         backend_for_agent
-                            .submit_prompt(content, meta, response_tx)
+                            .submit_prompt(content, meta, admission, response_tx)
                             .await;
                     }
                     HarnessCommand::Shutdown {
@@ -832,6 +870,13 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
                     }
                     HarnessCommand::Cancel { response_tx } => {
                         let _ = response_tx.send(backend_for_agent.cancel().await);
+                    }
+                    HarnessCommand::CancelRequest {
+                        request_id,
+                        response_tx,
+                    } => {
+                        let _ =
+                            response_tx.send(backend_for_agent.cancel_request(request_id).await);
                     }
                     HarnessCommand::AddHistory { text, response_tx } => {
                         let _ = response_tx.send(backend_for_agent.add_history(text).await);

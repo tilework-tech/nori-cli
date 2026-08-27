@@ -24,6 +24,9 @@ pub(crate) struct CompletedTurn {
 
 pub(crate) enum SessionRuntimeInput {
     Reducer(InboundEvent),
+    Barrier {
+        response_tx: tokio::sync::oneshot::Sender<()>,
+    },
     PermissionRequest {
         pending_request: Box<PendingApprovalRequest>,
         current_policy: AskForApproval,
@@ -118,6 +121,10 @@ impl SessionDriver {
 
     pub(crate) fn queue_len(&self) -> usize {
         self.runtime.queue.len()
+    }
+
+    pub(crate) fn prompt_is_busy(&self) -> bool {
+        self.runtime.phase != SessionPhase::Idle || !self.runtime.queue.is_empty()
     }
 
     pub(crate) fn owns_active_prompt_echo(&self, chunk: &acp::ContentChunk) -> bool {
@@ -320,6 +327,7 @@ impl AcpBackend {
     }
 
     async fn dispatch_reducer_actions(&self, actions: ReducerActions) {
+        let completed_prompt = actions.completed_turn.is_some();
         match actions.completed_turn.as_ref().map(|turn| turn.prompt.kind) {
             // Summarize-and-swap compaction defers `PromptCompleted` until after
             // the session swap, so the new session is active before the UI sees
@@ -352,6 +360,10 @@ impl AcpBackend {
             }
         }
 
+        if completed_prompt {
+            self.forward_observer_turn_status("idle").await;
+        }
+
         for side_effect in actions.side_effects {
             self.execute_side_effect(side_effect).await;
         }
@@ -361,6 +373,23 @@ impl AcpBackend {
         for client_event in client_events {
             self.forward_client_event(client_event.clone()).await;
         }
+    }
+
+    async fn forward_observer_turn_status(&self, status: &str) {
+        let mut meta = serde_json::Map::new();
+        meta.insert("nori".to_string(), serde_json::json!({ "status": status }));
+        let notification = acp::SessionNotification::new(
+            self.session_id.read().await.clone(),
+            acp::SessionUpdate::SessionInfoUpdate(acp::SessionInfoUpdate::new().meta(meta)),
+        );
+        let _ = self
+            .backend_event_tx
+            .send(BackendEvent::Public(SessionEvent::Acp(
+                nori_protocol::AcpEvent::Notification(acp::AgentNotification::SessionNotification(
+                    notification,
+                )),
+            )))
+            .await;
     }
 
     pub(super) async fn forward_client_event(&self, client_event: ClientEvent) {
@@ -764,6 +793,7 @@ impl AcpBackend {
                             debug_assert!(actions.side_effects.is_empty());
                             debug_assert!(actions.completed_turn.is_none());
                             self.forward_client_events(&actions.events).await;
+                            self.forward_observer_turn_status("working").await;
                             Ok(wire_request_id)
                         }
                         Ok(Err(error)) => Err(error),
@@ -860,6 +890,16 @@ impl AcpBackend {
                     }
                 });
                 *self.cancel_timeout_abort.lock().await = Some(watchdog.abort_handle());
+            }
+            SideEffect::RejectPromptBusy { event_id } => {
+                if let Some(response_tx) = self
+                    .pending_prompt_submissions
+                    .lock()
+                    .await
+                    .remove(&event_id)
+                {
+                    let _ = response_tx.send(Err(super::PromptBusy.into()));
+                }
             }
             SideEffect::ResolvePermissionCancelled { request_id } => {
                 self.resolve_cancelled_permission(&request_id).await;

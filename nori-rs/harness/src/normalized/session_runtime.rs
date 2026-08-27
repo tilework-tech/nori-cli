@@ -221,6 +221,9 @@ pub struct SessionRuntime {
     /// warning since the last time a request became active. Reset on each new
     /// prompt/load start so a later unowned burst can warn again.
     pub orphan_update_warning_emitted: bool,
+    /// Whether Nori lifecycle metadata bounds activity owned by another
+    /// frontend. This never claims the local ACP request slot.
+    pub observer_turn_active: bool,
 }
 
 impl SessionRuntime {
@@ -231,6 +234,7 @@ impl SessionRuntime {
             active: None,
             queue: VecDeque::new(),
             orphan_update_warning_emitted: false,
+            observer_turn_active: false,
         }
     }
 

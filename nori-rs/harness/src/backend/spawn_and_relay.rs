@@ -308,6 +308,9 @@ impl AcpBackend {
                     session_runtime_driver::SessionRuntimeInput::Reducer(event) => {
                         runtime_backend.apply_session_event(event).await;
                     }
+                    session_runtime_driver::SessionRuntimeInput::Barrier { response_tx } => {
+                        let _ = response_tx.send(());
+                    }
                     session_runtime_driver::SessionRuntimeInput::PermissionRequest {
                         pending_request,
                         current_policy,

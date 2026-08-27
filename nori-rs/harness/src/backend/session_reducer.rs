@@ -40,8 +40,12 @@ pub enum InboundEvent {
     PermissionRequest { request_id: String, call_id: String },
     /// The user submitted a prompt (may be queued if a request is in flight).
     PromptSubmit(QueuedPrompt),
+    /// A remote controller submitted a prompt that must not queue.
+    PromptSubmitIfIdle(QueuedPrompt),
     /// The user requested cancellation of the active prompt.
     CancelSubmit,
+    /// A controller requested cancellation only if it owns this prompt.
+    CancelSubmitFor { request_id: acp::RequestId },
     /// A `session/load` was initiated.
     LoadSubmit { request_id: acp::RequestId },
 }
@@ -54,8 +58,8 @@ pub(super) fn inbound_event_kind(event: &InboundEvent) -> &'static str {
         InboundEvent::LoadResponse => "load_response",
         InboundEvent::PromptStarted { .. } => "prompt_started",
         InboundEvent::PermissionRequest { .. } => "permission_request",
-        InboundEvent::PromptSubmit(_) => "prompt_submit",
-        InboundEvent::CancelSubmit => "cancel_submit",
+        InboundEvent::PromptSubmit(_) | InboundEvent::PromptSubmitIfIdle(_) => "prompt_submit",
+        InboundEvent::CancelSubmit | InboundEvent::CancelSubmitFor { .. } => "cancel_submit",
         InboundEvent::LoadSubmit { .. } => "load_submit",
     }
 }
@@ -85,6 +89,8 @@ pub enum SideEffect {
     SendCancel,
     /// Resolve a pending permission request as cancelled.
     ResolvePermissionCancelled { request_id: String },
+    /// Reject a prompt instead of adding it to the queue.
+    RejectPromptBusy { event_id: String },
 }
 
 /// The output of a single reduction step.
@@ -109,11 +115,23 @@ pub fn reduce(
         InboundEvent::PromptSubmit(prompt) => {
             reduce_prompt_submit(runtime, prompt, &mut out);
         }
+        InboundEvent::PromptSubmitIfIdle(prompt) => {
+            if runtime.phase == SessionPhase::Idle && runtime.queue.is_empty() {
+                start_prompt(runtime, prompt, &mut out);
+            } else {
+                out.side_effects.push(SideEffect::RejectPromptBusy {
+                    event_id: prompt.event_id,
+                });
+            }
+        }
         InboundEvent::PromptStarted { request_id } => {
             reduce_prompt_started(runtime, request_id, &mut out);
         }
         InboundEvent::CancelSubmit => {
-            reduce_cancel_submit(runtime, &mut out);
+            reduce_cancel_submit(runtime, None, &mut out);
+        }
+        InboundEvent::CancelSubmitFor { request_id } => {
+            reduce_cancel_submit(runtime, Some(&request_id), &mut out);
         }
         InboundEvent::LoadSubmit { request_id } => {
             reduce_load_submit(runtime, request_id, &mut out);
@@ -234,13 +252,20 @@ fn reduce_prompt_started(
 // Cancel submit
 // ---------------------------------------------------------------------------
 
-fn reduce_cancel_submit(runtime: &mut SessionRuntime, out: &mut ReduceOutput) {
+fn reduce_cancel_submit(
+    runtime: &mut SessionRuntime,
+    expected_request_id: Option<&acp::RequestId>,
+    out: &mut ReduceOutput,
+) {
     if let SessionPhase::Prompt {
         cancelling,
         request_id,
         ..
     } = &mut runtime.phase
     {
+        if expected_request_id.is_some_and(|expected| expected != request_id) {
+            return;
+        }
         if *cancelling {
             return; // double cancel is a no-op
         }
@@ -454,7 +479,10 @@ fn reduce_notification(
     }
 
     // Warn once for content that no local prompt or load owns.
-    if runtime.active.is_none() && !runtime.orphan_update_warning_emitted {
+    if runtime.active.is_none()
+        && !runtime.observer_turn_active
+        && !runtime.orphan_update_warning_emitted
+    {
         out.events.push(ClientEvent::Warning(WarningInfo {
             message: "Received update with no active local request".to_string(),
         }));
@@ -544,6 +572,23 @@ fn reduce_metadata_update(
             }
             if let Some(updated_at) = session_info.updated_at.as_opt_ref() {
                 runtime.persisted.session_info.updated_at = updated_at.cloned();
+            }
+            if runtime.active.is_none()
+                && let Some(status) = session_info
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.get("nori"))
+                    .and_then(|nori| nori.get("status"))
+                    .and_then(serde_json::Value::as_str)
+            {
+                match status {
+                    "working" => runtime.observer_turn_active = true,
+                    "idle" => {
+                        runtime.observer_turn_active = false;
+                        runtime.orphan_update_warning_emitted = false;
+                    }
+                    _ => {}
+                }
             }
         }
         acp::SessionUpdate::UsageUpdate(usage) => {

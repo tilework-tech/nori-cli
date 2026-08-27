@@ -217,13 +217,11 @@ async fn serve_gated_connection<H: HostedAgent>(
                 async move |request: acp::PromptRequest,
                             responder: Responder<acp::PromptResponse>,
                             cx: ConnectionTo<Client>| {
-                    // Spawned: a prompt queued behind an active turn resolves
-                    // only when it is issued, and other incoming messages
-                    // (notably session/cancel) must keep dispatching.
+                    // Acquire the correlation lock before spawning so a later
+                    // session/cancel cannot overtake prompt registration.
                     let hosted = hosted.clone();
-                    let pending_prompts = pending_prompts.clone();
+                    let mut pending = pending_prompts.clone().lock_owned().await;
                     cx.spawn(async move {
-                        let mut pending = pending_prompts.lock().await;
                         match hosted
                             .prompt(&request.session_id, request.prompt, request.meta)
                             .await
@@ -257,7 +255,12 @@ async fn serve_gated_connection<H: HostedAgent>(
         .on_receive_notification(
             {
                 let hosted = hosted.clone();
+                let pending_prompts = pending_prompts.clone();
                 async move |notification: acp::CancelNotification, _cx: ConnectionTo<Client>| {
+                    // A prompt handler holds this lock until the hosted
+                    // request id is registered. Preserve wire order so cancel
+                    // cannot be acknowledged in the ownership gap.
+                    let _pending = pending_prompts.lock().await;
                     hosted.cancel(&notification.session_id).await?;
                     Ok(())
                 }

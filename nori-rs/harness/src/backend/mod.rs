@@ -33,6 +33,16 @@ use crate::undo::GhostSnapshotStack;
 
 mod remote_control_ext;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PromptAdmission {
+    Queue,
+    RejectIfBusy,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("session already has an active turn")]
+pub(crate) struct PromptBusy;
+
 // =============================================================================
 // Error Categorization
 // =============================================================================

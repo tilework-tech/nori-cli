@@ -7,6 +7,7 @@ impl AcpBackend {
         content: Vec<acp::ContentBlock>,
         id: &str,
         mut prompt_meta: Option<acp::Meta>,
+        admission: PromptAdmission,
     ) -> Result<()> {
         let prompt_text = content
             .iter()
@@ -199,22 +200,25 @@ impl AcpBackend {
             "Accepted user prompt into ACP backend"
         );
 
-        let _ = self
-            .session_event_tx
-            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
-                session_reducer::InboundEvent::PromptSubmit(
-                    crate::normalized::session_runtime::QueuedPrompt {
-                        event_id: id.to_string(),
-                        kind: crate::normalized::session_runtime::QueuedPromptKind::User,
-                        text: final_prompt_text,
-                        prompt_meta,
-                        original_content,
-                        content: final_content,
-                        display_text: Some(prompt_text_for_hooks),
-                    },
-                ),
-            ))
-            .await;
+        let prompt = crate::normalized::session_runtime::QueuedPrompt {
+            event_id: id.to_string(),
+            kind: crate::normalized::session_runtime::QueuedPromptKind::User,
+            text: final_prompt_text,
+            prompt_meta,
+            original_content,
+            content: final_content,
+            display_text: Some(prompt_text_for_hooks),
+        };
+        let event = match admission {
+            PromptAdmission::Queue => session_reducer::InboundEvent::PromptSubmit(prompt),
+            PromptAdmission::RejectIfBusy => {
+                session_reducer::InboundEvent::PromptSubmitIfIdle(prompt)
+            }
+        };
+        self.session_event_tx
+            .send(session_runtime_driver::SessionRuntimeInput::Reducer(event))
+            .await
+            .map_err(|_| anyhow::anyhow!("ACP session runtime closed during prompt submission"))?;
 
         Ok(())
     }
