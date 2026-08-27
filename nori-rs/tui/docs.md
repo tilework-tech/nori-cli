@@ -28,13 +28,15 @@ The TUI depends on `nori-harness`, `nori-config`, and `nori-protocol`; it does
 not import the ACP host or ACP schema crate directly. Its ACP types arrive
 through `nori_protocol::acp`.
 
-Shared pickers receive [`nori-tui-components`](../tui-components/docs.md)
-styles through [`component_theme`](src/style.rs). That adapter supplies the
-terminal's reported RGB background only when stdout supports true color, so
-neutral surfaces remain terminal-relative while the component library owns the
-green pointer, cyan information, foreground title, and neutral selected-copy
-grammar. Both bottom-pane pickers and the launch-time resume picker use this
-path; raw key routing and application actions remain owned by the TUI.
+Shared pickers and overlay menus receive
+[`nori-tui-components`](../tui-components/docs.md) styles through
+[`component_theme`](src/style.rs). That adapter supplies the terminal's
+reported RGB background only when stdout supports true color, so neutral
+surfaces remain terminal-relative while the component library owns the green
+pointer, cyan information, foreground title, and neutral selected-copy grammar.
+Bottom-pane selection adapters, launch-time pickers, and full-screen action
+prompts use this path; raw key routing and application actions remain owned by
+the TUI.
 
 At launch, the TUI supplies the harness with two Nori CLI context-envelope
 variants. Both identify the first prompt as coming from Nori CLI; the
@@ -103,7 +105,7 @@ into display cells and friendly labels. These view models are allowed to be
 lossy and UI-specific; they are not fed back into the harness or exported from
 `nori-protocol`.
 
-#### Picker navigation and search state
+#### Picker and overlay-menu presentation
 
 Searchable pickers use two explicit interaction states instead of interpreting
 every printable key as a query. They open in navigation state, where arrows and
@@ -123,19 +125,35 @@ additional visible hint text. Active footers describe typing and search exit.
   multi-stage Escape state transitions independent from Ctrl-C cancellation;
   the next Escape follows the view's normal dismissal path.
 - [`SelectionViewParams`](src/bottom_pane/list_selection_view.rs) keeps the
-  caller-owned selection model and adds an explicit presentation choice.
-  Standard picker factories opt into the shared presentation with `picker()`;
-  [`BottomPane::show_selection_view`](src/bottom_pane/mod.rs) then adapts those
-  rows into the domain-free picker instead of moving configuration types,
-  application events, or callbacks into the component crate. Short legacy
-  action lists may retain `ListSelectionView` and its numbered-row behavior.
+  caller-owned selection model and makes presentation explicit. Searchable or
+  browsable entity collections opt into `picker()`, bounded action sets opt
+  into `menu()`, and content that depends on an application-owned rich header
+  can retain `ListSelectionView`.
+  [`BottomPane::show_selection_view`](src/bottom_pane/mod.rs) selects the
+  corresponding adapter without moving configuration types, application
+  events, or callbacks into the component crate.
 - [`ComponentPickerView`](src/bottom_pane/component_picker_view.rs) maps
   Crossterm events into the domain-free `PickerAction` vocabulary from
   [`nori-tui-components`](../tui-components/docs.md). The adapter preserves
   current and initial selection, callbacks, keep-open actions, Shift-Tab
-  actions, and typed footer hints while projecting names and descriptions into
-  picker columns and details. The component's `search_active`, query,
-  filtering, and typed outcomes remain the source of truth.
+  actions, and typed footer hints while projecting names into one primary
+  column and descriptions into supporting rows. The shared renderer suppresses
+  that single column's heading and numbers the first nine actionable choices;
+  the adapter routes an inactive-search digit to the same visible choice and
+  submit path. Direct multi-column consumers, notably resume pickers, retain
+  table headings. The component's `search_active`, query, filtering, and typed
+  outcomes remain the source of truth.
+- [`ComponentOverlayMenuView`](src/bottom_pane/component_overlay_menu_view.rs)
+  projects the same caller-owned rows into `MenuState`, assigning number
+  shortcuts only to enabled action rows and preserving current-state markers,
+  consequence tone, callbacks, keep-open behavior, and dismissal callbacks.
+  It renders the shared dense, zebra-striped overlay with symmetric focus rails
+  and left-aligned hints inside the bottom-pane rectangle.
+- [`overlay_menu.rs`](src/overlay_menu.rs) is the common raw-key adapter for
+  bottom-pane and true full-screen menus. It maps arrows, `j`/`k`, paging,
+  Home/End, Enter, digits, character mnemonics, Escape, Ctrl-C, and Ctrl-D into
+  domain-free menu actions and ignores key-release events. Each caller retains
+  the meaning of activation and cancellation.
 - Specialized picker state machines use the same renderer only for their
   browsing states. For example, the hotkey and MCP views retain rebinding,
   form input, validation, and application-event routing locally while their
@@ -150,7 +168,11 @@ The pre-TUI [`resume_picker`](src/resume_picker/) cannot use a bottom-pane
 adapter, but it mirrors the same transitions and projects its active state and
 query into the reusable picker renderer. Full-screen CLI picker surfaces use
 the component's opt-in symmetric selection rails, including this launch-time
-picker; embedded or copyable output does not inherit the rail treatment.
+picker; embedded or copyable output does not inherit the rail treatment. The
+directory-trust onboarding step, worktree ask and blocked screens, and release
+update prompt are bounded full-screen actions, so they hold typed `MenuState`
+locally and use the same [`OverlayMenu`](../tui-components/src/menu/render.rs)
+and raw-key adapter instead of maintaining parallel row renderers.
 
 #### Structured session information
 
@@ -186,6 +208,13 @@ User actions call typed `HarnessHandle` methods for prompting, cancellation,
 history, prompt discovery, compaction, branching, undo, shell, goals, session
 config, session listing, close, and shutdown. The old generic operation bus is
 gone.
+
+The `/approvals` preset chooser and the replace-goal confirmation are bounded
+bottom-pane actions and therefore use the overlay-menu presentation. Warning
+tone is carried only by the consequential action; selection, number shortcuts,
+and cancellation still flow through the shared adapter. Rich confirmations
+that include explanatory cards or diffs retain their application-owned list
+composition rather than forcing ordinary content into the menu component.
 
 The `/fork` picker (`tui/src/nori/fork_picker.rs`) offers a "Branch from current
 point" entry as its first item when the agent advertises ACP `session/fork`
