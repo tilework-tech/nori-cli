@@ -72,12 +72,6 @@ impl ChatWidget {
         if self.exiting {
             return;
         }
-        if self.harness_handle.is_none() {
-            self.add_error_message(
-                "No active session — pick one with /resume or start one with /new.".to_string(),
-            );
-            return;
-        }
         let UserMessage { text, image_paths } = user_message;
         if text.is_empty() && image_paths.is_empty() {
             return;
@@ -103,6 +97,47 @@ impl ChatWidget {
             && !skillset_name.is_empty()
         {
             self.handle_switch_skillset_command_with_name(skillset_name);
+            return;
+        }
+
+        // Local shell input is never a reason to claim an ACP session.
+        if let Some(stripped) = text.strip_prefix('!') {
+            let cmd = stripped.trim();
+            if cmd.is_empty() {
+                self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                    history_cell::new_info_event(
+                        USER_SHELL_COMMAND_HELP_TITLE.to_string(),
+                        Some(USER_SHELL_COMMAND_HELP_HINT.to_string()),
+                    ),
+                )));
+                return;
+            }
+            self.submit_harness_action(crate::app_event::HarnessAction::RunUserShell(
+                cmd.to_string(),
+            ));
+            return;
+        }
+
+        if self.harness_handle.is_none() {
+            if text.starts_with('/') {
+                self.add_error_message(
+                    "No active session — pick one with /resume or start one with /new.".to_string(),
+                );
+                return;
+            }
+            if self.initial_user_message.is_some() {
+                self.add_info_message(
+                    "The first prompt is already waiting for the agent to finish preparing."
+                        .to_string(),
+                    None,
+                );
+                return;
+            }
+            if self.first_prompt_text.is_none() && !text.is_empty() {
+                self.first_prompt_text = Some(text.clone());
+            }
+            self.initial_user_message = Some(UserMessage { text, image_paths });
+            self.app_event_tx.send(AppEvent::NewSession);
             return;
         }
 
@@ -138,24 +173,6 @@ impl ChatWidget {
                 dir: self.config.cwd.clone(),
                 agent: Some(self.config.active_agent.clone()),
             });
-
-        // Special-case: "!cmd" executes a local shell command instead of sending to the model.
-        if let Some(stripped) = text.strip_prefix('!') {
-            let cmd = stripped.trim();
-            if cmd.is_empty() {
-                self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
-                    history_cell::new_info_event(
-                        USER_SHELL_COMMAND_HELP_TITLE.to_string(),
-                        Some(USER_SHELL_COMMAND_HELP_HINT.to_string()),
-                    ),
-                )));
-                return;
-            }
-            self.submit_harness_action(crate::app_event::HarnessAction::RunUserShell(
-                cmd.to_string(),
-            ));
-            return;
-        }
 
         let mut content = Vec::new();
         if !text.is_empty() {

@@ -346,28 +346,57 @@ pending replay.
 
 #### Lifecycle behavior
 
-Connection preparation is separate from session activation. Picker-first entry
-stores the harness's opaque `PreparedAgent` in `App` while the user chooses a
-new or existing session, so `initialize`, optional `session/list`, and the
-chosen `session/new`, `session/load`, or `session/resume` all use one child
-process. Unsupported listing is distinct from an empty successful catalog;
-preparation or advertised-list failure leaves the deferred widget without an
-active session and offers an explicit retry/new path. This orchestration lives
-in [`session_setup.rs`](src/app/session_setup.rs), while
-[`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes a
-prepared connection into the harness runtime.
+Connection preparation is separate from session activation. Every subprocess
+agent starts through [`session_setup.rs`](src/app/session_setup.rs), including
+ordinary local agents and a registered `nori-handroll acp --type remote`
+adapter. `App` retains the harness's opaque `PreparedAgent` after `initialize`,
+capability inspection, and optional `session/list`; no session directive is
+issued merely because startup completed. Advertised listing runs in the same
+background preparation while the composer remains usable. Unsupported listing
+is distinct from an empty successful catalog, and preparation or
+advertised-list failure leaves the widget sessionless.
+[`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes
+the exact prepared connection into the harness runtime. An ordinary-agent
+failure reopens the existing agent picker so the user can recover by choosing
+another agent unless a live candidate already owns its picker; cloud remains on
+its sessionless `/resume` or `/new` retry flow.
 
-Primary preparation is owned as a generation plus task abort handle, not a
-boolean in-flight flag. Explicit new/resume selection, close, candidate
-preparation, and exit invalidate it before changing lifecycle state. An
-`AgentPrepared` result is accepted only when its generation still matches the
-owned primary preparation; a late successful result is explicitly shut down.
+Primary preparation is owned as a generation, task abort handle, current
+intent, retained fork context, and optional pending activation. `/new` and a
+first genuine user prompt record New; `/resume` changes the intent to open the
+prepared catalog and then records the selected Resume. Esc-Esc backtrack and
+transcript fork also queue deferred New while preserving their selected history
+summary as initial context. If preparation is in flight, these decisions wait
+for it instead of cancelling it; if preparation is complete, they consume the
+stored connection. Thus `initialize`, optional `session/list`, and the chosen
+`session/new`, `session/load`, or `session/resume` use one child process. This
+orchestration lives in [`event_handling.rs`](src/app/event_handling.rs).
+
+Every primary activation calls
+[`take_refreshed_prepared_agent`](src/app/session_setup.rs) before consuming the
+connection. The refresh applies current mutable approval and sandbox policy and
+retains fork context. If process-defining identity changed, the TUI reaps the
+stale child and reprepares while keeping the pending New or Resume decision;
+stale policy is never activated.
+
+The sessionless composer distinguishes activation input from local behavior.
+The first text or image prompt remains in frontend state, requests New, and is
+transferred without rewriting to the activated widget. The widget submits it
+exactly once when `SessionStarted` establishes the configured session. Initial
+positional prompts use the same path. Slash commands and local shell commands
+are handled before this implicit-New decision; a shell command reports that no
+harness is active until activation. Neither can claim an ACP session. These
+ownership rules live in
+[`user_input.rs`](src/chatwidget/user_input.rs) and
+[`helpers.rs`](src/chatwidget/helpers.rs).
+
+An `AgentPrepared` result is accepted only when its generation still matches
+the owned preparation; a late successful result is explicitly shut down.
 Primary and switch-candidate preparation both use the same 20-second
-wall-clock bound in [`session_setup.rs`](src/app/session_setup.rs). A timeout is
-reported as preparation failure, drops the in-flight preparation so its child
-is reaped, and leaves any current session available. Together these rules keep
-a cancelled or hung initialize/list task from repopulating the picker, leaking
-its child, or displacing a usable session.
+wall-clock bound in [`session_setup.rs`](src/app/session_setup.rs). Close,
+cancellation, timeout, and exit invalidate preparation and reap its subprocess.
+Together these rules keep a cancelled or hung initialize/list task from
+repopulating the picker, leaking its child, or displacing a usable session.
 
 Candidate state retains the candidate identity and opaque prepared connection;
 it does not separately snapshot the full `NoriConfig`. When the user chooses
@@ -388,7 +417,9 @@ phases. The current and candidate subprocesses coexist while the candidate
 initializes and while its session picker is open. Choosing a session activates
 the candidate in a separate widget, and `SessionStarted` is the commit event:
 only then does `App` swap widgets, persist the selected agent, and shut down the
-replaced process. Preparation failure, activation failure, picker dismissal,
+replaced process. Until that event, positional or deferred input remains owned
+by the current widget; after commit it transfers to the candidate and is
+submitted once. Preparation failure, activation failure, picker dismissal,
 supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
@@ -446,15 +477,17 @@ session is present, or listing is unsupported, onboarding explicitly starts a
 new session on that same prepared `cloud-acp --onboard` connection, preserving
 the broker's serialized acquire-or-resume behavior and compatibility with older
 components. An initialization or advertised-list failure is shown as a
-preparation failure rather than being treated as an empty catalog. `/new`
-repeats this onboarding preparation; `/close` retains its ordinary picker-first
-lifecycle. Because the `--onboard` argv is part of the process-wide agent
-registry entry, every fallback acquisition remains onboarding-only. While a
+preparation failure rather than being treated as an empty catalog. A
+sessionless `/new` consumes that valid prepared onboarding connection; after an
+active session, `/new` prepares another connection with the same onboarding
+registry entry. `/close` retains its ordinary picker-first lifecycle. Because
+the `--onboard` argv is part of the process-wide agent registry entry, every
+fallback acquisition remains onboarding-only. While a
 picker-first launch waits for a choice, its initial positional prompt and image
 attachments remain owned by the deferred widget. Choosing Start new transfers
 that input into the replacement widget before the deferred widget shuts down,
-so it auto-sends on `SessionConfigured` for the prepared session just like
-other entry paths.
+so it auto-sends at the same `SessionStarted` boundary as every other entry
+path.
 
 The shared ACP resume picker treats session source as first-class presentation
 instead of requiring users to inspect raw metadata. Cloud rows with a typed

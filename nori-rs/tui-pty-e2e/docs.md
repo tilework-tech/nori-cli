@@ -32,6 +32,14 @@ updates. Agent-switch coverage observes real child PIDs to prove that the
 current and prepared candidate coexist, activation reuses the prepared child,
 and cancellation or activation failure leaves the current session usable.
 
+Prepared-startup scenarios wrap `mock-acp-agent` behind the exact registered
+`nori-handroll acp --type remote` argv while recording process identity. They
+prove that ordinary and remote-adapter startup initialize and optionally list
+without activation; `/new`, `/resume`, positional input, and the first typed
+prompt reuse that child; and deferred text and images cross the configured
+session boundary exactly once. Sessionless slash/local commands, preparation
+timeout, and exit cover the corresponding no-activation and reaping paths.
+
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
 typed `HarnessHandle` methods available to headless embedders.
@@ -49,5 +57,8 @@ typed `HarnessHandle` methods available to headless embedders.
 - Prepared-lifecycle scenarios assert process ownership as well as terminal
   output because a correct-looking picker can otherwise hide a disposable
   inspection subprocess.
+- Prompt-fidelity assertions use mock-agent validation rather than rendered
+  output, so a duplicated or transformed deferred payload fails at the ACP
+  boundary.
 
 Created and maintained by Nori.

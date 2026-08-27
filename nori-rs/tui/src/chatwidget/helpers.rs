@@ -267,10 +267,34 @@ impl ChatWidget {
     }
 
     pub(crate) fn take_initial_input(&mut self) -> (Option<String>, Vec<PathBuf>) {
-        let Some(message) = self.initial_user_message.take() else {
+        let Some(UserMessage { text, image_paths }) = self.initial_user_message.take() else {
             return (None, Vec::new());
         };
-        (self.first_prompt_text.take(), message.image_paths)
+        (Some(text).filter(|text| !text.is_empty()), image_paths)
+    }
+
+    pub(crate) fn has_harness_session(&self) -> bool {
+        self.harness_handle.is_some()
+    }
+
+    pub(crate) fn loop_state(&self) -> Option<(i32, i32)> {
+        self.loop_remaining.zip(self.loop_total)
+    }
+
+    pub(crate) fn submit_launch_input(
+        &mut self,
+        prompt: Option<String>,
+        image_paths: Vec<PathBuf>,
+    ) {
+        let Some(message) =
+            super::create_initial_user_message(prompt.clone().unwrap_or_default(), image_paths)
+        else {
+            return;
+        };
+        if self.first_prompt_text.is_none() {
+            self.first_prompt_text = prompt;
+        }
+        self.submit_user_message(message);
     }
 
     /// Returns true if a popup or custom view is currently active in the bottom pane.

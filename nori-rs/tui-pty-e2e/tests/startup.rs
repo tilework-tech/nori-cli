@@ -33,14 +33,14 @@ fn test_startup_error_for_unregistered_model() {
     // When acp.allow_http_fallback=false (default) and the model is not registered as an ACP agent,
     // the TUI should start, show an error message, and open the agent picker for recovery.
     // Use a short needle that won't wrap across lines at 80 columns.
-    session.wait_for_text("is not registered", TIMEOUT).unwrap();
+    session.wait_for_text("Unknown ACP agent", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
 
     // Verify the error message appears (short needle avoids line-wrap issues)
     assert!(
-        contents.contains("is not registered"),
+        contents.contains("Unknown ACP agent"),
         "Missing the required error message, screen contents: {}",
         contents
     );

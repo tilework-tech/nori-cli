@@ -27,6 +27,13 @@ use tokio::time::sleep;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
+fn last_prompt_text_block(prompt: &[acp::ContentBlock]) -> Option<&str> {
+    prompt.iter().rev().find_map(|block| match block {
+        acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+        _ => None,
+    })
+}
+
 #[cfg(unix)]
 fn spawn_descendant_if_requested() {
     let Some(pid_file) = std::env::var_os("MOCK_AGENT_DESCENDANT_PID_FILE") else {
@@ -275,6 +282,84 @@ impl MockAgent {
         arguments: acp::PromptRequest,
     ) -> Result<acp::PromptResponse, acp::Error> {
         eprintln!("Mock agent: prompt");
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK") {
+            let actual = last_prompt_text_block(&arguments.prompt);
+            if actual != Some(expected.as_str()) {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!(
+                        "expected final user prompt text block {expected:?}, received {actual:?}"
+                    ),
+                ));
+            }
+        }
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_IMAGE_BLOCK_COUNT") {
+            let expected = expected.parse::<usize>().map_err(|error| {
+                acp::Error::new(-32001, format!("invalid expected image count: {error}"))
+            })?;
+            let actual = arguments
+                .prompt
+                .iter()
+                .filter(|block| matches!(block, acp::ContentBlock::Image(_)))
+                .count();
+            if actual != expected {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!("expected {expected} prompt image blocks, received {actual}"),
+                ));
+            }
+        }
+        if let Ok(expected_count) = std::env::var("MOCK_AGENT_EXPECT_MATCHING_TEXT_BLOCK_COUNT") {
+            let expected_count = expected_count.parse::<usize>().map_err(|error| {
+                acp::Error::new(-32001, format!("invalid expected text count: {error}"))
+            })?;
+            let expected_text =
+                std::env::var("MOCK_AGENT_EXPECT_LAST_PROMPT_TEXT_BLOCK").map_err(|_| {
+                    acp::Error::new(
+                        -32001,
+                        "matching text count requires an expected prompt text block",
+                    )
+                })?;
+            let actual = arguments
+                .prompt
+                .iter()
+                .filter(|block| {
+                    matches!(block, acp::ContentBlock::Text(text) if text.text == expected_text)
+                })
+                .count();
+            if actual != expected_count {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!(
+                        "expected {expected_count} matching prompt text blocks, received {actual}"
+                    ),
+                ));
+            }
+        }
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_IMAGE_MIME_TYPE") {
+            let actual = arguments.prompt.iter().find_map(|block| match block {
+                acp::ContentBlock::Image(image) => Some(image.mime_type.as_str()),
+                _ => None,
+            });
+            if actual != Some(expected.as_str()) {
+                return Err(acp::Error::new(
+                    -32001,
+                    format!("expected prompt image MIME {expected:?}, received {actual:?}"),
+                ));
+            }
+        }
+        if let Ok(expected) = std::env::var("MOCK_AGENT_EXPECT_IMAGE_DATA") {
+            let actual = arguments.prompt.iter().find_map(|block| match block {
+                acp::ContentBlock::Image(image) => Some(image.data.as_str()),
+                _ => None,
+            });
+            if actual != Some(expected.as_str()) {
+                return Err(acp::Error::new(
+                    -32001,
+                    "prompt image data did not match the expected bytes",
+                ));
+            }
+        }
         if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
             eprintln!("Mock agent: exiting during prompt");
             std::process::exit(17);
