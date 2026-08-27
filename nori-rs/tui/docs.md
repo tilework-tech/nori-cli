@@ -56,6 +56,12 @@ The application event loop matches `SessionEvent::Acp` and
 
 - ACP notifications drive private message, thought, plan, tool, usage, mode,
   live config, capability, and available-command presentation.
+- User input is rendered from the harness's canonical ACP
+  `user_message_chunk` notifications, not inserted by the submitting widget.
+  Chunks with one message id are accumulated into one user history cell, and
+  non-text image, audio, resource-link, and embedded-resource blocks receive
+  attachment placeholders. The submitter and observing frontends therefore
+  follow the same event path.
 - Request-scoped updates belong to the active local prompt or load when one
   exists; otherwise the TUI preserves and renders each update as unowned
   activity without dropping or invented attribution, regardless of source or
@@ -503,11 +509,13 @@ imports the ACP host crate directly.
 
 While a remote controller drives the session, the TUI stays attached to the
 same handle and ordered event stream and renders remote-driven activity as an
-observer. The fan-out delivers every event to both consumers: the remote host
-forwards a delegated permission request to its controller only when the remote
-controller owns the turn, while the TUI continues to observe the same request
-on its own stream. Policy for simultaneous local and remote input is
-deliberately deferred by the spec.
+observer. Canonical user prompt chunks reach both consumers, including the
+frontend that submitted the prompt. The remote host rewrites only the outward
+session id on forwarded updates and sends delegated permission requests to its
+controller only when that controller owns the turn; the TUI continues to
+observe the same request on its own stream. The transport retains one remote
+controller, while the fan-out can feed future bounded observers. Policy for
+simultaneous local and remote input is deliberately deferred by the spec.
 
 #### Footer configuration
 

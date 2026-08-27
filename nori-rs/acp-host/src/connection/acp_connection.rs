@@ -864,7 +864,9 @@ impl AcpConnection {
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
     ) -> Result<acp::StopReason> {
-        let (_, result) = self.prompt_with_request_id(session_id, prompt, None).await;
+        let (_, result) = self
+            .prompt_with_request_id(session_id, prompt, None, None)
+            .await;
         result
     }
 
@@ -874,6 +876,7 @@ impl AcpConnection {
         &self,
         session_id: acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
+        prompt_meta: Option<acp::Meta>,
         request_started: Option<oneshot::Sender<Result<RequestId>>>,
     ) -> (RequestId, Result<acp::StopReason>) {
         debug!(
@@ -884,7 +887,7 @@ impl AcpConnection {
         );
         let request = self
             .cx
-            .send_request(acp::PromptRequest::new(session_id.clone(), prompt));
+            .send_request(acp::PromptRequest::new(session_id.clone(), prompt).meta(prompt_meta));
         let request_id = schema_request_id(request.id());
         if let Some(request_started) = request_started {
             let _ = request_started.send(Ok(request_id.clone()));

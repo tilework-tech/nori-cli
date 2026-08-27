@@ -206,6 +206,7 @@ impl AcpBackend {
     pub(crate) async fn submit_prompt(
         &self,
         content: Vec<acp::ContentBlock>,
+        prompt_meta: Option<acp::Meta>,
         response_tx: oneshot::Sender<Result<acp::RequestId>>,
     ) {
         let has_content = content.iter().any(|block| match block {
@@ -222,7 +223,7 @@ impl AcpBackend {
             .lock()
             .await
             .insert(id.clone(), response_tx);
-        if let Err(error) = self.handle_prompt(content, &id).await
+        if let Err(error) = self.handle_prompt(content, &id, prompt_meta).await
             && let Some(response_tx) = self.pending_prompt_submissions.lock().await.remove(&id)
         {
             let _ = response_tx.send(Err(error));
@@ -253,6 +254,8 @@ impl AcpBackend {
                             kind:
                                 crate::normalized::session_runtime::QueuedPromptKind::NativeCompact,
                             text: "/compact".to_string(),
+                            prompt_meta: None,
+                            original_content: Vec::new(),
                             content: vec![acp::ContentBlock::Text(acp::TextContent::new(
                                 "/compact",
                             ))],
@@ -272,6 +275,8 @@ impl AcpBackend {
                         event_id: id.to_string(),
                         kind: crate::normalized::session_runtime::QueuedPromptKind::Compact,
                         text: SUMMARIZATION_PROMPT.to_string(),
+                        prompt_meta: None,
+                        original_content: Vec::new(),
                         content: vec![acp::ContentBlock::Text(acp::TextContent::new(
                             SUMMARIZATION_PROMPT,
                         ))],

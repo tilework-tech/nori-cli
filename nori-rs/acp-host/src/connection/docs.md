@@ -34,9 +34,10 @@ assigned by the SDK transport and retained end to end. A failed session-config
 write is the deliberate exception: its error is returned to the caller but not
 mirrored onto the public event boundary, where the caller's friendly failure
 handling would otherwise produce a duplicate raw error. Each call to `prompt`
-issues one `session/prompt` request. A later response is never swallowed to
-justify resending the prompt after cancellation; a successful empty `EndTurn`
-is returned as that prompt's terminal result.
+issues one `session/prompt` request; `prompt_with_request_id` preserves optional
+top-level prompt metadata on that request. A later response is never swallowed
+to justify resending the prompt after cancellation; a successful empty
+`EndTurn` is returned as that prompt's terminal result.
 
 `fork_session` issues the unstable ACP `session/fork` request to branch a
 session at its current head. Unlike `session/load` and `session/resume`, which

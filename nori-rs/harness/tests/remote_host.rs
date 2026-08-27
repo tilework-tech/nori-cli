@@ -123,6 +123,7 @@ async fn remote_prompt_streams_rewritten_updates_then_the_response() {
         .prompt(
             &session_id,
             vec![acp::ContentBlock::Text(acp::TextContent::new("hello"))],
+            None,
         )
         .await
         .expect("submit remote prompt");
@@ -157,13 +158,130 @@ async fn remote_prompt_streams_rewritten_updates_then_the_response() {
 
     assert_eq!(
         texts,
-        vec!["Test message 1".to_string(), "Test message 2".to_string()]
+        vec![
+            "hello".to_string(),
+            "Test message 1".to_string(),
+            "Test message 2".to_string(),
+        ]
     );
     match response.expect("prompt should succeed") {
         acp::AgentResponse::PromptResponse(response) => {
             assert_eq!(response.stop_reason, acp::StopReason::EndTurn);
         }
         other => panic!("expected a prompt response, got {other:?}"),
+    }
+
+    fixture.session.handle.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
+#[serial]
+async fn remote_host_rewrites_and_forwards_every_original_user_content_block() {
+    let mut fixture = launch_attached().await;
+    let info = wait_for_session(&fixture.host).await;
+    let session_id = info.session_id.clone();
+    let prompt = vec![
+        acp::ContentBlock::Text(acp::TextContent::new("inspect this")),
+        acp::ContentBlock::Image(acp::ImageContent::new("aW1hZ2U=", "image/png")),
+        acp::ContentBlock::ResourceLink(acp::ResourceLink::new("notes", "file:///tmp/notes.md")),
+    ];
+    let prompt_meta = acp::Meta::from_iter([(
+        nori_protocol::PROMPT_ECHO_ID_META_KEY.to_string(),
+        serde_json::Value::String("outer-prompt".to_string()),
+    )]);
+
+    let mut subscription = fixture.host.subscribe().await;
+    let request_id = fixture
+        .host
+        .prompt(&session_id, prompt.clone(), Some(prompt_meta))
+        .await
+        .expect("submit remote prompt");
+    let remote_notifications = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut notifications = Vec::new();
+        loop {
+            let event = subscription
+                .events
+                .recv()
+                .await
+                .expect("subscription closed before the prompt completed");
+            match event {
+                SessionEvent::Acp(AcpEvent::Notification(
+                    acp::AgentNotification::SessionNotification(notification),
+                )) => {
+                    assert_eq!(notification.session_id, session_id);
+                    if matches!(notification.update, acp::SessionUpdate::UserMessageChunk(_)) {
+                        notifications.push(notification);
+                    }
+                }
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id: response_id,
+                    ..
+                }) if response_id == request_id => break notifications,
+                SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
+            }
+        }
+    })
+    .await
+    .expect("prompt should complete");
+
+    let local_notifications = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut notifications = Vec::new();
+        loop {
+            let event = fixture
+                .session
+                .events
+                .recv()
+                .await
+                .expect("primary event stream closed before the prompt completed");
+            match event {
+                SessionEvent::Acp(AcpEvent::Notification(
+                    acp::AgentNotification::SessionNotification(notification),
+                )) if matches!(notification.update, acp::SessionUpdate::UserMessageChunk(_)) => {
+                    notifications.push(notification)
+                }
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id: response_id,
+                    ..
+                }) if response_id == request_id => break notifications,
+                SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
+            }
+        }
+    })
+    .await
+    .expect("primary prompt stream should complete");
+
+    assert_eq!(
+        remote_notifications
+            .iter()
+            .map(|notification| match &notification.update {
+                acp::SessionUpdate::UserMessageChunk(chunk) => chunk.content.clone(),
+                _ => unreachable!("collected only user message notifications"),
+            })
+            .collect::<Vec<_>>(),
+        prompt
+    );
+    let message_id = remote_notifications
+        .first()
+        .and_then(|notification| match &notification.update {
+            acp::SessionUpdate::UserMessageChunk(chunk) => chunk.message_id.clone(),
+            _ => None,
+        })
+        .expect("broadcast chunks must have a message id");
+    assert!(remote_notifications.iter().all(|notification| matches!(
+        &notification.update,
+        acp::SessionUpdate::UserMessageChunk(chunk)
+            if chunk.message_id.as_ref() == Some(&message_id)
+                && chunk.meta.as_ref().and_then(|meta| {
+                    meta.get(nori_protocol::PROMPT_ECHO_ID_META_KEY)
+                }) == Some(&serde_json::Value::String("outer-prompt".to_string()))
+    )));
+    assert_eq!(local_notifications.len(), remote_notifications.len());
+    for (local, remote) in local_notifications.iter().zip(&remote_notifications) {
+        assert_ne!(local.session_id, remote.session_id);
+        assert_eq!(remote.session_id, session_id);
+        let mut expected_remote = local.clone();
+        expected_remote.session_id = session_id.clone();
+        assert_eq!(&expected_remote, remote);
     }
 
     fixture.session.handle.shutdown().await.expect("shutdown");
@@ -184,6 +302,7 @@ async fn load_session_replays_the_previous_turn_from_the_transcript() {
             vec![acp::ContentBlock::Text(acp::TextContent::new(
                 "remember this turn",
             ))],
+            None,
         )
         .await
         .expect("submit remote prompt");
@@ -249,7 +368,7 @@ async fn unknown_session_ids_are_rejected() {
     assert_eq!(i32::from(error.code), -32002);
     let error = fixture
         .host
-        .prompt(&bogus, vec![])
+        .prompt(&bogus, vec![], None)
         .await
         .expect_err("bogus prompt must fail");
     assert_eq!(i32::from(error.code), -32002);
@@ -304,6 +423,7 @@ async fn delegated_permission_requests_reach_the_remote_controller_for_remote_tu
             vec![acp::ContentBlock::Text(acp::TextContent::new(
                 "do a tool call",
             ))],
+            None,
         )
         .await
         .expect("submit remote prompt");
@@ -375,6 +495,7 @@ async fn queued_remote_prompt_does_not_freeze_the_host() {
         .prompt(
             &session_id,
             vec![acp::ContentBlock::Text(acp::TextContent::new("first"))],
+            None,
         )
         .await
         .expect("submit the first prompt");
@@ -388,6 +509,7 @@ async fn queued_remote_prompt_does_not_freeze_the_host() {
             host.prompt(
                 &session_id,
                 vec![acp::ContentBlock::Text(acp::TextContent::new("second"))],
+                None,
             )
             .await
         })
@@ -409,6 +531,7 @@ async fn queued_remote_prompt_does_not_freeze_the_host() {
         .expect("prompt task")
         .expect("submit the second prompt");
     let mut outcomes = Vec::new();
+    let mut sequence = Vec::new();
     tokio::time::timeout(Duration::from_secs(15), async {
         while outcomes.len() < 2 {
             let event = subscription
@@ -416,14 +539,41 @@ async fn queued_remote_prompt_does_not_freeze_the_host() {
                 .recv()
                 .await
                 .expect("subscription closed before both turns ended");
-            if let SessionEvent::Acp(AcpEvent::Response { request_id, .. }) = event {
-                outcomes.push(request_id);
+            match event {
+                SessionEvent::Acp(AcpEvent::Notification(
+                    acp::AgentNotification::SessionNotification(notification),
+                )) => {
+                    if let acp::SessionUpdate::UserMessageChunk(chunk) = notification.update
+                        && let acp::ContentBlock::Text(text) = chunk.content
+                    {
+                        sequence.push(format!("user:{}", text.text));
+                    }
+                }
+                SessionEvent::Acp(AcpEvent::Response { request_id, .. }) => {
+                    sequence.push(if request_id == first_request_id {
+                        "response:first".to_string()
+                    } else {
+                        "response:second".to_string()
+                    });
+                    outcomes.push(request_id);
+                }
+                SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
             }
         }
     })
     .await
     .expect("both turns should complete");
     assert_eq!(outcomes, vec![first_request_id, second_request_id]);
+    assert_eq!(
+        sequence,
+        vec![
+            "user:first".to_string(),
+            "response:first".to_string(),
+            "user:second".to_string(),
+            "response:second".to_string(),
+        ],
+        "a queued prompt must not enter the fan-out until it becomes active"
+    );
 
     fixture.session.handle.shutdown().await.expect("shutdown");
 }
@@ -453,6 +603,7 @@ async fn a_stale_detach_does_not_break_the_replacement_subscription() {
         .prompt(
             &session_id,
             vec![acp::ContentBlock::Text(acp::TextContent::new("hello"))],
+            None,
         )
         .await
         .expect("submit remote prompt");

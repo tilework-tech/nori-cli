@@ -6,6 +6,7 @@ impl AcpBackend {
         &self,
         content: Vec<acp::ContentBlock>,
         id: &str,
+        mut prompt_meta: Option<acp::Meta>,
     ) -> Result<()> {
         let prompt_text = content
             .iter()
@@ -127,15 +128,6 @@ impl AcpBackend {
             }
         }
 
-        // Record user message to transcript
-        if let Some(recorder) = self.transcript_recorder.read().await.clone()
-            && let Err(e) = recorder
-                .record_user_message(id, &display_text, vec![])
-                .await
-        {
-            warn!("Failed to record user message to transcript: {e}");
-        }
-
         // Save prompt text for post_user_prompt hooks (before it gets moved)
         let prompt_text_for_hooks = display_text;
 
@@ -162,6 +154,17 @@ impl AcpBackend {
 
         // Internal context is an additional leading block. The caller's ACP
         // content remains an ordered subsequence of the wire prompt.
+        let echo_id = prompt_meta
+            .as_ref()
+            .and_then(|meta| meta.get(nori_protocol::PROMPT_ECHO_ID_META_KEY))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(id)
+            .to_string();
+        prompt_meta.get_or_insert_default().insert(
+            nori_protocol::PROMPT_ECHO_ID_META_KEY.to_string(),
+            serde_json::Value::String(echo_id),
+        );
+        let original_content = content.clone();
         let mut final_content = content;
         if final_prompt_text != prompt_text {
             let injected_prefix = final_prompt_text
@@ -204,6 +207,8 @@ impl AcpBackend {
                         event_id: id.to_string(),
                         kind: crate::normalized::session_runtime::QueuedPromptKind::User,
                         text: final_prompt_text,
+                        prompt_meta,
+                        original_content,
                         content: final_content,
                         display_text: Some(prompt_text_for_hooks),
                     },

@@ -71,6 +71,24 @@ after harness policy. `SessionEnded` and `RequestFailed` surface as JSON-RPC
 errors on the affected request or close the connection; no other `NoriEvent`
 is forwarded in this version.
 
+The post-harness stream includes one canonical user-message sequence when each
+queued prompt becomes active. It contains the caller's original ACP blocks,
+uses one message id across the sequence, and precedes agent output. Because the
+TUI and remote Agent subscribe to this same fan-out, both render the prompt
+without transport-specific insertion.
+
+Nori composition preserves correlation end to end. The public
+`nori_protocol::PROMPT_ECHO_ID_META_KEY` constant names
+`nori.dev/promptEchoId`; the WebSocket handler passes the remote
+`PromptRequest.meta` through `HostedAgent` and `HarnessHandle`, and the harness
+retains that metadata while queued before forwarding it on the downstream
+`session/prompt`. The harness supplies a marker when the caller did not. Each
+canonical user chunk carries only that marker, and remote event forwarding
+changes only its session id. A downstream echo is suppressed only when its
+marker identifies the active prompt and its content matches active wire
+content. Load/replay, unowned, and unmarked activity is forwarded; ownership is
+never guessed from content alone.
+
 ## 4. WebSocket contract
 
 The first implementation is WebSocket-only, which the upstream RFD permits
@@ -99,10 +117,11 @@ the host. It does not introduce a Nori-specific message envelope.
 
 A WebSocket connection and an ACP session have separate lifetimes.
 
-The server accepts one remote connection at a time. A newer connection
-replaces the current one — last connect wins — and the replaced socket is
-closed. Broadcasting one session's stream to several concurrent remote
-connections is on the roadmap, not in this version.
+The server accepts one remote controller at a time. A newer connection replaces
+the current one—last connect wins—and the replaced socket is closed. The
+ordered harness fan-out is already shared with the TUI and can supply future
+remote observers; accepting those observer connections is not part of this
+version.
 
 - Socket EOF or network loss detaches the remote client. It does not close the
   Nori harness session, stop the downstream agent, or exit the TUI.
@@ -131,7 +150,9 @@ the active prompt is not cancelled merely because the socket disappeared.
 The TUI remains attached to the same `HarnessHandle` and receives the same
 ordered `SessionEvent` stream while a remote ACP client is connected. Remote
 mutations also pass through that handle, so their prompts, updates, tool calls,
-and results appear in the existing TUI state.
+and results appear in the existing TUI state. A prompt is inserted by neither
+frontend: once it becomes active, both render the harness's canonical
+`user_message_chunk` sequence before agent output.
 
 Opening the microVM terminal therefore reveals the already-running Nori TUI;
 it does not reconstruct a second frontend or replace the WebSocket
@@ -177,9 +198,9 @@ nori-rs/
 
 The `--remote` flag lives on the interactive CLI surface (`nori --remote
 <ADDR>`), so activation happens in the TUI startup path rather than a separate
-`cli/src/remote.rs`; the `cli` crate itself is unchanged. A remote prompt's
-own text is not yet rendered by the observing TUI (its updates, tool calls,
-and results are); surfacing the initiating message locally is follow-up work.
+`cli/src/remote.rs`; the `cli` crate itself is unchanged. Remote prompts use the
+same harness-originated user-message notifications as local prompts, so their
+original content is visible in the observing TUI and every attached frontend.
 
 ## 8. Planned compatibility and lifecycle follow-up
 

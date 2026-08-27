@@ -91,6 +91,7 @@ pub trait HostedAgent: Send + Sync + 'static {
         &self,
         session_id: &acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
+        meta: Option<acp::Meta>,
     ) -> impl Future<Output = Result<acp::RequestId, acp::Error>> + Send;
 
     /// Cancel the active turn of the given session.
