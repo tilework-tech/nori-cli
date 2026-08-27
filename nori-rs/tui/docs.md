@@ -383,10 +383,12 @@ The sessionless composer distinguishes activation input from local behavior.
 The first text or image prompt remains in frontend state, requests New, and is
 transferred without rewriting to the activated widget. The widget submits it
 exactly once when `SessionStarted` establishes the configured session. Initial
-positional prompts use the same path. Slash commands and local shell commands
-are handled before this implicit-New decision; a shell command reports that no
-harness is active until activation. Neither can claim an ACP session. These
-ownership rules live in
+positional prompts use the same path. `SessionStarted` refreshes persistent
+history metadata but must preserve composer-local history, which may already
+contain the genuine prompt that triggered deferred activation. Slash commands
+and local shell commands are handled before this implicit-New decision; a shell
+command reports that no harness is active until activation. Neither can claim
+an ACP session. These ownership rules live in
 [`user_input.rs`](src/chatwidget/user_input.rs) and
 [`helpers.rs`](src/chatwidget/helpers.rs).
 
