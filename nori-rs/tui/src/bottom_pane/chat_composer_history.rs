@@ -41,12 +41,12 @@ impl ChatComposerHistory {
         }
     }
 
-    /// Update persistent metadata when a session is configured. Local entries
-    /// may already contain the prompt that triggered deferred activation.
+    /// Update metadata when a new session is configured.
     pub fn set_metadata(&mut self, log_id: u64, entry_count: usize) {
         self.history_log_id = Some(log_id);
         self.history_entry_count = entry_count;
         self.fetched_history.clear();
+        self.local_history.clear();
         self.history_cursor = None;
         self.last_history_text = None;
     }
@@ -224,26 +224,6 @@ mod tests {
         history.record_local_submission("world");
         assert_eq!(history.local_history.len(), 2);
         assert_eq!(history.local_history.last().unwrap(), "world");
-    }
-
-    #[test]
-    fn session_metadata_preserves_prompts_submitted_before_activation() {
-        let (tx, _rx) = unbounded_channel();
-        let app_event_tx = AppEventSender::new(tx);
-        let mut history = ChatComposerHistory::new();
-
-        history.record_local_submission("first prompt");
-        history.set_metadata(7, 0);
-        history.record_local_submission("second prompt");
-
-        assert_eq!(
-            history.navigate_up(&app_event_tx),
-            Some("second prompt".to_string())
-        );
-        assert_eq!(
-            history.navigate_up(&app_event_tx),
-            Some("first prompt".to_string())
-        );
     }
 
     #[test]
