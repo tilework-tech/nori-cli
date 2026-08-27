@@ -91,6 +91,7 @@ pub(crate) struct App {
     pub(crate) config: NoriConfig,
     pub(crate) vertical_footer: bool,
     pub(crate) cloud_mode: bool,
+    pub(crate) analytics: Option<nori_installed::AnalyticsReporter>,
     pub(crate) footer_layout_config: nori_config::FooterLayoutConfig,
 
     pub(crate) file_search: FileSearchManager,
@@ -222,6 +223,7 @@ impl App {
         cloud_mode: bool,
         cloud_onboard: bool,
         startup_remote_addr: Option<std::net::SocketAddr>,
+        analytics: Option<nori_installed::AnalyticsReporter>,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
 
@@ -250,6 +252,7 @@ impl App {
                 deferred_spawn: needs_deferred_spawn,
                 fork_context: None,
                 prepared_agent: None,
+                analytics: analytics.clone(),
             };
             match resume_selection {
                 ResumeSelection::Resume(target) => {
@@ -295,6 +298,7 @@ impl App {
             config,
             vertical_footer,
             cloud_mode,
+            analytics,
             file_search,
             enhanced_keys_supported,
             transcript_cells: Vec::new(),
@@ -478,6 +482,7 @@ impl App {
             deferred_spawn,
             fork_context,
             prepared_agent: None,
+            analytics: self.analytics.clone(),
         }
     }
 

@@ -33,6 +33,12 @@ child PIDs to prove that the current and prepared candidate coexist, activation
 reuses the prepared child, and cancellation or activation failure leaves the
 current session usable.
 
+Authenticated analytics scenarios pair the real PTY workflow with a local HTTP
+sink. They prove interactive and cloud launches remain silent while merely
+connected, submit the first user prompt through the real ACP agent, observe the
+exact public `session_mode`, and verify a later prompt on the same logical
+session does not create another activity.
+
 The remote-control workflow drives startup and runtime listener management
 through a real WebSocket ACP client, then switches agents. It proves both entry
 paths share one listener owner, disabling listeners preserves the harness, and
@@ -67,5 +73,8 @@ typed `HarnessHandle` methods available to headless embedders.
 - Prompt-fidelity assertions use mock-agent validation rather than rendered
   output, so a duplicated or transformed deferred payload fails at the ACP
   boundary.
+- Analytics assertions use an explicit `NORI_ANALYTICS_URL` and disposable
+  Firebase-shaped user configuration. They never contact the production ingress
+  or PostHog.
 
 Created and maintained by Nori.

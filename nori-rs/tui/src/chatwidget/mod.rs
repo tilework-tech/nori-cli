@@ -156,6 +156,8 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) fork_context: Option<String>,
     /// A live initialized connection to consume instead of spawning one.
     pub(crate) prepared_agent: Option<nori_harness::runtime::PreparedAgent>,
+    /// Emits one authenticated activity after this session's first prompt reaches ACP.
+    pub(crate) analytics: Option<nori_installed::AnalyticsReporter>,
 }
 
 /// Controls the pinned plan drawer visibility and display mode.

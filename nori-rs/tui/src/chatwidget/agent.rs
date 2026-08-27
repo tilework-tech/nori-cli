@@ -17,6 +17,7 @@ use nori_harness::runtime::SessionResume;
 use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::launch_session;
 use nori_harness::runtime::prepare_and_launch_session;
+use nori_installed::AnalyticsReporter;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -44,6 +45,7 @@ pub(crate) fn spawn_agent(
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
     fork_context: Option<String>,
+    analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
     match nori_harness::get_agent_config(&config.active_agent) {
         Ok(_) => prepare_and_launch_acp_agent(
@@ -52,6 +54,7 @@ pub(crate) fn spawn_agent(
             generation,
             fork_context,
             SessionStart::New,
+            analytics,
         ),
         Err(_) => {
             let agent_name = config.active_agent;
@@ -80,6 +83,7 @@ pub(crate) fn spawn_acp_agent_resume(
     transcript: Option<nori_harness::transcript::Transcript>,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
+    analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
     prepare_and_launch_acp_agent(
         config,
@@ -90,6 +94,7 @@ pub(crate) fn spawn_acp_agent_resume(
             acp_session_id,
             transcript,
         }),
+        analytics,
     )
 }
 
@@ -115,13 +120,14 @@ fn prepare_and_launch_acp_agent(
     generation: crate::app_event::SessionGeneration,
     fork_context: Option<String>,
     start: SessionStart,
+    analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
     let display_name = get_agent_display_name(&config.active_agent);
     app_event_tx.send(AppEvent::AgentConnecting { display_name });
 
     let prepare_spec = agent_prepare_spec(config, fork_context);
     let session = prepare_and_launch_session(prepare_spec, start);
-    forward_launched_session(session, app_event_tx, generation)
+    forward_launched_session(session, app_event_tx, generation, analytics)
 }
 
 pub(crate) fn agent_prepare_spec(
@@ -145,16 +151,21 @@ pub(crate) fn launch_prepared_agent(
     start: SessionStart,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
+    analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
     let session = launch_session(SessionLaunchSpec { agent, start });
-    forward_launched_session(session, app_event_tx, generation)
+    forward_launched_session(session, app_event_tx, generation, analytics)
 }
 
 fn forward_launched_session(
     mut session: nori_harness::runtime::LaunchedSession,
     app_event_tx: AppEventSender,
     generation: crate::app_event::SessionGeneration,
+    analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
+    if let Some(reporter) = analytics.as_ref() {
+        session.handle = reporter.attach(session.handle);
+    }
     let handle = Some(session.handle.clone());
 
     tokio::spawn(async move {

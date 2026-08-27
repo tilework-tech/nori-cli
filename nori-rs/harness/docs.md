@@ -153,6 +153,16 @@ responses: a frontend that did not submit the turn can render and flush the
 complete stream without claiming the initiating request or receiving its stop
 reason.
 
+[`HarnessHandle::with_first_prompt_started_callback`](src/runtime.rs) exposes
+that same transport boundary to product infrastructure without adding an ACP or
+Nori protocol event. A decorated handle invokes its callback once, after its
+first successful [`prompt`](src/runtime.rs) call receives the real downstream
+wire request ID. Clones share the one-shot guard, so concurrent or repeated
+prompts cannot duplicate the callback. A prompt rejected before transport does
+not fire it. Nori's frontends use this hook for authenticated activity reporting
+through [`nori-installed`](../installed/docs.md); the harness remains unaware of
+identity, event schemas, and network delivery.
+
 The public event stream has two source-owned branches:
 
 ```rust

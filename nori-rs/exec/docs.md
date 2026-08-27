@@ -14,6 +14,9 @@ Path: @/nori-rs/exec
 - Prompt ingestion is entirely a `nori-cli` concern: it composes the argument prompt and any piped stdin into one string and hands `run_plaintext` a fully resolved prompt. `nori-exec` never reads a prompt from the process itself.
 - `nori-exec` prepares and activates sessions through `nori-harness`; it does not spawn agents or reduce ACP state independently.
 - `nori-harness` supplies the ordered `SessionEvent` stream and preserves exact ACP request IDs used for prompt and permission correlation.
+- `nori-installed` supplies the optional authenticated activity reporter. Both
+  execution surfaces attach it to the downstream harness handle, so capture uses
+  the same first-prompt-on-ACP boundary as the interactive frontend.
 - Plaintext mode projects text `agent_message_chunk` updates into one final answer.
 - ACP mode uses the upstream ACP SDK to present an agent endpoint while acting as a client of the configured downstream ACP agent.
 
@@ -22,18 +25,26 @@ Path: @/nori-rs/exec
 - `run_plaintext` passes `AgentPrepareSpec` and the already-chosen
   `SessionStart::New` to `prepare_and_launch_session`, submits one text prompt,
   collects text chunks until the correlated prompt response, and shuts down the
-  session.
+  session. When supplied, its reporter emits `nori_agent_session_started` with
+  `session_mode = exec` after that prompt receives a downstream wire request ID,
+  then performs a bounded final flush without changing the plaintext outcome.
 - Unattended permission requests are rejected immediately using a schema-provided reject option, with cancellation as the safe fallback.
 - `run_acp` handles standard `initialize`, `session/new`,
   `session/set_config_option`, `session/prompt`, and `session/cancel` traffic
   over line-delimited JSON-RPC stdio. Its downstream `session/new` also uses
-  `prepare_and_launch_session` with the explicit New choice.
+  `prepare_and_launch_session` with the explicit New choice. The facade assigns
+  `session_mode = acp`; initialization and `session/new` alone are silent, and
+  the attached reporter fires only after the facade's accepted `session/prompt`
+  reaches the downstream ACP transport.
 - The ACP facade exposes the downstream session ID and effective configuration options, then emits one complete `agent_message_chunk` before the correlated prompt response.
 - Delegated permission requests are forwarded to the upstream ACP caller and their responses are returned to the downstream agent under the original downstream request ID.
 
 ### Things to Know
 
 - The facade is intentionally bounded to one downstream session and one prompt per process.
+- Analytics is optional at this crate boundary. The binary selects the mode and
+  constructs the reporter; embedders that pass `None` retain identical session
+  behavior without capture.
 - Both headless surfaces choose `SessionStart::New` before activation and use
   `prepare_and_launch_session`. Preparation and activation retain one
   downstream subprocess even though the API keeps those lifecycle phases
