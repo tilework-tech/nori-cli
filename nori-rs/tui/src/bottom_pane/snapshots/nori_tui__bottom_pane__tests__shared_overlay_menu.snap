@@ -1,0 +1,16 @@
+---
+source: tui/src/bottom_pane/mod.rs
+expression: rendered
+---
+                                                                                
+                                                                                
+                                                                                
+   Replace goal?                                                                
+   Start the new objective now                                                  
+                                                                                
+     1  Replace current goal                                                    
+        Set the new objective and start it now                                  
+   ▏ 2  Keep current goal                                                   ▕   
+   ▏    Leave the current objective unchanged                               ▕   
+                                                                                
+   ↑↓/j/k move  1-9 select  enter select  esc close

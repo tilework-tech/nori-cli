@@ -3,6 +3,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use itertools::Itertools as _;
 use nori_tui_components::KeyHint;
+use nori_tui_components::MenuItemTone;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -39,6 +40,7 @@ pub(crate) enum SelectionPresentation {
     #[default]
     List,
     Picker,
+    Menu,
 }
 
 #[derive(Default)]
@@ -54,6 +56,7 @@ pub(crate) struct SelectionItem {
     /// When true, this row is a non-selectable section header: navigation skips
     /// it, it shows no number or cursor, and it renders as a bold section label.
     pub is_header: bool,
+    pub menu_tone: MenuItemTone,
 }
 
 pub(crate) struct SelectionViewParams {
@@ -78,6 +81,11 @@ pub(crate) struct SelectionViewParams {
 impl SelectionViewParams {
     pub(crate) fn picker(mut self) -> Self {
         self.presentation = SelectionPresentation::Picker;
+        self
+    }
+
+    pub(crate) fn menu(mut self) -> Self {
+        self.presentation = SelectionPresentation::Menu;
         self
     }
 }

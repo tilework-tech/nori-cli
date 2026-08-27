@@ -580,19 +580,23 @@ impl ChatWidget {
                     dismiss_on_select: true,
                     search_value: None,
                     is_header: false,
+                    menu_tone: nori_tui_components::MenuItemTone::Default,
                 }
             })
             .collect();
 
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Undo to snapshot".to_string()),
-            subtitle: None,
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            header: Box::new(()),
-            is_searchable: false,
-            ..Default::default()
-        });
+        self.bottom_pane.show_selection_view(
+            SelectionViewParams {
+                title: Some("Undo to snapshot".to_string()),
+                subtitle: None,
+                footer_hint: Some(standard_popup_hint_line()),
+                items,
+                header: Box::new(()),
+                is_searchable: false,
+                ..Default::default()
+            }
+            .picker(),
+        );
         self.request_redraw();
     }
 

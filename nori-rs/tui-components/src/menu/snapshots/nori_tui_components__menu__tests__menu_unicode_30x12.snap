@@ -10,7 +10,7 @@ expression: "snapshot(&mut unicode, 30, 12, \"続ける action\", Some(\"Unicode
 "                              "
 "    新しい session            " Hidden by multi-width symbols: [(5, " "), (7, " "), (9, " ")]
 "    Create a clean session    "
-"   ↑↓/jk move  enter select   "
-"            q close           "
+"  ↑↓/jk move  enter select    "
+"  q close                     "
 "                              "
 "                              "

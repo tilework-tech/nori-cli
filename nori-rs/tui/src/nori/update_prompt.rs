@@ -4,30 +4,23 @@
 
 #![cfg(not(debug_assertions))]
 
-use crate::history_cell::padded_emoji;
-use crate::key_hint;
 use crate::nori::update_action::UpdateAction;
 use crate::nori::updates;
-use crate::render::Insets;
-use crate::render::renderable::ColumnRenderable;
-use crate::render::renderable::Renderable;
-use crate::render::renderable::RenderableExt as _;
-use crate::selection_list::selection_option_row;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use color_eyre::Result;
-use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use nori_config::NoriConfig;
+use nori_tui_components::MenuDensity;
+use nori_tui_components::MenuItem;
+use nori_tui_components::MenuOutcome;
+use nori_tui_components::MenuRowPattern;
+use nori_tui_components::MenuState;
+use nori_tui_components::OverlayMenu;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::prelude::Widget;
-use ratatui::style::Stylize as _;
-use ratatui::text::Line;
-use ratatui::widgets::Clear;
+use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::WidgetRef;
 use tokio_stream::StreamExt;
 
@@ -98,8 +91,7 @@ struct UpdatePromptScreen {
     request_frame: FrameRequester,
     latest_version: String,
     current_version: String,
-    update_action: UpdateAction,
-    highlighted: UpdateSelection,
+    menu: MenuState<UpdateSelection>,
     selection: Option<UpdateSelection>,
 }
 
@@ -109,47 +101,48 @@ impl UpdatePromptScreen {
         latest_version: String,
         update_action: UpdateAction,
     ) -> Self {
+        let update_command = update_action.command_str();
         Self {
             request_frame,
             latest_version,
             current_version: env!("CARGO_PKG_VERSION").to_string(),
-            update_action,
-            highlighted: UpdateSelection::UpdateNow,
+            menu: crate::overlay_menu::state_from_items(
+                [
+                    MenuItem::new(UpdateSelection::UpdateNow, "Update now")
+                        .description(format!("Run `{update_command}`"))
+                        .mnemonic('u')
+                        .number_shortcut(1),
+                    MenuItem::new(UpdateSelection::NotNow, "Not now")
+                        .description("Continue with the installed version")
+                        .mnemonic('n')
+                        .number_shortcut(2),
+                    MenuItem::new(
+                        UpdateSelection::DontRemind,
+                        "Don't remind me for this version",
+                    )
+                    .description("Hide this release until a newer version is available")
+                    .mnemonic('d')
+                    .number_shortcut(3),
+                ],
+                "update prompt",
+            ),
             selection: None,
         }
     }
 
     fn handle_key(&mut self, key_event: KeyEvent) {
-        if key_event.kind == KeyEventKind::Release {
+        let Some(action) = crate::overlay_menu::action_from_key_event(key_event) else {
             return;
-        }
-        if key_event.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key_event.code, KeyCode::Char('c') | KeyCode::Char('d'))
-        {
-            self.select(UpdateSelection::NotNow);
-            return;
-        }
-        match key_event.code {
-            KeyCode::Up | KeyCode::Char('k') => self.set_highlight(self.highlighted.prev()),
-            KeyCode::Down | KeyCode::Char('j') => self.set_highlight(self.highlighted.next()),
-            KeyCode::Char('1') => self.select(UpdateSelection::UpdateNow),
-            KeyCode::Char('2') => self.select(UpdateSelection::NotNow),
-            KeyCode::Char('3') => self.select(UpdateSelection::DontRemind),
-            KeyCode::Enter => self.select(self.highlighted),
-            KeyCode::Esc => self.select(UpdateSelection::NotNow),
-            _ => {}
-        }
-    }
-
-    fn set_highlight(&mut self, highlight: UpdateSelection) {
-        if self.highlighted != highlight {
-            self.highlighted = highlight;
-            self.request_frame.schedule_frame();
+        };
+        match self.menu.handle(action) {
+            MenuOutcome::Activated(selection) => self.select(selection),
+            MenuOutcome::Cancelled => self.select(UpdateSelection::NotNow),
+            MenuOutcome::SelectionChanged(_) => self.request_frame.schedule_frame(),
+            MenuOutcome::Unchanged => {}
         }
     }
 
     fn select(&mut self, selection: UpdateSelection) {
-        self.highlighted = selection;
         self.selection = Some(selection);
         self.request_frame.schedule_frame();
     }
@@ -167,79 +160,21 @@ impl UpdatePromptScreen {
     }
 }
 
-impl UpdateSelection {
-    fn next(self) -> Self {
-        match self {
-            UpdateSelection::UpdateNow => UpdateSelection::NotNow,
-            UpdateSelection::NotNow => UpdateSelection::DontRemind,
-            UpdateSelection::DontRemind => UpdateSelection::UpdateNow,
-        }
-    }
-
-    fn prev(self) -> Self {
-        match self {
-            UpdateSelection::UpdateNow => UpdateSelection::DontRemind,
-            UpdateSelection::NotNow => UpdateSelection::UpdateNow,
-            UpdateSelection::DontRemind => UpdateSelection::NotNow,
-        }
-    }
-}
-
 impl WidgetRef for &UpdatePromptScreen {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        Clear.render(area, buf);
-        let mut column = ColumnRenderable::new();
-
-        let update_command = self.update_action.command_str();
-
-        column.push("");
-        column.push(Line::from(vec![
-            padded_emoji("  ✨").bold().cyan(),
-            "Update available!".bold(),
-            " ".into(),
-            format!(
-                "{current} -> {latest}",
-                current = self.current_version,
-                latest = self.latest_version
-            )
-            .dim(),
-        ]));
-        column.push("");
-        column.push(
-            Line::from(vec![
-                "Release notes: ".dim(),
-                "https://github.com/tilework-tech/nori-cli/releases/latest"
-                    .dim()
-                    .underlined(),
-            ])
-            .inset(Insets::tlbr(0, 2, 0, 0)),
-        );
-        column.push("");
-        column.push(selection_option_row(
-            0,
-            format!("Update now (runs `{update_command}`)"),
-            self.highlighted == UpdateSelection::UpdateNow,
-        ));
-        column.push(selection_option_row(
-            1,
-            "Skip".to_string(),
-            self.highlighted == UpdateSelection::NotNow,
-        ));
-        column.push(selection_option_row(
-            2,
-            "Skip until next version".to_string(),
-            self.highlighted == UpdateSelection::DontRemind,
-        ));
-        column.push("");
-        column.push(
-            Line::from(vec![
-                "Press ".dim(),
-                key_hint::plain(KeyCode::Enter).into(),
-                " to continue".dim(),
-            ])
-            .inset(Insets::tlbr(0, 2, 0, 0)),
-        );
-        column.render(area, buf);
+        let mut state = self.menu.clone();
+        OverlayMenu::new(format!(
+            "Update available: {} → {}",
+            self.current_version, self.latest_version
+        ))
+        .subtitle("Release notes: https://github.com/tilework-tech/nori-cli/releases/latest")
+        .theme(crate::style::component_theme())
+        .max_width(76)
+        .density(MenuDensity::Dense)
+        .row_pattern(MenuRowPattern::Zebra)
+        .fullscreen_selection_rails(true)
+        .key_hints(crate::overlay_menu::default_hints())
+        .render(area, buf, &mut state);
     }
 }
 
@@ -252,6 +187,7 @@ mod tests {
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     use ratatui::Terminal;
+    use ratatui::widgets::FrameExt;
 
     fn new_prompt() -> UpdatePromptScreen {
         UpdatePromptScreen::new(
@@ -310,8 +246,14 @@ mod tests {
     fn nori_update_prompt_navigation_wraps_between_entries() {
         let mut screen = new_prompt();
         screen.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-        assert_eq!(screen.highlighted, UpdateSelection::DontRemind);
+        assert_eq!(
+            screen.menu.selected_item().map(|item| *item.key()),
+            Some(UpdateSelection::DontRemind)
+        );
         screen.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        assert_eq!(screen.highlighted, UpdateSelection::UpdateNow);
+        assert_eq!(
+            screen.menu.selected_item().map(|item| *item.key()),
+            Some(UpdateSelection::UpdateNow)
+        );
     }
 }

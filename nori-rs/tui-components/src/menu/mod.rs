@@ -254,6 +254,19 @@ pub struct MenuState<K> {
     pub(crate) viewport_capacity: usize,
 }
 
+impl<K> MenuState<K> {
+    /// Creates an empty menu state for callers that need a non-panicking
+    /// fallback after model validation fails.
+    pub fn empty() -> Self {
+        Self {
+            items: Vec::new(),
+            selected_index: None,
+            viewport_offset: 0,
+            viewport_capacity: 1,
+        }
+    }
+}
+
 impl<K: Eq> MenuState<K> {
     /// Validates a bounded menu and selects its first enabled item.
     ///

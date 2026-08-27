@@ -96,20 +96,11 @@ impl NoriOnboardingScreen {
         // Add directory trust screen if needed (unless --skip-trust-directory is set)
         if show_trust_screen && !skip_trust_directory {
             let is_git_repo = resolve_root_git_project_for_trust(&cwd).is_some();
-            let highlighted = if is_git_repo {
-                TrustDirectorySelection::Trust
-            } else {
-                TrustDirectorySelection::DontTrust
-            };
-
-            steps.push(NoriStep::TrustDirectory(NoriTrustDirectoryWidget {
+            steps.push(NoriStep::TrustDirectory(NoriTrustDirectoryWidget::new(
+                nori_home.clone(),
                 cwd,
-                nori_home: nori_home.clone(),
                 is_git_repo,
-                selection: None,
-                highlighted,
-                error: None,
-            }));
+            )));
         }
 
         Self {
@@ -222,6 +213,15 @@ impl KeyboardHandler for NoriOnboardingScreen {
 impl WidgetRef for &NoriOnboardingScreen {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
         Clear.render(area, buf);
+
+        if let Some(NoriStep::TrustDirectory(widget)) = self
+            .steps
+            .iter()
+            .find(|step| matches!(step.get_step_state(), StepState::InProgress))
+        {
+            widget.render_ref(area, buf);
+            return;
+        }
 
         // Render steps top-to-bottom, measuring each step's height dynamically.
         let mut y = area.y;

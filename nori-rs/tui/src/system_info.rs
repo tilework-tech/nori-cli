@@ -916,6 +916,7 @@ Filesystem     1024-blocks      Used Available Capacity Mounted on
     }
 
     #[test]
+    #[cfg(debug_assertions)]
     fn test_collect_sync_returns_valid_data() {
         // This test runs collect_sync and verifies the returned data is valid
         // Note: CI runners may checkout in detached HEAD state, so git_branch

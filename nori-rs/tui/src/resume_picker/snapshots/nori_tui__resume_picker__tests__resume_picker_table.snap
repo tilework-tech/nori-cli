@@ -4,6 +4,7 @@ expression: snapshot
 ---
   Resume a previous session
   All saved sessions
+
      Conversation                         Updated           Branch
      session-a                            42 seconds ago    Not reported
   ▏  session-b                            35 minutes ago    Not reported     ▕
@@ -11,5 +12,4 @@ expression: snapshot
 
 
 
-
-        ↑↓/j/k browse  / search  enter resume  esc start new  ctrl+c quit
+  ↑↓/j/k browse  / search  enter resume  esc start new  ctrl+c quit

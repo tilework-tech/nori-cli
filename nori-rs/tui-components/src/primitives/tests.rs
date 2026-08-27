@@ -75,3 +75,20 @@ fn key_hints_wrap_snapshot() {
     ]);
     assert_snapshot!(snapshot_widget(hints, 29, 3));
 }
+
+#[test]
+fn key_hints_start_at_the_left_edge_of_the_caller_area() {
+    let backend = TestBackend::new(44, 3);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            frame.render_widget(
+                KeyHints::new([KeyHint::new("1-3", "choose"), KeyHint::new("esc", "close")]),
+                Rect::new(3, 1, 40, 1),
+            )
+        })
+        .expect("draw key hints");
+
+    assert_eq!(terminal.backend().buffer()[(2, 1)].symbol(), " ");
+    assert_eq!(terminal.backend().buffer()[(3, 1)].symbol(), "1");
+}
