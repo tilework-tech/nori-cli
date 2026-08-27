@@ -339,6 +339,8 @@ impl<K: Clone + Eq> Picker<'_, K> {
             };
             let style = if selected {
                 surface.patch(self.theme.selected)
+            } else if item.section_heading {
+                surface.patch(self.theme.text).add_modifier(Modifier::BOLD)
             } else if item.disabled {
                 surface.patch(self.theme.disabled)
             } else {

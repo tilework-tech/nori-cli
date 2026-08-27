@@ -2,6 +2,7 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use itertools::Itertools as _;
+use nori_tui_components::KeyHint;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -33,6 +34,13 @@ use super::selection_popup_common::render_rows;
 /// One selectable item in the generic selection list.
 pub(crate) type SelectionAction = Box<dyn Fn(&AppEventSender) + Send + Sync>;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum SelectionPresentation {
+    #[default]
+    List,
+    Picker,
+}
+
 #[derive(Default)]
 pub(crate) struct SelectionItem {
     pub name: String,
@@ -53,6 +61,7 @@ pub(crate) struct SelectionViewParams {
     pub subtitle: Option<String>,
     pub footer_hint: Option<Line<'static>>,
     pub footer_hint_right: Option<Line<'static>>,
+    pub picker_footer_hints: Option<Vec<KeyHint<'static>>>,
     pub items: Vec<SelectionItem>,
     pub is_searchable: bool,
     pub search_placeholder: Option<String>,
@@ -63,6 +72,14 @@ pub(crate) struct SelectionViewParams {
     pub on_dismiss: Option<SelectionAction>,
     /// Optional callback fired when Shift-Tab is pressed while the picker is open.
     pub on_shift_tab: Option<SelectionAction>,
+    pub presentation: SelectionPresentation,
+}
+
+impl SelectionViewParams {
+    pub(crate) fn picker(mut self) -> Self {
+        self.presentation = SelectionPresentation::Picker;
+        self
+    }
 }
 
 impl Default for SelectionViewParams {
@@ -72,6 +89,7 @@ impl Default for SelectionViewParams {
             subtitle: None,
             footer_hint: None,
             footer_hint_right: None,
+            picker_footer_hints: None,
             items: Vec::new(),
             is_searchable: false,
             search_placeholder: None,
@@ -79,6 +97,7 @@ impl Default for SelectionViewParams {
             initial_selected_idx: None,
             on_dismiss: None,
             on_shift_tab: None,
+            presentation: SelectionPresentation::List,
         }
     }
 }

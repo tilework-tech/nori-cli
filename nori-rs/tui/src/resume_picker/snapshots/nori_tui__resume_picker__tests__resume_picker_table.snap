@@ -4,9 +4,9 @@ expression: snapshot
 ---
   Resume a previous session
   All saved sessions
-    Conversation                          Updated           Branch
-    session-a                             42 seconds ago    Not reported
-  › session-b                             35 minutes ago    Not reported
+     Conversation                         Updated           Branch
+     session-a                            42 seconds ago    Not reported
+  ▏  session-b                            35 minutes ago    Not reported     ▕
 
 
 

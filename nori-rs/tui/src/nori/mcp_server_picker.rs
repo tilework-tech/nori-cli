@@ -13,6 +13,14 @@ use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use nori_config::McpServerConfig;
 use nori_config::McpServerTransportConfig;
+use nori_tui_components::KeyHint;
+use nori_tui_components::Picker;
+use nori_tui_components::PickerColumn;
+use nori_tui_components::PickerColumnWidth;
+use nori_tui_components::PickerDensity;
+use nori_tui_components::PickerItem;
+use nori_tui_components::PickerState;
+use nori_tui_components::SearchMode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -30,7 +38,6 @@ use crate::bottom_pane::CancellationEvent;
 use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
 
 /// The current mode of the picker state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -642,6 +649,69 @@ impl McpServerPickerView {
     pub(crate) fn pending_oauth_server(&self) -> Option<&str> {
         self.pending_oauth_server.as_deref()
     }
+
+    fn list_picker_state(&self) -> PickerState<usize> {
+        let mut items = vec![
+            PickerItem::new(0, "server", "+ Add new...")
+                .cell("transport", "")
+                .cell("status", ""),
+        ];
+        items.extend(
+            self.servers
+                .iter()
+                .enumerate()
+                .map(|(index, (name, config))| {
+                    let transport = match &config.transport {
+                        McpServerTransportConfig::Stdio { .. } => "stdio",
+                        McpServerTransportConfig::StreamableHttp { .. } => "http",
+                    };
+                    PickerItem::new(index + 1, "server", name)
+                        .cell("transport", transport)
+                        .cell("status", if config.enabled { "on" } else { "off" })
+                }),
+        );
+        let mut state = PickerState::new(
+            "MCP Servers",
+            [
+                PickerColumn::flexible("server", "Server").width(PickerColumnWidth::Flexible {
+                    min: 16,
+                    max: 48,
+                    weight: 1,
+                }),
+                PickerColumn::fixed("transport", "Transport", 10),
+                PickerColumn::fixed("status", "Status", 8),
+            ],
+            items,
+        )
+        .subtitle("Manage MCP server connections")
+        .search_mode(SearchMode::None);
+        state.selected_index = Some(self.selected_idx);
+        state
+    }
+
+    fn transport_picker_state(&self, selected: TransportChoice) -> PickerState<TransportChoice> {
+        let items = [
+            PickerItem::new(TransportChoice::Stdio, "transport", "Stdio")
+                .cell("details", "Run a local command"),
+            PickerItem::new(TransportChoice::Http, "transport", "HTTP")
+                .cell("details", "Connect to a remote URL"),
+        ];
+        let mut state = PickerState::new(
+            "Add MCP Server",
+            [
+                PickerColumn::fixed("transport", "Transport", 12),
+                PickerColumn::flexible("details", "Details"),
+            ],
+            items,
+        )
+        .subtitle("Select transport type")
+        .search_mode(SearchMode::None);
+        state.selected_index = Some(match selected {
+            TransportChoice::Stdio => 0,
+            TransportChoice::Http => 1,
+        });
+        state
+    }
 }
 
 impl BottomPaneView for McpServerPickerView {
@@ -871,12 +941,46 @@ impl Renderable for McpServerPickerView {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        match self.mode {
+            Mode::List => {
+                let state = self.list_picker_state();
+                Picker::new(&state)
+                    .theme(crate::style::component_theme())
+                    .density(PickerDensity::Compact)
+                    .fullscreen_selection_rails(true)
+                    .footer_hints([
+                        KeyHint::new("↑↓/j/k", "move"),
+                        KeyHint::new("enter", "toggle"),
+                        KeyHint::new("l", "login"),
+                        KeyHint::new("d", "delete"),
+                        KeyHint::new("esc", "close"),
+                    ])
+                    .render(area, buf);
+                return;
+            }
+            Mode::TransportSelect { selected } => {
+                let state = self.transport_picker_state(selected);
+                Picker::new(&state)
+                    .theme(crate::style::component_theme())
+                    .density(PickerDensity::Compact)
+                    .fullscreen_selection_rails(true)
+                    .footer_hints([
+                        KeyHint::new("↑↓/j/k", "move"),
+                        KeyHint::new("enter", "choose"),
+                        KeyHint::new("esc", "back"),
+                    ])
+                    .render(area, buf);
+                return;
+            }
+            _ => {}
+        }
+
         if area.height == 0 || area.width == 0 {
             return;
         }
 
         Block::default()
-            .style(user_message_style())
+            .style(crate::style::component_theme().surface)
             .render(area, buf);
 
         let content_area = area.inset(Insets::vh(1, 2));
@@ -1085,6 +1189,7 @@ mod tests {
     use codex_rmcp_client::McpAuthStatus;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
+    use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
     use std::collections::HashMap;
     use tokio::sync::mpsc::unbounded_channel;
@@ -1468,6 +1573,23 @@ mod tests {
         assert!(text.contains("MCP Servers"), "should contain title");
         assert!(text.contains("Add new"), "should contain Add new option");
         assert!(text.contains("docs"), "should contain server name");
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("Add new")
+            })
+            .expect("selected MCP row");
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
+        assert_snapshot!(
+            "shared_mcp_server_picker",
+            text.lines()
+                .map(str::trim_end)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 
     #[test]
@@ -1495,6 +1617,23 @@ mod tests {
 
         assert!(text.contains("Stdio"), "should contain Stdio option");
         assert!(text.contains("HTTP"), "should contain HTTP option");
+        let selected_row = (area.y..area.bottom())
+            .find(|&y| {
+                (area.x..area.right())
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains("Stdio")
+            })
+            .expect("selected MCP transport row");
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▏"));
+        assert!((area.x..area.right()).any(|x| buf[(x, selected_row)].symbol() == "▕"));
+        assert_snapshot!(
+            "shared_mcp_transport_picker",
+            text.lines()
+                .map(str::trim_end)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 
     #[test]

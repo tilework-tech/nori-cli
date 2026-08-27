@@ -5,6 +5,7 @@
 
 use nori_harness::AcpAgentInfo;
 use nori_harness::list_available_agents;
+use nori_tui_components::KeyHint;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -62,12 +63,26 @@ pub fn agent_picker_params(
         ),
         footer_hint: Some(standard_popup_hint_line()),
         footer_hint_right: Some(recording_footer_hint(recording_enabled)),
+        picker_footer_hints: Some(vec![
+            KeyHint::new("↑↓/j/k", "move"),
+            KeyHint::new("enter", "select"),
+            KeyHint::new(
+                "shift-tab",
+                if recording_enabled {
+                    "rec off"
+                } else {
+                    "rec on"
+                },
+            ),
+            KeyHint::new("esc", "close"),
+        ]),
         on_shift_tab: Some(Box::new(move |tx| {
             tx.send(AppEvent::SetConfigAcpWireRecording(!recording_enabled));
         })),
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 fn recording_footer_hint(enabled: bool) -> Line<'static> {
@@ -110,6 +125,7 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
         items,
         ..Default::default()
     }
+    .picker()
 }
 
 /// Get information about an agent by agent name

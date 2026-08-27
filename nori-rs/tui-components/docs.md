@@ -88,6 +88,11 @@ consumer application
   query mutation actions are ignored outside active search. Deactivation
   clears the query and selects the first available visible item, and selecting
   `SearchMode::None` also clears both search state and query.
+- [`PickerItem`](src/picker/) can represent a non-interactive section heading.
+  The state machine treats that row as non-interactive independently of its
+  disabled flag, while the renderer preserves bold primary text instead of
+  applying the faded disabled style. Consumers can therefore retain domain
+  groupings without teaching the shared state machine about their group model.
 - The [`picker` renderer](src/picker/render.rs) shows its input row only during
   active search and derives footer hints from the same state. Its inactive
   footer deliberately advertises only the concise `/ search` convention, not
@@ -204,7 +209,9 @@ consumer application
   both shortcut families, either maps to the same stable key; precedence among
   raw input meanings belongs to the consumer adapter.
 - Disabled items remain visible but cannot receive selection or activation.
-  Empty and all-disabled menus are valid and have no selected item.
+  Section headings share that navigation invariant while retaining their bold
+  structural treatment. Empty and all-disabled menus are valid and have no
+  selected item.
 - Surface height is content-derived and viewport-limited. Descriptions use at
   most two rows, Normal density separates items with blank rows, Dense density
   removes those rows, and selected content remains visible as the viewport

@@ -78,6 +78,7 @@ pub struct PickerItem<K> {
     pub details: Vec<PickerDetail>,
     pub description: Option<String>,
     pub disabled: bool,
+    pub section_heading: bool,
     pub current: bool,
     pub default: bool,
     pub read_only: bool,
@@ -97,6 +98,7 @@ impl<K> PickerItem<K> {
             details: Vec::new(),
             description: None,
             disabled: false,
+            section_heading: false,
             current: false,
             default: false,
             read_only: false,
@@ -150,6 +152,15 @@ impl<K> PickerItem<K> {
         self
     }
 
+    /// Render this non-interactive row as a bold section heading.
+    pub fn section_heading(mut self, section_heading: bool) -> Self {
+        self.section_heading = section_heading;
+        if section_heading {
+            self.disabled = true;
+        }
+        self
+    }
+
     pub fn current(mut self, current: bool) -> Self {
         self.current = current;
         self
@@ -168,6 +179,10 @@ impl<K> PickerItem<K> {
     pub fn pinned(mut self, pinned: bool) -> Self {
         self.pinned = pinned;
         self
+    }
+
+    fn is_noninteractive(&self) -> bool {
+        self.disabled || self.section_heading
     }
 }
 
@@ -476,14 +491,14 @@ impl<K: Clone + Eq> PickerState<K> {
         self.selected_index = self
             .visible_indices()
             .into_iter()
-            .find(|index| !self.items[*index].disabled);
+            .find(|index| !self.items[*index].is_noninteractive());
     }
 
     fn move_selection(&mut self, delta: i32) -> PickerOutcome<K> {
         let visible = self.visible_indices();
         let available = visible
             .into_iter()
-            .filter(|index| !self.items[*index].disabled)
+            .filter(|index| !self.items[*index].is_noninteractive())
             .collect::<Vec<_>>();
         if available.is_empty() {
             self.selected_index = None;
@@ -504,7 +519,7 @@ impl<K: Clone + Eq> PickerState<K> {
         let available = self
             .visible_indices()
             .into_iter()
-            .filter(|index| !self.items[*index].disabled)
+            .filter(|index| !self.items[*index].is_noninteractive())
             .collect::<Vec<_>>();
         let selected = if last {
             available.last().copied()
@@ -522,7 +537,7 @@ impl<K: Clone + Eq> PickerState<K> {
         let Some(item) = self.selected_item() else {
             return PickerOutcome::Unchanged;
         };
-        if item.disabled || item.read_only {
+        if item.is_noninteractive() || item.read_only {
             return PickerOutcome::Unchanged;
         }
         PickerOutcome::Selected(item.key.clone())
@@ -535,7 +550,7 @@ impl<K: Clone + Eq> PickerState<K> {
         let Some(item) = self.selected_item() else {
             return PickerOutcome::Unchanged;
         };
-        if item.disabled || item.read_only {
+        if item.is_noninteractive() || item.read_only {
             return PickerOutcome::Unchanged;
         }
         let key = item.key.clone();

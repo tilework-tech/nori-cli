@@ -499,8 +499,16 @@ impl BottomPane {
 
     /// Show a generic list selection view with the provided items.
     pub(crate) fn show_selection_view(&mut self, params: list_selection_view::SelectionViewParams) {
-        let view = list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
-        self.push_view(Box::new(view));
+        match params.presentation {
+            list_selection_view::SelectionPresentation::List => {
+                let view =
+                    list_selection_view::ListSelectionView::new(params, self.app_event_tx.clone());
+                self.push_view(Box::new(view));
+            }
+            list_selection_view::SelectionPresentation::Picker => {
+                self.show_component_picker(ComponentPickerParams::from_selection(params));
+            }
+        }
     }
 
     /// Show a domain-free picker from the shared component crate, adapting
@@ -850,6 +858,7 @@ impl Renderable for BottomPane {
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
+    use crossterm::event::KeyModifiers;
     use insta::assert_snapshot;
     use nori_tui_components::PickerColumn;
     use nori_tui_components::PickerDensity;
@@ -935,6 +944,139 @@ mod tests {
         test_bottom_pane_with_events().0
     }
 
+    fn assert_selected_row_has_symmetric_rails(rendered: &str, label: &str) {
+        let row = rendered
+            .lines()
+            .find(|row| row.contains(label))
+            .unwrap_or_else(|| panic!("missing row containing {label:?}\n{rendered}"));
+        let left = row.find('▏').expect("selected row left rail");
+        let label = row.find(label).expect("selected row label");
+        let right = row.find('▕').expect("selected row right rail");
+        assert!(left < label && label < right, "{row}");
+    }
+
+    #[test]
+    fn settings_selection_uses_the_shared_searchable_picker() {
+        let mut pane = test_bottom_pane();
+        let (tx, _rx) = unbounded_channel();
+        pane.show_selection_view(crate::nori::config_picker::config_picker_params(
+            &nori_config::NoriConfig::default(),
+            AppEventSender::new(tx),
+            None,
+        ));
+
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 22));
+
+        assert_selected_row_has_symmetric_rails(&rendered, "Pinned Plan Drawer");
+        assert!(rendered.contains("/ search"), "{rendered}");
+        assert_snapshot!("shared_settings_picker", rendered);
+
+        pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "resize reflow".chars() {
+            pane.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        let filtered = render_snapshot(&pane, Rect::new(0, 0, 100, 22));
+        assert!(filtered.contains("Resize Reflow"), "{filtered}");
+        assert!(!filtered.contains("Pinned Plan Drawer"), "{filtered}");
+        assert_snapshot!("shared_settings_picker_search", filtered);
+    }
+
+    #[test]
+    fn agent_selection_uses_the_shared_non_searchable_picker() {
+        let mut pane = test_bottom_pane();
+        let (tx, _rx) = unbounded_channel();
+        pane.show_selection_view(crate::nori::agent_picker::agent_picker_params(
+            "mock-model",
+            AppEventSender::new(tx),
+            false,
+        ));
+
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+
+        assert_selected_row_has_symmetric_rails(&rendered, "Mock ACP");
+        assert!(!rendered.contains("/ search"), "{rendered}");
+        assert!(rendered.contains("shift-tab rec on"), "{rendered}");
+        assert_snapshot!("shared_agent_picker", rendered);
+
+        pane.handle_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        pane.handle_key_event(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        let navigated = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        let mock_row = navigated
+            .lines()
+            .find(|row| row.contains("Mock ACP"))
+            .expect("mock agent row");
+        assert!(!mock_row.contains('▏') && !mock_row.contains('▕'));
+        assert!(
+            navigated
+                .lines()
+                .any(|row| row.contains('▏') && row.contains('▕')),
+            "{navigated}"
+        );
+    }
+
+    #[test]
+    fn footer_segments_shared_picker_stays_open_after_a_toggle() {
+        let (mut pane, mut rx) = test_bottom_pane_with_events();
+        pane.show_selection_view(crate::nori::config_picker::footer_segments_picker_params(
+            &nori_config::FooterSegmentConfig::default(),
+            pane.app_event_tx.clone(),
+        ));
+
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        assert_selected_row_has_symmetric_rails(&rendered, "Task Summary");
+
+        pane.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(
+            pane.has_active_view(),
+            "the footer toggle picker should remain open after changing one segment"
+        );
+        assert!(
+            matches!(rx.try_recv(), Ok(AppEvent::SetConfigFooterSegment(_, _))),
+            "toggling a footer segment should still emit its config event"
+        );
+    }
+
+    #[test]
+    fn session_config_and_model_selections_use_the_shared_picker() {
+        let option = nori_protocol::acp::v1::SessionConfigOption::select(
+            "model",
+            "Model",
+            "stable",
+            vec![
+                nori_protocol::acp::v1::SessionConfigSelectOption::new("stable", "Stable"),
+                nori_protocol::acp::v1::SessionConfigSelectOption::new("preview", "Preview"),
+            ],
+        )
+        .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Model);
+        let mut pane = test_bottom_pane();
+
+        pane.show_selection_view(
+            crate::nori::session_config_picker::acp_session_config_picker_params(
+                std::slice::from_ref(&option),
+                None,
+            ),
+        );
+        let config_render = render_snapshot(&pane, Rect::new(0, 0, 100, 16));
+        assert_selected_row_has_symmetric_rails(&config_render, "Model");
+        assert_snapshot!("shared_session_config_picker", config_render);
+
+        pane.show_selection_view(
+            crate::nori::session_config_picker::acp_session_config_value_picker_params(
+                &option,
+                &[nori_harness::OtherModel {
+                    id: "experimental",
+                    label: "Experimental",
+                }],
+            ),
+        );
+        let model_render = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
+        assert!(model_render.contains("Recommended"), "{model_render}");
+        assert!(model_render.contains("Other"), "{model_render}");
+        assert_selected_row_has_symmetric_rails(&model_render, "Stable");
+        assert_snapshot!("shared_model_picker", model_render);
+    }
+
     #[test]
     fn searchable_selection_view_consumes_escape_before_bottom_pane_dismissal() {
         let mut pane = test_bottom_pane();
@@ -984,9 +1126,12 @@ mod tests {
             ),
             actions: std::collections::BTreeMap::new(),
             on_dismiss: None,
+            on_shift_tab: None,
             primary_column: "session".to_string(),
             detail_column: None,
             density: PickerDensity::Compact,
+            keep_open: std::collections::BTreeSet::new(),
+            footer_hints: None,
         });
 
         pane.handle_key_event(KeyEvent::new(

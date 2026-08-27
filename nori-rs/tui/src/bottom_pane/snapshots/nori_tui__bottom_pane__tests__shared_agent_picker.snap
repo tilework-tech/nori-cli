@@ -1,0 +1,21 @@
+---
+source: tui/src/bottom_pane/mod.rs
+expression: rendered
+---
+                                                                                                    
+  Select Agent                                                                                      
+  Creates new conversation with selected agent (history not preserved)                              
+     Option                        Details                                                          
+  ▏  Mock ACP (current)            Mock agent for testing                                        ▕  
+     Mock ACP Alt                  Alternate mock agent for testing                                 
+     Claude Code                   Anthropic                                                        
+     Codex                         OpenAI                                                           
+     Gemini                        Google                                                           
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                       ↑↓/j/k move  enter select  shift-tab rec on  esc close
