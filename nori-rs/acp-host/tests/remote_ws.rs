@@ -28,6 +28,7 @@ use serde_json::json;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
+use tokio::sync::Notify;
 use tokio::sync::mpsc;
 use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
@@ -45,6 +46,7 @@ struct FakeState {
     sink: Option<mpsc::Sender<SessionEvent>>,
     prompts: Vec<(acp::SessionId, Vec<acp::ContentBlock>, Option<acp::Meta>)>,
     responds: Vec<(acp::RequestId, Result<acp::ClientResponse, acp::Error>)>,
+    cancels: Vec<acp::SessionId>,
     detaches: Vec<i64>,
     replay: Vec<acp::SessionNotification>,
 }
@@ -52,6 +54,7 @@ struct FakeState {
 #[derive(Default)]
 struct FakeHosted {
     list_sessions_delay: Duration,
+    prompt_release: Option<Arc<Notify>>,
     state: Mutex<FakeState>,
 }
 
@@ -130,6 +133,10 @@ impl HostedAgent for FakeHosted {
             state.prompts.push((session_id.clone(), prompt, meta));
             state.sink.clone()
         };
+        if let Some(prompt_release) = &self.prompt_release {
+            prompt_release.notified().await;
+            return Ok(request_id);
+        }
         if let Some(sink) = sink {
             for text in ["Hello ", "world"] {
                 let event = SessionEvent::Acp(AcpEvent::Notification(
@@ -149,7 +156,9 @@ impl HostedAgent for FakeHosted {
     }
 
     async fn cancel(&self, session_id: &acp::SessionId) -> Result<(), acp::Error> {
-        Self::check(session_id)
+        Self::check(session_id)?;
+        self.state.lock().await.cancels.push(session_id.clone());
+        Ok(())
     }
 
     async fn close_session(&self, session_id: &acp::SessionId) -> Result<(), acp::Error> {
@@ -208,6 +217,7 @@ async fn start_server_with_options(
 ) -> TestServer {
     let hosted = Arc::new(FakeHosted {
         list_sessions_delay,
+        prompt_release: None,
         state: Mutex::new(FakeState {
             has_active_session,
             ..FakeState::default()
@@ -316,6 +326,73 @@ async fn shutdown_closes_a_websocket_that_upgrades_after_acceptance() {
     .unwrap_or(false);
 
     assert!(closed, "late WebSocket upgrade survived server shutdown");
+}
+
+#[tokio::test]
+async fn cancel_waits_until_the_preceding_prompt_is_registered() {
+    let prompt_release = Arc::new(Notify::new());
+    let hosted = Arc::new(FakeHosted {
+        list_sessions_delay: Duration::ZERO,
+        prompt_release: Some(prompt_release.clone()),
+        state: Mutex::new(FakeState {
+            has_active_session: true,
+            ..FakeState::default()
+        }),
+    });
+    let server = RemoteAcpServer::bind(
+        "127.0.0.1:0".parse::<SocketAddr>().expect("addr"),
+        hosted.clone(),
+    )
+    .await
+    .expect("bind remote server");
+    let (mut client, _) = WsClient::connect(server.local_addr()).await;
+    client.initialize().await;
+
+    client
+        .send_json(json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "session/prompt",
+            "params": {
+                "sessionId": SESSION_ID,
+                "prompt": [{ "type": "text", "text": "cancel immediately" }],
+            },
+        }))
+        .await;
+    tokio::time::timeout(RECV_TIMEOUT, async {
+        loop {
+            if !hosted.state.lock().await.prompts.is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("prompt should reach the hosted agent");
+    client
+        .send_json(json!({
+            "jsonrpc": "2.0",
+            "method": "session/cancel",
+            "params": { "sessionId": SESSION_ID },
+        }))
+        .await;
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(
+        hosted.state.lock().await.cancels.is_empty(),
+        "cancel must wait until the prompt request id is registered"
+    );
+    prompt_release.notify_one();
+    tokio::time::timeout(RECV_TIMEOUT, async {
+        loop {
+            if hosted.state.lock().await.cancels == vec![FakeHosted::session_id()] {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("cancel should reach the hosted agent after prompt registration");
 }
 
 struct WsClient {

@@ -97,10 +97,16 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   an already-running session.
 - A remote `PromptRequest` passes its top-level `_meta` through the
   `HostedAgent` interface with its content and session id. The harness
-  implementation retains that metadata while the prompt waits in its queue and
-  forwards it to the downstream ACP agent. This preserves the shared
+  implementation retains that metadata through prompt admission and forwards
+  it to the downstream ACP agent. This preserves the shared
   `nori_protocol::PROMPT_ECHO_ID_META_KEY` correlation marker across composed
   Nori hosts without making the transport interpret it.
+- Prompt registration and a following `session/cancel` preserve WebSocket wire
+  order through the same correlation lock. The prompt handler acquires the lock
+  before spawning its hosted call and holds it until the harness request id is
+  registered with the remote responder; cancel waits for that boundary before
+  calling `HostedAgent::cancel`. This prevents an immediately following cancel
+  from overtaking the prompt state it is meant to target.
 - Responses are correlated at the boundary: `HostedAgent::prompt` returns the
   harness-issued request id, and the turn's final response arrives in stream
   order through the hosted event subscription, so a turn's `session/update`
@@ -182,6 +188,11 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   session. Per the RFD's v1 reliability model there are no sequence numbers and
   no replay of missed messages; `session/load` from the transcript is the
   recovery path after reconnect, so the server must advertise `loadSession`.
+- `session/cancel` has no response envelope, so the connection must not treat
+  successful notification dispatch as proof that prompt ownership was already
+  registered. Its ordering lock covers only the correlation boundary; the
+  hosted harness remains responsible for deciding whether the controller owns
+  the target turn.
 - `nori exec --acp` remains a separate, bounded stdio facade (see
   `@/nori-rs/exec/docs.md`); the remote module instead exposes the long-lived
   interactive harness session.
