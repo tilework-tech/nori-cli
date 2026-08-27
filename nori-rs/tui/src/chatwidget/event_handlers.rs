@@ -805,12 +805,31 @@ impl ChatWidget {
     fn handle_client_message_delta(&mut self, message_delta: crate::presentation::MessageDelta) {
         match message_delta.stream {
             crate::presentation::MessageStream::User => {
-                // A user chunk is an echo only while a local prompt owns the turn.
-                if self.owned_prompt_request_id.is_none() && !message_delta.delta.is_empty() {
-                    self.session_stats.record_user_message();
-                    self.add_to_history(history_cell::new_user_prompt(message_delta.delta));
-                    self.request_redraw();
+                if message_delta.delta.is_empty() {
+                    return;
                 }
+
+                let continues_active_message =
+                    self.active_user_message_id == message_delta.message_id
+                        && self.active_cell.as_ref().is_some_and(|cell| {
+                            cell.as_any().is::<history_cell::UserHistoryCell>()
+                        });
+                if continues_active_message {
+                    if let Some(cell) = self.active_cell.as_mut().and_then(|cell| {
+                        cell.as_any_mut()
+                            .downcast_mut::<history_cell::UserHistoryCell>()
+                    }) {
+                        cell.message.push_str(&message_delta.delta);
+                    }
+                } else {
+                    self.flush_active_cell();
+                    self.session_stats.record_user_message();
+                    self.active_user_message_id = message_delta.message_id;
+                    self.active_cell =
+                        Some(Box::new(history_cell::new_user_prompt(message_delta.delta)));
+                }
+                self.needs_final_message_separator = false;
+                self.request_redraw();
             }
             crate::presentation::MessageStream::Answer => {
                 self.assistant_stream_seen_for_stats = true;

@@ -907,6 +907,390 @@ async fn ordered_prompt_content_reaches_the_acp_agent_unchanged() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn active_prompt_broadcasts_original_content_once_before_agent_output() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_ECHO_USER_PROMPT", "1") };
+    let _guard = EnvGuard("MOCK_AGENT_ECHO_USER_PROMPT");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: Some(SessionContext {
+            with_http_mcp: "Nori-only injected context".to_string(),
+            without_http_mcp: "Nori-only injected context".to_string(),
+        }),
+        initial_context: None,
+        resume: None,
+    });
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !matches!(
+            session.events.recv().await,
+            Some(SessionEvent::Nori(NoriEvent::SessionStarted(_)))
+        ) {}
+    })
+    .await
+    .expect("session should start");
+
+    let prompt = vec![
+        acp::v1::ContentBlock::Text(acp::v1::TextContent::new("visible prompt")),
+        acp::v1::ContentBlock::Image(acp::v1::ImageContent::new("aW1hZ2U=", "image/png")),
+        acp::v1::ContentBlock::ResourceLink(acp::v1::ResourceLink::new(
+            "notes",
+            "file:///tmp/notes.md",
+        )),
+    ];
+    let prompt_request_id = session
+        .handle
+        .prompt(prompt.clone())
+        .await
+        .expect("submit mixed-content prompt");
+
+    let updates = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut updates = Vec::new();
+        loop {
+            let event = session
+                .events
+                .recv()
+                .await
+                .expect("session event stream closed during prompt");
+            match event {
+                SessionEvent::Acp(AcpEvent::Notification(
+                    acp::v1::AgentNotification::SessionNotification(notification),
+                )) => updates.push(notification.update),
+                SessionEvent::Acp(AcpEvent::Response { request_id, .. })
+                    if request_id == prompt_request_id =>
+                {
+                    break updates;
+                }
+                SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
+            }
+        }
+    })
+    .await
+    .expect("prompt should complete");
+
+    let first_agent_update = updates
+        .iter()
+        .position(|update| matches!(update, acp::v1::SessionUpdate::AgentMessageChunk(_)))
+        .expect("mock agent should stream output");
+    let user_positions = updates
+        .iter()
+        .enumerate()
+        .filter_map(|(index, update)| match update {
+            acp::v1::SessionUpdate::UserMessageChunk(_) => Some(index),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let user_chunks = user_positions
+        .iter()
+        .map(|index| match &updates[*index] {
+            acp::v1::SessionUpdate::UserMessageChunk(chunk) => chunk,
+            _ => unreachable!("positions contain only user chunks"),
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        user_chunks
+            .iter()
+            .map(|chunk| chunk.content.clone())
+            .collect::<Vec<_>>(),
+        prompt,
+        "the fan-out must contain only the caller's original ACP content"
+    );
+    let message_id = user_chunks
+        .first()
+        .and_then(|chunk| chunk.message_id.clone())
+        .expect("broadcast chunks must have a message id");
+    assert!(
+        user_chunks
+            .iter()
+            .all(|chunk| chunk.message_id.as_ref() == Some(&message_id)),
+        "all content blocks in one prompt must share one message id"
+    );
+    assert!(
+        user_positions
+            .last()
+            .is_some_and(|last_user_update| *last_user_update < first_agent_update),
+        "the complete user prompt must precede agent output"
+    );
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn unowned_user_message_notifications_remain_on_the_public_boundary() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_NEW_SESSION_USER_NOTIFICATION", "1") };
+    let _guard = EnvGuard("MOCK_AGENT_NEW_SESSION_USER_NOTIFICATION");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    let events = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session.events.recv().await.expect("session event stream");
+            let started = matches!(event, SessionEvent::Nori(NoriEvent::SessionStarted(_)));
+            events.push(event);
+            if started {
+                break events;
+            }
+        }
+    })
+    .await
+    .expect("session should start");
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        SessionEvent::Acp(AcpEvent::Notification(
+            acp::v1::AgentNotification::SessionNotification(notification)
+        )) if matches!(
+            &notification.update,
+            acp::v1::SessionUpdate::UserMessageChunk(chunk)
+                if matches!(
+                    &chunk.content,
+                    acp::v1::ContentBlock::Text(text)
+                        if text.text == "unowned user activity"
+                )
+        )
+    )));
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn unowned_user_message_during_an_active_prompt_is_not_suppressed() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_PROMPT_UNOWNED_USER_NOTIFICATION", "1") };
+    let _guard = EnvGuard("MOCK_AGENT_PROMPT_UNOWNED_USER_NOTIFICATION");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !matches!(
+            session.events.recv().await,
+            Some(SessionEvent::Nori(NoriEvent::SessionStarted(_)))
+        ) {}
+    })
+    .await
+    .expect("session should start");
+
+    let request_id = session
+        .handle
+        .prompt(vec![acp::v1::ContentBlock::Text(
+            acp::v1::TextContent::new("owned prompt"),
+        )])
+        .await
+        .expect("submit prompt");
+    let user_texts = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut texts = Vec::new();
+        loop {
+            match session.events.recv().await.expect("session event stream") {
+                SessionEvent::Acp(AcpEvent::Notification(
+                    acp::v1::AgentNotification::SessionNotification(notification),
+                )) => {
+                    if let acp::v1::SessionUpdate::UserMessageChunk(chunk) = notification.update
+                        && let acp::v1::ContentBlock::Text(text) = chunk.content
+                    {
+                        texts.push(text.text);
+                    }
+                }
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id: response_id,
+                    ..
+                }) if response_id == request_id => break texts,
+                SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
+            }
+        }
+    })
+    .await
+    .expect("prompt should complete");
+
+    assert_eq!(user_texts, vec!["owned prompt", "unowned user activity"]);
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn matching_unowned_user_message_during_an_active_prompt_is_not_suppressed() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_ECHO_USER_PROMPT", "1");
+        std::env::set_var("MOCK_AGENT_PROMPT_MATCHING_UNOWNED_USER_NOTIFICATION", "1");
+    }
+    let _echo_guard = EnvGuard("MOCK_AGENT_ECHO_USER_PROMPT");
+    let _unowned_guard = EnvGuard("MOCK_AGENT_PROMPT_MATCHING_UNOWNED_USER_NOTIFICATION");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: None,
+    });
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !matches!(
+            session.events.recv().await,
+            Some(SessionEvent::Nori(NoriEvent::SessionStarted(_)))
+        ) {}
+    })
+    .await
+    .expect("session should start");
+
+    let request_id = session
+        .handle
+        .prompt(vec![acp::v1::ContentBlock::Text(
+            acp::v1::TextContent::new("same text"),
+        )])
+        .await
+        .expect("submit prompt");
+    let user_chunks = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut chunks = Vec::new();
+        loop {
+            match session.events.recv().await.expect("session event stream") {
+                SessionEvent::Acp(AcpEvent::Notification(
+                    acp::v1::AgentNotification::SessionNotification(notification),
+                )) => {
+                    if let acp::v1::SessionUpdate::UserMessageChunk(chunk) = notification.update {
+                        chunks.push(chunk);
+                    }
+                }
+                SessionEvent::Acp(AcpEvent::Response {
+                    request_id: response_id,
+                    ..
+                }) if response_id == request_id => break chunks,
+                SessionEvent::Acp(_) | SessionEvent::Nori(_) => {}
+            }
+        }
+    })
+    .await
+    .expect("prompt should complete");
+
+    assert_eq!(
+        user_chunks.len(),
+        2,
+        "canonical prompt plus unowned activity"
+    );
+    assert!(
+        user_chunks[0].message_id.is_some(),
+        "canonical prompt is identified"
+    );
+    assert!(
+        user_chunks[1].message_id.is_none(),
+        "unowned activity is untouched"
+    );
+    assert!(user_chunks.iter().all(|chunk| {
+        matches!(
+            &chunk.content,
+            acp::v1::ContentBlock::Text(text) if text.text == "same text"
+        )
+    }));
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn load_replay_user_message_notifications_remain_on_the_public_boundary() {
+    // SAFETY: tests that mutate the mock-agent environment run serially.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        std::env::set_var("MOCK_AGENT_LOAD_SESSION_USER_NOTIFICATION", "1");
+    }
+    let _support_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let _notification_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_USER_NOTIFICATION");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: Some(SessionResume {
+            acp_session_id: Some("load-user-message".to_string()),
+            transcript: None,
+        }),
+    });
+
+    let events = tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session.events.recv().await.expect("session event stream");
+            let replay_finished = matches!(event, SessionEvent::Nori(NoriEvent::ReplayFinished));
+            events.push(event);
+            if replay_finished {
+                break events;
+            }
+        }
+    })
+    .await
+    .expect("loaded session should finish replay");
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        SessionEvent::Acp(AcpEvent::Notification(
+            acp::v1::AgentNotification::SessionNotification(notification)
+        )) if matches!(
+            &notification.update,
+            acp::v1::SessionUpdate::UserMessageChunk(chunk)
+                if matches!(
+                    &chunk.content,
+                    acp::v1::ContentBlock::Text(text)
+                        if text.text == "loaded user activity"
+                )
+        )
+    )));
+
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
 #[expect(
     clippy::expect_used,
     reason = "this helper turns missing ACP wire records into focused test failures"

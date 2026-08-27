@@ -1056,14 +1056,21 @@ fn message_delta_from_chunk(
     chunk: &acp::ContentChunk,
     stream: MessageStream,
 ) -> Option<MessageDelta> {
-    match &chunk.content {
-        acp::ContentBlock::Text(text) if !text.text.is_empty() => Some(MessageDelta {
-            stream,
-            message_id: chunk.message_id.as_ref().map(ToString::to_string),
-            delta: text.text.clone(),
-        }),
-        _ => None,
-    }
+    let delta = match (&chunk.content, stream) {
+        (acp::ContentBlock::Text(text), _) if !text.text.is_empty() => text.text.clone(),
+        (acp::ContentBlock::Image(_), MessageStream::User) => " [image attachment]".to_string(),
+        (acp::ContentBlock::Audio(_), MessageStream::User) => " [audio attachment]".to_string(),
+        (acp::ContentBlock::ResourceLink(resource), MessageStream::User) => {
+            format!(" [resource: {}]", resource.name)
+        }
+        (acp::ContentBlock::Resource(_), MessageStream::User) => " [embedded resource]".to_string(),
+        _ => return None,
+    };
+    Some(MessageDelta {
+        stream,
+        message_id: chunk.message_id.as_ref().map(ToString::to_string),
+        delta,
+    })
 }
 
 fn session_update_info_from_session_info(update: &acp::SessionInfoUpdate) -> SessionUpdateInfo {
@@ -2179,6 +2186,49 @@ mod tests {
                 message_id: None,
                 delta: "resume this session".to_string(),
             })]
+        );
+    }
+
+    #[test]
+    fn normalizer_renders_user_attachments_without_exposing_payloads() {
+        let mut normalizer = ClientEventNormalizer::default();
+        let message_id = acp::MessageId::new("user-attachment");
+        let updates = [
+            acp::SessionUpdate::UserMessageChunk(
+                acp::ContentChunk::new(acp::ContentBlock::Image(acp::ImageContent::new(
+                    "base64-payload",
+                    "image/png",
+                )))
+                .message_id(message_id.clone()),
+            ),
+            acp::SessionUpdate::UserMessageChunk(
+                acp::ContentChunk::new(acp::ContentBlock::ResourceLink(acp::ResourceLink::new(
+                    "notes",
+                    "file:///tmp/notes.md",
+                )))
+                .message_id(message_id),
+            ),
+        ];
+
+        let events = updates
+            .iter()
+            .flat_map(|update| normalizer.push_session_update(update))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            events,
+            vec![
+                ClientEvent::MessageDelta(MessageDelta {
+                    stream: MessageStream::User,
+                    message_id: Some("user-attachment".to_string()),
+                    delta: " [image attachment]".to_string(),
+                }),
+                ClientEvent::MessageDelta(MessageDelta {
+                    stream: MessageStream::User,
+                    message_id: Some("user-attachment".to_string()),
+                    delta: " [resource: notes]".to_string(),
+                }),
+            ]
         );
     }
 
