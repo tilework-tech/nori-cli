@@ -8,6 +8,15 @@ use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
 
+#[cfg(target_os = "linux")]
+fn composer_line_contains(screen: &str, expected: &str) -> bool {
+    screen
+        .lines()
+        .rev()
+        .find(|line| line.contains('›'))
+        .is_some_and(|line| line.contains(expected))
+}
+
 #[test]
 #[cfg(target_os = "linux")]
 fn test_ctrl_c_clears_input() {
@@ -188,20 +197,30 @@ fn test_history_navigation_multiple_messages() {
 
     // Press Up once - should show "› second message"
     session.send_key(Key::Up).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.wait_for_text("› second message", TIMEOUT).unwrap();
+    session
+        .wait_for(
+            |screen| composer_line_contains(screen, "› second message"),
+            TIMEOUT,
+        )
+        .unwrap();
 
     // Press Up again - should show "› first message"
     session.send_key(Key::Up).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.wait_for_text("› first message", TIMEOUT).unwrap();
+    session
+        .wait_for(
+            |screen| composer_line_contains(screen, "› first message"),
+            TIMEOUT,
+        )
+        .unwrap();
 
     // Press Up again - should be a no-op (stay at "› first message")
     session.send_key(Key::Up).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-
-    // Verify still showing "› first message"
-    session.wait_for_text("› first message", TIMEOUT).unwrap();
+    session
+        .wait_for(
+            |screen| composer_line_contains(screen, "› first message"),
+            TIMEOUT,
+        )
+        .unwrap();
 
     // Snapshot the final state
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
