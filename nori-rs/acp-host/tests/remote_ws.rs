@@ -39,7 +39,7 @@ const RECV_TIMEOUT: Duration = Duration::from_secs(10);
 struct FakeState {
     subscription_seq: i64,
     sink: Option<mpsc::Sender<SessionEvent>>,
-    prompts: Vec<(acp::SessionId, Vec<acp::ContentBlock>)>,
+    prompts: Vec<(acp::SessionId, Vec<acp::ContentBlock>, Option<acp::Meta>)>,
     responds: Vec<(acp::RequestId, Result<acp::ClientResponse, acp::Error>)>,
     detaches: Vec<i64>,
     replay: Vec<acp::SessionNotification>,
@@ -111,12 +111,13 @@ impl HostedAgent for FakeHosted {
         &self,
         session_id: &acp::SessionId,
         prompt: Vec<acp::ContentBlock>,
+        meta: Option<acp::Meta>,
     ) -> Result<acp::RequestId, acp::Error> {
         Self::check(session_id)?;
         let request_id = acp::RequestId::Number(42);
         let sink = {
             let mut state = self.state.lock().await;
-            state.prompts.push((session_id.clone(), prompt));
+            state.prompts.push((session_id.clone(), prompt, meta));
             state.sink.clone()
         };
         if let Some(sink) = sink {
@@ -438,6 +439,7 @@ async fn list_load_prompt_flow_streams_updates_then_response() {
             json!({
                 "sessionId": SESSION_ID,
                 "prompt": [{ "type": "text", "text": "hi" }],
+                "_meta": { nori_protocol::PROMPT_ECHO_ID_META_KEY: "outer-prompt" },
             }),
         )
         .await;
@@ -455,6 +457,13 @@ async fn list_load_prompt_flow_streams_updates_then_response() {
 
     let prompts = test.hosted.state.lock().await.prompts.clone();
     assert_eq!(prompts.len(), 1);
+    assert_eq!(
+        prompts[0]
+            .2
+            .as_ref()
+            .and_then(|meta| meta.get(nori_protocol::PROMPT_ECHO_ID_META_KEY)),
+        Some(&json!("outer-prompt"))
+    );
 }
 
 #[tokio::test]

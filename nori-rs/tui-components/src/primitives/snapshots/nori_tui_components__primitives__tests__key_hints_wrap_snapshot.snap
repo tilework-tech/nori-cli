@@ -3,5 +3,5 @@ source: tui-components/src/primitives/tests.rs
 expression: "snapshot_widget(hints, 29, 3)"
 ---
 "↑↓ move  enter open  / search"
-"          esc close          "
+"esc close                    "
 "                             "

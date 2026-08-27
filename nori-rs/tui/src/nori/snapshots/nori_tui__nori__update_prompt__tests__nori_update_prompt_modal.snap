@@ -1,0 +1,12 @@
+---
+source: tui/src/nori/update_prompt.rs
+expression: terminal.backend()
+---
+   Update available: 0.0.0 → 9.9.9                                           
+   ▏ 1  Update now                                                          ▕
+   ▏    Run `npm install -g nori-ai-cli@latest`                             ▕
+     2  Not now
+        Continue with the installed version
+     3  Don't remind me for this version
+        Hide this release until a newer version is available
+   ↑↓/j/k move  1-9 select  enter select  esc close

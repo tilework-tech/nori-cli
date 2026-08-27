@@ -5,17 +5,17 @@ expression: rendered
                                                                                                     
   Select Agent                                                                                      
   Creates new conversation with selected agent (history not preserved)                              
-     Option                        Details                                                          
-  ▏  Mock ACP (current)            Mock agent for testing                                        ▕  
-     Mock ACP Alt                  Alternate mock agent for testing                                 
-     Claude Code                   Anthropic                                                        
-     Codex                         OpenAI                                                           
-     Gemini                        Google                                                           
+                                                                                                    
+  ▏1. Mock ACP (current)                                                                         ▕  
+  ▏   Mock agent for testing                                                                     ▕  
+   2. Mock ACP Alt                                                                                  
+      Alternate mock agent for testing                                                              
+   3. Claude Code                                                                                   
+      Anthropic                                                                                     
+   4. Codex                                                                                         
+      OpenAI                                                                                        
+   5. Gemini                                                                                        
+      Google                                                                                        
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                       ↑↓/j/k move  enter select  shift-tab rec on  esc close
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close

@@ -867,7 +867,7 @@ fn nori_status_update(status: &str) -> nori_protocol::SessionEvent {
 }
 
 #[test]
-fn proactive_turn_status_bounds_unowned_output_without_echoing_owned_prompts() {
+fn proactive_turn_status_bounds_unowned_output_and_owned_prompt_broadcast_renders_once() {
     let (mut observer, mut observer_rx, _op_rx) = make_chatwidget_manual();
     let observer_generation = observer.session_generation;
     observer.handle_session_event(observer_generation, nori_status_update("working"));
@@ -897,8 +897,6 @@ fn proactive_turn_status_bounds_unowned_output_without_echoing_owned_prompts() {
 › what's the status here so far?
 
 
-─ Worked for 0s ────────────────────────────────────────────────────────────────
-
 • No implementation work has started.
 ");
 
@@ -917,11 +915,49 @@ fn proactive_turn_status_bounds_unowned_output_without_echoing_owned_prompts() {
         replay_text_chunk(
             crate::presentation::MessageStream::User,
             "local-user",
-            "do not echo this prompt",
+            "render this ",
+        ),
+    );
+    initiator.handle_session_event(
+        initiator_generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::User,
+            "local-user",
+            "prompt once",
+        ),
+    );
+    initiator.handle_session_event(
+        initiator_generation,
+        replay_text_chunk(
+            crate::presentation::MessageStream::Answer,
+            "local-answer",
+            "Working on it.",
         ),
     );
 
-    assert!(drain_insert_history(&mut initiator_rx).is_empty());
+    let initiator_history = drain_insert_history(&mut initiator_rx)
+        .into_iter()
+        .map(|lines| lines_to_single_string(&lines))
+        .collect::<String>();
+    insta::assert_snapshot!(initiator_history, @r"
+› render this prompt once
+");
+}
+
+#[tokio::test]
+async fn local_submission_waits_for_the_harness_prompt_broadcast() {
+    let session = start_mock_session().await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    chat.harness_handle = Some(session.handle.clone());
+
+    chat.submit_user_message_text("render from fan-out".to_string());
+
+    assert!(
+        drain_insert_history(&mut rx).is_empty(),
+        "submitting frontend must not insert its own prompt"
+    );
+
+    session.handle.shutdown().await.expect("shutdown session");
 }
 
 #[test]

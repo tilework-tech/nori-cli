@@ -120,6 +120,33 @@ impl SessionDriver {
         self.runtime.queue.len()
     }
 
+    pub(crate) fn owns_active_prompt_echo(&self, chunk: &acp::ContentChunk) -> bool {
+        let Some(owner_event_id) = chunk
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get(nori_protocol::PROMPT_ECHO_ID_META_KEY))
+            .and_then(serde_json::Value::as_str)
+        else {
+            return false;
+        };
+
+        matches!(self.runtime.phase, SessionPhase::Prompt { .. })
+            && self
+                .runtime
+                .active
+                .as_ref()
+                .and_then(|active| active.prompt.as_ref())
+                .is_some_and(|prompt| {
+                    prompt
+                        .prompt_meta
+                        .as_ref()
+                        .and_then(|meta| meta.get(nori_protocol::PROMPT_ECHO_ID_META_KEY))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(owner_event_id)
+                        && prompt.content.contains(&chunk.content)
+                })
+    }
+
     /// Whether the connected agent currently advertises a slash command with
     /// the given name.
     pub(crate) fn advertises_command(&self, name: &str) -> bool {
@@ -622,6 +649,8 @@ impl AcpBackend {
                         kind:
                             crate::normalized::session_runtime::QueuedPromptKind::GoalContinuation,
                         text: prompt_text.clone(),
+                        prompt_meta: None,
+                        original_content: Vec::new(),
                         content: vec![acp::ContentBlock::Text(acp::TextContent::new(prompt_text))],
                         display_text: None,
                     },
@@ -637,15 +666,29 @@ impl AcpBackend {
                     abort_handle.abort();
                 }
 
-                let (prompt_kind, prompt_event_id) = {
+                let (prompt_kind, prompt_event_id, prompt_meta, original_content, display_text) = {
                     let driver = self.session_driver.lock().await;
                     driver
                         .runtime
                         .active
                         .as_ref()
                         .and_then(|active| active.prompt.as_ref())
-                        .map(|prompt| (prompt.kind, prompt.event_id.clone()))
-                        .unwrap_or((QueuedPromptKind::User, request_id.to_string()))
+                        .map(|prompt| {
+                            (
+                                prompt.kind,
+                                prompt.event_id.clone(),
+                                prompt.prompt_meta.clone(),
+                                prompt.original_content.clone(),
+                                prompt.display_text.clone(),
+                            )
+                        })
+                        .unwrap_or((
+                            QueuedPromptKind::User,
+                            request_id.to_string(),
+                            None,
+                            Vec::new(),
+                            None,
+                        ))
                 };
                 let client_request_started = self
                     .pending_prompt_submissions
@@ -658,6 +701,7 @@ impl AcpBackend {
                 let backend = (*self).clone();
                 let prompt_result_tx = self.prompt_result_tx.clone();
                 let request_id_for_task = request_id.clone();
+                let prompt_meta_for_task = prompt_meta.clone();
                 let prompt_task = tokio::spawn(async move {
                     let session_id = backend.session_id.read().await.clone();
                     debug!(
@@ -670,7 +714,12 @@ impl AcpBackend {
                     );
                     let (wire_request_id, result) = backend
                         .connection
-                        .prompt_with_request_id(session_id, prompt, Some(transport_started_tx))
+                        .prompt_with_request_id(
+                            session_id,
+                            prompt,
+                            prompt_meta_for_task,
+                            Some(transport_started_tx),
+                        )
                         .await;
                     match result {
                         Ok(stop_reason) => {
@@ -704,34 +753,69 @@ impl AcpBackend {
                 });
                 *self.prompt_task_abort.lock().await = Some(prompt_task.abort_handle());
 
-                match transport_started_rx.await {
-                    Ok(Ok(wire_request_id)) => {
-                        let actions =
-                            self.session_driver
-                                .lock()
-                                .await
-                                .apply(InboundEvent::PromptStarted {
+                let transport_start_result =
+                    match transport_started_rx.await {
+                        Ok(Ok(wire_request_id)) => {
+                            let actions = self.session_driver.lock().await.apply(
+                                InboundEvent::PromptStarted {
                                     request_id: wire_request_id.clone(),
-                                });
-                        debug_assert!(actions.side_effects.is_empty());
-                        debug_assert!(actions.completed_turn.is_none());
-                        self.forward_client_events(&actions.events).await;
-                        if let Some(request_started) = client_request_started {
-                            let _ = request_started.send(Ok(wire_request_id));
+                                },
+                            );
+                            debug_assert!(actions.side_effects.is_empty());
+                            debug_assert!(actions.completed_turn.is_none());
+                            self.forward_client_events(&actions.events).await;
+                            Ok(wire_request_id)
                         }
+                        Ok(Err(error)) => Err(error),
+                        Err(_) => Err(anyhow::anyhow!(
+                            "ACP transport did not assign a prompt request ID"
+                        )),
+                    };
+
+                if prompt_kind == QueuedPromptKind::User {
+                    if let Some(recorder) = self.transcript_recorder.read().await.clone()
+                        && let Some(display_text) = display_text.as_deref()
+                        && let Err(error) = recorder
+                            .record_user_message(&prompt_event_id, display_text, vec![])
+                            .await
+                    {
+                        warn!("Failed to record user message to transcript: {error}");
                     }
-                    Ok(Err(error)) => {
-                        if let Some(request_started) = client_request_started {
-                            let _ = request_started.send(Err(error));
-                        }
+
+                    let session_id = self.session_id.read().await.clone();
+                    let message_id = acp::MessageId::new(prompt_event_id);
+                    let echo_meta = prompt_meta.as_ref().and_then(|meta| {
+                        meta.get(nori_protocol::PROMPT_ECHO_ID_META_KEY)
+                            .cloned()
+                            .map(|echo_id| {
+                                acp::Meta::from_iter([(
+                                    nori_protocol::PROMPT_ECHO_ID_META_KEY.to_string(),
+                                    echo_id,
+                                )])
+                            })
+                    });
+                    for content in original_content {
+                        let notification = acp::SessionNotification::new(
+                            session_id.clone(),
+                            acp::SessionUpdate::UserMessageChunk(
+                                acp::ContentChunk::new(content)
+                                    .message_id(message_id.clone())
+                                    .meta(echo_meta.clone()),
+                            ),
+                        );
+                        let _ = self
+                            .backend_event_tx
+                            .send(BackendEvent::Public(SessionEvent::Acp(
+                                nori_protocol::AcpEvent::Notification(
+                                    acp::AgentNotification::SessionNotification(notification),
+                                ),
+                            )))
+                            .await;
                     }
-                    Err(_) => {
-                        if let Some(request_started) = client_request_started {
-                            let _ = request_started.send(Err(anyhow::anyhow!(
-                                "ACP transport did not assign a prompt request ID"
-                            )));
-                        }
-                    }
+                }
+
+                if let Some(request_started) = client_request_started {
+                    let _ = request_started.send(transport_start_result);
                 }
                 let _ = prompt_phase_tx.send(true);
             }

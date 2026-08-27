@@ -26,7 +26,9 @@ fn local_image_content(
 
 impl ChatWidget {
     pub(super) fn flush_active_cell(&mut self) {
+        self.active_user_message_id = None;
         if let Some(active) = self.active_cell.take() {
+            let is_user_message = active.as_any().is::<history_cell::UserHistoryCell>();
             if let Some(client_cell) = active.as_any().downcast_ref::<ClientToolCell>() {
                 if client_cell.is_active() {
                     self.completed_client_tool_calls
@@ -38,7 +40,7 @@ impl ChatWidget {
                     self.completed_client_tool_calls.insert(id);
                 }
             }
-            self.needs_final_message_separator = true;
+            self.needs_final_message_separator = !is_user_message;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));
         }
     }
@@ -162,9 +164,6 @@ impl ChatWidget {
             }
         }
 
-        // Track user message for session statistics
-        self.session_stats.record_user_message();
-
         // Refresh system info (including git branch) on user message submission.
         // This catches branch changes that happened between interactions
         // (e.g., user switched branches in another terminal).
@@ -195,12 +194,6 @@ impl ChatWidget {
 
         // Persist the text to cross-session message history.
         self.persist_prompt_history(&text);
-
-        // Only show the text portion in conversation history.
-        if !text.is_empty() {
-            self.add_to_history(history_cell::new_user_prompt(text));
-        }
-        self.needs_final_message_separator = false;
     }
 
     fn persist_prompt_history(&mut self, text: &str) {

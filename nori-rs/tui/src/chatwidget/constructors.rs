@@ -79,6 +79,7 @@ impl ChatWidget {
                 agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
+            active_user_message_id: None,
             config: config.clone(),
             auth_manager,
             initial_user_message: create_initial_user_message(
@@ -258,6 +259,7 @@ impl ChatWidget {
                 agent_slug: config.active_agent.clone(),
             }),
             active_cell: None,
+            active_user_message_id: None,
             config: config.clone(),
             auth_manager,
             initial_user_message: create_initial_user_message(

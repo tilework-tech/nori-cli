@@ -4,6 +4,7 @@ expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
   Hotkeys
   Configure keyboard shortcuts
+
      Action                          Binding
   ▏  Open Transcript                 ctrl + t            ▕
      Open Editor                     ctrl + g
@@ -20,5 +21,4 @@ expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
      Kill to Line Start              ctrl + u
      Yank                            ctrl + y
      History Search                  ctrl + r
-     Toggle Plan Drawer              ctrl + o
-        ↑↓/j/k move  enter rebind  r reset  esc close
+  ↑↓/j/k move  enter rebind  r reset  esc close

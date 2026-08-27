@@ -172,6 +172,7 @@ pub(crate) struct ChatWidget {
     app_event_tx: AppEventSender,
     bottom_pane: BottomPane,
     active_cell: Option<Box<dyn HistoryCell>>,
+    active_user_message_id: Option<String>,
     config: Config,
     auth_manager: Arc<AuthManager>,
     initial_user_message: Option<UserMessage>,
