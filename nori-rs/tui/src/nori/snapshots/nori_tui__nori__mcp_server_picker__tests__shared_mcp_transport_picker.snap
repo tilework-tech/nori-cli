@@ -4,8 +4,8 @@ expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
   Add MCP Server
   Select transport type
+
      Transport     Details
   ▏  Stdio         Run a local command                   ▕
      HTTP          Connect to a remote URL
-
-             ↑↓/j/k move  enter choose  esc back
+  ↑↓/j/k move  enter choose  esc back

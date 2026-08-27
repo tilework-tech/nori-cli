@@ -25,6 +25,7 @@ mod bottom_pane_view;
 mod chat_composer;
 mod chat_composer_history;
 mod command_popup;
+mod component_overlay_menu_view;
 mod component_picker_view;
 mod file_search_popup;
 mod footer;
@@ -507,6 +508,13 @@ impl BottomPane {
             }
             list_selection_view::SelectionPresentation::Picker => {
                 self.show_component_picker(ComponentPickerParams::from_selection(params));
+            }
+            list_selection_view::SelectionPresentation::Menu => {
+                let view = component_overlay_menu_view::ComponentOverlayMenuView::new(
+                    params,
+                    self.app_event_tx.clone(),
+                );
+                self.push_view(Box::new(view));
             }
         }
     }
@@ -1075,6 +1083,50 @@ mod tests {
         assert!(model_render.contains("Other"), "{model_render}");
         assert_selected_row_has_symmetric_rails(&model_render, "Stable");
         assert_snapshot!("shared_model_picker", model_render);
+    }
+
+    #[test]
+    fn menu_selection_uses_the_shared_overlay_and_number_shortcuts() {
+        let (mut pane, mut rx) = test_bottom_pane_with_events();
+        pane.show_selection_view(
+            SelectionViewParams {
+                title: Some("Replace goal?".to_string()),
+                subtitle: Some("Start the new objective now".to_string()),
+                items: vec![
+                    SelectionItem {
+                        name: "Replace current goal".to_string(),
+                        description: Some("Set the new objective and start it now".to_string()),
+                        actions: vec![Box::new(|tx| tx.send(AppEvent::BeginExit))],
+                        dismiss_on_select: true,
+                        ..Default::default()
+                    },
+                    SelectionItem {
+                        name: "Keep current goal".to_string(),
+                        description: Some("Leave the current objective unchanged".to_string()),
+                        dismiss_on_select: true,
+                        ..Default::default()
+                    },
+                ],
+                initial_selected_idx: Some(1),
+                ..Default::default()
+            }
+            .menu(),
+        );
+
+        assert!(
+            pane.desired_height(80) >= 14,
+            "subtitle-bearing menus reserve enough height to render their subtitle"
+        );
+        let rendered = render_snapshot(&pane, Rect::new(0, 0, 80, 16));
+        assert!(rendered.contains("Replace goal?"), "{rendered}");
+        assert!(rendered.contains("1  Replace current goal"), "{rendered}");
+        assert!(rendered.contains("2  Keep current goal"), "{rendered}");
+        assert_selected_row_has_symmetric_rails(&rendered, "Keep current goal");
+        assert_snapshot!("shared_overlay_menu", rendered);
+
+        pane.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert!(matches!(rx.try_recv(), Ok(AppEvent::BeginExit)));
+        assert!(!pane.has_active_view());
     }
 
     #[test]

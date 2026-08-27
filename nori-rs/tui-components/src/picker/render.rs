@@ -131,12 +131,14 @@ impl<K: Clone + Eq> Picker<'_, K> {
         let search_height = u16::from(
             self.state.search_active && !matches!(self.state.search_mode, SearchMode::None),
         );
-        let fixed_height = subtitle_height + category_height + search_height;
+        let header_gap = u16::from(area.height > subtitle_height + category_height + search_height);
+        let fixed_height = subtitle_height + category_height + search_height + header_gap;
         let content_height = area.height.saturating_sub(fixed_height);
         let chunks = Layout::vertical([
             Constraint::Length(subtitle_height),
             Constraint::Length(category_height),
             Constraint::Length(search_height),
+            Constraint::Length(header_gap),
             Constraint::Length(content_height),
         ])
         .split(area);
@@ -146,7 +148,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
         }
         self.render_categories(chunks[1], buf);
         self.render_search(chunks[2], buf);
-        self.render_rows(chunks[3], buf);
+        self.render_rows(chunks[4], buf);
     }
 
     fn render_categories(&self, area: Rect, buf: &mut Buffer) {
@@ -274,7 +276,8 @@ impl<K: Clone + Eq> Picker<'_, K> {
             PickerDensity::Compact => 1,
             PickerDensity::Normal => 2,
         };
-        let header_height = u16::from(area.height > row_height);
+        let simple_list = columns.len() == 1 && self.state.mode == PickerMode::Single;
+        let header_height = u16::from(!simple_list && area.height > row_height);
         if header_height > 0 {
             self.render_row(
                 Rect::new(row_content_area.x, area.y, row_content_area.width, 1),
@@ -286,6 +289,7 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     .map(|column| (column.header.as_str(), self.theme.table_header)),
                 self.theme.table_header,
                 " ",
+                2,
             );
         }
 
@@ -309,29 +313,45 @@ impl<K: Clone + Eq> Picker<'_, K> {
             let item = &self.state.items[*item_index];
             let selected = self.state.selected_index == Some(*item_index);
             let checked = self.state.selected_keys.contains(&item.key);
-            let marker = match (self.fullscreen_selection_rails, self.state.mode) {
-                (true, PickerMode::Single) => " ",
-                (true, PickerMode::Toggle | PickerMode::Multi) => {
-                    if checked {
-                        "●"
-                    } else {
-                        "○"
+            let numbered_position = (simple_list && !item.disabled && !item.section_heading)
+                .then(|| {
+                    visible[..=start + row_offset]
+                        .iter()
+                        .filter(|index| {
+                            let item = &self.state.items[**index];
+                            !item.disabled && !item.section_heading
+                        })
+                        .count()
+                })
+                .filter(|position| (1..=9).contains(position));
+            let marker = if let Some(position) = numbered_position {
+                format!("{position}.")
+            } else {
+                match (self.fullscreen_selection_rails, self.state.mode) {
+                    (true, PickerMode::Single) => " ".to_string(),
+                    (true, PickerMode::Toggle | PickerMode::Multi) => {
+                        if checked {
+                            "●".to_string()
+                        } else {
+                            "○".to_string()
+                        }
                     }
-                }
-                (false, PickerMode::Single) => {
-                    if selected {
-                        "›"
-                    } else {
-                        " "
+                    (false, PickerMode::Single) => {
+                        if selected {
+                            "›".to_string()
+                        } else {
+                            " ".to_string()
+                        }
                     }
+                    (false, PickerMode::Toggle | PickerMode::Multi) => match (selected, checked) {
+                        (true, true) => "◉".to_string(),
+                        (true, false) => "›".to_string(),
+                        (false, true) => "●".to_string(),
+                        (false, false) => "○".to_string(),
+                    },
                 }
-                (false, PickerMode::Toggle | PickerMode::Multi) => match (selected, checked) {
-                    (true, true) => "◉",
-                    (true, false) => "›",
-                    (false, true) => "●",
-                    (false, false) => "○",
-                },
             };
+            let marker_width = if numbered_position.is_some() { 3 } else { 2 };
             let surface = match self.density {
                 PickerDensity::Compact if (start + row_offset).is_multiple_of(2) => self.theme.row,
                 PickerDensity::Compact => self.theme.row_alt,
@@ -404,15 +424,16 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 } else {
                     style
                 },
-                marker,
+                &marker,
+                marker_width,
             );
             if row_height > 1
                 && let Some(description) = &item.description
             {
                 let description_area = Rect::new(
-                    row_content_area.x.saturating_add(2),
+                    row_content_area.x.saturating_add(marker_width),
                     row_area.y.saturating_add(1),
-                    row_content_area.width.saturating_sub(2),
+                    row_content_area.width.saturating_sub(marker_width),
                     1,
                 );
                 let description_style = if selected {
@@ -437,10 +458,11 @@ impl<K: Clone + Eq> Picker<'_, K> {
         values: impl IntoIterator<Item = (&'a str, Style)>,
         marker_style: Style,
         marker: &str,
+        marker_width: u16,
     ) {
         let mut x = area.x;
         buf.set_string(x, area.y, marker, marker_style);
-        x = x.saturating_add(2);
+        x = x.saturating_add(marker_width);
         for ((column, width), (value, value_style)) in columns.iter().zip(widths).zip(values) {
             let value = truncate(value, *width as usize);
             buf.set_string(x, area.y, value, value_style);

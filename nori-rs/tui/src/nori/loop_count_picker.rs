@@ -247,6 +247,18 @@ impl BottomPaneView for LoopCountPickerView {
             } => self.select_current(),
 
             KeyEvent {
+                code: KeyCode::Char(character @ '1'..='9'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                let index = character.to_digit(10).unwrap_or_default() as usize - 1;
+                if index < self.item_count() {
+                    self.selected_idx = index;
+                    self.select_current();
+                }
+            }
+
+            KeyEvent {
                 code: KeyCode::Esc, ..
             } => {
                 self.on_ctrl_c();
@@ -396,6 +408,18 @@ mod tests {
             _ => panic!("expected SetConfigLoopCount, got: {event:?}"),
         }
         assert!(picker.is_complete());
+    }
+
+    #[test]
+    fn digit_shortcut_selects_visible_option() {
+        let (mut picker, mut rx) = make_picker(None);
+
+        press(&mut picker, KeyCode::Char('4'));
+
+        assert_eq!(picker.selected_idx(), 3);
+        assert!(picker.is_complete());
+        let event = rx.try_recv().expect("digit shortcut should select option");
+        assert!(matches!(event, AppEvent::SetConfigLoopCount(Some(5))));
     }
 
     #[test]

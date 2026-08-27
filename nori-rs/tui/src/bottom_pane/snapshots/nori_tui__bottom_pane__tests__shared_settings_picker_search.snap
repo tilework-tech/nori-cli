@@ -6,8 +6,9 @@ expression: filtered
   Configuration                                                                                     
   Toggle TUI settings (changes saved to config.toml)                                                
   ⌕  resize reflow                                                                                  
-     Option                   Details                                                               
-  ▏  Resize Reflow (on) (cu…  Reflow transcript history when the terminal width changes          ▕  
+                                                                                                    
+  ▏1. Resize Reflow (on) (current)                                                               ▕  
+  ▏   Reflow transcript history when the terminal width changes                                  ▕  
                                                                                                     
                                                                                                     
                                                                                                     
@@ -21,5 +22,4 @@ expression: filtered
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                         ↑↓ move  type filter  enter select  esc stop search
+  ↑↓ move  type filter  enter select  esc stop search

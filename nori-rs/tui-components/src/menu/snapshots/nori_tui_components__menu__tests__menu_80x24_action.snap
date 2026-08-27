@@ -21,7 +21,7 @@ expression: "snapshot(&mut action, 80, 24, \"Choose how to continue\",\nSome(\"S
 "               Share session                                                    "
 "               Supporting copy for Share session                                "
 "                                                                                "
-"                        ↑↓/jk move  enter select  q close                       "
+"             ↑↓/jk move  enter select  q close                                  "
 "                                                                                "
 "                                                                                "
 "                                                                                "
