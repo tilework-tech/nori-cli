@@ -37,6 +37,7 @@ const RECV_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Default)]
 struct FakeState {
+    has_active_session: bool,
     subscription_seq: i64,
     sink: Option<mpsc::Sender<SessionEvent>>,
     prompts: Vec<(acp::SessionId, Vec<acp::ContentBlock>)>,
@@ -47,6 +48,7 @@ struct FakeState {
 
 #[derive(Default)]
 struct FakeHosted {
+    list_sessions_delay: Duration,
     state: Mutex<FakeState>,
 }
 
@@ -91,9 +93,14 @@ impl FakeHosted {
 )]
 impl HostedAgent for FakeHosted {
     async fn list_sessions(&self) -> Result<Vec<acp::SessionInfo>, acp::Error> {
-        Ok(vec![
-            acp::SessionInfo::new(Self::session_id(), "/tmp/fake").title("fake session"),
-        ])
+        tokio::time::sleep(self.list_sessions_delay).await;
+        if self.state.lock().await.has_active_session {
+            Ok(vec![
+                acp::SessionInfo::new(Self::session_id(), "/tmp/fake").title("fake session"),
+            ])
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     async fn load_session(&self, session_id: &acp::SessionId) -> Result<LoadedSession, acp::Error> {
@@ -179,12 +186,29 @@ struct TestServer {
     hosted: Arc<FakeHosted>,
 }
 
+async fn start_server() -> TestServer {
+    start_server_with_active_session(true).await
+}
+
+async fn start_server_with_active_session(has_active_session: bool) -> TestServer {
+    start_server_with_options(has_active_session, Duration::ZERO).await
+}
+
 #[expect(
     clippy::expect_used,
     reason = "fixture failures should fail the test loudly"
 )]
-async fn start_server() -> TestServer {
-    let hosted = Arc::new(FakeHosted::default());
+async fn start_server_with_options(
+    has_active_session: bool,
+    list_sessions_delay: Duration,
+) -> TestServer {
+    let hosted = Arc::new(FakeHosted {
+        list_sessions_delay,
+        state: Mutex::new(FakeState {
+            has_active_session,
+            ..FakeState::default()
+        }),
+    });
     let server = RemoteAcpServer::bind(
         "127.0.0.1:0".parse::<SocketAddr>().expect("addr"),
         hosted.clone(),
@@ -358,6 +382,58 @@ async fn initialize_advertises_load_session_and_session_capabilities() {
     assert!(result["agentCapabilities"]["sessionCapabilities"]["list"].is_object());
     assert!(result["agentCapabilities"]["sessionCapabilities"]["resume"].is_object());
     assert_eq!(result["agentInfo"]["name"], json!("nori"));
+    assert_eq!(
+        result["_meta"]["nori"]["remoteControl"]["version"],
+        json!(1)
+    );
+    assert_eq!(
+        result["_meta"]["nori"]["remoteControl"]["activeSessionId"],
+        json!(SESSION_ID),
+        "initialize must identify the stable outward session exposed by this Nori remote-control surface"
+    );
+}
+
+#[tokio::test]
+async fn initialize_keeps_remote_control_marker_without_an_active_session_id() {
+    let test = start_server_with_active_session(false).await;
+    let (mut client, _) = WsClient::connect(test.server.local_addr()).await;
+    let response = client.initialize().await;
+
+    let remote_control = &response["result"]["_meta"]["nori"]["remoteControl"];
+    assert_eq!(remote_control["version"], json!(1));
+    assert!(
+        remote_control.get("activeSessionId").is_none(),
+        "an inactive Nori remote-control surface must not invent a session ID"
+    );
+}
+
+#[tokio::test]
+async fn initialize_response_precedes_live_session_events() {
+    let test = start_server_with_options(true, Duration::from_millis(100)).await;
+    let (mut client, _) = WsClient::connect(test.server.local_addr()).await;
+    client
+        .send_json(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": { "protocolVersion": 1, "clientCapabilities": {} },
+        }))
+        .await;
+    test.hosted
+        .push(SessionEvent::Acp(AcpEvent::Notification(
+            acp::AgentNotification::SessionNotification(FakeHosted::update("live")),
+        )))
+        .await;
+
+    let first = client.next_json().await;
+    assert_eq!(first["id"], json!(1));
+    assert!(
+        first.get("result").is_some(),
+        "initialize must respond first: {first}"
+    );
+
+    let second = client.next_json().await;
+    assert_eq!(second["method"], json!("session/update"));
 }
 
 #[tokio::test]

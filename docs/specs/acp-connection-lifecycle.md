@@ -26,9 +26,10 @@ spawned -> initialized -> prepared -> session-active -> closed
 
 - **Initialized** means the ACP `initialize` handshake completed. No ACP
   session is implied.
-- **Prepared** means Nori owns the initialized connection, has inspected its
-  capabilities, and has attempted `session/list` when advertised. The same
-  connection remains open while the user chooses what to do.
+- **Prepared** means Nori owns the initialized connection and has inspected its
+  capabilities. It has attempted `session/list` when advertised unless the
+  recognized Nori remote-control marker already selects the active session.
+  The same connection remains open until activation.
 - **Session-active** means exactly one explicit session directive succeeded:
   `session/new`, `session/load`, or `session/resume`.
 - **Abandoned** means a prepared candidate was cancelled, superseded, or
@@ -47,16 +48,44 @@ Startup and agent switching use the same ordering:
 2. Spawn the selected agent subprocess from that configuration.
 3. Complete ACP `initialize`.
 4. Read capabilities from the initialized connection.
-5. If advertised, issue and fully drain `session/list` on that connection.
-6. Present the available choice without issuing a session directive.
-7. After an explicit product decision, issue one of `session/new`,
-   `session/load`, or `session/resume` on the same connection.
+5. If advertised, issue and fully drain `session/list` on that connection,
+   except for the Nori remote-control automatic-attachment rule below.
+6. Unless automatic attachment applies, present the available choice without
+   issuing a session directive.
+7. After an explicit product decision or recognized automatic selection,
+   issue one of `session/new`, `session/load`, or `session/resume` on the same
+   connection.
 8. Only after session activation succeeds may that connection replace the
    current active agent.
 
 The implementation must not use a disposable probe process followed by a
 second session process. It must not call `session/new` merely because
 `initialize` succeeded.
+
+### Nori remote-control automatic attachment
+
+Only Nori's remote-control agent surface may advertise:
+
+```json
+{
+  "nori": {
+    "remoteControl": {
+      "version": 1,
+      "activeSessionId": "<stable outward Nori conversation ID>"
+    }
+  }
+}
+```
+
+This object lives in `InitializeResponse._meta`. The version marker remains
+present when no session is active, but `activeSessionId` is omitted.
+
+When version 1 is well formed, has a non-empty active ID, and the agent also
+advertises `loadSession`, preparation skips `session/list`. Activation
+immediately issues `session/load` for that ID on the same connection, without
+a picker or `session/new`. A load error is terminal and leaves the client
+unattached. Missing, malformed, unsupported, or non-loadable markers use the
+ordinary lifecycle unchanged.
 
 ## Ownership and crate boundaries
 

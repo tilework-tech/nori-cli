@@ -1482,9 +1482,14 @@ async fn main() -> acp::Result<()> {
                     response = response.agent_capabilities(capabilities);
                 }
 
+                let mut meta = std::env::var("MOCK_AGENT_INITIALIZE_META")
+                    .ok()
+                    .and_then(|value| serde_json::from_str::<serde_json::Value>(&value).ok())
+                    .and_then(|value| value.as_object().cloned())
+                    .unwrap_or_default();
+
                 if std::env::var("MOCK_AGENT_GOAL_EXT").is_ok() {
                     eprintln!("Mock agent: advertising the _session/goal goal extension");
-                    let mut meta = serde_json::Map::new();
                     meta.insert(
                         "goal".to_string(),
                         serde_json::json!({
@@ -1493,6 +1498,8 @@ async fn main() -> acp::Result<()> {
                             "actions": ["set", "pause", "resume", "clear"],
                         }),
                     );
+                }
+                if !meta.is_empty() {
                     response.meta = Some(meta);
                 }
 

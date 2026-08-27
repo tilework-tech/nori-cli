@@ -42,6 +42,10 @@ than calling host internals. This makes the public `AcpEvent::Request` and
   among client-side product crates.
 - The mock has no catch-all dispatch handler; the SDK default must be allowed to
   forward responses to the mock's own pending client requests.
+- `MOCK_AGENT_INITIALIZE_META` accepts a JSON object for initialize-response
+  metadata. Tests use it to exercise extension recognition without making the
+  fixture itself identify as a Nori remote-control surface; invalid or
+  non-object JSON is ignored.
 - `ExitOnEof` preserves the host's stdin-EOF shutdown contract. A dedicated
   scenario can ignore EOF to test the hard-exit watchdog.
 - A Unix lifecycle fixture can leave a descendant running after the mock agent

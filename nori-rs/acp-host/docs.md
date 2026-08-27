@@ -79,12 +79,17 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   queue whose writer finishes with a best-effort close frame. `initialize`
   must be the first message on the socket, otherwise close code 1002. One
   connection is live at a time; a newer connection replaces the current one
-  (last connect wins).
+  (last connect wins). The initialize handler sends its response before it
+  starts forwarding subscribed session events, preserving initialize as the
+  first server message even when the hosted session is already active.
 - The remote Agent advertises `loadSession` plus session list/resume/close
-  capabilities and serves the corresponding session methods; `session/load`
-  replays recorded history as `session/update` notifications ahead of its
-  response. `session/new` is rejected with guidance: the remote surface
-  exposes the running session, discovered via `session/list`.
+  capabilities. Its initialize `_meta.nori.remoteControl` marker has version 1
+  and includes `activeSessionId` when a running outward Nori conversation is
+  available. The server obtains that ID from the hosted session catalog; an
+  empty catalog or catalog error omits the ID without failing initialization.
+  `session/load` replays recorded history as `session/update` notifications
+  ahead of its response. `session/new` is rejected because the surface exposes
+  an already-running session.
 - Responses are correlated at the boundary: `HostedAgent::prompt` returns the
   harness-issued request id, and the turn's final response arrives in stream
   order through the hosted event subscription, so a turn's `session/update`

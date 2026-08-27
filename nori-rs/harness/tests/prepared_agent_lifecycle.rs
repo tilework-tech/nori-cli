@@ -53,7 +53,7 @@ fn prepare_spec(cwd: &Path, wire_log_dir: PathBuf) -> AgentPrepareSpec {
     clippy::expect_used,
     reason = "test helper should fail at the malformed ACP wire-log boundary"
 )]
-fn recorded_client_methods(wire_log_dir: &Path) -> Vec<String> {
+fn recorded_client_messages(wire_log_dir: &Path) -> Vec<serde_json::Value> {
     let wire_logs = std::fs::read_dir(wire_log_dir)
         .expect("wire log directory")
         .map(|entry| entry.expect("wire log entry").path())
@@ -73,7 +73,14 @@ fn recorded_client_methods(wire_log_dir: &Path) -> Vec<String> {
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("valid wire record"))
         .filter(|record| record["direction"] == "client_to_agent")
-        .filter_map(|record| record["message"]["method"].as_str().map(str::to_string))
+        .map(|record| record["message"].clone())
+        .collect()
+}
+
+fn recorded_client_methods(wire_log_dir: &Path) -> Vec<String> {
+    recorded_client_messages(wire_log_dir)
+        .into_iter()
+        .filter_map(|message| message["method"].as_str().map(str::to_string))
         .collect()
 }
 
@@ -115,6 +122,26 @@ async fn wait_for_started(session: &mut LaunchedSession) {
     })
     .await
     .expect("prepared session should start");
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "test helper should fail at the session-start boundary"
+)]
+async fn wait_for_failed_start(session: &mut LaunchedSession) -> Vec<SessionEvent> {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let mut events = Vec::new();
+        loop {
+            let event = session.events.recv().await.expect("session event stream");
+            let finished = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
+            events.push(event);
+            if finished {
+                return events;
+            }
+        }
+    })
+    .await
+    .expect("failed prepared session should finish startup")
 }
 
 #[tokio::test]
@@ -214,6 +241,150 @@ async fn listed_agent_loads_on_the_same_connection() {
         "load must consume the connection that produced the selected catalog row"
     );
     session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn marked_nori_remote_control_agent_loads_its_active_session_immediately() {
+    // SAFETY: environment-mutating mock-agent tests run serially.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
+        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        std::env::set_var(
+            "MOCK_AGENT_INITIALIZE_META",
+            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":"remote-active"}}}"#,
+        );
+    }
+    let _list_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_LIST");
+    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let _meta_guard = EnvGuard("MOCK_AGENT_INITIALIZE_META");
+    let temp = tempfile::tempdir().expect("create test directory");
+    let wire_log_dir = temp.path().join("wire-logs");
+
+    let prepared = prepare_agent(prepare_spec(temp.path(), wire_log_dir.clone()))
+        .await
+        .expect("prepare marked remote-control agent");
+    assert_eq!(
+        recorded_client_methods(&wire_log_dir),
+        vec!["initialize"],
+        "automatic reattachment must not list sessions before loading the advertised active session"
+    );
+
+    let mut session = launch_session(SessionLaunchSpec {
+        agent: prepared,
+        start: SessionStart::New,
+    });
+    wait_for_started(&mut session).await;
+
+    assert_eq!(
+        recorded_client_methods(&wire_log_dir),
+        vec!["initialize", "session/load"],
+        "the marked active session must replace the caller's fresh-session directive"
+    );
+    let messages = recorded_client_messages(&wire_log_dir);
+    let load = messages
+        .iter()
+        .find(|message| message["method"] == "session/load")
+        .expect("automatic session/load request");
+    assert_eq!(load["params"]["sessionId"], "remote-active");
+    session.handle.shutdown().await.expect("shutdown session");
+}
+
+#[tokio::test]
+#[serial]
+async fn unsupported_or_malformed_remote_control_metadata_keeps_the_normal_lifecycle() {
+    // SAFETY: environment-mutating mock-agent tests run serially.
+    unsafe { std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1") };
+    let _list_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_LIST");
+    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let _meta_guard = EnvGuard("MOCK_AGENT_INITIALIZE_META");
+
+    let cases = [
+        (
+            r#"{"nori":{"remoteControl":{"version":2,"activeSessionId":"remote-active"}}}"#,
+            true,
+        ),
+        (
+            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":42}}}"#,
+            true,
+        ),
+        (
+            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":"remote-active"}}}"#,
+            false,
+        ),
+        (r#"{"nori":{"remoteControl":{"version":1}}}"#, true),
+    ];
+
+    for (meta, advertise_load) in cases {
+        // SAFETY: environment-mutating mock-agent tests run serially.
+        unsafe {
+            std::env::set_var("MOCK_AGENT_INITIALIZE_META", meta);
+            if advertise_load {
+                std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+            } else {
+                std::env::remove_var("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+            }
+        }
+        let temp = tempfile::tempdir().expect("create test directory");
+        let wire_log_dir = temp.path().join("wire-logs");
+        let prepared = prepare_agent(prepare_spec(temp.path(), wire_log_dir.clone()))
+            .await
+            .expect("prepare ordinary agent lifecycle");
+        let mut session = launch_session(SessionLaunchSpec {
+            agent: prepared,
+            start: SessionStart::New,
+        });
+        wait_for_started(&mut session).await;
+        assert_eq!(
+            recorded_client_methods(&wire_log_dir),
+            vec!["initialize", "session/list", "session/new"],
+            "case must not opt an agent into Nori automatic reattachment: {meta}"
+        );
+        session.handle.shutdown().await.expect("shutdown session");
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn automatic_remote_control_load_failure_never_starts_a_replacement_session() {
+    // SAFETY: environment-mutating mock-agent tests run serially.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
+        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        std::env::set_var("MOCK_AGENT_LOAD_SESSION_FAIL", "1");
+        std::env::set_var(
+            "MOCK_AGENT_INITIALIZE_META",
+            r#"{"nori":{"remoteControl":{"version":1,"activeSessionId":"remote-active"}}}"#,
+        );
+    }
+    let _list_guard = EnvGuard("MOCK_AGENT_SUPPORT_SESSION_LIST");
+    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let _failure_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_FAIL");
+    let _meta_guard = EnvGuard("MOCK_AGENT_INITIALIZE_META");
+    let temp = tempfile::tempdir().expect("create test directory");
+    let wire_log_dir = temp.path().join("wire-logs");
+
+    let prepared = prepare_agent(prepare_spec(temp.path(), wire_log_dir.clone()))
+        .await
+        .expect("prepare marked remote-control agent");
+    let mut session = launch_session(SessionLaunchSpec {
+        agent: prepared,
+        start: SessionStart::New,
+    });
+    let events = wait_for_failed_start(&mut session).await;
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        SessionEvent::Acp(AcpEvent::Response {
+            response: Err(_),
+            ..
+        })
+    )));
+    assert_eq!(
+        recorded_client_methods(&wire_log_dir),
+        vec!["initialize", "session/load"],
+        "a failed automatic load must surface without session/list or session/new fallback"
+    );
 }
 
 #[tokio::test]

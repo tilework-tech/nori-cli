@@ -357,6 +357,13 @@ in [`session_setup.rs`](src/app/session_setup.rs), while
 [`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes a
 prepared connection into the harness runtime.
 
+A prepared agent carrying the recognized Nori remote-control active-session
+marker bypasses both primary and switch-candidate pickers. The TUI emits its
+existing resume action for the advertised stable session ID, and the harness
+uses `session/load` on that same connection without issuing `session/list` or
+`session/new`. A failed automatic load leaves the primary session unattached or
+the candidate uncommitted; it never creates a replacement session.
+
 Primary preparation is owned as a generation plus task abort handle, not a
 boolean in-flight flag. Explicit new/resume selection, close, candidate
 preparation, and exit invalidate it before changing lifecycle state. An
@@ -496,8 +503,10 @@ events. Switch-candidate launches suppress that attachment until their
 committed handle without losing its outward identity. Thus new-session and
 resume paths remain eager, while a failed or cancelled candidate cannot replace
 the current remote session. Attaching the committed replacement closes any
-current remote controller; after reconnecting, the controller discovers the
-replacement through `session/list`. All remote types reach the TUI through
+current remote controller. After reconnecting, a recognizing Nori client loads
+the stable ID from `_meta.nori.remoteControl.activeSessionId`; ordinary ACP
+clients can continue to discover the replacement through `session/list`. All
+remote types reach the TUI through
 `nori_harness::remote_agent` re-exports, preserving the rule that the TUI never
 imports the ACP host crate directly.
 

@@ -79,6 +79,8 @@ for servers. Streamable HTTP/SSE is not required.
 - `GET /acp` with `Upgrade: websocket` opens the connection.
 - The upgrade response includes a new `Acp-Connection-Id`.
 - `initialize` must be the first JSON-RPC request on the socket.
+- The initialize response is sent before live session-event forwarding starts,
+  so it is the first server message on an accepted connection.
 - Each WebSocket text frame contains one UTF-8 JSON-RPC message.
 - Binary frames are ignored.
 - WebSocket ping/pong provides liveness; it has no ACP meaning.
@@ -89,8 +91,12 @@ The remote surface issues Nori conversation IDs as its ACP session IDs.
 Downstream agent session swaps that continue the same conversation (compact,
 restore) are invisible to remote clients; the outward session ID never
 changes for a continuing conversation. A fork starts a new conversation with
-a new ID: the server closes the remote connection, and a reconnecting client
-rediscovers the forked session through `session/list`.
+a new ID and the server closes the remote connection. On initialize, the Nori
+remote-control surface advertises version 1 in
+`_meta.nori.remoteControl` and includes the current stable ID as
+`activeSessionId` when one exists. A recognizing client whose agent advertises
+`loadSession` attaches directly with `session/load`; other ACP clients can
+continue to discover the session through `session/list`.
 
 The transport adapts WebSocket frames to the same ACP Agent handler used by
 the host. It does not introduce a Nori-specific message envelope.
@@ -107,9 +113,9 @@ connections is on the roadmap, not in this version.
 - Socket EOF or network loss detaches the remote client. It does not close the
   Nori harness session, stop the downstream agent, or exit the TUI.
 - Reconnection creates a new transport connection and
-  `Acp-Connection-Id`. The client initializes again, then uses
-  `session/resume` or the equivalent supported ACP resume path for the stable
-  session ID.
+  `Acp-Connection-Id`. The client initializes again. A Nori client recognizes
+  the remote-control marker and immediately uses `session/load` for its stable
+  session ID; other clients use their supported ACP discovery/resume path.
 - `session/close` is terminal for the selected harness session.
 - Foregrounding or detaching the Handroll-owned terminal does not affect the
   WebSocket connection.
