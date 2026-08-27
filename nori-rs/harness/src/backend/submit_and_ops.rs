@@ -19,6 +19,15 @@ impl AcpBackend {
             .map_err(|_| anyhow::anyhow!("session runtime closed"))
     }
 
+    pub(crate) async fn cancel_request(&self, request_id: acp::RequestId) -> Result<()> {
+        self.session_event_tx
+            .send(session_runtime_driver::SessionRuntimeInput::Reducer(
+                session_reducer::InboundEvent::CancelSubmitFor { request_id },
+            ))
+            .await
+            .map_err(|_| anyhow::anyhow!("session runtime closed"))
+    }
+
     pub(crate) async fn shutdown(&self, child_grace: std::time::Duration) -> Result<()> {
         self.teardown(true, Some(child_grace)).await;
         let _ = self
@@ -207,6 +216,7 @@ impl AcpBackend {
         &self,
         content: Vec<acp::ContentBlock>,
         prompt_meta: Option<acp::Meta>,
+        admission: PromptAdmission,
         response_tx: oneshot::Sender<Result<acp::RequestId>>,
     ) {
         let has_content = content.iter().any(|block| match block {
@@ -218,12 +228,36 @@ impl AcpBackend {
             return;
         }
 
+        if admission == PromptAdmission::RejectIfBusy {
+            let (barrier_tx, barrier_rx) = oneshot::channel();
+            if self
+                .session_event_tx
+                .send(session_runtime_driver::SessionRuntimeInput::Barrier {
+                    response_tx: barrier_tx,
+                })
+                .await
+                .is_err()
+                || barrier_rx.await.is_err()
+            {
+                let _ = response_tx.send(Err(anyhow::anyhow!(
+                    "ACP session runtime closed before prompt admission"
+                )));
+                return;
+            }
+            if self.session_driver.lock().await.prompt_is_busy() {
+                let _ = response_tx.send(Err(PromptBusy.into()));
+                return;
+            }
+        }
+
         let id = generate_id();
         self.pending_prompt_submissions
             .lock()
             .await
             .insert(id.clone(), response_tx);
-        if let Err(error) = self.handle_prompt(content, &id, prompt_meta).await
+        if let Err(error) = self
+            .handle_prompt(content, &id, prompt_meta, admission)
+            .await
             && let Some(response_tx) = self.pending_prompt_submissions.lock().await.remove(&id)
         {
             let _ = response_tx.send(Err(error));

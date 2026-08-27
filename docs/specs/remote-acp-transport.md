@@ -162,11 +162,18 @@ frontend: once it becomes active, both render the harness's canonical
 
 Opening the microVM terminal therefore reveals the already-running Nori TUI;
 it does not reconstruct a second frontend or replace the WebSocket
-controller. While a remote controller is connected, the TUI acts as an
-observer. An observer sees a turn's `session/update` notifications but not
-its stop reason, which travels in the prompt response to the initiator.
-Harness commands serialize mutations. Detailed policy for simultaneous local
-and remote input is deferred.
+controller. The first accepted prompt owns the turn. Local prompts retain the
+existing harness queue; a remote prompt received while any turn is active is
+rejected as busy and is never queued. A remote cancel affects only a
+remote-owned turn, never activity started by the local TUI.
+
+Observers receive the complete shared update stream, including final assistant
+content. The harness brackets each active turn with `session/update`
+`SessionInfoUpdate` notifications carrying `_meta.nori.status` values
+`working` and `idle`. This optional Nori extension lets an observing frontend
+enter and leave its working state without receiving the initiator's prompt
+response or stop reason. The remote host only rewrites the session id and
+forwards these notifications.
 
 An agent switch uses the TUI's transactional session boundary. The remote host
 continues following the current `HarnessHandle` while a candidate initializes,

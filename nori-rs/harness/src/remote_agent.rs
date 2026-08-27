@@ -26,6 +26,7 @@ pub use nori_acp_host::remote::LoadedSession;
 pub use nori_acp_host::remote::RemoteAcpServer;
 pub use nori_acp_host::remote::parse_bind_addr;
 
+use crate::backend::PromptBusy;
 use crate::runtime::HarnessHandle;
 use crate::transcript::TranscriptLoader;
 
@@ -37,6 +38,7 @@ const REMOTE_SINK_EVENTS: usize = 256;
 /// event loop can observe a response before `prompt` finishes registering
 /// its request id). Local-frontend outcomes cycle through and are evicted.
 const UNCLAIMED_OUTCOME_LIMIT: usize = 8;
+const SESSION_BUSY_ERROR_CODE: i32 = -32015;
 
 /// The active harness session as seen by the remote surface.
 struct ActiveSession {
@@ -56,6 +58,12 @@ struct HostShared {
     subscription_seq: i64,
     /// Harness request ids of remote-submitted prompts awaiting completion.
     remote_turns: Vec<acp::RequestId>,
+    /// Monotonic identity for remote prompt-registration work.
+    remote_prompt_seq: u64,
+    /// A remote prompt is between host admission and request-id registration.
+    remote_prompt_pending: Option<u64>,
+    /// A cancel arrived while that remote prompt was still registering.
+    cancel_pending_prompt: bool,
     /// Turn outcomes (responses and failures) seen while no submitter had
     /// registered their request id; bounded, oldest evicted first.
     unclaimed_outcomes: Vec<SessionEvent>,
@@ -148,6 +156,8 @@ impl HarnessRemoteHost {
             cwd,
         });
         state.remote_turns.clear();
+        state.remote_prompt_pending = None;
+        state.cancel_pending_prompt = false;
         state.unclaimed_outcomes.clear();
         state.current_turn = None;
         state.event_task = Some(tokio::spawn(run_event_loop(self.state.clone(), events)));
@@ -179,6 +189,67 @@ fn unknown_session() -> acp::Error {
 
 fn internal_error(message: impl std::fmt::Display) -> acp::Error {
     acp::Error::new(-32000, message.to_string())
+}
+
+fn session_busy() -> acp::Error {
+    acp::Error::new(
+        SESSION_BUSY_ERROR_CODE,
+        "session already has an active turn",
+    )
+}
+
+async fn register_remote_prompt(
+    state: Arc<Mutex<HostShared>>,
+    handle: HarnessHandle,
+    submission_id: u64,
+    prompt: Vec<acp::ContentBlock>,
+    meta: Option<acp::Meta>,
+) -> Result<acp::RequestId, acp::Error> {
+    let request_id = match handle.prompt_with_meta_if_idle(prompt, meta).await {
+        Ok(request_id) => request_id,
+        Err(error) => {
+            let mut state = state.lock().await;
+            if state.remote_prompt_pending == Some(submission_id) {
+                state.remote_prompt_pending = None;
+                state.cancel_pending_prompt = false;
+            }
+            return if error.is::<PromptBusy>() {
+                Err(session_busy())
+            } else {
+                Err(internal_error(error))
+            };
+        }
+    };
+
+    let mut state = state.lock().await;
+    if state.remote_prompt_pending != Some(submission_id) {
+        return Err(internal_error(
+            "hosted session changed during remote prompt registration",
+        ));
+    }
+    state.remote_prompt_pending = None;
+    let cancel_pending = std::mem::take(&mut state.cancel_pending_prompt);
+    let raced = state
+        .unclaimed_outcomes
+        .iter()
+        .position(|event| outcome_request_id(event) == Some(&request_id));
+    match raced {
+        // The outcome was observed before this registration; deliver it now
+        // instead of registering a turn that already ended.
+        Some(position) => {
+            let event = state.unclaimed_outcomes.remove(position);
+            forward_to_sink(&mut state, event);
+        }
+        None => state.remote_turns.push(request_id.clone()),
+    }
+    drop(state);
+    if cancel_pending {
+        handle
+            .cancel_request(request_id.clone())
+            .await
+            .map_err(internal_error)?;
+    }
+    Ok(request_id)
 }
 
 /// Answer delegated permission requests the detached controller can no longer
@@ -270,6 +341,8 @@ async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receive
                     let mut shared = state.lock().await;
                     shared.session = None;
                     shared.remote_turns.clear();
+                    shared.remote_prompt_pending = None;
+                    shared.cancel_pending_prompt = false;
                     shared.unclaimed_outcomes.clear();
                     shared.current_turn = None;
                     return;
@@ -354,6 +427,8 @@ async fn run_event_loop(state: Arc<Mutex<HostShared>>, mut events: mpsc::Receive
                 );
                 shared.session = None;
                 shared.remote_turns.clear();
+                shared.remote_prompt_pending = None;
+                shared.cancel_pending_prompt = false;
                 shared.unclaimed_outcomes.clear();
                 shared.forwarded_requests.clear();
                 shared.current_turn = None;
@@ -467,36 +542,57 @@ impl HostedAgent for HarnessRemoteHost {
         prompt: Vec<acp::ContentBlock>,
         meta: Option<acp::Meta>,
     ) -> Result<acp::RequestId, acp::Error> {
-        // Do not hold the state lock across the submission: a prompt queued
-        // behind an active turn resolves only when it is issued, and holding
-        // the lock that long would freeze every other host method and the
-        // event loop.
-        let handle = self.checked_handle(session_id).await?;
-        let request_id = handle
-            .prompt_with_meta(prompt, meta)
-            .await
-            .map_err(internal_error)?;
-
-        let mut state = self.state.lock().await;
-        let raced = state
-            .unclaimed_outcomes
-            .iter()
-            .position(|event| outcome_request_id(event) == Some(&request_id));
-        match raced {
-            // The outcome was observed before this registration; deliver it
-            // now instead of registering a turn that already ended.
-            Some(position) => {
-                let event = state.unclaimed_outcomes.remove(position);
-                forward_to_sink(&mut state, event);
+        let (handle, submission_id) = {
+            let mut state = self.state.lock().await;
+            let Some(session) = state.session.as_ref() else {
+                return Err(unknown_session());
+            };
+            if session.conversation_id.as_deref() != Some(session_id.0.as_ref()) {
+                return Err(unknown_session());
             }
-            None => state.remote_turns.push(request_id.clone()),
-        }
-        Ok(request_id)
+            if state.remote_prompt_pending.is_some() {
+                return Err(session_busy());
+            }
+            let handle = session.handle.clone();
+            state.remote_prompt_seq += 1;
+            let submission_id = state.remote_prompt_seq;
+            state.remote_prompt_pending = Some(submission_id);
+            (handle, submission_id)
+        };
+        let registration = tokio::spawn(register_remote_prompt(
+            self.state.clone(),
+            handle,
+            submission_id,
+            prompt,
+            meta,
+        ));
+        registration.await.map_err(|error| {
+            internal_error(format!("remote prompt registration failed: {error}"))
+        })?
     }
 
     async fn cancel(&self, session_id: &acp::SessionId) -> Result<(), acp::Error> {
-        let handle = self.checked_handle(session_id).await?;
-        handle.cancel().await.map_err(internal_error)
+        let (handle, request_id) = {
+            let mut state = self.state.lock().await;
+            let Some(session) = state.session.as_ref() else {
+                return Err(unknown_session());
+            };
+            if session.conversation_id.as_deref() != Some(session_id.0.as_ref()) {
+                return Err(unknown_session());
+            }
+            let handle = session.handle.clone();
+            let Some(request_id) = state.remote_turns.last().cloned() else {
+                if state.remote_prompt_pending.is_some() {
+                    state.cancel_pending_prompt = true;
+                }
+                return Ok(());
+            };
+            (handle, request_id)
+        };
+        handle
+            .cancel_request(request_id)
+            .await
+            .map_err(internal_error)
     }
 
     async fn close_session(&self, session_id: &acp::SessionId) -> Result<(), acp::Error> {
