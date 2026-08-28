@@ -43,6 +43,9 @@ fn test_streamed_markdown_table_renders_as_a_grid() {
     session
         .wait_for_text("Done.", TIMEOUT)
         .expect("Did not receive the streamed table");
+    session
+        .wait_for_text("Approvals: Agent", TIMEOUT)
+        .expect("Footer did not render after the streamed table");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let screen = session.screen_contents();
