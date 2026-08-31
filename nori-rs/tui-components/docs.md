@@ -64,6 +64,10 @@ consumer application
 - Ratatui provides the rendering types and caller rectangles. Crossterm is an
   example-only development dependency, so the public library does not bind a
   consumer to one raw event source.
+- Storybook E2E tests are registered in [`Cargo.toml`](Cargo.toml) beside their
+  example sources. Their private [`tmux adapter`](examples/support/e2e.rs)
+  exercises the examples' real input and rendering loops, without adding
+  terminal ownership or testing APIs to the public component library.
 - Handroll is a design reference and a future consumer. This crate contains no
   Handroll workflow actions or data types, and adoption is deferred from the
   reusable component change.
@@ -193,6 +197,27 @@ consumer application
   overlay layer. Disabled items stay unavailable to navigation or activation.
   Warning and destructive colors identify consequences only while an item is
   not selected.
+- The [`storybook runner`](scripts/storybook-e2e.sh) builds examples before
+  testing, obtains executable paths from Cargo compiler-artifact messages,
+  and uses Cargo metadata to locate capture storage. Each attempt gets a fresh
+  run directory; `latest-run` records that attempt and a `passed` marker is
+  written only after its tests succeed.
+  The adapter creates uniquely named, independently sized tmux sessions,
+  waits for expected content and settled ANSI display rows, and derives text
+  from that same captured frame. It removes SGR style sequences but preserves
+  display rows; unexpected control sequences are rejected. Insta snapshots
+  escape ANSI and literal backslashes and wrap each row in delimiters to retain
+  blank rows and trailing cells without trailing whitespace in snapshot files.
+  The session guard stops only its owned session on completion or
+  failure, including assertion panics.
+- The [`review-image renderer`](scripts/render-storybook-captures.sh) replays
+  saved `replay.ansi` and geometry through the external Ghostty Web renderer.
+  This replay-only derivative hides the cursor and removes exactly the final
+  LF row separator, preventing replay from scrolling away the top row while
+  preserving empty display rows. Raw ANSI and text snapshots remain unchanged.
+  PNGs live beside the examples for review, separately from Insta assertions;
+  rendering does not rerun the application. It requires the latest attempt to
+  have passed and scans only that run, excluding stale captures from prior runs.
 
 ### Things to Know
 
@@ -238,5 +263,12 @@ consumer application
 - No public selectable-list core is extracted: menu and picker semantics do
   not yet have another proven shared consumer beyond their existing
   state-in/typed-outcome-out convention.
+- Storybook E2E cases are explicitly ignored by ordinary Cargo test runs;
+  pure capture-helper tests run normally. The opt-in runner requires an
+  installed compatible CSRessel tmux skill, tmux, and jq, with no installation
+  or network bootstrap during tests. ANSI serialization depends on tmux, so
+  local and CI versions must remain consistent. Browser tooling is required
+  only to regenerate PNGs; setup and review commands are documented in
+  [`examples/README.md`](examples/README.md).
 
 Created and maintained by Nori.

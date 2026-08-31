@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/markdown_storybook/e2e.rs
+---
+││
+│  \x1b[1mMarkdown storybook · page 2 of 3\x1b[0m│
+││
+│  \x1b[38;5;8m# \x1b[1;4m\x1b[39mAdaptive tables\x1b[0m│
+││
+│  \x1b[1mSession                  \x1b[0m  \x1b[1mProject          \x1b[0m  \x1b[1mUpdated\x1b[0m  \x1b[1mCurrent turn status        \x1b[0m│
+│  \x1b[38;5;8m━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━  ━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[39m│
+│  Fix parser recovery        nori-cli                2m  Working│
+│  \x1b[38;5;8m─────────────────────────  ─────────────────  ───────  ───────────────────────────\x1b[39m│
+│  Improve Markdown tables    external-codex         18m  Waiting for user input│
+│  \x1b[38;5;8m─────────────────────────  ─────────────────  ───────  ───────────────────────────\x1b[39m│
+│  Handroll picker migration  sessions/handroll       1h  Implementing the event loop│
+││
+│  Narrow the terminal until the grid becomes stacked records.│
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+│  \x1b[38;5;2m1-3\x1b[39m \x1b[38;5;8mpage  \x1b[38;5;2m↑↓\x1b[39m \x1b[38;5;8mscroll  \x1b[38;5;2mq\x1b[39m \x1b[38;5;8mclose│
+││

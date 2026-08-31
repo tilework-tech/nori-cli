@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/nori_storybook/e2e.rs
+---
+│                      \x1b[38;5;8m1 Picker\x1b[39m   \x1b[38;5;8m2 Markdown\x1b[39m   \x1b[38;5;8m3 Primitives\x1b[39m   \x1b[38;5;8m4 States\x1b[39m   \x1b[38;5;2m5\x1b[39m \x1b[1mDetails\x1b[0m   \x1b[38;5;8m6 Overlay menu\x1b[39m│
+││
+│  \x1b[1mDetail pane\x1b[0m│
+││
+│  \x1b[1mDefault · compact columns + heading\x1b[0m│
+│  \x1b[38;5;8mAutomatic label width with the approved compact two-column layout.\x1b[39m│
+│  \x1b[38;5;8mRequired height at 116 columns: 12 rows\x1b[39m│
+││
+│   \x1b[48;2;40;40;40m \x1b[1mSession details                                                                                                 \x1b[0m\x1b[48;2;40;40;40m \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mThread        \x1b[39m  Fix parser recovery                                                                              \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mAgent         \x1b[39m  \x1b[38;5;15mCodex                                                                                           \x1b[39m \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mOrigin        \x1b[39m  Local · nori-cli                                                                                 \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mCreated       \x1b[39m  Aug 16, 2026 · 9:42 AM                                                                           \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mModified      \x1b[39m  Aug 17, 2026 · 11:08 AM                                                                          \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mTurns         \x1b[39m  48                                                                                               \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mTranscript    \x1b[39m  1.8 MB                                                                                           \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mLatest prompt \x1b[39m  \x1b[38;5;8mRecover malformed session transcripts without changing user-visible behavior.                   \x1b[39m \x1b[49m│
+│   \x1b[48;2;40;40;40m \x1b[38;5;8mLatest respon…\x1b[39m  \x1b[38;5;8mInspecting parser recovery fixtures and structured error handling.                              \x1b[39m \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+│   \x1b[48;2;40;40;40m                                                                                                                  \x1b[49m│
+││
+│  \x1b[38;5;2mTab/Shift-Tab\x1b[39m \x1b[38;5;8mdetail story  \x1b[38;5;2m1-6\x1b[39m \x1b[38;5;8mpage  \x1b[38;5;2mq\x1b[39m \x1b[38;5;8mclose\x1b[39m│
+││

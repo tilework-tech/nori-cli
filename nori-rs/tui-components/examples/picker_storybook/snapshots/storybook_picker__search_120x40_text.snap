@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/picker_storybook/e2e.rs
+---
+││
+│  Picker storybook│
+│  / searches · tab changes category · enter selects · q exits│
+│  All  Claude  Codex  Gemini  Antigravity  Nori                                   Details                           │
+│  ⌕  markdown                                                                                                       │
+│                                                                                  Agent  Codex                      │
+│    Session                        Type          Project           Updated        Turn   Waiting for user input     │
+│  › Improve Markdown tables        Gemini        external-codex    18m ago                                          │
+│    Waiting for user input                                                                                          │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                                                                                    │
+│                                                   Selected: markdown                                                 │
+│  ↑↓ move  type filter  enter select  esc stop search│
+││

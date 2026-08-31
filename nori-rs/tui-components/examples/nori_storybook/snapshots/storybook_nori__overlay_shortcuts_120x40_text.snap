@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/nori_storybook/e2e.rs
+---
+│                                      ← previous page   Overlay menu   next page →│
+│Overlay menu  shortcut-heavy│
+│tab next example   shift-tab previous example│
+││
+│Session transcript│
+│[host] transcript remains beneath the overlay│
+│[host] status stays visible outside the menu│
+││
+││
+││
+│                                                                                         │
+│                                 Choose a session action                                 │
+│                                 Shortcuts activate immediately                          │
+│                                                                                         │
+│                                 ▏ 1  Resume session                                  ▕  │
+│                                 ▏    Continue the selected transcript                ▕  │
+│                                                                                         │
+│                                   2  Start a new session                                │
+│                                      Create an empty local session                      │
+│                                                                                         │
+│                                   3  Inspect transcript                                 │
+│                                      Open without changing state                        │
+│                                                                                         │
+│                                   4  Archive session                                    │
+│                                      Move the transcript to local history               │
+│                                                                                         │
+│                                   5  Share session                                      │
+│                                      Unavailable for this session                       │
+│                                                                                         │
+│                                 1-5/r,s,i,a activate  ↑↓/jk move  tab example  q close  │
+│                                                                                         │
+││
+││
+││
+││
+││
+││
+││
+││
+││

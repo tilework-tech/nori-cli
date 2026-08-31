@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/markdown_storybook/e2e.rs
+---
+││
+│  \x1b[1mMarkdown storybook · page 1 of 3\x1b[0m│
+││
+│  \x1b[38;5;8m# \x1b[1;4m\x1b[39mMarkdown storybook\x1b[0m│
+││
+│  The shared renderer supports \x1b[1mstrong text\x1b[0m, \x1b[3memphasis\x1b[0m, \x1b[9mstrikethrough\x1b[0m, \x1b[38;5;6minline code\x1b[39m, and \x1b[4m\x1b[38;5;6mlinks (https://nori.dev)\x1b[0m.│
+││
+│  > The component owns rendering, while this example owns the event loop.│
+││
+│  \x1b[38;5;8m1. \x1b[39mResize the terminal│
+│  \x1b[38;5;8m2. \x1b[39mPress \x1b[38;5;6m2\x1b[39m for adaptive tables│
+│  \x1b[38;5;8m3. \x1b[39mPress \x1b[38;5;6m3\x1b[39m for streaming output│
+││
+│  \x1b[38;5;8m  rust\x1b[39m│
+│  \x1b[38;5;8m  \x1b[38;5;6mlet text = Markdown::new(source).width(area.width).render_text();\x1b[39m│
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+│  \x1b[38;5;2m1-3\x1b[39m \x1b[38;5;8mpage  \x1b[38;5;2m↑↓\x1b[39m \x1b[38;5;8mscroll  \x1b[38;5;2mq\x1b[39m \x1b[38;5;8mclose│
+││

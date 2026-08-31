@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/nori_storybook/e2e.rs
+---
+│                                      ← previous page   Overlay menu   next page →│
+│Overlay menu  centered action│
+│tab next example   shift-tab previous example│
+││
+│Session transcript│
+│[host] transcript remains beneath the overlay│
+│[host] status stays visible outside the menu│
+││
+││
+││
+││
+│                                                                                         │
+│                                 Choose how to continue                                  │
+│                                 Select one action                                       │
+│                                                                                         │
+│                                 ▏ Resume session                                     ▕  │
+│                                 ▏ Continue the selected transcript                   ▕  │
+│                                                                                         │
+│                                   Start a new session                                   │
+│                                   Create an empty local session                         │
+│                                                                                         │
+│                                   Open read-only                                        │
+│                                   Inspect without changing state                        │
+│                                                                                         │
+│                                   Share session                                         │
+│                                   Unavailable for this session                          │
+│                                                                                         │
+│                                 ↑↓/jk move  enter select  tab example  q close          │
+│                                                                                         │
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
+││
