@@ -1,43 +1,43 @@
 ---
 source: tui-components/examples/picker_storybook/e2e.rs
 ---
-││
-│  Picker storybook│
-│  / searches · tab changes category · enter selects · q exits│
-│  All  Claude  Codex  Gemini  Antigravity  Nori                                   Details                           │
-│                                                                                                                    │
-│    Session                         Type          Project          Updated        Agent         Codex               │
-│    Start a new session             Nori          Not reported     now            Path          /workspace/nori/cli │
-│    Create a fresh ACP session                                                    Current turn  Implementing parse… │
-│  › Fix parser recovery (current)   Codex         nori-cli         2m ago                                           │
-│    Codex is implementing parser recovery                                                                           │
-│    Improve Markdown tables         Gemini        external-codex   18m ago                                          │
-│    Waiting for user input                                                                                          │
-│    Slack · Claude                  Claude        Nori Sessions    1h ago                                           │
-│    The broker owns this remote session                                                                             │
-│    Unavailable legacy session      Antigravity   handroll         3d ago                                           │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                                                                                    │
-│                                                    Selected: parser                                                  │
-│  ↑↓/j/k move  / search  enter select  esc close│
-││
+│                                                                                                                        │
+│  Picker storybook                                                                                                      │
+│  / searches · tab changes category · enter selects · q exits                                                           │
+│  All  Claude  Codex  Gemini  Antigravity  Nori                                   Details                               │
+│                                                                                                                        │
+│    Session                         Type          Project          Updated        Agent         Codex                   │
+│    Start a new session             Nori          Not reported     now            Path          /workspace/nori/cli     │
+│    Create a fresh ACP session                                                    Current turn  Implementing parse…     │
+│  › Fix parser recovery (current)   Codex         nori-cli         2m ago                                               │
+│    Codex is implementing parser recovery                                                                               │
+│    Improve Markdown tables         Gemini        external-codex   18m ago                                              │
+│    Waiting for user input                                                                                              │
+│    Slack · Claude                  Claude        Nori Sessions    1h ago                                               │
+│    The broker owns this remote session                                                                                 │
+│    Unavailable legacy session      Antigravity   handroll         3d ago                                               │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                    Selected: parser                                                    │
+│  ↑↓/j/k move  / search  enter select  esc close                                                                        │
+│                                                                                                                        │

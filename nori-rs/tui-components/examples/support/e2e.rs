@@ -13,6 +13,7 @@ use std::time::SystemTime;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::ensure;
+use unicode_width::UnicodeWidthStr;
 
 pub struct Screen {
     pub ansi: String,
@@ -51,6 +52,23 @@ impl Screen {
 
     pub fn snapshot_ansi(&self) -> String {
         self.ansi.replace('\\', "\\\\").replace('\x1b', "\\x1b")
+    }
+
+    pub fn text_grid(&self, cols: i32) -> Result<String> {
+        ensure!(cols > 0, "terminal width must be positive");
+        let mut grid = String::new();
+        for line in self.text.lines() {
+            let width = i32::try_from(UnicodeWidthStr::width(line))?;
+            ensure!(width <= cols, "captured row exceeds terminal width");
+            grid.push_str(line);
+            // tmux omits unused cells at the right edge. Restore the actual
+            // grid using terminal cells, not byte count or Unicode scalar count.
+            for _ in width..cols {
+                grid.push(' ');
+            }
+            grid.push('\n');
+        }
+        Ok(grid)
     }
 
     pub fn replay_ansi(&self) -> String {
@@ -184,7 +202,8 @@ impl TuiSession {
             ensure!(Instant::now() < deadline, "storybook screen did not settle");
             previous = next;
         };
-        let screen = Screen::from_ansi(ansi)?;
+        let mut screen = Screen::from_ansi(ansi)?;
+        screen.text = screen.text_grid(self.cols)?;
         ensure!(
             screen.ansi.contains("\x1b["),
             "expected a styled storybook capture"

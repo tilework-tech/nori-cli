@@ -1,43 +1,43 @@
 ---
 source: tui-components/examples/markdown_storybook/e2e.rs
 ---
-││
-│  Markdown storybook · page 1 of 3│
-││
-│  # Markdown storybook│
-││
-│  The shared renderer supports strong text, emphasis, strikethrough, inline code, and links (https://nori.dev).│
-││
-│  > The component owns rendering, while this example owns the event loop.│
-││
-│  1. Resize the terminal│
-│  2. Press 2 for adaptive tables│
-│  3. Press 3 for streaming output│
-││
-│    rust│
-│    let text = Markdown::new(source).width(area.width).render_text();│
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-│  1-3 page  ↑↓ scroll  q close│
-││
+│                                                                                                                        │
+│  Markdown storybook · page 1 of 3                                                                                      │
+│                                                                                                                        │
+│  # Markdown storybook                                                                                                  │
+│                                                                                                                        │
+│  The shared renderer supports strong text, emphasis, strikethrough, inline code, and links (https://nori.dev).         │
+│                                                                                                                        │
+│  > The component owns rendering, while this example owns the event loop.                                               │
+│                                                                                                                        │
+│  1. Resize the terminal                                                                                                │
+│  2. Press 2 for adaptive tables                                                                                        │
+│  3. Press 3 for streaming output                                                                                       │
+│                                                                                                                        │
+│    rust                                                                                                                │
+│    let text = Markdown::new(source).width(area.width).render_text();                                                   │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│  1-3 page  ↑↓ scroll  q close                                                                                          │
+│                                                                                                                        │

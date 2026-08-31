@@ -1,33 +1,33 @@
 ---
 source: tui-components/examples/markdown_storybook/e2e.rs
 ---
-││
-│  Markdown storybook · page 2 of 3│
-││
-│  # Adaptive tables│
-││
-│  Session         Fix parser recovery│
-│  Project         nori-cli│
-│  Updated         2m│
-│  Current turn status  Working│
-│  ────────────────────────────────────────────│
-│  Session         Improve Markdown tables│
-│  Project         external-codex│
-│  Updated         18m│
-│  Current turn status  Waiting for user input│
-│  ────────────────────────────────────────────│
-│  Session         Handroll picker migration│
-│  Project         sessions/handroll│
-│  Updated         1h│
-│  Current turn status  Implementing the event│
-│                       loop│
-││
-│  Narrow the terminal until the grid becomes│
-│  stacked records.│
-││
-││
-││
-││
-││
-│  1-3 page  ↑↓ scroll  q close│
-││
+│                                                │
+│  Markdown storybook · page 2 of 3              │
+│                                                │
+│  # Adaptive tables                             │
+│                                                │
+│  Session         Fix parser recovery           │
+│  Project         nori-cli                      │
+│  Updated         2m                            │
+│  Current turn status  Working                  │
+│  ────────────────────────────────────────────  │
+│  Session         Improve Markdown tables       │
+│  Project         external-codex                │
+│  Updated         18m                           │
+│  Current turn status  Waiting for user input   │
+│  ────────────────────────────────────────────  │
+│  Session         Handroll picker migration     │
+│  Project         sessions/handroll             │
+│  Updated         1h                            │
+│  Current turn status  Implementing the event   │
+│                       loop                     │
+│                                                │
+│  Narrow the terminal until the grid becomes    │
+│  stacked records.                              │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│                                                │
+│  1-3 page  ↑↓ scroll  q close                  │
+│                                                │

@@ -14,6 +14,26 @@ fn text_capture_preserves_unicode_spacing_and_rows_without_style_sequences() -> 
 }
 
 #[test]
+fn text_grid_restores_blank_cells_using_display_width() -> Result<()> {
+    let screen = Screen::from_ansi("\n\x1b[31m日e\u{301}\x1b[0m\nx  \n\n".to_owned())?;
+    assert_eq!(
+        screen.text_grid(8)?,
+        "        \n日e\u{301}     \nx       \n        \n"
+    );
+    Ok(())
+}
+
+#[test]
+fn text_grid_rejects_invalid_width_instead_of_truncating_content() -> Result<()> {
+    let screen = Screen::from_ansi("12345\n".to_owned())?;
+    for cols in [-1, 0, 4] {
+        assert!(screen.text_grid(cols).is_err());
+    }
+    assert_eq!(screen.text_grid(5)?, "12345\n");
+    Ok(())
+}
+
+#[test]
 fn ansi_snapshot_distinguishes_escape_sequences_from_literal_backslashes() -> Result<()> {
     let screen = Screen::from_ansi("\x1b[31mred\x1b[0m \\x1b[31m\n".to_owned())?;
     assert_eq!(screen.snapshot_ansi(), "\\x1b[31mred\\x1b[0m \\\\x1b[31m\n");

@@ -1,33 +1,33 @@
 ---
 source: tui-components/examples/nori_storybook/e2e.rs
 ---
-│1 Picker   2 Markdown   3 Primitives   4 States│
-││
-│  Detail pane│
-││
-│  Responsive · stack below 120 columns│
-│  Narrow labels sit above values, which retain│
-│  Required height at 44 columns: 24 rows│
-││
-│    Session details                          │
-│                                             │
-│    Thread                                   │
-│      Fix parser recovery                    │
-│    Agent                                    │
-│      Codex                                  │
-│    Origin                                   │
-│      Local · nori-cli                       │
-│    Created                                  │
-│      Aug 16, 2026 · 9:42 AM                 │
-│    Modified                                 │
-│      Aug 17, 2026 · 11:08 AM                │
-│    Turns                                    │
-│      48                                     │
-│    Transcript                               │
-│      1.8 MB                                 │
-│                                             │
-│    Latest prompt                            │
-│      Recover malformed session transcripts  │
-││
-│  Tab/Shift-Tab detail story  1-6 page  q│
-││
+│1 Picker   2 Markdown   3 Primitives   4 States │
+│                                                │
+│  Detail pane                                   │
+│                                                │
+│  Responsive · stack below 120 columns          │
+│  Narrow labels sit above values, which retain  │
+│  Required height at 44 columns: 24 rows        │
+│                                                │
+│    Session details                             │
+│                                                │
+│    Thread                                      │
+│      Fix parser recovery                       │
+│    Agent                                       │
+│      Codex                                     │
+│    Origin                                      │
+│      Local · nori-cli                          │
+│    Created                                     │
+│      Aug 16, 2026 · 9:42 AM                    │
+│    Modified                                    │
+│      Aug 17, 2026 · 11:08 AM                   │
+│    Turns                                       │
+│      48                                        │
+│    Transcript                                  │
+│      1.8 MB                                    │
+│                                                │
+│    Latest prompt                               │
+│      Recover malformed session transcripts     │
+│                                                │
+│  Tab/Shift-Tab detail story  1-6 page  q       │
+│                                                │

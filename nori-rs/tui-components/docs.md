@@ -205,7 +205,11 @@ consumer application
   The adapter creates uniquely named, independently sized tmux sessions,
   waits for expected content and settled ANSI display rows, and derives text
   from that same captured frame. It removes SGR style sequences but preserves
-  display rows; unexpected control sequences are rejected. Insta snapshots
+  display rows; unexpected control sequences are rejected. Derived text rows
+  are padded to the viewport width using `unicode-width` display-cell widths,
+  restoring trailing cells omitted by tmux while preserving blank rows and
+  rejecting overwide rows. This makes text snapshots and `screen.txt`
+  rectangular without changing raw ANSI or PNG replay. Insta snapshots
   escape ANSI and literal backslashes and wrap each row in delimiters to retain
   blank rows and trailing cells without trailing whitespace in snapshot files.
   The session guard stops only its owned session on completion or

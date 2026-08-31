@@ -1,43 +1,43 @@
 ---
 source: tui-components/examples/component_storybook/e2e.rs
 ---
-││
-│  Component storybook│
-││
-│  Semantic tokens│
-│  pointer success  warning  error  muted│
-││
-│  i Connected to the agent│
-││
-│  ✓ Snapshot suite passed│
-││
-│  ! Two sessions are still running│
-│    Open the picker to inspect them.│
-│  × Could not resume the session│
-│    The agent no longer reports that session id.│
-││
-│  ◇ No matching sessions│
-│    Try a title, project path, or session id.│
-││
-││
-│  These primitives are intentionally small. Applications compose them around caller-owned state and translate their ow│
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-││
-│  q / esc close storybook│
-││
+│                                                                                                                        │
+│  Component storybook                                                                                                   │
+│                                                                                                                        │
+│  Semantic tokens                                                                                                       │
+│  pointer success  warning  error  muted                                                                                │
+│                                                                                                                        │
+│  i Connected to the agent                                                                                              │
+│                                                                                                                        │
+│  ✓ Snapshot suite passed                                                                                               │
+│                                                                                                                        │
+│  ! Two sessions are still running                                                                                      │
+│    Open the picker to inspect them.                                                                                    │
+│  × Could not resume the session                                                                                        │
+│    The agent no longer reports that session id.                                                                        │
+│                                                                                                                        │
+│  ◇ No matching sessions                                                                                                │
+│    Try a title, project path, or session id.                                                                           │
+│                                                                                                                        │
+│                                                                                                                        │
+│  These primitives are intentionally small. Applications compose them around caller-owned state and translate their ow  │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│  q / esc close storybook                                                                                               │
+│                                                                                                                        │

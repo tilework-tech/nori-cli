@@ -66,6 +66,12 @@ These are tmux display-row captures, not raw PTY byte streams:
 only SGR styling is stripped to derive text, and unsupported control sequences
 fail the capture.
 
+Text snapshots and `screen.txt` restore trailing cells omitted by tmux: each
+row is padded to the viewport width using Unicode display-cell widths, including
+wide and combining characters. Blank rows are retained and overwide rows fail
+the capture. This rectangular text formatting leaves raw ANSI, escaped ANSI
+snapshots, replay ANSI, and PNG output unchanged.
+
 The helper also writes unescaped `screen.ansi`, derived `screen.txt`, and
 `geometry.txt` under the Cargo target directory's
 `storybook-captures/run.XXXXXX/<example>/<case>/`. Each attempt gets a fresh run

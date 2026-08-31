@@ -1,43 +1,43 @@
 ---
 source: tui-components/examples/nori_storybook/e2e.rs
 ---
-│                      1 Picker   2 Markdown   3 Primitives   4 States   5 Details   6 Overlay menu│
-││
-│  Detail pane│
-││
-│  Default · compact columns + heading│
-│  Automatic label width with the approved compact two-column layout.│
-│  Required height at 116 columns: 12 rows│
-││
-│    Session details                                                                                                  │
-│                                                                                                                     │
-│    Thread          Fix parser recovery                                                                              │
-│    Agent           Codex                                                                                            │
-│    Origin          Local · nori-cli                                                                                 │
-│    Created         Aug 16, 2026 · 9:42 AM                                                                           │
-│    Modified        Aug 17, 2026 · 11:08 AM                                                                          │
-│    Turns           48                                                                                               │
-│    Transcript      1.8 MB                                                                                           │
-│                                                                                                                     │
-│    Latest prompt   Recover malformed session transcripts without changing user-visible behavior.                    │
-│    Latest respon…  Inspecting parser recovery fixtures and structured error handling.                               │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-│                                                                                                                     │
-││
-│  Tab/Shift-Tab detail story  1-6 page  q close│
-││
+│                      1 Picker   2 Markdown   3 Primitives   4 States   5 Details   6 Overlay menu                      │
+│                                                                                                                        │
+│  Detail pane                                                                                                           │
+│                                                                                                                        │
+│  Default · compact columns + heading                                                                                   │
+│  Automatic label width with the approved compact two-column layout.                                                    │
+│  Required height at 116 columns: 12 rows                                                                               │
+│                                                                                                                        │
+│    Session details                                                                                                     │
+│                                                                                                                        │
+│    Thread          Fix parser recovery                                                                                 │
+│    Agent           Codex                                                                                               │
+│    Origin          Local · nori-cli                                                                                    │
+│    Created         Aug 16, 2026 · 9:42 AM                                                                              │
+│    Modified        Aug 17, 2026 · 11:08 AM                                                                             │
+│    Turns           48                                                                                                  │
+│    Transcript      1.8 MB                                                                                              │
+│                                                                                                                        │
+│    Latest prompt   Recover malformed session transcripts without changing user-visible behavior.                       │
+│    Latest respon…  Inspecting parser recovery fixtures and structured error handling.                                  │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│  Tab/Shift-Tab detail story  1-6 page  q close                                                                         │
+│                                                                                                                        │
