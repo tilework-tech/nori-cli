@@ -62,10 +62,10 @@ cargo run -p nori-tui-components --example markdown_storybook
 cargo run -p nori-tui-components --example component_storybook
 ```
 
-`status_card_storybook` is an interactive production-design specimen. Use it
-to compare derived, ANSI-fallback, and unshaded surfaces; plain or colon labels;
-green accent placement; compact or normal density; and summary or full status
-content before changing the CLI status card.
+`status_card_storybook` is an interactive production-design specimen. Its
+default matches the CLI: unshaded, plain labels, a green prompt marker, compact
+density, and summary content. The controls retain the other variants for
+comparison while evolving the component.
 
 Press `q` or `Esc` to leave an example. In picker examples, active search owns
 printable keys and the first Escape, so deactivate search before quitting.

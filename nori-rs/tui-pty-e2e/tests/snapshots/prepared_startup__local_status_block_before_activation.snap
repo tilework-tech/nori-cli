@@ -1,0 +1,19 @@
+---
+source: tui-pty-e2e/tests/prepared_startup.rs
+expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())"
+---
+/status
+
+  › Nori CLI v0.0.0
+
+  Directory    [TMP_DIR]
+  Agent        remote-handroll
+  Skillset     (none)
+  Approvals    Agent
+  Git          ⎇ master !
+
+  Instructions  ~/.claude/CLAUDE.md
+
+› [DEFAULT_PROMPT]
+
+  ⎇ master · Approvals: Agent

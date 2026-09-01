@@ -9,10 +9,8 @@ use nori_tui_components::DetailEntry;
 use nori_tui_components::DetailLabelStyle;
 use nori_tui_components::DetailLayout;
 use nori_tui_components::DetailPane;
-use nori_tui_components::DetailTone;
 use nori_tui_components::KeyHint;
 use nori_tui_components::KeyHints;
-use nori_tui_components::ProviderKind;
 use nori_tui_components::Theme;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -31,10 +29,10 @@ use support::StorybookTerminal;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum SurfaceMode {
-    #[default]
     Auto,
     Derived,
     Ansi,
+    #[default]
     None,
 }
 
@@ -156,7 +154,8 @@ fn main() -> Result<()> {
             if accent_mode == AccentMode::Labels {
                 card_theme.muted = card_theme.pointer;
             }
-            let entries = status_entries(content_mode);
+            card_theme.provider_claude = Style::new().fg(Color::Rgb(255, 158, 100));
+            let entries = status_entries(content_mode, card_theme);
             let pane = DetailPane::new(&entries)
                 .heading(status_heading(card_theme, accent_mode))
                 .theme(card_theme)
@@ -260,12 +259,17 @@ fn status_heading(theme: Theme, accent_mode: AccentMode) -> Line<'static> {
     }
 }
 
-fn status_entries(content_mode: ContentMode) -> Vec<DetailEntry> {
+fn status_entries(content_mode: ContentMode, theme: Theme) -> Vec<DetailEntry> {
     match content_mode {
         ContentMode::Summary => vec![
             DetailEntry::key_value("System", "~/org/workspace/cli · Agent approvals · clifford"),
-            DetailEntry::key_value("Agent", "Claude · Opus 5 · xhigh · fast")
-                .tone(DetailTone::Provider(ProviderKind::Claude)),
+            DetailEntry::key_value(
+                "Agent",
+                Line::from(vec![
+                    Span::styled("Claude", theme.provider_claude),
+                    Span::raw(" · Opus 5 · xhigh · fast"),
+                ]),
+            ),
         ],
         ContentMode::Full => vec![
             DetailEntry::key_value("Directory", "~/org/workspace/cli"),
@@ -273,15 +277,19 @@ fn status_entries(content_mode: ContentMode) -> Vec<DetailEntry> {
             DetailEntry::key_value("Approvals", "Agent"),
             DetailEntry::key_value("Skillset", "clifford"),
             DetailEntry::Rule,
-            DetailEntry::key_value("Agent", "Claude")
-                .tone(DetailTone::Provider(ProviderKind::Claude)),
+            DetailEntry::key_value(
+                "Agent",
+                Line::from(Span::styled("Claude", theme.provider_claude)),
+            ),
             DetailEntry::key_value("Model", "Opus 5"),
             DetailEntry::key_value("Reasoning", "xhigh"),
             DetailEntry::key_value("Speed", "fast"),
             DetailEntry::Rule,
             DetailEntry::key_value("Git", "⎇ main · +120 -8"),
             DetailEntry::key_value("Context", "44% used · 120K / 272K"),
-            DetailEntry::key_value("Instructions", "2 files · ~2,450 tokens"),
+            DetailEntry::key_value("Instructions", "~/org/AGENTS.md          ~1,830 tokens"),
+            DetailEntry::key_value("", "./AGENTS.md               ~620 tokens"),
+            DetailEntry::key_value("", "2 files · ~2,450 tokens"),
         ],
     }
 }

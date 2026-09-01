@@ -2,14 +2,7 @@
 source: tui/src/nori/session_header/tests.rs
 expression: rendered
 ---
-╭──────────────────────────────────────────────────────────────╮
-│ Nori CLI v0.1.0                                              │
-│                                                              │
-│ directory:   /home/user/project                              │
-│ agent:       claude-sonnet                                   │
-│ skillset:    senior-swe                                      │
-│                                                              │
-│ Instruction Files                                            │
-│   /home/user/project/.claude/settings.md                     │
-│   total                                        ~2,450 tokens │
-╰──────────────────────────────────────────────────────────────╯
+  › Nori CLI v0.1.0
+
+  System       /home/user/project · senior-swe
+  Agent        claude-sonnet

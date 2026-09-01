@@ -5,14 +5,28 @@
 //! needs (git, ACP mode, skillset version, and the rich context breakdown) so
 //! they can be threaded from the bottom pane into the header cell in one shot.
 
+use crate::nori::token_count::format_token_count;
 use crate::system_info::NoriVersionSource;
 use crate::ui_types::format_si_suffix;
+use nori_tui_components::Theme;
 use ratatui::prelude::*;
+use ratatui::style::Color;
+use ratatui::style::Style;
 use ratatui::style::Stylize;
+use unicode_width::UnicodeWidthStr;
 
-/// Width of the aligned label column shared by every labelled card row.
-/// Sized to fit the widest label (`forked from:`).
-pub(super) const STATUS_LABEL_WIDTH: usize = 13;
+use super::AgentKindSimple;
+use super::InstructionFile;
+use super::TokenCount;
+use super::format_directory;
+
+/// Width of the aligned label column shared by every labelled status row.
+/// Sized to fit the widest label (`forked from`) without punctuation. Values
+/// begin after a separate two-cell gutter.
+pub(super) const STATUS_LABEL_WIDTH: usize = 11;
+
+/// Leading inset plus label and the minimum two-cell value separator.
+pub(super) const STATUS_VALUE_OFFSET: usize = 2 + STATUS_LABEL_WIDTH + 2;
 
 /// Footer-derived values surfaced on the `/status` card so it stays a superset
 /// of the footer's information categories regardless of the user's footer
@@ -47,13 +61,81 @@ pub(crate) struct StatusCardInfo {
     pub(crate) context_window_percent: Option<i64>,
 }
 
-/// Build an aligned label row: a dim, left-padded label followed by the value
-/// spans. Keeps the growing label column consistent across every card row.
+/// Build an aligned, inset label row without punctuation. A minimum two-cell
+/// gutter separates the label and value, matching `DetailPane` columns.
 pub(super) fn status_row(label: &str, value_spans: Vec<Span<'static>>) -> Line<'static> {
-    let padded = format!("{label:<STATUS_LABEL_WIDTH$}");
+    let label = label.trim_end_matches(':');
+    let padded = format!("  {label:<STATUS_LABEL_WIDTH$}  ");
     let mut spans = vec![Span::from(padded).dim()];
     spans.extend(value_spans);
     Line::from(spans)
+}
+
+/// Semantic identity styling for the agent name only. Supporting model,
+/// effort, and priority text must remain in the terminal foreground.
+pub(super) fn agent_name_style(agent_kind: Option<AgentKindSimple>) -> Style {
+    let theme = Theme::default();
+    match agent_kind {
+        #[allow(clippy::disallowed_methods)]
+        Some(AgentKindSimple::Claude) => Style::new().fg(Color::Rgb(255, 158, 100)),
+        Some(AgentKindSimple::Codex) => theme.provider_codex,
+        Some(AgentKindSimple::Gemini) => theme.provider_gemini,
+        None => theme.text,
+    }
+}
+
+/// Render the active local instruction-file outline used by full `/status`.
+/// Each file remains individually visible so engineers can audit context.
+pub(super) fn instruction_file_lines(
+    instruction_files: &[InstructionFile],
+    inner_width: usize,
+) -> Vec<Line<'static>> {
+    let active_files: Vec<&InstructionFile> = instruction_files
+        .iter()
+        .filter(|file| file.active)
+        .collect();
+    if active_files.is_empty() {
+        return Vec::new();
+    }
+
+    let mut lines = Vec::new();
+    let mut total_count: i64 = 0;
+    let mut any_approximate = false;
+
+    for (index, file) in active_files.iter().enumerate() {
+        let value_width = inner_width.saturating_sub(STATUS_VALUE_OFFSET);
+        let label = if index == 0 { "Instructions" } else { "" };
+        let mut value_spans = Vec::new();
+        if let Some(token_count) = &file.token_count {
+            total_count += token_count.count;
+            any_approximate |= token_count.approximate;
+            let count = format_token_count(token_count);
+            let path_budget = value_width.saturating_sub(count.width() + 2);
+            let path = format_directory(&file.path, Some(path_budget));
+            let gap = value_width.saturating_sub(path.width() + count.width());
+            value_spans.push(Span::from(path));
+            value_spans.push(Span::from(" ".repeat(gap)));
+            value_spans.push(Span::from(count).dim());
+        } else {
+            value_spans.push(Span::from(format_directory(&file.path, Some(value_width))));
+        }
+        lines.push(status_row(label, value_spans));
+    }
+
+    if total_count > 0 {
+        let total = format_token_count(&TokenCount {
+            count: total_count,
+            approximate: any_approximate,
+        });
+        let file_count = active_files.len();
+        let noun = if file_count == 1 { "file" } else { "files" };
+        lines.push(status_row(
+            "",
+            vec![Span::from(format!("{file_count} {noun} · {total}")).dim()],
+        ));
+    }
+
+    lines
 }
 
 /// Build the value spans for the `git:` row, mirroring the footer's

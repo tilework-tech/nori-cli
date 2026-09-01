@@ -555,7 +555,39 @@ fn truncate(value: &str, width: usize) -> String {
 }
 
 fn truncate_line(line: &Line<'static>, width: usize) -> Line<'static> {
-    Line::from(truncate(&line.to_string(), width))
+    if line.width() <= width {
+        return line.clone();
+    }
+    if width == 0 {
+        return Line::default();
+    }
+
+    let mut remaining = width.saturating_sub(1);
+    let mut spans = Vec::new();
+    for span in &line.spans {
+        let mut content = String::new();
+        for character in span.content.chars() {
+            let character_width = character.to_string().width();
+            if character_width > remaining {
+                break;
+            }
+            content.push(character);
+            remaining = remaining.saturating_sub(character_width);
+        }
+        if !content.is_empty() {
+            spans.push(ratatui::text::Span::styled(content, span.style));
+        }
+        if remaining == 0 {
+            break;
+        }
+    }
+    let ellipsis_style = spans.last().map_or(line.style, |span| span.style);
+    spans.push(ratatui::text::Span::styled("…", ellipsis_style));
+    Line {
+        spans,
+        style: line.style,
+        alignment: line.alignment,
+    }
 }
 
 fn pad_right(value: &str, width: usize) -> String {

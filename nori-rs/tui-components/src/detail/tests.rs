@@ -111,6 +111,30 @@ fn detail_pane_respects_fixed_gutter_and_provider_tone() {
 }
 
 #[test]
+#[allow(clippy::disallowed_methods)]
+fn detail_pane_preserves_per_span_styles_when_truncating_values() {
+    let entries = [DetailEntry::key_value(
+        "Agent",
+        Line::from(vec![
+            Span::styled("Claude", Style::new().fg(Color::Rgb(255, 158, 100))),
+            Span::raw(" · Opus 5"),
+        ]),
+    )];
+    let backend = TestBackend::new(22, 1);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| frame.render_widget(DetailPane::new(&entries), frame.area()))
+        .expect("draw pane");
+    let buffer = terminal.backend().buffer();
+
+    assert_eq!(buffer[(9, 0)].symbol(), "C");
+    assert_eq!(buffer[(9, 0)].fg, Color::Rgb(255, 158, 100));
+    assert_eq!(buffer[(15, 0)].symbol(), " ");
+    assert_eq!(buffer[(15, 0)].fg, Color::Reset);
+    assert_eq!(buffer[(19, 0)].symbol(), "…");
+}
+
+#[test]
 fn detail_pane_left_aligns_two_columns_without_rule_glyphs() {
     let entries = [
         DetailEntry::key_value("A", "first"),
