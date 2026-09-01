@@ -11,6 +11,8 @@ use nori_config::NoriConfigOverrides;
 use nori_config::SandboxMode;
 use nori_config::find_nori_home;
 use nori_harness::init_rolling_file_tracing;
+use nori_installed::AnalyticsReporter;
+use nori_installed::SessionMode;
 
 use nori_tui::AppExitInfo;
 use nori_tui::Cli as TuiCli;
@@ -408,7 +410,12 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             if consumed_stdin {
                 stdin_prompt::restore_stdin_from_terminal();
             }
-            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            let exit_info = nori_tui::run_main(
+                interactive,
+                codex_linux_sandbox_exe,
+                analytics_reporter(SessionMode::Interactive),
+            )
+            .await?;
             handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Sandbox(sandbox_args)) => match sandbox_args.cmd {
@@ -463,7 +470,12 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 all,
                 config_overrides,
             );
-            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            let exit_info = nori_tui::run_main(
+                interactive,
+                codex_linux_sandbox_exe,
+                analytics_reporter(SessionMode::Interactive),
+            )
+            .await?;
             handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Execpolicy(ExecpolicyCommand { sub })) => match sub {
@@ -505,7 +517,12 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             interactive.cloud_mode = true;
             interactive.cloud_onboard = cloud_cmd.onboard;
 
-            let exit_info = nori_tui::run_main(interactive, codex_linux_sandbox_exe).await?;
+            let exit_info = nori_tui::run_main(
+                interactive,
+                codex_linux_sandbox_exe,
+                analytics_reporter(SessionMode::Cloud),
+            )
+            .await?;
             handle_app_exit(exit_info)?;
         }
         Some(Subcommand::Exec(cmd)) => {
@@ -577,10 +594,18 @@ async fn run_exec(
     let config = nori_config::NoriConfig::load_with_overrides(overrides)?;
     nori_harness::initialize_registry(config.agents.clone())
         .map_err(|error| anyhow::anyhow!("failed to initialize agent registry: {error}"))?;
+    let analytics = AnalyticsReporter::new(
+        if acp {
+            SessionMode::Acp
+        } else {
+            SessionMode::Exec
+        },
+        config.nori_home.clone(),
+    );
     let config = Arc::new(config);
 
     if acp {
-        return nori_exec::run_acp(config, cli_version).await;
+        return nori_exec::run_acp(config, cli_version, Some(analytics)).await;
     }
 
     // Read stdin only after the ACP facade has had its chance to claim it.
@@ -588,7 +613,7 @@ async fn run_exec(
     let Some(prompt) = prompt else {
         anyhow::bail!("a prompt argument or piped stdin is required");
     };
-    let outcome = nori_exec::run_plaintext(config, cli_version, prompt).await?;
+    let outcome = nori_exec::run_plaintext(config, cli_version, prompt, Some(analytics)).await?;
     {
         let mut stdout = std::io::stdout().lock();
         stdout.write_all(outcome.output.as_bytes())?;
@@ -601,6 +626,12 @@ async fn run_exec(
         anyhow::bail!("permission request was rejected during unattended execution");
     }
     Ok(())
+}
+
+fn analytics_reporter(mode: SessionMode) -> Option<AnalyticsReporter> {
+    find_nori_home()
+        .ok()
+        .map(|nori_home| AnalyticsReporter::new(mode, nori_home))
 }
 
 /// Prepend root-level overrides so they have lower precedence than

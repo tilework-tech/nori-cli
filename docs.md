@@ -50,6 +50,17 @@ Configuration is resolved from `$NORI_HOME/config.toml` (default
 `~/.nori/cli/config.toml`) and injected into session launches. Transcripts live
 under the same Nori home and can be resumed through `nori resume`.
 
+Authenticated product activity is a separate, prompt-bound path. The CLI maps
+its interactive, cloud, plaintext-exec, and ACP-facade entrypoints to stable
+session modes; `nori-installed` attaches a one-shot reporter to the launched
+harness handle. The reporter reads Firebase credentials from the current nested
+`auth` object in `~/.nori-config.json`, with top-level `username` and
+`refreshToken` retained for legacy files, and posts the strict
+`nori_agent_session_started` envelope through the login-hosted analytics ingress
+only after the first user prompt reaches ACP. Nested auth is authoritative when
+both shapes exist. The ingress, rather than the distributed binary, owns
+canonical identity and organization fanout.
+
 ### Things to Know
 
 - The former `codex-protocol` and `codex-app-server-protocol` crates were
@@ -62,6 +73,11 @@ under the same Nori home and can be resumed through `nori resume`.
   their raw `RequestId`; `AskForApproval::Never` resolves them internally.
 - Cross-platform sandboxing uses Landlock on Linux, Seatbelt on macOS, and
   restricted tokens on Windows.
+- Analytics honors `NORI_NO_ANALYTICS` and durable install-state opt-out, skips
+  missing and service identities, and treats authentication, refresh, and
+  transport failures as best-effort background work with a bounded final
+  flush. Launch, help, version, and resume without a transported prompt are not
+  meaningful activity.
 - The crate-layering decision and the exact protocol contract are documented
   in `@/docs/specs/crate-layering.md` and
   `@/docs/specs/protocol-unification.md`.

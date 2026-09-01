@@ -29,6 +29,7 @@ impl ChatWidget {
             deferred_spawn,
             fork_context,
             prepared_agent,
+            analytics,
         } = common;
         let mut rng = rand::rng();
         let placeholder = PROMPT_MODE_PLACEHOLDERS
@@ -41,6 +42,7 @@ impl ChatWidget {
                 nori_harness::runtime::SessionStart::New,
                 app_event_tx.clone(),
                 session_generation,
+                analytics,
             )
         } else if deferred_spawn {
             SpawnAgentResult { handle: None }
@@ -50,6 +52,7 @@ impl ChatWidget {
                 app_event_tx.clone(),
                 session_generation,
                 fork_context,
+                analytics,
             )
         };
 
@@ -192,6 +195,7 @@ impl ChatWidget {
             deferred_spawn: _,
             fork_context: _,
             prepared_agent,
+            analytics,
         } = common;
         let mut rng = rand::rng();
         let placeholder = PROMPT_MODE_PLACEHOLDERS
@@ -207,6 +211,7 @@ impl ChatWidget {
                 }),
                 app_event_tx.clone(),
                 session_generation,
+                analytics,
             )
         } else {
             spawn_acp_agent_resume(
@@ -215,6 +220,7 @@ impl ChatWidget {
                 transcript,
                 app_event_tx.clone(),
                 session_generation,
+                analytics,
             )
         };
 
