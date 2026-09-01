@@ -76,14 +76,19 @@ impl ChatWidget {
 
         self.bottom_pane.show_selection_view(
             SelectionViewParams {
-                title: Some("Select Approval Mode".to_string()),
+                title: Some("Select approval mode".to_string()),
                 subtitle: Some("Choose what Nori can do without approval".to_string()),
                 footer_hint: Some(standard_popup_hint_line()),
                 items,
                 header: Box::new(()),
                 ..Default::default()
             }
-            .menu(),
+            .menu(
+                96,
+                nori_tui_components::MenuDensity::Normal,
+                nori_tui_components::MenuRowPattern::Plain,
+                nori_tui_components::MenuPlacement::Left,
+            ),
         );
     }
 

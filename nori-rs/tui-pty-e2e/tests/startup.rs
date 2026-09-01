@@ -50,14 +50,14 @@ fn test_startup_error_for_unregistered_model() {
     // When acp.allow_http_fallback=false (default) and the model is not registered as an ACP agent,
     // the TUI should start and open the agent picker with the error as its
     // subtitle. History may be outside the viewport while the picker is open.
-    session.wait_for_text("Select Agent", TIMEOUT).unwrap();
+    session.wait_for_text("Select agent", TIMEOUT).unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
 
     let mut lines = contents.lines();
     lines
-        .find(|line| line.contains("Select Agent"))
+        .find(|line| line.contains("Select agent"))
         .expect("Agent picker should be visible");
     let picker_subtitle = lines.next().unwrap_or_default();
 

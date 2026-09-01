@@ -424,7 +424,7 @@ fn sessionless_policy_change_is_refreshed_before_activation() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("Select Approval Mode", TIMEOUT)
+        .wait_for_text("Select approval mode", TIMEOUT)
         .expect("approval picker");
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();

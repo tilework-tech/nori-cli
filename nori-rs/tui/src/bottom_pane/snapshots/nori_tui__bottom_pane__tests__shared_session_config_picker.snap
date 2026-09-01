@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/mod.rs
 expression: config_render
 ---
                                                                                                     
-  Session Config                                                                                    
+  Session config                                                                                    
   Select an ACP session setting to change                                                           
                                                                                                     
   ▏1. Model (Stable)                                                                             ▕  

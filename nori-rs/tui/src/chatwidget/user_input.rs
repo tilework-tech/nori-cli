@@ -135,7 +135,7 @@ impl ChatWidget {
         if self.harness_handle.is_none() {
             if text.starts_with('/') {
                 self.add_error_message(
-                    "No active session — pick one with /resume or start one with /new.".to_string(),
+                    "No active session - pick one with /resume or start one with /new.".to_string(),
                 );
                 return;
             }

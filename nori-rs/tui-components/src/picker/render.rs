@@ -36,6 +36,8 @@ pub struct Picker<'a, K> {
     state: &'a PickerState<K>,
     theme: Theme,
     density: PickerDensity,
+    show_title: bool,
+    show_details: bool,
     fullscreen_selection_rails: bool,
     footer_hints: Option<Vec<KeyHint<'static>>>,
 }
@@ -46,6 +48,8 @@ impl<'a, K> Picker<'a, K> {
             state,
             theme: Theme::default(),
             density: PickerDensity::default(),
+            show_title: true,
+            show_details: true,
             fullscreen_selection_rails: false,
             footer_hints: None,
         }
@@ -58,6 +62,21 @@ impl<'a, K> Picker<'a, K> {
 
     pub fn density(mut self, density: PickerDensity) -> Self {
         self.density = density;
+        self
+    }
+
+    /// Controls whether the picker reserves and renders its title row.
+    ///
+    /// Bottom-pane flows whose surrounding context already names the surface
+    /// can hide the title to avoid redundant chrome.
+    pub fn show_title(mut self, show_title: bool) -> Self {
+        self.show_title = show_title;
+        self
+    }
+
+    /// Controls whether wide layouts may open a detail pane beside the list.
+    pub fn show_details(mut self, show_details: bool) -> Self {
+        self.show_details = show_details;
         self
     }
 
@@ -87,16 +106,20 @@ impl<K: Clone + Eq> Widget for Picker<'_, K> {
         if inner.width < 4 || inner.height < 3 {
             return;
         }
+        let title_height = u16::from(self.show_title && !self.state.title.is_empty());
         let page = Layout::vertical([
-            Constraint::Length(1),
+            Constraint::Length(title_height),
             Constraint::Min(1),
             Constraint::Length(1),
         ])
         .split(inner);
-        Paragraph::new(Line::styled(self.state.title.clone(), self.theme.title))
-            .render(page[0], buf);
+        if title_height > 0 {
+            Paragraph::new(Line::styled(self.state.title.clone(), self.theme.title))
+                .render(page[0], buf);
+        }
 
-        let detail_visible = area.width >= 110
+        let detail_visible = self.show_details
+            && area.width >= 110
             && self
                 .state
                 .selected_item()

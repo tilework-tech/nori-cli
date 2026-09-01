@@ -431,7 +431,7 @@ impl App {
         self.sync_runtime_config();
         let status = if enabled { "enabled" } else { "disabled" };
         self.chat_widget.add_info_message(
-            format!("Per Session Skillsets {status}. Changes will take effect on next session."),
+            format!("Per-session skillsets {status}. Changes will take effect on next session."),
             None,
         );
         self.chat_widget

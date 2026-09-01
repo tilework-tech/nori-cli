@@ -13,6 +13,7 @@ pub mod theme;
 
 pub use detail::DetailDensity;
 pub use detail::DetailEntry;
+pub use detail::DetailLabelStyle;
 pub use detail::DetailLayout;
 pub use detail::DetailPane;
 pub use detail::DetailRowPattern;
@@ -27,6 +28,7 @@ pub use menu::MenuItem;
 pub use menu::MenuItemTone;
 pub use menu::MenuModelError;
 pub use menu::MenuOutcome;
+pub use menu::MenuPlacement;
 pub use menu::MenuRowPattern;
 pub use menu::MenuShortcut;
 pub use menu::MenuState;

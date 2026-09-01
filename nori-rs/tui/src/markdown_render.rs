@@ -214,7 +214,7 @@ where
                 if !self.text.lines.is_empty() {
                     self.push_blank_line();
                 }
-                self.push_line(Line::from("———"));
+                self.push_line(Line::from("───"));
                 self.needs_newline = true;
             }
             Event::Html(html) => self.html(html, false),

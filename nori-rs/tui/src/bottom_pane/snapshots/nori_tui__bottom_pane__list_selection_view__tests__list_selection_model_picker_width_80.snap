@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/list_selection_view.rs
 expression: "render_lines_with_width(&view, 80)"
 ---
                                                                                 
-  Select Model and Effort                                                       
+  Select model and effort                                                       
                                                                                 
 › 1. gpt-5.1-codex (current)  Optimized for Nori. Balance of reasoning quality  
                               and coding ability.                               

@@ -210,7 +210,7 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
 
     run_command(&mut session, "/agent");
     session
-        .wait_for_text("Select Agent", Duration::from_secs(10))
+        .wait_for_text("Select agent", Duration::from_secs(10))
         .expect("agent picker");
     session.send_key(Key::Down).expect("select alternate agent");
     session

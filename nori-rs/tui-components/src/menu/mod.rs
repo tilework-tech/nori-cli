@@ -12,6 +12,16 @@ mod render;
 
 pub use render::OverlayMenu;
 
+/// Horizontal placement of a bounded overlay-menu surface.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MenuPlacement {
+    /// Center short, bounded actions in the caller rectangle.
+    #[default]
+    Centered,
+    /// Anchor longer choices to the caller's left inset.
+    Left,
+}
+
 /// Vertical spacing policy for overlay-menu items and their containing surface.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MenuDensity {

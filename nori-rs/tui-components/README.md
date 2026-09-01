@@ -44,19 +44,26 @@ full-screen overlay examples, selected rows use the explicit symmetric-rail
 treatment; the Narrow example demonstrates the copy-safe compact pointer used
 by default. The Picker page also opts into full-screen rails: they replace the
 single-select pointer, while toggle and multi-select markers continue to show
-checked state. The overlay cases include Dense and Dense Zebra presentations;
-the storybook demonstrates these presentation options while production CLI
-adoption remains deferred. On the Detail pane page, `Tab`/`Shift-Tab` compares compact columns,
+checked state. The overlay cases include Dense and Dense Zebra presentations.
+Shared pickers and overlay menus are now deployed across Nori CLI bottom-pane
+and full-screen surfaces; the storybook remains their visual acceptance
+reference. On the Detail pane page, `Tab`/`Shift-Tab` compares compact columns,
 zebra bands, normal density, responsive stacking, fixed label width, and an
 omitted heading. Each story reports its required height at the current pane
 width.
 The focused examples remain useful while developing one component:
 
 ```console
+cargo run -p nori-tui-components --example status_card_storybook
 cargo run -p nori-tui-components --example picker_storybook
 cargo run -p nori-tui-components --example markdown_storybook
 cargo run -p nori-tui-components --example component_storybook
 ```
+
+`status_card_storybook` is an interactive production-design specimen. Use it
+to compare derived, ANSI-fallback, and unshaded surfaces; plain or colon labels;
+green accent placement; compact or normal density; and summary or full status
+content before changing the CLI status card.
 
 Press `q` or `Esc` to leave an example. In picker examples, active search owns
 printable keys and the first Escape, so deactivate search before quitting.

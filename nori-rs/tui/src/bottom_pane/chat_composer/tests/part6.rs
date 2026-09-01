@@ -517,7 +517,7 @@ fn shortcut_mode_prompt_uses_gray_question_mark_without_duplicate_prefix() {
 }
 
 #[test]
-fn slash_mode_prompt_uses_cyan_slash_without_duplicate_prefix() {
+fn slash_mode_prompt_uses_green_slash_without_duplicate_prefix() {
     let (tx, _rx) = unbounded_channel::<AppEvent>();
     let sender = AppEventSender::new(tx);
     let mut composer = ChatComposer::new(
@@ -532,7 +532,7 @@ fn slash_mode_prompt_uses_cyan_slash_without_duplicate_prefix() {
 
     let buf = render_composer(&composer);
     assert_eq!(buf[(0, 1)].symbol(), "/");
-    assert_eq!(buf[(0, 1)].fg, Color::Cyan);
+    assert_eq!(buf[(0, 1)].fg, Color::Green);
     assert!(
         input_row(&buf).starts_with("/ init"),
         "slash prompt should hide the editable leading slash: {:?}",
@@ -559,7 +559,7 @@ fn slash_mode_prompt_stays_active_after_command_arguments() {
 
     let buf = render_composer(&composer);
     assert_eq!(buf[(0, 1)].symbol(), "/");
-    assert_eq!(buf[(0, 1)].fg, Color::Cyan);
+    assert_eq!(buf[(0, 1)].fg, Color::Green);
     assert!(
         input_row(&buf).starts_with("/ model mock"),
         "slash prompt should stay active for command arguments: {:?}",

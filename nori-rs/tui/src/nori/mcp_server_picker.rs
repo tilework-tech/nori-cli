@@ -576,19 +576,19 @@ impl McpServerPickerView {
     /// Current mode title for the wizard.
     fn wizard_title(&self) -> &'static str {
         match &self.mode {
-            Mode::List => "MCP Servers",
-            Mode::ConfirmDelete(_) => "MCP Servers",
-            Mode::TransportSelect { .. } => "Add MCP Server",
-            Mode::NameInput => "Add MCP Server",
-            Mode::CommandInput => "Add MCP Server",
-            Mode::ArgsInput => "Add MCP Server",
-            Mode::UrlInput => "Add MCP Server",
-            Mode::EnvInput => "Add MCP Server",
-            Mode::HeaderInput => "Add MCP Server",
+            Mode::List => "MCP servers",
+            Mode::ConfirmDelete(_) => "MCP servers",
+            Mode::TransportSelect { .. } => "Add MCP server",
+            Mode::NameInput => "Add MCP server",
+            Mode::CommandInput => "Add MCP server",
+            Mode::ArgsInput => "Add MCP server",
+            Mode::UrlInput => "Add MCP server",
+            Mode::EnvInput => "Add MCP server",
+            Mode::HeaderInput => "Add MCP server",
             Mode::SecretInput | Mode::ClientIdInput | Mode::ClientSecretEnvVarInput => {
-                "Add MCP Server"
+                "Add MCP server"
             }
-            Mode::OAuthInProgress { .. } => "MCP Servers",
+            Mode::OAuthInProgress { .. } => "MCP servers",
         }
     }
 
@@ -671,7 +671,7 @@ impl McpServerPickerView {
                 }),
         );
         let mut state = PickerState::new(
-            "MCP Servers",
+            "MCP servers",
             [
                 PickerColumn::flexible("server", "Server").width(PickerColumnWidth::Flexible {
                     min: 16,
@@ -697,7 +697,7 @@ impl McpServerPickerView {
                 .cell("details", "Connect to a remote URL"),
         ];
         let mut state = PickerState::new(
-            "Add MCP Server",
+            "Add MCP server",
             [
                 PickerColumn::fixed("transport", "Transport", 12),
                 PickerColumn::flexible("details", "Details"),
@@ -1129,13 +1129,13 @@ impl Renderable for McpServerPickerView {
                         Line::from(vec![
                             prefix.to_string().bold(),
                             label.to_string().bold(),
-                            format!(" — {desc}").dim(),
+                            format!(" · {desc}").dim(),
                         ])
                     } else {
                         Line::from(vec![
                             prefix.into(),
                             label.to_string().dim(),
-                            format!(" — {desc}").dim(),
+                            format!(" · {desc}").dim(),
                         ])
                     };
                     line.render(areas[row], buf);
@@ -1570,7 +1570,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
 
-        assert!(text.contains("MCP Servers"), "should contain title");
+        assert!(text.contains("MCP servers"), "should contain title");
         assert!(text.contains("Add new"), "should contain Add new option");
         assert!(text.contains("docs"), "should contain server name");
         let selected_row = (area.y..area.bottom())

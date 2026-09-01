@@ -37,7 +37,7 @@ args = ["hello"]
 
     // The picker should open showing the server name and "Add new..."
     session
-        .wait_for_text("MCP Servers", TIMEOUT)
+        .wait_for_text("MCP servers", TIMEOUT)
         .expect("/mcp should open the MCP server picker");
 
     let contents = session.screen_contents();
@@ -74,7 +74,7 @@ fn test_mcp_command_no_servers_opens_picker() {
 
     // The picker should open with just "Add new..."
     session
-        .wait_for_text("MCP Servers", TIMEOUT)
+        .wait_for_text("MCP servers", TIMEOUT)
         .expect("/mcp should open the MCP server picker even with no servers");
 
     let contents = session.screen_contents();

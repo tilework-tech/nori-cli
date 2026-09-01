@@ -34,6 +34,8 @@ pub(crate) struct ComponentPickerParams {
     pub primary_column: String,
     pub detail_column: Option<String>,
     pub density: PickerDensity,
+    pub show_title: bool,
+    pub show_details: bool,
     pub keep_open: BTreeSet<String>,
     pub footer_hints: Option<Vec<KeyHint<'static>>>,
 }
@@ -133,6 +135,8 @@ impl ComponentPickerParams {
             } else {
                 PickerDensity::Compact
             },
+            show_title: true,
+            show_details: true,
             keep_open,
             footer_hints: params.picker_footer_hints,
         }
@@ -149,6 +153,8 @@ pub(crate) struct ComponentPickerView {
     primary_column: String,
     detail_column: Option<String>,
     density: PickerDensity,
+    show_title: bool,
+    show_details: bool,
     keep_open: BTreeSet<String>,
     footer_hints: Option<Vec<KeyHint<'static>>>,
 }
@@ -165,6 +171,8 @@ impl ComponentPickerView {
             primary_column: params.primary_column,
             detail_column: params.detail_column,
             density: params.density,
+            show_title: params.show_title,
+            show_details: params.show_details,
             keep_open: params.keep_open,
             footer_hints: params.footer_hints,
         }
@@ -412,6 +420,8 @@ impl Renderable for ComponentPickerView {
         let mut picker = Picker::new(&self.state)
             .theme(crate::style::component_theme())
             .density(self.density)
+            .show_title(self.show_title)
+            .show_details(self.show_details)
             .fullscreen_selection_rails(true);
         if let Some(footer_hints) = &self.footer_hints {
             picker = picker.footer_hints(footer_hints.clone());
@@ -425,14 +435,16 @@ impl Renderable for ComponentPickerView {
             PickerDensity::Compact => 1,
             PickerDensity::Normal => 2,
         };
-        let picker_chrome = 5
+        let picker_chrome = 4
+            + u16::from(self.show_title && !self.state.title.is_empty())
             + u16::from(self.state.subtitle.is_some())
             + u16::from(!self.state.categories.is_empty())
             + u16::from(self.state.search_active)
             + u16::from(self.state.columns.len() > 1);
+        let minimum_height = if self.show_title { 9 } else { 6 };
         rows.saturating_mul(row_height)
             .saturating_add(picker_chrome)
-            .clamp(9, 18)
+            .clamp(minimum_height, 18)
     }
 }
 
@@ -463,6 +475,8 @@ mod tests {
             primary_column: "session".to_string(),
             detail_column: None,
             density: PickerDensity::Compact,
+            show_title: true,
+            show_details: true,
             keep_open: BTreeSet::new(),
             footer_hints: None,
         }
@@ -576,6 +590,32 @@ mod tests {
             }
         }
         assert!(text.contains("Third"));
+    }
+
+    #[test]
+    fn titleless_picker_drops_redundant_chrome() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut titled_params = params();
+        titled_params.state.subtitle = Some("No resumable sessions".to_string());
+        titled_params
+            .state
+            .columns
+            .push(PickerColumn::fixed("source", "Source", 10));
+        titled_params.state.items.truncate(1);
+        let titled = ComponentPickerView::new(titled_params, AppEventSender::new(tx.clone()));
+
+        let mut titleless_params = params();
+        titleless_params.state.subtitle = Some("No resumable sessions".to_string());
+        titleless_params
+            .state
+            .columns
+            .push(PickerColumn::fixed("source", "Source", 10));
+        titleless_params.state.items.truncate(1);
+        titleless_params.show_title = false;
+        let titleless = ComponentPickerView::new(titleless_params, AppEventSender::new(tx));
+
+        assert_eq!(titled.desired_height(100), 9);
+        assert_eq!(titleless.desired_height(100), 7);
     }
 
     #[test]
