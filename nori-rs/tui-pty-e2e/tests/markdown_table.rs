@@ -43,9 +43,12 @@ fn test_streamed_markdown_table_renders_as_a_grid() {
     session
         .wait_for_text("Done.", TIMEOUT)
         .expect("Did not receive the streamed table");
+    // The snapshot covers the composer as well as the transcript, and the last transcript line
+    // lands before the turn ends. Wait for the idle footer so the capture cannot catch a composer
+    // that is still mid-turn, showing a bare `›` with no placeholder and no footer.
     session
-        .wait_for_text("Approvals: Agent", TIMEOUT)
-        .expect("Footer did not render after the streamed table");
+        .wait_for_text("Approvals", TIMEOUT)
+        .expect("Composer did not return to idle");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     let screen = session.screen_contents();
