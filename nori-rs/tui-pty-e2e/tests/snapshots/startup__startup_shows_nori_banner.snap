@@ -1,15 +1,8 @@
 ---
 source: tui-pty-e2e/tests/startup.rs
-assertion_line: 194
 expression: "normalize_for_snapshot(header_lines.join(\"\\n\"))"
 ---
-╭───────────────────────────────────────╮
-│  Nori CLI v0.0.0                      │
-│                                       │
-│  directory:   [TMP_DIR]               │
-│  agent:       mock-model              │
-│  skillset:    (none)                  │
-│                                       │
-│  Instruction Files                    │
-│    ~/.claude/CLAUDE.md                │
-╰───────────────────────────────────────╯
+  › Nori CLI v0.0.0
+
+  System       [TMP_DIR] · Agent approvals
+  Agent        mock-model
