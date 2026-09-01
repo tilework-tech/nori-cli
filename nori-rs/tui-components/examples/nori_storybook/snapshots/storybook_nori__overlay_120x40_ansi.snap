@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/nori_storybook/e2e.rs
+---
+│                                      \x1b[38;5;8m← previous page\x1b[39m   \x1b[1mOverlay menu\x1b[0m   \x1b[38;5;8mnext page →\x1b[39m                                      │
+│\x1b[1m\x1b[48;2;31;31;31mOverlay menu\x1b[0m\x1b[38;5;8m\x1b[48;2;31;31;31m  centered action\x1b[39m                                                                                           │
+│\x1b[38;5;8mtab next example   shift-tab previous example\x1b[39m                                                                           │
+│                                                                                                                        │
+│Session transcript                                                                                                      │
+│\x1b[38;5;8m[host] transcript remains beneath the overlay\x1b[39m                                                                           │
+│\x1b[38;5;8m[host] status stays visible outside the menu\x1b[39m                                                                            │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                               \x1b[48;2;40;40;40m                                                          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[1mChoose how to continue                                \x1b[0m\x1b[48;2;40;40;40m  \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[38;5;8mSelect one action\x1b[39m                                       \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m                                                          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[38;5;2m\x1b[48;2;45;45;45m▏\x1b[39m Resume session                                     \x1b[38;5;2m▕\x1b[39m\x1b[48;2;40;40;40m  \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[38;5;2m\x1b[48;2;45;45;45m▏\x1b[39m \x1b[38;5;8mContinue the selected transcript\x1b[39m                   \x1b[38;5;2m▕\x1b[39m\x1b[48;2;40;40;40m  \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m                                                          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[48;2;37;37;37m  Start a new session                                 \x1b[48;2;40;40;40m  \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[48;2;37;37;37m  \x1b[38;5;8mCreate an empty local session\x1b[39m                       \x1b[48;2;40;40;40m  \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m                                                          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[48;2;37;37;37m  Open read-only                                      \x1b[48;2;40;40;40m  \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[48;2;37;37;37m  \x1b[38;5;8mInspect without changing state\x1b[39m                      \x1b[48;2;40;40;40m  \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m                                                          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m    \x1b[38;5;8mShare session\x1b[39m                                         \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m    \x1b[38;5;8mUnavailable for this session\x1b[39m                          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m                                                          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m  \x1b[38;5;2m↑↓/jk\x1b[39m \x1b[38;5;8mmove  \x1b[38;5;2menter\x1b[39m \x1b[38;5;8mselect  \x1b[38;5;2mtab\x1b[39m \x1b[38;5;8mexample  \x1b[38;5;2mq\x1b[39m \x1b[38;5;8mclose\x1b[39m          \x1b[48;2;31;31;31m                               │
+│                               \x1b[48;2;40;40;40m                                                          \x1b[48;2;31;31;31m                               │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │

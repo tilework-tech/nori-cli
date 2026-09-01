@@ -45,8 +45,9 @@ treatment; the Narrow example demonstrates the copy-safe compact pointer used
 by default. The Picker page also opts into full-screen rails: they replace the
 single-select pointer, while toggle and multi-select markers continue to show
 checked state. The overlay cases include Dense and Dense Zebra presentations;
-the storybook demonstrates these presentation options while production CLI
-adoption remains deferred. On the Detail pane page, `Tab`/`Shift-Tab` compares compact columns,
+the production CLI also uses them in its
+[`directory trust prompt`](../tui/src/nori/onboarding/trust_directory.rs).
+On the Detail pane page, `Tab`/`Shift-Tab` compares compact columns,
 zebra bands, normal density, responsive stacking, fixed label width, and an
 omitted heading. Each story reports its required height at the current pane
 width.
@@ -60,3 +61,14 @@ cargo run -p nori-tui-components --example component_storybook
 
 Press `q` or `Esc` to leave an example. In picker examples, active search owns
 printable keys and the first Escape, so deactivate search before quitting.
+
+## Storybook E2E snapshots
+
+Each storybook has neighboring E2E tests that drive the real example through
+CSRessel's isolated tmux scripts. Insta compares ANSI display rows and plain
+text derived from the same capture. Committed PNGs are rendered from that ANSI
+for review only; the test lane does not launch a browser or compare images.
+
+See [`examples/README.md`](examples/README.md) for prerequisites, running and
+updating snapshots, and regenerating the review images. These opt-in tests and
+their helper are development tooling, not part of the public component API.
