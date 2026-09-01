@@ -52,6 +52,25 @@ never to similarly named native agent tools.
 
 ### Core Implementation
 
+#### Prompt-bound authenticated analytics
+
+[`run_main`](src/lib.rs) receives an optional
+[`AnalyticsReporter`](../installed/docs.md) from the binary and carries one
+clone through [`App`](src/app/mod.rs) and each [`ChatWidgetInit`](src/chatwidget/mod.rs).
+Every new or resumed agent path in [`chatwidget/agent.rs`](src/chatwidget/agent.rs)
+attaches that reporter to the exact launched harness handle before exposing the
+handle to the widget. Agent replacement and `/new` therefore create a fresh
+logical-session boundary while cloned handles for one session share one
+first-prompt guard.
+
+The ordinary TUI uses `session_mode = interactive`; the explicit cloud route
+uses `session_mode = cloud`. Preparation, session listing, picker display,
+resume, and connection establishment are silent. Capture begins in the
+[harness](../harness/docs.md) only when the first user prompt receives its ACP
+wire request ID. Leaving the application performs one bounded reporter flush
+after [`App::run`](src/app/mod.rs) completes and before terminal restoration;
+analytics failures do not replace the application result.
+
 #### Source-first event dispatch
 
 The application event loop matches `SessionEvent::Acp` and

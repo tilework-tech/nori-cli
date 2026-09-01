@@ -26,3 +26,23 @@ crossterm = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
 supports-color = { workspace = true }
+
+[[test]]
+name = "storybook_capture"
+path = "examples/support/e2e_tests.rs"
+
+[[test]]
+name = "storybook_components"
+path = "examples/component_storybook/e2e.rs"
+
+[[test]]
+name = "storybook_markdown"
+path = "examples/markdown_storybook/e2e.rs"
+
+[[test]]
+name = "storybook_picker"
+path = "examples/picker_storybook/e2e.rs"
+
+[[test]]
+name = "storybook_nori"
+path = "examples/nori_storybook/e2e.rs"

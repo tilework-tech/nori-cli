@@ -16,15 +16,20 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
+dirs = { workspace = true }
 nori-harness = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
+reqwest13 = { package = "reqwest", version = "0.13", default-features = false, features = [
+    "form",
+    "json",
+    "rustls",
+] }
 semver = "1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "rt", "time"] }
 tracing = { workspace = true }
-uuid = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

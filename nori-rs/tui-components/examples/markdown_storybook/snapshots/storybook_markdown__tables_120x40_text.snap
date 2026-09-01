@@ -1,0 +1,43 @@
+---
+source: tui-components/examples/markdown_storybook/e2e.rs
+---
+│                                                                                                                        │
+│  Markdown storybook · page 2 of 3                                                                                      │
+│                                                                                                                        │
+│  # Adaptive tables                                                                                                     │
+│                                                                                                                        │
+│  Session                    Project            Updated  Current turn status                                            │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━  ━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━                                    │
+│  Fix parser recovery        nori-cli                2m  Working                                                        │
+│  ─────────────────────────  ─────────────────  ───────  ───────────────────────────                                    │
+│  Improve Markdown tables    external-codex         18m  Waiting for user input                                         │
+│  ─────────────────────────  ─────────────────  ───────  ───────────────────────────                                    │
+│  Handroll picker migration  sessions/handroll       1h  Implementing the event loop                                    │
+│                                                                                                                        │
+│  Narrow the terminal until the grid becomes stacked records.                                                           │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│                                                                                                                        │
+│  1-3 page  ↑↓ scroll  q close                                                                                          │
+│                                                                                                                        │

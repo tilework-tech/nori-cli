@@ -13,8 +13,20 @@ This crate is the primary entry point that ties together the core crates:
 - **Always included:** `nori-tui`, `nori-exec`, `nori-harness`, `nori-config`, `codex-sandbox`
 - **Uses** `codex-arg0` for arg0-based dispatch (Linux sandbox embedding)
 - **Uses** `codex-sandbox` (`@/nori-rs/sandbox/`) for the `nori sandbox` debug subcommand's seatbelt/landlock/windows spawn helpers
+- Maps each agent-bearing entrypoint to the stable product analytics modes in
+  [`nori-installed`](../installed/docs.md): ordinary and resumed TUI sessions
+  are `interactive`, `nori cloud` is `cloud`, plaintext execution is `exec`, and
+  the stdio facade is `acp`.
 
 ### Core Implementation
+
+[`main.rs`](src/main.rs) constructs an `AnalyticsReporter` only for agent-bearing
+TUI, cloud, plaintext, and ACP-facade routes, then passes it into the owning
+frontend. Help, version, configuration-only, sandbox, and other sessionless
+commands do not create a reportable session. The reporter receives the resolved
+Nori home for durable opt-out state. Authenticated Firebase credentials come
+from the shared user-level `~/.nori-config.json`; the CLI does not derive
+PostHog identity or organization membership itself.
 
 **SeatbeltCommand**: macOS sandbox testing with options:
 - `--full-auto` - Network-disabled sandbox with cwd/TMPDIR write access
