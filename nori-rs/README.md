@@ -21,7 +21,7 @@ progressively adopted or removed (see `docs/specs/crate-layering.md`).
 | `nori-config/` | Nori config layer (`~/.nori/cli/config.toml`) |
 | `nori-protocol/` | Session-runtime types over the ACP schema |
 | `sandbox/` (`codex-sandbox`) | Sandboxed exec engine: Seatbelt, Landlock/seccomp, Windows restricted tokens |
-| `installed/` (`nori-installed`) | Install detection and analytics |
+| `installed/` (`nori-installed`) | Local install state and prompt-bound authenticated analytics |
 | `mock-acp-agent/` | Mock ACP agent used by tests |
 | `tui-pty-e2e/` | End-to-end PTY tests driving the real binary |
 

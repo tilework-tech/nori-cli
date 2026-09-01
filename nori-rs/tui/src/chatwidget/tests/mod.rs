@@ -116,6 +116,7 @@ fn make_chatwidget_manual_for_mode(
         fork_context: None,
         prepared_agent: None,
         cloud_mode,
+        analytics: None,
     });
     let (_unused_tx, unused_rx) = unbounded_channel();
     (widget, event_rx, unused_rx)

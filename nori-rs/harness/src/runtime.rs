@@ -184,12 +184,44 @@ enum HarnessCommand {
 }
 
 /// Typed handle for controlling one Nori harness session.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct HarnessHandle {
     command_tx: mpsc::UnboundedSender<HarnessCommand>,
+    first_prompt_started: Option<Arc<FirstPromptStarted>>,
+}
+
+struct FirstPromptStarted {
+    fired: std::sync::atomic::AtomicBool,
+    callback: Box<dyn Fn() + Send + Sync>,
+}
+
+impl std::fmt::Debug for HarnessHandle {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("HarnessHandle")
+            .field("command_tx", &self.command_tx)
+            .field(
+                "has_first_prompt_started_callback",
+                &self.first_prompt_started.is_some(),
+            )
+            .finish()
+    }
 }
 
 impl HarnessHandle {
+    /// Attach a callback that fires once, after this session's first prompt
+    /// reaches the ACP transport and receives its wire request id.
+    pub fn with_first_prompt_started_callback(
+        mut self,
+        callback: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        self.first_prompt_started = Some(Arc::new(FirstPromptStarted {
+            fired: std::sync::atomic::AtomicBool::new(false),
+            callback: Box::new(callback),
+        }));
+        self
+    }
+
     /// Submit a prompt and return the ACP request ID used on the wire.
     pub async fn prompt(
         &self,
@@ -231,9 +263,17 @@ impl HarnessHandle {
                 response_tx,
             })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
-        response_rx
+        let request_id = response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP agent did not accept the prompt"))?
+            .map_err(|_| anyhow::anyhow!("ACP agent did not accept the prompt"))??;
+        if let Some(first_prompt_started) = &self.first_prompt_started
+            && !first_prompt_started
+                .fired
+                .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            (first_prompt_started.callback)();
+        }
+        Ok(request_id)
     }
 
     /// Shut down the active harness session.
@@ -681,6 +721,7 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
 
     let handle = HarnessHandle {
         command_tx: agent_cmd_tx,
+        first_prompt_started: None,
     };
 
     tokio::spawn(async move {
@@ -1049,7 +1090,10 @@ mod tests {
                 }
             }
         });
-        let handle = HarnessHandle { command_tx };
+        let handle = HarnessHandle {
+            command_tx,
+            first_prompt_started: None,
+        };
 
         let config_options = handle
             .set_session_config_option("mode".to_string(), "build".to_string())
@@ -1057,5 +1101,37 @@ mod tests {
             .unwrap();
 
         assert_eq!(config_options, vec![mode_option("build")]);
+    }
+
+    #[tokio::test]
+    async fn first_prompt_callback_fires_once_across_cloned_handles() {
+        let (command_tx, mut command_rx) = unbounded_channel::<HarnessCommand>();
+        tokio::spawn(async move {
+            let mut request_id = 0_i64;
+            while let Some(command) = command_rx.recv().await {
+                if let HarnessCommand::Prompt { response_tx, .. } = command {
+                    request_id += 1;
+                    let _ = response_tx.send(Ok(request_id.into()));
+                }
+            }
+        });
+        let callback_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let callback_count_for_handle = Arc::clone(&callback_count);
+        let handle = HarnessHandle {
+            command_tx,
+            first_prompt_started: None,
+        }
+        .with_first_prompt_started_callback(move || {
+            callback_count_for_handle.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        });
+        let cloned_handle = handle.clone();
+
+        handle.prompt(Vec::new()).await.expect("first prompt");
+        cloned_handle
+            .prompt(Vec::new())
+            .await
+            .expect("second prompt");
+
+        assert_eq!(callback_count.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 }

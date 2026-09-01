@@ -20,6 +20,7 @@ use nori_harness::runtime::AgentPrepareSpec;
 use nori_harness::runtime::HarnessHandle;
 use nori_harness::runtime::SessionStart;
 use nori_harness::runtime::prepare_and_launch_session;
+use nori_installed::AnalyticsReporter;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
 use nori_protocol::SessionEvent;
@@ -42,6 +43,7 @@ pub async fn run_plaintext(
     config: Arc<NoriConfig>,
     cli_version: String,
     prompt: String,
+    analytics: Option<AnalyticsReporter>,
 ) -> anyhow::Result<PlaintextOutcome> {
     let mut launched = prepare_and_launch_session(
         AgentPrepareSpec {
@@ -52,6 +54,9 @@ pub async fn run_plaintext(
         },
         SessionStart::New,
     );
+    if let Some(reporter) = analytics.as_ref() {
+        launched.handle = reporter.attach(launched.handle);
+    }
     let request_id = launched
         .handle
         .prompt(vec![acp::ContentBlock::Text(acp::TextContent::new(prompt))])
@@ -65,7 +70,7 @@ pub async fn run_plaintext(
     )
     .await;
     let shutdown_result = launched.handle.shutdown().await;
-    match result {
+    let outcome = match result {
         Ok(result) => {
             shutdown_result?;
             Ok(PlaintextOutcome {
@@ -74,7 +79,11 @@ pub async fn run_plaintext(
             })
         }
         Err(error) => Err(error),
+    };
+    if let Some(reporter) = analytics {
+        reporter.flush();
     }
+    outcome
 }
 
 #[derive(Clone, Copy)]
@@ -207,6 +216,7 @@ struct FacadeSession {
 struct FacadeState {
     base_config: Arc<NoriConfig>,
     cli_version: String,
+    analytics: Option<AnalyticsReporter>,
     session: Option<FacadeSession>,
 }
 
@@ -255,10 +265,15 @@ impl<R: AsyncRead + Unpin> AsyncRead for ErrorOnEof<R> {
 }
 
 /// Serve a bounded ACP agent facade over stdin/stdout.
-pub async fn run_acp(config: Arc<NoriConfig>, cli_version: String) -> anyhow::Result<()> {
+pub async fn run_acp(
+    config: Arc<NoriConfig>,
+    cli_version: String,
+    analytics: Option<AnalyticsReporter>,
+) -> anyhow::Result<()> {
     let state = Arc::new(Mutex::new(FacadeState {
         base_config: config,
         cli_version,
+        analytics: analytics.clone(),
         session: None,
     }));
 
@@ -287,12 +302,16 @@ pub async fn run_acp(config: Arc<NoriConfig>, cli_version: String) -> anyhow::Re
                     {
                         return responder.respond_with_error(acp::Error::invalid_params());
                     }
-                    let (mut config, cli_version) = {
+                    let (mut config, cli_version, analytics) = {
                         let state = state.lock().await;
                         if state.session.is_some() {
                             return responder.respond_with_error(acp::Error::invalid_params());
                         }
-                        ((*state.base_config).clone(), state.cli_version.clone())
+                        (
+                            (*state.base_config).clone(),
+                            state.cli_version.clone(),
+                            state.analytics.clone(),
+                        )
                     };
                     config.cwd = request.cwd;
                     let mut launched = prepare_and_launch_session(
@@ -304,6 +323,9 @@ pub async fn run_acp(config: Arc<NoriConfig>, cli_version: String) -> anyhow::Re
                         },
                         SessionStart::New,
                     );
+                    if let Some(reporter) = analytics.as_ref() {
+                        launched.handle = reporter.attach(launched.handle);
+                    }
                     let session_id = loop {
                         match launched.events.recv().await {
                             Some(SessionEvent::Nori(NoriEvent::SessionStarted(started))) => {
@@ -477,6 +499,9 @@ pub async fn run_acp(config: Arc<NoriConfig>, cli_version: String) -> anyhow::Re
     if let Some(handle) = handle {
         let _ = handle.cancel().await;
         let _ = handle.shutdown().await;
+    }
+    if let Some(reporter) = analytics {
+        reporter.flush();
     }
     if eof.load(Ordering::SeqCst) {
         Ok(())

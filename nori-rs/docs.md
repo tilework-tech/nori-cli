@@ -14,6 +14,7 @@ The production path is layered downward:
 
 ```text
 nori-cli / nori-tui / nori-exec
+        -> nori-installed -> authenticated analytics ingress
         -> nori-harness
         -> nori-acp-host
         -> ACP agent subprocess
@@ -47,6 +48,10 @@ used in production.
   `SessionEvent::{Acp, Nori}`.
 - `nori-config/` owns CLI configuration and the approval, sandbox, MCP, trust,
   and shell-policy types consumed at runtime.
+- `installed/` keeps local installation/launch state and owns the authenticated
+  `nori_agent_session_started` reporter. Frontends attach it to a harness
+  handle so one logical session is counted only after its first prompt reaches
+  ACP; identity and organization expansion remain server-owned.
 - `sandbox/` and the platform crates implement local sandbox debug execution;
   agent tool execution itself occurs in the external ACP agent.
 
@@ -70,6 +75,9 @@ product crates.
 - ACP capabilities describe an agent facade's operations, not whether the
   deployment is local or cloud. The top-level `nori cloud` launch carries that
   identity explicitly into the TUI.
+- Product analytics distinguishes `interactive`, `cloud`, `exec`, and `acp`
+  session modes. Resume is not a mode or event; a resumed interactive session
+  reports only if a new prompt reaches the transport.
 - There are two outward ACP agent surfaces: `nori exec --acp` (a bounded,
   one-session stdio facade) and the remote WebSocket transport (the long-lived
   interactive session, enabled at startup or runtime, loopback by default,

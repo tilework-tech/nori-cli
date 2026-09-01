@@ -122,6 +122,7 @@ use std::io::Write as _;
 pub async fn run_main(
     cli: Cli,
     _codex_linux_sandbox_exe: Option<PathBuf>,
+    analytics: Option<nori_installed::AnalyticsReporter>,
 ) -> std::io::Result<AppExitInfo> {
     // Pre-warm the ACP agent installation cache in a background thread.
     // This runs `which` commands early so the agent picker opens quickly.
@@ -296,6 +297,7 @@ pub async fn run_main(
         overrides,
         pending_worktree_ask,
         worktree_blocked_reason,
+        analytics,
     )
     .await
     .map_err(|err| std::io::Error::other(err.to_string()))
@@ -308,6 +310,7 @@ async fn run_ratatui_app(
     overrides: NoriConfigOverrides,
     pending_worktree_ask: bool,
     worktree_blocked_reason: Option<String>,
+    analytics: Option<nori_installed::AnalyticsReporter>,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
 
@@ -529,8 +532,13 @@ async fn run_ratatui_app(
         cloud_mode,
         cloud_onboard,
         startup_remote_addr,
+        analytics.clone(),
     )
     .await;
+
+    if let Some(reporter) = analytics {
+        reporter.flush();
+    }
 
     restore();
     // Mark the end of the recorded session.
