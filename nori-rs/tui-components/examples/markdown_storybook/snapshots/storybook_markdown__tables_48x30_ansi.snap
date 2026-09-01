@@ -2,32 +2,32 @@
 source: tui-components/examples/markdown_storybook/e2e.rs
 ---
 ││
-│  \x1b[1mMarkdown storybook · page 2 of 3\x1b[0m│
+│  \x1b[1mMarkdown storybook · page 2 of 3\x1b[0m              │
 ││
-│  \x1b[38;5;8m# \x1b[1;4m\x1b[39mAdaptive tables\x1b[0m│
+│  \x1b[38;5;8m# \x1b[1;4m\x1b[39mAdaptive tables\x1b[0m     │
 ││
-│  \x1b[1mSession         \x1b[0mFix parser recovery│
-│  \x1b[1mProject         \x1b[0mnori-cli│
-│  \x1b[1mUpdated         \x1b[0m2m│
-│  \x1b[1mCurrent turn status  \x1b[0mWorking│
-│  \x1b[38;5;8m────────────────────────────────────────────\x1b[39m│
-│  \x1b[1mSession         \x1b[0mImprove Markdown tables│
-│  \x1b[1mProject         \x1b[0mexternal-codex│
-│  \x1b[1mUpdated         \x1b[0m18m│
-│  \x1b[1mCurrent turn status  \x1b[0mWaiting for user input│
-│  \x1b[38;5;8m────────────────────────────────────────────\x1b[39m│
-│  \x1b[1mSession         \x1b[0mHandroll picker migration│
-│  \x1b[1mProject         \x1b[0msessions/handroll│
-│  \x1b[1mUpdated         \x1b[0m1h│
-│  \x1b[1mCurrent turn status  \x1b[0mImplementing the event│
-│  \x1b[1m                     \x1b[0mloop│
+│  \x1b[1mSession         \x1b[0mFix parser recovery           │
+│  \x1b[1mProject         \x1b[0mnori-cli                      │
+│  \x1b[1mUpdated         \x1b[0m2m                            │
+│  \x1b[1mCurrent turn status  \x1b[0mWorking                  │
+│  \x1b[38;5;8m────────────────────────────────────────────\x1b[39m  │
+│  \x1b[1mSession         \x1b[0mImprove Markdown tables       │
+│  \x1b[1mProject         \x1b[0mexternal-codex                │
+│  \x1b[1mUpdated         \x1b[0m18m   │
+│  \x1b[1mCurrent turn status  \x1b[0mWaiting for user input   │
+│  \x1b[38;5;8m────────────────────────────────────────────\x1b[39m  │
+│  \x1b[1mSession         \x1b[0mHandroll picker migration     │
+│  \x1b[1mProject         \x1b[0msessions/handroll             │
+│  \x1b[1mUpdated         \x1b[0m1h                            │
+│  \x1b[1mCurrent turn status  \x1b[0mImplementing the event   │
+│  \x1b[1m                     \x1b[0mloop                     │
 ││
-│  Narrow the terminal until the grid becomes│
-│  stacked records.│
-││
-││
+│  Narrow the terminal until the grid becomes    │
+│  stacked records.      │
 ││
 ││
 ││
-│  \x1b[38;5;2m1-3\x1b[39m \x1b[38;5;8mpage  \x1b[38;5;2m↑↓\x1b[39m \x1b[38;5;8mscroll  \x1b[38;5;2mq\x1b[39m \x1b[38;5;8mclose\x1b[39m│
+││
+││
+│  \x1b[38;5;2m1-3\x1b[39m \x1b[38;5;8mpage  \x1b[38;5;2m↑↓\x1b[39m \x1b[38;5;8mscroll  \x1b[38;5;2mq\x1b[39m \x1b[38;5;8mclose\x1b[39m                  │
 ││

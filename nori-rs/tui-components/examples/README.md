@@ -15,7 +15,7 @@ skills. Keep the tmux version consistent between snapshot authors and CI:
 display-row ANSI serialization can change between versions.
 
 Set `TUI_PUPPETEERING_DIR` to the skill directory directly containing its
-executables, such as `tui-start` and `tui-capture`:
+executables, such as `tui-start` and `tmux-isolated`:
 
 ```bash
 export TUI_PUPPETEERING_DIR=/absolute/path/to/skills/tui-puppeteering-with-tmux

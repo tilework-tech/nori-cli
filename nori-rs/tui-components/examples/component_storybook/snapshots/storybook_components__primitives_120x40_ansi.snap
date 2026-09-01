@@ -2,27 +2,25 @@
 source: tui-components/examples/component_storybook/e2e.rs
 ---
 ││
-│  \x1b[1mComponent storybook\x1b[0m│
+│  \x1b[1mComponent storybook\x1b[0m         │
 ││
-│  \x1b[1mSemantic tokens\x1b[0m│
-│  \x1b[38;5;2mpointer success  \x1b[38;5;3mwarning  \x1b[38;5;1merror  \x1b[38;5;8mmuted\x1b[39m│
+│  \x1b[1mSemantic tokens\x1b[0m             │
+│  \x1b[38;5;2mpointer success  \x1b[38;5;3mwarning  \x1b[38;5;1merror  \x1b[38;5;8mmuted\x1b[39m                    │
 ││
-│  \x1b[38;5;6mi \x1b[39mConnected to the agent│
+│  \x1b[38;5;6mi \x1b[39mConnected to the agent    │
 ││
-│  \x1b[38;5;2m✓ \x1b[39mSnapshot suite passed│
+│  \x1b[38;5;2m✓ \x1b[39mSnapshot suite passed     │
 ││
-│  \x1b[38;5;3m! \x1b[39mTwo sessions are still running│
-│    \x1b[38;5;8mOpen the picker to inspect them.\x1b[39m│
-│  \x1b[38;5;1m× \x1b[39mCould not resume the session│
-│    \x1b[38;5;8mThe agent no longer reports that session id.\x1b[39m│
+│  \x1b[38;5;3m! \x1b[39mTwo sessions are still running                          │
+│    \x1b[38;5;8mOpen the picker to inspect them.\x1b[39m                        │
+│  \x1b[38;5;1m× \x1b[39mCould not resume the session                            │
+│    \x1b[38;5;8mThe agent no longer reports that session id.\x1b[39m            │
 ││
-│  \x1b[38;5;6m◇ \x1b[39mNo matching sessions│
-│  \x1b[38;5;8m  Try a title, project path, or session id.\x1b[39m│
-││
-││
-│  These primitives are intentionally small. Applications compose them around caller-owned state and translate their ow│
+│  \x1b[38;5;6m◇ \x1b[39mNo matching sessions      │
+│  \x1b[38;5;8m  Try a title, project path, or session id.\x1b[39m               │
 ││
 ││
+│  These primitives are intentionally small. Applications compose them around caller-owned state and translate their ow  │
 ││
 ││
 ││
@@ -39,5 +37,7 @@ source: tui-components/examples/component_storybook/e2e.rs
 ││
 ││
 ││
-│  \x1b[38;5;2mq / esc\x1b[39m \x1b[38;5;8mclose storybook\x1b[39m│
+││
+││
+│  \x1b[38;5;2mq / esc\x1b[39m \x1b[38;5;8mclose storybook\x1b[39m     │
 ││

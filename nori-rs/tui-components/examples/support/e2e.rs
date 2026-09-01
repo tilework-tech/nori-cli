@@ -100,7 +100,6 @@ impl TuiSession {
             "tui-start",
             "tui-send",
             "tui-assert",
-            "tui-capture",
             "tui-stop",
             "tmux-isolated",
         ] {
@@ -192,10 +191,10 @@ impl TuiSession {
     pub fn capture(&self, name: &str) -> Result<Screen> {
         // Wait for unchanged display rows, not a fixed delay after input.
         let deadline = Instant::now() + Duration::from_secs(5);
-        let mut previous = self.run("tui-capture", &[&self.name, "-e"])?;
+        let mut previous = self.capture_pane()?;
         let ansi = loop {
             std::thread::sleep(Duration::from_millis(100));
-            let next = self.run("tui-capture", &[&self.name, "-e"])?;
+            let next = self.capture_pane()?;
             if next == previous {
                 break next;
             }
@@ -222,6 +221,15 @@ impl TuiSession {
             format!("{} {}\n", self.cols, self.rows),
         )?;
         Ok(screen)
+    }
+
+    fn capture_pane(&self) -> Result<String> {
+        // `-N` is essential for replay: without the trailing styled cells,
+        // derived text can recover geometry but Ghostty cannot recover colors.
+        self.run(
+            "tmux-isolated",
+            &["capture-pane", "-p", "-e", "-N", "-t", &self.name],
+        )
     }
 
     fn run(&self, script: &str, args: &[&str]) -> Result<String> {
