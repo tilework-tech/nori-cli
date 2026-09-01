@@ -65,11 +65,6 @@ impl ChatWidget {
                 is_current,
                 actions,
                 dismiss_on_select: true,
-                menu_tone: if preset.id == "full-access" {
-                    nori_tui_components::MenuItemTone::Warning
-                } else {
-                    nori_tui_components::MenuItemTone::Default
-                },
                 ..Default::default()
             });
         }
@@ -83,12 +78,7 @@ impl ChatWidget {
                 header: Box::new(()),
                 ..Default::default()
             }
-            .menu(
-                96,
-                nori_tui_components::MenuDensity::Normal,
-                nori_tui_components::MenuRowPattern::Plain,
-                nori_tui_components::MenuPlacement::Left,
-            ),
+            .picker(),
         );
     }
 

@@ -426,6 +426,11 @@ fn sessionless_policy_change_is_refreshed_before_activation() {
     session
         .wait_for_text("Select approval mode", TIMEOUT)
         .expect("approval picker");
+    std::thread::sleep(tui_pty_e2e::TIMEOUT_PRESNAPSHOT);
+    insta::assert_snapshot!(
+        "sessionless_approval_picker",
+        tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
+    );
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
     session
