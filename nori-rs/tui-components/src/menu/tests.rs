@@ -729,6 +729,30 @@ fn dense_menu_keeps_item_anatomy_without_inter_item_rows_and_tightens_padding() 
 }
 
 #[test]
+fn left_placement_anchors_long_choices_without_changing_the_caller_rect() {
+    let backend = TestBackend::new(100, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut state = action_state();
+    terminal
+        .draw(|frame| {
+            frame.render_stateful_widget(
+                OverlayMenu::new("Select approval mode")
+                    .max_width(58)
+                    .density(MenuDensity::Normal)
+                    .row_pattern(MenuRowPattern::Plain)
+                    .placement(MenuPlacement::Left),
+                frame.area(),
+                &mut state,
+            )
+        })
+        .expect("draw left-aligned menu");
+
+    let title =
+        find_ascii_text(terminal.backend().buffer(), "Select approval mode").expect("menu title");
+    assert_eq!(title.0, 4);
+}
+
+#[test]
 #[allow(clippy::disallowed_methods)]
 fn dense_menu_zebra_surfaces_preserve_selection_and_disabled_precedence() {
     let theme = Theme {

@@ -2,7 +2,7 @@
 source: tui/src/nori/mcp_server_picker.rs
 expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
-  Add MCP Server
+  Add MCP server
   Select transport type
 
      Transport     Details

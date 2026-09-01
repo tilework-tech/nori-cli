@@ -662,7 +662,7 @@ impl Renderable for ChatComposer {
                 PromptIndicator::Shortcut => {
                     Span::styled("?", Style::default().fg(Color::DarkGray))
                 }
-                PromptIndicator::Slash => "/".cyan(),
+                PromptIndicator::Slash => "/".green(),
                 PromptIndicator::Shell => "!".red(),
             };
             buf.set_span(

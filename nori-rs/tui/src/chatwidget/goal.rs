@@ -236,7 +236,12 @@ impl ChatWidget {
                 items,
                 ..Default::default()
             }
-            .menu(),
+            .menu(
+                58,
+                nori_tui_components::MenuDensity::Normal,
+                nori_tui_components::MenuRowPattern::Plain,
+                nori_tui_components::MenuPlacement::Centered,
+            ),
         );
     }
 

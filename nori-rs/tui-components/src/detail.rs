@@ -135,6 +135,16 @@ pub enum DetailRowPattern {
     Zebra,
 }
 
+/// Punctuation appended to detail labels at render time.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DetailLabelStyle {
+    /// Render labels without trailing punctuation.
+    #[default]
+    Plain,
+    /// Append a colon to each label.
+    Colon,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ResolvedDetailLayout {
     Columns,
@@ -163,6 +173,7 @@ pub struct DetailPane<'a> {
     density: DetailDensity,
     layout: DetailLayout,
     row_pattern: DetailRowPattern,
+    label_style: DetailLabelStyle,
 }
 
 impl<'a> DetailPane<'a> {
@@ -175,6 +186,7 @@ impl<'a> DetailPane<'a> {
             density: DetailDensity::default(),
             layout: DetailLayout::default(),
             row_pattern: DetailRowPattern::default(),
+            label_style: DetailLabelStyle::default(),
         }
     }
 
@@ -208,13 +220,23 @@ impl<'a> DetailPane<'a> {
         self
     }
 
+    pub fn label_style(mut self, label_style: DetailLabelStyle) -> Self {
+        self.label_style = label_style;
+        self
+    }
+
     /// Returns the rows required to render this pane at the caller rectangle width.
     pub fn required_height(&self, width: u16) -> u16 {
         let Some(content_width) = detail_content_width(width) else {
             return 0;
         };
         let layout = self.layout.resolve(width);
-        let gutter = gutter_width(self.entries, self.label_width, content_width);
+        let gutter = gutter_width(
+            self.entries,
+            self.label_width,
+            self.label_style,
+            content_width,
+        );
         let mut height = u16::from(self.heading.is_some()) * 2;
         for (index, entry) in self.entries.iter().enumerate() {
             height = height.saturating_add(entry_height(entry, layout, content_width, gutter));
@@ -260,7 +282,12 @@ impl Widget for DetailPane<'_> {
                 .render(Rect::new(content.x, y, content.width, 1), buf);
             y = y.saturating_add(2);
         }
-        let gutter = gutter_width(self.entries, self.label_width, content.width);
+        let gutter = gutter_width(
+            self.entries,
+            self.label_width,
+            self.label_style,
+            content.width,
+        );
         let mut zebra_index = 0usize;
         for (index, entry) in self.entries.iter().enumerate() {
             if y >= content.bottom() {
@@ -298,8 +325,9 @@ impl Widget for DetailPane<'_> {
 
                     match layout {
                         ResolvedDetailLayout::Columns => {
+                            let label = format_label(label, self.label_style);
                             let label =
-                                pad_right(&truncate(label, gutter as usize), gutter as usize);
+                                pad_right(&truncate(&label, gutter as usize), gutter as usize);
                             buf.set_string(
                                 content.x,
                                 y,
@@ -322,10 +350,11 @@ impl Widget for DetailPane<'_> {
                             );
                         }
                         ResolvedDetailLayout::Stacked => {
+                            let label = format_label(label, self.label_style);
                             buf.set_string(
                                 content.x,
                                 y,
-                                truncate(label, content.width as usize),
+                                truncate(&label, content.width as usize),
                                 content_style(row_style, self.theme.muted, zebra_background),
                             );
                             let value_x = content.x.saturating_add(2);
@@ -451,20 +480,34 @@ fn content_style(row_style: Style, semantic_style: Style, background: Option<Sty
     background.map_or(style, |background| style.patch(background))
 }
 
-fn gutter_width(entries: &[DetailEntry], policy: LabelWidth, width: u16) -> u16 {
+fn gutter_width(
+    entries: &[DetailEntry],
+    policy: LabelWidth,
+    label_style: DetailLabelStyle,
+    width: u16,
+) -> u16 {
     let available = width.saturating_sub(2) / 2;
     match policy {
         LabelWidth::Fixed(width) => width.min(available),
         LabelWidth::Auto { max } => entries
             .iter()
             .filter_map(|entry| match entry {
-                DetailEntry::KeyValue { label, .. } => Some(label.width() as u16),
+                DetailEntry::KeyValue { label, .. } => {
+                    Some(format_label(label, label_style).width() as u16)
+                }
                 DetailEntry::Rule => None,
             })
             .max()
             .unwrap_or(0)
             .min(max)
             .min(available),
+    }
+}
+
+fn format_label(label: &str, label_style: DetailLabelStyle) -> String {
+    match label_style {
+        DetailLabelStyle::Plain => label.to_string(),
+        DetailLabelStyle::Colon => format!("{label}:"),
     }
 }
 

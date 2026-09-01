@@ -71,7 +71,7 @@ pub fn agent_picker_params_with_subtitle(
         .collect();
 
     SelectionViewParams {
-        title: Some("Select Agent".to_string()),
+        title: Some("Select agent".to_string()),
         subtitle: Some(subtitle),
         footer_hint: Some(standard_popup_hint_line()),
         footer_hint_right: Some(recording_footer_hint(recording_enabled)),
@@ -129,7 +129,7 @@ pub fn acp_model_picker_params() -> SelectionViewParams {
     }];
 
     SelectionViewParams {
-        title: Some("Select Model".to_string()),
+        title: Some("Select model".to_string()),
         subtitle: Some("Not available in ACP mode - use /agent instead".to_string()),
         footer_hint: Some(Line::from(
             "Press esc to dismiss, or use /agent to switch agents.",
@@ -164,7 +164,7 @@ mod tests {
         let params = agent_picker_params("mock-model", tx, false);
 
         assert!(params.title.is_some());
-        assert!(params.title.unwrap().contains("Select Agent"));
+        assert!(params.title.unwrap().contains("Select agent"));
         assert!(!params.items.is_empty());
 
         // Should have mock-model as current

@@ -407,7 +407,7 @@ pub fn skillset_worktree_choice_params(app_event_tx: AppEventSender) -> Selectio
     ];
 
     SelectionViewParams {
-        title: Some("Per Session Skillsets".to_string()),
+        title: Some("Per-session skillsets".to_string()),
         subtitle: Some("Choose how skillsets are managed per session".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -489,7 +489,7 @@ pub fn vim_mode_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("Vim Mode".to_string()),
+        title: Some("Vim mode".to_string()),
         subtitle: Some("Choose Enter key behavior for vim mode".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -535,7 +535,7 @@ pub fn auto_worktree_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("Auto Worktree".to_string()),
+        title: Some("Auto worktree".to_string()),
         subtitle: Some("Create a git worktree at session start".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -574,7 +574,7 @@ pub fn notify_after_idle_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("Notify After Idle".to_string()),
+        title: Some("Notify after idle".to_string()),
         subtitle: Some("Select idle notification delay".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -611,7 +611,7 @@ pub fn browser_profile_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("Browser Profile".to_string()),
+        title: Some("Browser profile".to_string()),
         subtitle: Some("Choose which Chrome profile /browser launches".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -651,7 +651,7 @@ pub fn script_timeout_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("Script Timeout".to_string()),
+        title: Some("Script timeout".to_string()),
         subtitle: Some("Select script execution timeout".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -698,7 +698,7 @@ pub fn footer_segments_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("Footer Segments".to_string()),
+        title: Some("Footer segments".to_string()),
         subtitle: Some("Toggle which segments appear in the footer".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -744,7 +744,7 @@ pub fn file_manager_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("File Manager".to_string()),
+        title: Some("File manager".to_string()),
         subtitle: Some("Choose a terminal file manager for /browse".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -1046,7 +1046,7 @@ mod tests {
         let params = notify_after_idle_picker_params(nori_config::NotifyAfterIdle::FiveSeconds, tx);
 
         assert_eq!(params.items.len(), 5);
-        assert!(params.title.unwrap().contains("Notify After Idle"));
+        assert!(params.title.unwrap().contains("Notify after idle"));
     }
 
     #[test]
@@ -1313,7 +1313,7 @@ mod tests {
         let params = script_timeout_picker_params(nori_config::ScriptTimeout::default(), tx);
 
         assert_eq!(params.items.len(), 5);
-        assert!(params.title.unwrap().contains("Script Timeout"));
+        assert!(params.title.unwrap().contains("Script timeout"));
     }
 
     #[test]

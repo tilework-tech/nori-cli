@@ -99,7 +99,9 @@ consumer application
   groupings without teaching the shared state machine about their group model.
 - The [`picker` renderer](src/picker/render.rs) shows its input row only during
   active search and derives footer hints from the same state. Title metadata is
-  followed by one grouping row before results. A single-column, single-select
+  followed by one grouping row before results. Consumers whose surrounding
+  context already names the surface may call `show_title(false)` to omit both
+  the redundant title and its reserved row. A single-column, single-select
   picker presents each item as primary text with optional supporting copy,
   suppresses the redundant table heading, and numbers the first nine enabled
   choices while skipping structural and disabled rows. Multi-column pickers,
@@ -132,7 +134,8 @@ consumer application
 
   Pi retains the warning tone and unknown providers use normal text.
 - `OverlayMenu` centers a content-derived, maximum-width surface inside the
-  supplied rectangle. Rendering reconciles only menu-local viewport offset and
+  supplied rectangle by default; `MenuPlacement::Left` anchors longer choices
+  to the caller's left inset. Rendering reconciles only menu-local viewport offset and
   capacity so the selection stays visible when content exceeds the available
   height. Its independent [`MenuDensity`](src/menu/) and
   [`MenuRowPattern`](src/menu/) policies default to Normal and Plain. Dense
@@ -150,6 +153,9 @@ consumer application
   automatic label width capped at 14 cells. Column labels and values are
   left-aligned with two blank cells between them; auto and fixed label gutters
   are bounded against padded content width so a value column remains.
+- [`DetailLabelStyle`](src/detail.rs) keeps label punctuation in presentation
+  policy rather than caller data. Plain labels remain the default; callers may
+  opt into trailing colons without changing stored metadata labels.
 - `DetailLayout` can instead select a stacked form, which places each label
   above a value inset by two cells, or a responsive form. Responsive resolution
   uses the outer caller rectangle and stacks only when its width is below the

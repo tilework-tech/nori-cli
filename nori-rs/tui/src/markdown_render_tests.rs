@@ -703,7 +703,7 @@ fn horizontal_rule_renders_em_dashes() {
                 .collect::<String>()
         })
         .collect();
-    assert_eq!(lines, vec!["Before", "", "———", "", "After"]);
+    assert_eq!(lines, vec!["Before", "", "───", "", "After"]);
 }
 
 #[test]

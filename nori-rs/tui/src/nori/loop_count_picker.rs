@@ -182,7 +182,7 @@ impl LoopCountPickerView {
                 .current(self.is_item_current(index))
         });
         let mut state = PickerState::new(
-            "Loop Count",
+            "Loop count",
             [PickerColumn::flexible("count", "Iterations")],
             items,
         )
@@ -330,7 +330,7 @@ impl Renderable for LoopCountPickerView {
         let mut row = 0;
 
         // Title
-        Line::from("Loop Count".bold()).render(areas[row], buf);
+        Line::from("Loop count".bold()).render(areas[row], buf);
         row += 1;
 
         // Subtitle
@@ -649,7 +649,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
 
-        assert!(text.contains("Loop Count"), "should contain title");
+        assert!(text.contains("Loop count"), "should contain title");
         assert!(text.contains("Disabled"), "should contain Disabled option");
         assert!(text.contains("Custom"), "should contain Custom option");
         let selected_label = picker.item_label(picker.selected_idx());

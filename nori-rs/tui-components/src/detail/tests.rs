@@ -469,3 +469,21 @@ fn detail_pane_zebra_background_overrides_semantic_and_span_backgrounds() {
     assert_eq!(buffer[(2, 0)].bg, Color::Red);
     assert_eq!(buffer[(9, 0)].bg, Color::Red);
 }
+
+#[test]
+fn detail_pane_colon_style_adds_render_only_punctuation() {
+    let entries = [DetailEntry::key_value("Agent:", "Claude")];
+    let backend = TestBackend::new(30, 1);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| {
+            frame.render_widget(
+                DetailPane::new(&entries).label_style(DetailLabelStyle::Colon),
+                frame.area(),
+            );
+        })
+        .expect("draw pane");
+
+    assert!(terminal.backend().to_string().contains("Agent:  Claude"));
+    assert_eq!(entries, [DetailEntry::key_value("Agent", "Claude")]);
+}

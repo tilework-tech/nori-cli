@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/list_selection_view.rs
 expression: "render_lines_with_width(&view, 80)"
 ---
                                                                                 
-  Select Agent                                                                  
+  Select agent                                                                  
                                                                                 
 › 1. ElizACP (current)  Local test ACP agent                                    
                                                                                 

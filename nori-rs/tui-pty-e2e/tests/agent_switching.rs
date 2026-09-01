@@ -382,7 +382,7 @@ fn test_agent_command_shows_available_agents() {
         .wait_for(
             |screen| {
                 // Should show available agents from the ACP registry
-                screen.contains("Select Agent") || screen.contains("mock-model")
+                screen.contains("Select agent") || screen.contains("mock-model")
             },
             Duration::from_secs(8),
         )
@@ -432,7 +432,7 @@ fn test_agent_switch_activates_prepared_candidate() {
     // Wait for agent picker to appear (8 seconds - CI detection is slow)
     session
         .wait_for(
-            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            |screen| screen.contains("Select agent") || screen.contains("mock-model"),
             Duration::from_secs(8),
         )
         .expect("Agent picker should appear");
@@ -510,7 +510,7 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("Select Agent", Duration::from_secs(8))
+        .wait_for_text("Select agent", Duration::from_secs(8))
         .expect("agent picker");
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
@@ -561,7 +561,7 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("Select Agent", Duration::from_secs(8))
+        .wait_for_text("Select agent", Duration::from_secs(8))
         .expect("agent picker");
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
@@ -611,7 +611,7 @@ fn test_agent_candidate_preparation_timeout_keeps_current_session_promptable() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("Select Agent", Duration::from_secs(8))
+        .wait_for_text("Select agent", Duration::from_secs(8))
         .expect("agent picker");
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
@@ -727,7 +727,7 @@ fn test_model_command_shows_disabled_in_acp_mode() {
     // Wait for model picker to appear (8 seconds - CI detection is slow)
     session
         .wait_for(
-            |screen| screen.contains("Select Model") || screen.contains("Model"),
+            |screen| screen.contains("Select model") || screen.contains("Model"),
             Duration::from_secs(8),
         )
         .expect("Model picker should appear");
@@ -797,7 +797,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     // Wait for agent picker to appear (8 seconds - CI detection is slow)
     session
         .wait_for(
-            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            |screen| screen.contains("Select agent") || screen.contains("mock-model"),
             Duration::from_secs(8),
         )
         .expect("Agent picker should appear");
@@ -866,7 +866,7 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
     // Wait for agent picker to appear (8 seconds - CI detection is slow)
     session
         .wait_for(
-            |screen| screen.contains("Select Agent"),
+            |screen| screen.contains("Select agent"),
             Duration::from_secs(8),
         )
         .expect("Agent picker should appear with title");
@@ -1063,7 +1063,7 @@ fn test_connecting_status_during_slow_agent_startup() {
     // Wait for agent picker to appear
     session
         .wait_for(
-            |screen| screen.contains("Select Agent") || screen.contains("mock-model"),
+            |screen| screen.contains("Select agent") || screen.contains("mock-model"),
             Duration::from_secs(8),
         )
         .expect("Agent picker should appear");
