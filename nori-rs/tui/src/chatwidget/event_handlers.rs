@@ -60,6 +60,13 @@ impl ChatWidget {
                 response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
                 ..
             } => {
+                self.follow_only_attachment = response
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.get("nori"))
+                    .and_then(|nori| nori.get("attachmentMode"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some("follow");
                 self.session_agent_info = response.agent_info;
                 self.session_info_state.reset();
                 self.publish_session_title();

@@ -132,6 +132,12 @@ impl ChatWidget {
             return;
         }
 
+        // Followers may use local commands, but must never submit a prompt to
+        // the Slack-owned ACP session, including through programmatic callers.
+        if self.follow_only_attachment {
+            return;
+        }
+
         if self.harness_handle.is_none() {
             if text.starts_with('/') {
                 self.add_error_message(

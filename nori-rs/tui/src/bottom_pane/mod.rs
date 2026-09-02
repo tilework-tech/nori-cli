@@ -305,6 +305,11 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn restore_composer_submission(&mut self, text: String) {
+        self.composer.restore_submission_text(text);
+        self.request_redraw();
+    }
+
     pub(crate) fn clear_composer_for_ctrl_c(&mut self) {
         self.composer.clear_for_ctrl_c();
         self.request_redraw();

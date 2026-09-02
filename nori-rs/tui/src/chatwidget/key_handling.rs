@@ -53,6 +53,9 @@ impl ChatWidget {
         }
 
         match self.bottom_pane.handle_key_event(key_event) {
+            InputResult::Submitted(text) if self.follow_only_attachment => {
+                self.bottom_pane.restore_composer_submission(text);
+            }
             InputResult::Submitted(text) => {
                 let user_message = UserMessage {
                     text,

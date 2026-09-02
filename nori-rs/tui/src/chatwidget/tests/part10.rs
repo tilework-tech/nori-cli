@@ -76,6 +76,74 @@ fn session_started_records_queued_launch_prompt_in_composer_history() {
     );
 }
 
+#[test]
+fn follow_only_attachment_keeps_messages_in_the_composer_but_allows_agent_switching() {
+    use crate::render::renderable::Renderable;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+
+    let (mut chat, mut rx, _unused_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.handle_session_event(generation, initialize_follow_only_agent_event());
+    while rx.try_recv().is_ok() {}
+
+    chat.set_composer_text("This must stay local".to_string());
+    let image_path = PathBuf::from("/tmp/follow-only-draft.png");
+    chat.attach_image(image_path.clone(), 32, 16, "PNG");
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(
+        chat.composer_text(),
+        "[follow-only-draft.png 32x16]This must stay local"
+    );
+    assert!(
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .all(|event| !matches!(event, AppEvent::NewSession | AppEvent::HarnessAction(_))),
+        "follow-only input must not start or mutate an ACP session"
+    );
+
+    let area = Rect::new(0, 0, 64, chat.bottom_pane.desired_height(64));
+    let mut buffer = Buffer::empty(area);
+    chat.bottom_pane.render(area, &mut buffer);
+    let rendered = (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buffer[(x, y)].symbol().chars().next().unwrap_or(' '))
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!(rendered);
+    assert_eq!(
+        chat.bottom_pane.take_recent_submission_images(),
+        vec![image_path],
+        "follow-only input must retain draft attachments"
+    );
+
+    chat.set_composer_text("/agent".to_string());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(chat.bottom_pane.has_active_overlay_or_popup());
+}
+
+#[test]
+fn follow_only_attachment_blocks_init_prompt_submission() {
+    let (mut chat, mut rx, _unused_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.handle_session_event(generation, initialize_follow_only_agent_event());
+    while rx.try_recv().is_ok() {}
+
+    chat.dispatch_command(SlashCommand::Init);
+
+    assert!(
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .all(|event| !matches!(event, AppEvent::NewSession | AppEvent::HarnessAction(_))),
+        "follow-only commands must not submit prompts to the ACP session"
+    );
+}
+
 /// Deliver a prompt completion through the real client-event entry point.
 fn deliver_completion(chat: &mut ChatWidget, failure: Option<crate::presentation::TurnFailure>) {
     chat.handle_client_event(crate::presentation::ClientEvent::PromptCompleted(
@@ -301,6 +369,24 @@ fn initialize_agent_event(name: &str, title: &str, version: &str) -> nori_protoc
                 nori_protocol::acp::ProtocolVersion::LATEST,
             )
             .agent_info(nori_protocol::acp::v1::Implementation::new(name, version).title(title)),
+        )),
+    })
+}
+
+fn initialize_follow_only_agent_event() -> nori_protocol::SessionEvent {
+    let meta = serde_json::json!({
+        "nori": { "attachmentMode": "follow" }
+    })
+    .as_object()
+    .cloned()
+    .expect("follow-only metadata is an object");
+    nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+        request_id: nori_protocol::acp::v1::RequestId::Str("initialize".to_string()),
+        response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(
+            nori_protocol::acp::v1::InitializeResponse::new(
+                nori_protocol::acp::ProtocolVersion::LATEST,
+            )
+            .meta(meta),
         )),
     })
 }
