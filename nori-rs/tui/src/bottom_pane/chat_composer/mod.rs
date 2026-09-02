@@ -351,6 +351,17 @@ impl ChatComposer {
         self.sync_selection_popups();
     }
 
+    /// Restore text rejected after submission without discarding draft attachments.
+    pub(crate) fn restore_submission_text(&mut self, text: String) {
+        if !self.input_enabled {
+            return;
+        }
+        self.is_shell_mode = false;
+        self.textarea.set_text(&text);
+        self.textarea.set_cursor(text.len());
+        self.sync_selection_popups();
+    }
+
     fn set_history_content(&mut self, text: String) {
         if !self.input_enabled {
             return;
