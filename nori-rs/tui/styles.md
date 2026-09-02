@@ -11,7 +11,7 @@
 - **Information:** Use ANSI `cyan` for targeted informational or secondary accents such as a marker, key, value, status, or compact cell. Do not wash supporting prose in cyan.
 - **Success and additions:** Use ANSI `green`.
 - **Errors, failures and deletions:** Use ANSI `red`.
-- **Agent identity:** Use yellow/orange for Claude, white for Codex, blue for Gemini and Antigravity, and green for Nori. Apply identity colors only to explicitly typed category tabs or cells.
+- **Agent identity:** Use yellow/orange for Claude, white for Codex, blue for Gemini and Antigravity, and green for Nori. Apply identity colors only to explicitly typed category tabs or cells. The status block uses Handroll's Claude orange (`#ff9e64`) on the agent name only; supporting model, effort, and priority text stays in the default foreground.
 
 # Avoid
 

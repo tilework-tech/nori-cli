@@ -3,7 +3,7 @@ source: tui-components/examples/status_card_storybook/e2e.rs
 ---
 │                                                                                                                        │
 │ Status card specimen                                                                                                   │
-│ Background: Auto (derived) · Labels: plain · Green: Prompt marker                                                      │
+│ Background: None · Labels: plain · Green: Prompt marker                                                                │
 │ Content: Summary · Density: Compact                                                                                    │
 │   › Nori CLI v0.1.0                                                                                                    │
 │                                                                                                                        │

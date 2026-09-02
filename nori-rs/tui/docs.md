@@ -712,18 +712,24 @@ into `SessionInfoState`, so the session title keeps reaching the footer and the
 
 #### Status card
 
-`/status` renders the bordered session card (`NoriSessionHeaderCell`,
-`@/nori-rs/tui/src/nori/session_header/`) as a by-default superset of the
-footer's information categories, independent of the user's footer configuration:
+The startup status block is an unbordered two-row summary beneath a green
+prompt marker: system context on one row and agent identity on the next.
+`/status` uses the same compact, unshaded definition-list grammar with plain
+labels and a two-cell label/value gutter, expanding it into a superset of the
+footer's information categories independent of the user's footer configuration:
 directory, session id (the conversation id, shown for every agent — cloud
 sessions append the broker title), agent, skillset (with detected skillsets
 version), approvals, ACP mode, a git row (branch / worktree / +added −removed /
-untracked), instruction files, a single consolidated context row (`% left
-(used / window)`), and cumulative token usage. The footer-derived values are
+untracked), a single consolidated context row (`% left (used / window)`), and
+cumulative token usage. Local full status also outlines every active instruction
+file with its token count; cloud status omits this local discovery because it
+does not describe the remote agent's context. Only the agent name receives its
+provider identity color; model, effort, and priority metadata remain in the
+terminal foreground. The footer-derived values are
 pulled in one shot via `ChatComposer::status_card_info()` (a `StatusCardInfo`
 built from `footer_props()`); the aligned row helpers and the git/context
 formatting live in `@/nori-rs/tui/src/nori/session_header/status_card.rs`. After a
-branch-at-head fork the card also shows a `forked from:` row (the parent
+branch-at-head fork the block also shows a `Forked from` row (the parent
 conversation id): the harness emits `NoriEvent::SessionForked` when it forks the
 transcript, and `on_session_forked` (`@/nori-rs/tui/src/chatwidget/event_handlers.rs`)
 updates `conversation_id`, records `forked_from`, and drops a copy-pasteable

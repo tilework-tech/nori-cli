@@ -188,22 +188,25 @@ fn test_startup_shows_nori_banner() {
     let contents = session.screen_contents();
 
     // Verify Nori branding elements are present
-    // The ASCII art banner uses special characters like |_| and \_ to spell NORI
-    // so we check for the unique pattern from the first line of the banner
     assert!(
         contents.contains("Nori CLI v0"),
         "Expected NORI header, but got: {}",
         contents
     );
 
-    // Extract the entire boxed header (from line after top border through bottom border)
+    // Extract the compact startup status block from its marker through the
+    // agent summary row. It intentionally has no border or background.
     let lines: Vec<&str> = contents.lines().collect();
-    let bottom_border_idx = lines
+    let header_start = lines
         .iter()
-        .position(|l| l.contains("╰──"))
-        .expect("Should find bottom border");
-    // Slice from line 1 (after top border) through bottom border (inclusive)
-    let header_lines = &lines[1..=bottom_border_idx];
+        .position(|line| line.contains("› Nori CLI"))
+        .expect("Should find status block heading");
+    let header_end = lines[header_start..]
+        .iter()
+        .position(|line| line.trim_start().starts_with("Agent "))
+        .map(|offset| header_start + offset)
+        .expect("Should find agent summary row");
+    let header_lines = &lines[header_start..=header_end];
     assert_snapshot!(
         "startup_shows_nori_banner",
         normalize_for_snapshot(header_lines.join("\n"))
