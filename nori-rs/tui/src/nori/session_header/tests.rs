@@ -156,8 +156,8 @@ fn nori_header_renders_instruction_files() {
 
     // Should show instruction files section
     assert!(
-        rendered.contains("Instruction Files"),
-        "Should show 'Instruction Files' section header"
+        rendered.contains("Instructions"),
+        "Should show the Instructions row"
     );
 }
 
@@ -179,16 +179,56 @@ fn nori_header_renders_correctly() {
 
     // Should contain directory
     assert!(
-        rendered.contains("directory:"),
+        rendered.contains("Directory"),
         "Should show directory label"
     );
 
     // Should contain agent
-    assert!(rendered.contains("agent:"), "Should show agent label");
+    assert!(rendered.contains("Agent"), "Should show agent label");
     assert!(rendered.contains("test-agent"), "Should show agent name");
 
     // Should contain skillset
-    assert!(rendered.contains("skillset:"), "Should show skillset label");
+    assert!(rendered.contains("Skillset"), "Should show skillset label");
+}
+
+#[test]
+#[allow(clippy::disallowed_methods)]
+fn status_uses_prompt_accent_plain_labels_and_orange_agent_name() {
+    let cell = NoriSessionHeaderCell {
+        version: "test",
+        agent: "claude-code".to_string(),
+        directory: PathBuf::from("/tmp/test"),
+        skillset: Some("test-skillset".to_string()),
+        instruction_files: Vec::new(),
+        display_mode: DisplayMode::Full,
+        prompt_summary: None,
+        approval_mode_label: None,
+        token_breakdown: None,
+        status_info: StatusCardInfo::default(),
+        conversation_id: None,
+        forked_from: None,
+        cloud_session: None,
+    };
+
+    let lines = cell.display_lines(80);
+    assert_eq!(lines[0].spans[0].content, "  › ");
+    assert_eq!(lines[0].spans[0].style.fg, Some(Color::Green));
+    let directory = lines
+        .iter()
+        .find(|line| line.to_string().contains("Directory"))
+        .expect("Directory row");
+    assert!(directory.to_string().starts_with("  Directory    "));
+    assert!(!directory.to_string().contains(':'));
+    let agent = lines
+        .iter()
+        .find(|line| line.to_string().contains("claude-code"))
+        .expect("Agent row");
+    let agent_name = agent
+        .spans
+        .iter()
+        .find(|span| span.content == "claude-code")
+        .expect("agent name span");
+    assert_eq!(agent_name.style.fg, Some(Color::Rgb(255, 158, 100)));
 }
 
 #[test]
@@ -325,11 +365,11 @@ fn nori_status_output_shows_status_command_and_nori_branding() {
 
     // Should show directory and agent info
     assert!(
-        rendered.contains("directory:"),
+        rendered.contains("Directory"),
         "Status output should show directory"
     );
     assert!(
-        rendered.contains("agent:"),
+        rendered.contains("Agent"),
         "Status output should show agent"
     );
     assert!(
@@ -670,10 +710,10 @@ fn header_renders_instruction_files_section() {
     let lines = cell.display_lines(80);
     let rendered = render_lines(&lines).join("\n");
 
-    // Should have "Instruction Files" section header
+    // Should have an Instructions row.
     assert!(
-        rendered.contains("Instruction Files"),
-        "Should show 'Instruction Files' section header"
+        rendered.contains("Instructions"),
+        "Should show the Instructions row"
     );
 
     // Should show file paths
@@ -692,8 +732,11 @@ fn header_renders_instruction_files_section() {
         "Should show token count for second active file"
     );
 
-    // Should show total line
-    assert!(rendered.contains("total"), "Should show total line");
+    // Should show the loaded-file summary line.
+    assert!(
+        rendered.contains("2 files"),
+        "Should show loaded-file count"
+    );
     assert!(
         rendered.contains("~1,500 tokens"),
         "Should show combined total"
@@ -1025,8 +1068,8 @@ fn status_card_with_task_summary_renders_summary_at_top() {
 
     // Should contain the task summary
     assert!(
-        rendered.contains("Task:"),
-        "Status card should show 'Task:' label when summary is provided"
+        rendered.contains("Task"),
+        "Status card should show the Task label when summary is provided"
     );
     assert!(
         rendered.contains("Fix authentication bug"),
@@ -1071,7 +1114,7 @@ fn status_card_with_tokens_renders_tokens_section() {
     );
     // Should contain context window info
     assert!(
-        rendered.contains("Context:"),
+        rendered.contains("Context"),
         "Status card should show context window usage"
     );
     // 27% used is rendered as its complement: 73% left.
@@ -1101,8 +1144,8 @@ fn status_card_with_approval_mode_renders_approval() {
 
     // Should contain the approval mode
     assert!(
-        rendered.contains("approvals:"),
-        "Status card should show 'approvals:' label when approval mode is provided"
+        rendered.contains("Approvals"),
+        "Status card should show the Approvals label when approval mode is provided"
     );
     assert!(
         rendered.contains("Agent"),
@@ -1130,8 +1173,8 @@ fn status_card_without_optional_fields_renders_base_only() {
 
     // Should NOT contain optional sections
     assert!(
-        !rendered.contains("Task:"),
-        "Status card should NOT show 'Task:' when no summary provided"
+        !rendered.contains("Task"),
+        "Status card should not show Task when no summary is provided"
     );
     assert!(
         !rendered.contains("Tokens"),
@@ -1143,10 +1186,10 @@ fn status_card_without_optional_fields_renders_base_only() {
         "Status card should show Nori CLI title"
     );
     assert!(
-        rendered.contains("directory:"),
+        rendered.contains("Directory"),
         "Status card should show directory"
     );
-    assert!(rendered.contains("agent:"), "Status card should show agent");
+    assert!(rendered.contains("Agent"), "Status card should show agent");
 }
 
 #[test]
@@ -1169,10 +1212,10 @@ fn status_card_truncates_long_task_summary() {
     let lines = status_output.display_lines(80);
     let rendered = render_lines(&lines).join("\n");
 
-    // Should contain Task: label
+    // Should contain the Task label.
     assert!(
-        rendered.contains("Task:"),
-        "Status card should show 'Task:' label"
+        rendered.contains("Task"),
+        "Status card should show the Task label"
     );
     // The full long summary should NOT appear (it should be truncated)
     assert!(
@@ -1241,8 +1284,8 @@ fn truncate_summary_handles_multibyte_utf8() {
 
 #[test]
 fn context_window_percent_renders_without_token_breakdown() {
-    // context_window_percent should render under the Tokens header
-    // even when token_breakdown is None
+    // context_window_percent should render on its own row even when
+    // token_breakdown is None.
     let cell = NoriSessionHeaderCell {
         version: "test",
         agent: "test-agent".to_string(),
@@ -1266,8 +1309,8 @@ fn context_window_percent_renders_without_token_breakdown() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("Tokens"),
-        "Should show 'Tokens' section header when context_window_percent is set: {rendered}"
+        rendered.contains("Context"),
+        "Should show Context: {rendered}"
     );
     // 42% used is rendered as its complement: 58% left.
     assert!(
@@ -1339,8 +1382,8 @@ fn status_card_full_snapshot() {
 
 #[test]
 fn status_card_local_session_shows_conversation_id_and_directory() {
-    // Every agent (including a local, non-cloud session) shows the `session:`
-    // line naming the conversation id, alongside the `directory:` line.
+    // Every agent (including a local, non-cloud session) shows the Session
+    // row naming the conversation id, alongside Directory.
     let conversation_id =
         nori_harness::ConversationId::from_string("12345678-90ab-cdef-1234-567890abcdef")
             .expect("valid conversation id");
@@ -1360,23 +1403,23 @@ fn status_card_local_session_shows_conversation_id_and_directory() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("session:"),
-        "local status card must show a 'session:' line, got:\n{rendered}"
+        rendered.contains("Session"),
+        "local status card must show a Session row, got:\n{rendered}"
     );
     assert!(
         rendered.contains("12345678-90ab-cdef-1234-567890abcdef"),
         "local status card session line must show the conversation id, got:\n{rendered}"
     );
     assert!(
-        rendered.contains("directory:"),
-        "local status card must still show the 'directory:' line, got:\n{rendered}"
+        rendered.contains("Directory"),
+        "local status card must still show the Directory row, got:\n{rendered}"
     );
 }
 
 #[test]
 fn status_card_renders_forked_from_row() {
-    // A forked session shows BOTH the new session's `session:` line and a
-    // `forked from:` line naming the parent conversation id it branched off.
+    // A forked session shows both the new Session row and a Forked from row
+    // naming the parent conversation id it branched off.
     let conversation_id =
         nori_harness::ConversationId::from_string("11111111-1111-1111-1111-111111111111")
             .expect("valid conversation id");
@@ -1399,16 +1442,16 @@ fn status_card_renders_forked_from_row() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("session:"),
-        "forked status card must show a 'session:' line, got:\n{rendered}"
+        rendered.contains("Session"),
+        "forked status card must show a Session row, got:\n{rendered}"
     );
     assert!(
         rendered.contains("11111111-1111-1111-1111-111111111111"),
         "forked status card session line must show the new conversation id, got:\n{rendered}"
     );
     assert!(
-        rendered.contains("forked from:"),
-        "forked status card must show a 'forked from:' line, got:\n{rendered}"
+        rendered.contains("Forked from"),
+        "forked status card must show a Forked from row, got:\n{rendered}"
     );
     assert!(
         rendered.contains("22222222-2222-2222-2222-222222222222"),
@@ -1442,8 +1485,8 @@ fn status_card_renders_git_branch_worktree_and_stats_row() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("git:"),
-        "status card must show a 'git:' row when a branch is known, got:\n{rendered}"
+        rendered.contains("Git"),
+        "status card must show a Git row when a branch is known, got:\n{rendered}"
     );
     assert!(
         rendered.contains("feat/status-card"),
@@ -1484,8 +1527,8 @@ fn status_card_renders_mode_row_when_acp_mode_present() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("mode:"),
-        "status card must show a 'mode:' row when an ACP mode label is present, got:\n{rendered}"
+        rendered.contains("Mode"),
+        "status card must show a Mode row when an ACP mode label is present, got:\n{rendered}"
     );
     assert!(
         rendered.contains("Plan"),
@@ -1531,7 +1574,7 @@ fn status_card_renders_consolidated_context_row() {
     );
     // Consolidated: no separate remaining/used-only rows.
     assert_eq!(
-        rendered.matches("Context:").count(),
+        rendered.matches("Context").count(),
         1,
         "context should render as a single row, got:\n{rendered}"
     );
@@ -1563,8 +1606,8 @@ fn status_card_skillset_row_includes_version() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("skillset:"),
-        "status card must show a 'skillset:' row, got:\n{rendered}"
+        rendered.contains("Skillset"),
+        "status card must show a Skillset row, got:\n{rendered}"
     );
     assert!(
         rendered.contains("senior-swe (Skillsets v1.2.3)"),
@@ -1603,7 +1646,7 @@ fn sample_instruction_files() -> Vec<InstructionFile> {
 }
 
 #[test]
-fn compact_mode_hides_inactive_files() {
+fn compact_mode_uses_summary_without_instruction_files() {
     let cell = NoriSessionHeaderCell {
         version: "test",
         agent: "claude-code".to_string(),
@@ -1623,25 +1666,16 @@ fn compact_mode_hides_inactive_files() {
     let lines = cell.display_lines(80);
     let rendered = render_lines(&lines).join("\n");
 
-    // Should show active files
     assert!(
-        rendered.contains(".claude/CLAUDE.md"),
-        "Compact mode should show active file .claude/CLAUDE.md: {rendered}"
+        !rendered.contains("CLAUDE.md") && !rendered.contains("AGENTS.md"),
+        "Compact mode should omit the instruction outline: {rendered}"
     );
-    assert!(
-        rendered.contains("project/CLAUDE.md"),
-        "Compact mode should show active file project/CLAUDE.md: {rendered}"
-    );
-
-    // Should NOT show inactive files
-    assert!(
-        !rendered.contains("AGENTS.md"),
-        "Compact mode should hide inactive AGENTS.md: {rendered}"
-    );
+    assert!(rendered.contains("System"));
+    assert!(rendered.contains("Agent"));
 }
 
 #[test]
-fn compact_mode_hides_per_file_token_counts() {
+fn compact_mode_omits_instruction_token_counts() {
     let cell = NoriSessionHeaderCell {
         version: "test",
         agent: "claude-code".to_string(),
@@ -1661,25 +1695,18 @@ fn compact_mode_hides_per_file_token_counts() {
     let lines = cell.display_lines(80);
     let rendered = render_lines(&lines).join("\n");
 
-    // Should NOT show per-file token counts
     assert!(
         !rendered.contains("~1,200 tokens"),
-        "Compact mode should not show per-file token counts: {rendered}"
+        "Compact mode should not show instruction token counts: {rendered}"
     );
     assert!(
         !rendered.contains("~800 tokens"),
-        "Compact mode should not show per-file token counts: {rendered}"
-    );
-
-    // Should still show total
-    assert!(
-        rendered.contains("~2,000 tokens"),
-        "Compact mode should still show total token count: {rendered}"
+        "Compact mode should not show instruction token counts: {rendered}"
     );
 }
 
 #[test]
-fn full_mode_shows_inactive_files_and_per_file_counts() {
+fn full_mode_outlines_loaded_files_and_per_file_counts() {
     let cell = NoriSessionHeaderCell {
         version: "test",
         agent: "claude-code".to_string(),
@@ -1699,10 +1726,10 @@ fn full_mode_shows_inactive_files_and_per_file_counts() {
     let lines = cell.display_lines(80);
     let rendered = render_lines(&lines).join("\n");
 
-    // Should show inactive files
+    // Only files loaded by the active agent are part of its context outline.
     assert!(
-        rendered.contains("AGENTS.md"),
-        "Full mode should show inactive AGENTS.md: {rendered}"
+        !rendered.contains("AGENTS.md"),
+        "Full mode should hide inactive AGENTS.md: {rendered}"
     );
 
     // Should show per-file token counts
@@ -2150,9 +2177,9 @@ fn discover_managed_policy_inactive_for_gemini() {
 
 #[test]
 fn status_card_with_cloud_session_shows_session_and_directory() {
-    // The `/status` card is now a superset: it shows BOTH the `session:` line
-    // (the conversation id, with the broker title in parens on a cloud session)
-    // AND the local `directory:` line. The session value is the conversation id,
+    // The `/status` block shows both the Session row (the conversation id, with
+    // the broker title in parens on a cloud session) and the local Directory.
+    // The session value is the conversation id,
     // not the friendly cloud id.
     let conversation_id =
         nori_harness::ConversationId::from_string("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -2176,8 +2203,8 @@ fn status_card_with_cloud_session_shows_session_and_directory() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("session:"),
-        "cloud status card must show a 'session:' line, got:\n{rendered}"
+        rendered.contains("Session"),
+        "cloud status block must show a Session row, got:\n{rendered}"
     );
     assert!(
         rendered.contains("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
@@ -2188,15 +2215,19 @@ fn status_card_with_cloud_session_shows_session_and_directory() {
         "cloud status card must name the broker title when known, got:\n{rendered}"
     );
     assert!(
-        rendered.contains("directory:") && rendered.contains("local-only-checkout"),
-        "cloud status card must now also show the local directory, got:\n{rendered}"
+        rendered.contains("Directory") && rendered.contains("local-only-checkout"),
+        "cloud status block must also show the local directory, got:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("Instructions"),
+        "cloud status must not describe locally discovered instruction files: {rendered}"
     );
 }
 
 #[test]
 fn welcome_card_with_cloud_session_shows_session_line_not_local_cwd() {
     // The session-start welcome card (compact mode) must, on a cloud session,
-    // show the cloud session identity instead of the misleading local cwd.
+    // summarize the cloud session identity instead of the misleading local cwd.
     let cell = NoriSessionHeaderCell {
         version: "0.1.0",
         agent: "claude-sonnet".to_string(),
@@ -2220,8 +2251,8 @@ fn welcome_card_with_cloud_session_shows_session_line_not_local_cwd() {
     let rendered = render_lines(&lines).join("\n");
 
     assert!(
-        rendered.contains("session:"),
-        "cloud welcome card must show a 'session:' line, got:\n{rendered}"
+        rendered.contains("System"),
+        "cloud welcome summary must show the System row, got:\n{rendered}"
     );
     assert!(
         rendered.contains("nori-fast-kazunoko-aac8"),

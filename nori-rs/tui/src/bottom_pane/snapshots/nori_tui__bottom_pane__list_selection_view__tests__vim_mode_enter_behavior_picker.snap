@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/list_selection_view.rs
 expression: "render_lines_with_width(&view, 80)"
 ---
                                                                                 
-  Vim Mode                                                                      
+  Vim mode                                                                      
   Choose Enter key behavior for vim mode                                        
                                                                                 
   1. Submit in NORMAL         Enter inserts a newline in INSERT mode, submits   

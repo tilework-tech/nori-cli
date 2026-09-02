@@ -125,6 +125,8 @@ pub fn resume_session_component_picker_params(
         primary_column: "session".to_string(),
         detail_column: Some("preview".to_string()),
         density: PickerDensity::Compact,
+        show_title: true,
+        show_details: true,
         keep_open: std::collections::BTreeSet::new(),
         footer_hints: None,
     }
@@ -317,6 +319,8 @@ pub fn acp_resume_session_component_picker_params(
         primary_column: "title".to_string(),
         detail_column: None,
         density: PickerDensity::Compact,
+        show_title: false,
+        show_details: false,
         keep_open: std::collections::BTreeSet::new(),
         footer_hints: None,
     }
@@ -514,6 +518,8 @@ mod tests {
                 frame.render_widget(
                     Picker::new(&params.state)
                         .density(params.density)
+                        .show_title(params.show_title)
+                        .show_details(params.show_details)
                         .fullscreen_selection_rails(true),
                     frame.area(),
                 )
@@ -592,7 +598,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["title", "source", "cwd", "updated", "status"]
         );
-        assert_snapshot!(component_picker_snapshot(&params, 124, 15));
+        assert_snapshot!(component_picker_snapshot(&params, 124, 9));
     }
 
     #[test]
@@ -662,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn mixed_resume_picker_hides_columns_that_do_not_fit_beside_details() {
+    fn mixed_resume_picker_keeps_table_columns_instead_of_opening_details() {
         let params = acp_resume_session_component_picker_params(vec![acp_session_info(
             "local-session",
             "/workspace/nori/cli",
@@ -672,9 +678,9 @@ mod tests {
         )]);
 
         let rendered = component_picker_snapshot(&params, 124, 12);
-        assert!(!rendered.contains("Turn status"));
+        assert!(rendered.contains("Turn status"));
         assert!(rendered.contains("Working direc"));
-        assert!(rendered.contains("Details"));
+        assert!(!rendered.contains("Details"));
     }
 
     #[test]

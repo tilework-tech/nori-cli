@@ -392,8 +392,13 @@ fn local_and_slash_commands_do_not_implicitly_activate() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("/status", TIMEOUT)
+        .wait_for_text("Directory", TIMEOUT)
         .expect("the local status command should render before activation");
+    std::thread::sleep(tui_pty_e2e::TIMEOUT_PRESNAPSHOT);
+    insta::assert_snapshot!(
+        "local_status_block_before_activation",
+        tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
+    );
     session.send_str("!pwd").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
@@ -424,8 +429,13 @@ fn sessionless_policy_change_is_refreshed_before_activation() {
     std::thread::sleep(TIMEOUT_INPUT);
     session.send_key(Key::Enter).unwrap();
     session
-        .wait_for_text("Select Approval Mode", TIMEOUT)
+        .wait_for_text("Select approval mode", TIMEOUT)
         .expect("approval picker");
+    std::thread::sleep(tui_pty_e2e::TIMEOUT_PRESNAPSHOT);
+    insta::assert_snapshot!(
+        "sessionless_approval_picker",
+        tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
+    );
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
     session

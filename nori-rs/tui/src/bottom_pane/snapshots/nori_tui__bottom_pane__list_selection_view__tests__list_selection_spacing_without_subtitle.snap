@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/list_selection_view.rs
 expression: render_lines(&view)
 ---
                                                 
-  Select Approval Mode                          
+  Select approval mode                          
                                                 
 › 1. Read Only (current)  Nori can read files   
   2. Full Access          Nori can edit files   

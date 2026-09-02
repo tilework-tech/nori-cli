@@ -221,12 +221,12 @@ pub fn skillset_picker_params(
         // Per-session is on but there is no session worktree to isolate into
         // (auto-worktree is off), so the skillset installs globally. Say so
         // rather than silently doing a home install.
-        (None, true) => "No session worktree — installing to your global skillset".to_string(),
+        (None, true) => "No session worktree - installing to your global skillset".to_string(),
         (None, false) => "Install a skillset to customize Nori's capabilities".to_string(),
     };
 
     SelectionViewParams {
-        title: Some("Select Skillset".to_string()),
+        title: Some("Select skillset".to_string()),
         subtitle: Some(subtitle),
         footer_hint: None,
         items,
@@ -340,7 +340,7 @@ mod tests {
         let params = skillset_picker_params(names, None, None, false, false);
 
         assert!(params.title.is_some());
-        assert!(params.title.unwrap().contains("Skillset"));
+        assert!(params.title.unwrap().contains("skillset"));
         assert_eq!(params.items.len(), 3);
         assert_eq!(params.items[0].name, "rust-dev");
         assert_eq!(params.items[1].name, "python-ml");

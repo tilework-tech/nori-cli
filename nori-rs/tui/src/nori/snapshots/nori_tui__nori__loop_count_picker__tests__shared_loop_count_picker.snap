@@ -2,7 +2,7 @@
 source: tui/src/nori/loop_count_picker.rs
 expression: "text.lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
 ---
-  Loop Count
+  Loop count
   Select number of loop iterations
 
    1. Disabled

@@ -6,6 +6,7 @@ use crossterm::event::KeyEvent;
 use nori_tui_components::MenuDensity;
 use nori_tui_components::MenuItem;
 use nori_tui_components::MenuOutcome;
+use nori_tui_components::MenuPlacement;
 use nori_tui_components::MenuRowPattern;
 use nori_tui_components::MenuState;
 use nori_tui_components::OverlayMenu;
@@ -30,6 +31,10 @@ pub(crate) struct ComponentOverlayMenuView {
     on_dismiss: Option<SelectionAction>,
     app_event_tx: AppEventSender,
     complete: bool,
+    max_width: u16,
+    density: MenuDensity,
+    row_pattern: MenuRowPattern,
+    placement: MenuPlacement,
 }
 
 impl ComponentOverlayMenuView {
@@ -92,6 +97,10 @@ impl ComponentOverlayMenuView {
             on_dismiss: params.on_dismiss,
             app_event_tx,
             complete: false,
+            max_width: params.menu_max_width,
+            density: params.menu_density,
+            row_pattern: params.menu_row_pattern,
+            placement: params.menu_placement,
         }
     }
 
@@ -150,9 +159,10 @@ impl Renderable for ComponentOverlayMenuView {
     fn render(&self, area: Rect, buffer: &mut Buffer) {
         let mut menu = OverlayMenu::new(self.title.clone())
             .theme(crate::style::component_theme())
-            .max_width(76)
-            .density(MenuDensity::Dense)
-            .row_pattern(MenuRowPattern::Zebra)
+            .max_width(self.max_width)
+            .density(self.density)
+            .row_pattern(self.row_pattern)
+            .placement(self.placement)
             .fullscreen_selection_rails(true)
             .key_hints(crate::overlay_menu::default_hints());
         if let Some(subtitle) = &self.subtitle {

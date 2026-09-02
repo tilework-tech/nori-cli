@@ -83,7 +83,7 @@ pub fn fork_picker_params(
         "Select a message to rewind to"
     };
     SelectionViewParams {
-        title: Some("Fork Conversation".to_string()),
+        title: Some("Fork conversation".to_string()),
         subtitle: Some(subtitle.to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -180,7 +180,7 @@ mod tests {
         let messages = vec![(0, "Hello".to_string())];
         let params = fork_picker_params(messages, true, tx);
 
-        assert_eq!(params.title.as_deref(), Some("Fork Conversation"));
+        assert_eq!(params.title.as_deref(), Some("Fork conversation"));
         assert!(params.subtitle.is_some());
     }
 

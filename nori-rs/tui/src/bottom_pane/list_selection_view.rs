@@ -3,7 +3,10 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use itertools::Itertools as _;
 use nori_tui_components::KeyHint;
+use nori_tui_components::MenuDensity;
 use nori_tui_components::MenuItemTone;
+use nori_tui_components::MenuPlacement;
+use nori_tui_components::MenuRowPattern;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -76,6 +79,10 @@ pub(crate) struct SelectionViewParams {
     /// Optional callback fired when Shift-Tab is pressed while the picker is open.
     pub on_shift_tab: Option<SelectionAction>,
     pub presentation: SelectionPresentation,
+    pub menu_max_width: u16,
+    pub menu_density: MenuDensity,
+    pub menu_row_pattern: MenuRowPattern,
+    pub menu_placement: MenuPlacement,
 }
 
 impl SelectionViewParams {
@@ -84,8 +91,18 @@ impl SelectionViewParams {
         self
     }
 
-    pub(crate) fn menu(mut self) -> Self {
+    pub(crate) fn menu(
+        mut self,
+        max_width: u16,
+        density: MenuDensity,
+        row_pattern: MenuRowPattern,
+        placement: MenuPlacement,
+    ) -> Self {
         self.presentation = SelectionPresentation::Menu;
+        self.menu_max_width = max_width;
+        self.menu_density = density;
+        self.menu_row_pattern = row_pattern;
+        self.menu_placement = placement;
         self
     }
 }
@@ -106,6 +123,10 @@ impl Default for SelectionViewParams {
             on_dismiss: None,
             on_shift_tab: None,
             presentation: SelectionPresentation::List,
+            menu_max_width: 58,
+            menu_density: MenuDensity::Normal,
+            menu_row_pattern: MenuRowPattern::Plain,
+            menu_placement: MenuPlacement::Centered,
         }
     }
 }
@@ -765,7 +786,7 @@ mod tests {
         ];
         ListSelectionView::new(
             SelectionViewParams {
-                title: Some("Select Approval Mode".to_string()),
+                title: Some("Select approval mode".to_string()),
                 subtitle: subtitle.map(str::to_string),
                 footer_hint: Some(standard_popup_hint_line()),
                 items,
@@ -840,7 +861,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let view = ListSelectionView::new(
             SelectionViewParams {
-                title: Some("Select Agent".to_string()),
+                title: Some("Select agent".to_string()),
                 footer_hint: Some(Line::from("Press esc to dismiss.")),
                 footer_hint_right: Some(Line::from("Recording: ○ off  Shift-Tab to enable")),
                 items: vec![SelectionItem {
@@ -903,7 +924,7 @@ mod tests {
         }];
         let mut view = ListSelectionView::new(
             SelectionViewParams {
-                title: Some("Select Approval Mode".to_string()),
+                title: Some("Select approval mode".to_string()),
                 footer_hint: Some(standard_popup_hint_line()),
                 items,
                 is_searchable: true,
@@ -991,7 +1012,7 @@ mod tests {
         ];
         let view = ListSelectionView::new(
             SelectionViewParams {
-                title: Some("Select Model and Effort".to_string()),
+                title: Some("Select model and effort".to_string()),
                 items,
                 ..Default::default()
             },
@@ -1138,7 +1159,7 @@ mod tests {
         ];
         let view = ListSelectionView::new(
             SelectionViewParams {
-                title: Some("Select Model and Effort".to_string()),
+                title: Some("Select model and effort".to_string()),
                 items,
                 ..Default::default()
             },

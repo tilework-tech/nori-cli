@@ -3,7 +3,7 @@ source: tui/src/bottom_pane/mod.rs
 expression: rendered
 ---
                                                                                                     
-  Select Agent                                                                                      
+  Select agent                                                                                      
   Creates new conversation with selected agent (history not preserved)                              
                                                                                                     
   ▏1. Mock ACP (current)                                                                         ▕  

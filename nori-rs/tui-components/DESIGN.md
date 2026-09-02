@@ -17,7 +17,9 @@ as they move into this crate.
 4. Place page content inside a consistent two-cell horizontal inset.
 5. Use bold, left-aligned, sentence-case titles in the terminal foreground.
    Titles establish hierarchy and never consume a functional accent color.
-6. Keep context-sensitive key hints centered on the last row.
+6. Keep context-sensitive key hints left-aligned and, when the full keymap
+   needs more room, split them into two deliberate rows instead of centering
+   or distributing them across the viewport.
 
 ## Color and emphasis
 
@@ -83,6 +85,13 @@ replace the pointer in single-select mode, while toggle and multi-select modes
 retain `●` and `○` to communicate checked state independently. The shared
 widget does not infer full-screen ownership from its rectangle.
 
+A status card may use a shaded background instead of a perimeter frame. Prefer
+a terminal-relative derived surface when true color and the terminal background
+are known. A consumer may opt into one documented ANSI fallback color when that
+information is unavailable, but must also offer an unshaded presentation; this
+is a deliberate status-card compatibility exception to rule 10, not a general
+surface fallback.
+
 ## Overlay menus
 
 An overlay menu is a bounded list of actions, not a picker with different
@@ -99,8 +108,8 @@ The reusable menu boundary is deliberately narrow:
   viewport position. `MenuOutcome` reports selection, activation, or
   cancellation through the caller's stable item key; it never dispatches an
   application event.
-- `OverlayMenu` receives a caller-owned `Rect`, centers a bounded surface
-  within that rectangle, and updates only the viewport bookkeeping needed to
+- `OverlayMenu` receives a caller-owned `Rect`, places a bounded surface
+  according to the caller's explicit presentation policy, and updates only the viewport bookkeeping needed to
   keep selection visible. It does not assume that the rectangle is the whole
   terminal.
 
@@ -133,10 +142,12 @@ enabled-item surfaces by logical item and can be combined with either density.
 
 Overlay menu layout responds to the caller's rectangle:
 
-- The centered surface is at most 58 cells wide by default and never exceeds
+- The surface is at most 58 cells wide by default and never exceeds
   the supplied rectangle. Normal density reserves a wider outer inset than
   Dense; constrained rectangles surrender that margin before truncating
-  primary labels. The title is retained whenever any content can render.
+  primary labels. Center short action menus; left-align long settings choices
+  so they do not float in the middle of wide terminals. The title is retained
+  whenever any content can render.
 - Supporting subtitles require at least 40 content cells and a height of 14
   rows. They disappear before labels or item descriptions when space is tight.
 - Descriptions wrap by Unicode display width to at most two rows. Structured
@@ -146,8 +157,9 @@ Overlay menu layout responds to the caller's rectangle:
 - Content-derived height is capped by the caller's height. When the list does
   not fit, the selected item remains visible and muted top or bottom overflow
   markers communicate that more items exist.
-- Key hints remain centered at the bottom of the surface and use at most two
-  rows. Their height is clamped to the content remaining below the title, so
+- Key hints remain left-aligned at the bottom of the surface and use at most
+  two deliberate rows. Their height is clamped to the content remaining below
+  the title, so
   even tiny caller rectangles with non-zero origins stay within bounds.
   Header, list, and footer spacing compress before essential content is
   removed.
@@ -241,8 +253,14 @@ displayed number or character shortcuts to invoke actions. The example owns its
 terminal and event loop, adapts raw keys to domain-free actions, and uses
 production components only. Its Picker page opts into full-screen selection
 rails, while the Overlay menu cases include Dense and Dense Zebra presentations.
-These storybook choices demonstrate the APIs; production CLI adoption remains
-deferred. While Picker search is active, printable keys
+These storybook choices demonstrate the APIs now used by production Nori CLI
+picker and overlay surfaces. While Picker search is active, printable keys
 belong exclusively to the query: global page, quit, density, mode, and state
 shortcuts resume only after search deactivates, and Escape deactivates search
 before leaving the example.
+
+For the focused status-card decision specimen, run
+`cargo run -p nori-tui-components --example status_card_storybook`. It compares
+derived, ANSI-fallback, and unshaded surfaces; plain and colon label policies;
+green-accent placement; both densities; and summary versus full metadata. Its
+hints intentionally occupy two left-aligned rows.

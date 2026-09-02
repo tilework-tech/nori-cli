@@ -22,7 +22,7 @@ pub(crate) fn acp_session_config_picker_params(
 
     if supported.is_empty() {
         return SelectionViewParams {
-            title: Some("Session Config".to_string()),
+            title: Some("Session config".to_string()),
             subtitle: Some("No ACP session settings available".to_string()),
             footer_hint: Some(Line::from("Press esc to dismiss.")),
             items: vec![SelectionItem {
@@ -69,7 +69,7 @@ pub(crate) fn acp_session_config_picker_params(
         .collect();
 
     SelectionViewParams {
-        title: Some("Session Config".to_string()),
+        title: Some("Session config".to_string()),
         subtitle: Some("Select an ACP session setting to change".to_string()),
         footer_hint: Some(standard_popup_hint_line()),
         items,
@@ -389,7 +389,7 @@ mod tests {
     fn top_level_picker_shows_select_options_with_current_value() {
         let params = super::acp_session_config_picker_params(&[model_option()], None);
 
-        assert_eq!(params.title.as_deref(), Some("Session Config"));
+        assert_eq!(params.title.as_deref(), Some("Session config"));
         assert_eq!(params.items.len(), 1);
         assert_eq!(params.items[0].name, "Model (Mock Default Model)");
         assert_eq!(params.initial_selected_idx, Some(0));
@@ -498,7 +498,7 @@ mod tests {
     fn empty_picker_explains_when_agent_exposes_no_supported_options() {
         let params = super::acp_session_config_picker_params(&[], None);
 
-        assert_eq!(params.title.as_deref(), Some("Session Config"));
+        assert_eq!(params.title.as_deref(), Some("Session config"));
         assert_eq!(params.items.len(), 1);
         assert!(params.items[0].actions.is_empty());
     }

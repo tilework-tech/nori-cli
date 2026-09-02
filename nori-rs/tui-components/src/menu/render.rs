@@ -17,6 +17,7 @@ use unicode_width::UnicodeWidthStr;
 use super::MenuDensity;
 use super::MenuItem;
 use super::MenuItemTone;
+use super::MenuPlacement;
 use super::MenuRowPattern;
 use super::MenuState;
 use super::layout::truncate;
@@ -25,7 +26,7 @@ use crate::KeyHint;
 use crate::KeyHints;
 use crate::Theme;
 
-/// Centered presentation for a bounded action menu.
+/// Configurable presentation for a bounded action menu.
 ///
 /// The caller supplies the rectangle and owns terminal setup, input polling,
 /// raw-mode and alternate-screen lifecycle, render cadence, focus or modal
@@ -38,6 +39,7 @@ pub struct OverlayMenu<'a, K> {
     subtitle: Option<Cow<'a, str>>,
     theme: Theme,
     max_width: u16,
+    placement: MenuPlacement,
     backdrop: bool,
     fullscreen_selection_rails: bool,
     density: MenuDensity,
@@ -63,6 +65,7 @@ impl<'a, K> OverlayMenu<'a, K> {
             subtitle: None,
             theme: Theme::default(),
             max_width: 58,
+            placement: MenuPlacement::default(),
             backdrop: true,
             fullscreen_selection_rails: false,
             density: MenuDensity::default(),
@@ -91,6 +94,12 @@ impl<'a, K> OverlayMenu<'a, K> {
         self
     }
 
+    /// Sets the surface's horizontal placement inside the caller rectangle.
+    pub fn placement(mut self, placement: MenuPlacement) -> Self {
+        self.placement = placement;
+        self
+    }
+
     /// Enables or disables styling the caller-provided area as a backdrop.
     pub fn backdrop(mut self, backdrop: bool) -> Self {
         self.backdrop = backdrop;
@@ -116,7 +125,7 @@ impl<'a, K> OverlayMenu<'a, K> {
         self
     }
 
-    /// Adds centered hints to the bottom of the menu surface.
+    /// Adds left-aligned hints to the bottom of the menu surface.
     pub fn key_hints(mut self, hints: impl IntoIterator<Item = KeyHint<'a>>) -> Self {
         self.key_hints = hints.into_iter().collect();
         self
@@ -186,9 +195,14 @@ impl<K> StatefulWidget for OverlayMenu<'_, K> {
         let surface_height = desired_height
             .min(area.height.saturating_sub(vertical_margin * 2))
             .max(1);
-        let surface = Rect::new(
-            area.x
+        let surface_x = match self.placement {
+            MenuPlacement::Centered => area
+                .x
                 .saturating_add(area.width.saturating_sub(surface_width) / 2),
+            MenuPlacement::Left => area.x.saturating_add(outer_margin),
+        };
+        let surface = Rect::new(
+            surface_x,
             area.y
                 .saturating_add(area.height.saturating_sub(surface_height) / 2),
             surface_width.min(area.width),

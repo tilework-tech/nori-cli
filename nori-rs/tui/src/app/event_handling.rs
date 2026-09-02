@@ -502,7 +502,7 @@ impl App {
                         self.chat_widget
                             .add_error_message(format!("Couldn't prepare agent: {error}"));
                         self.chat_widget.add_info_message(
-                            "No session is active — /resume retries the picker, /new starts a \
+                            "No session is active - /resume retries the picker, /new starts a \
                              fresh session."
                                 .to_string(),
                             None,
@@ -1193,7 +1193,7 @@ impl App {
                     if self.persist_custom_default_model(&agent, &value).await {
                         self.chat_widget.add_info_message(
                             format!(
-                                "Saved '{value}' as the default model for {agent} — restarting the session to apply it."
+                                "Saved '{value}' as the default model for {agent} - restarting the session to apply it."
                             ),
                             None,
                         );

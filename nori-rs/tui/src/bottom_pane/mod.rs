@@ -1119,7 +1119,12 @@ mod tests {
                 initial_selected_idx: Some(1),
                 ..Default::default()
             }
-            .menu(),
+            .menu(
+                58,
+                nori_tui_components::MenuDensity::Normal,
+                nori_tui_components::MenuRowPattern::Plain,
+                nori_tui_components::MenuPlacement::Centered,
+            ),
         );
 
         assert!(
@@ -1191,6 +1196,8 @@ mod tests {
             primary_column: "session".to_string(),
             detail_column: None,
             density: PickerDensity::Compact,
+            show_title: true,
+            show_details: true,
             keep_open: std::collections::BTreeSet::new(),
             footer_hints: None,
         });
