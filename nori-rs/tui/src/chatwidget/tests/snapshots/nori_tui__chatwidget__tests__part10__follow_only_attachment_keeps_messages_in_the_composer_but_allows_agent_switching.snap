@@ -1,0 +1,6 @@
+---
+source: tui/src/chatwidget/tests/part10.rs
+assertion_line: 118
+expression: rendered
+---
+› [follow-only-draft.png 32x16]This must stay local

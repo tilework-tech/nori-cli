@@ -114,6 +114,19 @@ The application event loop matches `SessionEvent::Acp` and
   “Cloud connection lost. Reconnecting…” and “Cloud connection restored.”
   info entries instead of generic redacted metadata. They do not change turn
   ownership, replay ACP methods, or enter the session-info state reducer.
+- An initialize response with exact `_meta.nori.attachmentMode = "follow"`
+  marks the live attachment as follow-only. The chat widget keeps typing
+  enabled, but ordinary submission restores the text to the composer without
+  draining attachments or emitting a prompt or session action. Slash-command
+  dispatch remains active so `/agent`, `/new`, and `/resume` can leave the
+  attachment; local input handlers also run before a centralized user-message
+  guard suppresses every path that would submit an ACP prompt, including
+  prompt-generating commands and programmatic callers. Every later initialize
+  response recomputes this policy, so a missing, malformed, or different value
+  restores normal submission. This boundary lives in
+  [`event_handlers.rs`](src/chatwidget/event_handlers.rs) and
+  [`key_handling.rs`](src/chatwidget/key_handling.rs), with the ACP-bound guard
+  in [`user_input.rs`](src/chatwidget/user_input.rs).
 - ACP requests drive the permission overlay and retain their raw `RequestId`.
 - Initialize responses and prompt responses matching the active request update
   UI lifecycle. For prompt errors, the correlated `NoriEvent::RequestFailed`

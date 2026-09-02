@@ -254,6 +254,8 @@ pub(crate) struct ChatWidget {
     cloud_mode: bool,
     // Identity reported by the active agent during ACP initialization.
     session_agent_info: Option<nori_protocol::acp::v1::Implementation>,
+    /// Whether the live ACP attachment accepts observation but not prompts.
+    follow_only_attachment: bool,
     // Latest structured session metadata for status/footer consumers.
     session_info_state: crate::nori::session_info::SessionInfoState,
     // How much session-info metadata this build writes to the transcript.
