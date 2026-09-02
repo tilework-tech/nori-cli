@@ -1,0 +1,8 @@
+---
+source: tui/src/nori/session_header/status_card/tests.rs
+expression: "render(view, DisplayMode::Compact)"
+---
+  › Nori CLI v0.1.0
+
+  System       /home/user/project · Agent approvals · senior-swe
+  Agent        Claude · Opus 5 · xhigh · Plan · Fast mode

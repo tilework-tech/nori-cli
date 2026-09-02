@@ -7,10 +7,11 @@ expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents()
   › Nori CLI v0.0.0
 
   Directory    [TMP_DIR]
-  Agent        remote-handroll
   Skillset     (none)
   Approvals    Agent
   Git          ⎇ master !
+
+  Agent        Remote Handroll
 
   Instructions  ~/.claude/CLAUDE.md
 

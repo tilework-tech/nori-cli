@@ -357,6 +357,7 @@ impl AcpBackend {
                     transcript_path,
                     history_log_id: i64::try_from(history_log_id).unwrap_or(i64::MAX),
                     history_entry_count: i64::try_from(history_entry_count).unwrap_or(i64::MAX),
+                    config_options: backend.config_options(),
                 }),
             )))
             .await

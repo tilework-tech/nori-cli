@@ -122,5 +122,6 @@ fn make_chatwidget_manual_for_mode(
     (widget, event_rx, unused_rx)
 }
 
+mod agent_status;
 mod part10;
 mod part8;

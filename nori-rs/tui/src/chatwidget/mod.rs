@@ -54,6 +54,7 @@ use crate::slash_command::SlashCommand;
 use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
 pub(crate) mod agent;
+mod agent_status;
 pub(crate) use self::agent::HarnessHandle;
 use self::agent::spawn_acp_agent_resume;
 use self::agent::spawn_agent;
@@ -232,7 +233,14 @@ pub(crate) struct ChatWidget {
     /// backend teardown stalls. On cloud agents this exit is a detach — the
     /// session keeps running server-side.
     exiting: bool,
-    acp_config_option_snapshot: Option<crate::nori::session_config_history::SessionConfigSnapshot>,
+    /// The agent's advertised session configuration, in advertised order.
+    /// Authoritative for `/config`, the mode footer, the config history lines,
+    /// and the status card.
+    agent_config: crate::nori::agent_config_state::AgentConfigState,
+    /// The agent identity and configuration as rendered by the status views.
+    /// Shared with the welcome card so it fills in when the agent advertises
+    /// its configuration after the card was already written to history.
+    agent_status: crate::nori::session_header::AgentStatusHandle,
     acp_mode_config: Option<crate::nori::session_config_mode::AcpModeConfig>,
     acp_mode_config_generation: i64,
     // Session statistics tracking

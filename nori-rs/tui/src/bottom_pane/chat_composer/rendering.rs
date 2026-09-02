@@ -1,5 +1,9 @@
 use super::*;
 
+use crate::nori::session_header::ContextStatus;
+use crate::nori::session_header::GitStatus;
+use crate::nori::session_header::StatusFooterValues;
+
 impl ChatComposer {
     pub(super) fn layout_areas(&self, area: Rect) -> [Rect; 3] {
         let footer_props = self.footer_props();
@@ -146,22 +150,27 @@ impl ChatComposer {
 
     /// Status-relevant footer values for the `/status` card, so the card stays
     /// a superset of the footer's information categories.
-    pub(crate) fn status_card_info(&self) -> crate::nori::session_header::StatusCardInfo {
+    pub(crate) fn status_footer_values(&self) -> StatusFooterValues {
         let props = self.footer_props();
-        crate::nori::session_header::StatusCardInfo {
-            git_branch: props.git_branch,
-            is_worktree: props.is_worktree,
-            worktree_name: props.worktree_name,
-            git_lines_added: props.git_lines_added,
-            git_lines_removed: props.git_lines_removed,
-            git_has_untracked: props.git_has_untracked,
-            acp_mode_label: props.acp_mode_label,
+        StatusFooterValues {
+            git: GitStatus {
+                branch: props.git_branch,
+                is_worktree: props.is_worktree,
+                worktree_name: props.worktree_name,
+                lines_added: props.git_lines_added,
+                lines_removed: props.git_lines_removed,
+                has_untracked: props.git_has_untracked,
+            },
+            context: ContextStatus {
+                tokens: props.context_tokens,
+                window_tokens: props.context_window_tokens,
+                percent_used: props.context_window_percent,
+            },
             session_title: props.session_title,
+            prompt_summary: props.prompt_summary,
             nori_version: props.nori_version,
             nori_version_source: props.nori_version_source,
-            context_tokens: props.context_tokens,
-            context_window_tokens: props.context_window_tokens,
-            context_window_percent: props.context_window_percent,
+            token_breakdown: self.transcript_token_breakdown(),
         }
     }
 

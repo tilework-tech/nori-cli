@@ -1,0 +1,26 @@
+---
+source: tui/src/nori/session_header/status_card/tests.rs
+expression: "render(view, DisplayMode::Full)"
+---
+  › Nori CLI v0.1.0
+
+  Directory    /home/user/project
+  Session ID   11111111-2222-3333-4444-555555555555
+  Forked from  22222222-2222-2222-2222-222222222222
+  Title        Fix login flakes
+  Summary      Fix auth bug
+  Skillset     senior-swe (Skillsets v1.2.3)
+  Approvals    Agent
+  Git          ⎇ main !
+  Context      84% left (164K used / 1.00M)
+  Tokens       123K total (32.0K cached)
+
+  Agent        Claude
+               Model      Opus 5
+               Effort     xhigh
+               Mode       Plan
+               Fast mode  Off
+
+  Instructions  /home/user/.claude/CLAUDE.md                     ~2,950 tokens
+                /home/user/project/CLAUDE.md                     ~2,164 tokens
+                2 files · ~5,114 tokens

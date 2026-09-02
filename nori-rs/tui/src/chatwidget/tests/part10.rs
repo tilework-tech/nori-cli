@@ -348,6 +348,7 @@ fn session_started_event(acp_session_id: &str) -> nori_protocol::SessionEvent {
             transcript_path: None,
             history_log_id: 0,
             history_entry_count: 0,
+            config_options: Vec::new(),
         },
     ))
 }
@@ -552,7 +553,7 @@ fn stable_builds_drop_the_metadata_cell_but_keep_the_session_title() {
 
     assert_eq!(history_text(&mut rx), String::new());
     assert_eq!(
-        chat.bottom_pane.status_card_info().session_title,
+        chat.bottom_pane.status_footer_values().session_title,
         Some("Metadata work".to_string())
     );
 }
@@ -601,7 +602,7 @@ fn session_titles_are_bounded_and_stripped_of_control_characters() {
     );
 
     assert_eq!(
-        chat.bottom_pane.status_card_info().session_title,
+        chat.bottom_pane.status_footer_values().session_title,
         Some("Fix the login flake in the auth integration test…".to_string())
     );
 }

@@ -641,20 +641,10 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    /// Get the prompt summary for status card display.
-    pub(crate) fn prompt_summary(&self) -> Option<String> {
-        self.composer.prompt_summary()
-    }
-
-    /// Get the token breakdown from transcript location (for status card display).
-    pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_harness::TranscriptTokenUsage> {
-        self.composer.transcript_token_breakdown()
-    }
-
-    /// Footer-derived values (git, ACP mode, skillset version, context window)
+    /// Footer-derived values (git, context window, skillset version, titles)
     /// for the `/status` card.
-    pub(crate) fn status_card_info(&self) -> crate::nori::session_header::StatusCardInfo {
-        self.composer.status_card_info()
+    pub(crate) fn status_footer_values(&self) -> crate::nori::session_header::StatusFooterValues {
+        self.composer.status_footer_values()
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {

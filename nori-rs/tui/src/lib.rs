@@ -72,6 +72,8 @@ mod shimmer;
 mod slash_command;
 mod status;
 mod status_indicator_widget;
+#[cfg(feature = "storybook")]
+pub mod storybook;
 mod streaming;
 mod style;
 mod system_info;

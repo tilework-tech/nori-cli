@@ -3,6 +3,7 @@
 //! This module contains Nori-branded components that replace or extend
 //! the default Codex TUI behavior.
 
+pub(crate) mod agent_config_state;
 pub(crate) mod agent_mode_history;
 pub(crate) mod agent_picker;
 pub(crate) mod exit_message;
