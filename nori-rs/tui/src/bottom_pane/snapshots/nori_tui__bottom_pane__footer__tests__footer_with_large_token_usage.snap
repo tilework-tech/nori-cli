@@ -2,4 +2,4 @@
 source: tui/src/bottom_pane/footer.rs
 expression: terminal.backend()
 ---
-"  1.23M · Tokens: 1.23M total                                                   "
+"  Tokens: 1.23M total                                                      1.23M"

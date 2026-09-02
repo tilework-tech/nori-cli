@@ -293,10 +293,12 @@ fn test_trust_directory_saves_to_config() {
         .send_key(Key::Char('y'))
         .expect("Failed to send 'y' key");
 
-    // Step 5: Wait for the main prompt to appear (onboarding complete).
+    // Step 5: Wait for the main prompt to appear (onboarding complete). The
+    // idle footer no longer carries an approvals chip by default, so the trust
+    // screen giving way to the composer is the signal.
     session
         .wait_for(
-            |contents| contents.contains("›") && contents.contains("Approvals"),
+            |contents| contents.contains("›") && !contents.contains("You are running Nori in"),
             TIMEOUT,
         )
         .expect("Main prompt did not appear after trust selection");

@@ -945,30 +945,32 @@ fn test_footer_segment_default_order() {
 fn test_footer_segment_config_default_is_lean_subset() {
     let config = FooterSegmentConfig::default();
 
-    // Segments enabled by default: broadly useful or cheap-when-absent.
+    // Segments enabled by default: where you are, how much room is left, which
+    // mode is active, plus self-hiding state that only appears when it is true.
     let expected_enabled = [
-        FooterSegment::SessionTitle,
         FooterSegment::Context,
         FooterSegment::GitBranch,
-        FooterSegment::ApprovalMode,
         FooterSegment::VimMode,
         FooterSegment::ModeIndicator,
         FooterSegment::WorktreeName,
-        FooterSegment::TokenUsage,
         FooterSegment::CloudSession,
     ];
-    // Segments disabled by default: only meaningful after opting into the
-    // related workflow (skillsets, prompt summary, git stats).
+    // Segments disabled by default: static, restated by the transcript, or
+    // otherwise only meaningful after opting into the related workflow. Each
+    // stays reachable through `/status` and `[tui.footer_segments]`.
     let expected_disabled = [
         FooterSegment::PromptSummary,
+        FooterSegment::SessionTitle,
         FooterSegment::GitStats,
         FooterSegment::ContextUsedPercent,
         FooterSegment::ContextRemainingPercent,
         FooterSegment::ContextUsedTokens,
         FooterSegment::ContextRemainingTokens,
         FooterSegment::ContextWindowTokens,
+        FooterSegment::ApprovalMode,
         FooterSegment::Skillset,
         FooterSegment::NoriVersion,
+        FooterSegment::TokenUsage,
     ];
 
     for segment in expected_enabled {
@@ -1039,26 +1041,73 @@ fn test_footer_segment_config_from_toml_some_disabled() {
     assert!(!config.is_enabled(FooterSegment::GitBranch));
     assert!(!config.is_enabled(FooterSegment::TokenUsage));
     assert!(!config.is_enabled(FooterSegment::ModeIndicator));
+    // Unlisted segments keep their defaults in both directions.
     assert!(config.is_enabled(FooterSegment::Context));
-    assert!(config.is_enabled(FooterSegment::ApprovalMode));
+    assert!(!config.is_enabled(FooterSegment::ApprovalMode));
 }
 
 #[test]
-fn test_footer_layout_default_puts_mode_in_footer_right() {
+fn test_footer_layout_default_places_mode_above_prompt_and_state_on_the_right() {
+    use pretty_assertions::assert_eq;
+    let layout = FooterLayoutConfig::default();
+
+    // The agent mode owns the textarea's top-right corner, above the prompt.
     assert_eq!(
-        FooterLayoutConfig::default().footer_right,
+        layout.textarea_top_right,
         vec![FooterSegment::ModeIndicator.into()]
     );
-    assert!(
-        FooterLayoutConfig::default()
-            .footer_left
-            .contains(&FooterSegment::GitBranch.into())
+    // Location and headroom are right-aligned on the footer row.
+    assert_eq!(
+        layout.footer_right,
+        vec![
+            FooterSegment::GitBranch.into(),
+            FooterSegment::WorktreeName.into(),
+            FooterSegment::Context.into(),
+        ]
     );
-    assert!(
-        !FooterLayoutConfig::default()
-            .footer_left
-            .contains(&FooterSegment::ModeIndicator.into())
+    // Every other corner is empty.
+    assert_eq!(layout.textarea_top_left, Vec::new());
+    assert_eq!(layout.textarea_bottom_left, Vec::new());
+    assert_eq!(layout.textarea_bottom_right, Vec::new());
+}
+
+#[test]
+fn test_footer_layout_default_left_group_is_self_hiding_state_plus_opt_ins() {
+    let layout = FooterLayoutConfig::default();
+    let segments = FooterSegmentConfig::default();
+
+    // Only self-hiding state renders on the left out of the box, so an
+    // ordinary local shell leaves the group empty.
+    let enabled_on_the_left: Vec<FooterSegment> = layout
+        .footer_left
+        .iter()
+        .filter_map(|item| match item {
+            FooterLayoutItem::Builtin(segment) => Some(*segment),
+            FooterLayoutItem::Custom(_) => None,
+        })
+        .filter(|segment| segments.is_enabled(*segment))
+        .collect();
+    assert_eq!(
+        enabled_on_the_left,
+        vec![FooterSegment::CloudSession, FooterSegment::VimMode]
     );
+
+    // The default-off segments still list a placement, so enabling one through
+    // `[tui.footer_segments]` alone is enough to make it render.
+    for segment in [
+        FooterSegment::ApprovalMode,
+        FooterSegment::Skillset,
+        FooterSegment::NoriVersion,
+        FooterSegment::TokenUsage,
+        FooterSegment::SessionTitle,
+        FooterSegment::PromptSummary,
+        FooterSegment::GitStats,
+    ] {
+        assert!(
+            layout.footer_left.contains(&segment.into()),
+            "{segment:?} needs a default placement so [tui.footer_segments] alone can show it"
+        );
+    }
 }
 
 #[test]
@@ -1066,7 +1115,7 @@ fn test_footer_layout_toml_moves_segment_to_textarea_corner() {
     let config: TuiConfigToml = toml::from_str(
         r#"
 [footer_layout]
-textarea_top_right = ["mode_indicator"]
+textarea_top_right = ["git_branch"]
 "#,
     )
     .unwrap();
@@ -1074,9 +1123,17 @@ textarea_top_right = ["mode_indicator"]
     let layout = FooterLayoutConfig::from_toml(&config.footer_layout);
     assert_eq!(
         layout.textarea_top_right,
-        vec![FooterSegment::ModeIndicator.into()]
+        vec![FooterSegment::GitBranch.into()]
     );
-    assert!(layout.footer_right.is_empty());
+    // The segment moves rather than duplicating: it leaves the default
+    // `footer_right` group, and the rest of that group is untouched.
+    assert_eq!(
+        layout.footer_right,
+        vec![
+            FooterSegment::WorktreeName.into(),
+            FooterSegment::Context.into(),
+        ]
+    );
 }
 
 #[test]

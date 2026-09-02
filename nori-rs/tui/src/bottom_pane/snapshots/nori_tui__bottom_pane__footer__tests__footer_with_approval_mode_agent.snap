@@ -2,4 +2,4 @@
 source: tui/src/bottom_pane/footer.rs
 expression: terminal.backend()
 ---
-"  ⎇ feature/test · +10 -3 · 72% · Approvals: Agent · Skillset: clifford · Skills"
+"  +10 -3 · Approvals: Agent · Skillset: clifford · Skillsets v19.1.1            "

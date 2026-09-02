@@ -1,8 +1,6 @@
 ---
 source: tui-pty-e2e/tests/input_handling.rs
-assertion_line: 54
+assertion_line: 63
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 › Hel
-
-  Approvals: Agent

@@ -47,7 +47,7 @@ fn test_streamed_markdown_table_renders_as_a_grid() {
     // lands before the turn ends. Wait for the idle footer so the capture cannot catch a composer
     // that is still mid-turn, showing a bare `›` with no placeholder and no footer.
     session
-        .wait_for_text("Approvals", TIMEOUT)
+        .wait_for_text("⎇", TIMEOUT)
         .expect("Composer did not return to idle");
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 

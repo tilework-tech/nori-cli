@@ -4,4 +4,4 @@ expression: normalize_for_input_snapshot(contents)
 ---
 › [DEFAULT_PROMPT]
 
-  ⎇ master · ! · Approvals: Agent · Skillset: [SKILLSET] · Skillsets v0.9.99
+  ! · Skillset: [SKILLSET] · Skillsets v0.9.99                                                               ⎇ master

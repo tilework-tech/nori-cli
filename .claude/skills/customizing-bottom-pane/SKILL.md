@@ -28,6 +28,31 @@ Read the existing file before editing it. Preserve unrelated settings and merge
 with existing `[tui.footer_segments]` and `[tui.footer_layout]` tables instead of
 creating duplicate TOML tables.
 
+## Shipped defaults
+
+Out of the box the bottom pane is deliberately quiet:
+
+```
+                                                              [ Plan ]
+› Ask Nori to do anything
+                                                ⎇ branch · 44% / 272k
+```
+
+- `textarea_top_right`: `mode_indicator`
+- `footer_right`: `git_branch`, `worktree_name`, `context`
+- `footer_left`: self-hiding state only — `cloud_session` (attached cloud
+  sessions) and `vim_mode` (vim mode on). Empty in an ordinary local shell.
+- The other three textarea corners are empty.
+
+`approval_mode`, `skillset`, `nori_version`, `session_title`, `prompt_summary`,
+`git_stats`, and `token_usage` are disabled by default. They all appear in
+`/status`, and each returns to the footer with a single `[tui.footer_segments]`
+line — no `[tui.footer_layout]` entry is needed, because they keep a default
+`footer_left` placement.
+
+On a terminal too narrow for both groups, `footer_right` sheds trailing
+segments and then hides entirely rather than overwriting `footer_left`.
+
 ## Placement
 
 `[tui.footer_layout]` supports six arrays:
@@ -61,8 +86,10 @@ textarea_top_right = [
 ]
 ```
 
-A placement field replaces that placement's default array. A directly listed
-built-in is also moved out of its other default placement. A custom chunk is a
+A placement field replaces that placement's default array, and leaves every
+placement it does not name alone. A directly listed built-in is also moved out
+of its other default placement, so a partial override never duplicates a
+segment. A custom chunk is a
 distinct item; if it references a built-in that is still directly placed
 elsewhere, both can render.
 

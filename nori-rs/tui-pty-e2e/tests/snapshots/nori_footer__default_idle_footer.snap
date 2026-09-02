@@ -1,0 +1,7 @@
+---
+source: tui-pty-e2e/tests/nori_footer.rs
+expression: normalize_for_input_snapshot(contents)
+---
+› [DEFAULT_PROMPT]
+
+                                                                                                                ⎇ master
