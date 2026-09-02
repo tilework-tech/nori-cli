@@ -129,7 +129,7 @@ fn follow_only_attachment_keeps_messages_in_the_composer_but_allows_agent_switch
 }
 
 #[test]
-fn follow_only_attachment_blocks_prompt_generating_commands() {
+fn follow_only_attachment_blocks_init_prompt_submission() {
     let (mut chat, mut rx, _unused_rx) = make_cloud_chatwidget_manual();
     let generation = chat.session_generation;
     chat.handle_session_event(generation, initialize_follow_only_agent_event());
