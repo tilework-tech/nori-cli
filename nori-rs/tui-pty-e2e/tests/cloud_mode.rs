@@ -365,6 +365,9 @@ fn test_cloud_new_reuses_in_flight_entry_preparation() {
     session.submit_input("/new").unwrap();
 
     session
+        .wait_for_text("Nori Cloud · Mock Default Model", TIMEOUT)
+        .expect("the explicit new session should finish connecting");
+    session
         .submit_input("prove the explicit session won")
         .unwrap();
     session
@@ -550,7 +553,7 @@ fn test_cloud_create_new_shows_connection_progress_and_blocks_early_submit() {
     std::fs::write(release_file, "ready").expect("release delayed session/new");
 
     session
-        .wait_for_text("Directory", TIMEOUT)
+        .wait_for_text("Nori Cloud · Mock Default Model", TIMEOUT)
         .expect("the connected session should render its initial status card");
     assert!(
         session
