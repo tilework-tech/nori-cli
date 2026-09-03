@@ -15,11 +15,18 @@ fn acp_error_detail(error: &nori_protocol::acp::v1::Error) -> Option<&str> {
 }
 
 impl ChatWidget {
+    pub(crate) fn acp_error_detail(error: &nori_protocol::acp::v1::Error) -> Option<&str> {
+        acp_error_detail(error)
+    }
+
+    pub(crate) fn acp_error_message_with_detail(
+        error: &nori_protocol::acp::v1::Error,
+    ) -> Option<String> {
+        acp_error_detail(error).map(|detail| format!("{}: {detail}", error.message))
+    }
+
     pub(crate) fn acp_error_message(error: &nori_protocol::acp::v1::Error) -> String {
-        match acp_error_detail(error) {
-            Some(detail) => format!("{}: {detail}", error.message),
-            None => error.message.clone(),
-        }
+        Self::acp_error_message_with_detail(error).unwrap_or_else(|| error.message.clone())
     }
 
     pub(crate) fn handle_session_event(

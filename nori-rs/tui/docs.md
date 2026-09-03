@@ -136,12 +136,12 @@ The application event loop matches `SessionEvent::Acp` and
   time. Failures unrelated to the active prompt do not complete it. Other typed
   operations complete through their
   `HarnessHandle` return values while their raw responses remain observable on
-  the stream. [`event_handlers.rs`](src/chatwidget/event_handlers.rs) logs an
-  unpaired ACP error response with its code and safe diagnostic fields, then
-  renders its message plus a distinct, non-empty string `data.detail` when
-  present. Other machine-readable error data stays out of history, keeping the
-  user-facing failure actionable and screenshot-friendly without dumping
-  opaque metadata.
+  the stream. When an unpaired ACP error reaches the active widget,
+  [`event_handlers.rs`](src/chatwidget/event_handlers.rs) logs its code and safe
+  diagnostic fields, then renders its message plus a distinct, non-empty string
+  `data.detail` when present. Other machine-readable error data stays out of
+  history, keeping the user-facing failure actionable and screenshot-friendly
+  without dumping opaque metadata.
 - Nori events drive lifecycle, queue, replay, compaction, goals, undo,
   user-shell output, hooks, summaries, notices, and classified failures.
 
@@ -532,12 +532,16 @@ supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
 
-Candidate activation retains the safe, formatted ACP error received before a
-terminal `SessionEnded`. If activation fails, [`App`](src/app/event_handling.rs)
-prefers that precise message and detail over the lifecycle event's generic
-fallback, tears down the candidate, and renders the failure through the still
-active widget. Internal structured fields remain excluded by the shared error
-projection in [`event_handlers.rs`](src/chatwidget/event_handlers.rs).
+Candidate activation classifies hidden candidate events in
+[`App`](src/app/event_handling.rs) before they reach the candidate widget. An
+ACP error or pre-start `RequestFailed` is logged and captured rather than
+forwarded into history. A safe ACP message is retained only when it has a
+distinct, non-empty string `data.detail`; otherwise the request-failure message
+becomes the retained fallback. On terminal `SessionEnded`, the TUI renders
+exactly one failure through the still-active widget, preferring detailed ACP
+context, then the request-failure message, then the terminal lifecycle message.
+This preserves useful broker detail without duplicating hidden candidate
+failures or exposing other structured fields.
 
 Bare `/login` has a narrow candidate-target override. Selecting a candidate
 sets it, and preparation or activation failure leaves it available so the user

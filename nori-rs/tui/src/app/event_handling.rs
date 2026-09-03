@@ -1,26 +1,52 @@
 use super::*;
 
-fn candidate_activation_failure_message(
+#[derive(Debug, PartialEq, Eq)]
+enum CandidateActivationEvent {
+    Forward,
+    CapturedError,
+    Ended(String),
+}
+
+fn classify_candidate_activation_event(
     event: &nori_protocol::SessionEvent,
-    raw_error: &mut Option<String>,
-) -> Option<String> {
+    activation_error: &mut Option<String>,
+) -> CandidateActivationEvent {
     match event {
         nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
             response: Err(error),
             ..
         }) => {
-            *raw_error = Some(ChatWidget::acp_error_message(error));
-            None
+            tracing::warn!(
+                code = i32::from(error.code),
+                message = %error.message,
+                detail = ChatWidget::acp_error_detail(error),
+                "ACP candidate activation request failed"
+            );
+            if let Some(message) = ChatWidget::acp_error_message_with_detail(error) {
+                *activation_error = Some(message);
+            }
+            CandidateActivationEvent::CapturedError
+        }
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::RequestFailed(failure)) => {
+            tracing::warn!(
+                message = %failure.message,
+                kind = ?failure.kind,
+                "candidate activation request failed"
+            );
+            if activation_error.is_none() {
+                *activation_error = Some(failure.message.clone());
+            }
+            CandidateActivationEvent::CapturedError
         }
         nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(ended)) => {
-            Some(raw_error.take().unwrap_or_else(|| {
+            CandidateActivationEvent::Ended(activation_error.take().unwrap_or_else(|| {
                 ended
                     .message
                     .clone()
                     .unwrap_or_else(|| "Candidate session ended during activation".to_string())
             }))
         }
-        _ => None,
+        _ => CandidateActivationEvent::Forward,
     }
 }
 
@@ -698,10 +724,17 @@ impl App {
                         ..
                     }) = self.candidate_agent.as_mut()
                     {
-                        let message =
-                            candidate_activation_failure_message(&event, activation_error);
-                        widget.handle_session_event(generation, event);
-                        message
+                        match classify_candidate_activation_event(&event, activation_error) {
+                            CandidateActivationEvent::Forward => {
+                                widget.handle_session_event(generation, event);
+                                None
+                            }
+                            CandidateActivationEvent::CapturedError => None,
+                            CandidateActivationEvent::Ended(message) => {
+                                widget.handle_session_event(generation, event);
+                                Some(message)
+                            }
+                        }
                     } else {
                         None
                     };
@@ -2019,7 +2052,8 @@ pub(super) fn reattach_info_message(
 
 #[cfg(test)]
 mod tests {
-    use super::candidate_activation_failure_message;
+    use super::CandidateActivationEvent;
+    use super::classify_candidate_activation_event;
     use super::reattach_info_message;
 
     #[test]
@@ -2046,8 +2080,8 @@ mod tests {
             response: Err(error),
         });
         assert_eq!(
-            candidate_activation_failure_message(&response, &mut raw_error),
-            None
+            classify_candidate_activation_event(&response, &mut raw_error),
+            CandidateActivationEvent::CapturedError
         );
         assert_eq!(
             raw_error.as_deref(),
@@ -2061,9 +2095,42 @@ mod tests {
             },
         ));
         assert_eq!(
-            candidate_activation_failure_message(&ended, &mut raw_error).as_deref(),
-            Some("broker unreachable: connection reset by broker")
+            classify_candidate_activation_event(&ended, &mut raw_error),
+            CandidateActivationEvent::Ended(
+                "broker unreachable: connection reset by broker".to_string()
+            )
         );
         assert_eq!(raw_error, None);
+    }
+
+    #[test]
+    fn candidate_activation_defers_request_failure_until_session_end() {
+        let mut activation_error = None;
+        let failure_message = "Connection timed out. The agent did not respond.";
+        let request_failed = nori_protocol::SessionEvent::Nori(
+            nori_protocol::NoriEvent::RequestFailed(nori_protocol::RequestFailure {
+                request_id: None,
+                message: failure_message.to_string(),
+                kind: nori_protocol::RequestFailureKind::Retryable,
+            }),
+        );
+
+        assert_eq!(
+            classify_candidate_activation_event(&request_failed, &mut activation_error),
+            CandidateActivationEvent::CapturedError
+        );
+        assert_eq!(activation_error.as_deref(), Some(failure_message));
+
+        let ended = nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::TimedOut,
+                message: Some(failure_message.to_string()),
+            },
+        ));
+        assert_eq!(
+            classify_candidate_activation_event(&ended, &mut activation_error),
+            CandidateActivationEvent::Ended(failure_message.to_string())
+        );
+        assert_eq!(activation_error, None);
     }
 }

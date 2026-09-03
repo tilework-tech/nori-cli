@@ -521,11 +521,26 @@ fn test_cloud_create_new_shows_connection_progress_and_blocks_early_submit() {
         .expect("claiming a new cloud session should show connection progress");
 
     session.submit_input("draft while connecting").unwrap();
-    std::thread::sleep(Duration::from_millis(200));
+    session
+        .type_input("x")
+        .expect("input after Enter should prove the blocked submission was processed");
+    session
+        .wait_for_text("draft while connectingx", TIMEOUT)
+        .expect("the preserved draft should remain editable after blocked submission");
     assert!(
         session.screen_contents().contains("draft while connecting"),
         "an early Enter must keep the text in the composer"
     );
+    session.send_key(Key::Backspace).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("draft while connecting")
+                    && !screen.contains("draft while connectingx")
+            },
+            TIMEOUT,
+        )
+        .expect("backspace should restore the original draft");
     let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
     assert!(
         !agent_stderr.contains("Mock agent: prompt"),
@@ -537,7 +552,6 @@ fn test_cloud_create_new_shows_connection_progress_and_blocks_early_submit() {
     session
         .wait_for_text("Directory", TIMEOUT)
         .expect("the connected session should render its initial status card");
-    std::thread::sleep(Duration::from_millis(300));
     assert!(
         session
             .screen_contents()
@@ -580,6 +594,16 @@ fn test_cloud_create_new_error_shows_message_and_detail_without_json_noise() {
         .expect("the ACP error detail should appear in history");
 
     let contents = session.screen_contents();
+    assert_eq!(
+        contents.matches("broker unreachable").count(),
+        1,
+        "{contents}"
+    );
+    assert_eq!(
+        contents.matches("connection reset by broker").count(),
+        1,
+        "{contents}"
+    );
     assert!(!contents.contains("retry_after_ms"), "{contents}");
     assert!(!contents.contains("trace_id"), "{contents}");
 }

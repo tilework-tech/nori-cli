@@ -554,6 +554,16 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
     session
         .wait_for(|_| !process_exists(candidate_pid), Duration::from_secs(10))
         .expect("failed candidate should be reaped");
+    let contents = session.screen_contents();
+    assert_eq!(
+        contents.matches("Failed to start ACP session").count(),
+        1,
+        "candidate activation should render one actionable failure:\n{contents}"
+    );
+    assert!(
+        !contents.contains("Mock model-specific new_session failure for testing"),
+        "detail-less hidden ACP errors should yield to lifecycle guidance:\n{contents}"
+    );
     assert!(
         process_exists_and_not_zombie(current_pid),
         "current process must survive candidate activation failure"
