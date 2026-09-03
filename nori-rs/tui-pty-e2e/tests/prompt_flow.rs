@@ -1,5 +1,4 @@
 use insta::assert_snapshot;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
@@ -14,13 +13,8 @@ fn test_submit_prompt_default_response() {
 
     session.wait_for_text("›", TIMEOUT).unwrap();
 
-    // Type prompt
-    session.send_str("Hello").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.wait_for_text("Hello", TIMEOUT).unwrap();
-
-    // Submit
-    session.send_key(Key::Enter).unwrap();
+    // Type and submit prompt
+    session.submit_input("Hello").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for default mock responses
@@ -49,9 +43,7 @@ fn test_submit_prompt_custom_response() {
 
     session.wait_for_text("›", TIMEOUT).unwrap();
 
-    session.send_str("test prompt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("test prompt").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     session
@@ -71,7 +63,7 @@ fn test_multiline_input() {
     session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Type multiline prompt
-    session.send_str("Line 1\nLine 2\nLine 3").unwrap();
+    session.type_input("Line 1\nLine 2\nLine 3").unwrap();
 
     // Verify all lines visible
     session.wait_for_text("Line 1", TIMEOUT).unwrap();

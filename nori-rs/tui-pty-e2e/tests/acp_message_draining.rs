@@ -36,9 +36,7 @@ fn test_single_prompt_response_appears_immediately() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send first prompt
-    session.send_str("First prompt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("First prompt").unwrap();
 
     // Response should appear WITHOUT needing to send another prompt
     session
@@ -76,9 +74,7 @@ fn test_two_prompts_responses_not_off_by_one() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send first prompt
-    session.send_str("First prompt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("First prompt").unwrap();
 
     // First response should appear before we send second prompt
     let first_response_appeared =
@@ -110,9 +106,7 @@ fn test_two_prompts_responses_not_off_by_one() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send second prompt (note: mock agent will send same response)
-    session.send_str("Second prompt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Second prompt").unwrap();
 
     // Second response should appear
     // Since it's the same text, we just verify the prompt cycle completes
@@ -156,9 +150,7 @@ fn test_long_response_appears_immediately() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt
-    session.send_str("Give me a long response").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Give me a long response").unwrap();
 
     // The FINAL line should appear without needing another prompt
     session
@@ -203,9 +195,7 @@ fn test_delayed_streaming_response() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt
-    session.send_str("Delayed response test").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Delayed response test").unwrap();
 
     // Response should appear even with the delay
     session
@@ -239,9 +229,7 @@ fn test_tool_call_response_draining() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt
-    session.send_str("Do a tool call").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Do a tool call").unwrap();
 
     // Should see both the tool call AND the final message
     // The mock agent sends "Tool call completed successfully." after the tool call
@@ -282,9 +270,7 @@ fn test_interactive_debug_draining() {
 
     // Send first prompt
     eprintln!("\n>>> Sending first prompt...");
-    session.send_str("First prompt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("First prompt").unwrap();
 
     // Wait a bit and show state
     std::thread::sleep(Duration::from_secs(2));
@@ -301,7 +287,7 @@ fn test_interactive_debug_draining() {
             "\n>>> Response NOT visible. Sending second prompt to see if it triggers draining..."
         );
         std::thread::sleep(TIMEOUT_INPUT);
-        session.send_str("Second prompt").unwrap();
+        session.type_input("Second prompt").unwrap();
         std::thread::sleep(TIMEOUT_INPUT);
 
         eprintln!("\n=== After typing second prompt (before Enter) ===");

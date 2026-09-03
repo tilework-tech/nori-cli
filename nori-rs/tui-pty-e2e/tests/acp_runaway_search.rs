@@ -205,9 +205,7 @@ fn test_runaway_search_transcript_preserves_the_raw_acp_tool_stream() {
         .nori_home_path()
         .expect("should have NORI_HOME path");
 
-    session.send_str("reproduce runaway search").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("reproduce runaway search").unwrap();
 
     session
         .wait_for_text("Explored", Duration::from_secs(10))

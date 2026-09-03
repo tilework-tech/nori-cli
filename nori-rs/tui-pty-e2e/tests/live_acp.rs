@@ -8,7 +8,6 @@
 //! - ANTHROPIC_API_KEY for claude-acp tests
 
 use std::time::Duration;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
 
@@ -39,9 +38,7 @@ fn test_gemini_acp_live_response() {
         .expect("TUI should start successfully");
 
     // Send a simple prompt
-    session.send_str("Say hello").unwrap();
-    std::thread::sleep(LIVE_TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Say hello").unwrap();
     std::thread::sleep(LIVE_TIMEOUT_INPUT);
 
     // Wait for any response from the model (not a specific string, just any output)
@@ -85,9 +82,7 @@ fn test_claude_acp_live_response() {
         .expect("TUI should start successfully");
 
     // Send a simple prompt
-    session.send_str("Say hello").unwrap();
-    std::thread::sleep(LIVE_TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Say hello").unwrap();
     std::thread::sleep(LIVE_TIMEOUT_INPUT);
 
     // Wait for any response from the model (not a specific string, just any output)

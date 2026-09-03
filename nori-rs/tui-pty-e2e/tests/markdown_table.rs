@@ -6,10 +6,8 @@
 //! a raw `| header |` line and separators of several different widths.
 
 use insta::assert_snapshot;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TIMEOUT_PRESNAPSHOT;
 use tui_pty_e2e::TuiSession;
 use tui_pty_e2e::normalize_for_input_snapshot;
@@ -36,9 +34,7 @@ fn test_streamed_markdown_table_renders_as_a_grid() {
 
     session.wait_for_text("›", TIMEOUT).unwrap();
 
-    session.send_str("show me a table").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("show me a table").unwrap();
 
     session
         .wait_for_text("Done.", TIMEOUT)

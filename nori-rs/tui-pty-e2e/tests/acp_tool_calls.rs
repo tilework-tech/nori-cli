@@ -26,7 +26,6 @@
 //! ```
 
 use std::time::Duration;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
@@ -66,9 +65,7 @@ fn test_acp_tool_call_rendered_in_tui() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt that triggers the tool call
-    session.send_str("Read a file for me").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Read a file for me").unwrap();
 
     // Wait for tool call to appear in TUI
     // The tool call should render like: "• Calling acp.read_file(...)"
@@ -130,9 +127,7 @@ fn test_acp_tool_call_completion_rendered_in_tui() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt
-    session.send_str("Echo hello").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Echo hello").unwrap();
 
     // Wait for the mock response which means the tool call has completed
     // The mock agent sends "Tool call completed successfully." as final text
@@ -190,9 +185,7 @@ fn test_acp_tool_call_no_duplicate_messages() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger the interleaved tool call
-    session.send_str("Test interleaved").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Test interleaved").unwrap();
 
     // Wait for the final text which means everything completed
     session
@@ -264,9 +257,7 @@ fn test_acp_tool_call_snapshot() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt to trigger tool call
-    session.send_str("Read test.txt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Read test.txt").unwrap();
 
     // Wait for the response - mock agent sends "Tool call completed successfully."
     session
@@ -307,9 +298,7 @@ fn test_multi_call_exploring_cells_with_out_of_order_completion() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger the multi-call exploring sequence
-    session.send_str("Explore files").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Explore files").unwrap();
 
     // Wait for task to start
     session
@@ -403,9 +392,7 @@ fn test_exploring_cell_flushed_immediately_without_agent_text() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger the multi-call exploring sequence
-    session.send_str("Explore files").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Explore files").unwrap();
 
     // Wait for the exploring cell to appear - it should be flushed immediately
     // after the last tool call completes, even without subsequent agent text
@@ -479,9 +466,7 @@ fn test_tool_calls_during_final_stream_not_shown_after() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger the race condition scenario
-    session.send_str("Analyze the codebase").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Analyze the codebase").unwrap();
 
     // Wait for the final text to appear
     session
@@ -572,9 +557,7 @@ fn test_no_orphan_tool_cells_from_cascade_deferral() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger the orphan tool cell scenario
-    session.send_str("Analyze code").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Analyze code").unwrap();
 
     // Wait for the final text to appear
     session
@@ -652,9 +635,7 @@ fn test_stuck_tool_calls_dont_block_agent_message() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger the stuck tool call scenario
-    session.send_str("Analyze files").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Analyze files").unwrap();
 
     // CRITICAL ASSERTION: The agent's final text MUST appear.
     // If the bug is present, this will timeout because the stuck ExecCells
@@ -723,9 +704,7 @@ fn test_acp_generic_tool_call_shows_resolved_name() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger the generic tool call
-    session.send_str("Run a command").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Run a command").unwrap();
 
     // Wait for the final text which means the tool call has completed
     session

@@ -150,14 +150,11 @@ fn test_slash_new_reuses_prepared_subprocess() {
 
     // Get initial PID
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Type /new to activate the already-prepared connection.
-    session.send_str("/new").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/new").unwrap();
 
     session
         .wait_for(
@@ -201,14 +198,11 @@ fn test_acp_cleanup_outside_prompt_turn() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Start a streaming prompt
-    session.send_str("Start streaming").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Start streaming").unwrap();
 
     // Wait for streaming to start (status indicator appears with interrupt hint)
     session
@@ -255,8 +249,7 @@ fn test_different_agents_different_subprocesses() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path1 = session1.acp_log_path().expect("Should have log path");
-    let pids1 = extract_mock_agent_pids_from_log(&log_path1);
-    assert!(!pids1.is_empty(), "First session should have PID");
+    let pids1 = wait_for_mock_agent_pid_count(&mut session1, &log_path1, 1, TIMEOUT);
     let pid1 = pids1[0];
 
     // Second session with mock-model-alt (separate TUI instance)
@@ -271,8 +264,7 @@ fn test_different_agents_different_subprocesses() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path2 = session2.acp_log_path().expect("Should have log path");
-    let pids2 = extract_mock_agent_pids_from_log(&log_path2);
-    assert!(!pids2.is_empty(), "Second session should have PID");
+    let pids2 = wait_for_mock_agent_pid_count(&mut session2, &log_path2, 1, TIMEOUT);
     let pid2 = pids2[0];
 
     // Different TUI instances should have different agent PIDs
@@ -301,8 +293,7 @@ fn test_acp_agent_switch_via_model_picker() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Open model picker with Ctrl-M (or the key that opens it)
@@ -323,9 +314,7 @@ fn test_acp_agent_switch_via_model_picker() {
         // If Ctrl-K doesn't work, try /model command
         session.send_key(Key::Escape).unwrap();
         std::thread::sleep(TIMEOUT_INPUT);
-        session.send_str("/model").unwrap();
-        std::thread::sleep(TIMEOUT_INPUT);
-        session.send_key(Key::Enter).unwrap();
+        session.submit_input("/model").unwrap();
         std::thread::sleep(TIMEOUT_INPUT);
     }
 
@@ -372,9 +361,7 @@ fn test_agent_command_shows_available_agents() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open agent picker with /agent command
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for agent picker to appear - it should show available agents
@@ -419,14 +406,11 @@ fn test_agent_switch_activates_prepared_candidate() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Open agent picker with /agent command
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for agent picker to appear (8 seconds - CI detection is slow)
@@ -482,9 +466,7 @@ fn test_agent_switch_activates_prepared_candidate() {
         .wait_for(|_| !process_exists(initial_pid), Duration::from_secs(10))
         .expect("the replaced process should be reaped after candidate SessionStarted");
 
-    session.send_str("hello").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("hello").unwrap();
     session
         .wait_for_text("Test message", Duration::from_secs(10))
         .expect("the activated candidate should answer prompts");
@@ -504,11 +486,9 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
         .wait_for_text("›", TIMEOUT)
         .expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
-    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+    let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     session
         .wait_for_text("Select agent", Duration::from_secs(8))
         .expect("agent picker");
@@ -532,9 +512,7 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
         "current process must survive candidate cancellation"
     );
 
-    session.send_str("still current").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("still current").unwrap();
     session
         .wait_for_text("Test message", Duration::from_secs(10))
         .expect("current session should remain promptable after cancellation");
@@ -555,11 +533,9 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
         .wait_for_text("›", TIMEOUT)
         .expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
-    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+    let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     session
         .wait_for_text("Select agent", Duration::from_secs(8))
         .expect("agent picker");
@@ -583,9 +559,7 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
         "current process must survive candidate activation failure"
     );
 
-    session.send_str("still current").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("still current").unwrap();
     session
         .wait_for_text("Test message", Duration::from_secs(10))
         .expect("current session should remain promptable after candidate failure");
@@ -605,11 +579,9 @@ fn test_agent_candidate_preparation_timeout_keeps_current_session_promptable() {
         .wait_for_text("›", TIMEOUT)
         .expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
-    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+    let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     session
         .wait_for_text("Select agent", Duration::from_secs(8))
         .expect("agent picker");
@@ -636,9 +608,7 @@ fn test_agent_candidate_preparation_timeout_keeps_current_session_promptable() {
         "current process must survive candidate preparation timeout"
     );
 
-    session.send_str("still current after timeout").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("still current after timeout").unwrap();
     session
         .wait_for_text("Test message", Duration::from_secs(10))
         .expect("current session should remain promptable after candidate timeout");
@@ -664,14 +634,11 @@ fn test_agent_picker_no_switch_during_streaming() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Start a streaming prompt
-    session.send_str("Start streaming").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Start streaming").unwrap();
 
     // Wait for streaming to start (status indicator appears with interrupt hint)
     session
@@ -719,9 +686,7 @@ fn test_model_command_shows_disabled_in_acp_mode() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open model picker with /model command
-    session.send_str("/model").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/model").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for model picker to appear (8 seconds - CI detection is slow)
@@ -779,9 +744,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // First, verify the initial agent works.
-    session.send_str("test initial").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("test initial").unwrap();
 
     // Wait for the initial agent's echoed prompt.
     session
@@ -789,9 +752,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
         .expect("Initial agent should respond");
 
     // Open agent picker with /agent command
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for agent picker to appear (8 seconds - CI detection is slow)
@@ -820,9 +781,7 @@ fn test_agent_switch_message_flow_mock_to_mock_alt() {
         .expect("prepared candidate should commit before accepting the next prompt");
 
     // The new active agent should receive this prompt and respond.
-    session.send_str("test after switch").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("test after switch").unwrap();
 
     session
         .wait_for_text("switched agent response marker", TIMEOUT)
@@ -858,9 +817,7 @@ fn test_agent_picker_shows_five_agents_in_debug_build() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open agent picker with /agent command
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for agent picker to appear (8 seconds - CI detection is slow)
@@ -951,7 +908,7 @@ fn test_slash_popup_shows_current_agent_in_description() {
     // Type '/a' to open the slash command popup (NOT '/agent' + Enter which
     // opens the agent picker). The popup should show filtered commands
     // including /agent with its description.
-    session.send_str("/a").unwrap();
+    session.type_input("/a").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the slash popup to render with the /agent command visible
@@ -995,7 +952,7 @@ fn test_slash_popup_shows_current_approval_mode_in_description() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Type '/ap' to open the slash command popup filtered to show /approvals
-    session.send_str("/ap").unwrap();
+    session.type_input("/ap").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the slash popup to render with the /approvals command visible
@@ -1055,9 +1012,7 @@ fn test_connecting_status_during_slow_agent_startup() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open agent picker with /agent command
-    session.send_str("/agent").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/agent").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for agent picker to appear

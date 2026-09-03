@@ -239,9 +239,7 @@ fn test_cloud_mode_round_trips_prompt_through_handroll() {
     );
 
     std::thread::sleep(TIMEOUT_INPUT);
-    session.send_str("ping across the tunnel").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("ping across the tunnel").unwrap();
 
     session
         .wait_for_text("Hello from cloud handroll!", TIMEOUT)
@@ -267,17 +265,13 @@ fn test_cloud_mode_sends_eof_detach_to_handroll_on_exit() {
         .expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
     // Prove the prepared child was activated and is live.
-    session.send_str("prove the session is live").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("prove the session is live").unwrap();
     session
         .wait_for_text("alive before exit", TIMEOUT)
         .expect("session should be live before exit");
     let baseline = fake.released_count();
 
-    session.send_str("/exit").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/exit").unwrap();
 
     // Assert before dropping the PTY so a slow shutdown can't be SIGHUPed by
     // the closing master and produce a false failure.
@@ -368,13 +362,11 @@ fn test_cloud_new_reuses_in_flight_entry_preparation() {
     let initial_pids = fake.wait_for_child_pid_count(1, TIMEOUT);
     let prepared_pid = *initial_pids.first().expect("entry-preparation child pid");
     std::thread::sleep(TIMEOUT_INPUT);
-    session.send_str("/new").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/new").unwrap();
 
-    session.send_str("prove the explicit session won").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session
+        .submit_input("prove the explicit session won")
+        .unwrap();
     session
         .wait_for_text("new session remains active", TIMEOUT)
         .expect("the explicit new session should remain usable");
@@ -459,9 +451,7 @@ fn test_cloud_entry_picker_resume_row_reattaches_live() {
         .expect("the composer should be ready after reattach");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("ping the reattached session").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("ping the reattached session").unwrap();
     session
         .wait_for_text("hello from the reattached session", TIMEOUT)
         .expect("prompt should round-trip on the reattached session");
@@ -498,9 +488,7 @@ fn test_cloud_entry_picker_create_new_starts_fresh_session() {
         .expect("picking create-new should start a fresh session");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("hello fresh session").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("hello fresh session").unwrap();
     session
         .wait_for_text("fresh session says hi", TIMEOUT)
         .expect("prompt should round-trip on the fresh session");
@@ -532,9 +520,7 @@ fn test_cloud_create_new_shows_connection_progress_and_blocks_early_submit() {
         .wait_for_text("Connecting to Nori Cloud", TIMEOUT)
         .expect("claiming a new cloud session should show connection progress");
 
-    session.send_str("draft while connecting").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("draft while connecting").unwrap();
     std::thread::sleep(Duration::from_millis(200));
     assert!(
         session.screen_contents().contains("draft while connecting"),
@@ -619,9 +605,7 @@ fn test_cloud_close_returns_to_the_picker() {
         .expect("create-new should start a session");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("/close").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/close").unwrap();
 
     session
         .wait_for_text("Session closed", TIMEOUT)
@@ -677,9 +661,7 @@ fn test_cloud_quit_exits_fast_even_if_child_ignores_eof() {
         .expect("nori cloud should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("/quit").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/quit").unwrap();
 
     // The owned child lifecycle caps detach grace at ~1s; 5s here is CI slack.
     // The old behavior waited out a 25s child-exit grace, which this must never
@@ -707,9 +689,7 @@ fn test_cloud_mode_child_death_mid_session_surfaces_error() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Prove the session is live first.
-    session.send_str("are you there").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("are you there").unwrap();
     session
         .wait_for_text("still alive", TIMEOUT)
         .expect("session should be live before the crash");
@@ -750,9 +730,7 @@ fn test_cloud_mode_writes_local_transcript() {
     let nori_home = session.nori_home_path().expect("nori home");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("write me down").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("write me down").unwrap();
     session
         .wait_for_text("transcribed response", TIMEOUT)
         .expect("should receive response");

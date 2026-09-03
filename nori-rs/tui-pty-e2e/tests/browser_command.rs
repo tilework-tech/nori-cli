@@ -10,7 +10,6 @@
 //! Requires Chrome/Chromium installed and a display server (X11/Wayland).
 
 use std::time::Duration;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
@@ -118,9 +117,7 @@ fn browser_command_agent_modifies_page() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // 2. Send /browser command
-    session.send_str("/browser").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/browser").unwrap();
 
     // 3. Wait for the browser session prompt to appear on screen.
     //    This contains "CDP endpoint: http://127.0.0.1:PORT" which proves

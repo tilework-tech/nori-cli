@@ -4,7 +4,6 @@
 //! displayed to the user in the TUI rather than being silently swallowed.
 
 use std::time::Duration;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
@@ -43,9 +42,7 @@ fn test_acp_prompt_failure_shows_error_to_user() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt that will trigger the failure
-    session.send_str("Hello").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Hello").unwrap();
 
     // Wait for some response - we should see either an error message or
     // at minimum the prompt should become active again
@@ -115,9 +112,7 @@ fn test_acp_prompt_failure_tui_remains_responsive() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt that will fail
-    session.send_str("Test message").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Test message").unwrap();
 
     // Wait for error event to appear (confirms the error was processed)
     session
