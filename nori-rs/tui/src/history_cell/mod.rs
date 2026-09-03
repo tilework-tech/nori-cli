@@ -453,10 +453,10 @@ pub(crate) fn new_session_info(
     config: &Config,
     agent: String,
     is_first_event: bool,
-    cloud_session: Option<crate::nori::session_header::CloudSessionInfo>,
+    status: crate::nori::session_header::StatusViewModel,
 ) -> SessionInfoCell {
     // Use the Nori-branded session header
-    crate::nori::session_header::new_nori_session_info(config, agent, is_first_event, cloud_session)
+    crate::nori::session_header::new_nori_session_info(config, agent, is_first_event, status)
 }
 
 pub(crate) fn new_user_prompt(message: String) -> UserHistoryCell {

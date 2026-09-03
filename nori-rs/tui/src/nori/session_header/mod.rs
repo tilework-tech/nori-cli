@@ -15,13 +15,7 @@ use crate::history_cell::PlainHistoryCell;
 use crate::history_cell::SessionInfoCell;
 use crate::nori::token_count::TokenCount;
 use crate::nori::token_count::count_tokens;
-use crate::system_info::NoriVersionSource;
-use crate::system_info::read_active_skillset;
-use crate::ui_types::format_si_suffix;
-use crate::version::CODEX_CLI_VERSION;
 use nori_config::NoriConfig;
-use nori_harness::ConversationId;
-use nori_harness::TranscriptTokenUsage;
 use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use std::path::Path;
@@ -29,13 +23,18 @@ use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
 
 mod status_card;
-use status_card::STATUS_VALUE_OFFSET;
-pub(crate) use status_card::StatusCardInfo;
-use status_card::agent_name_style;
-use status_card::context_value;
-use status_card::git_row_spans;
-use status_card::instruction_file_lines;
-use status_card::status_row;
+pub(crate) mod status_view;
+
+pub(crate) use status_view::AgentStatus;
+pub(crate) use status_view::AgentStatusHandle;
+pub(crate) use status_view::CloudSessionInfo;
+pub(crate) use status_view::ContextStatus;
+pub(crate) use status_view::GitStatus;
+pub(crate) use status_view::SkillsetStatus;
+pub(crate) use status_view::StatusFooterValues;
+pub(crate) use status_view::StatusViewModel;
+pub(crate) use status_view::active_instruction_file_contents;
+pub(crate) use status_view::local_context;
 
 /// Maximum content width for the compact Nori status block.
 const NORI_HEADER_MAX_INNER_WIDTH: usize = 100;
@@ -368,113 +367,24 @@ pub(crate) enum DisplayMode {
     Full,
 }
 
-/// Identity of the cloud session the TUI is attached to. The top-level cloud
-/// launch path supplies this identity; ACP capabilities do not.
-#[derive(Debug, Clone)]
-pub(crate) struct CloudSessionInfo {
-    /// The human-readable session id, e.g. `nori-fast-kazunoko-aac8`.
-    pub id: String,
-    /// The broker-reported session title, when known (e.g. "Fix login flakes").
-    pub title: Option<String>,
-}
-
-/// The Nori-branded session header cell.
+/// The Nori-branded session header cell: a pure view over [`StatusViewModel`].
 #[derive(Debug)]
 pub(crate) struct NoriSessionHeaderCell {
-    version: &'static str,
-    agent: String,
-    directory: PathBuf,
-    skillset: Option<String>,
-    instruction_files: Vec<InstructionFile>,
+    model: StatusViewModel,
     display_mode: DisplayMode,
-    /// Optional task summary (first prompt summary).
-    prompt_summary: Option<String>,
-    /// Optional approval mode label (e.g., "Agent", "Read Only", "Full Access").
-    approval_mode_label: Option<String>,
-    /// Optional token usage breakdown from transcript.
-    token_breakdown: Option<TranscriptTokenUsage>,
-    /// Footer-derived values (git, ACP mode, skillset version, context window)
-    /// so the `/status` card is a superset of the footer's categories.
-    status_info: StatusCardInfo,
-    /// The local conversation id, rendered on the `session:` row for every
-    /// agent. Absent on the session-start welcome card before it is assigned.
-    conversation_id: Option<ConversationId>,
-    /// The parent conversation id after a branch-at-head fork, rendered on the
-    /// `forked from:` row so the previous (resumable) session stays visible.
-    forked_from: Option<ConversationId>,
-    /// Cloud session identity when attached through cloud mode.
-    /// When present, the `session:` line appends the broker title; on the
-    /// compact welcome card it also suppresses the misleading local `directory:`
-    /// value (the cwd is on the remote VM, not local).
-    cloud_session: Option<CloudSessionInfo>,
 }
 
-/// Maximum length for task summary in status card.
-const MAX_TASK_SUMMARY_LENGTH: usize = 50;
-
 impl NoriSessionHeaderCell {
-    pub(crate) fn new(agent: String, directory: PathBuf) -> Self {
-        let skillset = read_active_skillset(&directory);
-        let agent_kind = detect_agent_kind(&agent);
-        let instruction_files = discover_all_instruction_files(&directory, agent_kind);
+    pub(crate) fn new(model: StatusViewModel) -> Self {
         Self {
-            version: CODEX_CLI_VERSION,
-            agent,
-            directory,
-            skillset,
-            instruction_files,
+            model,
             display_mode: DisplayMode::Full,
-            prompt_summary: None,
-            approval_mode_label: None,
-            token_breakdown: None,
-            status_info: StatusCardInfo::default(),
-            conversation_id: None,
-            forked_from: None,
-            cloud_session: None,
         }
     }
 
     pub(crate) fn with_display_mode(mut self, mode: DisplayMode) -> Self {
         self.display_mode = mode;
         self
-    }
-
-    pub(crate) fn with_cloud_session(mut self, cloud_session: Option<CloudSessionInfo>) -> Self {
-        self.cloud_session = cloud_session;
-        self
-    }
-
-    /// Create a new header cell with optional status card fields.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new_with_status_info(
-        agent: String,
-        directory: PathBuf,
-        prompt_summary: Option<String>,
-        approval_mode_label: Option<String>,
-        token_breakdown: Option<TranscriptTokenUsage>,
-        cloud_session: Option<CloudSessionInfo>,
-        conversation_id: Option<ConversationId>,
-        forked_from: Option<ConversationId>,
-        status_info: StatusCardInfo,
-    ) -> Self {
-        let skillset = read_active_skillset(&directory);
-        let agent_kind = detect_agent_kind(&agent);
-        let instruction_files = discover_all_instruction_files(&directory, agent_kind);
-        Self {
-            version: CODEX_CLI_VERSION,
-            agent,
-            directory,
-            skillset,
-            instruction_files,
-            display_mode: DisplayMode::Full,
-            prompt_summary,
-            approval_mode_label,
-            token_breakdown,
-            status_info,
-            conversation_id,
-            forked_from,
-            cloud_session,
-        }
     }
 }
 
@@ -485,190 +395,23 @@ impl HistoryCell for NoriSessionHeaderCell {
         }
         let inner_width = usize::from(width.saturating_sub(2)).min(NORI_HEADER_MAX_INNER_WIDTH);
 
-        let mut lines: Vec<Line<'static>> = Vec::new();
-
         // The prompt marker is the sole Nori accent. The title and version use
         // ordinary text hierarchy and the block deliberately has no surface or border.
-        lines.push(Line::from(vec![
-            Span::from("  › ").green(),
-            Span::from("Nori CLI").bold(),
-            Span::from(format!(" v{}", self.version)).dim(),
-        ]));
+        let mut lines: Vec<Line<'static>> = vec![
+            Line::from(vec![
+                Span::from("  › ").green(),
+                Span::from("Nori CLI").bold(),
+                Span::from(format!(" v{}", self.model.version)).dim(),
+            ]),
+            Line::from(""),
+        ];
 
-        lines.push(Line::from(""));
-
-        if self.display_mode == DisplayMode::Compact {
-            let location = if let Some(cloud) = &self.cloud_session {
-                match &cloud.title {
-                    Some(title) => format!("{} ({title})", cloud.id),
-                    None => cloud.id.clone(),
-                }
-            } else {
-                format_directory(
-                    &self.directory,
-                    Some(inner_width.saturating_sub(STATUS_VALUE_OFFSET)),
-                )
-            };
-            let mut system_parts = vec![location];
-            if let Some(approval_mode) = &self.approval_mode_label {
-                system_parts.push(format!("{approval_mode} approvals"));
-            }
-            if let Some(skillset) = &self.skillset {
-                system_parts.push(skillset.clone());
-            }
-            let mut system_spans = Vec::new();
-            for (index, part) in system_parts.into_iter().enumerate() {
-                if index > 0 {
-                    system_spans.push(Span::from(" · ").dim());
-                }
-                system_spans.push(Span::from(part));
-            }
-            lines.push(status_row("System", system_spans));
-            lines.push(status_row(
-                "Agent",
-                vec![Span::styled(
-                    self.agent.clone(),
-                    agent_name_style(detect_agent_kind(&self.agent)),
-                )],
-            ));
-            return lines;
-        }
-
-        // Task summary line (if provided) - truncated to one line
-        if let Some(summary) = &self.prompt_summary {
-            let truncated = truncate_summary(summary, MAX_TASK_SUMMARY_LENGTH);
-            lines.push(status_row("Task", vec![Span::from(truncated).dim()]));
-            lines.push(Line::from(""));
-        }
-
-        let dir_max_width = inner_width.saturating_sub(STATUS_VALUE_OFFSET);
-        let dir = format_directory(&self.directory, Some(dir_max_width));
-        lines.push(status_row("Directory", vec![Span::from(dir)]));
-
-        // Session line: the local conversation id (or the cloud id when the
-        // conversation id is not yet known), with the broker title in parens on
-        // a cloud session.
-        let session_base = match (self.conversation_id, &self.cloud_session) {
-            (Some(id), _) => Some(id.to_string()),
-            (None, Some(cloud)) => Some(cloud.id.clone()),
-            (None, None) => None,
-        };
-        if let Some(base) = session_base {
-            let session_display = match self.cloud_session.as_ref().and_then(|c| c.title.as_ref()) {
-                Some(title) => format!("{base} ({title})"),
-                None => base,
-            };
-            lines.push(status_row("Session", vec![Span::from(session_display)]));
-        }
-
-        // Forked-from line: the parent conversation after a branch-at-head fork,
-        // which stays resumable via `nori resume <id>`.
-        if let Some(forked_from) = self.forked_from {
-            lines.push(status_row(
-                "Forked from",
-                vec![Span::from(forked_from.to_string())],
-            ));
-        }
-
-        // Agent-supplied session title, when the agent reports one over ACP.
-        if let Some(title) = &self.status_info.session_title {
-            lines.push(status_row("Title", vec![Span::from(title.clone())]));
-        }
-
-        lines.push(status_row(
-            "Agent",
-            vec![Span::styled(
-                self.agent.clone(),
-                agent_name_style(detect_agent_kind(&self.agent)),
-            )],
-        ));
-
-        // Skillset line, with the detected skillsets version appended when known.
-        let skillset_display = match &self.skillset {
-            Some(name) => match &self.status_info.nori_version {
-                Some(version) => {
-                    let label = self
-                        .status_info
-                        .nori_version_source
-                        .map(NoriVersionSource::label)
-                        .unwrap_or("Skillsets");
-                    format!("{name} ({label} v{version})")
-                }
-                None => name.clone(),
-            },
-            None => "(none)".to_string(),
-        };
-        lines.push(status_row("Skillset", vec![Span::from(skillset_display)]));
-
-        // Approval mode line (if provided)
-        if let Some(approval_mode) = &self.approval_mode_label {
-            lines.push(status_row(
-                "Approvals",
-                vec![Span::from(approval_mode.clone())],
-            ));
-        }
-
-        // ACP mode line (plan/build) when the agent exposes a mode.
-        if let Some(mode) = &self.status_info.acp_mode_label {
-            lines.push(status_row("Mode", vec![Span::from(mode.clone())]));
-        }
-
-        // Git line: branch, worktree, stats, and untracked marker on one row.
-        if let Some(git_spans) = git_row_spans(&self.status_info) {
-            lines.push(status_row("Git", git_spans));
-        }
-
-        // Local `/status` keeps the individual active instruction-file outline.
-        // Cloud sessions suppress it because local discovery does not describe
-        // the remote agent's actual context.
-        if self.cloud_session.is_none() {
-            let instruction_lines = instruction_file_lines(&self.instruction_files, inner_width);
-            if !instruction_lines.is_empty() {
-                lines.push(Line::from(""));
-                lines.extend(instruction_lines);
-            }
-        }
-
-        // Tokens section: show if we have token data or context window percentage
-        let has_tokens = self.token_breakdown.as_ref().is_some_and(|t| t.total() > 0);
-        let has_context = self.status_info.context_window_percent.is_some();
-
-        if has_tokens || has_context {
-            lines.push(Line::from(""));
-            // Consolidated, codex-style context window line.
-            if let Some(context) = context_value(&self.status_info) {
-                lines.push(status_row("Context", vec![Span::from(context)]));
-            }
-
-            // Total tokens line (only if we have token data)
-            if let Some(token_breakdown) = &self.token_breakdown {
-                let total = token_breakdown.total();
-                if total > 0 {
-                    let total_fmt = format_si_suffix(total);
-                    let mut token_spans = vec![Span::from(format!("{total_fmt} total")).dim()];
-
-                    if token_breakdown.cached_tokens > 0 {
-                        let cached_fmt = format_si_suffix(token_breakdown.cached_tokens);
-                        token_spans.push(Span::from(format!(" ({cached_fmt} cached)")).dim());
-                    }
-
-                    lines.push(status_row("Tokens", token_spans));
-                }
-            }
-        }
+        lines.extend(match self.display_mode {
+            DisplayMode::Compact => status_card::compact_lines(&self.model, inner_width),
+            DisplayMode::Full => status_card::full_lines(&self.model, inner_width),
+        });
 
         lines
-    }
-}
-
-/// Truncate a summary string to fit on one line.
-fn truncate_summary(summary: &str, max_len: usize) -> String {
-    if summary.chars().count() <= max_len {
-        summary.to_string()
-    } else {
-        let truncated_chars = max_len.saturating_sub(3);
-        let truncated: String = summary.chars().take(truncated_chars).collect();
-        format!("{truncated}...")
     }
 }
 
@@ -677,78 +420,35 @@ pub(crate) fn format_instruction_path(path: &Path) -> String {
     format_directory(path, None)
 }
 
-/// Discover and return all active instruction files for the given agent and directory.
-///
-/// Each returned tuple contains the file path and its contents.
-/// Files that cannot be read are silently skipped.
-pub(crate) fn active_instruction_file_contents(agent: &str, cwd: &Path) -> Vec<(PathBuf, String)> {
-    let agent_kind = detect_agent_kind(agent);
-    let files = discover_all_instruction_files(cwd, agent_kind);
-    files
-        .into_iter()
-        .filter(|f| f.active)
-        .filter_map(|f| {
-            std::fs::read_to_string(&f.path)
-                .ok()
-                .map(|contents| (f.path, contents))
-        })
-        .collect()
-}
-
-/// Create the Nori status output cell for the /status command.
+/// Create the Nori status output cell for the `/status` command.
 ///
 /// This displays the full, unbordered status block showing:
-/// - The /status command echo
+/// - The `/status` command echo
 /// - Nori branding with version
-/// - Session, directory, agent, skillset, approval, and footer metadata
+/// - Session metadata (directory, ids, skillset, approvals, git, context)
+/// - The agent and every configuration option it advertises
 /// - Active local instruction files (suppressed for cloud sessions)
-/// - Optional task summary, context window, and token usage
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn new_nori_status_output(
-    agent: &str,
-    directory: PathBuf,
-    prompt_summary: Option<String>,
-    approval_mode_label: Option<String>,
-    token_breakdown: Option<TranscriptTokenUsage>,
-    cloud_session: Option<CloudSessionInfo>,
-    conversation_id: Option<ConversationId>,
-    forked_from: Option<ConversationId>,
-    status_info: StatusCardInfo,
-) -> CompositeHistoryCell {
+pub(crate) fn new_nori_status_output(model: StatusViewModel) -> CompositeHistoryCell {
     let command = PlainHistoryCell::new(vec![Line::from(vec!["/".green(), "status".into()])]);
-    let header = NoriSessionHeaderCell::new_with_status_info(
-        agent.to_string(),
-        directory,
-        prompt_summary,
-        approval_mode_label,
-        token_breakdown,
-        cloud_session,
-        conversation_id,
-        forked_from,
-        status_info,
-    );
+    let header = NoriSessionHeaderCell::new(model);
 
     CompositeHistoryCell::new(vec![Box::new(command), Box::new(header)])
 }
 
 /// Create the Nori session info cell to be displayed at session start.
-/// `cloud_session` carries the identity supplied by cloud mode; the welcome
-/// card then shows it in place of the local cwd.
+///
+/// The model carries the live agent status handle, so the welcome card shows
+/// the provider name immediately and fills in the agent's configuration as
+/// soon as the agent advertises it.
 pub(crate) fn new_nori_session_info(
     config: &NoriConfig,
     model: String,
     is_first_event: bool,
-    cloud_session: Option<CloudSessionInfo>,
+    view_model: StatusViewModel,
 ) -> SessionInfoCell {
     SessionInfoCell::new(if is_first_event {
         // Header box rendered as history (so it appears at the very top)
-        let mut header = NoriSessionHeaderCell::new(model, config.cwd.clone())
-            .with_display_mode(DisplayMode::Compact)
-            .with_cloud_session(cloud_session);
-        header.approval_mode_label = codex_common::approval_presets::approval_mode_label(
-            config.approval_policy,
-            &config.sandbox_policy,
-        );
+        let header = NoriSessionHeaderCell::new(view_model).with_display_mode(DisplayMode::Compact);
 
         // Help lines below the header
         let mut help_lines: Vec<Line<'static>> = vec![];

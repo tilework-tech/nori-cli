@@ -532,11 +532,6 @@ impl ChatComposer {
         }
     }
 
-    /// Get the prompt summary for status card display.
-    pub(crate) fn prompt_summary(&self) -> Option<String> {
-        self.prompt_summary.clone()
-    }
-
     /// Get the token breakdown from transcript location (for status card display).
     pub(crate) fn transcript_token_breakdown(&self) -> Option<nori_harness::TranscriptTokenUsage> {
         self.system_info

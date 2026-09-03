@@ -15,7 +15,10 @@ NORI_STORYBOOK_ARTIFACT_DIR=$(mktemp -d "$capture_root/run.XXXXXX")
 printf '%s\n' "$NORI_STORYBOOK_ARTIFACT_DIR" > "$capture_root/latest-run"
 export TUI_PUPPETEERING_DIR
 
+# The status-card storybook renders the CLI's own status view, so it lives in
+# `nori-tui` behind the `storybook` feature; the rest are component specimens.
 cargo build -p nori-tui-components --examples --message-format=json > "$NORI_STORYBOOK_ARTIFACT_DIR/build.jsonl"
+cargo build -p nori-tui --features storybook --examples --message-format=json >> "$NORI_STORYBOOK_ARTIFACT_DIR/build.jsonl"
 example_binary=$(jq -r 'select(.reason == "compiler-artifact" and .target.name == "nori_storybook" and .executable != null) | .executable' "$NORI_STORYBOOK_ARTIFACT_DIR/build.jsonl")
 if [[ ! -f "$example_binary" ]]; then
   echo "Cargo did not report the built nori_storybook executable" >&2
@@ -24,5 +27,6 @@ fi
 export NORI_STORYBOOK_BIN_DIR
 NORI_STORYBOOK_BIN_DIR=$(dirname "$example_binary")
 cargo test -p nori-tui-components --test 'storybook_*' --no-fail-fast -- --include-ignored "$@"
+cargo test -p nori-tui --features storybook --test 'storybook_*' --no-fail-fast -- --include-ignored "$@"
 touch "$NORI_STORYBOOK_ARTIFACT_DIR/passed"
 printf 'Captures: %s\n' "$NORI_STORYBOOK_ARTIFACT_DIR"

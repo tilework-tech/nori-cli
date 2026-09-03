@@ -56,16 +56,16 @@ width.
 The focused examples remain useful while developing one component:
 
 ```console
-cargo run -p nori-tui-components --example status_card_storybook
+cargo run -p nori-tui --features storybook --example status_card_storybook
 cargo run -p nori-tui-components --example picker_storybook
 cargo run -p nori-tui-components --example markdown_storybook
 cargo run -p nori-tui-components --example component_storybook
 ```
 
-`status_card_storybook` is an interactive production-design specimen. Its
-default matches the CLI: unshaded, plain labels, a green prompt marker, compact
-density, and summary content. The controls retain the other variants for
-comparison while evolving the component.
+`status_card_storybook` lives in `nori-tui` because it renders the CLI's own
+status view: `v` switches between the compact welcome block and the full
+`/status` card, and both are drawn by the production code behind the
+`storybook` feature. It shows layout as shipped, not a component mock.
 
 Press `q` or `Esc` to leave an example. In picker examples, active search owns
 printable keys and the first Escape, so deactivate search before quitting.

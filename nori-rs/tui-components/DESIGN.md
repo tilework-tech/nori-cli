@@ -259,8 +259,7 @@ belong exclusively to the query: global page, quit, density, mode, and state
 shortcuts resume only after search deactivates, and Escape deactivates search
 before leaving the example.
 
-For the focused status-card decision specimen, run
-`cargo run -p nori-tui-components --example status_card_storybook`. It compares
-derived, ANSI-fallback, and unshaded surfaces; plain and colon label policies;
-green-accent placement; both densities; and summary versus full metadata. Its
-hints intentionally occupy two left-aligned rows.
+For the status-card specimen, run
+`cargo run -p nori-tui --features storybook --example status_card_storybook`.
+It renders the CLI's production status view over fixture data, with `v`
+switching between the compact welcome block and the full `/status` card.

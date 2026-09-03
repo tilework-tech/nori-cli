@@ -98,68 +98,6 @@ impl ChatWidget {
         self.submit_harness_action(crate::app_event::HarnessAction::Shutdown { child_grace });
     }
 
-    pub(crate) fn handle_acp_session_config_update(
-        &mut self,
-        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
-    ) {
-        let next_snapshot =
-            crate::nori::session_config_history::snapshot_from_options(config_options);
-
-        if let Some(previous_snapshot) = &self.acp_config_option_snapshot {
-            let changes = crate::nori::session_config_history::changed_values(
-                previous_snapshot,
-                config_options,
-            );
-            if !changes.is_empty() {
-                self.add_to_history(
-                    crate::nori::session_config_history::new_agent_options_history_cell(
-                        self.bottom_pane.agent_display_name(),
-                        &changes,
-                    ),
-                );
-            }
-        } else if !next_snapshot.is_empty() {
-            self.add_to_history(
-                crate::nori::session_config_history::new_agent_options_initial_history_cell(
-                    self.bottom_pane.agent_display_name(),
-                    config_options,
-                ),
-            );
-        }
-
-        self.acp_config_option_snapshot = Some(next_snapshot);
-        self.apply_acp_mode_config_snapshot(
-            self.acp_mode_config_generation,
-            crate::nori::session_config_mode::acp_mode_config_from_options(config_options),
-        );
-        self.request_redraw();
-    }
-
-    pub(crate) fn sync_acp_session_config_snapshot(
-        &mut self,
-        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
-    ) {
-        self.acp_config_option_snapshot = Some(
-            crate::nori::session_config_history::snapshot_from_options(config_options),
-        );
-        self.apply_acp_mode_config_snapshot(
-            self.acp_mode_config_generation,
-            crate::nori::session_config_mode::acp_mode_config_from_options(config_options),
-        );
-    }
-
-    pub(crate) fn handle_acp_session_config_snapshot(
-        &mut self,
-        generation: i64,
-        config_options: &[nori_protocol::acp::v1::SessionConfigOption],
-    ) {
-        if generation != self.acp_mode_config_generation {
-            return;
-        }
-
-        self.sync_acp_session_config_snapshot(config_options);
-    }
-
     pub(crate) fn add_acp_session_config_set_message(
         &mut self,
         option_name: &str,

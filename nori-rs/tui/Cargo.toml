@@ -23,6 +23,10 @@ debug-logs = []
 # ChatGPT/API login functionality
 login = ["dep:codex-utils-pty"]
 
+# Expose production-view specimens (`storybook` module) to the storybook
+# examples. Never enabled for the shipped binary.
+storybook = []
+
 [lints]
 workspace = true
 
@@ -110,6 +114,15 @@ libc = { workspace = true }
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = { workspace = true }
 
+
+[[example]]
+name = "status_card_storybook"
+path = "examples/status_card_storybook.rs"
+required-features = ["storybook"]
+
+[[test]]
+name = "storybook_status_card"
+path = "examples/status_card_storybook/e2e.rs"
 
 [dev-dependencies]
 assert_matches = { workspace = true }
