@@ -3,7 +3,7 @@ use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::widgets::WidgetRef;
 
-use super::popup_consts::MAX_POPUP_ROWS;
+use super::popup_consts::MAX_COMMAND_POPUP_ROWS;
 use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::render_rows;
@@ -147,7 +147,7 @@ impl CommandPopup {
         let matches_len = self.filtered_items().len();
         self.state.clamp_selection(matches_len);
         self.state
-            .ensure_visible(matches_len, MAX_POPUP_ROWS.min(matches_len));
+            .ensure_visible(matches_len, MAX_COMMAND_POPUP_ROWS.min(matches_len));
     }
 
     /// Determine the preferred height of the popup for a given width.
@@ -158,7 +158,12 @@ impl CommandPopup {
 
         // Subtract 2 to match the horizontal inset applied to the render area
         // in render_ref (Insets::tlbr(0, 2, 0, 0)).
-        measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, width.saturating_sub(2))
+        measure_rows_height(
+            &rows,
+            &self.state,
+            MAX_COMMAND_POPUP_ROWS,
+            width.saturating_sub(2),
+        )
     }
 
     /// Compute fuzzy-filtered matches over built-in commands and user prompts,
@@ -297,6 +302,10 @@ impl CommandPopup {
                         CommandItem::Builtin(cmd) if self.disabled_builtins.contains_key(&cmd)
                     ),
                     is_header: false,
+                    // Agent-declared commands render name-over-description so
+                    // their long, prefixed names cannot shift the built-in
+                    // commands' description column.
+                    two_line: matches!(item, CommandItem::AgentCommand(_)),
                 }
             })
             .collect()
@@ -306,7 +315,8 @@ impl CommandPopup {
     pub(crate) fn move_up(&mut self) {
         let len = self.filtered_items().len();
         self.state.move_up_wrap(len);
-        self.state.ensure_visible(len, MAX_POPUP_ROWS.min(len));
+        self.state
+            .ensure_visible(len, MAX_COMMAND_POPUP_ROWS.min(len));
     }
 
     /// Move the selection cursor one step down.
@@ -314,7 +324,7 @@ impl CommandPopup {
         let matches_len = self.filtered_items().len();
         self.state.move_down_wrap(matches_len);
         self.state
-            .ensure_visible(matches_len, MAX_POPUP_ROWS.min(matches_len));
+            .ensure_visible(matches_len, MAX_COMMAND_POPUP_ROWS.min(matches_len));
     }
 
     /// Return currently selected command, if any.
@@ -338,7 +348,7 @@ impl WidgetRef for CommandPopup {
             buf,
             &rows,
             &self.state,
-            MAX_POPUP_ROWS,
+            MAX_COMMAND_POPUP_ROWS,
             "no matches",
         );
     }
@@ -718,6 +728,71 @@ mod tests {
         assert_eq!(name, Some("/claude-code:loop"));
         let desc = rows.first().and_then(|r| r.description.as_deref());
         assert_eq!(desc, Some("Run a prompt on a recurring interval"));
+    }
+
+    #[test]
+    fn agent_commands_render_two_line_and_builtins_do_not() {
+        let agent_commands = vec![AgentCommandInfo {
+            name: "authenticating-a-service-for-one-session".to_string(),
+            description: "Use when a task needs to authenticate to a service".to_string(),
+            input_hint: None,
+        }];
+        let popup = CommandPopup::new_full(
+            Vec::new(),
+            agent_commands,
+            "nori-cloud".to_string(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        let rows = popup.rows_from_matches(vec![
+            (CommandItem::Builtin(SlashCommand::Init), None, 0),
+            (CommandItem::AgentCommand(0), None, 0),
+        ]);
+
+        assert!(!rows[0].two_line, "builtins keep the aligned column layout");
+        assert!(
+            rows[1].two_line,
+            "agent-declared commands render name over description"
+        );
+    }
+
+    #[test]
+    fn long_agent_command_does_not_shift_builtin_description_column() {
+        let agent_commands = vec![AgentCommandInfo {
+            name: "authenticating-a-service-for-one-session".to_string(),
+            description: "Use when a task needs to authenticate to a service".to_string(),
+            input_hint: None,
+        }];
+        let popup = CommandPopup::new_full(
+            Vec::new(),
+            agent_commands,
+            "nori-cloud".to_string(),
+            HashMap::new(),
+            HashMap::new(),
+        );
+
+        let builtin_only =
+            popup.rows_from_matches(vec![(CommandItem::Builtin(SlashCommand::Init), None, 0)]);
+        let with_agent = popup.rows_from_matches(vec![
+            (CommandItem::Builtin(SlashCommand::Init), None, 0),
+            (CommandItem::AgentCommand(0), None, 0),
+        ]);
+
+        let area = Rect::new(0, 0, 80, 4);
+        let column_x = |rows: &[GenericDisplayRow]| {
+            let mut state = ScrollState::new();
+            state.clamp_selection(rows.len());
+            let mut buf = Buffer::empty(area);
+            render_rows(area, &mut buf, rows, &state, MAX_COMMAND_POPUP_ROWS, "none");
+            // First non-space cell after the leading `/init` name on row 0.
+            (0..area.width)
+                .skip_while(|x| buf[(*x, 0)].symbol() != " ")
+                .find(|x| buf[(*x, 0)].symbol() != " ")
+                .expect("description column")
+        };
+
+        assert_eq!(column_x(&builtin_only), column_x(&with_agent));
     }
 
     #[test]
