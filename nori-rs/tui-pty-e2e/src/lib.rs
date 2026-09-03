@@ -991,8 +991,17 @@ pub fn normalize_for_snapshot(contents: String) -> String {
     let mut normalized = contents;
 
     // Replace temp directories: /tmp/claude-*/.tmpXXXXXX, /tmp/claude/.tmpXXXXXX,
-    // or /tmp/.tmpXXXXXX -> [TMP_DIR]
-    for pattern in &["/tmp/claude-", "/tmp/claude/.tmp", "/tmp/.tmp"] {
+    // or /tmp/.tmpXXXXXX -> [TMP_DIR]. macOS puts TMPDIR under
+    // /var/folders/<hash>/T, which canonicalizes to /private/var/folders/...,
+    // so the longer prefix has to be tried first or it leaves "/private"
+    // stranded in the snapshot.
+    for pattern in &[
+        "/tmp/claude-",
+        "/tmp/claude/.tmp",
+        "/tmp/.tmp",
+        "/private/var/folders/",
+        "/var/folders/",
+    ] {
         while let Some(start) = normalized.find(pattern) {
             let end = normalized[start..]
                 .find(|c: char| c.is_whitespace() || c == '│')
@@ -1236,6 +1245,7 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_normalize_worked_for_line() {
@@ -1279,6 +1289,25 @@ mod tests {
             normalize_for_snapshot(multi_line.to_string()),
             expected_multi
         );
+    }
+
+    #[test]
+    fn test_normalize_platform_temp_directories() {
+        // The macOS runners report TMPDIR under /var/folders, canonicalized to
+        // /private/var/folders. Both must normalize to the same placeholder as
+        // the Linux /tmp paths or every snapshot with a directory line is
+        // platform-specific.
+        for input in [
+            "  Directory    /tmp/.tmpU8TVyg",
+            "  Directory    /var/folders/pm/cmklcsfj60nd/T/.tmpU8TVyg",
+            "  Directory    /private/var/folders/pm/cmklcsfj60nd/T/.tmpU8TVyg",
+        ] {
+            assert_eq!(
+                normalize_for_snapshot(input.to_string()),
+                "  Directory    [TMP_DIR]",
+                "failed to normalize {input}"
+            );
+        }
     }
 
     #[test]
