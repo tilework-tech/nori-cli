@@ -21,8 +21,8 @@ PTY -> nori-tui -> nori-harness -> nori-acp-host -> mock ACP agent
 ### Core Implementation
 
 `portable_pty` supplies the terminal, `vt100` maintains a virtual screen, and
-test helpers send keys, wait for stable text, capture output, and enforce exit
-deadlines.
+test helpers send keys, type and submit composer input, wait for stable text,
+capture output, and enforce exit deadlines.
 
 Scenarios cover representative raw ACP messages, tools, plans, permissions and
 responses; Nori lifecycle and failure behavior; query-driven pickers; cloud
@@ -65,6 +65,11 @@ typed `HarnessHandle` methods available to headless embedders.
   text while retaining meaningful terminal ordering and content.
 - Transcript pickers treat a v3 transcript as non-empty only when it has at
   least one user turn; lifecycle records alone do not make it resumable.
+- Composer input goes through `TuiSession::type_input` and
+  `TuiSession::submit_input`, never a bare `send_str` followed by a sleep. A
+  string written in one PTY burst is classified as a paste, and Enter is folded
+  into that buffer as a newline until the buffer flushes, so the helpers wait
+  for the composer to render the text before sending the next key.
 - Timing-sensitive scenarios use bounded waits, but assertions target visible
   behavior rather than private reducer calls.
 - Prepared-lifecycle scenarios assert process ownership as well as terminal

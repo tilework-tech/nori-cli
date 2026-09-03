@@ -32,9 +32,7 @@ fn resume_picker_lists_agent_sessions_when_session_list_supported() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Dispatch the in-session `/resume` slash command.
-    session.send_str("/resume").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/resume").unwrap();
 
     session
         .wait_for_text(

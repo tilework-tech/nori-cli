@@ -101,9 +101,7 @@ fn test_transcript_created_on_session() {
     let nori_home = session.nori_home_path().expect("Should have NORI_HOME");
 
     // Send a message to trigger transcript recording
-    session.send_str("Test transcript message").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Test transcript message").unwrap();
 
     // Wait for response
     session
@@ -187,9 +185,7 @@ fn test_transcript_contains_assistant_message() {
     let nori_home = session.nori_home_path().expect("Should have NORI_HOME");
 
     // Send message and wait for response
-    session.send_str("Prompt for assistant").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Prompt for assistant").unwrap();
 
     session
         .wait_for_text("This is the assistant response for transcript!", TIMEOUT)
@@ -271,9 +267,7 @@ fn test_multiple_sessions_same_project() {
 
     let nori_home = session1.nori_home_path().expect("Should have NORI_HOME");
 
-    session1.send_str("Message 1").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session1.send_key(Key::Enter).unwrap();
+    session1.submit_input("Message 1").unwrap();
 
     session1
         .wait_for_text("Response 1", TIMEOUT)
@@ -308,9 +302,7 @@ fn test_multiple_sessions_same_project() {
 
     let nori_home2 = session2.nori_home_path().expect("Should have NORI_HOME");
 
-    session2.send_str("Message 2").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session2.send_key(Key::Enter).unwrap();
+    session2.submit_input("Message 2").unwrap();
 
     session2
         .wait_for_text("Response 2", TIMEOUT)
@@ -368,9 +360,7 @@ fn test_project_metadata_created() {
 
     let nori_home = session.nori_home_path().expect("Should have NORI_HOME");
 
-    session.send_str("Test message").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Test message").unwrap();
 
     session
         .wait_for_text("Response for metadata test", TIMEOUT)
@@ -441,9 +431,7 @@ fn test_session_meta_fields() {
 
     let nori_home = session.nori_home_path().expect("Should have NORI_HOME");
 
-    session.send_str("Test").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Test").unwrap();
 
     session
         .wait_for_text("Response", TIMEOUT)
@@ -524,9 +512,7 @@ fn test_resume_viewonly_shows_transcript() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Turn 1: Send first user message with unique marker
-    session.send_str("UNIQUE_PROMPT_ALPHA_12345").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("UNIQUE_PROMPT_ALPHA_12345").unwrap();
 
     session
         .wait_for_text("RESPONSE_ALPHA", Duration::from_secs(10))
@@ -534,9 +520,7 @@ fn test_resume_viewonly_shows_transcript() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Turn 2: Send second user message with different marker
-    session.send_str("UNIQUE_PROMPT_BETA_67890").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("UNIQUE_PROMPT_BETA_67890").unwrap();
 
     session
         .wait_for_text("RESPONSE_BETA", Duration::from_secs(10))
@@ -546,9 +530,7 @@ fn test_resume_viewonly_shows_transcript() {
     std::thread::sleep(Duration::from_millis(1000));
 
     // Start new session with /new command
-    session.send_str("/new").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/new").unwrap();
 
     session
         .wait_for_text("›", TIMEOUT)
@@ -556,9 +538,7 @@ fn test_resume_viewonly_shows_transcript() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Open view-only transcript picker
-    session.send_str("/resume-viewonly").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/resume-viewonly").unwrap();
 
     // Wait for picker to appear with title
     session

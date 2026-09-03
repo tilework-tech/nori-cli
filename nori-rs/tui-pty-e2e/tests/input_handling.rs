@@ -24,8 +24,7 @@ fn test_ctrl_c_clears_input() {
     session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Type some text
-    session.send_str("draft message").unwrap();
-    session.wait_for_text("draft message", TIMEOUT).unwrap();
+    session.type_input("draft message").unwrap();
 
     // Ctrl-C should clear
     session.send_key(Key::Ctrl('c')).unwrap();
@@ -48,8 +47,7 @@ fn test_backspace() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
     session.wait_for_text("›", TIMEOUT).unwrap();
 
-    session.send_str("Hello").unwrap();
-    session.wait_for_text("Hello", TIMEOUT).unwrap();
+    session.type_input("Hello").unwrap();
 
     // Backspace twice
     session.send_key(Key::Backspace).unwrap();
@@ -72,10 +70,7 @@ fn test_arrows() {
     let mut session = TuiSession::spawn(40, 80).unwrap();
     session.wait_for_text("›", TIMEOUT).unwrap();
 
-    session.send_str("/model").unwrap();
-    session.wait_for_text("/model", TIMEOUT).unwrap();
-
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/model").unwrap();
     std::thread::sleep(Duration::from_millis(100));
     session.send_key(Key::Down).unwrap();
     std::thread::sleep(Duration::from_millis(100));
@@ -100,9 +95,7 @@ fn test_history_navigation_up_down() {
     session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Submit first message
-    session.send_str("first message").unwrap();
-    session.wait_for_text("first message", TIMEOUT).unwrap();
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("first message").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for response to complete
@@ -163,9 +156,7 @@ fn test_history_navigation_multiple_messages() {
     session.wait_for_text("›", TIMEOUT).unwrap();
 
     // Submit first message
-    session.send_str("first message").unwrap();
-    session.wait_for_text("› first message", TIMEOUT).unwrap();
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("first message").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for response
@@ -176,9 +167,7 @@ fn test_history_navigation_multiple_messages() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit second message
-    session.send_str("second message").unwrap();
-    session.wait_for_text("› second message", TIMEOUT).unwrap();
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("second message").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the second response specifically. A plain text lookup can

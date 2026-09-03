@@ -28,7 +28,6 @@
 //! Failure: `"Failed to write file: ..."` or `"Write restricted ..."`
 
 use std::time::Duration;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
@@ -62,9 +61,7 @@ fn test_acp_create_new_file() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt to trigger file creation
-    session.send_str("Create a new file").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Create a new file").unwrap();
 
     // Wait for the write operation to complete
     session
@@ -118,9 +115,7 @@ fn test_acp_edit_existing_file() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt to trigger edit
-    session.send_str("Modify hello.py").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Modify hello.py").unwrap();
 
     // Wait for write completion
     session
@@ -171,9 +166,7 @@ fn test_acp_create_file_with_parent_dirs() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt to trigger nested file creation
-    session.send_str("Create nested file").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Create nested file").unwrap();
 
     // Wait for write completion
     session
@@ -224,9 +217,7 @@ fn test_acp_write_outside_workspace_denied() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt to trigger forbidden write
-    session.send_str("Write outside workspace").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Write outside workspace").unwrap();
 
     // Wait for error message
     session
@@ -274,9 +265,7 @@ fn test_acp_write_system_path_denied() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt to trigger system path write
-    session.send_str("Write to /etc/hosts").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Write to /etc/hosts").unwrap();
 
     // Wait for error message
     session
@@ -324,9 +313,7 @@ fn test_acp_write_to_tmp_allowed() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send prompt to trigger /tmp/claude write
-    session.send_str("Write to /tmp/claude").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Write to /tmp/claude").unwrap();
 
     // Wait for success
     session
@@ -375,9 +362,7 @@ fn test_acp_multiple_file_writes() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // First write
-    session.send_str("Write first file").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Write first file").unwrap();
 
     session
         .wait_for_text("File written successfully", Duration::from_secs(10))
@@ -396,10 +381,8 @@ fn test_acp_multiple_file_writes() {
     // would require extending the mock agent to support multiple paths.
 
     // Verify session is still functional by typing another message
-    session.send_str("Session still active").unwrap();
-
     session
-        .wait_for_text("Session still active", Duration::from_secs(3))
+        .type_input("Session still active")
         .expect("Session should remain functional after write");
 
     let contents = session.screen_contents();
@@ -442,9 +425,7 @@ fn test_acp_file_write_snapshot() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Trigger file write
-    session.send_str("Create snapshot file").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Create snapshot file").unwrap();
 
     // Wait for completion
     session

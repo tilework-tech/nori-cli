@@ -11,13 +11,11 @@
 //! - `elizacp` for the ElizACP tests (cargo install elizacp)
 
 use std::time::Duration;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TuiSession;
 
 /// Longer timeout for live agent tests (subprocess spawn + init)
 const LIVE_TIMEOUT: Duration = Duration::from_secs(30);
-const LIVE_TIMEOUT_INPUT: Duration = Duration::from_millis(500);
 
 /// Config TOML snippet that registers elizacp as a custom local agent.
 const ELIZACP_CONFIG: &str = r#"agent = "elizacp"
@@ -74,9 +72,7 @@ fn test_elizacp_custom_agent_startup_and_response() {
         .expect("TUI should start successfully with elizacp agent");
 
     // Send a simple message
-    session.send_str("Hello").unwrap();
-    std::thread::sleep(LIVE_TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Hello").unwrap();
 
     // Wait for the prompt to reappear after the response, indicating
     // a complete exchange. The "›" prompt returns once the agent finishes.

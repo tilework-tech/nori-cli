@@ -8,7 +8,6 @@ use serde_json::json;
 use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
-use tui_pty_e2e::TIMEOUT_INPUT;
 use tui_pty_e2e::TuiSession;
 use tungstenite::Message;
 use tungstenite::WebSocket;
@@ -90,12 +89,6 @@ fn wait_for_hosted_session(port: u16) -> (Client, String) {
     }
 }
 
-fn run_command(session: &mut TuiSession, command: &str) {
-    session.send_str(command).expect("type command");
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).expect("submit command");
-}
-
 fn latest_loopback_acp_port(screen: &str) -> u16 {
     let regex = regex::Regex::new(r"ws://127\.0\.0\.1:(\d+)/acp").expect("URL regex");
     regex
@@ -149,7 +142,7 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
     );
     drop(startup_client);
 
-    run_command(&mut session, "/new");
+    session.submit_input("/new").expect("submit command");
     let (mut startup_client, original_session_id) = wait_for_hosted_session(startup_port);
     let prompt_before_switch = "remote prompt before switch";
     let response = request(
@@ -173,12 +166,16 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
         1,
         "canonical remote prompt must render exactly once"
     );
-    run_command(&mut session, "/remote-control status");
+    session
+        .submit_input("/remote-control status")
+        .expect("submit command");
     session
         .wait_for_text("Controller: connected", Duration::from_secs(10))
         .expect("live controller in durable status history");
 
-    run_command(&mut session, "/remote-control on tailnet");
+    session
+        .submit_input("/remote-control on tailnet")
+        .expect("submit command");
     session
         .wait_for_text(
             "Could not run `tailscale status --json`",
@@ -186,7 +183,9 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
         )
         .expect("real Tailscale detection failure");
 
-    run_command(&mut session, "/remote-control off");
+    session
+        .submit_input("/remote-control off")
+        .expect("submit command");
     session
         .wait_for_text("Remote control disabled.", Duration::from_secs(10))
         .expect("runtime off history");
@@ -196,7 +195,9 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
         "off must stop the listener created by --remote"
     );
 
-    run_command(&mut session, "/remote-control on");
+    session
+        .submit_input("/remote-control on")
+        .expect("submit command");
     session
         .wait_for(
             |screen| has_loopback_acp_port_other_than(screen, startup_port),
@@ -208,7 +209,7 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
     assert_eq!(current_session_id, original_session_id);
     drop(runtime_client);
 
-    run_command(&mut session, "/agent");
+    session.submit_input("/agent").expect("submit command");
     session
         .wait_for_text("Select agent", Duration::from_secs(10))
         .expect("agent picker");

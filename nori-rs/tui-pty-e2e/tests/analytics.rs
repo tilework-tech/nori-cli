@@ -9,7 +9,6 @@ use std::time::SystemTime;
 
 use pretty_assertions::assert_eq;
 use serde_json::Value;
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
@@ -121,26 +120,6 @@ fn authenticated_home() -> tempfile::TempDir {
     home
 }
 
-/// Type `prompt` into the composer and submit it only once the composer has
-/// actually rendered it.
-///
-/// `send_str` writes the whole prompt into the PTY in one burst, so the
-/// composer's paste-burst heuristic buffers the characters and holds them out
-/// of the textarea until a flush tick fires. While that buffer is live, Enter
-/// is suppressed into a newline inside the pasted text instead of submitting.
-/// A fixed sleep does not settle this: a busy event loop — cloud entry spawns
-/// and activates the agent child before it drains input — can push the flush
-/// past any constant. The rendered prompt is the flush's observable effect, so
-/// waiting for it proves the suppression window is closed and Enter will
-/// submit.
-fn submit_prompt(session: &mut TuiSession, prompt: &str) {
-    session.send_str(prompt).expect("type prompt");
-    session
-        .wait_for_text(prompt, TIMEOUT)
-        .expect("composer should render the typed prompt before submit");
-    session.send_key(Key::Enter).expect("submit prompt");
-}
-
 #[test]
 fn interactive_prompt_reports_authenticated_agent_session() {
     let home = authenticated_home();
@@ -152,7 +131,9 @@ fn interactive_prompt_reports_authenticated_agent_session() {
 
     session.wait_for_text("›", TIMEOUT).expect("prompt ready");
     assert!(requests.recv_timeout(Duration::from_millis(300)).is_err());
-    submit_prompt(&mut session, "meaningful work");
+    session
+        .submit_input("meaningful work")
+        .expect("submit prompt");
     session
         .wait_for_text("Test message 2", TIMEOUT)
         .expect("agent response");
@@ -168,7 +149,9 @@ fn interactive_prompt_reports_authenticated_agent_session() {
         request.get("properties"),
         Some(&serde_json::json!({ "session_mode": "interactive" }))
     );
-    submit_prompt(&mut session, "second prompt");
+    session
+        .submit_input("second prompt")
+        .expect("submit second prompt");
     session
         .wait_for_text("Test message 2", TIMEOUT)
         .expect("second agent response");
@@ -192,7 +175,9 @@ fn cloud_prompt_reports_cloud_mode_after_the_agent_connects() {
         .wait_for_text("›", TIMEOUT)
         .expect("cloud prompt ready");
     assert!(requests.recv_timeout(Duration::from_millis(300)).is_err());
-    submit_prompt(&mut session, "meaningful cloud work");
+    session
+        .submit_input("meaningful cloud work")
+        .expect("submit prompt");
     session
         .wait_for_text("Test message 2", TIMEOUT)
         .expect("cloud agent response");
