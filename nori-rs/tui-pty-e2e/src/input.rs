@@ -4,6 +4,16 @@ use crate::Key;
 use crate::TIMEOUT;
 use crate::TuiSession;
 
+/// `text` with every run of whitespace removed.
+///
+/// Screen matching has to be whitespace-insensitive because the composer does
+/// not echo input back byte for byte: a leading `/` or `!` renders as a mode
+/// sigil followed by a space (`/remote-control status` becomes
+/// `/ remote-control status`), and long input wraps across lines.
+fn without_whitespace(text: &str) -> String {
+    text.split_whitespace().collect()
+}
+
 impl TuiSession {
     /// Type `input` into the composer and wait until the composer has rendered
     /// it.
@@ -26,8 +36,8 @@ impl TuiSession {
         let needle = input
             .rsplit('\n')
             .find(|line| !line.trim().is_empty())
-            .unwrap_or_default()
-            .to_string();
+            .map(without_whitespace)
+            .unwrap_or_default();
         if needle.is_empty() {
             return self
                 .send_str(input)
@@ -38,11 +48,15 @@ impl TuiSession {
         // transcript, and an input that filters a popup also appears in the
         // popup's own rows.
         self.poll().map_err(|error| error.to_string())?;
-        let before = self.screen_contents().matches(needle.as_str()).count();
+        let visible = without_whitespace(&self.screen_contents());
+        let before = visible.matches(needle.as_str()).count();
         self.send_str(input)
             .map_err(|error| format!("type {input:?}: {error}"))?;
         let expected = needle.clone();
-        let rendered = move |screen: &str| screen.matches(expected.as_str()).count() > before;
+        let rendered = move |screen: &str| {
+            let visible = without_whitespace(screen);
+            visible.matches(expected.as_str()).count() > before
+        };
         self.wait_for(rendered, TIMEOUT)
             .map_err(|error| format!("the composer never rendered {needle:?}: {error}"))
     }
