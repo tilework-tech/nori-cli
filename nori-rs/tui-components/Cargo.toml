@@ -46,7 +46,3 @@ path = "examples/picker_storybook/e2e.rs"
 [[test]]
 name = "storybook_nori"
 path = "examples/nori_storybook/e2e.rs"
-
-[[test]]
-name = "storybook_status_card"
-path = "examples/status_card_storybook/e2e.rs"

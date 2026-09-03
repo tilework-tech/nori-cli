@@ -67,6 +67,11 @@ pub struct SessionStarted {
     pub transcript_path: Option<PathBuf>,
     pub history_log_id: i64,
     pub history_entry_count: i64,
+    /// The session configuration the agent advertised when the session was
+    /// created, so clients can show the agent's model, mode, and other options
+    /// from the first frame instead of waiting for an update.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config_options: Vec<acp::v1::SessionConfigOption>,
 }
 
 /// The harness-owned phase of the active streaming operation.

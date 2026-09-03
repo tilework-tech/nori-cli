@@ -22,7 +22,14 @@ while IFS= read -r ansi; do
   name=$(basename "$artifact_dir")
   example=$(basename "$(dirname "$artifact_dir")")
   read -r cols rows < "$artifact_dir/geometry.txt"
-  output="$component_dir/examples/$example/screenshots/$name.png"
+  # Storybooks live beside the code they exercise, so the example directory
+  # is resolved per crate rather than assumed to be a component example.
+  if [[ -d "$component_dir/examples/$example" ]]; then
+    example_dir="$component_dir/examples/$example"
+  else
+    example_dir="$component_dir/../tui/examples/$example"
+  fi
+  output="$example_dir/screenshots/$name.png"
   bun "$TUI_CAPTURE_DIR/scripts/render-ansi.ts" \
     --input "$ansi" --output "$output" --cols "$cols" --rows "$rows" >/dev/null
   printf '%s\n' "$output"

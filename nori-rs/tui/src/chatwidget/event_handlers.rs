@@ -60,6 +60,13 @@ impl ChatWidget {
                 response: Ok(nori_protocol::acp::v1::AgentResponse::InitializeResponse(response)),
                 ..
             } => {
+                self.follow_only_attachment = response
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.get("nori"))
+                    .and_then(|nori| nori.get("attachmentMode"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some("follow");
                 self.session_agent_info = response.agent_info;
                 self.session_info_state.reset();
                 self.publish_session_title();
@@ -320,11 +327,17 @@ impl ChatWidget {
         self.current_rollout_path = event.transcript_path;
         self.acp_session_id = self.cloud_mode.then(|| event.acp_session_id.to_string());
         self.refresh_cloud_session_indicator();
+        // Adopt the configuration the agent advertised when it created the
+        // session, before the welcome card renders: the card then names the
+        // agent's actual model and options instead of the provider alone.
+        if !event.config_options.is_empty() {
+            self.sync_acp_session_config_snapshot(&event.config_options);
+        }
         self.add_to_history(history_cell::new_session_info(
             &self.config,
             self.config.active_agent.clone(),
             self.show_welcome_banner,
-            self.cloud_session_identity(),
+            self.live_status_view_model(),
         ));
         if let Some(user_message) = self.initial_user_message.take() {
             self.bottom_pane
@@ -374,11 +387,8 @@ impl ChatWidget {
             // but without install hints since this is not the first launch).
             use crate::nori::session_header::DisplayMode;
             use crate::nori::session_header::NoriSessionHeaderCell;
-            let header = NoriSessionHeaderCell::new(
-                self.config.active_agent.clone(),
-                self.config.cwd.clone(),
-            )
-            .with_display_mode(DisplayMode::Compact);
+            let header = NoriSessionHeaderCell::new(self.live_status_view_model())
+                .with_display_mode(DisplayMode::Compact);
             self.add_to_history(history_cell::SessionInfoCell::new(
                 history_cell::CompositeHistoryCell::new(vec![Box::new(header)]),
             ));

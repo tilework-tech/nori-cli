@@ -116,7 +116,10 @@ impl ChatWidget {
             harness_handle: spawn_result.handle,
             session_close_in_flight: false,
             exiting: false,
-            acp_config_option_snapshot: None,
+            agent_config: crate::nori::agent_config_state::AgentConfigState::default(),
+            agent_status: crate::nori::session_header::AgentStatusHandle::new(
+                crate::nori::session_header::AgentStatus::new(&config.active_agent),
+            ),
             acp_mode_config: None,
             acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
             ),
@@ -130,6 +133,7 @@ impl ChatWidget {
             session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
             cloud_mode,
             session_agent_info: None,
+            follow_only_attachment: false,
             session_info_state: Default::default(),
             session_info_detail: crate::nori::session_info::SessionInfoDetail::for_build(),
             acp_session_id: None,
@@ -284,7 +288,10 @@ impl ChatWidget {
             harness_handle: spawn_result.handle,
             session_close_in_flight: false,
             exiting: false,
-            acp_config_option_snapshot: None,
+            agent_config: crate::nori::agent_config_state::AgentConfigState::default(),
+            agent_status: crate::nori::session_header::AgentStatusHandle::new(
+                crate::nori::session_header::AgentStatus::new(&config.active_agent),
+            ),
             acp_mode_config: None,
             acp_mode_config_generation: super::session_config_mode::next_acp_mode_config_generation(
             ),
@@ -298,6 +305,7 @@ impl ChatWidget {
             session_agent_capabilities: crate::presentation::AgentCapabilitiesView::default(),
             cloud_mode,
             session_agent_info: None,
+            follow_only_attachment: false,
             session_info_state: Default::default(),
             session_info_detail: crate::nori::session_info::SessionInfoDetail::for_build(),
             acp_session_id,

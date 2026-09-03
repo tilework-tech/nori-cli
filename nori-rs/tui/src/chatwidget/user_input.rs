@@ -132,6 +132,12 @@ impl ChatWidget {
             return;
         }
 
+        // Followers may use local commands, but must never submit a prompt to
+        // the Slack-owned ACP session, including through programmatic callers.
+        if self.follow_only_attachment {
+            return;
+        }
+
         if self.harness_handle.is_none() {
             if text.starts_with('/') {
                 self.add_error_message(
@@ -268,28 +274,5 @@ impl ChatWidget {
 
     pub(crate) fn on_diff_complete(&mut self) {
         self.request_redraw();
-    }
-
-    pub(crate) fn add_status_output(&mut self) {
-        // Get optional status card fields from bottom_pane
-        let prompt_summary = self.bottom_pane.prompt_summary();
-        let token_breakdown = self.bottom_pane.transcript_token_breakdown();
-        let status_info = self.bottom_pane.status_card_info();
-
-        // Calculate approval mode label from config
-        let approval_mode_label =
-            approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
-
-        self.add_to_history(crate::nori::session_header::new_nori_status_output(
-            &self.config.active_agent,
-            self.config.cwd.clone(),
-            prompt_summary,
-            approval_mode_label,
-            token_breakdown,
-            self.cloud_session_identity(),
-            self.conversation_id(),
-            self.forked_from,
-            status_info,
-        ));
     }
 }

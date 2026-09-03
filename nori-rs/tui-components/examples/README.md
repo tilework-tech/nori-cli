@@ -1,7 +1,10 @@
 # Storybook E2E snapshots
 
 The storybooks have neighboring `<example>/e2e.rs` integration tests, registered
-in [`../Cargo.toml`](../Cargo.toml). They drive the built applications through
+in [`../Cargo.toml`](../Cargo.toml) — except `status_card_storybook`, which
+renders the CLI's production status view and therefore lives in
+[`../../tui/examples`](../../tui/examples) and is registered in the `nori-tui`
+crate. They drive the built applications through
 CSRessel's isolated tmux scripts and compare both styled ANSI display rows and
 plain text with Insta. The shared [`support/e2e.rs`](support/e2e.rs) adapter is
 test-only; it is not exported by `nori-tui-components`.
@@ -40,6 +43,9 @@ compiler-artifact output, including target-specific paths when
 and runs the storybook tests including ignored E2E cases. Rust's test
 runner can execute the independent sessions in parallel. Additional arguments
 are forwarded to the test harness, for example `--nocapture`.
+
+The runner builds both crates' storybooks, including `nori-tui` with its
+`storybook` feature, into the shared examples directory.
 
 Ordinary `cargo test -p nori-tui-components` runs the pure capture-helper tests
 but leaves the external tmux E2E cases ignored. To update expected screens,

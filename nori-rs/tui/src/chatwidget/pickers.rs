@@ -665,6 +665,17 @@ impl ChatWidget {
     /// Model-category config option, open the value picker for it. Otherwise
     /// show a static "not supported" message.
     pub(crate) fn open_model_popup(&mut self) {
+        // The advertised configuration is already tracked, so the picker opens
+        // from it rather than re-fetching what the agent already told us.
+        let advertised_model = self
+            .agent_config()
+            .option_for_category(&nori_protocol::acp::v1::SessionConfigOptionCategory::Model)
+            .map(|option| option.raw.clone());
+        if let Some(option) = advertised_model {
+            self.open_acp_session_config_value_picker(option);
+            return;
+        }
+
         if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
@@ -696,6 +707,14 @@ impl ChatWidget {
 
     /// Open the generic ACP session-config picker.
     pub(crate) fn open_session_config_popup(&mut self) {
+        // Open from the tracked configuration when the agent has advertised
+        // one; only an agent that has not yet announced anything needs a fetch.
+        if !self.agent_config().is_empty() {
+            let config_options = self.agent_config().raw_options();
+            self.open_acp_session_config_picker(config_options, None);
+            return;
+        }
+
         if let Some(handle) = self.harness_handle.clone() {
             let app_event_tx = self.app_event_tx.clone();
             tokio::spawn(async move {
