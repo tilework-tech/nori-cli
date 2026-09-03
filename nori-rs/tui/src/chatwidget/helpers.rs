@@ -142,6 +142,9 @@ impl ChatWidget {
     /// Called when an ACP agent is being spawned and may take time
     /// (e.g., npx/bunx resolving dependencies).
     pub(crate) fn show_connecting_status(&mut self, display_name: &str) {
+        if self.cloud_mode {
+            self.add_info_message(format!("Connecting to {display_name}…"), None);
+        }
         let header = format!("Connecting to {display_name}");
         self.bottom_pane.ensure_status_indicator();
         self.bottom_pane.set_interrupt_hint_visible(false); // Can't interrupt during connect

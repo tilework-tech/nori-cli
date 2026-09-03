@@ -31,6 +31,7 @@ impl ChatWidget {
             prepared_agent,
             analytics,
         } = common;
+        let activating_prepared_cloud_session = cloud_mode && prepared_agent.is_some();
         let mut rng = rand::rng();
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
@@ -154,6 +155,9 @@ impl ChatWidget {
         widget
             .bottom_pane
             .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
+        if activating_prepared_cloud_session {
+            widget.show_connecting_status("Nori Cloud");
+        }
         widget
     }
 
@@ -201,6 +205,7 @@ impl ChatWidget {
             prepared_agent,
             analytics,
         } = common;
+        let activating_prepared_cloud_session = cloud_mode && prepared_agent.is_some();
         let mut rng = rand::rng();
         let placeholder = PROMPT_MODE_PLACEHOLDERS
             [rng.random_range(0..PROMPT_MODE_PLACEHOLDERS.len())]
@@ -326,6 +331,9 @@ impl ChatWidget {
         widget
             .bottom_pane
             .set_acp_wire_recording_enabled(acp_wire_recording_enabled);
+        if activating_prepared_cloud_session {
+            widget.show_connecting_status("Nori Cloud");
+        }
         widget
     }
 

@@ -4,7 +4,31 @@ use crate::ui_types::PlanItem;
 use crate::ui_types::PlanUpdate;
 use crate::ui_types::StepStatus;
 
+fn acp_error_detail(error: &nori_protocol::acp::v1::Error) -> Option<&str> {
+    error
+        .data
+        .as_ref()
+        .and_then(|data| data.get("detail"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|detail| !detail.is_empty() && *detail != error.message)
+}
+
 impl ChatWidget {
+    pub(crate) fn acp_error_detail(error: &nori_protocol::acp::v1::Error) -> Option<&str> {
+        acp_error_detail(error)
+    }
+
+    pub(crate) fn acp_error_message_with_detail(
+        error: &nori_protocol::acp::v1::Error,
+    ) -> Option<String> {
+        acp_error_detail(error).map(|detail| format!("{}: {detail}", error.message))
+    }
+
+    pub(crate) fn acp_error_message(error: &nori_protocol::acp::v1::Error) -> String {
+        Self::acp_error_message_with_detail(error).unwrap_or_else(|| error.message.clone())
+    }
+
     pub(crate) fn handle_session_event(
         &mut self,
         generation: crate::app_event::SessionGeneration,
@@ -95,12 +119,19 @@ impl ChatWidget {
                 request_id,
                 response: Err(error),
             } => {
+                let message = Self::acp_error_message(&error);
+                tracing::warn!(
+                    code = i32::from(error.code),
+                    message = %error.message,
+                    detail = acp_error_detail(&error),
+                    "ACP request failed"
+                );
                 if self.owned_prompt_request_id.as_ref() == Some(&request_id) {
                     if !self.unpaired_prompt_error_ids.remove(&request_id) {
                         self.unpaired_prompt_error_ids.insert(request_id);
                     }
                 } else if !self.unpaired_prompt_error_ids.remove(&request_id) {
-                    self.on_error(error.to_string());
+                    self.on_error(message);
                 }
             }
             nori_protocol::AcpEvent::Request { .. }
@@ -204,17 +235,22 @@ impl ChatWidget {
                 };
                 self.handle_client_phase_changed(phase);
             }
-            nori_protocol::NoriEvent::SessionEnded(ended) => match ended.reason {
-                nori_protocol::SessionEndReason::Shutdown => {
-                    self.app_event_tx.send(AppEvent::ExitRequest);
+            nori_protocol::NoriEvent::SessionEnded(ended) => {
+                if !self.session_configured_received {
+                    self.bottom_pane.hide_status_indicator();
                 }
-                nori_protocol::SessionEndReason::Closed => {
-                    self.app_event_tx.send(AppEvent::SessionClosed);
+                match ended.reason {
+                    nori_protocol::SessionEndReason::Shutdown => {
+                        self.app_event_tx.send(AppEvent::ExitRequest);
+                    }
+                    nori_protocol::SessionEndReason::Closed => {
+                        self.app_event_tx.send(AppEvent::SessionClosed);
+                    }
+                    nori_protocol::SessionEndReason::ConnectionLost
+                    | nori_protocol::SessionEndReason::SpawnFailed
+                    | nori_protocol::SessionEndReason::TimedOut => {}
                 }
-                nori_protocol::SessionEndReason::ConnectionLost
-                | nori_protocol::SessionEndReason::SpawnFailed
-                | nori_protocol::SessionEndReason::TimedOut => {}
-            },
+            }
             nori_protocol::NoriEvent::QueueChanged(queue) => {
                 self.bottom_pane.set_queued_user_messages(queue.prompts);
                 self.request_redraw();
@@ -240,6 +276,9 @@ impl ChatWidget {
             }
             nori_protocol::NoriEvent::Notice(notice) => self.on_warning(notice.message),
             nori_protocol::NoriEvent::RequestFailed(failure) => {
+                if !self.session_configured_received {
+                    self.bottom_pane.hide_status_indicator();
+                }
                 let completes_active_prompt =
                     failure.request_id.as_ref().is_some_and(|request_id| {
                         self.owned_prompt_request_id.as_ref() == Some(request_id)

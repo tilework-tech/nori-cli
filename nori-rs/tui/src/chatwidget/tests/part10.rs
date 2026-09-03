@@ -1,5 +1,25 @@
 use super::*;
 
+fn render_bottom_pane(chat: &mut ChatWidget, width: u16) -> String {
+    use crate::render::renderable::Renderable;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+
+    let area = Rect::new(0, 0, width, chat.bottom_pane.desired_height(width));
+    let mut buffer = Buffer::empty(area);
+    chat.bottom_pane.render(area, &mut buffer);
+    (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buffer[(x, y)].symbol().chars().next().unwrap_or(' '))
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[test]
 fn candidate_login_target_survives_failure_and_clears_after_success() {
     let (mut chat, _rx, _unused_rx) = make_chatwidget_manual();
@@ -1583,6 +1603,58 @@ fn unrelated_request_failure_does_not_complete_the_active_prompt() {
     assert!(chat.bottom_pane.is_task_running());
     assert_eq!(chat.loop_remaining, Some(5));
     assert_eq!(next_loop_iteration(&mut rx), None);
+}
+
+#[test]
+fn startup_request_failure_stops_the_connecting_indicator() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.set_composer_text("draft while connecting".to_string());
+    chat.show_connecting_status("Nori Cloud");
+    assert!(chat.bottom_pane.status_indicator_visible());
+    insta::assert_snapshot!(
+        "cloud_connecting_bottom_pane",
+        render_bottom_pane(&mut chat, 80)
+    );
+    insta::assert_snapshot!("cloud_connecting_history", history_text(&mut rx));
+
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::RequestFailed(
+            nori_protocol::RequestFailure {
+                request_id: None,
+                message: "Connection timed out. The agent did not respond.".to_string(),
+                kind: nori_protocol::RequestFailureKind::Retryable,
+            },
+        )),
+    );
+
+    assert!(!chat.bottom_pane.status_indicator_visible());
+    insta::assert_snapshot!(
+        "cloud_connection_failure_bottom_pane",
+        render_bottom_pane(&mut chat, 80)
+    );
+    insta::assert_snapshot!("cloud_connection_failure_history", history_text(&mut rx));
+}
+
+#[test]
+fn startup_session_end_stops_the_connecting_indicator_without_a_request_failure() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.show_connecting_status("Nori Cloud");
+    assert!(chat.bottom_pane.status_indicator_visible());
+
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::SpawnFailed,
+                message: Some("Failed to create session".to_string()),
+            },
+        )),
+    );
+
+    assert!(!chat.bottom_pane.status_indicator_visible());
 }
 
 #[test]

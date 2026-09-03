@@ -53,6 +53,11 @@ impl ChatWidget {
         }
 
         match self.bottom_pane.handle_key_event(key_event) {
+            InputResult::Submitted(text)
+                if self.cloud_mode && !self.session_configured_received =>
+            {
+                self.bottom_pane.restore_composer_submission(text);
+            }
             InputResult::Submitted(text) if self.follow_only_attachment => {
                 self.bottom_pane.restore_composer_submission(text);
             }

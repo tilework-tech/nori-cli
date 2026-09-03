@@ -65,11 +65,12 @@ first-prompt guard.
 
 The ordinary TUI uses `session_mode = interactive`; the explicit cloud route
 uses `session_mode = cloud`. Preparation, session listing, picker display,
-resume, and connection establishment are silent. Capture begins in the
-[harness](../harness/docs.md) only when the first user prompt receives its ACP
-wire request ID. Leaving the application performs one bounded reporter flush
-after [`App::run`](src/app/mod.rs) completes and before terminal restoration;
-analytics failures do not replace the application result.
+resume, and connection establishment do not emit authenticated activity;
+visible connection feedback is independent of analytics. Capture begins in
+the [harness](../harness/docs.md) only when the first user prompt receives its
+ACP wire request ID. Leaving the application performs one bounded reporter
+flush after [`App::run`](src/app/mod.rs) completes and before terminal
+restoration; analytics failures do not replace the application result.
 
 #### Source-first event dispatch
 
@@ -135,7 +136,12 @@ The application event loop matches `SessionEvent::Acp` and
   time. Failures unrelated to the active prompt do not complete it. Other typed
   operations complete through their
   `HarnessHandle` return values while their raw responses remain observable on
-  the stream.
+  the stream. When an unpaired ACP error reaches the active widget,
+  [`event_handlers.rs`](src/chatwidget/event_handlers.rs) logs its code and safe
+  diagnostic fields, then renders its message plus a distinct, non-empty string
+  `data.detail` when present. Other machine-readable error data stays out of
+  history, keeping the user-facing failure actionable and screenshot-friendly
+  without dumping opaque metadata.
 - Nori events drive lifecycle, queue, replay, compaction, goals, undo,
   user-shell output, hooks, summaries, notices, and classified failures.
 
@@ -526,6 +532,17 @@ supersession, or application exit tears down only the candidate and leaves the
 current session promptable. Prompt submission always targets the current
 widget; there is no pending switch-on-next-prompt state.
 
+Candidate activation classifies hidden candidate events in
+[`App`](src/app/event_handling.rs) before they reach the candidate widget. An
+ACP error or pre-start `RequestFailed` is logged and captured rather than
+forwarded into history. A safe ACP message is retained only when it has a
+distinct, non-empty string `data.detail`; otherwise the request-failure message
+becomes the retained fallback. On terminal `SessionEnded`, the TUI renders
+exactly one failure through the still-active widget, preferring detailed ACP
+context, then the request-failure message, then the terminal lifecycle message.
+This preserves useful broker detail without duplicating hidden candidate
+failures or exposing other structured fields.
+
 Bare `/login` has a narrow candidate-target override. Selecting a candidate
 sets it, and preparation or activation failure leaves it available so the user
 can authenticate that attempted agent without recreating pending-switch state.
@@ -591,6 +608,25 @@ attachments remain owned by the deferred widget. Choosing Start new transfers
 that input into the replacement widget before the deferred widget shuts down,
 so it auto-sends at the same `SessionStarted` boundary as every other entry
 path.
+
+Consuming a prepared Cloud connection for either New or Resume immediately
+adds a durable “Connecting to Nori Cloud…” history entry and shows the live
+connecting indicator. The constructors in
+[`constructors.rs`](src/chatwidget/constructors.rs) enter this state through
+the presentation helper in [`helpers.rs`](src/chatwidget/helpers.rs).
+`SessionStarted` is the readiness boundary: it hides the indicator, applies the
+connected session state, and renders the existing status card. The composer
+remains editable while activation is pending, but
+[`key_handling.rs`](src/chatwidget/key_handling.rs) restores the submitted text
+on Enter instead of passing it to the harness; the user must submit again after
+the status card appears. This prevents the harness's ordinary pre-activation
+command queue from accepting a Cloud prompt before the remote session is ready
+while preserving the user's draft. A pre-start `RequestFailed` or
+`SessionEnded` also clears the live indicator, so any failure output is not
+accompanied by stale connection state; the durable progress entry remains in
+history. Snapshots in [`chatwidget/tests`](src/chatwidget/tests/) pin the live
+indicator, durable connecting entry, stopped indicator with its preserved
+draft, and terminal failure history as separate presentation boundaries.
 
 The shared ACP resume picker treats session source as first-class presentation
 instead of requiring users to inspect raw metadata. Cloud rows with a typed

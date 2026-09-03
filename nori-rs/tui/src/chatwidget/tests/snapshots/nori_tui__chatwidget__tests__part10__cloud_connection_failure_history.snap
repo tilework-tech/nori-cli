@@ -1,0 +1,5 @@
+---
+source: tui/src/chatwidget/tests/part10.rs
+expression: history_text(&mut rx)
+---
+■ Connection timed out. The agent did not respond.

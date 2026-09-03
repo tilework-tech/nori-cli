@@ -1,5 +1,55 @@
 use super::*;
 
+#[derive(Debug, PartialEq, Eq)]
+enum CandidateActivationEvent {
+    Forward,
+    CapturedError,
+    Ended(String),
+}
+
+fn classify_candidate_activation_event(
+    event: &nori_protocol::SessionEvent,
+    activation_error: &mut Option<String>,
+) -> CandidateActivationEvent {
+    match event {
+        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            response: Err(error),
+            ..
+        }) => {
+            tracing::warn!(
+                code = i32::from(error.code),
+                message = %error.message,
+                detail = ChatWidget::acp_error_detail(error),
+                "ACP candidate activation request failed"
+            );
+            if let Some(message) = ChatWidget::acp_error_message_with_detail(error) {
+                *activation_error = Some(message);
+            }
+            CandidateActivationEvent::CapturedError
+        }
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::RequestFailed(failure)) => {
+            tracing::warn!(
+                message = %failure.message,
+                kind = ?failure.kind,
+                "candidate activation request failed"
+            );
+            if activation_error.is_none() {
+                *activation_error = Some(failure.message.clone());
+            }
+            CandidateActivationEvent::CapturedError
+        }
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(ended)) => {
+            CandidateActivationEvent::Ended(activation_error.take().unwrap_or_else(|| {
+                ended
+                    .message
+                    .clone()
+                    .unwrap_or_else(|| "Candidate session ended during activation".to_string())
+            }))
+        }
+        _ => CandidateActivationEvent::Forward,
+    }
+}
+
 impl App {
     /// Clear and report a due deferred agent spawn.
     ///
@@ -139,6 +189,7 @@ impl App {
                         agent_name,
                         display_name,
                         widget: Box::new(widget),
+                        activation_error: None,
                     });
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
@@ -667,25 +718,33 @@ impl App {
                         ) => Some(started.clone()),
                         _ => None,
                     };
-                    let ended_message = match &event {
-                        nori_protocol::SessionEvent::Nori(
-                            nori_protocol::NoriEvent::SessionEnded(ended),
-                        ) => Some(ended.message.clone().unwrap_or_else(|| {
-                            "Candidate session ended during activation".to_string()
-                        })),
-                        _ => None,
-                    };
-                    if let Some(CandidateAgent::Activating { widget, .. }) =
-                        self.candidate_agent.as_mut()
+                    let ended_message = if let Some(CandidateAgent::Activating {
+                        widget,
+                        activation_error,
+                        ..
+                    }) = self.candidate_agent.as_mut()
                     {
-                        widget.handle_session_event(generation, event);
-                    }
+                        match classify_candidate_activation_event(&event, activation_error) {
+                            CandidateActivationEvent::Forward => {
+                                widget.handle_session_event(generation, event);
+                                None
+                            }
+                            CandidateActivationEvent::CapturedError => None,
+                            CandidateActivationEvent::Ended(message) => {
+                                widget.handle_session_event(generation, event);
+                                Some(message)
+                            }
+                        }
+                    } else {
+                        None
+                    };
 
                     if let Some(started) = started {
                         let Some(CandidateAgent::Activating {
                             agent_name,
                             display_name,
                             widget,
+                            ..
                         }) = self.candidate_agent.take()
                         else {
                             unreachable!("candidate generation checked above")
@@ -1623,6 +1682,7 @@ impl App {
                         agent_name,
                         display_name,
                         widget: Box::new(widget),
+                        activation_error: None,
                     });
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
@@ -1992,6 +2052,8 @@ pub(super) fn reattach_info_message(
 
 #[cfg(test)]
 mod tests {
+    use super::CandidateActivationEvent;
+    use super::classify_candidate_activation_event;
     use super::reattach_info_message;
 
     #[test]
@@ -2000,5 +2062,75 @@ mod tests {
             "cloud_reattach_info_message",
             reattach_info_message("session-123", Some("Fix reconnect"), true, "Nori Cloud")
         );
+    }
+
+    #[test]
+    fn candidate_activation_prefers_structured_acp_error_detail() {
+        let request_id = nori_protocol::acp::v1::RequestId::Str("session-new".to_string());
+        let error = nori_protocol::acp::v1::Error::new(-32010, "broker unreachable").data(
+            serde_json::json!({
+                "detail": "connection reset by broker",
+                "trace_id": "internal-only"
+            }),
+        );
+        let mut raw_error = None;
+
+        let response = nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            request_id,
+            response: Err(error),
+        });
+        assert_eq!(
+            classify_candidate_activation_event(&response, &mut raw_error),
+            CandidateActivationEvent::CapturedError
+        );
+        assert_eq!(
+            raw_error.as_deref(),
+            Some("broker unreachable: connection reset by broker")
+        );
+
+        let ended = nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::SpawnFailed,
+                message: Some("Failed to create session".to_string()),
+            },
+        ));
+        assert_eq!(
+            classify_candidate_activation_event(&ended, &mut raw_error),
+            CandidateActivationEvent::Ended(
+                "broker unreachable: connection reset by broker".to_string()
+            )
+        );
+        assert_eq!(raw_error, None);
+    }
+
+    #[test]
+    fn candidate_activation_defers_request_failure_until_session_end() {
+        let mut activation_error = None;
+        let failure_message = "Connection timed out. The agent did not respond.";
+        let request_failed = nori_protocol::SessionEvent::Nori(
+            nori_protocol::NoriEvent::RequestFailed(nori_protocol::RequestFailure {
+                request_id: None,
+                message: failure_message.to_string(),
+                kind: nori_protocol::RequestFailureKind::Retryable,
+            }),
+        );
+
+        assert_eq!(
+            classify_candidate_activation_event(&request_failed, &mut activation_error),
+            CandidateActivationEvent::CapturedError
+        );
+        assert_eq!(activation_error.as_deref(), Some(failure_message));
+
+        let ended = nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::TimedOut,
+                message: Some(failure_message.to_string()),
+            },
+        ));
+        assert_eq!(
+            classify_candidate_activation_event(&ended, &mut activation_error),
+            CandidateActivationEvent::Ended(failure_message.to_string())
+        );
+        assert_eq!(activation_error, None);
     }
 }

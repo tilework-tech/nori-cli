@@ -991,16 +991,17 @@ pub fn normalize_for_snapshot(contents: String) -> String {
     let mut normalized = contents;
 
     // Replace temp directories: /tmp/claude-*/.tmpXXXXXX, /tmp/claude/.tmpXXXXXX,
-    // or /tmp/.tmpXXXXXX -> [TMP_DIR]. macOS puts TMPDIR under
-    // /var/folders/<hash>/T, which canonicalizes to /private/var/folders/...,
-    // so the longer prefix has to be tried first or it leaves "/private"
-    // stranded in the snapshot.
+    // or /tmp/.tmpXXXXXX -> [TMP_DIR]. macOS can canonicalize /tmp to
+    // /private/tmp or put TMPDIR under /var/folders/<hash>/T.
     for pattern in &[
+        "/private/var/folders/",
+        "/var/folders/",
+        "/private/tmp/claude-",
+        "/private/tmp/claude/.tmp",
+        "/private/tmp/.tmp",
         "/tmp/claude-",
         "/tmp/claude/.tmp",
         "/tmp/.tmp",
-        "/private/var/folders/",
-        "/var/folders/",
     ] {
         while let Some(start) = normalized.find(pattern) {
             let end = normalized[start..]
@@ -1246,6 +1247,16 @@ pub fn normalize_for_input_snapshot(contents: String) -> String {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn normalizes_canonical_macos_temp_directories() {
+        let input = "Directory  /private/tmp/.tmpAbCd12/project";
+
+        assert_eq!(
+            normalize_for_snapshot(input.to_string()),
+            "Directory  [TMP_DIR]"
+        );
+    }
 
     #[test]
     fn test_normalize_worked_for_line() {
