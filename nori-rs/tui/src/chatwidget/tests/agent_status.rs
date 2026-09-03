@@ -217,25 +217,62 @@ fn the_config_picker_opens_from_the_tracked_configuration() {
     }
 }
 
+/// A `SessionStarted` event carrying `config_options`.
+fn session_started(config_options: Vec<acp::SessionConfigOption>) -> nori_protocol::SessionEvent {
+    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionStarted(
+        nori_protocol::SessionStarted {
+            transcript_id: None,
+            acp_session_id: nori_protocol::acp::v1::SessionId::new("0"),
+            cwd: std::path::PathBuf::from("/workspace"),
+            transcript_path: None,
+            history_log_id: 0,
+            history_entry_count: 0,
+            config_options,
+        },
+    ))
+}
+
+#[test]
+fn the_welcome_card_is_written_before_any_session_starts() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.emit_welcome_card();
+
+    let card = history_text(&mut rx);
+    assert!(
+        card.contains("Nori CLI") && card.contains("Agent        Claude\n"),
+        "an unprompted session still gets a card, with the provider name alone \
+         on the agent row, got:\n{card}"
+    );
+}
+
+#[test]
+fn a_session_start_after_the_early_card_announces_the_configuration_instead() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+    let generation = chat.session_generation;
+    chat.emit_welcome_card();
+    while rx.try_recv().is_ok() {}
+
+    chat.handle_session_event(generation, session_started(claude_options("opus-5")));
+
+    let announced = history_text(&mut rx);
+    assert!(
+        announced.contains("Claude Code options: Mode=Plan, Model=Opus 5, Effort=xhigh"),
+        "the card already went out without the model, so the resolved \
+         configuration is announced on its own line, got:\n{announced}"
+    );
+    assert!(
+        !announced.contains("Nori CLI"),
+        "and the card is not written a second time, got:\n{announced}"
+    );
+}
+
 #[test]
 fn a_session_start_carrying_configuration_renders_it_on_the_welcome_card() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
     let generation = chat.session_generation;
 
-    chat.handle_session_event(
-        generation,
-        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionStarted(
-            nori_protocol::SessionStarted {
-                transcript_id: None,
-                acp_session_id: nori_protocol::acp::v1::SessionId::new("0"),
-                cwd: std::path::PathBuf::from("/workspace"),
-                transcript_path: None,
-                history_log_id: 0,
-                history_entry_count: 0,
-                config_options: claude_options("opus-5"),
-            },
-        )),
-    );
+    chat.handle_session_event(generation, session_started(claude_options("opus-5")));
 
     let welcome = last_history_cell(&mut rx).expect("welcome card");
     assert!(

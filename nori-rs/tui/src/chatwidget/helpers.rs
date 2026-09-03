@@ -185,6 +185,13 @@ impl ChatWidget {
         self.bottom_pane.on_file_search_result(query, matches);
     }
 
+    /// Fill the footer with the system facts that are cheap to read, so the
+    /// first frame already shows them instead of leaving every segment blank
+    /// until the background refresh lands.
+    pub(crate) fn seed_system_info(&mut self) {
+        self.bottom_pane.seed_system_info(&self.config.cwd);
+    }
+
     /// Update system info in the footer (for background refresh).
     pub(crate) fn apply_system_info_refresh(&mut self, info: crate::system_info::SystemInfo) {
         if let Some(transcript_location) = &info.transcript_location {

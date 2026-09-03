@@ -92,6 +92,39 @@ impl ChatWidget {
         self.status_view_model(self.agent_status.clone())
     }
 
+    /// Write the welcome card now, before any agent session exists.
+    ///
+    /// Lazy activation does not send `session/new` until the first prompt, so
+    /// waiting for `SessionStarted` leaves the session with no card at all
+    /// while the user is reading and typing. Everything on the compact card
+    /// except the agent's configuration is known locally at startup, so the
+    /// card goes out immediately with the provider name alone on the agent
+    /// row; `on_session_started` then announces the model and options the
+    /// agent resolved.
+    ///
+    /// No-op once the card has been written, so the agent-switch path (whose
+    /// candidate widget is hidden until it publishes `SessionStarted`) still
+    /// gets its card at session start.
+    pub(crate) fn emit_welcome_card(&mut self) {
+        if !self.show_welcome_banner {
+            return;
+        }
+        self.show_welcome_banner = false;
+        self.add_to_history(crate::history_cell::new_session_info(
+            &self.config,
+            self.config.active_agent.clone(),
+            true,
+            self.live_status_view_model(),
+        ));
+    }
+
+    /// Take over a conversation whose welcome card is already in the
+    /// scrollback, so this widget does not write a second one when its session
+    /// starts.
+    pub(crate) fn suppress_welcome_card(&mut self) {
+        self.show_welcome_banner = false;
+    }
+
     fn status_view_model(&self, agent: AgentStatusHandle) -> StatusViewModel {
         let footer = self.bottom_pane.status_footer_values();
         let (skillset, instruction_files) =

@@ -54,6 +54,35 @@ impl SystemInfo {
         Self::collect_fresh(None)
     }
 
+    /// The subset of system info worth blocking startup for: the git identity
+    /// of `dir`, which is three short `git` invocations.
+    ///
+    /// Everything else a full collection does is too slow to run before the
+    /// first frame — the skillset version spawns Node, transcript discovery and
+    /// the worktree disk check walk the filesystem — so those fields stay at
+    /// their defaults until the background refresh overwrites this snapshot
+    /// wholesale.
+    pub(crate) fn seed(dir: &std::path::Path) -> Self {
+        // E2E snapshots pin the complete, deterministic snapshot, so debug
+        // builds under `NORI_SYNC_SYSTEM_INFO=1` still collect everything.
+        #[cfg(debug_assertions)]
+        if env::var("NORI_SYNC_SYSTEM_INFO").is_ok() {
+            return Self::collect_sync();
+        }
+
+        let is_worktree = is_git_worktree(Some(dir));
+        Self {
+            git_branch: get_git_branch(Some(dir)),
+            is_worktree,
+            worktree_name: if is_worktree {
+                extract_worktree_name(dir)
+            } else {
+                None
+            },
+            ..Self::default()
+        }
+    }
+
     /// Collect fresh system info. This is blocking and should be called from
     /// a background thread to avoid blocking TUI startup.
     ///
@@ -685,6 +714,42 @@ mod tests {
             !info.is_worktree,
             "Non-git directory should not be a worktree"
         );
+    }
+
+    #[test]
+    fn seed_reports_the_branch_without_the_slow_lookups() {
+        let repo = create_git_repo();
+        // A file git would have to diff or stat if seeding did that work.
+        std::fs::write(repo.path().join("untracked.txt"), "scratch\n").expect("write file");
+
+        let seeded = SystemInfo::seed(repo.path());
+
+        assert_eq!(seeded.git_branch.as_deref(), Some("main"));
+        assert_eq!(
+            (
+                seeded.is_worktree,
+                seeded.worktree_name,
+                seeded.nori_version,
+                seeded.active_skillsets,
+                seeded.transcript_location,
+                seeded.git_lines_added,
+                seeded.git_lines_removed,
+                seeded.git_has_untracked,
+                seeded.worktree_cleanup_warning,
+            ),
+            (false, None, None, Vec::new(), None, None, None, false, None),
+            "seeding must leave everything the background refresh collects at its default"
+        );
+    }
+
+    #[test]
+    fn seed_of_a_non_git_directory_is_empty() {
+        let dir = tempfile::TempDir::new().expect("temp dir should be created");
+
+        let seeded = SystemInfo::seed(dir.path());
+
+        assert_eq!(seeded.git_branch, None);
+        assert!(!seeded.is_worktree);
     }
 
     #[test]

@@ -267,10 +267,17 @@ approval_mode = false
         contents
     );
 
-    // No session has been activated merely by startup.
+    // The card is written at startup, before any session exists, so it names
+    // the agent without the configuration only a live session can report.
     assert!(
-        !contents.contains("Nori CLI v"),
-        "Prepared startup should not render an active-session header. Contents: {}",
+        contents.contains("Nori CLI v"),
+        "Startup should render the session header. Contents: {}",
+        contents
+    );
+    assert!(
+        contents.contains("Agent        Mock ACP\n"),
+        "The agent row should be the provider name alone before a session \
+         reports its configuration. Contents: {}",
         contents
     );
 }

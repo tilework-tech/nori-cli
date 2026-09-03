@@ -747,6 +747,19 @@ live in `@/nori-rs/tui/src/bottom_pane/footer.rs`; resolved ACP or transcript
 usage reaches it through
 `@/nori-rs/tui/src/bottom_pane/chat_composer/rendering.rs`.
 
+The values behind those segments come from `SystemInfo`
+(`@/nori-rs/tui/src/system_info.rs`), collected on a single worker thread that
+refreshes only when asked: at startup, on message submit, turn completion,
+tool-call cwd change, and skillset apply. A full collection spawns Node for the
+skillset version and walks the filesystem for transcripts and worktrees, which
+is too slow to hold the first frame, so `SystemInfo::seed` runs a cheap subset —
+the git branch and worktree identity, three short `git` invocations — and
+`App::run` applies it before the loop starts. `configure_new_chat_widget`
+re-seeds after a widget swap, because the replacement carries its own empty
+footer. The background refresh then overwrites the seed wholesale. Debug builds
+under `NORI_SYNC_SYSTEM_INFO=1` seed with a complete synchronous collection
+instead, so E2E snapshots stay deterministic.
+
 #### Session-info verbosity
 
 ACP session-info updates carry an agent-defined metadata blob. Rendering all of
@@ -773,6 +786,21 @@ its remaining options in exactly the order the agent advertised them; boolean
 toggles read by presence (the label appears only when the toggle is on). Before
 the agent advertises any configuration the row is the provider name alone —
 nothing is guessed.
+
+The card is written at startup, not at `SessionStarted`. Lazy activation does
+not send `session/new` until the first prompt, so a session that has been opened
+but not prompted would otherwise show no card at all. `App::run` calls
+`ChatWidget::emit_welcome_card` once everything local is configured; the agent
+row is the provider name alone at that point, and when the session does start
+`on_session_started` announces the model and options the agent resolved on their
+own history line (the same cell a `session/update` config announcement uses)
+rather than writing a second card. Two entries keep writing the card at session
+start instead: a cloud session, whose card names a broker session it only learns
+about once attached, and the agent-switch candidate, which is hidden until it
+publishes `SessionStarted`. When lazy activation swaps in a fresh widget on the
+first prompt, `App::configure_new_chat_widget` suppresses that widget's card so
+the conversation keeps the one card it already has; a later `/new` is a
+different conversation and writes its own.
 
 `/status` uses the same compact, unshaded definition-list grammar with plain
 labels and a two-cell label/value gutter, expanding it into a superset of the

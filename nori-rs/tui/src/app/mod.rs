@@ -134,6 +134,9 @@ pub(crate) struct App {
     /// Live agent-switch candidate. The active widget remains usable until an
     /// activating candidate publishes `SessionStarted`.
     candidate_agent: Option<CandidateAgent>,
+    /// Whether the welcome card for the current conversation has already been
+    /// written, ahead of the session that conversation will run on.
+    welcome_card_written: bool,
 
     /// Ephemeral per-session loop count override (set via /settings menu).
     /// Outer Option: whether overridden; inner Option<i32>: the value.
@@ -315,6 +318,7 @@ impl App {
             primary_agent_preparation: None,
             pending_session_activation,
             candidate_agent: None,
+            welcome_card_written: false,
             loop_count_override: None,
             hotkey_config: nori_config::HotkeyConfig::default(),
             vim_mode: nori_config::VimEnterBehavior::Off,
@@ -359,6 +363,25 @@ impl App {
         };
         app.plan_drawer_mode = plan_mode;
         app.chat_widget.set_plan_drawer_mode(plan_mode);
+
+        // Fill the footer with the git facts we can read in a few milliseconds.
+        // The background refresh below replaces this with the full snapshot,
+        // but it spawns Node for the skillset version and walks the filesystem
+        // for transcripts, so without a seed every footer segment stays blank
+        // for as long as that takes.
+        app.chat_widget.seed_system_info();
+
+        // Write the welcome card before the agent session exists, so a session
+        // that has not been prompted yet still says where it is running and
+        // which agent it will run. Two entries opt out. A cloud session's card
+        // names the broker session, which it only learns once attached. And a
+        // pending activation — an initial prompt, or a resume — replaces this
+        // widget before the user can read anything, so its card belongs to the
+        // widget that takes over.
+        if !cloud_mode && app.pending_session_activation.is_none() {
+            app.chat_widget.emit_welcome_card();
+            app.welcome_card_written = true;
+        }
 
         // If skillset_per_session is enabled, show the skillset picker. The
         // agent preparation was deferred so that `nori-skillsets switch` can
@@ -487,6 +510,17 @@ impl App {
     }
 
     pub(super) fn configure_new_chat_widget(&mut self) {
+        // Lazy activation swaps in a fresh widget the first time the user
+        // submits a prompt. That widget continues the conversation the startup
+        // card already described, so it must not write a second one. Taking the
+        // flag scopes this to that one handover: a later `/new` is a different
+        // conversation and writes its own card when its session starts.
+        if std::mem::take(&mut self.welcome_card_written) {
+            self.chat_widget.suppress_welcome_card();
+        }
+        // The replacement carries its own empty footer, so re-seed it rather
+        // than leaving every segment blank until the next background refresh.
+        self.chat_widget.seed_system_info();
         self.chat_widget.update_approval_mode_label();
         self.chat_widget
             .set_hotkey_config(self.hotkey_config.clone());
