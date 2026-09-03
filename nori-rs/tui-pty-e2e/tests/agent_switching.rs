@@ -150,8 +150,7 @@ fn test_slash_new_reuses_prepared_subprocess() {
 
     // Get initial PID
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Type /new to activate the already-prepared connection.
@@ -199,8 +198,7 @@ fn test_acp_cleanup_outside_prompt_turn() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Start a streaming prompt
@@ -251,8 +249,7 @@ fn test_different_agents_different_subprocesses() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path1 = session1.acp_log_path().expect("Should have log path");
-    let pids1 = extract_mock_agent_pids_from_log(&log_path1);
-    assert!(!pids1.is_empty(), "First session should have PID");
+    let pids1 = wait_for_mock_agent_pid_count(&mut session1, &log_path1, 1, TIMEOUT);
     let pid1 = pids1[0];
 
     // Second session with mock-model-alt (separate TUI instance)
@@ -267,8 +264,7 @@ fn test_different_agents_different_subprocesses() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path2 = session2.acp_log_path().expect("Should have log path");
-    let pids2 = extract_mock_agent_pids_from_log(&log_path2);
-    assert!(!pids2.is_empty(), "Second session should have PID");
+    let pids2 = wait_for_mock_agent_pid_count(&mut session2, &log_path2, 1, TIMEOUT);
     let pid2 = pids2[0];
 
     // Different TUI instances should have different agent PIDs
@@ -297,8 +293,7 @@ fn test_acp_agent_switch_via_model_picker() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Open model picker with Ctrl-M (or the key that opens it)
@@ -411,8 +406,7 @@ fn test_agent_switch_activates_prepared_candidate() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Open agent picker with /agent command
@@ -492,7 +486,7 @@ fn test_agent_candidate_cancel_keeps_current_session_promptable() {
         .wait_for_text("›", TIMEOUT)
         .expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
-    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+    let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
     session.submit_input("/agent").unwrap();
     session
@@ -539,7 +533,7 @@ fn test_agent_candidate_activation_failure_keeps_current_session_promptable() {
         .wait_for_text("›", TIMEOUT)
         .expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
-    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+    let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
     session.submit_input("/agent").unwrap();
     session
@@ -585,7 +579,7 @@ fn test_agent_candidate_preparation_timeout_keeps_current_session_promptable() {
         .wait_for_text("›", TIMEOUT)
         .expect("TUI should start");
     let log_path = session.acp_log_path().expect("log path");
-    let current_pid = extract_mock_agent_pids_from_log(&log_path)[0];
+    let current_pid = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT)[0];
 
     session.submit_input("/agent").unwrap();
     session
@@ -640,8 +634,7 @@ fn test_agent_picker_no_switch_during_streaming() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = extract_mock_agent_pids_from_log(&log_path);
-    assert!(!initial_pids.is_empty(), "Should have initial PID");
+    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
     let initial_pid = initial_pids[0];
 
     // Start a streaming prompt
