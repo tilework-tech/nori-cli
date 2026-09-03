@@ -292,7 +292,7 @@ impl App {
             Self::spawn_system_info_worker(system_info_rx, app_event_tx.clone());
         let footer_segment_config = config.footer_segment_config.clone();
         let footer_layout_config = config.footer_layout_config.clone();
-        let skillset_per_session = config.skillset_per_session;
+        let skillset_per_session = !cloud_mode && config.skillset_per_session;
 
         let mut app = Self {
             app_event_tx,
@@ -389,7 +389,7 @@ impl App {
         // write `.claude/CLAUDE.md` before the agent reads it. Applying or
         // dismissing the picker starts preparation without activating a
         // session.
-        if app.config.skillset_per_session {
+        if skillset_per_session {
             app.chat_widget.handle_switch_skillset_command();
         } else if app.pending_session_activation.is_some() {
             app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);

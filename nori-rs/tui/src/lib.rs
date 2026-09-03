@@ -197,7 +197,7 @@ pub async fn run_main(
         use nori_config::AutoWorktree;
         let auto_worktree = config.auto_worktree;
 
-        if !auto_worktree.is_enabled() {
+        if cli.cloud_mode || !auto_worktree.is_enabled() {
             (false, None)
         } else {
             match cwd.clone().or_else(|| std::env::current_dir().ok()) {
@@ -358,8 +358,9 @@ async fn run_ratatui_app(
         codex_login::AuthCredentialsStoreMode::File,
     );
     let should_show_trust_screen = should_show_trust_screen(&initial_config);
-    let should_show_onboarding = should_show_trust_screen
-        || (!cli.skip_welcome && nori::onboarding::is_first_launch(&initial_config.nori_home));
+    let should_show_onboarding = !cli.cloud_mode
+        && (should_show_trust_screen
+            || (!cli.skip_welcome && nori::onboarding::is_first_launch(&initial_config.nori_home)));
 
     let (config, overrides) = if should_show_onboarding {
         // Use Nori-branded onboarding flow
