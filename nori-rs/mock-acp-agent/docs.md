@@ -37,6 +37,13 @@ count, image count, image MIME type, and image data through the
 error, allowing PTY lifecycle tests to verify that deferred positional or typed
 input reaches ACP exactly once without transforming text or attachments.
 
+Cloud readiness fixtures can hold a successful `session/new` response until a
+`MOCK_AGENT_NEW_SESSION_RELEASE_FILE` appears or return a structured
+broker-style failure. The handlers in [`main.rs`](src/main.rs) keep these
+controls on the real ACP request path, so PTY tests can observe the
+pre-`SessionStarted` UI state and user-facing ACP error projection without
+replacing Handroll or bypassing the stdio transport.
+
 The mock deliberately issues outbound client requests through the SDK rather
 than calling host internals. This makes the public `AcpEvent::Request` and
 `HarnessHandle::respond_to_agent` path observable end to end.

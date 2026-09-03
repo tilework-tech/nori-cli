@@ -53,6 +53,13 @@ prompt reuse that child; and deferred text and images cross the configured
 session boundary exactly once. Sessionless slash/local commands, preparation
 timeout, and exit cover the corresponding no-activation and reaping paths.
 
+Cloud activation scenarios hold `session/new` behind a release-file barrier
+after the picker selection. They verify that connecting feedback remains in
+history, typing stays available, Enter preserves rather than queues the draft
+before `SessionStarted`, and a later retry crosses ACP exactly once. A
+structured new-session failure also proves that the terminal shows the ACP
+message and string `data.detail` while excluding unrelated diagnostic fields.
+
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
 typed `HarnessHandle` methods available to headless embedders.
@@ -61,8 +68,10 @@ typed `HarnessHandle` methods available to headless embedders.
 
 - Build the mock agent before local runs when CI has not supplied its path.
 - Tests require the TUI `vt100-tests` feature.
-- Snapshot normalization removes dynamic session IDs, timestamps, and status
-  text while retaining meaningful terminal ordering and content.
+- Snapshot normalization removes dynamic session IDs, timestamps, status
+  text, and disposable Linux or macOS temp roots (`/tmp`, `/private/tmp`, and
+  `/private/var/folders`) while retaining meaningful terminal ordering and
+  content.
 - Transcript pickers treat a v3 transcript as non-empty only when it has at
   least one user turn; lifecycle records alone do not make it resumable.
 - Timing-sensitive scenarios use bounded waits, but assertions target visible

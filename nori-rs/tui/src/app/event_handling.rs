@@ -1,5 +1,29 @@
 use super::*;
 
+fn candidate_activation_failure_message(
+    event: &nori_protocol::SessionEvent,
+    raw_error: &mut Option<String>,
+) -> Option<String> {
+    match event {
+        nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            response: Err(error),
+            ..
+        }) => {
+            *raw_error = Some(ChatWidget::acp_error_message(error));
+            None
+        }
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(ended)) => {
+            Some(raw_error.take().unwrap_or_else(|| {
+                ended
+                    .message
+                    .clone()
+                    .unwrap_or_else(|| "Candidate session ended during activation".to_string())
+            }))
+        }
+        _ => None,
+    }
+}
+
 impl App {
     /// Clear and report a due deferred agent spawn.
     ///
@@ -139,6 +163,7 @@ impl App {
                         agent_name,
                         display_name,
                         widget: Box::new(widget),
+                        activation_error: None,
                     });
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
@@ -667,25 +692,26 @@ impl App {
                         ) => Some(started.clone()),
                         _ => None,
                     };
-                    let ended_message = match &event {
-                        nori_protocol::SessionEvent::Nori(
-                            nori_protocol::NoriEvent::SessionEnded(ended),
-                        ) => Some(ended.message.clone().unwrap_or_else(|| {
-                            "Candidate session ended during activation".to_string()
-                        })),
-                        _ => None,
-                    };
-                    if let Some(CandidateAgent::Activating { widget, .. }) =
-                        self.candidate_agent.as_mut()
+                    let ended_message = if let Some(CandidateAgent::Activating {
+                        widget,
+                        activation_error,
+                        ..
+                    }) = self.candidate_agent.as_mut()
                     {
+                        let message =
+                            candidate_activation_failure_message(&event, activation_error);
                         widget.handle_session_event(generation, event);
-                    }
+                        message
+                    } else {
+                        None
+                    };
 
                     if let Some(started) = started {
                         let Some(CandidateAgent::Activating {
                             agent_name,
                             display_name,
                             widget,
+                            ..
                         }) = self.candidate_agent.take()
                         else {
                             unreachable!("candidate generation checked above")
@@ -1623,6 +1649,7 @@ impl App {
                         agent_name,
                         display_name,
                         widget: Box::new(widget),
+                        activation_error: None,
                     });
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
@@ -1992,6 +2019,7 @@ pub(super) fn reattach_info_message(
 
 #[cfg(test)]
 mod tests {
+    use super::candidate_activation_failure_message;
     use super::reattach_info_message;
 
     #[test]
@@ -2000,5 +2028,42 @@ mod tests {
             "cloud_reattach_info_message",
             reattach_info_message("session-123", Some("Fix reconnect"), true, "Nori Cloud")
         );
+    }
+
+    #[test]
+    fn candidate_activation_prefers_structured_acp_error_detail() {
+        let request_id = nori_protocol::acp::v1::RequestId::Str("session-new".to_string());
+        let error = nori_protocol::acp::v1::Error::new(-32010, "broker unreachable").data(
+            serde_json::json!({
+                "detail": "connection reset by broker",
+                "trace_id": "internal-only"
+            }),
+        );
+        let mut raw_error = None;
+
+        let response = nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+            request_id,
+            response: Err(error),
+        });
+        assert_eq!(
+            candidate_activation_failure_message(&response, &mut raw_error),
+            None
+        );
+        assert_eq!(
+            raw_error.as_deref(),
+            Some("broker unreachable: connection reset by broker")
+        );
+
+        let ended = nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+            nori_protocol::SessionEnded {
+                reason: nori_protocol::SessionEndReason::SpawnFailed,
+                message: Some("Failed to create session".to_string()),
+            },
+        ));
+        assert_eq!(
+            candidate_activation_failure_message(&ended, &mut raw_error).as_deref(),
+            Some("broker unreachable: connection reset by broker")
+        );
+        assert_eq!(raw_error, None);
     }
 }

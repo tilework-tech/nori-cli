@@ -1,0 +1,8 @@
+---
+source: tui/src/chatwidget/tests/part10.rs
+expression: "render_bottom_pane(&mut chat, 80)"
+---
+• Connecting to Nori Cloud (0s)
+
+
+› draft while connecting

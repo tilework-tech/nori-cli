@@ -506,6 +506,98 @@ fn test_cloud_entry_picker_create_new_starts_fresh_session() {
         .expect("prompt should round-trip on the fresh session");
 }
 
+/// Claiming a fresh Cloud box can take several seconds. During that gap the
+/// TUI must explain what it is doing and keep an attempted prompt as a draft
+/// instead of silently queueing it before the session is ready.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_create_new_shows_connection_progress_and_blocks_early_submit() {
+    let fake = FakeHandroll::new();
+    let release_file = fake.marker("release_new_session");
+    let config = cloud_lifecycle_config(&fake)
+        .with_agent_env(
+            "MOCK_AGENT_NEW_SESSION_RELEASE_FILE",
+            release_file.to_string_lossy(),
+        )
+        .with_mock_response("draft submitted after cloud connected");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Connecting to Nori Cloud", TIMEOUT)
+        .expect("claiming a new cloud session should show connection progress");
+
+    session.send_str("draft while connecting").unwrap();
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(
+        session.screen_contents().contains("draft while connecting"),
+        "an early Enter must keep the text in the composer"
+    );
+    let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
+    assert!(
+        !agent_stderr.contains("Mock agent: prompt"),
+        "the draft must not be queued during connection:\n{agent_stderr}"
+    );
+
+    std::fs::write(release_file, "ready").expect("release delayed session/new");
+
+    session
+        .wait_for_text("Directory", TIMEOUT)
+        .expect("the connected session should render its initial status card");
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(
+        session
+            .screen_contents()
+            .contains("Connecting to Nori Cloud"),
+        "connection progress should remain in history after the status card appears"
+    );
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("draft submitted after cloud connected", TIMEOUT)
+        .expect("the preserved draft should submit once the user retries after connection");
+    let agent_stderr = std::fs::read_to_string(fake.marker("agent_stderr")).unwrap_or_default();
+    assert_eq!(
+        agent_stderr.matches("Mock agent: prompt").count(),
+        1,
+        "the preserved draft should cross the ACP boundary exactly once:\n{agent_stderr}"
+    );
+}
+
+/// A structured ACP failure from Handroll must remain actionable in terminal
+/// history without exposing unrelated machine-readable error metadata.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_create_new_error_shows_message_and_detail_without_json_noise() {
+    let fake = FakeHandroll::new();
+    let config =
+        cloud_lifecycle_config(&fake).with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_JSON", "1");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("broker unreachable", TIMEOUT)
+        .expect("the ACP error message should appear in history");
+    session
+        .wait_for_text("connection reset by broker", TIMEOUT)
+        .expect("the ACP error detail should appear in history");
+
+    let contents = session.screen_contents();
+    assert!(!contents.contains("retry_after_ms"), "{contents}");
+    assert!(!contents.contains("trace_id"), "{contents}");
+}
+
 /// /close releases the session and returns to the session picker — it must
 /// NOT auto-claim a fresh session ("swap" semantics are gone).
 #[test]

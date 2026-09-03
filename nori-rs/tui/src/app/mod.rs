@@ -195,6 +195,7 @@ enum CandidateAgent {
         agent_name: String,
         display_name: String,
         widget: Box<ChatWidget>,
+        activation_error: Option<String>,
     },
 }
 

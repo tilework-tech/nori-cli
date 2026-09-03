@@ -1663,6 +1663,18 @@ async fn main() -> acp::Result<()> {
                             "Mock model-specific new_session failure for testing",
                         ));
                     }
+                    if std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_JSON").is_ok() {
+                        eprintln!("Mock agent: simulating structured new_session failure");
+                        return responder.respond_with_error(
+                            acp::Error::new(-32010, "broker unreachable").data(
+                                serde_json::json!({
+                                    "detail": "connection reset by broker",
+                                    "retry_after_ms": 5000,
+                                    "trace_id": "mock-trace-new-session"
+                                }),
+                            ),
+                        );
+                    }
                     if let Ok(fail_from) = std::env::var("MOCK_AGENT_FAIL_NEW_SESSION_FROM")
                         && let Ok(fail_from) = fail_from.parse::<i64>()
                         && session_id >= fail_from
@@ -1674,7 +1686,14 @@ async fn main() -> acp::Result<()> {
                         ));
                     }
                     eprintln!("Mock agent: new_session id={session_id}");
-
+                    if let Ok(release_file) =
+                        std::env::var("MOCK_AGENT_NEW_SESSION_RELEASE_FILE")
+                    {
+                        let release_file = PathBuf::from(release_file);
+                        while !release_file.exists() {
+                            sleep(Duration::from_millis(10)).await;
+                        }
+                    }
                     let session_key = session_id.to_string();
                     let session_config = default_session_config();
                     state
