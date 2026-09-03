@@ -177,23 +177,87 @@ fn slash_popup_model_first_for_mo_logic() {
 }
 
 #[test]
-fn composer_renders_acp_mode_label_in_footer_by_default() {
-    snapshot_composer_state("composer_acp_mode_footer_default", false, |composer| {
-        composer.set_acp_mode_label(Some("Plan".to_string()));
-    });
+fn composer_renders_acp_mode_label_above_the_prompt_by_default() {
+    snapshot_composer_state(
+        "composer_acp_mode_textarea_top_right_default",
+        false,
+        |composer| {
+            composer.set_acp_mode_label(Some("Plan".to_string()));
+        },
+    );
 }
 
 #[test]
-fn composer_can_render_mode_segment_in_textarea_top_right() {
-    snapshot_composer_state("composer_acp_mode_textarea_top_right", false, |composer| {
-        composer.set_footer_layout_config(nori_config::FooterLayoutConfig::from_toml(
-            &nori_config::FooterLayoutConfigToml {
-                textarea_top_right: Some(vec![nori_config::FooterSegment::ModeIndicator.into()]),
-                ..Default::default()
-            },
-        ));
-        composer.set_acp_mode_label(Some("Plan".to_string()));
-    });
+fn composer_can_move_mode_segment_back_into_the_footer_row() {
+    snapshot_composer_state(
+        "composer_acp_mode_footer_right_override",
+        false,
+        |composer| {
+            composer.set_footer_layout_config(nori_config::FooterLayoutConfig::from_toml(
+                &nori_config::FooterLayoutConfigToml {
+                    footer_right: Some(vec![nori_config::FooterSegment::ModeIndicator.into()]),
+                    ..Default::default()
+                },
+            ));
+            composer.set_acp_mode_label(Some("Plan".to_string()));
+        },
+    );
+}
+
+/// Render the composer into an exact `width` x `height` area and return the
+/// rows as plain text, so narrow-terminal tests can inspect every cell.
+fn render_composer_rows(width: u16, height: u16, acp_mode_label: &str) -> Vec<String> {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    let (tx, _rx) = unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    let mut composer = ChatComposer::new(
+        true,
+        sender,
+        false,
+        "Ask Nori to do anything".to_string(),
+        false,
+    );
+    composer.set_acp_mode_label(Some(acp_mode_label.to_string()));
+
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|f| composer.render(f.area(), f.buffer_mut()))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .map(|y| (0..width).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+#[test]
+fn textarea_corner_hides_when_it_cannot_fit_the_composer_width() {
+    // Comfortably wide: the mode indicator sits above the prompt.
+    let wide = render_composer_rows(40, 3, "Plan");
+    assert!(wide[0].trim_end().ends_with("[ Plan ]"), "{wide:?}");
+    assert!(wide[1].starts_with("› Ask Nori"), "{wide:?}");
+
+    // Too narrow for the indicator: it disappears rather than being clipped
+    // across the row or pushed off the composer's left edge.
+    let narrow = render_composer_rows(6, 3, "Plan");
+    assert_eq!(narrow[0].trim(), "", "{narrow:?}");
+    assert!(narrow[1].starts_with('›'), "{narrow:?}");
+}
+
+#[test]
+fn textarea_corner_never_lands_on_the_prompt_row() {
+    // A composer squeezed below its three-row minimum has no padding row for
+    // the corner segment, so nothing is drawn over the prompt.
+    for height in [1, 2] {
+        let rows = render_composer_rows(40, height, "Plan");
+        for (index, row) in rows.iter().enumerate() {
+            assert!(
+                !row.contains("[ Plan ]"),
+                "corner segment landed on row {index} of a {height}-row composer: {rows:?}"
+            );
+        }
+    }
 }
 
 #[test]

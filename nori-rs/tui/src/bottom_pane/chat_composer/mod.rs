@@ -169,6 +169,9 @@ enum ActivePopup {
 }
 
 const FOOTER_SPACING_HEIGHT: u16 = 0;
+/// One padding row above the textarea, the textarea row, one padding row
+/// below. The padding rows are where the textarea corner segments render.
+const MIN_COMPOSER_HEIGHT: u16 = 3;
 
 mod key_handling;
 mod paste_handling;
@@ -754,42 +757,47 @@ fn render_textarea_corner_segments(
     buf: &mut Buffer,
     segments: super::footer::TextareaCornerSegments,
 ) {
-    if composer_rect.is_empty() {
+    // Corner segments live on the composer's blank padding rows, above and
+    // below the textarea. A composer squeezed below its three-row minimum has
+    // no padding left, so writing a corner would land on the prompt itself.
+    if composer_rect.is_empty() || composer_rect.height < MIN_COMPOSER_HEIGHT {
         return;
     }
-
-    render_left_corner(composer_rect.x + 1, composer_rect.y, buf, segments.top_left);
-    render_right_corner(
-        composer_rect.right().saturating_sub(1),
-        composer_rect.y,
-        buf,
-        segments.top_right,
-    );
 
     let bottom_y = composer_rect.bottom().saturating_sub(1);
-    render_left_corner(composer_rect.x + 1, bottom_y, buf, segments.bottom_left);
-    render_right_corner(
-        composer_rect.right().saturating_sub(1),
-        bottom_y,
-        buf,
-        segments.bottom_right,
-    );
+    render_left_corner(composer_rect, composer_rect.y, buf, segments.top_left);
+    render_right_corner(composer_rect, composer_rect.y, buf, segments.top_right);
+    render_left_corner(composer_rect, bottom_y, buf, segments.bottom_left);
+    render_right_corner(composer_rect, bottom_y, buf, segments.bottom_right);
 }
 
-fn render_left_corner(x: u16, y: u16, buf: &mut Buffer, line: Line<'static>) {
-    let width = line.width() as u16;
-    if width > 0 {
-        line.render(Rect::new(x, y, width, 1), buf);
-    }
+/// Columns a corner segment may occupy: one in from the composer's left edge,
+/// matching the prompt gutter, and out to its right edge.
+fn corner_span(composer_rect: Rect) -> Option<(u16, u16)> {
+    let available = composer_rect.width.checked_sub(1)?;
+    (available > 0).then_some((composer_rect.x + 1, available))
 }
 
-fn render_right_corner(right_edge: u16, y: u16, buf: &mut Buffer, line: Line<'static>) {
-    let width = line.width() as u16;
-    if width == 0 {
+fn render_left_corner(composer_rect: Rect, y: u16, buf: &mut Buffer, line: Line<'static>) {
+    let Some((x, available)) = corner_span(composer_rect) else {
+        return;
+    };
+    let width = u16::try_from(line.width()).unwrap_or(u16::MAX);
+    if width == 0 || width > available {
         return;
     }
-    let x = right_edge.saturating_sub(width).saturating_add(1);
     line.render(Rect::new(x, y, width, 1), buf);
+}
+
+fn render_right_corner(composer_rect: Rect, y: u16, buf: &mut Buffer, line: Line<'static>) {
+    let Some((x, available)) = corner_span(composer_rect) else {
+        return;
+    };
+    let width = u16::try_from(line.width()).unwrap_or(u16::MAX);
+    if width == 0 || width > available {
+        return;
+    }
+    line.render(Rect::new(x + available - width, y, width, 1), buf);
 }
 
 fn prompt_selection_action(

@@ -676,6 +676,32 @@ simultaneous local and remote input is deliberately deferred by the spec.
 
 #### Footer configuration
 
+The shipped default is a quiet shell. An idle local session shows the agent
+mode on the textarea's top-right corner, above the prompt, and right-aligns
+branch, worktree, and context on the footer row beneath it:
+
+```
+                                                              [ Plan ]
+› Ask Nori to do anything
+                                                ⎇ branch · 44% / 272k
+```
+
+`footer_left` holds only self-hiding state — the cloud session id when attached
+through cloud mode, and the vim mode indicator when vim mode is on — so an
+ordinary local shell leaves that group empty. Approvals, skillset, skillset
+version, session title, and cumulative token usage are all off by default:
+they are static, restate the transcript, or belong to a workflow the user has
+not opted into. Every one of them still appears in `/status`, and each is one
+`[tui.footer_segments]` line away from returning to the footer. Those segments
+keep a default `footer_left` placement precisely so enabling them needs nothing
+more than that one line.
+
+On a terminal too narrow to hold both groups, the right group sheds trailing
+segments until it fits and then disappears, rather than overwriting the left
+group. Textarea corner segments are clamped to the composer and are skipped
+entirely when the composer is squeezed below its three-row minimum, so they
+never land on the prompt line.
+
 `[tui.footer_layout]` accepts the same layout entries in `footer_left`,
 `footer_right`, and all four `textarea_*` corners. An entry is either a built-in
 segment name or an inline custom chunk:
@@ -698,6 +724,11 @@ Built-in names are `prompt_summary`, `session_title`, `vim_mode`, `git_branch`,
 maximum window size, such as `44% / 272k`. The five atomic context segments are
 off as standalone entries by default so custom chunks can compose only the
 values they need.
+
+Naming a segment in any `[tui.footer_layout]` group moves it out of whatever
+default group it started in, so a partial override never duplicates a segment
+and never disturbs the groups it did not name. `[tui.footer_segments]` toggles
+are applied on top and are never rewritten.
 
 `session_title` shows the title the agent reports over ACP session-info updates
 (`Title: Fix login flakes`). It self-hides for agents that never send one, and

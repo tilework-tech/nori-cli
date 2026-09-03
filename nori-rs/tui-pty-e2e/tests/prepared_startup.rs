@@ -56,6 +56,13 @@ impl FakeRemoteHandroll {
     }
 
     fn config(&self) -> SessionConfig {
+        self.config_with_extra_toml("")
+    }
+
+    /// The fake writes a complete config.toml, which makes
+    /// `SessionConfig::with_extra_config_toml` a no-op, so extra sections have
+    /// to be appended here instead.
+    fn config_with_extra_toml(&self, extra: &str) -> SessionConfig {
         let config_toml = format!(
             r#"
 agent = "remote-handroll"
@@ -70,7 +77,7 @@ args = ["acp", "--type", "remote", "ws://microvm.test/acp"]
 
 [notice]
 hide_full_access_warning = true
-"#,
+{extra}"#,
             self.script.display(),
         );
         SessionConfig::new()
@@ -418,8 +425,15 @@ fn local_and_slash_commands_do_not_implicitly_activate() {
 #[test]
 fn sessionless_policy_change_is_refreshed_before_activation() {
     let fake = FakeRemoteHandroll::new();
+    // This test reads the applied policy off the footer, and approvals is off
+    // in the shipped footer defaults.
     let config = fake
-        .config()
+        .config_with_extra_toml(
+            r#"
+[tui.footer_segments]
+approval_mode = true
+"#,
+        )
         .with_agent_env("MOCK_AGENT_REQUEST_PERMISSION", "1");
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
 

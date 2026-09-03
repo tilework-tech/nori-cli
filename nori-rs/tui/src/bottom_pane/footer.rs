@@ -18,6 +18,9 @@ use ratatui::text::Span;
 use ratatui::widgets::Widget;
 
 const MODE_INDICATOR_LABEL_MAX_CHARS: usize = 20;
+/// Minimum blank columns between the left and right footer groups before the
+/// right group starts shedding segments.
+const FOOTER_GROUP_MIN_GAP_COLS: u16 = 2;
 /// Session titles are agent-controlled free text and routinely a whole
 /// paragraph. The `/status` card keeps the longer form; the footer row has to
 /// share one line with git, context, and approvals.
@@ -146,26 +149,29 @@ fn footer_lines(props: &FooterProps) -> Vec<Line<'static>> {
 #[derive(Clone, Debug, Default)]
 struct FooterRow {
     left: Line<'static>,
-    right: Line<'static>,
+    /// Right-aligned segments, kept separate rather than pre-joined so a narrow
+    /// terminal can drop trailing ones instead of painting over the left group.
+    right: Vec<Line<'static>>,
 }
 
 impl FooterRow {
     fn left(left: Line<'static>) -> Self {
         Self {
             left,
-            right: Line::from(""),
+            right: Vec::new(),
         }
     }
 
     fn joined(self) -> Line<'static> {
-        if self.right.spans.is_empty() {
+        let right = join_footer_segments(&self.right);
+        if right.spans.is_empty() {
             self.left
         } else if self.left.spans.is_empty() {
-            self.right
+            right
         } else {
             let mut line = self.left;
             line.push_span(" · ".dim());
-            line.extend(self.right.spans);
+            line.extend(right.spans);
             line
         }
     }
@@ -183,20 +189,42 @@ fn render_footer_row(area: Rect, buf: &mut Buffer, row: FooterRow) {
         width: area.width.saturating_sub(footer_indent),
         height: 1,
     };
+    let left_width = line_cols(&row.left);
     row.left.render(left_area, buf);
 
-    let right_width = row.right.width() as u16;
-    if right_width == 0 {
-        return;
+    // The right group shares the row with the left one, so it only gets the
+    // columns the indent and the left group leave behind. Shed trailing
+    // segments until it fits; the group narrows and then disappears instead of
+    // overwriting the left group on a small terminal.
+    let mut reserved = footer_indent.saturating_add(left_width);
+    if left_width > 0 {
+        reserved = reserved.saturating_add(FOOTER_GROUP_MIN_GAP_COLS);
     }
+    let Some(right) = fit_footer_segments(&row.right, area.width.saturating_sub(reserved)) else {
+        return;
+    };
 
+    let right_width = line_cols(&right);
     let right_area = Rect {
         x: area.right().saturating_sub(right_width),
         y: area.y,
-        width: right_width.min(area.width),
+        width: right_width,
         height: 1,
     };
-    row.right.render(right_area, buf);
+    right.render(right_area, buf);
+}
+
+fn line_cols(line: &Line<'static>) -> u16 {
+    u16::try_from(line.width()).unwrap_or(u16::MAX)
+}
+
+/// Join the longest leading run of `segments` that fits in `available` columns.
+/// Returns `None` when nothing fits, which hides the group for that frame.
+fn fit_footer_segments(segments: &[Line<'static>], available: u16) -> Option<Line<'static>> {
+    (1..=segments.len())
+        .rev()
+        .map(|end| join_footer_segments(&segments[..end]))
+        .find(|candidate| !candidate.spans.is_empty() && line_cols(candidate) <= available)
 }
 
 fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
@@ -253,9 +281,9 @@ fn footer_rows(props: &FooterProps) -> Vec<FooterRow> {
 fn footer_row_for_segment_groups(footer_segments: FooterSegmentGroups) -> Vec<FooterRow> {
     let row = FooterRow {
         left: join_footer_segments(&footer_segments.left),
-        right: join_footer_segments(&footer_segments.right),
+        right: footer_segments.right,
     };
-    if row.left.spans.is_empty() && row.right.spans.is_empty() {
+    if row.left.spans.is_empty() && row.right.is_empty() {
         Vec::new()
     } else {
         vec![row]
@@ -939,8 +967,12 @@ mod tests {
     }
 
     fn snapshot_footer(name: &str, props: FooterProps) {
+        snapshot_footer_at_width(name, 80, props);
+    }
+
+    fn snapshot_footer_at_width(name: &str, width: u16, props: FooterProps) {
         let height = footer_height(&props).max(1);
-        let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
             .draw(|f| {
                 let area = Rect::new(0, 0, f.area().width, height);
@@ -971,10 +1003,40 @@ mod tests {
             .join("\n")
     }
 
+    fn render_footer_row_text(props: &FooterProps, width: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(width, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, width, 1);
+                render_footer(area, f.buffer_mut(), props);
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        (0..width).map(|x| buffer[(x, 0)].symbol()).collect()
+    }
+
     fn layout_from_toml(source: &str) -> FooterLayoutConfig {
         let config: nori_config::NoriConfigToml =
             toml::from_str(source).expect("footer layout should deserialize");
         FooterLayoutConfig::from_toml(&config.tui.footer_layout)
+    }
+
+    /// Props whose layout keeps the mode indicator on the footer row. The
+    /// shipped default hangs it off the textarea's top-right corner, which
+    /// `render_footer` does not draw, so the tests that exercise the
+    /// indicator's own rendering opt it back into the footer.
+    fn props_with_mode_indicator_in_footer() -> FooterProps {
+        FooterProps {
+            footer_layout_config: layout_from_toml(
+                r#"
+[tui.footer_layout]
+footer_left = ["git_branch"]
+footer_right = ["mode_indicator"]
+"#,
+            ),
+            ..default_props()
+        }
     }
 
     #[test]
@@ -1173,7 +1235,7 @@ mod tests {
         let rendered = render_footer_text(FooterProps {
             git_branch: Some("main".to_string()),
             acp_mode_label: Some("Plan".to_string()),
-            ..default_props()
+            ..props_with_mode_indicator_in_footer()
         });
 
         let first_line = rendered.lines().next().unwrap_or_default();
@@ -1183,10 +1245,145 @@ mod tests {
     }
 
     #[test]
+    fn default_idle_footer_shows_only_location_and_headroom() {
+        let props = FooterProps {
+            git_branch: Some("main".to_string()),
+            context_window_percent: Some(44),
+            context_tokens: Some(116_000),
+            context_window_tokens: Some(272_000),
+            // Values the defaults deliberately drop: available, but not shown.
+            approval_mode_label: Some("Agent".to_string()),
+            active_skillsets: vec!["clifford".to_string()],
+            nori_version: Some("19.1.1".to_string()),
+            nori_version_source: Some(NoriVersionSource::Skillsets),
+            session_title: Some("Fix login flakes".to_string()),
+            input_tokens: Some(64_000),
+            output_tokens: Some(13_000),
+            cached_tokens: Some(32_000),
+            acp_mode_label: Some("Plan".to_string()),
+            footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: FooterLayoutConfig::default(),
+            ..default_props()
+        };
+        let rendered = render_footer_text(props.clone());
+
+        // Branch and context, right-aligned, and nothing else.
+        assert_eq!(rendered.trim(), "⎇ main · 44% / 272k");
+        assert!(
+            rendered.ends_with("⎇ main · 44% / 272k"),
+            "footer metadata should be right-aligned: {rendered:?}"
+        );
+        for clutter in ["Approvals", "Skillset", "Skillsets v", "Title:", "Tokens:"] {
+            assert!(
+                !rendered.contains(clutter),
+                "default footer should not contain {clutter:?}: {rendered:?}"
+            );
+        }
+
+        // The mode indicator moved above the prompt rather than disappearing.
+        assert_eq!(
+            textarea_corner_segments(&props).top_right.to_string(),
+            "[ Plan ]"
+        );
+    }
+
+    #[test]
+    fn default_footer_left_stays_empty_until_self_hiding_state_is_true() {
+        let base = FooterProps {
+            git_branch: Some("main".to_string()),
+            footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: FooterLayoutConfig::default(),
+            ..default_props()
+        };
+        let groups = footer_segment_groups(&base);
+        assert!(
+            groups.left.is_empty(),
+            "an ordinary local shell should leave the left group empty: {:?}",
+            groups.left
+        );
+
+        let attached = FooterProps {
+            cloud_session: Some("nori-fast-kazunoko-aac8".to_string()),
+            vim_mode_state: Some(VimModeState::Insert),
+            ..base
+        };
+        let rendered = render_footer_text(attached);
+        assert!(rendered.contains("nori-fast-kazunoko-aac8"), "{rendered:?}");
+        assert!(rendered.contains("INSERT"), "{rendered:?}");
+    }
+
+    #[test]
+    fn enabling_a_default_off_segment_needs_no_layout_override() {
+        // The default layout keeps a home for every default-off segment, so a
+        // single `[tui.footer_segments]` line is enough to bring one back.
+        let rendered = render_footer_text(FooterProps {
+            approval_mode_label: Some("Agent".to_string()),
+            footer_segment_config: FooterSegmentConfig {
+                approval_mode: true,
+                ..FooterSegmentConfig::default()
+            },
+            footer_layout_config: FooterLayoutConfig::default(),
+            ..default_props()
+        });
+
+        assert_eq!(rendered.trim(), "Approvals: Agent");
+    }
+
+    #[test]
+    fn narrow_footer_sheds_right_segments_before_overwriting_the_left_group() {
+        let props = FooterProps {
+            git_branch: Some("some-quite-long-branch-name".to_string()),
+            context_window_percent: Some(44),
+            context_tokens: Some(116_000),
+            context_window_tokens: Some(272_000),
+            cloud_session: Some("nori-fast-kazunoko-aac8".to_string()),
+            footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: FooterLayoutConfig::default(),
+            ..default_props()
+        };
+
+        // Wide enough for everything.
+        let wide = render_footer_row_text(&props, 80);
+        assert!(wide.starts_with("  ☁ nori-fast-kazunoko-aac8"), "{wide:?}");
+        assert!(
+            wide.trim_end()
+                .ends_with("⎇ some-quite-long-branch-name · 44% / 272k"),
+            "{wide:?}"
+        );
+
+        // Narrower: the trailing context segment goes first.
+        let squeezed = render_footer_row_text(&props, 60);
+        assert!(
+            squeezed.contains("☁ nori-fast-kazunoko-aac8"),
+            "{squeezed:?}"
+        );
+        assert!(!squeezed.contains("44% / 272k"), "{squeezed:?}");
+
+        // Narrower still: the right group disappears and the left group
+        // survives intact rather than being painted over.
+        let tiny = render_footer_row_text(&props, 32);
+        assert_eq!(tiny.trim_end(), "  ☁ nori-fast-kazunoko-aac8");
+    }
+
+    #[test]
+    fn narrow_footer_hides_the_right_group_rather_than_clipping_it() {
+        let props = FooterProps {
+            git_branch: Some("main".to_string()),
+            footer_segment_config: FooterSegmentConfig::default(),
+            footer_layout_config: FooterLayoutConfig::default(),
+            ..default_props()
+        };
+
+        assert_eq!(render_footer_row_text(&props, 12).trim(), "⎇ main");
+        // One column short of fitting: nothing rendered, no half-drawn branch.
+        assert_eq!(render_footer_row_text(&props, 5).trim(), "");
+    }
+
+    #[test]
     fn footer_skips_mode_indicator_without_agent_mode() {
         let rendered = render_footer_text(FooterProps {
             git_branch: Some("main".to_string()),
-            ..default_props()
+            ..props_with_mode_indicator_in_footer()
         });
 
         assert!(!rendered.contains("[ Plan ]"));
@@ -1198,7 +1395,7 @@ mod tests {
         let rendered = render_footer_text(FooterProps {
             git_branch: Some("main".to_string()),
             acp_mode_label: Some("ABCDEFGHIJKLMNOPQRSTUV".to_string()),
-            ..default_props()
+            ..props_with_mode_indicator_in_footer()
         });
 
         let first_line = rendered.lines().next().unwrap_or_default();
@@ -1210,7 +1407,7 @@ mod tests {
         let props = FooterProps {
             git_branch: Some("main".to_string()),
             acp_mode_label: Some(label.to_string()),
-            ..default_props()
+            ..props_with_mode_indicator_in_footer()
         };
         let height = footer_height(&props).max(1);
         let mut terminal = Terminal::new(TestBackend::new(80, height)).unwrap();
@@ -1493,6 +1690,7 @@ footer_left = [
 footer_left = [
     { format = "{git_branch} — {approval_mode}" },
 ]
+footer_right = []
 "#,
         );
         let rendered = render_footer_text(FooterProps {
@@ -1571,8 +1769,9 @@ footer_left = [
 
     #[test]
     fn footer_with_worktree_name() {
-        snapshot_footer(
+        snapshot_footer_at_width(
             "footer_with_worktree_name",
+            120,
             FooterProps {
                 git_branch: Some("auto/fix-auth-bug-20260205".to_string()),
                 is_worktree: true,
@@ -1590,8 +1789,9 @@ footer_left = [
             ..snapshot_segment_config()
         };
 
-        snapshot_footer(
+        snapshot_footer_at_width(
             "footer_with_worktree_name_disabled",
+            120,
             FooterProps {
                 git_branch: Some("auto/fix-auth-bug-20260205".to_string()),
                 is_worktree: true,

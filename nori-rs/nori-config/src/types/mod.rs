@@ -1498,13 +1498,16 @@ pub struct FooterSegmentConfig {
 
 impl Default for FooterSegmentConfig {
     fn default() -> Self {
-        // Lean defaults: only segments that are useful for everyone (or
-        // self-hiding when irrelevant) ship enabled. Vim mode is self-hiding
-        // when disabled and must stay visible when enabled so modal state is
-        // never ambiguous.
+        // Quiet defaults: an idle local shell shows where you are (branch,
+        // worktree), how much room is left (context), and which agent mode is
+        // active. Everything else is either self-hiding state that only
+        // appears when it is true (cloud session, vim mode) or off, because it
+        // is static, restates the transcript, or belongs in `/status`:
+        // approvals, skillset, skillset version, session title, and cumulative
+        // token usage. Each stays one `[tui.footer_segments]` line away.
         Self {
             prompt_summary: false,
-            session_title: true,
+            session_title: false,
             vim_mode: true,
             git_branch: true,
             worktree_name: true,
@@ -1515,10 +1518,10 @@ impl Default for FooterSegmentConfig {
             context_used_tokens: false,
             context_remaining_tokens: false,
             context_window_tokens: false,
-            approval_mode: true,
+            approval_mode: false,
             skillset: false,
             nori_version: false,
-            token_usage: true,
+            token_usage: false,
             mode_indicator: true,
             cloud_session: true,
         }
@@ -1771,15 +1774,19 @@ pub struct FooterLayoutConfig {
 impl Default for FooterLayoutConfig {
     fn default() -> Self {
         Self {
+            // Only self-hiding state lands on the left by default:
+            // `CloudSession` renders when attached to a cloud session and
+            // `VimMode` when vim mode is on, so an ordinary local shell leaves
+            // this group empty. The remaining entries are all disabled in
+            // `FooterSegmentConfig::default`; they stay listed so that turning
+            // one on through `[tui.footer_segments]` alone still has somewhere
+            // to render, without the user also writing a `[tui.footer_layout]`.
             footer_left: vec![
                 FooterSegment::CloudSession.into(),
                 FooterSegment::PromptSummary.into(),
                 FooterSegment::SessionTitle.into(),
                 FooterSegment::VimMode.into(),
-                FooterSegment::GitBranch.into(),
-                FooterSegment::WorktreeName.into(),
                 FooterSegment::GitStats.into(),
-                FooterSegment::Context.into(),
                 FooterSegment::ContextUsedPercent.into(),
                 FooterSegment::ContextRemainingPercent.into(),
                 FooterSegment::ContextUsedTokens.into(),
@@ -1790,9 +1797,17 @@ impl Default for FooterLayoutConfig {
                 FooterSegment::NoriVersion.into(),
                 FooterSegment::TokenUsage.into(),
             ],
-            footer_right: vec![FooterSegment::ModeIndicator.into()],
+            // Location and headroom, right-aligned under the prompt.
+            footer_right: vec![
+                FooterSegment::GitBranch.into(),
+                FooterSegment::WorktreeName.into(),
+                FooterSegment::Context.into(),
+            ],
             textarea_top_left: Vec::new(),
-            textarea_top_right: Vec::new(),
+            // The agent mode sits on the textarea's top-right corner, above
+            // the prompt, so it reads as a property of what you are about to
+            // send rather than another metadata chip.
+            textarea_top_right: vec![FooterSegment::ModeIndicator.into()],
             textarea_bottom_left: Vec::new(),
             textarea_bottom_right: Vec::new(),
         }
