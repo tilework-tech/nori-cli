@@ -9,6 +9,11 @@ use crate::key_hint;
 /// Keep this consistent across all popups for a uniform feel.
 pub(crate) const MAX_POPUP_ROWS: usize = 8;
 
+/// Maximum number of *commands* the slash-command popup shows at once. Counted
+/// in commands, not terminal lines, so a two-line agent command still costs one
+/// slot -- the list stays predictable regardless of how the rows are laid out.
+pub(crate) const MAX_COMMAND_POPUP_ROWS: usize = 10;
+
 /// Standard footer hint text used by non-searchable popups.
 /// Includes j/k vim-style navigation hint.
 pub(crate) fn standard_popup_hint_line() -> Line<'static> {

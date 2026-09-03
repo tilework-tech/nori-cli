@@ -315,6 +315,7 @@ impl ListSelectionView {
                     styled_description: None,
                     disabled: false,
                     is_header: true,
+                    two_line: false,
                 });
                 continue;
             }
@@ -344,6 +345,7 @@ impl ListSelectionView {
                 styled_description: None,
                 disabled: false,
                 is_header: false,
+                two_line: false,
             });
         }
         rows
