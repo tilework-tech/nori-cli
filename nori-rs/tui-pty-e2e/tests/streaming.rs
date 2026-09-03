@@ -19,10 +19,7 @@ fn test_submit_text() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit prompt
-    session.send_str("testing!!!").unwrap();
-    session.wait_for_text("testing!!!", TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("testing!!!").unwrap();
 
     session
         .wait_for_text("esc to interrupt", TIMEOUT)
@@ -48,10 +45,7 @@ fn test_escape_cancels_streaming() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit prompt
-    session.send_str("testing!!!").unwrap();
-    session.wait_for_text("testing!!!", TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("testing!!!").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for streaming to start (status indicator appears with interrupt hint)
@@ -94,10 +88,7 @@ fn test_ctrl_c_cancels_streaming() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit prompt
-    session.send_str("testing!!!").unwrap();
-    session.wait_for_text("testing!!!", TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("testing!!!").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for streaming to start (status indicator appears with interrupt hint)
@@ -137,18 +128,14 @@ fn test_prompt_submitted_during_cancelling_is_not_lost() {
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("first try").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("first try").unwrap();
     session
         .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("First prompt should become interruptible");
 
     session.send_key(Key::Escape).unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
-    session.send_str("queued follow up").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("queued follow up").unwrap();
 
     session
         .wait_for_text(
@@ -175,9 +162,7 @@ fn test_prompt_still_streams_after_interrupt() {
         .expect("Prompt did not appear");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("first try").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("first try").unwrap();
     session
         .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("First prompt should become interruptible");
@@ -193,9 +178,7 @@ fn test_prompt_still_streams_after_interrupt() {
         .wait_for_text("›", TIMEOUT)
         .expect("Prompt should return after first interrupt");
 
-    session.send_str("second try").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("second try").unwrap();
     session
         .wait_for_text("esc to interrupt", TIMEOUT)
         .expect("Second prompt should also become interruptible after the first cancel");

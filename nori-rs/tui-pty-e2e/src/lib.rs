@@ -92,6 +92,7 @@ fn set_nonblocking(fd: std::os::unix::io::RawFd) -> Result<()> {
 }
 
 pub use keys::Key;
+mod input;
 mod keys;
 
 /// PTY session for driving the codex TUI

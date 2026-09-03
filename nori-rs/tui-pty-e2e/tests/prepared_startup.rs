@@ -226,9 +226,7 @@ fn first_prompt_waits_for_preparation_then_activates_once() {
         .wait_for_text("›", TIMEOUT)
         .expect("the composer should remain usable during preparation");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
-    session.send_str("one deferred prompt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("one deferred prompt").unwrap();
     session
         .wait_for_text("remote deferred turn complete", TIMEOUT)
         .expect("the original prompt should run after session activation");
@@ -266,9 +264,7 @@ fn slash_new_reuses_in_flight_preparation() {
         .wait_for_text("›", TIMEOUT)
         .expect("the composer should remain usable during preparation");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
-    session.send_str("/new").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/new").unwrap();
 
     let _ = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
     std::thread::sleep(Duration::from_millis(300));
@@ -297,9 +293,7 @@ fn slash_resume_reuses_in_flight_preparation_catalog() {
         .wait_for_text("›", TIMEOUT)
         .expect("the composer should remain usable during preparation");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
-    session.send_str("/resume").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/resume").unwrap();
     session
         .wait_for_text("First mock session", TIMEOUT)
         .expect("/resume should open the catalog prepared on startup");
@@ -332,9 +326,7 @@ fn slash_resume_uses_resume_capability_on_the_prepared_connection() {
 
     session.wait_for_text("›", TIMEOUT).expect("composer");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
-    session.send_str("/resume").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/resume").unwrap();
     session
         .wait_for_text("First mock session", TIMEOUT)
         .expect("catalog");
@@ -395,9 +387,7 @@ fn local_and_slash_commands_do_not_implicitly_activate() {
     session.wait_for_text("›", TIMEOUT).expect("composer");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     let _ = fake.wait_for_stderr("Mock agent: session/list", TIMEOUT);
-    session.send_str("/status").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/status").unwrap();
     session
         .wait_for_text("Directory", TIMEOUT)
         .expect("the local status command should render before activation");
@@ -406,9 +396,7 @@ fn local_and_slash_commands_do_not_implicitly_activate() {
         "local_status_block_before_activation",
         tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
     );
-    session.send_str("!pwd").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("!pwd").unwrap();
     session
         .wait_for_text("No active harness session", TIMEOUT)
         .expect("local shell command should report why it cannot run yet");
@@ -439,9 +427,7 @@ approval_mode = true
 
     session.wait_for_text("›", TIMEOUT).expect("composer");
     let _ = fake.wait_for_stderr("Mock agent: initialize", TIMEOUT);
-    session.send_str("/approvals").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/approvals").unwrap();
     session
         .wait_for_text("Select approval mode", TIMEOUT)
         .expect("approval picker");
@@ -457,9 +443,7 @@ approval_mode = true
         .expect("full-access policy should be applied while sessionless");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("exercise refreshed policy").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("exercise refreshed policy").unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
         .expect("the refreshed never-ask policy should auto-approve");
@@ -489,9 +473,7 @@ fn exit_reaps_in_flight_preparation() {
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     let pid = fake.first_pid();
     let descendant_pid = fake.wait_for_recorded_pid("descendant_pid", TIMEOUT);
-    session.send_str("/quit").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/quit").unwrap();
 
     assert!(
         session.wait_for_process_exit(Duration::from_secs(5)),

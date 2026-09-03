@@ -22,10 +22,7 @@ fn test_exit_message_displays_on_ctrl_d() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit a test prompt to generate some session activity
-    session.send_str("hello world").unwrap();
-    session.wait_for_text("hello world", TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("hello world").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the response to complete
@@ -81,10 +78,7 @@ fn test_exit_message_displays_on_slash_exit() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Submit a test prompt to generate some session activity
-    session.send_str("hello world").unwrap();
-    session.wait_for_text("hello world", TIMEOUT).unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("hello world").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Wait for the response to complete
@@ -94,9 +88,7 @@ fn test_exit_message_displays_on_slash_exit() {
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Quit the session with /exit command
-    session.send_str("/exit").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/exit").unwrap();
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
 
     // Verify exit message components appear

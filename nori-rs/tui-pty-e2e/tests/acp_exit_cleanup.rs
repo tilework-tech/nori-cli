@@ -76,7 +76,7 @@ fn test_local_quit_does_not_wait_one_second_for_eof_ignoring_agent() {
         .expect("TUI should start");
     std::thread::sleep(TIMEOUT_INPUT);
 
-    session.send_str("/quit").unwrap();
+    session.type_input("/quit").unwrap();
     std::thread::sleep(TIMEOUT_INPUT);
     let started = std::time::Instant::now();
     session.send_key(Key::Enter).unwrap();
@@ -130,9 +130,7 @@ fn test_acp_agent_cleanup_on_exit_command() {
     );
 
     // Send /exit command
-    session.send_str("/exit").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/exit").unwrap();
 
     // Wait briefly for the exit message to be processed
     std::thread::sleep(Duration::from_millis(500));
@@ -267,9 +265,7 @@ fn test_acp_agent_cleanup_on_quit_command() {
     );
 
     // Send /quit command
-    session.send_str("/quit").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/quit").unwrap();
 
     // Wait for TUI to exit
     std::thread::sleep(Duration::from_secs(3));

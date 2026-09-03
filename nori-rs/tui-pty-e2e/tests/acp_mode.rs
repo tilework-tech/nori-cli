@@ -65,9 +65,7 @@ fn test_acp_mode_prompt_response_flow() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a test prompt
-    session.send_str("Test ACP prompt").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Test ACP prompt").unwrap();
 
     // Wait for the mock response
     session
@@ -105,9 +103,7 @@ fn test_acp_approval_request_displayed_in_tui() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt that triggers a permission request
-    session.send_str("Run a shell command").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Run a shell command").unwrap();
 
     // Wait for the schema-native permission request to appear.
     let approval_appeared = session.wait_for(
@@ -164,9 +160,7 @@ fn test_acp_approval_full_flow() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt that triggers a permission request
-    session.send_str("Test approval flow").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Test approval flow").unwrap();
 
     // Wait for the approval request to appear
     session
@@ -196,11 +190,8 @@ fn test_acp_approval_full_flow() {
 
     // Verify TUI is still functional - can type a new message
     std::thread::sleep(TIMEOUT_INPUT);
-    session.send_str("Follow-up message").unwrap();
-
-    // Verify the typed text appears
     session
-        .wait_for_text("Follow-up message", Duration::from_secs(3))
+        .type_input("Follow-up message")
         .expect("TUI should remain functional for further input");
 }
 
@@ -237,9 +228,7 @@ fn test_acp_write_text_file() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Send a prompt that triggers the file write
-    session.send_str("Write to hello.py").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("Write to hello.py").unwrap();
 
     // Wait for the agent to respond indicating the write was attempted
     // The mock agent should report success or failure

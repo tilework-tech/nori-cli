@@ -1,6 +1,5 @@
 //! E2E tests for /mcp slash command in ACP mode.
 
-use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TIMEOUT_INPUT;
@@ -31,9 +30,7 @@ args = ["hello"]
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Type /mcp and submit
-    session.send_str("/mcp").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/mcp").unwrap();
 
     // The picker should open showing the server name and "Add new..."
     session
@@ -68,9 +65,7 @@ fn test_mcp_command_no_servers_opens_picker() {
     std::thread::sleep(TIMEOUT_INPUT);
 
     // Type /mcp and submit
-    session.send_str("/mcp").unwrap();
-    std::thread::sleep(TIMEOUT_INPUT);
-    session.send_key(Key::Enter).unwrap();
+    session.submit_input("/mcp").unwrap();
 
     // The picker should open with just "Add new..."
     session
