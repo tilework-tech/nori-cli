@@ -583,14 +583,24 @@ Cloud sessions use standard ACP `session/list`, `session/resume`,
 `session/load`, and `session/close`. Capabilities describe what an initialized
 ACP facade supports; they are not a sound test for whether its process
 represents a remote VM. The top-level `nori cloud` launch supplies explicit
-`cloud_mode` state through `TuiCli`, `App`, and `ChatWidget`. Cloud entry is
-normally picker-first: `App::run` prepares one connection and opens its session
-picker before any session directive can claim a VM, with "Start a new session"
-as an explicit pick. The prepared child remains alive behind that picker and
-the selection consumes it rather than spawning a second agent. The clap-skipped
-`cloud_onboard` flag (`nori cloud --onboard`, for customer onboarding) skips
-the picker but runs the same bounded connection preparation. The broker projects
-the config-pinned onboarding session as `_meta.nori.purpose = "onboarding"`;
+`cloud_mode` state through `TuiCli`, `App`, and `ChatWidget`. Before the TUI
+starts, [`run_main`](src/lib.rs) bypasses the local auto-worktree policy — its
+ask and blocked screens as well as automatic creation — and the local
+first-launch/directory-trust flow for this mode. During application
+construction, [`App`](src/app/mod.rs) also suppresses per-session skillset
+selection and its deferred agent preparation. These settings remain available
+to ordinary local sessions but cannot intercept, change the working directory
+for, or delay Handroll Cloud startup.
+
+Cloud entry is normally picker-first: `App::run` prepares one connection and
+opens its session picker before any session directive can claim a VM, with
+"Start a new session" as an explicit pick. The prepared child remains alive
+behind that picker and the selection consumes it rather than spawning a second
+agent. The clap-skipped `cloud_onboard` flag (`nori cloud --onboard`, for
+customer onboarding) skips the picker but runs the same bounded connection
+preparation. It remains a Handroll/ACP onboarding path and does not re-enable
+the suppressed local startup flows. The broker projects the config-pinned
+onboarding session as `_meta.nori.purpose = "onboarding"`;
 when that tag is present, the TUI emits the existing resume action and the
 harness uses `session/load`, including recorded-history replay. If no tagged
 session is present, or listing is unsupported, onboarding explicitly starts a

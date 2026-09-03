@@ -321,6 +321,70 @@ fn test_cloud_mode_boots_into_session_picker_without_claiming() {
     );
 }
 
+/// Cloud startup owns its own Handroll-backed onboarding and must not be
+/// intercepted by the CLI's first-launch or directory-trust screens.
+#[test]
+fn test_cloud_mode_bypasses_local_onboarding_and_trust() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake)
+        .with_skip_trust_directory(false)
+        .with_config_toml("");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should bypass local onboarding and open the session picker");
+
+    let contents = session.screen_contents();
+    assert!(
+        !contents.contains("Welcome to Nori") && !contents.contains("You are running Nori in"),
+        "cloud entry must not show local onboarding or directory trust, screen:\n{contents}"
+    );
+}
+
+/// Automatic worktrees configure local coding sessions. Cloud startup must
+/// neither create one nor switch its working directory before Handroll starts.
+#[test]
+fn test_cloud_mode_ignores_automatic_worktree() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake)
+        .with_extra_config_toml("[tui]\nauto_worktree = \"automatic\"\n");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+    let local_repo = session.nori_home_path().expect("temporary local repo");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should open the session picker");
+
+    assert!(
+        !local_repo.join(".worktrees").exists(),
+        "cloud entry must not create a local auto-worktree"
+    );
+}
+
+/// Per-session skillset selection is a local-session concern and must not
+/// delay or replace the Handroll Cloud picker.
+#[test]
+fn test_cloud_mode_bypasses_per_session_skillset_picker() {
+    let fake = FakeHandroll::new();
+    let config = cloud_lifecycle_config(&fake)
+        .with_extra_config_toml("[tui]\nskillset_per_session = true\n");
+
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn nori cloud");
+
+    session
+        .wait_for_text("Start a new session", TIMEOUT)
+        .expect("cloud entry should bypass skillset selection and open the session picker");
+    session
+        .wait_for_text("First mock session", TIMEOUT)
+        .expect("the Handroll Cloud picker should list its live session");
+}
+
 /// Picker-first entry must retain the CLI's positional prompt until the user
 /// explicitly starts a new session on the prepared connection.
 #[test]

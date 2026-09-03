@@ -60,6 +60,11 @@ before `SessionStarted`, and a later retry crosses ACP exactly once. A
 structured new-session failure also proves that the terminal shows the ACP
 message and string `data.detail` while excluding unrelated diagnostic fields.
 
+Cloud startup scenarios enable the local onboarding/trust, automatic-worktree,
+and per-session-skillset policies independently. Each must still reach the
+Handroll session picker without showing a local gate, creating a local
+worktree, or delaying agent preparation.
+
 The protocol hard cut did not introduce a test-only compatibility path. PTY
 tests exercise source-first `SessionEvent::{Acp, Nori}` dispatch and the same
 typed `HarnessHandle` methods available to headless embedders.
