@@ -137,19 +137,6 @@ impl BottomPane {
         composer.set_footer_segment_config(footer_segment_config);
         composer.set_footer_layout_config(footer_layout_config);
 
-        // In debug builds, allow synchronous system info collection for E2E tests
-        // via NORI_SYNC_SYSTEM_INFO=1. In release builds, always use default to
-        // avoid blocking TUI startup.
-        #[cfg(debug_assertions)]
-        let system_info = if std::env::var("NORI_SYNC_SYSTEM_INFO").is_ok() {
-            crate::system_info::SystemInfo::collect_sync()
-        } else {
-            crate::system_info::SystemInfo::default()
-        };
-        #[cfg(not(debug_assertions))]
-        let system_info = crate::system_info::SystemInfo::default();
-        composer.set_system_info(system_info);
-
         let mut pane = Self {
             composer,
             view_stack: Vec::new(),
@@ -596,6 +583,14 @@ impl BottomPane {
     pub(crate) fn set_system_info(&mut self, info: crate::system_info::SystemInfo) {
         self.composer.set_system_info(info);
         self.request_redraw();
+    }
+
+    /// Fill the footer with the system facts that are cheap to read from `cwd`
+    /// so the first frame already shows them, instead of leaving every segment
+    /// blank until the background refresh lands.
+    pub(crate) fn seed_system_info(&mut self, cwd: &std::path::Path) {
+        self.composer
+            .set_system_info(crate::system_info::SystemInfo::seed(cwd));
     }
 
     /// Update the approval mode label displayed in the footer and the slash

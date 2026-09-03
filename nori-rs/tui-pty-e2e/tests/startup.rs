@@ -27,8 +27,11 @@ fn activate_new_session(session: &mut TuiSession) {
         .wait_for_text("›", TIMEOUT)
         .expect("Sessionless composer did not appear");
     session.submit_input("/new").expect("Failed to enter /new");
+    // Startup already wrote a card, so "Nori CLI" is no longer a readiness
+    // signal. Wait for the row only an activated session's card carries: the
+    // model the agent resolved.
     session
-        .wait_for_text("Nori CLI", TIMEOUT)
+        .wait_for_text("Mock Default Model", TIMEOUT)
         .expect("Activated session header did not appear");
 }
 
@@ -206,6 +209,14 @@ fn test_startup_shows_nori_banner() {
     assert_snapshot!(
         "startup_shows_nori_banner",
         normalize_for_snapshot(header_lines.join("\n"))
+    );
+
+    // The card is written before a session exists, so the agent's own
+    // configuration arrives after it, on its own line.
+    assert!(
+        contents.contains("Mock ACP options: Model=Mock Default Model"),
+        "The activated session should report the model it resolved, but got: {}",
+        contents
     );
 }
 

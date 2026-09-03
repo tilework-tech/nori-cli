@@ -2,6 +2,11 @@
 source: tui-pty-e2e/tests/nori_footer.rs
 expression: normalize_for_input_snapshot(contents)
 ---
+  › Nori CLI v0.0.0
+
+  System       [TMP_DIR] · Agent approvals
+  Agent        Mock ACP
+
 › [DEFAULT_PROMPT]
 
   ! · Skillset: [SKILLSET] · Skillsets v0.9.99                                                               ⎇ master

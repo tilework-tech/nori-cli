@@ -2,6 +2,8 @@
 source: tui-pty-e2e/tests/markdown_table.rs
 expression: normalize_for_input_snapshot(screen)
 ---
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
 › show me a table
 
 • Here is a table:

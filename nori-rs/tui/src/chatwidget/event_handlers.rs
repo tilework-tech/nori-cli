@@ -328,15 +328,25 @@ impl ChatWidget {
         self.acp_session_id = self.cloud_mode.then(|| event.acp_session_id.to_string());
         self.refresh_cloud_session_indicator();
         // Adopt the configuration the agent advertised when it created the
-        // session, before the welcome card renders: the card then names the
-        // agent's actual model and options instead of the provider alone.
+        // session. When the welcome card is still pending — the agent-switch
+        // candidate, which stays hidden until this event — adopt it silently
+        // first so the card below names the agent's actual model and options
+        // instead of the provider alone. When the card was already written at
+        // startup it cannot gain the model after the fact, because history is
+        // committed to the scrollback as it is written, so announce the
+        // resolved configuration on its own line instead.
         if !event.config_options.is_empty() {
-            self.sync_acp_session_config_snapshot(&event.config_options);
+            if self.show_welcome_banner {
+                self.sync_acp_session_config_snapshot(&event.config_options);
+            } else {
+                self.handle_acp_session_config_update(&event.config_options);
+            }
         }
+        let show_welcome_banner = std::mem::take(&mut self.show_welcome_banner);
         self.add_to_history(history_cell::new_session_info(
             &self.config,
             self.config.active_agent.clone(),
-            self.show_welcome_banner,
+            show_welcome_banner,
             self.live_status_view_model(),
         ));
         if let Some(user_message) = self.initial_user_message.take() {
