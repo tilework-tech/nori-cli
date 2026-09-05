@@ -23,6 +23,8 @@ Usage:
     ./scripts/create_nori_release --version 0.3.0
 """
 
+from __future__ import annotations
+
 import argparse
 import base64
 import json

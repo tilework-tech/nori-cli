@@ -19,7 +19,7 @@ Path: @/scripts
 
 **`create_nori_release` -- release creation via synthetic commits:**
 
-The script uses the GitHub API exclusively (via `gh api`) rather than local git operations. The release flow is:
+The script separates read-only version discovery from release creation: it enumerates matching tags from the `origin` remote through the git protocol, then uses the GitHub API (via `gh api`) to create the synthetic commit and annotated tag without mutating the local checkout. The creation flow is:
 
 ```
 get_branch_head() -> fetch Cargo.toml -> replace_version() -> create_blob() -> create_tree() -> create_commit() -> create_tag() -> create_tag_ref()
@@ -29,13 +29,13 @@ All tags use the prefix `nori-v` (e.g., `nori-v0.9.0`, `nori-v0.9.0-next.3`).
 
 **Version determination (`determine_version()`):**
 
-| Mode | Base version | Suffix pattern | Example |
-|---|---|---|---|
-| `--publish-release` | latest stable + minor bump | none | `0.10.0` |
-| `--publish-next` | latest stable (as-is) | `-next.N` | `0.9.0-next.3` |
-| `--publish-alpha` | latest stable + minor bump | `-alpha.N` | `0.10.0-alpha.2` |
+| Mode                | Base version               | Suffix pattern | Example          |
+| ------------------- | -------------------------- | -------------- | ---------------- |
+| `--publish-release` | latest stable + minor bump | none           | `0.10.0`         |
+| `--publish-next`    | latest stable (as-is)      | `-next.N`      | `0.9.0-next.3`   |
+| `--publish-alpha`   | latest stable + minor bump | `-alpha.N`     | `0.10.0-alpha.2` |
 
-The `N` suffix is determined by scanning all git tags (via `list_tags()`) that match the relevant prefix and taking `max(N) + 1`. The `list_tags()` function paginates through the GitHub refs/tags API and strips the `nori-v` prefix from each tag to yield bare version strings.
+The `N` suffix is determined by scanning all git tags (via `list_tags()`) that match the relevant prefix and taking `max(N) + 1`. The tag listing uses `git ls-remote` against `origin` so all matching refs arrive in one git-protocol request; it strips the `nori-v` prefix and ignores the peeled refs emitted for annotated tags.
 
 `get_latest_release_version()` also uses `list_tags()` -- it filters to stable-only versions (no `-` in the version string) and returns the highest by semver comparison.
 
@@ -51,15 +51,15 @@ check_prereqs -> build_nori -> patch_broker -> start_broker -> verify_auth
 
 The script temporarily patches the broker to prevent it from deleting or refreshing sprites during the test (reverted on cleanup). It uses tmux to drive the `nori cloud` TUI and asserts on screen output. The test exercises the session lifecycle twice: acquire a session, send a message, close, re-acquire a fresh session, and send another message.
 
-| Env var | Purpose | Default |
-|---|---|---|
-| `NORI_SPRITE_TOKEN` | Sprites API token (required) | -- |
-| `NORI_SPRITE_ORG` | Sprites org name | `amol-kapoor` |
+| Env var                  | Purpose                                         | Default                                                           |
+| ------------------------ | ----------------------------------------------- | ----------------------------------------------------------------- |
+| `NORI_SPRITE_TOKEN`      | Sprites API token (required)                    | --                                                                |
+| `NORI_SPRITE_ORG`        | Sprites org name                                | `amol-kapoor`                                                     |
 | `NORI_SESSIONS_WORKTREE` | Path to broker worktree in `nori-sessions` repo | `~/code/nori/nori-sessions/.worktrees/cli-cloud-session-refactor` |
-| `NORI_BINARY` | Path to nori binary | `nori-rs/target/debug/nori` |
-| `BROKER_PORT` | Local broker port | `19400` |
-| `SKIP_BROKER_START` | Use an already-running broker | `0` |
-| `SKIP_BUILD` | Skip `cargo build --bin nori` | `0` |
+| `NORI_BINARY`            | Path to nori binary                             | `nori-rs/target/debug/nori`                                       |
+| `BROKER_PORT`            | Local broker port                               | `19400`                                                           |
+| `SKIP_BROKER_START`      | Use an already-running broker                   | `0`                                                               |
+| `SKIP_BUILD`             | Skip `cargo build --bin nori`                   | `0`                                                               |
 
 ### Shared Local Runner Layer Support
 
@@ -69,7 +69,7 @@ Validates the standard targets (`help`, `dev`, `test`, `doctor`) defined by the 
 
 ### Things to Know
 
-- Git tags are the single source of truth for version enumeration -- `list_tags()` queries the GitHub refs/tags API, not GitHub Releases; this matters because synthetic-commit tags may not always have corresponding GitHub Releases (e.g., if the release workflow was cancelled after tagging)
+- Git tags are the single source of truth for version enumeration -- `list_tags()` reads the repository's `origin` remote rather than GitHub Releases, so the caller must run in a checkout with an accessible `origin`; this also preserves versions whose tag exists even if a cancelled or failed workflow never created the corresponding GitHub Release
 - The `--get-next-version` flag simulates `--publish-next` internally to compute the version, then prints it and exits without creating any tags; this is how the CI workflow determines what version to build
 - The version determination logic in `determine_version()` is noted in comments as being "mirrored" in `@/.github/workflows/nori-release.yml` -- changes to version numbering logic must be kept in sync between the two
 - `cloud-e2e-test.sh` requires external infrastructure (Fly.io Sprites, Firebase auth) and a checkout of the `nori-sessions` broker repo -- it cannot run in CI or sandboxed environments; it patches broker source files in-place and relies on a cleanup trap to restore them
