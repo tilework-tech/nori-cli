@@ -11,7 +11,7 @@ Path: @/.github/workflows
 ### How it fits into the larger codebase
 
 - The release workflow builds Rust binaries from `@/nori-rs/` and packages them via the Node.js launcher in `@/nori-cli/`
-- Pull requests run the release script's Python tests under Python 3.9 in `rust-ci.yml`, preserving compatibility with the macOS system Python used by local release operators
+- The repository's `.python-version` selects Python 3.12 for uv-managed script execution
 - Version detection delegates to `@/scripts/create_nori_release --get-next-version`, which queries tags from the checkout's `origin` remote via the git protocol as the single source of truth for version numbering
 - Stable releases use "synthetic commits" created by the `create_nori_release` script -- release tags point to commits that exist only for the release (not on any branch), with `Cargo.toml` updated to the release version, keeping the `main` branch's `Cargo.toml` at a placeholder `0.0.0`
 - The `nori-release.yml` workflow publishes to npm under the package name `nori-ai-cli`, with stable releases tagged `@latest` and snapshots tagged `@next`
