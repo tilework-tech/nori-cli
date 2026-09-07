@@ -154,6 +154,17 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   Codex configuration explicitly instead of silently discarding user settings.
   Codex model injection merges only the `model` key into that same object,
   preserving the goals-disabled flag.
+- The Codex agent subprocess is spawned with `CODEX_HOME` stripped
+  (`.env_remove("CODEX_HOME")` in `connection/acp_connection.rs`), so it resolves
+  its home to `$HOME/.codex` and reads its credentials from
+  `~/.codex/auth.json`, ignoring any `CODEX_HOME` override. The invariant this
+  enforces: whatever writes Codex credentials must target the same home the
+  subprocess reads. Nori's in-app OAuth `/login`
+  (`@/nori-rs/tui/src/chatwidget/login.rs`) therefore writes to `~/.codex` rather
+  than `nori_home`; writing anywhere else means a successful login never
+  authenticates the agent. Nori's own in-process `AuthManager` (which reads
+  `nori_home`) is not consumed by the ACP path, so the login flow's
+  `auth_manager.reload()` has no effect on the Codex agent.
 - Model injection does not validate the model id: an invalid model is accepted at
   spawn and only fails at the first prompt. For env-based channels, nori's
   injected value takes precedence over the agent's own configured model (e.g.
