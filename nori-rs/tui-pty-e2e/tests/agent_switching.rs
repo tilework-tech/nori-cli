@@ -131,13 +131,13 @@ fn test_acp_agent_subprocess_spawned() {
 }
 
 // ============================================================================
-// Test: /new Reuses the Prepared Subprocess
+// Test: Startup Activation Reuses the Prepared Subprocess
 // ============================================================================
 
-/// Test that `/new` activates the prepared connection without respawning it.
+/// Test that startup activates the prepared connection without respawning it.
 #[test]
 #[cfg(target_os = "linux")]
-fn test_slash_new_reuses_prepared_subprocess() {
+fn test_startup_activation_reuses_prepared_subprocess() {
     let config = SessionConfig::new().with_agent("mock-model".to_string());
 
     let mut session = TuiSession::spawn_with_config(24, 80, config).expect("Failed to spawn TUI");
@@ -146,16 +146,10 @@ fn test_slash_new_reuses_prepared_subprocess() {
     session
         .wait_for_text("›", TIMEOUT)
         .expect("TUI should start");
-    std::thread::sleep(TIMEOUT_INPUT);
 
-    // Get initial PID
+    // Startup activates the session on its own, consuming the connection that
+    // preparation opened rather than spawning a second child.
     let log_path = session.acp_log_path().expect("Should have log path");
-    let initial_pids = wait_for_mock_agent_pid_count(&mut session, &log_path, 1, TIMEOUT);
-    let initial_pid = initial_pids[0];
-
-    // Type /new to activate the already-prepared connection.
-    session.submit_input("/new").unwrap();
-
     session
         .wait_for(
             |_| {
@@ -165,15 +159,16 @@ fn test_slash_new_reuses_prepared_subprocess() {
             },
             Duration::from_secs(10),
         )
-        .expect("/new should activate the prepared connection");
+        .expect("startup should activate the prepared connection");
 
     let activated_pids = extract_mock_agent_pids_from_log(&log_path);
     assert_eq!(
-        activated_pids, initial_pids,
-        "/new must not spawn or initialize another child"
+        activated_pids.len(),
+        1,
+        "activation must reuse the prepared child, not spawn another: {activated_pids:?}"
     );
     assert!(
-        process_exists_and_not_zombie(initial_pid),
+        process_exists_and_not_zombie(activated_pids[0]),
         "the prepared child must remain alive after activation"
     );
 }

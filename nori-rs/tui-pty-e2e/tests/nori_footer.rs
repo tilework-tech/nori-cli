@@ -120,10 +120,14 @@ git_stats = true
     )
     .expect("Failed to spawn");
 
-    // Startup prepares the agent without creating a session. Wait for the
-    // sessionless composer and footer instead of the post-activation banner.
+    // Wait for the composer and the fully populated footer.
     session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Skillsets v", TIMEOUT).unwrap();
+    // Startup activates the session, so the model announcement lands
+    // asynchronously; wait for it so the snapshot is deterministic.
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -191,6 +195,11 @@ approval_mode = true
 
     session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("Approvals", TIMEOUT).unwrap();
+    // Startup activates the session, so the model announcement lands
+    // asynchronously; wait for it so the snapshot is deterministic.
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();
@@ -294,6 +303,11 @@ fn test_default_idle_footer_has_no_metadata_clutter() {
 
     session.wait_for_text("›", TIMEOUT).unwrap();
     session.wait_for_text("⎇", TIMEOUT).unwrap();
+    // Startup activates the session, so the model announcement lands
+    // asynchronously; wait for it so the snapshot is deterministic.
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .unwrap();
 
     std::thread::sleep(TIMEOUT_PRESNAPSHOT);
     let contents = session.screen_contents();

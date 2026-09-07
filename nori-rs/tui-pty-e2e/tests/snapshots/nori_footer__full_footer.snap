@@ -7,6 +7,8 @@ expression: normalize_for_input_snapshot(contents)
   System       [TMP_DIR] · Agent approvals
   Agent        Mock ACP
 
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
 › [DEFAULT_PROMPT]
 
   ! · Skillset: [SKILLSET] · Skillsets v0.9.99                                                               ⎇ master

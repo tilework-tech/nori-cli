@@ -374,3 +374,83 @@ fn test_poll_does_not_block_when_no_data() {
         elapsed
     );
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn startup_activates_session_without_input() {
+    // A plain local launch must activate the agent session on its own, so
+    // session-scoped UI works before the user sends any prompt. The resolved
+    // model name only appears once the session is live.
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("composer did not appear");
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .expect("session should activate on startup without any input");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn model_command_works_before_first_prompt() {
+    // /model must offer the agent's advertised models immediately after startup.
+    // Without a live session it can only show "disabled in ACP mode", so the
+    // agent-provided "Mock Fast Model" option proves the session is active.
+    let mut session =
+        TuiSession::spawn_with_config(24, 80, SessionConfig::default()).expect("Failed to spawn");
+
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("composer did not appear");
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .expect("session should activate on startup");
+
+    session
+        .submit_input("/model")
+        .expect("Failed to submit /model");
+    session
+        .wait_for_text("Mock Fast Model", TIMEOUT)
+        .expect("/model should list the agent's advertised models before any prompt");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn skillset_per_session_activates_after_selection() {
+    // With per-session skillsets the session must auto-activate once a skillset
+    // is applied (after `.claude/CLAUDE.md` is written), not wait for a prompt.
+    use std::os::unix::fs::PermissionsExt;
+
+    let bin_dir = tempfile::tempdir().expect("Failed to create mock nori-skillsets dir");
+    let script = bin_dir.path().join("nori-skillsets");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in install|switch) exit 0 ;; esac; done\necho default\nexit 0\n",
+    )
+    .expect("Failed to write mock nori-skillsets");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+        .expect("Failed to make mock nori-skillsets executable");
+
+    let config = SessionConfig::default()
+        .with_extra_config_toml("[tui]\nskillset_per_session = true\n")
+        .with_extra_path(bin_dir.path().to_path_buf());
+    let mut session = TuiSession::spawn_with_config(24, 90, config).expect("Failed to spawn");
+
+    session
+        .wait_for_text("Select skillset", TIMEOUT)
+        .expect("per-session skillset picker should appear at startup");
+    session
+        .wait_for_text("default", TIMEOUT)
+        .expect("mocked skillset should be listed");
+    // Row 0 is "No Skillset"; move to the real skillset row and apply it.
+    session
+        .send_key(Key::Down)
+        .expect("move to the skillset row");
+    session.send_key(Key::Enter).expect("apply the skillset");
+
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .expect("session should auto-activate after the skillset is applied");
+}

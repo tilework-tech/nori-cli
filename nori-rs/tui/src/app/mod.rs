@@ -404,6 +404,11 @@ impl App {
                 });
             }
         } else {
+            // Plain local startup activates the session on its own so
+            // session-scoped features (model/config pickers, prompt history)
+            // work before the first prompt. The welcome card above already ran,
+            // so it still shows while the agent resolves its configuration.
+            app.pending_session_activation = Some(PendingSessionActivation::New);
             app.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
         }
 

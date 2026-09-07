@@ -47,11 +47,16 @@ commit.
 
 Prepared-startup scenarios wrap `mock-acp-agent` behind the exact registered
 `nori-handroll acp --type remote` argv while recording process identity. They
-prove that ordinary and remote-adapter startup initialize and optionally list
-without activation; `/new`, `/resume`, positional input, and the first typed
-prompt reuse that child; and deferred text and images cross the configured
-session boundary exactly once. Sessionless slash/local commands, preparation
-timeout, and exit cover the corresponding no-activation and reaping paths.
+prove that ordinary and remote-adapter startup initialize, optionally list, and
+then activate exactly one session on their own without any input, reusing the
+single prepared child; that `/new`, `/resume`, positional input, and a first
+typed prompt reuse that same child; and that deferred text and images cross the
+configured session boundary exactly once. Local slash and shell commands still
+render or report their status without spawning a second agent, and preparation
+timeout and exit cover the reaping paths. Plain-local coverage in `startup.rs`
+additionally proves that a session activates without input (the resolved model
+name appears), that `/model` lists the agent's advertised models before any
+prompt, and that per-session skillsets auto-activate once a skillset is applied.
 
 Cloud activation scenarios hold `session/new` behind a release-file barrier
 after the picker selection. They verify that connecting feedback remains in

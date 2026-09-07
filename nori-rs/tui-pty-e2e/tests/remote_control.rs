@@ -135,14 +135,12 @@ fn startup_runtime_disable_reenable_and_agent_switch_share_one_remote_control_ow
         startup_screen.contains(&format!("ws://127.0.0.1:{startup_port}/acp")),
         "startup --remote did not retain requested port {startup_port}: {startup_screen}"
     );
-    let (startup_client, startup_sessions) = connect_and_list(startup_port);
-    assert!(
-        startup_sessions.is_empty(),
-        "prepared startup must not claim a session: {startup_sessions:?}"
-    );
-    drop(startup_client);
 
-    session.submit_input("/new").expect("submit command");
+    // Startup activates the session on its own; wait for that before hosting so
+    // the remote client does not connect mid-activation.
+    session
+        .wait_for_text("Mock Default Model", Duration::from_secs(10))
+        .expect("startup should activate a session");
     let (mut startup_client, original_session_id) = wait_for_hosted_session(startup_port);
     let prompt_before_switch = "remote prompt before switch";
     let response = request(
