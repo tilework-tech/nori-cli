@@ -1,5 +1,7 @@
 use super::*;
 
+use std::path::Path;
+
 impl ChatWidget {
     /// Handle the /login slash command
     pub(super) fn handle_login_command(&mut self) {
@@ -98,8 +100,10 @@ impl ChatWidget {
         use codex_login::ServerOptions;
         use codex_login::run_login_server;
 
+        let credentials_home =
+            codex_oauth_credentials_home(&self.config.nori_home, dirs::home_dir());
         let opts = ServerOptions::new(
-            self.config.nori_home.clone(),
+            credentials_home,
             CLIENT_ID.to_string(),
             None, // No forced workspace ID
             codex_login::AuthCredentialsStoreMode::File,
@@ -282,5 +286,44 @@ impl ChatWidget {
             self.add_info_message(format!("{agent_name} login failed or was cancelled."), None);
         }
         self.request_redraw();
+    }
+}
+
+/// Directory the Codex OAuth login writes credentials to.
+///
+/// This must match the directory the codex-acp subprocess reads auth from. That
+/// subprocess is spawned with `CODEX_HOME` stripped (see the connection spawn in
+/// `nori-acp-host`), so it resolves its home to `$HOME/.codex`. Writing anywhere
+/// else (for example `nori_home`) means the agent never sees the credentials.
+/// Falls back to `nori_home` only when the home directory cannot be determined.
+fn codex_oauth_credentials_home(nori_home: &Path, home_dir: Option<PathBuf>) -> PathBuf {
+    home_dir
+        .map(|home| home.join(".codex"))
+        .unwrap_or_else(|| nori_home.to_path_buf())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::codex_oauth_credentials_home;
+    use pretty_assertions::assert_eq;
+    use std::path::PathBuf;
+
+    #[test]
+    fn oauth_login_targets_codex_agent_home_when_home_known() {
+        let nori_home = PathBuf::from("/example/home/.nori/cli");
+        let home_dir = PathBuf::from("/example/home");
+
+        let destination = codex_oauth_credentials_home(&nori_home, Some(home_dir));
+
+        assert_eq!(destination, PathBuf::from("/example/home/.codex"));
+    }
+
+    #[test]
+    fn oauth_login_falls_back_to_nori_home_when_home_unknown() {
+        let nori_home = PathBuf::from("/example/home/.nori/cli");
+
+        let destination = codex_oauth_credentials_home(&nori_home, None);
+
+        assert_eq!(destination, nori_home);
     }
 }

@@ -551,6 +551,13 @@ successful switch replaces the widget and returns bare `/login` to the active
 agent. The override affects login resolution only—prompts and lifecycle actions
 continue to target the current session unless a real candidate state exists.
 
+The Codex OAuth `/login` flow (`chatwidget/login.rs`) writes its credentials to
+the Codex agent home (`$HOME/.codex`, resolved by `codex_oauth_credentials_home`
+with a `nori_home` fallback), not `nori_home`. This matches where the codex-acp
+subprocess actually reads `auth.json`, since that subprocess is spawned with
+`CODEX_HOME` stripped (see `@/nori-rs/acp-host/docs.md`). The resolver
+deliberately ignores `$CODEX_HOME` because the subprocess ignores it too.
+
 The app-owned `HarnessRemoteHost` follows the same commit boundary. `App`
 attaches the stable host only after the active widget publishes
 `SessionStarted`, seeding identity from that observed event. During a switch it
