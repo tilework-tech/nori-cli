@@ -435,20 +435,31 @@ pending replay.
 
 #### Lifecycle behavior
 
-Connection preparation is separate from session activation. Every subprocess
-agent starts through [`session_setup.rs`](src/app/session_setup.rs), including
-ordinary local agents and a registered `nori-handroll acp --type remote`
-adapter. `App` retains the harness's opaque `PreparedAgent` after `initialize`,
-capability inspection, and optional `session/list`; no session directive is
-issued merely because startup completed. Advertised listing runs in the same
-background preparation while the composer remains usable. Unsupported listing
-is distinct from an empty successful catalog, and preparation or
-advertised-list failure leaves the widget sessionless.
-[`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary that consumes
-the exact prepared connection into the harness runtime. An ordinary-agent
-failure reopens the existing agent picker so the user can recover by choosing
-another agent unless a live candidate already owns its picker; cloud remains on
-its sessionless `/resume` or `/new` retry flow.
+Connection preparation is separate from session activation, but ordinary local
+startup records a pending New decision as soon as it begins preparing, so the
+frontend issues `session/new` on its own once the connection is ready instead of
+waiting for a first prompt. This keeps session-scoped UI (`/model`, `/config`,
+`/approvals`, Ctrl-R prompt-history search, and Up/Down prompt recall) alive out
+of the box, because in ACP those surfaces only exist after `session/new`. Every
+subprocess agent starts through [`session_setup.rs`](src/app/session_setup.rs),
+including ordinary local agents and a registered `nori-handroll acp --type
+remote` adapter. `App` retains the harness's opaque `PreparedAgent` after
+`initialize`, capability inspection, and optional `session/list`; the pending
+New decision consumes it as soon as preparation completes. Advertised listing
+runs in the same background preparation while the composer remains usable and
+does not block activation. Unsupported listing is distinct from an empty
+successful catalog, and preparation or advertised-list failure leaves the widget
+sessionless. [`chatwidget/agent.rs`](src/chatwidget/agent.rs) is the boundary
+that consumes the exact prepared connection into the harness runtime. An
+ordinary-agent failure reopens the existing agent picker so the user can recover
+by choosing another agent unless a live candidate already owns its picker; cloud
+remains on its sessionless `/resume` or `/new` retry flow.
+
+Cloud startup and agent-switch candidates keep deferred activation as an
+invariant: cloud stays picker-first and sessionless until the user chooses a
+session, and a candidate stays hidden until it publishes `SessionStarted`. Only
+the plain-local and per-session-skillset startup paths auto-activate; the
+prepared/candidate connection lifecycle and teardown are otherwise unchanged.
 
 A prepared agent carrying the recognized Nori remote-control active-session
 marker bypasses both primary and switch-candidate pickers. The TUI emits its
@@ -467,11 +478,16 @@ generic new-conversation subtitle. This recovery path is assembled by
 or treating it as picker state.
 
 Primary preparation is owned as a generation, task abort handle, current
-intent, retained fork context, and optional pending activation. `/new` and a
-first genuine user prompt record New; `/resume` changes the intent to open the
-prepared catalog and then records the selected Resume. Esc-Esc backtrack and
-transcript fork also queue deferred New while preserving their selected history
-summary as initial context. If preparation is in flight, these decisions wait
+intent, retained fork context, and optional pending activation. Ordinary local
+startup records New up front so activation follows preparation automatically.
+When per-session skillsets are enabled the agent spawn is deferred until a
+skillset is chosen: applying a skillset writes its workspace state
+(`.claude/CLAUDE.md`) and then records New, while dismissing the picker records
+New without a skillset — both preserving the ordering that the skillset is
+written before `session/new`. `/new` and a first genuine user prompt record New
+as well; `/resume` changes the intent to open the prepared catalog and then
+records the selected Resume. Esc-Esc backtrack and transcript fork also queue
+deferred New while preserving their selected history summary as initial context. If preparation is in flight, these decisions wait
 for it instead of cancelling it; if preparation is complete, they consume the
 stored connection. Thus `initialize`, optional `session/list`, and the chosen
 `session/new`, `session/load`, or `session/resume` use one child process. This
@@ -484,15 +500,24 @@ retains fork context. If process-defining identity changed, the TUI reaps the
 stale child and reprepares while keeping the pending New or Resume decision;
 stale policy is never activated.
 
-The sessionless composer distinguishes activation input from local behavior.
-The first text or image prompt remains in frontend state, requests New, and is
-transferred without rewriting to the activated widget. The widget submits it
-exactly once when `SessionStarted` establishes the configured session. Initial
-positional prompts use the same path. Activation replaces the sessionless
-widget, so `SessionStarted` first applies normal history metadata to the new
-widget, then records its queued launch prompt into composer-local history
-immediately before submission. Slash commands and local shell commands are
-handled before this implicit-New decision; a shell command reports that no
+During the activation window — the gap between recording a New/Resume decision
+and `SessionStarted`, which now exists even on plain-local startup and also for
+the cloud, candidate, positional, and backtrack/fork flows — the sessionless
+composer distinguishes activation input from local behavior. Any text or image
+prompt entered before the session is live remains in frontend state, requests
+New, and is transferred without rewriting to the activated widget, which submits
+it exactly once when `SessionStarted` establishes the configured session.
+Because activation rebuilds the composer widget, any in-flight paste burst is
+force-flushed before the handoff reads `composer_text`, so characters typed
+mid-burst are committed rather than dropped when the widget is rebuilt; this
+pass-through runs [`helpers.rs`](src/chatwidget/helpers.rs) ->
+[`bottom_pane/mod.rs`](src/bottom_pane/mod.rs) ->
+[`chat_composer/paste_handling.rs`](src/bottom_pane/chat_composer/paste_handling.rs).
+Initial positional prompts use the same path. Activation replaces the
+sessionless widget, so `SessionStarted` first applies normal history metadata to
+the new widget, then records its queued launch prompt into composer-local
+history immediately before submission. Slash commands and local shell commands
+are handled before this implicit-New decision; a shell command reports that no
 harness is active until activation. Neither can claim an ACP session. These
 ownership rules live in
 [`user_input.rs`](src/chatwidget/user_input.rs) and
@@ -840,20 +865,20 @@ toggles read by presence (the label appears only when the toggle is on). Before
 the agent advertises any configuration the row is the provider name alone —
 nothing is guessed.
 
-The card is written at startup, not at `SessionStarted`. Lazy activation does
-not send `session/new` until the first prompt, so a session that has been opened
-but not prompted would otherwise show no card at all. `App::run` calls
-`ChatWidget::emit_welcome_card` once everything local is configured; the agent
-row is the provider name alone at that point, and when the session does start
-`on_session_started` announces the model and options the agent resolved on their
-own history line (the same cell a `session/update` config announcement uses)
-rather than writing a second card. Two entries keep writing the card at session
-start instead: a cloud session, whose card names a broker session it only learns
-about once attached, and the agent-switch candidate, which is hidden until it
-publishes `SessionStarted`. When lazy activation swaps in a fresh widget on the
-first prompt, `App::configure_new_chat_widget` suppresses that widget's card so
-the conversation keeps the one card it already has; a later `/new` is a
-different conversation and writes its own.
+The card is written at startup, not at `SessionStarted`. Startup now
+auto-activates the session, but the welcome card is still emitted immediately so
+it shows while the agent resolves its configuration rather than blanking until
+activation commits. `App::run` calls `ChatWidget::emit_welcome_card` once
+everything local is configured; the agent row is the provider name alone at that
+point, and when the session does start `on_session_started` announces the model
+and options the agent resolved on their own history line (the same cell a
+`session/update` config announcement uses) rather than writing a second card.
+Two entries keep writing the card at session start instead: a cloud session,
+whose card names a broker session it only learns about once attached, and the
+agent-switch candidate, which is hidden until it publishes `SessionStarted`.
+When activation swaps in a fresh widget, `App::configure_new_chat_widget`
+suppresses that widget's card so the conversation keeps the one card it already
+has; a later `/new` is a different conversation and writes its own.
 
 `/status` uses the same compact, unshaded definition-list grammar with plain
 labels and a two-cell label/value gutter, expanding it into a superset of the

@@ -46,6 +46,9 @@ fn test_ctrl_c_clears_input() {
 fn test_backspace() {
     let mut session = TuiSession::spawn(24, 80).unwrap();
     session.wait_for_text("›", TIMEOUT).unwrap();
+    // Startup activates the session; wait for the model announcement so the
+    // snapshot is deterministic.
+    session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
 
     session.type_input("Hello").unwrap();
 
@@ -69,6 +72,9 @@ fn test_backspace() {
 fn test_arrows() {
     let mut session = TuiSession::spawn(40, 80).unwrap();
     session.wait_for_text("›", TIMEOUT).unwrap();
+    // Startup activates the session; wait for the model announcement so the
+    // snapshot is deterministic.
+    session.wait_for_text("Mock ACP options", TIMEOUT).unwrap();
 
     session.submit_input("/model").unwrap();
     std::thread::sleep(Duration::from_millis(100));

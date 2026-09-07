@@ -165,20 +165,17 @@ fn assert_lifecycle_order(stderr: &str) {
 }
 
 #[test]
-fn remote_adapter_prepares_without_activating_a_session() {
+fn remote_adapter_activates_a_session_on_startup() {
     let fake = FakeRemoteHandroll::new();
     let config = fake
         .config()
-        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
-        .with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0");
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
     session
         .wait_for_text("›", TIMEOUT)
         .expect("composer should remain usable while the agent is prepared");
-    let _ = fake.wait_for_stderr("Mock agent: session/list", TIMEOUT);
-    std::thread::sleep(Duration::from_millis(300));
-    let stderr = fake.read("agent_stderr");
+    let stderr = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
 
     assert_eq!(fake.pid_count(), 1, "startup must spawn one adapter child");
     assert_eq!(
@@ -186,26 +183,32 @@ fn remote_adapter_prepares_without_activating_a_session() {
         "acp --type remote ws://microvm.test/acp",
         "the registered remote adapter invocation must be preserved"
     );
-    assert!(
-        !stderr.contains("new_session"),
-        "preparation must not activate a session:\n{stderr}"
+    assert_eq!(
+        stderr.matches("Mock agent: new_session id=").count(),
+        1,
+        "startup must activate exactly one session:\n{stderr}"
     );
 }
 
 #[test]
-fn agent_without_session_list_prepares_without_activating_a_session() {
+fn agent_without_session_list_activates_a_session_on_startup() {
     let fake = FakeRemoteHandroll::new();
-    let config = fake
-        .config()
-        .with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0");
+    let config = fake.config();
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
     session.wait_for_text("›", TIMEOUT).expect("composer");
-    let stderr = fake.wait_for_stderr("Mock agent: initialize", TIMEOUT);
+    let stderr = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
 
     assert_eq!(fake.pid_count(), 1);
-    assert!(!stderr.contains("session/list"));
-    assert!(!stderr.contains("new_session"));
+    assert!(
+        !stderr.contains("session/list"),
+        "the agent advertises no session list:\n{stderr}"
+    );
+    assert_eq!(
+        stderr.matches("Mock agent: new_session id=").count(),
+        1,
+        "startup must activate exactly one session:\n{stderr}"
+    );
 }
 
 #[test]
@@ -376,42 +379,33 @@ fn positional_prompt_activates_after_preparation_exactly_once() {
 }
 
 #[test]
-fn local_and_slash_commands_do_not_implicitly_activate() {
+fn startup_activates_and_local_status_renders() {
     let fake = FakeRemoteHandroll::new();
     let config = fake
         .config()
-        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1")
-        .with_agent_env("MOCK_AGENT_FAIL_NEW_SESSION_FROM", "0");
+        .with_agent_env("MOCK_AGENT_SUPPORT_SESSION_LIST", "1");
     let mut session = TuiSession::spawn_with_config(24, 90, config).expect("spawn nori");
 
     session.wait_for_text("›", TIMEOUT).expect("composer");
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
-    let _ = fake.wait_for_stderr("Mock agent: session/list", TIMEOUT);
+    // Startup activates the session on its own.
+    let stderr = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
+    // Local slash commands still render without spawning another agent.
     session.submit_input("/status").unwrap();
     session
         .wait_for_text("Directory", TIMEOUT)
-        .expect("the local status command should render before activation");
-    std::thread::sleep(tui_pty_e2e::TIMEOUT_PRESNAPSHOT);
-    insta::assert_snapshot!(
-        "local_status_block_before_activation",
-        tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
-    );
-    session.submit_input("!pwd").unwrap();
-    session
-        .wait_for_text("No active harness session", TIMEOUT)
-        .expect("local shell command should report why it cannot run yet");
-    std::thread::sleep(Duration::from_millis(300));
+        .expect("the local status command should render");
 
-    let stderr = fake.read("agent_stderr");
     assert_eq!(fake.pid_count(), 1);
-    assert!(
-        !stderr.contains("new_session"),
-        "local and slash commands must not activate a session:\n{stderr}"
+    assert_eq!(
+        stderr.matches("Mock agent: new_session id=").count(),
+        1,
+        "startup must activate exactly one session:\n{stderr}"
     );
 }
 
 #[test]
-fn sessionless_policy_change_is_refreshed_before_activation() {
+fn policy_change_is_applied_to_the_active_session() {
     let fake = FakeRemoteHandroll::new();
     // This test reads the applied policy off the footer, and approvals is off
     // in the shipped footer defaults.
@@ -426,27 +420,27 @@ approval_mode = true
     let mut session = TuiSession::spawn_with_config(24, 100, config).expect("spawn nori");
 
     session.wait_for_text("›", TIMEOUT).expect("composer");
-    let _ = fake.wait_for_stderr("Mock agent: initialize", TIMEOUT);
+    let _ = fake.wait_for_stderr("Mock agent: new_session id=", TIMEOUT);
     session.submit_input("/approvals").unwrap();
     session
         .wait_for_text("Select approval mode", TIMEOUT)
         .expect("approval picker");
     std::thread::sleep(tui_pty_e2e::TIMEOUT_PRESNAPSHOT);
     insta::assert_snapshot!(
-        "sessionless_approval_picker",
+        "active_session_approval_picker",
         tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())
     );
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for_text("Approvals: Full Access", TIMEOUT)
-        .expect("full-access policy should be applied while sessionless");
+        .expect("full-access policy should be applied to the active session");
     std::thread::sleep(TIMEOUT_INPUT);
 
     session.submit_input("exercise refreshed policy").unwrap();
     session
         .wait_for_text("Permission granted with option: allow", TIMEOUT)
-        .expect("the refreshed never-ask policy should auto-approve");
+        .expect("the never-ask policy should auto-approve");
 
     let stderr = fake.read("agent_stderr");
     assert_eq!(fake.pid_count(), 1);

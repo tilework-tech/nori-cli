@@ -209,6 +209,13 @@ impl ChatWidget {
         self.bottom_pane.composer_text()
     }
 
+    /// Force any in-flight paste burst into the composer text immediately, so a
+    /// session-activation handoff that reads `composer_text` does not drop input
+    /// typed while the burst was still buffering.
+    pub(crate) fn flush_paste_burst(&mut self) {
+        self.bottom_pane.flush_paste_burst();
+    }
+
     /// Returns the first prompt text for this session, used for transcript matching.
     pub(crate) fn first_prompt_text(&self) -> Option<String> {
         self.first_prompt_text.clone()

@@ -113,6 +113,15 @@ impl ChatComposer {
         self.handle_paste_burst_flush(Instant::now())
     }
 
+    /// Force any in-flight paste burst into the textarea now, ignoring the burst
+    /// timer. Used before the composer contents are read for a session-activation
+    /// handoff so text typed mid-burst is not dropped when the widget is rebuilt.
+    pub(crate) fn flush_paste_burst(&mut self) {
+        if let Some(pasted) = self.paste_burst.flush_before_modified_input() {
+            self.handle_paste(pasted);
+        }
+    }
+
     pub(crate) fn is_in_paste_burst(&self) -> bool {
         self.paste_burst.is_active()
     }

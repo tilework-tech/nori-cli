@@ -307,6 +307,11 @@ impl BottomPane {
         self.composer.current_text()
     }
 
+    /// Force any in-flight paste burst into the composer text immediately.
+    pub(crate) fn flush_paste_burst(&mut self) {
+        self.composer.flush_paste_burst();
+    }
+
     /// Update the animated header shown to the left of the brackets in the
     /// status indicator. No-ops if the status indicator is not active.
     pub(crate) fn update_status_header(&mut self, header: String) {

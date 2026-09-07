@@ -2,6 +2,8 @@
 source: tui-pty-e2e/tests/prepared_startup.rs
 expression: "tui_pty_e2e::normalize_for_input_snapshot(session.screen_contents())"
 ---
+• Remote Handroll options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
   Select approval mode
   Choose what Nori can do without approval
 

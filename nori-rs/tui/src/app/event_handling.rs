@@ -77,6 +77,9 @@ impl App {
             return;
         }
         if self.take_deferred_spawn() {
+            // The chosen skillset has written its workspace state, so activate
+            // the session now instead of waiting for the first prompt.
+            self.pending_session_activation = Some(PendingSessionActivation::New);
             self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
         }
         self.request_system_info_refresh(
@@ -216,6 +219,10 @@ impl App {
                     self.pending_session_activation = None;
                     self.deferred_spawn_pending = false;
                     let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
+                    // Commit any in-flight paste burst before reading the composer
+                    // so input typed while the session was activating is carried
+                    // over to the rebuilt widget instead of being dropped.
+                    self.chat_widget.flush_paste_burst();
                     let composer_text = self.chat_widget.composer_text();
                     let loop_state = self.chat_widget.loop_state();
                     self.shutdown_current_conversation();
@@ -1448,8 +1455,10 @@ impl App {
             AppEvent::SkillsetPickerDismissed => {
                 // The skillset picker was dismissed without selection. If the
                 // agent spawn was deferred, spawn it now without a skillset
-                // (behaves as if skillset_per_session is disabled).
+                // (behaves as if skillset_per_session is disabled) and activate
+                // the session, matching plain local startup.
                 if self.take_deferred_spawn() {
+                    self.pending_session_activation = Some(PendingSessionActivation::New);
                     self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
                 }
             }

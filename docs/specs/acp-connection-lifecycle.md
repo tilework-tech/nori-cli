@@ -198,32 +198,37 @@ the active `HarnessHandle`.
 
 ## Startup and compatibility
 
-Ordinary startup prepares one agent immediately and leaves the frontend
-sessionless. Preparation may advertise and run `session/list`, but listing does
-not block typing and does not activate a session. If listing is supported, an
-empty list and a non-empty list are both successful results. Unsupported
-listing remains distinct from either result.
+Ordinary local startup prepares one agent and then activates a session on its
+own: once preparation is ready the frontend records a pending New decision and
+issues `session/new` without waiting for a prompt, so session-scoped state
+(model and configuration options, prompt history, modes) is available
+immediately. Preparation may still advertise and run `session/list`; listing
+does not block typing, and an empty list and a non-empty list are both
+successful results, distinct from unsupported listing. Cloud startup is the
+exception: it stays sessionless and picker-first, listing live sessions before
+anything claims one.
 
-Sessionless user activation has three entry paths:
+The prepared connection is consumed through that pending New decision. Besides
+startup, `/new`, the first genuine user prompt, and initial positional prompts
+and images all record the same decision when a session is not yet active. Input
+typed while activation is still in flight is preserved: its text and image
+attachments are owned by the deferred widget, any in-flight paste burst is
+flushed at the handoff, and everything transfers to the activated widget to be
+submitted exactly once after the session-configured (`SessionStarted`) boundary.
 
-- `/new` records a pending New decision and issues `session/new` when the
-  current preparation is ready.
-- The first genuine user prompt without an active session records the same New
-  decision. Its text and image attachments remain owned by the deferred widget,
-  transfer to the activated widget, and are submitted exactly once after the
-  session-configured (`SessionStarted`) boundary.
-- `/resume` uses the catalog gathered during preparation when the agent can
-  load or resume listed sessions. Selecting a row consumes the prepared
-  connection through the existing load, live-resume, or transcript-replay
-  policy. Agents without those catalog capabilities open the local transcript
-  picker without first creating a session; selecting a transcript then follows
-  the existing replay policy.
+`/resume` uses the catalog gathered during preparation when the agent can load
+or resume listed sessions. Selecting a row consumes the prepared connection
+through the existing load, live-resume, or transcript-replay policy. Agents
+without those catalog capabilities open the local transcript picker without
+first creating a session; selecting a transcript then follows the existing
+replay policy.
 
-Initial positional prompts and image attachments follow the same deferred New
-path as typed prompts. Slash commands remain local while sessionless; harness
-commands such as `!cmd` report that no harness session is active. Neither path
-implies `session/new`. Per-session skillset selection happens before preparation
-so the initialized child observes the chosen workspace state.
+Per-session skillset selection defers activation until the chosen skillset has
+written its workspace state, then activates automatically so the initialized
+child observes that state before `session/new`. Dismissing the skillset picker
+activates without a skillset, matching ordinary local startup. Slash commands
+that run before activation completes remain local; harness commands such as
+`!cmd` report that no harness session is active until it does.
 
 Esc-Esc backtrack and transcript fork are also deferred New transitions. They
 prepare before activation and retain the selected fork summary through both
@@ -263,8 +268,10 @@ process.
 
 - One subprocess records `initialize -> session/list -> session/new|load|resume`
   for a prepared-and-activated agent.
-- Startup without input records no session directive, for ordinary subprocess
-  agents and the Handroll remote adapter alike.
+- Ordinary local startup, for ordinary subprocess agents and the Handroll
+  remote adapter alike, activates exactly one session without input; cloud
+  startup stays picker-first and records no session directive until the user
+  chooses.
 - `/new`, `/resume`, and the first prompt reuse an in-flight or completed
   primary preparation instead of spawning or initializing again.
 - Primary activation refreshes mutable policy; identity mismatch reaps and
@@ -272,7 +279,8 @@ process.
 - Backtrack/fork preserves its context across deferred preparation and New.
 - A deferred text-and-image prompt is submitted once, unmodified, only after
   session activation commits.
-- Slash commands and local shell commands do not implicitly activate a
+- Local slash and shell commands run without spawning an additional session; a
+  shell command issued before activation completes reports no active harness
   session.
 - The current agent process remains alive throughout candidate preparation.
 - Candidate failure, including preparation timeout, reaps the candidate and
