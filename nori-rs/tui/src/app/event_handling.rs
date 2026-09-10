@@ -219,11 +219,7 @@ impl App {
                     self.pending_session_activation = None;
                     self.deferred_spawn_pending = false;
                     let (initial_prompt, initial_images) = self.chat_widget.take_initial_input();
-                    // Commit any in-flight paste burst before reading the composer
-                    // so input typed while the session was activating is carried
-                    // over to the rebuilt widget instead of being dropped.
-                    self.chat_widget.flush_paste_burst();
-                    let composer_text = self.chat_widget.composer_text();
+                    let composer_draft = self.chat_widget.take_composer_draft();
                     let loop_state = self.chat_widget.loop_state();
                     self.shutdown_current_conversation();
                     let mut init = self.chat_widget_init(
@@ -237,9 +233,7 @@ impl App {
                     init.prepared_agent = Some(agent);
                     self.chat_widget = ChatWidget::new(init);
                     self.configure_new_chat_widget();
-                    if !composer_text.is_empty() {
-                        self.chat_widget.set_composer_text(composer_text);
-                    }
+                    self.chat_widget.restore_composer_draft(composer_draft);
                     if let Some((remaining, total)) = loop_state {
                         self.chat_widget.set_loop_state(remaining, total);
                     }
