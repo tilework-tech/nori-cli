@@ -211,10 +211,12 @@ anything claims one.
 The prepared connection is consumed through that pending New decision. Besides
 startup, `/new`, the first genuine user prompt, and initial positional prompts
 and images all record the same decision when a session is not yet active. Input
-typed while activation is still in flight is preserved: its text and image
-attachments are owned by the deferred widget, any in-flight paste burst is
-flushed at the handoff, and everything transfers to the activated widget to be
-submitted exactly once after the session-configured (`SessionStarted`) boundary.
+typed while activation is still in flight is preserved. Unsubmitted edits move
+as an owned `ComposerDraft`, retaining the cursor, undo/Vim state, image and
+large-paste placeholders and payloads, and any buffered input with its original
+flush deadline. A handoff must not round-trip an edit through plain text setters.
+Already-submitted activation input transfers separately and is submitted exactly
+once after the session-configured (`SessionStarted`) boundary.
 
 `/resume` uses the catalog gathered during preparation when the agent can load
 or resume listed sessions. Selecting a row consumes the prepared connection

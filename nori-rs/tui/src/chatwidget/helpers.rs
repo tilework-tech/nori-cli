@@ -209,11 +209,13 @@ impl ChatWidget {
         self.bottom_pane.composer_text()
     }
 
-    /// Force any in-flight paste burst into the composer text immediately, so a
-    /// session-activation handoff that reads `composer_text` does not drop input
-    /// typed while the burst was still buffering.
-    pub(crate) fn flush_paste_burst(&mut self) {
-        self.bottom_pane.flush_paste_burst();
+    /// Move the full edit, including buffered input, before replacing this widget.
+    pub(crate) fn take_composer_draft(&mut self) -> crate::bottom_pane::ComposerDraft {
+        self.bottom_pane.take_composer_draft()
+    }
+
+    pub(crate) fn restore_composer_draft(&mut self, draft: crate::bottom_pane::ComposerDraft) {
+        self.bottom_pane.restore_composer_draft(draft);
     }
 
     /// Returns the first prompt text for this session, used for transcript matching.
@@ -276,7 +278,8 @@ impl ChatWidget {
         self.bottom_pane.insert_str(text);
     }
 
-    /// Replace the composer content with the provided text and reset cursor.
+    /// Replace the composer content, placing the cursor at the end.
+    /// For widget handoffs, transfer a composer draft instead.
     pub(crate) fn set_composer_text(&mut self, text: String) {
         self.bottom_pane.set_composer_text(text);
     }
