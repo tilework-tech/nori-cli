@@ -11,6 +11,12 @@ test-only; it is not exported by `nori-tui-components`.
 
 ## Prerequisites
 
+The focused `motion_storybook` is a bare scene 1 ↔ 2 zoom loop, with no text
+or UI. The E2E case presses `s` to freeze an 80%-zoom frame before capture;
+`--still` instead starts at the dot endpoint. Buffer snapshots cover both fixed
+formation variants at wide and narrow sizes. Its
+[profiling guide](motion_storybook/README.md) describes headless and live timing.
+
 Install tmux and jq, and use a compatible checkout of
 [`CSRessel/skills`](https://github.com/CSRessel/skills/tree/414aa5123b81c682f9e5372b377d262853fdfb53).
 The referenced commit is the shared baseline for the tmux and Ghostty Web

@@ -74,6 +74,18 @@ consumer application
 
 ### Core Implementation
 
+- [`MotionBackground`](src/motion/) renders caller-controlled procedural scenery
+  inside a clipped rectangle. `MotionState` owns deterministic elapsed time and
+  interruptible scene transitions; reduced motion freezes the field and switches
+  scenes immediately. `MotionPalette` defaults to terminal-compatible muted
+  styles, with an explicit Nori RGB art palette. A quiet area clears space for
+  foreground forms, which callers draw afterward. The focused
+  [`motion_storybook`](examples/motion_storybook.rs) now runs only the bare Dots ↔ Formations transition, with a pinned platoon
+  or muster destination and example-only profiling instrumentation.
+  `MotionFormation` selects Cycle (the compatible default), Platoon, or Muster. See the
+  [integration guide](../../docs/reference/motion-background.md) for API contracts,
+  timing, accessibility, and capture controls.
+
 - `MenuItem` pairs a stable caller key with label and optional description,
   explicit character or number shortcuts, availability/current metadata, and
   semantic consequence tone. `MenuState::try_new` validates the aggregate

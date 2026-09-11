@@ -229,6 +229,23 @@ callers can reserve an exact-height region before placing the pane.
 
 ## Verification
 
+### Full-screen motion art
+
+`MotionBackground` is an explicitly requested decorative layer for a caller-owned
+alternate screen. Its default palette follows terminal surface and muted-text
+tokens. The opt-in `MotionPalette::nori()` is a bounded exception to the neutral
+surface and functional-accent rules: it reproduces the Motion Suite reference's
+dark RGB background and green procedural scenery. It must not change semantic
+styles in unrelated widgets. Foreground text on that explicit dark surface must
+use contrasting colors; the motion storybook supplies them. Keep forms unboxed,
+titles left-aligned, key hints left-aligned, and focus accents compact.
+
+Reserve a quiet rectangle and soft surrounding falloff for foreground content.
+Reduced motion must stop every animation, including idle movement and blinking,
+and switch scenes instantly. Provide ASCII and terminal-theme fallback policies.
+Terminal ownership, credentials, login actions, and redraw scheduling remain in
+the consumer; this component only paints scenery.
+
 25. Snapshot every component at representative wide and narrow widths.
 26. Snapshot both densities and loading, empty, error, disabled, and selected
     states where they apply.
