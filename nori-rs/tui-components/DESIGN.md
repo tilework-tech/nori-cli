@@ -237,14 +237,17 @@ tokens. The opt-in `MotionPalette::nori()` is a bounded exception to the neutral
 surface and functional-accent rules: it reproduces the Motion Suite reference's
 dark RGB background and green procedural scenery. It must not change semantic
 styles in unrelated widgets. Foreground text on that explicit dark surface must
-use contrasting colors; the motion storybook supplies them. Keep forms unboxed,
+use contrasting colors; the current motion storybook displays background only. Keep forms unboxed,
 titles left-aligned, key hints left-aligned, and focus accents compact.
 
 Reserve a quiet rectangle and soft surrounding falloff for foreground content.
 Reduced motion must stop every animation, including idle movement and blinking,
 and switch scenes instantly. Provide ASCII and terminal-theme fallback policies.
 Terminal ownership, credentials, login actions, and redraw scheduling remain in
-the consumer; this component only paints scenery.
+the consumer; this component only paints scenery. Its core API accepts explicit
+ambient time and transition progress, allowing the consumer to choose easing and
+duration. The optional `MotionState` controller provides simple interruptible
+linear playback without coupling state ownership to rendering.
 
 25. Snapshot every component at representative wide and narrow widths.
 26. Snapshot both densities and loading, empty, error, disabled, and selected

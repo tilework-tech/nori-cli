@@ -10,26 +10,44 @@ separate consumer integration.
 
 ## Compose it
 
+The renderer accepts an explicit scene, ambient time, and transition progress.
+It owns no playback state and does not borrow a controller. The caller chooses
+transition duration, easing, and any seek/reversal policy:
+
 ```rust
 use std::time::Duration;
-use nori_tui_components::{MotionBackground, MotionPalette, MotionScene, MotionState};
+use nori_tui_components::{MotionBackground, MotionPalette, MotionScene};
 use ratatui::layout::Rect;
 
-let mut motion = MotionState::new(MotionScene::Dots);
-motion.advance(Duration::from_millis(40)); // elapsed time supplied by your loop
-motion.set_scene(MotionScene::Creatures);
+let elapsed = Duration::from_secs(12);
+let progress = 0.8; // Supply your timeline's progress, optionally already eased.
 
-// In your application's terminal draw call:
 terminal.draw(|frame| {
     let form = Rect::new(25, 8, 50, 16);
     frame.render_widget(
-        MotionBackground::new(&motion)
+        MotionBackground::new(MotionScene::Dots, elapsed)
+            .transition_to(MotionScene::Formations, progress)
             .palette(MotionPalette::nori())
             .quiet_area(form),
         frame.area(),
     );
     // Render your foreground widgets into `form` now.
 });
+```
+
+For simple linear playback, keep an optional `MotionState` and call
+`motion.background()` to get an owned frame snapshot. This replaces the original
+`MotionBackground::new(&motion)` API:
+
+```rust
+use std::time::Duration;
+use nori_tui_components::{MotionScene, MotionState};
+
+let mut motion = MotionState::new(MotionScene::Dots);
+motion.set_scene(MotionScene::Creatures);
+motion.advance(Duration::from_millis(40));
+let background = motion.background();
+// Render `background`, optionally adding palette, quiet_area, ascii, or formation.
 ```
 
 `quiet_area` uses absolute terminal coordinates. It blanks the content rectangle
@@ -45,16 +63,22 @@ origins, empty areas, and tiny viewports. Foreground layout is entirely caller-o
   argyle, orbiting paired tiles, and a perspective muster. A fade separates the
   formation field from sandboxes; those grow into blinking creatures and then
   braille wireframes. Canvas strokes are approximated with terminal cells.
-- `set_scene` starts or reverses a transition at the current position. Each
+- `transition_to(target, progress)` clamps progress to `[0, 1]`; NaN means zero.
+  Both endpoints match their static scenes. It interpolates from the widget's
+  current position, so a captured controller frame can also be redirected.
+  Recreate the widget from your chosen origin when seeking an absolute progress.
+- On the optional controller, `set_scene` starts or reverses a transition at the current position. Each
   adjacent phase takes three seconds. Skipping phases traverses intermediate
   phases; reaching any destination takes at most twelve seconds.
-- The caller supplies elapsed `Duration` through `advance`. Render is pure:
+- Supply ambient time directly to `new`, or advance the optional controller. Render is pure:
   repeated state/geometry/palette produces the same frame. There is no RNG or
   hidden wall clock. The scenery clock wraps after 24 hours to keep numerical
   inputs bounded; a continuously displayed background can change at that boundary.
 - Pause by stopping `advance`; discard elapsed paused time when resuming.
-  `set_reduced_motion(true)` freezes all scenery, including blinking and formation
-  changes, and makes scene changes immediate. Consumers own preference detection.
+  The controller's `set_reduced_motion(true)` freezes its existing ambient time
+  and makes scene changes immediate. The stateless widget's `.reduced_motion(true)`
+  instead renders its target at time zero, independent of the supplied timeline.
+  Both stop blinking and formation changes. Consumers own preference detection.
 - Choose a measured frame budget for the intended terminal size, and redraw only
   for input or resize when paused/reduced. The example uses a 40 ms frame budget
   and blocking input polling when idle. Rendering costs O(visible cells), with
@@ -67,7 +91,7 @@ origins, empty areas, and tiny viewports. Foreground layout is entirely caller-o
   it does not invent a background. `MotionPalette::nori()` explicitly opts into
   the reference's RGB ink `#0a0f0c`, green `#7dd6a0`, and pale highlights. Only
   use that art palette when true color is suitable; compose foreground copy with
-  explicit contrasting colors, as the example does. Custom palettes expose
+  explicit contrasting colors. Custom palettes expose
   `surface`, `ink`, and `highlight` styles. RGB colors are blended and quantized
   into sixteen intensity steps; other palettes use their supplied ink and dimming.
 
@@ -104,3 +128,19 @@ ASCII fallback. The example snapshots dots, 80% zoom, and braille endpoints for
 both fixed variants at 100×34 and 36×20, and tests reversal/overshoot behavior.
 Its opt-in tmux case checks the actual full-screen frame through the shared
 [storybook capture workflow](../../nori-rs/tui-components/examples/README.md).
+
+## Implementation boundaries
+
+- `motion/mod.rs`: public scenes, frame description, clipping, and Ratatui painting.
+- `motion/state.rs`: optional playback controller and its state invariants.
+- `motion/palette.rs`: theme integration and scenery intensity styles.
+- `motion/fields.rs`: frame context, scene dispatch, and cell/braille sampling.
+- `motion/fields/zoom.rs`: dot islands and formation geometry.
+- `motion/fields/tiles.rs`: sandbox, creature, and blueprint geometry.
+- `motion/fields/math.rs`: shared deterministic noise/hash/interpolation.
+
+The storybook owns its six-second ping-pong timeline and supplies explicit
+progress to the renderer. Profiling instruments the example's draw boundary;
+there are no benchmark timers in the reusable renderer. The API cleanup retains
+existing field formulas, palette, and sampling schedule so subsequent performance
+changes can be measured separately.

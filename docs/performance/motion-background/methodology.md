@@ -19,7 +19,7 @@ component still uses the ambient cycle. No former login/card UI is rendered.
   size queries, buffer diff, ANSI encoding, write/flush, cursor handling, and
   buffer reset. Timing is accumulated in memory and saved only after alternate
   screen restoration. No per-cell timing is added to the renderer.
-- **CPU sampling:** optimized build with release optimization/LTO unchanged,
+- **Planned CPU sampling (interrupted; no retained profile here):** optimized build with release optimization/LTO unchanged,
   `debug=line-tables-only`, `strip=none`, using Linux perf userspace cycles and
   DWARF call stacks. Instruction samples identify hot functions/source lines;
   they are separate runs, not mixed into the wall-clock timing data.
@@ -83,4 +83,5 @@ python3 tui-components/scripts/summarize-motion-profile.py \
   /tmp/platoon.csv /tmp/muster.csv /tmp/muster-live.csv --output /tmp/summary
 ```
 
-The summary tool also accepts `.csv.gz` inputs in the saved `data/` directory.
+The summary tool also accepts `.csv.gz` inputs. See [measurement status](report.md)
+for which artifacts survived the interruption.

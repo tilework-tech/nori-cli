@@ -56,6 +56,11 @@ production and PTY backpressure, not the graphical terminal's displayed FPS.
 The summary excludes the first full repaint of each run, reports percentiles
 and work over the requested frame budget, and separates three zoom-phase bands.
 
-[Measurements and recommendations](../../../../docs/performance/motion-background/report.md)
-include the collected data and CPU profile. The component's broader API remains
+[Measurement status](../../../../docs/performance/motion-background/report.md)
+links the retained comparison data and explains gaps from the interrupted run. The component's broader API remains
 in the [integration guide](../../../../docs/reference/motion-background.md).
+
+The example timeline now supplies explicit time/progress to `MotionBackground`.
+It does not require `MotionState`; that controller remains available to consumers
+that want its default linear transitions. Sampling and art direction are unchanged
+by the API cleanup.

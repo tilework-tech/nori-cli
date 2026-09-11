@@ -75,9 +75,11 @@ consumer application
 ### Core Implementation
 
 - [`MotionBackground`](src/motion/) renders caller-controlled procedural scenery
-  inside a clipped rectangle. `MotionState` owns deterministic elapsed time and
-  interruptible scene transitions; reduced motion freezes the field and switches
-  scenes immediately. `MotionPalette` defaults to terminal-compatible muted
+  inside a clipped rectangle from explicit scene, time, and transition progress.
+  Optional `MotionState` owns linear playback and interruptible scene transitions;
+  `background()` returns an owned render snapshot. Reduced motion freezes the
+  field and switches scenes immediately. Geometry, palette, and controller live
+  in separate modules. `MotionPalette` defaults to terminal-compatible muted
   styles, with an explicit Nori RGB art palette. A quiet area clears space for
   foreground forms, which callers draw afterward. The focused
   [`motion_storybook`](examples/motion_storybook.rs) now runs only the bare Dots ↔ Formations transition, with a pinned platoon

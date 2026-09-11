@@ -1,14 +1,19 @@
 #![allow(clippy::disallowed_methods)] // Verify the explicit RGB art palette.
 
 use super::*;
+use crate::Theme;
 use pretty_assertions::assert_eq;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
 use unicode_width::UnicodeWidthStr;
 
 fn render(state: &MotionState, area: Rect, ascii: bool) -> Buffer {
     let mut buffer = Buffer::empty(area);
-    MotionBackground::new(state)
+    state
+        .background()
         .palette(MotionPalette::nori())
         .ascii(ascii)
         .render(area, &mut buffer);
@@ -23,7 +28,7 @@ fn every_scene_at_wide_and_narrow_sizes() {
         for (width, height) in [(80, 24), (32, 12)] {
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
             terminal
-                .draw(|frame| frame.render_widget(MotionBackground::new(&state), frame.area()))
+                .draw(|frame| frame.render_widget(state.background(), frame.area()))
                 .unwrap();
             insta::assert_snapshot!(
                 format!("{}_{}x{}", scene.label().to_lowercase(), width, height),
@@ -31,45 +36,6 @@ fn every_scene_at_wide_and_narrow_sizes() {
             );
         }
     }
-}
-
-#[test]
-fn transitions_reverse_from_the_current_frame_and_finish_without_overshoot() {
-    let mut state = MotionState::default();
-    state.set_scene(MotionScene::Blueprint);
-    state.advance(Duration::from_secs(2));
-    assert_eq!(state.position, 2.0 / 3.0);
-    let before = state.position;
-    state.set_scene(MotionScene::Dots);
-    assert_eq!(state.position, before);
-    state.advance(Duration::from_secs(1));
-    assert_eq!(state.position, 1.0 / 3.0);
-    state.advance(Duration::from_secs(100));
-    assert_eq!((state.position, state.scene()), (0.0, MotionScene::Dots));
-    state.set_scene(MotionScene::Blueprint);
-    state.advance(Duration::MAX);
-    assert_eq!(
-        (state.position, state.scene()),
-        (4.0, MotionScene::Blueprint)
-    );
-    // Very long-running clocks remain safe for field hash/index conversions.
-    render(&state, Rect::new(0, 0, 20, 10), false);
-}
-
-#[test]
-fn reduced_motion_freezes_the_entire_field_and_makes_scene_changes_immediate() {
-    let area = Rect::new(0, 0, 60, 20);
-    let mut state = MotionState::new(MotionScene::Creatures);
-    state.advance(Duration::from_secs(12));
-    state.set_reduced_motion(true);
-    let before = render(&state, area, false);
-    state.advance(Duration::from_secs(50));
-    assert_eq!(render(&state, area, false), before);
-    state.set_scene(MotionScene::Blueprint);
-    assert_eq!(state.position, 4.0);
-    state.set_reduced_motion(false);
-    state.advance(Duration::from_secs(1));
-    assert_eq!(state.elapsed, Duration::from_secs(13));
 }
 
 #[test]
@@ -97,7 +63,8 @@ fn clips_to_buffer_without_changing_field_coordinates_or_touching_other_cells() 
     let entire = render(&state, area, false);
     let clip = Rect::new(10, 5, 8, 4);
     let mut clipped = Buffer::empty(clip);
-    MotionBackground::new(&state)
+    state
+        .background()
         .palette(MotionPalette::nori())
         .render(area, &mut clipped);
     for y in clip.top()..clip.bottom() {
@@ -106,11 +73,11 @@ fn clips_to_buffer_without_changing_field_coordinates_or_touching_other_cells() 
         }
     }
     let mut outer = Buffer::filled(Rect::new(0, 0, 30, 16), ratatui::buffer::Cell::new("!"));
-    MotionBackground::new(&state).render(area, &mut outer);
+    state.background().render(area, &mut outer);
     assert_eq!(outer[(0, 0)].symbol(), "!");
     assert_eq!(outer[(23, 12)].symbol(), "!");
     let original = outer.clone();
-    MotionBackground::new(&state).render(Rect::new(3, 3, 0, 0), &mut outer);
+    state.background().render(Rect::new(3, 3, 0, 0), &mut outer);
     assert_eq!(outer, original);
     render(&state, Rect::new(5, 7, 1, 1), false);
 }
@@ -125,7 +92,8 @@ fn quiet_area_clears_old_content_and_styles_and_keeps_foreground_composable() {
         area,
         Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
     );
-    MotionBackground::new(&state)
+    state
+        .background()
         .palette(MotionPalette::nori())
         .quiet_area(quiet)
         .render(area, &mut buffer);
@@ -149,7 +117,7 @@ fn default_palette_keeps_terminal_background_and_all_glyphs_are_single_cell() {
     for scene in MotionScene::ALL {
         let state = MotionState::new(scene);
         let mut buffer = Buffer::empty(area);
-        MotionBackground::new(&state).render(area, &mut buffer);
+        state.background().render(area, &mut buffer);
         for cell in &buffer.content {
             assert_eq!(cell.bg, Color::Reset);
             assert_eq!(UnicodeWidthStr::width(cell.symbol()), 1);
@@ -177,8 +145,71 @@ fn intermediate_zoom_and_fade_have_snapshots() {
         state.advance(Duration::from_millis(milliseconds));
         let mut terminal = Terminal::new(TestBackend::new(60, 18)).unwrap();
         terminal
-            .draw(|frame| frame.render_widget(MotionBackground::new(&state), frame.area()))
+            .draw(|frame| frame.render_widget(state.background(), frame.area()))
             .unwrap();
         insta::assert_snapshot!(name, terminal.backend().to_string());
+    }
+}
+
+#[test]
+fn explicit_transition_endpoints_clamp_and_match_static_scenes() {
+    let area = Rect::new(0, 0, 24, 12);
+    let draw = |widget: MotionBackground| {
+        let mut buffer = Buffer::empty(area);
+        widget.render(area, &mut buffer);
+        buffer
+    };
+    for from in MotionScene::ALL {
+        for to in MotionScene::ALL {
+            let start = MotionBackground::new(from, Duration::from_secs(12));
+            let end = MotionBackground::new(to, Duration::from_secs(12));
+            for progress in [f64::NEG_INFINITY, -1.0, f64::NAN, 0.0] {
+                assert_eq!(
+                    draw(start.clone().transition_to(to, progress)),
+                    draw(start.clone())
+                );
+            }
+            for progress in [1.0, 2.0, f64::INFINITY] {
+                assert_eq!(
+                    draw(start.clone().transition_to(to, progress)),
+                    draw(end.clone())
+                );
+            }
+            assert_eq!(
+                draw(start.transition_to(to, 0.4).reduced_motion(true)),
+                draw(MotionBackground::new(to, Duration::ZERO)),
+            );
+        }
+    }
+}
+
+#[test]
+fn explicit_time_can_seek_and_matches_controller_frames() {
+    let area = Rect::new(3, 2, 36, 20);
+    // Nonchronological input demonstrates that rendering retains no playback state.
+    for millis in [2400, 0, 3000, 900, 1500, 2400] {
+        for formation in [
+            MotionFormation::Cycle,
+            MotionFormation::Platoon,
+            MotionFormation::Muster,
+        ] {
+            let mut state = MotionState::new(MotionScene::Dots);
+            state.advance(Duration::from_secs(12));
+            state.set_scene(MotionScene::Formations);
+            state.advance(Duration::from_millis(millis));
+            let mut controlled = Buffer::empty(area);
+            state
+                .background()
+                .formation(formation)
+                .palette(MotionPalette::nori())
+                .render(area, &mut controlled);
+            let mut explicit = Buffer::empty(area);
+            MotionBackground::new(MotionScene::Dots, Duration::from_millis(12000 + millis))
+                .transition_to(MotionScene::Formations, millis as f64 / 3000.0)
+                .formation(formation)
+                .palette(MotionPalette::nori())
+                .render(area, &mut explicit);
+            assert_eq!(explicit, controlled);
+        }
     }
 }

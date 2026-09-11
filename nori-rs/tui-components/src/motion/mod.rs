@@ -5,17 +5,17 @@
 //! clock, redraw scheduling, input, and all authentication behavior.
 
 mod fields;
+mod palette;
+mod state;
+
+pub use palette::MotionPalette;
+pub use state::MotionState;
 
 use std::time::Duration;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
-use ratatui::style::Modifier;
-use ratatui::style::Style;
 use ratatui::widgets::Widget;
-
-use crate::Theme;
 
 /// Optional fixed destination for the dot-to-braille zoom.
 /// `Cycle` retains the original time-driven formation sequence.
@@ -68,140 +68,77 @@ impl MotionScene {
     }
 }
 
-/// Caller-held animation clock and interruptible scene transition.
-///
-/// Adjacent scenes take three seconds to morph. No wall clock, background task,
-/// random source, or input handling is hidden in this state. Pause by not calling
-/// [`Self::advance`]. Reduced motion freezes scenery and switches scenes instantly.
-#[derive(Clone, Debug, Default)]
-pub struct MotionState {
-    scene: MotionScene,
-    position: f64,
-    elapsed: Duration,
-    reduced_motion: bool,
-}
-
-impl MotionState {
-    pub fn new(scene: MotionScene) -> Self {
-        Self {
-            scene,
-            position: scene.position(),
-            ..Self::default()
-        }
-    }
-
-    /// The requested destination, including while a transition is in progress.
-    pub fn scene(&self) -> MotionScene {
-        self.scene
-    }
-
-    pub fn set_scene(&mut self, scene: MotionScene) {
-        self.scene = scene;
-        if self.reduced_motion {
-            self.position = scene.position();
-        }
-    }
-
-    pub fn set_reduced_motion(&mut self, reduced: bool) {
-        self.reduced_motion = reduced;
-        if reduced {
-            self.position = self.scene.position();
-        }
-    }
-
-    pub fn reduced_motion(&self) -> bool {
-        self.reduced_motion
-    }
-
-    pub fn advance(&mut self, delta: Duration) {
-        if self.reduced_motion {
-            return;
-        }
-        self.elapsed = self.elapsed.saturating_add(delta);
-        let distance = self.scene.position() - self.position;
-        self.position += distance.signum() * distance.abs().min(delta.as_secs_f64() / 3.0);
-    }
-}
-
-/// Explicit scenery styles, separate from the semantic colors of foreground UI.
-#[derive(Clone, Copy, Debug)]
-pub struct MotionPalette {
-    pub surface: Style,
-    pub ink: Style,
-    pub highlight: Style,
-}
-
-impl MotionPalette {
-    /// Terminal-compatible default; never invents a background color.
-    pub fn from_theme(theme: Theme) -> Self {
-        Self {
-            surface: theme.surface,
-            ink: theme.muted,
-            highlight: theme.muted,
-        }
-    }
-
-    /// Opt-in, true-color art direction from the Nori Motion Suite mockup.
-    /// The caller must also give foreground content suitable contrasting colors.
-    #[allow(clippy::disallowed_methods)]
-    pub fn nori() -> Self {
-        Self {
-            surface: Style::new().bg(Color::Rgb(10, 15, 12)),
-            ink: Style::new().fg(Color::Rgb(125, 214, 160)),
-            highlight: Style::new().fg(Color::Rgb(214, 255, 224)),
-        }
-    }
-
-    #[allow(clippy::disallowed_methods)]
-    fn style(self, intensity: f64, highlight: bool) -> Style {
-        let ink = if highlight { self.highlight } else { self.ink };
-        let mut style = self.surface.patch(ink);
-        if let (Some(Color::Rgb(r, g, b)), Some(Color::Rgb(br, bg, bb))) = (ink.fg, self.surface.bg)
-        {
-            // Quantization keeps subtle field changes from repainting every cell.
-            let amount = (intensity.clamp(0.0, 1.0) * 16.0).round() / 16.0;
-            let mix = |base, top| (f64::from(base) + f64::from(top - base) * amount) as u8;
-            style = style.fg(Color::Rgb(
-                mix(i32::from(br), i32::from(r)),
-                mix(i32::from(bg), i32::from(g)),
-                mix(i32::from(bb), i32::from(b)),
-            ));
-        } else if intensity < 0.3 {
-            style = style.add_modifier(Modifier::DIM);
-        }
-        style
-    }
-}
-
-impl Default for MotionPalette {
-    fn default() -> Self {
-        Self::from_theme(Theme::default())
-    }
-}
-
 /// Background widget with an optional blank content region and soft outer falloff.
 ///
 /// Work is bounded by the visible cell count, with at most eight field samples per
-/// cell. Choose a cadence using measurements at the intended viewport. Unicode assumes a font with
-/// single-cell braille and geometric symbols; use [`Self::ascii`] for a fallback.
+/// cell. Choose a cadence using measurements at the intended viewport. Unicode
+/// assumes single-cell braille and geometric symbols; use [`Self::ascii`] for a
+/// fallback. Timing and transition progress belong to the caller. [`MotionState`]
+/// is an optional controller for simple linear transitions.
+///
+/// ```
+/// use std::time::Duration;
+/// use nori_tui_components::{MotionBackground, MotionScene, MotionState};
+/// use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
+///
+/// let area = Rect::new(0, 0, 80, 24);
+/// let mut buffer = Buffer::empty(area);
+/// MotionBackground::new(MotionScene::Dots, Duration::from_secs(12))
+///     .transition_to(MotionScene::Formations, 0.8)
+///     .render(area, &mut buffer);
+///
+/// let mut controller = MotionState::new(MotionScene::Dots);
+/// controller.set_scene(MotionScene::Formations);
+/// controller.advance(Duration::from_millis(40));
+/// controller.background().render(area, &mut buffer);
+/// ```
 #[derive(Clone, Debug)]
-pub struct MotionBackground<'a> {
-    state: &'a MotionState,
+pub struct MotionBackground {
+    scene: MotionScene,
+    elapsed: Duration,
+    position: f64,
+    reduced_motion: bool,
     palette: MotionPalette,
     quiet_area: Option<Rect>,
     ascii: bool,
     formation: MotionFormation,
 }
 
-impl<'a> MotionBackground<'a> {
-    pub fn new(state: &'a MotionState) -> Self {
+impl MotionBackground {
+    /// Render a scene at explicit ambient time, without a transition controller.
+    pub fn new(scene: MotionScene, elapsed: Duration) -> Self {
         Self {
-            state,
+            scene,
+            elapsed,
+            position: scene.position(),
+            reduced_motion: false,
             palette: MotionPalette::default(),
             quiet_area: None,
             ascii: false,
             formation: MotionFormation::Cycle,
         }
+    }
+
+    /// Interpolate from this frame's position to a target scene. The caller owns
+    /// duration and easing. Progress is clamped to 0..=1; NaN means zero.
+    /// Intermediate scenes follow suite order; endpoints match their static scene.
+    pub fn transition_to(mut self, target: MotionScene, progress: f64) -> Self {
+        let progress = if progress.is_nan() {
+            0.0
+        } else {
+            progress.clamp(0.0, 1.0)
+        };
+        self.position += (target.position() - self.position) * progress;
+        self.scene = target;
+        self
+    }
+
+    /// Freeze ambient time at zero and show the requested destination immediately.
+    /// For freezing an already-playing frame, hold time/progress constant or use
+    /// [`MotionState::set_reduced_motion`].
+    pub fn reduced_motion(mut self, reduced: bool) -> Self {
+        self.reduced_motion = reduced;
+        self
     }
 
     pub fn palette(mut self, palette: MotionPalette) -> Self {
@@ -228,14 +165,21 @@ impl<'a> MotionBackground<'a> {
     }
 }
 
-impl Widget for MotionBackground<'_> {
+impl Widget for MotionBackground {
     fn render(self, area: Rect, buf: &mut Buffer) {
         // Keep coordinates relative to the original area when the buffer clips it.
         let visible = area.intersection(buf.area);
         // Bound the floating-point clock even for a caller supplying Duration::MAX.
-        let time = (self.state.elapsed.as_secs() % 86_400) as f64
-            + f64::from(self.state.elapsed.subsec_nanos()) / 1e9;
-        let field = fields::Field::new(area, time, self.state.position, self.formation);
+        let (position, time) = if self.reduced_motion {
+            (self.scene.position(), 0.0)
+        } else {
+            (
+                self.position,
+                (self.elapsed.as_secs() % 86_400) as f64
+                    + f64::from(self.elapsed.subsec_nanos()) / 1e9,
+            )
+        };
+        let field = fields::Field::new(area, time, position, self.formation);
         let quiet = self.quiet_area.filter(|rect| !rect.is_empty());
         for y in visible.top()..visible.bottom() {
             for x in visible.left()..visible.right() {
