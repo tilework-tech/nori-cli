@@ -242,3 +242,58 @@ fn cached_zoom_is_independent_of_clip_and_previous_frames() {
         }
     }
 }
+
+#[test]
+fn sandbox_zoom_preserves_endpoints_and_never_blanks_the_field() {
+    let area = Rect::new(0, 0, 80, 24);
+    let time = Duration::from_secs(12);
+    let frame = |background: MotionBackground| {
+        let mut buffer = Buffer::empty(area);
+        background
+            .formation(MotionFormation::Muster)
+            .palette(MotionPalette::nori())
+            .render(area, &mut buffer);
+        buffer
+    };
+    assert_eq!(
+        frame(MotionBackground::sandbox_zoom(time, 0.0)),
+        frame(MotionBackground::new(MotionScene::Sandboxes, time))
+    );
+    assert_eq!(
+        frame(MotionBackground::sandbox_zoom(time, 1.0)),
+        frame(MotionBackground::new(MotionScene::Formations, time))
+    );
+    assert_eq!(
+        frame(MotionBackground::sandbox_zoom(time, f64::NAN)),
+        frame(MotionBackground::sandbox_zoom(time, 0.0))
+    );
+    assert_eq!(
+        frame(MotionBackground::sandbox_zoom(time, 0.5).reduced_motion(true)),
+        frame(MotionBackground::new(
+            MotionScene::Formations,
+            Duration::ZERO
+        ))
+    );
+    for step in 0..=100 {
+        let buffer = frame(MotionBackground::sandbox_zoom(
+            time,
+            f64::from(step) / 100.0,
+        ));
+        assert!(
+            buffer.content.iter().any(|cell| cell.symbol() != " "),
+            "blank frame at step {step}"
+        );
+    }
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|f| {
+            f.render_widget(
+                MotionBackground::sandbox_zoom(time, 0.5)
+                    .formation(MotionFormation::Muster)
+                    .palette(MotionPalette::nori()),
+                f.area(),
+            )
+        })
+        .unwrap();
+    insta::assert_snapshot!("sandbox_zoom_midpoint", terminal.backend().to_string());
+}

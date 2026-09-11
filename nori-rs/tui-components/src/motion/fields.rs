@@ -35,6 +35,7 @@ pub(super) struct Field {
     zoom_mix: f64,
     braille_mix: f64,
     fade: f64,
+    sandbox_zoom: Option<f64>,
     noise: math::Noise,
     islands: [Option<zoom::Island>; 64],
     muster_rows: [Option<zoom::MusterRow>; 4],
@@ -77,10 +78,19 @@ impl Field {
             } else {
                 1.0
             },
+            sandbox_zoom: None,
             noise: math::Noise::new(time * 0.1),
             islands: [None; 64],
             muster_rows: [None; 4],
         }
+    }
+
+    pub fn sandbox_zoom(area: Rect, time: f64, progress: f64, formation: MotionFormation) -> Self {
+        let mut field = Self::new(area, time, 1.0, formation);
+        field.sandbox_zoom = Some(progress);
+        field.scale = 28.0_f64.powf(1.0 - progress);
+        field.braille_mix = smooth((progress - 0.25) / 0.65);
+        field
     }
 
     pub fn cell(&mut self, x: i32, y: i32, ascii: bool) -> Sample {
@@ -134,7 +144,17 @@ impl Field {
     }
 
     fn value(&mut self, fx: f64, fy: f64) -> f64 {
-        if self.phase < 1.5 {
+        if let Some(progress) = self.sandbox_zoom {
+            let mix = smooth((progress - 0.35) / 0.65);
+            if mix == 1.0 {
+                return self.zoom(fx, fy);
+            }
+            let sandbox = self.tiles(fx, fy);
+            if mix == 0.0 {
+                return sandbox;
+            }
+            sandbox + (self.zoom(fx, fy) - sandbox) * mix
+        } else if self.phase < 1.5 {
             self.zoom(fx, fy)
         } else {
             self.tiles(fx, fy)

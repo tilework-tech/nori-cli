@@ -102,6 +102,7 @@ pub struct MotionBackground {
     quiet_area: Option<Rect>,
     ascii: bool,
     formation: MotionFormation,
+    sandbox_zoom: Option<f64>,
 }
 
 impl MotionBackground {
@@ -116,7 +117,25 @@ impl MotionBackground {
             quiet_area: None,
             ascii: false,
             formation: MotionFormation::Cycle,
+            sandbox_zoom: None,
         }
+    }
+
+    /// Continuously zoom out from the sandbox pulse grid to the braille field.
+    /// Unlike the suite's scene crossfade, this shrinks the sandbox geometry and
+    /// blends into the destination field without a black midpoint. The caller
+    /// owns duration/easing and can pin a destination with [`Self::formation`].
+    /// Reduced motion shows the destination immediately.
+    pub fn sandbox_zoom(elapsed: Duration, progress: f64) -> Self {
+        let progress = if progress.is_nan() {
+            0.0
+        } else {
+            progress.clamp(0.0, 1.0)
+        };
+        let mut background = Self::new(MotionScene::Formations, elapsed);
+        background.position = 2.0 - progress;
+        background.sandbox_zoom = Some(progress);
+        background
     }
 
     /// Interpolate from this frame's position to a target scene. The caller owns
@@ -128,6 +147,7 @@ impl MotionBackground {
         } else {
             progress.clamp(0.0, 1.0)
         };
+        self.sandbox_zoom = None;
         self.position += (target.position() - self.position) * progress;
         self.scene = target;
         self
@@ -183,7 +203,10 @@ impl Widget for MotionBackground {
                     + f64::from(self.elapsed.subsec_nanos()) / 1e9,
             )
         };
-        let mut field = fields::Field::new(area, time, position, self.formation);
+        let mut field = match self.sandbox_zoom.filter(|_| !self.reduced_motion) {
+            Some(progress) => fields::Field::sandbox_zoom(area, time, progress, self.formation),
+            None => fields::Field::new(area, time, position, self.formation),
+        };
         let quiet = self.quiet_area.filter(|rect| !rect.is_empty());
         for y in visible.top()..visible.bottom() {
             for x in visible.left()..visible.right() {
