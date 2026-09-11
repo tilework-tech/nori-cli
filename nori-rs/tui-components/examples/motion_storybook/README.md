@@ -20,6 +20,28 @@ Hidden development keys: Space pauses, `s` freezes a repeatable 80%-zoom frame,
 and `q`, Escape, or Ctrl-C quits. `--still` starts paused at the dot endpoint.
 The default cadence remains 25 FPS; `--fps 60` changes the requested cadence.
 
+## Deterministic snapshots
+
+`--at-ms N` starts paused at an exact elapsed story time, including ambient
+motion. Space resumes from that point. This makes frames reproducible without
+depending on terminal speed or when a key reaches the event loop:
+
+```console
+cargo run --release -p nori-tui-components --example motion_storybook -- --muster --at-ms 3600
+```
+
+The snapshot fixtures use 0 ms (dots), 2400 ms (80% inward zoom), 3000 ms
+(formations), and 3600 ms (80% outward zoom). Ambient time is story time plus
+12 seconds, so the return frame intentionally differs from the inward frame.
+Buffer snapshots cover all four times for both platoon and muster at 100×34 and
+36×20. Real terminal text and ANSI snapshots cover all four times at 100×34,
+plus the inward zoom at 36×20 for both variants. The platoon inward terminal
+case also exercises the `s` key. Fixtures stay paused while the capture settles.
+
+Run and review these through the [storybook snapshot workflow](../README.md).
+`--at-ms` cannot be combined with `--bench` or `--frames`; timed profiling keeps
+its existing timeline and cadence.
+
 ## Profile
 
 Live timing uses the actual terminal size and writes CSV only after leaving the

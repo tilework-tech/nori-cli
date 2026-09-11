@@ -27,7 +27,8 @@ fn main() -> Result<()> {
     }
     let mut terminal = StorybookTerminal::enter()?;
     let mut story = Story::new(options.muster);
-    let mut paused = options.still;
+    story.advance(options.at.unwrap_or_default());
+    let mut paused = options.still || options.at.is_some();
     let mut previous = Instant::now();
     let period = Duration::from_secs_f64(1.0 / options.fps);
     let mut dirty = true;

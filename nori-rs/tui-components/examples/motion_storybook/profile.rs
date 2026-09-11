@@ -22,6 +22,7 @@ use super::story::Story;
 pub struct Options {
     pub muster: bool,
     pub still: bool,
+    pub at: Option<Duration>,
     pub bench: bool,
     pub output: Option<PathBuf>,
     pub frames: Option<i32>,
@@ -35,6 +36,7 @@ impl Options {
         let mut options = Self {
             muster: false,
             still: false,
+            at: None,
             bench: false,
             output: None,
             frames: None,
@@ -47,6 +49,12 @@ impl Options {
             match arg.as_str() {
                 "--muster" => options.muster = true,
                 "--still" => options.still = true,
+                "--at-ms" => {
+                    let millis: i64 = args.next().context("--at-ms needs milliseconds")?.parse()?;
+                    options.at = Some(Duration::from_millis(
+                        millis.try_into().context("--at-ms must be nonnegative")?,
+                    ));
+                }
                 "--bench" => options.bench = true,
                 "--profile" => {
                     options.output = Some(args.next().context("--profile needs a CSV path")?.into())
@@ -63,7 +71,7 @@ impl Options {
                     options.height = height.parse()?;
                 }
                 _ => anyhow::bail!(
-                    "Unknown option {arg}. Options: --muster --still --fps N --frames N --profile FILE --bench --size WIDTHxHEIGHT"
+                    "Unknown option {arg}. Options: --muster --still --at-ms N --fps N --frames N --profile FILE --bench --size WIDTHxHEIGHT"
                 ),
             }
         }
@@ -90,6 +98,10 @@ impl Options {
         ensure!(
             !options.still || options.frames.is_none(),
             "--still cannot be combined with --frames"
+        );
+        ensure!(
+            options.at.is_none() || (!options.bench && options.frames.is_none()),
+            "--at-ms starts paused and cannot be combined with --bench or --frames"
         );
         Ok(options)
     }

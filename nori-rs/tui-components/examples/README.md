@@ -12,9 +12,11 @@ test-only; it is not exported by `nori-tui-components`.
 ## Prerequisites
 
 The focused `motion_storybook` is a bare scene 1 ↔ 2 zoom loop, with no text
-or UI. The E2E case presses `s` to freeze an 80%-zoom frame before capture;
-`--still` instead starts at the dot endpoint. Buffer snapshots cover both fixed
-formation variants at wide and narrow sizes. Its
+or UI. Its E2E cases use `--at-ms` to pause at exact story times, with one case
+also exercising `s` to freeze an 80%-zoom frame; `--still` starts at the dot
+endpoint. Text and ANSI snapshots cover both formation variants at the endpoints
+and during both zoom directions, plus narrow viewport captures. Buffer snapshots
+cover the same four timestamps at wide and narrow sizes. Its
 [profiling guide](motion_storybook/README.md) describes headless and live timing.
 
 Install tmux and jq, and use a compatible checkout of

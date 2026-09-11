@@ -90,6 +90,10 @@ pub struct TuiSession {
 
 impl TuiSession {
     pub fn start(example: &str, cols: i32, rows: i32) -> Result<Self> {
+        Self::start_with_args(example, cols, rows, &[])
+    }
+
+    pub fn start_with_args(example: &str, cols: i32, rows: i32, args: &[&str]) -> Result<Self> {
         ensure!(cols > 0 && rows > 0, "terminal dimensions must be positive");
         let scripts = PathBuf::from(
             std::env::var_os("TUI_PUPPETEERING_DIR")
@@ -137,8 +141,13 @@ impl TuiSession {
             rows,
         };
         let quoted_binary = binary.to_string_lossy().replace('\'', "'\\''");
+        let quoted_args = args
+            .iter()
+            .map(|arg| format!("'{}'", arg.replace('\'', "'\\''")))
+            .collect::<Vec<_>>()
+            .join(" ");
         let command = format!(
-            "env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor LC_ALL=en_US.UTF-8 '{quoted_binary}'"
+            "env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor LC_ALL=en_US.UTF-8 '{quoted_binary}' {quoted_args}"
         );
         session.run("tui-start", &[&session.name, "/bin/sh"])?;
         session.run(
