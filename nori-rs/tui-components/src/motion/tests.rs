@@ -213,3 +213,32 @@ fn explicit_time_can_seek_and_matches_controller_frames() {
         }
     }
 }
+
+#[test]
+fn cached_zoom_is_independent_of_clip_and_previous_frames() {
+    let area = Rect::new(3, 2, 100, 40);
+    let clip = Rect::new(19, 9, 41, 19);
+    for time in [12, 94, 36, 12] {
+        for progress in [0.4, 0.8, 1.0] {
+            for formation in [
+                MotionFormation::Cycle,
+                MotionFormation::Platoon,
+                MotionFormation::Muster,
+            ] {
+                let widget = MotionBackground::new(MotionScene::Dots, Duration::from_secs(time))
+                    .transition_to(MotionScene::Formations, progress)
+                    .formation(formation)
+                    .palette(MotionPalette::nori());
+                let mut full = Buffer::empty(area);
+                widget.clone().render(area, &mut full);
+                let mut clipped = Buffer::empty(clip);
+                widget.render(area, &mut clipped);
+                for y in clip.top()..clip.bottom() {
+                    for x in clip.left()..clip.right() {
+                        assert_eq!(&full[(x, y)], &clipped[(x, y)]);
+                    }
+                }
+            }
+        }
+    }
+}

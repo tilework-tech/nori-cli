@@ -169,6 +169,10 @@ impl Widget for MotionBackground {
     fn render(self, area: Rect, buf: &mut Buffer) {
         // Keep coordinates relative to the original area when the buffer clips it.
         let visible = area.intersection(buf.area);
+        if visible.is_empty() {
+            return;
+        }
+        let palette = self.palette.prepare();
         // Bound the floating-point clock even for a caller supplying Duration::MAX.
         let (position, time) = if self.reduced_motion {
             (self.scene.position(), 0.0)
@@ -179,7 +183,7 @@ impl Widget for MotionBackground {
                     + f64::from(self.elapsed.subsec_nanos()) / 1e9,
             )
         };
-        let field = fields::Field::new(area, time, position, self.formation);
+        let mut field = fields::Field::new(area, time, position, self.formation);
         let quiet = self.quiet_area.filter(|rect| !rect.is_empty());
         for y in visible.top()..visible.bottom() {
             for x in visible.left()..visible.right() {
@@ -203,10 +207,7 @@ impl Widget for MotionBackground {
                     continue;
                 }
                 cell.set_char(sample.glyph);
-                cell.set_style(
-                    self.palette
-                        .style(sample.intensity * fade, sample.highlight),
-                );
+                cell.set_style(palette.style(sample.intensity * fade, sample.highlight));
             }
         }
     }

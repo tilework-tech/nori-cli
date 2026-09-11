@@ -64,3 +64,10 @@ The example timeline now supplies explicit time/progress to `MotionBackground`.
 It does not require `MotionState`; that controller remains available to consumers
 that want its default linear transitions. Sampling and art direction are unchanged
 by the API cleanup.
+
+The [optimization report](../../../../docs/performance/motion-low-hanging/README.md)
+contains a durable baseline, interleaved before/after data, syscall counts, and
+visual-equivalence fingerprints. `motion_equivalence` is a separate example that
+prints deterministic glyph/style fingerprints; run it outside timed measurements.
+The terminal helper now buffers ANSI writes while retaining Ratatui's incremental
+diff. Changes to write batching affect live timings, not the headless counting sink.

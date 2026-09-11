@@ -14,7 +14,41 @@ pub struct MotionPalette {
     pub highlight: Style,
 }
 
+/// Prepared once per frame. Non-RGB styles retain the exact dimming threshold.
+pub(super) struct PreparedPalette {
+    ramps: [[Style; 17]; 2],
+    rgb: [bool; 2],
+}
+
+impl PreparedPalette {
+    pub fn style(&self, intensity: f64, highlight: bool) -> Style {
+        let ramp = usize::from(highlight);
+        let index = if self.rgb[ramp] {
+            (intensity.clamp(0.0, 1.0) * 16.0).round() as usize
+        } else if intensity < 0.3 {
+            0
+        } else {
+            16
+        };
+        self.ramps[ramp][index]
+    }
+}
+
 impl MotionPalette {
+    pub(super) fn prepare(self) -> PreparedPalette {
+        PreparedPalette {
+            ramps: std::array::from_fn(|ramp| {
+                std::array::from_fn(|level| self.style(level as f64 / 16.0, ramp == 1))
+            }),
+            rgb: [self.ink, self.highlight].map(|ink| {
+                matches!(
+                    (ink.fg, self.surface.bg),
+                    (Some(Color::Rgb(..)), Some(Color::Rgb(..)))
+                )
+            }),
+        }
+    }
+
     /// Terminal-compatible default; never invents a background color.
     pub fn from_theme(theme: Theme) -> Self {
         Self {
@@ -59,5 +93,40 @@ impl MotionPalette {
 impl Default for MotionPalette {
     fn default() -> Self {
         Self::from_theme(Theme::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn prepared_styles_preserve_custom_colors_modifiers_and_dimming_thresholds() {
+        for palette in [
+            MotionPalette::default(),
+            MotionPalette::nori(),
+            MotionPalette {
+                surface: Style::new()
+                    .bg(Color::Rgb(230, 220, 210))
+                    .add_modifier(Modifier::ITALIC),
+                ink: Style::new()
+                    .fg(Color::Rgb(20, 30, 40))
+                    .remove_modifier(Modifier::DIM),
+                highlight: Style::new().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+            },
+        ] {
+            let prepared = palette.prepare();
+            for step in -10..=1010 {
+                let intensity = f64::from(step) / 1000.0;
+                for highlight in [false, true] {
+                    assert_eq!(
+                        prepared.style(intensity, highlight),
+                        palette.style(intensity, highlight)
+                    );
+                }
+            }
+        }
     }
 }

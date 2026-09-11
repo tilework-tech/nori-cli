@@ -144,3 +144,15 @@ progress to the renderer. Profiling instruments the example's draw boundary;
 there are no benchmark timers in the reusable renderer. The API cleanup retains
 existing field formulas, palette, and sampling schedule so subsequent performance
 changes can be measured separately.
+
+## Measured optimization pass
+
+The renderer prepares styles and bounded geometry caches once per frame. Island
+motion, noise corners, and muster depth rows are reused while sampling, with no
+retained cache across calls. Palette, time, viewport, and clipping changes take
+effect immediately. Opaque formations omit invisible ambient work.
+
+The storybook terminal uses a locked, buffered stdout writer beneath Ratatui's
+existing incremental diff. The widget itself owns no output stream. See the
+[baseline and optimization results](../performance/motion-low-hanging/README.md)
+for measured gains and remaining large-terminal limitations.

@@ -30,7 +30,14 @@ pub(super) struct Field {
     scale: f64,
     shape: f64,
     lines: f64,
-    formation: MotionFormation,
+    formation_segment: i32,
+    formation_fade: f64,
+    zoom_mix: f64,
+    braille_mix: f64,
+    fade: f64,
+    noise: math::Noise,
+    islands: [Option<zoom::Island>; 64],
+    muster_rows: [Option<zoom::MusterRow>; 4],
 }
 
 impl Field {
@@ -40,6 +47,12 @@ impl Field {
         } else {
             0.55 + (phase - 3.0) * 0.45
         };
+        let segment = match formation {
+            MotionFormation::Cycle => (time / 24.0).floor() as i32,
+            MotionFormation::Platoon => 0,
+            MotionFormation::Muster => 3,
+        };
+        let local = time.rem_euclid(24.0) - 8.0;
         Self {
             width: f64::from(area.width) * 2.0,
             height: f64::from(area.height) * 4.0,
@@ -52,16 +65,29 @@ impl Field {
             },
             shape: smooth(morph / 0.6),
             lines: smooth((morph - 0.55) / 0.45),
-            formation,
+            formation_segment: segment.rem_euclid(4),
+            formation_fade: match formation {
+                MotionFormation::Cycle => smooth(local / 1.6) * smooth((16.0 - local) / 1.6),
+                MotionFormation::Platoon | MotionFormation::Muster => 1.0,
+            },
+            zoom_mix: smooth((phase.min(1.0) - 0.75) / 0.25),
+            braille_mix: smooth((phase.min(1.0) - 0.45) / 0.55),
+            fade: if (1.0..2.0).contains(&phase) {
+                1.0 - smooth(1.0 - (2.0 * (phase - 1.0) - 1.0).abs())
+            } else {
+                1.0
+            },
+            noise: math::Noise::new(time * 0.1),
+            islands: [None; 64],
+            muster_rows: [None; 4],
         }
     }
 
-    pub fn cell(&self, x: i32, y: i32, ascii: bool) -> Sample {
+    pub fn cell(&mut self, x: i32, y: i32, ascii: bool) -> Sample {
         let threshold =
             (f64::from(BAYER[y.rem_euclid(4) as usize][x.rem_euclid(4) as usize]) + 0.5) / 16.0;
-        let braille = !ascii
-            && ((self.phase < 1.5 && threshold < smooth((self.phase.min(1.0) - 0.45) / 0.55))
-                || self.lines > 0.5);
+        let braille =
+            !ascii && ((self.phase < 1.5 && threshold < self.braille_mix) || self.lines > 0.5);
         let mut sum = 0.0;
         let glyph = if braille {
             let mut bits = 0;
@@ -90,11 +116,7 @@ impl Field {
             let level = (sum.clamp(0.0, 0.999) * 4.0 + threshold).floor() as usize;
             if ascii { ASCII[level] } else { DOTS[level] }
         };
-        let fade = if (1.0..2.0).contains(&self.phase) {
-            1.0 - smooth(1.0 - (2.0 * (self.phase - 1.0) - 1.0).abs())
-        } else {
-            1.0
-        };
+        let fade = self.fade;
         let eye = if self.phase >= 2.0 && self.lines < 0.7 {
             self.eye(x, y)
         } else {
@@ -111,7 +133,7 @@ impl Field {
         }
     }
 
-    fn value(&self, fx: f64, fy: f64) -> f64 {
+    fn value(&mut self, fx: f64, fy: f64) -> f64 {
         if self.phase < 1.5 {
             self.zoom(fx, fy)
         } else {

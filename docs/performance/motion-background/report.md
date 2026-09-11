@@ -1,5 +1,9 @@
 # Motion measurement status
 
+A new durable baseline and completed optimization pass are available in the
+[September 11 report](../motion-low-hanging/README.md). The notes below describe
+the earlier interrupted investigation.
+
 The initial investigation was interrupted. Its broad headless/live runs reported
 frame-budget overruns at larger terminal sizes, but their raw traces were stored
 in temporary files and are no longer available. The planned CPU sampling for
