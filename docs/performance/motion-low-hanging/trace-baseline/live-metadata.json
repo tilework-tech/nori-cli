@@ -1,0 +1,46 @@
+{
+  "binary": "/home/clifford/Documents/source/nori/.local/motion-performance/549032f3/motion_storybook",
+  "sha256": "6af8b0db3173a9fadd6393edfdd3b30e8dbf166dd8abf998d21598f81e3bfdc4",
+  "mode": "live",
+  "runs": [
+    {
+      "command": [
+        "strace",
+        "-c",
+        "-e",
+        "trace=write,writev",
+        "-o",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/trace-baseline/live-240x80-platoon-0.strace.txt",
+        "/home/clifford/Documents/source/nori/.local/motion-performance/549032f3/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/trace-baseline/live-240x80-platoon-0.csv"
+      ],
+      "size": "240x80",
+      "muster": false,
+      "repeat": 0,
+      "wall_seconds": 8.579383844000404
+    },
+    {
+      "command": [
+        "strace",
+        "-c",
+        "-e",
+        "trace=write,writev",
+        "-o",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/trace-baseline/live-240x80-muster-0.strace.txt",
+        "/home/clifford/Documents/source/nori/.local/motion-performance/549032f3/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/trace-baseline/live-240x80-muster-0.csv",
+        "--muster"
+      ],
+      "size": "240x80",
+      "muster": true,
+      "repeat": 0,
+      "wall_seconds": 8.625405619000958
+    }
+  ]
+}

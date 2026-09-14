@@ -19,6 +19,8 @@ The v0 surface contains:
   in caller-positioned side or bottom regions;
 - width-aware Markdown rendering with adaptive table layouts;
 - semantic themes, messages, empty states, and key hints;
+- deterministic animated scenery for alternate-screen onboarding and login,
+  with five motion scenes, a quiet content region, and reduced-motion support;
 - one canonical fullscreen design storybook plus focused component examples.
 
 The enforceable visual contract lives in [`DESIGN.md`](DESIGN.md).
@@ -60,6 +62,7 @@ cargo run -p nori-tui --features storybook --example status_card_storybook
 cargo run -p nori-tui-components --example picker_storybook
 cargo run -p nori-tui-components --example markdown_storybook
 cargo run -p nori-tui-components --example component_storybook
+cargo run -p nori-tui-components --example motion_storybook
 ```
 
 `status_card_storybook` lives in `nori-tui` because it renders the CLI's own
@@ -69,6 +72,14 @@ status view: `v` switches between the compact welcome block and the full
 
 Press `q` or `Esc` to leave an example. In picker examples, active search owns
 printable keys and the first Escape, so deactivate search before quitting.
+
+The motion storybook is now a bare scene 1 ↔ 2 zoom loop with no text or UI
+layers. `-- --muster` selects the muster destination, Space pauses, and `q`
+quits. Use `--release` for an optimized build. Its
+[profiling guide](examples/motion_storybook/README.md) documents repeatable CPU
+and live-terminal measurements; the
+[motion integration guide](../../docs/reference/motion-background.md) describes
+the reusable API.
 
 ## Storybook E2E snapshots
 
