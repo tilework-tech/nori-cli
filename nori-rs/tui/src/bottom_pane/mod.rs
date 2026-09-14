@@ -51,6 +51,7 @@ pub(crate) enum CancellationEvent {
 }
 
 pub(crate) use chat_composer::ChatComposer;
+pub(crate) use chat_composer::ComposerDraft;
 pub(crate) use chat_composer::InputResult;
 use nori_harness::custom_prompts::CustomPrompt;
 
@@ -307,9 +308,14 @@ impl BottomPane {
         self.composer.current_text()
     }
 
-    /// Force any in-flight paste burst into the composer text immediately.
-    pub(crate) fn flush_paste_burst(&mut self) {
-        self.composer.flush_paste_burst();
+    /// Move editing state out before replacing the widget.
+    pub(crate) fn take_composer_draft(&mut self) -> ComposerDraft {
+        self.composer.take_draft()
+    }
+
+    pub(crate) fn restore_composer_draft(&mut self, draft: ComposerDraft) {
+        self.composer.restore_draft(draft);
+        self.request_redraw();
     }
 
     /// Update the animated header shown to the left of the brackets in the

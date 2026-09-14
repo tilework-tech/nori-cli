@@ -114,7 +114,7 @@ fn follow_only_attachment_keeps_messages_in_the_composer_but_allows_agent_switch
 
     assert_eq!(
         chat.composer_text(),
-        "[follow-only-draft.png 32x16]This must stay local"
+        "This must stay local[follow-only-draft.png 32x16]"
     );
     assert!(
         std::iter::from_fn(|| rx.try_recv().ok())

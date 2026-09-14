@@ -173,6 +173,8 @@ const FOOTER_SPACING_HEIGHT: u16 = 0;
 /// below. The padding rows are where the textarea corner segments render.
 const MIN_COMPOSER_HEIGHT: u16 = 3;
 
+mod draft;
+pub(crate) use draft::ComposerDraft;
 mod key_handling;
 mod paste_handling;
 mod popup_management;
@@ -334,11 +336,13 @@ impl ChatComposer {
         self.input_enabled
     }
 
-    /// Replace the entire composer content with `text` and reset cursor.
+    /// Replace the draft with `text`, discard buffered input, and place the cursor
+    /// at the end. Widget handoffs must use `take_draft` / `restore_draft`.
     pub(crate) fn set_text_content(&mut self, text: String) {
         if !self.input_enabled {
             return;
         }
+        self.paste_burst = PasteBurst::default();
         // Clear any existing content, placeholders, and attachments first.
         self.textarea.set_text("");
         self.pending_pastes.clear();
@@ -350,7 +354,7 @@ impl ChatComposer {
             self.is_shell_mode = false;
             self.textarea.set_text(&text);
         }
-        self.textarea.set_cursor(0);
+        self.textarea.set_cursor(self.textarea.text().len());
         self.sync_selection_popups();
     }
 
@@ -370,7 +374,6 @@ impl ChatComposer {
             return;
         }
         self.set_text_content(text);
-        self.textarea.set_cursor(self.textarea.text().len());
     }
 
     pub(crate) fn clear_for_ctrl_c(&mut self) -> Option<String> {

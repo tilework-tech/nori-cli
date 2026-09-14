@@ -507,12 +507,15 @@ composer distinguishes activation input from local behavior. Any text or image
 prompt entered before the session is live remains in frontend state, requests
 New, and is transferred without rewriting to the activated widget, which submits
 it exactly once when `SessionStarted` establishes the configured session.
-Because activation rebuilds the composer widget, any in-flight paste burst is
-force-flushed before the handoff reads `composer_text`, so characters typed
-mid-burst are committed rather than dropped when the widget is rebuilt; this
-pass-through runs [`helpers.rs`](src/chatwidget/helpers.rs) ->
+Because activation rebuilds the composer widget, it transfers an owned
+`ComposerDraft` rather than restoring a plain text copy. The draft retains the
+cursor, undo/Vim state, atomic placeholders and their image/large-paste payloads,
+and buffered characters with their original paste deadline. This also preserves
+input that has not rendered yet. Ordinary `set_composer_text` replacement clears
+old buffered input and puts the cursor at the end; it is not a handoff API.
+The transfer runs [`helpers.rs`](src/chatwidget/helpers.rs) ->
 [`bottom_pane/mod.rs`](src/bottom_pane/mod.rs) ->
-[`chat_composer/paste_handling.rs`](src/bottom_pane/chat_composer/paste_handling.rs).
+[`chat_composer/draft.rs`](src/bottom_pane/chat_composer/draft.rs).
 Initial positional prompts use the same path. Activation replaces the
 sessionless widget, so `SessionStarted` first applies normal history metadata to
 the new widget, then records its queued launch prompt into composer-local

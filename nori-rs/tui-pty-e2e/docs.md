@@ -58,6 +58,11 @@ additionally proves that a session activates without input (the resolved model
 name appears), that `/model` lists the agent's advertised models before any
 prompt, and that per-session skillsets auto-activate once a skillset is applied.
 
+`startup_draft.rs` gates agent preparation on a file, renders the first draft
+character, releases preparation, and types the remaining text after activation.
+This deterministically checks cursor preservation across the widget handoff and
+then verifies that Ctrl-C clears the correctly ordered draft.
+
 Cloud activation scenarios hold `session/new` behind a release-file barrier
 after the picker selection. They verify that connecting feedback remains in
 history, typing stays available, Enter preserves rather than queues the draft
