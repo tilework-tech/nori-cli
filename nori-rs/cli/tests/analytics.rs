@@ -28,6 +28,9 @@ struct CapturedRequest {
 
 fn read_request(mut stream: TcpStream) -> CapturedRequest {
     stream
+        .set_nonblocking(false)
+        .expect("make accepted analytics stream blocking");
+    stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .expect("set request timeout");
     let mut bytes = Vec::new();
