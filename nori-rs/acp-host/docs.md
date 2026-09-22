@@ -93,8 +93,12 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   available. The server obtains that ID from the hosted session catalog; an
   empty catalog or catalog error omits the ID without failing initialization.
   `session/load` replays recorded history as `session/update` notifications
-  ahead of its response. `session/new` is rejected because the surface exposes
-  an already-running session.
+  ahead of its response. `session/new` attaches to the already-running session
+  instead of creating one: it answers with the hosted session's id and then
+  replays recorded history *after* the response (the client only learns the id
+  from the response). This keeps baseline-only ACP clients such as Zed working,
+  since they open new threads with `session/new`. Without a hosted session,
+  `session/new` fails with `-32002`.
 - A remote `PromptRequest` passes its top-level `_meta` through the
   `HostedAgent` interface with its content and session id. The harness
   implementation retains that metadata through prompt admission and forwards

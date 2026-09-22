@@ -650,19 +650,45 @@ async fn unparseable_first_frame_gets_parse_error_then_initialize_still_works() 
 }
 
 #[tokio::test]
-async fn session_new_is_rejected_with_guidance() {
+async fn session_new_attaches_to_the_hosted_session_and_replays_after_the_response() {
     let test = start_server().await;
+    test.hosted.state.lock().await.replay = vec![
+        FakeHosted::update("old user turn"),
+        FakeHosted::update("old answer"),
+    ];
+
+    let (mut client, _) = WsClient::connect(test.server.local_addr()).await;
+    client.initialize().await;
+    let (before, response) = client
+        .request("session/new", json!({ "cwd": "/tmp", "mcpServers": [] }))
+        .await;
+
+    assert_eq!(before, Vec::<Value>::new());
+    assert_eq!(response["result"]["sessionId"], json!(SESSION_ID));
+    // Unlike session/load, the client only learns the session id from the
+    // response, so the history replay must follow it.
+    let first = client.next_json().await;
+    assert_eq!(first["method"], json!("session/update"));
+    assert_eq!(
+        first["params"]["update"]["content"]["text"],
+        json!("old user turn")
+    );
+    let second = client.next_json().await;
+    assert_eq!(
+        second["params"]["update"]["content"]["text"],
+        json!("old answer")
+    );
+}
+
+#[tokio::test]
+async fn session_new_without_a_hosted_session_is_an_error() {
+    let test = start_server_with_active_session(false).await;
     let (mut client, _) = WsClient::connect(test.server.local_addr()).await;
     client.initialize().await;
     let (_, response) = client
         .request("session/new", json!({ "cwd": "/tmp", "mcpServers": [] }))
         .await;
-    assert_eq!(response["error"]["code"], json!(-32600));
-    let message = response["error"]["message"].as_str().expect("message");
-    assert!(
-        message.contains("session/list"),
-        "unexpected message: {message}"
-    );
+    assert_eq!(response["error"]["code"], json!(-32002));
 }
 
 #[tokio::test]

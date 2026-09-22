@@ -150,14 +150,41 @@ async fn serve_gated_connection<H: HostedAgent>(
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |_request: acp::NewSessionRequest,
-                        responder: Responder<acp::NewSessionResponse>,
-                        _cx: ConnectionTo<Client>| {
-                responder.respond_with_error(acp::Error::new(
-                    -32600,
-                    "This remote surface exposes the running Nori session; discover it with \
-                     session/list and attach with session/load",
-                ))
+            {
+                let hosted = hosted.clone();
+                async move |_request: acp::NewSessionRequest,
+                            responder: Responder<acp::NewSessionResponse>,
+                            cx: ConnectionTo<Client>| {
+                    // The ACP baseline requires session/new, and clients like
+                    // Zed always open new threads with it. This surface hosts
+                    // exactly one session, so creation means attaching to it.
+                    let session_id = match hosted.list_sessions().await {
+                        Ok(sessions) => sessions
+                            .into_iter()
+                            .next()
+                            .map(|session| session.session_id),
+                        Err(error) => return responder.respond_with_error(error),
+                    };
+                    let Some(session_id) = session_id else {
+                        return responder.respond_with_error(acp::Error::new(
+                            -32002,
+                            "This remote surface hosts no active Nori session to attach to",
+                        ));
+                    };
+                    match hosted.load_session(&session_id).await {
+                        Ok(loaded) => {
+                            // Unlike session/load, the client only learns the
+                            // session id from the response, so replay follows
+                            // it instead of preceding it.
+                            responder.respond(acp::NewSessionResponse::new(session_id))?;
+                            for notification in loaded.replay {
+                                cx.send_notification(notification)?;
+                            }
+                            Ok(())
+                        }
+                        Err(error) => responder.respond_with_error(error),
+                    }
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
