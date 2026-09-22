@@ -877,6 +877,18 @@ impl ChatComposer {
                 // If there is neither text nor attachments, suppress submission entirely.
                 let has_attachments = !self.attached_images.is_empty();
                 text = text.trim().to_string();
+                // Alias a bare `exit`/`quit` to the matching slash command so the
+                // user can quit without the leading slash. A leading space opts out
+                // (mirroring how a leading space escapes slash commands below),
+                // keeping the words available as literal messages to the agent.
+                if !input_starts_with_space {
+                    if text == "exit" {
+                        return (InputResult::Command(SlashCommand::Exit), true);
+                    }
+                    if text == "quit" {
+                        return (InputResult::Command(SlashCommand::Quit), true);
+                    }
+                }
                 if let Some((name, _rest)) = parse_slash_name(&text) {
                     let treat_as_plain_text = input_starts_with_space || name.contains('/');
                     if !treat_as_plain_text {
