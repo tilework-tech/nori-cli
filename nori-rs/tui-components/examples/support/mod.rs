@@ -1,4 +1,5 @@
-use std::io::Stdout;
+use std::io::BufWriter;
+use std::io::StdoutLock;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -13,14 +14,16 @@ use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 
 pub struct StorybookTerminal {
-    pub terminal: Terminal<CrosstermBackend<Stdout>>,
+    pub terminal: Terminal<CrosstermBackend<BufWriter<StdoutLock<'static>>>>,
     pub theme: Theme,
 }
 
 impl StorybookTerminal {
     pub fn enter() -> Result<Self> {
         enable_raw_mode()?;
-        let mut stdout = std::io::stdout();
+        // Ratatui still diffs consecutive frames. Batch the encoder's small writes
+        // and hold stdout's lock once for the terminal's lifetime.
+        let mut stdout = BufWriter::with_capacity(64 * 1024, std::io::stdout().lock());
         execute!(stdout, EnterAlternateScreen)?;
         let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
         let theme = Theme::for_terminal_background(relative_terminal_background());

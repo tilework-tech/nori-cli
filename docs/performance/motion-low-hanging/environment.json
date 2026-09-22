@@ -1,0 +1,20 @@
+{
+  "date": "2026-09-11",
+  "base_commit": "549032f3",
+  "uname": {
+    "system": "Linux",
+    "node": "anubis",
+    "release": "7.1.5-76070105-generic",
+    "version": "#202607241434~1787955023~24.04~38a419f SMP PREEMPT_DYNAMIC Fri A",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "logical_cpus": 8,
+  "load_average": [
+    3.99365234375,
+    2.8720703125,
+    2.365234375
+  ],
+  "build": "Rust 1.90.0; release fat LTO, codegen-units 1; line-tables-only; strip none; cc linker; RUSTFLAGS empty; 2 build jobs",
+  "measurement": "Sequential, no build during timed runs; no affinity or power policy changes"
+}

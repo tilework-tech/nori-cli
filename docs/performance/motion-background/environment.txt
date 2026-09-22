@@ -1,0 +1,64 @@
+2026-09-11T00:25:01.830518+00:00
+Linux anubis 7.1.5-76070105-generic #202607241434~1787955023~24.04~38a419f SMP PREEMPT_DYNAMIC Fri A x86_64 x86_64 x86_64 GNU/Linux
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           46 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  8
+On-line CPU(s) list:                     0-7
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Core(TM) Ultra 5 325
+CPU family:                              6
+Model:                                   204
+Thread(s) per core:                      1
+Core(s) per socket:                      8
+Socket(s):                               1
+Stepping:                                3
+CPU(s) scaling MHz:                      98%
+CPU max MHz:                             2100.0000
+CPU min MHz:                             400.0000
+BogoMIPS:                                6220.80
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdt_a rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni lass fred lam wbnoinvd dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid bus_lock_detect movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities
+Virtualization:                          VT-x
+L1d cache:                               320 KiB (8 instances)
+L1i cache:                               512 KiB (8 instances)
+L2 cache:                                16 MiB (5 instances)
+L3 cache:                                12 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-7
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS Not affected; BHI BHI_DIS_S
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+
+Rust 1.90.0; edition/workspace configuration unchanged.
+Build: CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=cc RUSTFLAGS=""
+Release overrides: CARGO_PROFILE_RELEASE_DEBUG=line-tables-only CARGO_PROFILE_RELEASE_STRIP=none
+Release still uses opt-level=3, fat LTO, codegen-units=1.
+Toolchain and dependencies installed under /tmp; clang/mold unavailable on this host.
+Run environment: NO_COLOR unset, TERM=xterm-256color, COLORTERM=truecolor.
+Shared host; no affinity or priority changes.
+SHA256 310e2455b6abb6e44976d4ad2aa7b5f82b982ae46382d96e16094d8b6e6f572d target/debug/examples/motion_storybook
+SHA256 415b36966afa1a414256d3d6f6d24033d7bb9bc20e76d6ac0f2ba319877b6a74 target/release/examples/motion_storybook
+SHA256 f65b0b0b45142d0cda1a786264dca9547adf88a3a7740437a0f78f3722877540 tui-components/src/motion/fields.rs
+SHA256 b23c9fef745d6469e193e830aa208643f295b841f15cf45a2536304d7a89ff56 tui-components/src/motion/mod.rs
+SHA256 87405be278af80b04eee1700e20304c67e71beef8bcb365de4c0a792a0309ede tui-components/src/motion/tests.rs
+SHA256 26c8c855e5fa18585da6640239393b2de2a84af7cfbcc69636042103a83fa74e tui-components/examples/motion_storybook/e2e.rs
+SHA256 e83e867038912687a281e5221feacdc399bf9e98c443e3024f6763929751792c tui-components/examples/motion_storybook/profile.rs
+SHA256 0aba99815d6bdc8f4e04a2cdc6236299bd9b3572edfd34daecaf1412a02e2698 tui-components/examples/motion_storybook/story.rs
+SHA256 bed6a3f94f7812e7416bff9e57371c8803dde6412560f7281c99c0c70d42cae6 tui-components/examples/motion_storybook.rs
