@@ -151,3 +151,29 @@ Run all steps from the `nori-rs/` directory.
 9. Clean up: `$SCRIPTS/tui-stop nori-verify && rm -rf "$VERIFY_HOME"`
 
 **You know it works when:** The TUI launches without panicking, the `›` input prompt appears, the application accepts keyboard input, and the prompt returns after submission.
+
+### Showcase purely UI changes
+
+When a change is purely UI — its effect is only what someone sees or does on
+screen (layout, styling, copy, components, rendering, interaction) — the author
+must be able to see the result without checking out the branch. After the
+verification above passes:
+
+1. Capture the changed UI actually running: a screenshot for a static change,
+   a short recording (video or GIF) for an interaction or animation. When the
+   change alters existing UI, capture before (`main`) and after with the same
+   data and viewport.
+2. For TUI changes, drive the TUI as in Option 1 and capture a rendered
+   frame or recording, not only `tmux capture-pane` text. Use the
+   `tui-capture-with-ghostty-web` skill (for example, record the tmux session
+   as an asciicast and replay it through ghostty-web).
+3. Use mock data or fixtures when live data is unavailable or unsafe, and say
+   so in the caption. Never edit a capture or show a state the code cannot
+   produce.
+4. Deliver it to the author: post it on the PR (the `add-pr-proof` skill
+   uploads media to the `nori/pr-proofs` branch and embeds it), or share it
+   directly when there is no PR. Keep capture files out of the PR's own diff.
+
+**You know it's done when:** the author can see the change, before and after
+where relevant, from the PR or your message alone.
+
