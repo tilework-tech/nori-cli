@@ -397,7 +397,11 @@ impl AcpBackend {
                         ),
                     ));
 
-                    let Some(transcript) = transcript else {
+                    // A busy agent is still running the conversation's turn;
+                    // replaying the transcript into a new session would fork it.
+                    let agent_busy =
+                        categorize_acp_error_chain(&e).category == AcpErrorCategory::AgentBusy;
+                    let Some(transcript) = transcript.filter(|_| !agent_busy) else {
                         setup_session_events.extend(drain_setup_session_events(&mut recovered_rx)?);
                         forward_setup_session_events(&backend_event_tx, setup_session_events)
                             .await?;
