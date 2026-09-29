@@ -965,6 +965,9 @@ impl AcpBackend {
                     AcpErrorCategory::SessionNotFound => format!(
                         "The session no longer exists on the agent — it may have expired or been closed elsewhere: {display_error}"
                     ),
+                    AcpErrorCategory::AgentBusy => format!(
+                        "The agent is still finishing an earlier turn — wait a moment and try again: {display_error}"
+                    ),
                     AcpErrorCategory::SessionNotResumable => format!(
                         "The session can't be reattached — start a new session instead: {display_error}"
                     ),

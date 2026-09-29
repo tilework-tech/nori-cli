@@ -71,7 +71,9 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   preserving unrelated top-level and feature settings while forcing only
   `features.goals = false`, leaving Nori-owned goal state to the `nori-client`
   MCP server. `error_category.rs` preserves structured ACP errors before
-  falling back to message classification.
+  falling back to message classification. A `-32011` busy refusal (the agent
+  is still finishing a turn from an earlier connection) is retryable, unlike
+  the `-32012` not-resumable verdict.
 - `remote/` serves one logical ACP surface through one or more exact-address
   axum listeners. `RemoteAcpServer::bind_many` binds every socket before any
   begins serving; a zero port after the first address reuses the first
