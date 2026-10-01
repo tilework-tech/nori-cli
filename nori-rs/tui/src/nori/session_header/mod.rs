@@ -34,7 +34,7 @@ pub(crate) use status_view::SkillsetStatus;
 pub(crate) use status_view::StatusFooterValues;
 pub(crate) use status_view::StatusViewModel;
 pub(crate) use status_view::active_instruction_file_contents;
-pub(crate) use status_view::local_context;
+pub(crate) use status_view::local_instruction_files;
 
 /// Maximum content width for the compact Nori status block.
 const NORI_HEADER_MAX_INNER_WIDTH: usize = 100;

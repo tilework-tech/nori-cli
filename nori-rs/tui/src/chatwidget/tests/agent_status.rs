@@ -233,6 +233,24 @@ fn session_started(config_options: Vec<acp::SessionConfigOption>) -> nori_protoc
 }
 
 #[test]
+fn status_lists_the_skillsets_detected_for_the_footer() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
+
+    chat.apply_system_info_refresh(crate::system_info::SystemInfo {
+        active_skillsets: vec!["personal/foo".to_string(), "public/amol".to_string()],
+        ..Default::default()
+    });
+    chat.add_status_output();
+
+    let status = history_text(&mut rx);
+    let row = status
+        .lines()
+        .find(|line| line.trim_start().starts_with("Skillset"))
+        .expect("Skillset row");
+    assert_eq!(row, "  Skillsets    personal/foo, public/amol");
+}
+
+#[test]
 fn the_welcome_card_is_written_before_any_session_starts() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual();
 

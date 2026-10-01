@@ -14,7 +14,7 @@ User Journey B: First time setup for unique skillsets per session.
 - The system checks to see if `nori-skillsets` is installed.
   - If not, the session shows a warning telling the user to install nori-skillsets, and otherwise does not do anything.
 - If yes, the system updates the config.toml, setting the skillset-per-session field.
-- The session restarts itself.
+- The setting takes effect on the next session (see Notes; the session does not restart itself).
 - The session checks if it is inside a git repository.
   - If not inside a git repository, nothing occurs.
   - If inside a git repository, it should behave as if the 'Auto Worktree' setting is on -- it should create a new worktree and run the branch name change.
@@ -49,10 +49,9 @@ User Journey D: Switching a unique skillset midsession
 - The cli should show the updated skillset in the status bar
 
 Notes:
-- Because skillset-per-session *requires* automatic worktrees, the /config modal should show the automatic worktrees option as automatically enabled, and the user cannot disable it unless they first disable skillset-per-session (there should be message indicating this if the user tries to do so)
+- The original plan was that skillset-per-session *requires* automatic worktrees and locks the auto-worktree option on. As built, it does not: enabling 'Per Session Skillsets' in /config opens a choice between "With Auto Worktrees" (also sets auto-worktree to automatic) and "Without Auto Worktrees". The setting is saved to config.toml and takes effect on the next session; the session does not restart itself.
+- As built, the startup skillset picker opens whenever skillset-per-session is on (not in cloud mode), git repository or not. When the session cwd is not an auto-worktree (`.worktrees/<name>`), the selection runs `nori-skillsets install <name>` into the home install instead of `switch --install-dir`.
 
 Implementation detail:
 - Much of the individual pieces are already in place, such as automatic worktrees and session switching logic. Reuse those pieces, but refactor to centralized locations if necessary
-- The CLI statusline should show the existing skillset. The way it does this right now has two problems.
-  - First, it is out of date. It is looking inside the nori-config.json 'agents' field, but this no longer exists. It should instead look at the nori-config.json 'activeSkillset' field.
-  - Second, even this approach will not work for the worktree-local skillset. Right now there is no direct way to view the currently active skillset in a local folder, so the nori session will just have to store that variable when in skillset-per-session mode
+- The CLI statusline should show the active skillset. The original plan read the nori-config.json 'activeSkillset' field and stored a session-local skillset name, because there was no direct way to view the active skillset of a local folder. That is superseded: `nori-skillsets list-active` now reports every skillset active in a directory and its parents, and both the footer and /status read its output. The session does not store its own skillset name; after a skillset install or switch it re-runs `list-active`. The 'activeSkillset' field is read only as a fallback for old nori-skillsets versions that do not support `list-active`.

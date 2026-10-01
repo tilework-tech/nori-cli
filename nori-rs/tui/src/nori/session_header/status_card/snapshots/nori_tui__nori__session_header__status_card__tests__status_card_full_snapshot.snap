@@ -9,7 +9,7 @@ expression: "render(view, DisplayMode::Full)"
   Forked from  22222222-2222-2222-2222-222222222222
   Title        Fix login flakes
   Summary      Fix auth bug
-  Skillset     senior-swe (Skillsets v1.2.3)
+  Skillsets    personal/foo, public/amol (Skillsets v1.2.3)
   Approvals    Agent
   Git          ⎇ main !
   Context      84% left (164K used / 1.00M)
