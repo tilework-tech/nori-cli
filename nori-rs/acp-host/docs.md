@@ -12,7 +12,7 @@ session-product state.
 It also owns the optional remote ACP transport (`remote/`): a WebSocket server
 implementing the WebSocket profile of the upstream ACP "Streamable HTTP &
 WebSocket Transport" RFD, serving the hosted harness session outward as an ACP
-Agent (see `@/docs/specs/remote-acp-transport.md`).
+Agent (see `@/docs/remote-control.md`).
 
 ### How it fits into the larger codebase
 

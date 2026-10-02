@@ -20,7 +20,7 @@ In the nori-rs folder where the rust code lives:
 - Do not use unsigned integer even if the number cannot be negative.
 - When possible, make `match` statements exhaustive and avoid wildcard arms.
 - Do not create small helper methods that are referenced only once.
-- When making a change that adds or changes an API, ensure that the documentation in the `docs/` folder is up to date if applicable.
+- When a change affects behavior covered by a doc in `docs/` (indexed in `docs/README.md`), update that doc in the same PR. Use `docs/glossary.md` terms.
 - Avoid large modules:
   - Prefer adding new modules instead of growing existing ones.
   - Target Rust modules under 500 LoC, excluding tests.

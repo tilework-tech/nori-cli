@@ -12,8 +12,8 @@ and the Ratatui frontend; the npm package in `nori-cli/` is a thin launcher.
 
 - `nori-rs/` contains the Cargo workspace and production binary.
 - `nori-cli/` packages that binary for npm distribution.
-- `docs/` holds durable references and specs for behavior that crosses crate
-  boundaries.
+- `docs/` holds one prescriptive doc per cross-cutting topic, indexed in
+  `@/docs/README.md`.
 - ACP owns agent-to-client messages, plans, tools, permissions, capabilities,
   configuration options, usage, and responses. Nori adds only lifecycle and
   product behavior ACP does not define.
@@ -90,7 +90,7 @@ canonical identity and organization fanout.
   backend.
 - The optional WebSocket Agent surface can be enabled by startup `--remote` or
   managed inside the TUI with `/remote-control`. It is specified in
-  `@/docs/specs/remote-acp-transport.md` and remains separate from the bounded
+  `@/docs/remote-control.md` and remains separate from the bounded
   `nori exec --acp` stdio facade.
 
 Created and maintained by Nori.

@@ -43,7 +43,7 @@ used in production.
   through a `HostedAgent` trait that `harness/` implements, preserving the
   `nori-harness -> nori-acp-host` dependency direction. The TUI owns startup
   `--remote` and runtime `/remote-control` listener policy around that server
-  (see `@/docs/specs/remote-acp-transport.md`).
+  (see `@/docs/remote-control.md`).
 - `nori-protocol/` owns no behavior. It exports `nori_protocol::acp` and
   `SessionEvent::{Acp, Nori}`.
 - `nori-config/` owns CLI configuration and the approval, sandbox, MCP, trust,
