@@ -1,13 +1,11 @@
 # Nori transcript format
 
 Reference for Nori's versioned JSONL session transcripts. Schema v3 is the
-canonical write format. The Harness keeps older v1/v2 storage compatibility
-private so embedders do not inherit the retired normalized protocol as API.
+only write format; readers also accept older v1/v2 files.
 
-Canonical implementation: `nori-rs/harness/src/transcript/` in
-`nori-harness`. The versioned `TranscriptLine` and `TranscriptEntry` storage
-types are private. Public Rust readers use `TranscriptLoader`, `Transcript`,
-`Transcript::records()`, and `TranscriptRecord`.
+Implementation: `nori-rs/harness/src/transcript/`. The versioned storage types
+are private; Rust readers use the API under
+[Reading transcripts programmatically](#reading-transcripts-programmatically).
 
 ## File locations
 
@@ -25,6 +23,10 @@ $NORI_HOME/transcripts/by-project/{project-id}/
 - Session files are created with mode `0600` on Unix.
 - The writer creates a fresh file, appends one JSON object per line, and flushes
   each line. It does not `fsync`, so a crashed session can lose its tail.
+- A branch-at-head fork writes a new file whose `session_meta` is followed by a
+  copy of every non-metadata entry from the parent. Copied entries are
+  re-stamped with the fork's `ts` and the current `v`, so a v3 file forked from
+  a legacy parent can contain legacy entry kinds.
 
 ### Project IDs and `project.json`
 
@@ -52,7 +54,8 @@ and reading `project.json`.
 ```
 
 `git_remote` and `git_root` are `null` outside a Git repository. The file is
-rewritten when a new session starts in the project.
+rewritten whenever a session starts in the project, and both timestamps are set
+to the rewrite time, so `created_at` is not the project's first-seen time.
 
 ## Common line envelope
 
@@ -70,9 +73,9 @@ otherwise readable transcript survives schema changes.
 
 ## Canonical schema v3
 
-The runtime v3 writer emits three entry kinds: `session_meta`, `user`, and
-`session_event`. It does not write `assistant`, `client_event`, `tool_call`,
-`tool_result`, or `patch_apply` entries.
+The v3 writer records three entry kinds: `session_meta`, `user`, and
+`session_event`. Apart from entries copied by a fork, it never writes the
+legacy kinds listed under [Legacy v1/v2 entries](#legacy-v1v2-entries).
 
 ### `session_meta`
 
@@ -88,14 +91,16 @@ The runtime v3 writer emits three entry kinds: `session_meta`, `user`, and
   "agent": "claude-code",
   "cli_version": "0.9.0",
   "git": { "branch": "main", "commit_hash": "1975265abc..." },
-  "acp_session_id": "acp-sess-abc123"
+  "acp_session_id": "acp-sess-abc123",
+  "forked_from": "5d0c8e21-..."
 }
 ```
 
-Optional fields are omitted when absent: `agent`, `git`, and
-`acp_session_id`. Within `git`, `branch` and `commit_hash` are optional.
+Optional fields are omitted when absent: `agent`, `git`, `acp_session_id`, and
+`forked_from`. Within `git`, `branch` and `commit_hash` are optional.
 `acp_session_id` is the agent's identity used for ACP session load or resume;
-it is distinct from Nori's transcript `session_id`.
+it is distinct from Nori's transcript `session_id`. `forked_from` is the parent
+transcript's `session_id` when the file was created by a branch-at-head fork.
 
 ### `user`
 
@@ -143,32 +148,19 @@ A representative ACP notification is:
 }
 ```
 
-A representative Nori lifecycle event is:
+A Nori lifecycle event has the same envelope with an `event` of:
 
 ```json
-{
-  "ts": "2026-07-03T12:31:03.002Z",
-  "v": 3,
-  "type": "session_event",
-  "event": {
-    "source": "nori",
-    "event": {
-      "event_type": "session_phase_changed",
-      "event": { "phase": "idle" }
-    }
-  }
-}
+{ "source": "nori", "event": { "event_type": "session_phase_changed", "event": { "phase": "idle" } } }
 ```
 
 ACP payload casing and shape come from `nori_protocol::acp`; the outer Nori
 tags come from `SessionEvent`, `AcpEvent`, and `NoriEvent`. ACP requests and
 responses retain the schema `RequestId`, which may be a string, number, or
 `null`. Because v3 stores the exact public event payload, its nested ACP shape
-tracks the ACP schema re-export selected by `nori-protocol`.
-
-V3 intentionally has one canonical copy of agent output: the raw ACP
-notification. It does not also persist a derived assistant record or the
-private TUI/Harness presentation projection.
+tracks the ACP schema re-export selected by `nori-protocol`. The raw ACP
+notification is the only stored copy of agent output; no derived assistant
+record or presentation projection is persisted.
 
 ## Setup, phases, and replay
 
@@ -181,13 +173,12 @@ The recorded live stream preserves Harness publication order.
 - `SessionPhase::{Loading, Prompting, Cancelling}` stores the exact ACP wire
   `RequestId` for the active operation.
 - One accepted Harness prompt corresponds to exactly one ACP
-  `session/prompt`; there is no cancel-tail resend heuristic. A successful
-  empty `EndTurn` is terminal for that request.
+  `session/prompt`. A successful empty `EndTurn` is terminal for that request.
 
 Replay is a filtered projection, not a second reading mode for all stored
 events. The public replay sequence is:
 
-1. `NoriEvent::ReplayStarted`;
+1. `NoriEvent::ReplayStarted`, whose `source` is `transcript` or `agent`;
 2. historical `SessionEvent::Acp(AcpEvent::Notification(...))` values in
    source order; and
 3. `NoriEvent::ReplayFinished`.
@@ -195,62 +186,38 @@ events. The public replay sequence is:
 For v3, canonical raw user-message chunks supersede the explicit `user` entry
 with the same message id during replay. This retains attachment blocks without
 duplicating the prompt. A `user` entry without matching raw chunks is projected
-to an ACP user-message notification at its recorded position for compatibility.
+to an ACP user-message notification at its recorded position. Legacy
+`assistant` entries are projected to agent message and thought notifications
+only when the file contains no stored ACP session notification.
 Stored ACP notifications remain exact, apart from retargeting their session ID
 to the active session. Stored Nori events, ACP requests, and ACP responses are
-not emitted inside replay brackets. In particular, the current load/new
-response is never mislabeled as historical replay. Historical requests cannot
-repeat side effects, and historical responses cannot complete live requests.
+never replayed, so historical requests cannot repeat side effects and
+historical responses cannot complete live requests.
 
 Agent-sourced `session/load` replay follows the same outward rule: the markers
 bracket the load-time ACP notifications in agent order, while the current load
 response remains outside the brackets and before `SessionStarted`.
 
-## Private v1/v2 compatibility
+## Legacy v1/v2 entries
 
-Older transcripts can contain these retired storage records:
-
-- `assistant` text/thinking blocks;
-- normalized `client_event` values;
-- `tool_call` and `tool_result`; and
-- `patch_apply`.
-
-Those shapes remain private to the Harness transcript types and loader. They
-are not re-exported from `nori-protocol`, and `TranscriptEntry` /
-`TranscriptLine` are not public Harness types. New code must not write v2 or
-recreate the former normalized protocol facade.
-
-The compatibility projection is intentionally narrower than the old storage
-enum:
-
-- `Transcript::records()` exposes user text, legacy assistant text, legacy
-  thinking text, and exact v3 `SessionEvent` values;
-- it skips normalized client events and legacy tool/patch storage records;
-- internal resume code may privately derive completed display/goal state from
-  selected legacy records; and
-- v1/v2 user/assistant content can be synthesized as ACP message notifications
-  when no raw v3 notification stream exists.
-
-The checked-in public compatibility test covers v2 user, assistant, and
-thinking records. There is not currently a checked-in fixture matrix covering
-every legacy top-level record and all 18 former normalized `ClientEvent` tags.
-
-The loader does not expose a version-specific decoder API. It tolerantly
-deserializes the private storage enum; unknown fields are ignored, unknown or
-unparseable post-metadata lines are skipped, and blank lines are skipped.
+Older files can contain `assistant` (text and thinking blocks),
+`client_event`, `tool_call`, `tool_result`, and `patch_apply` entries. Readers
+must accept them; writers must never produce them. `Transcript::records()`
+exposes legacy `assistant` blocks as `Assistant` and `Thinking` records and
+skips the other legacy kinds. Their storage types stay private to
+`nori-harness` and are not re-exported from `nori-protocol`.
 
 ## Token usage
 
-Canonical v3 transcript entries have no separate Nori token-count record. ACP
-usage can appear inside stored ACP session notifications. The goodbye-card
-token statistics may also be read from the underlying agent's own transcript
-files by `nori-rs/harness/src/transcript_discovery.rs`; those third-party
-formats are outside this reference.
+There is no Nori token-count entry; ACP usage appears only inside stored ACP
+notifications. Goodbye-card token statistics come from the agent's own
+transcript files (`nori-rs/harness/src/transcript_discovery.rs`), whose formats
+are outside this reference.
 
 ## Reading transcripts programmatically
 
-Use `nori_harness::TranscriptLoader` (or the equivalent exports under
-`nori_harness::transcript`) and iterate `Transcript::records()`:
+Use `nori_harness::TranscriptLoader` and iterate `Transcript::records()`
+(`TranscriptRecord` is exported from `nori_harness::transcript`):
 
 ```rust
 for record in transcript.records() {
@@ -263,7 +230,6 @@ for record in transcript.records() {
 }
 ```
 
-Do not depend on the private versioned storage enum. A third-party producer
-that writes JSONL directly must version its integration against this document
-and the selected `nori-protocol` ACP schema; Nori does not promise that exact
-serialized public events are a permanently frozen storage ABI.
+A third-party producer that writes JSONL directly must version its integration
+against this document and the selected `nori-protocol` ACP schema; serialized
+public events are not a frozen storage ABI.
