@@ -832,7 +832,8 @@ The values behind those segments come from `SystemInfo`
 (`@/nori-rs/tui/src/system_info.rs`), collected on a single worker thread that
 refreshes only when asked: at startup, on message submit, turn completion,
 tool-call cwd change, and skillset apply. A full collection spawns Node for the
-skillset version and walks the filesystem for transcripts and worktrees, which
+skillset version, runs `nori-skillsets list-active` for the active skillset
+names, and walks the filesystem for transcripts and worktrees, which
 is too slow to hold the first frame, so `SystemInfo::seed` runs a cheap subset —
 the git branch and worktree identity, three short `git` invocations — and
 `App::run` applies it before the loop starts. `configure_new_chat_widget`
@@ -840,6 +841,17 @@ re-seeds after a widget swap, because the replacement carries its own empty
 footer. The background refresh then overwrites the seed wholesale. Debug builds
 under `NORI_SYNC_SYSTEM_INFO=1` seed with a complete synchronous collection
 instead, so E2E snapshots stay deterministic.
+
+`SystemInfo.active_skillsets` is the single source for "which skillsets are
+active" in both the `skillset` footer segment and `/status`.
+`nori-skillsets list-active` reports every skillset installed for any agent in
+the session directory or its parents, one name per line. When an older
+`nori-skillsets` rejects the subcommand (non-zero exit with stderr output),
+`get_active_skillsets` falls back to `read_active_skillset`, which walks parent
+directories for a `.nori-config.json` `activeSkillset` key; current
+`nori-skillsets` no longer writes that key per folder, which is why nothing
+else reads it. The seed leaves the list empty, so it stays empty until the
+first background refresh lands.
 
 #### Session-info verbosity
 
@@ -862,6 +874,11 @@ into `SessionInfoState`, so the session title keeps reaching the footer and the
 
 The startup status block is an unbordered two-row summary beneath a green
 prompt marker: system context on one row and agent identity on the next. The
+system row is the location (directory, or the cloud session id and title) and
+the approval mode. It deliberately carries no skillset: the welcome card is
+rendered to lines once and written into terminal scrollback before the
+background `list-active` refresh finishes, so a skillset there could never be
+kept current. The
 agent row reads provider, then the agent's model, then its thought level, then
 its remaining options in exactly the order the agent advertised them; boolean
 toggles read by presence (the label appears only when the toggle is on). Before
@@ -887,7 +904,7 @@ has; a later `/new` is a different conversation and writes its own.
 labels and a two-cell label/value gutter, expanding it into a superset of the
 footer's information categories independent of the user's footer configuration:
 directory, session id (the conversation id, shown for every agent — cloud
-sessions append the broker title), title, summary, skillset (with detected
+sessions append the broker title), title, summary, skillsets (with detected
 skillsets version), approvals, a git row (branch / worktree / +added −removed /
 untracked), a single consolidated context row (`% left (used / window)`), and
 cumulative token usage. Everything the agent decides then follows in its own
@@ -902,7 +919,13 @@ Both renderings are pure views over a single `StatusViewModel`
 (`@/nori-rs/tui/src/nori/session_header/status_view.rs`) that `ChatWidget`
 assembles in `@/nori-rs/tui/src/chatwidget/agent_status.rs` from the config, the
 footer values (`ChatComposer::status_footer_values()`), and the agent's
-configuration state. The row helpers and the git/context formatting live in
+configuration state. The skillset row reads the footer's `active_skillsets`
+list, so `/status` and the footer cannot disagree: the label is `Skillset` for
+zero or one name and `Skillsets` for more, names are comma-joined with one
+shared version suffix, and an empty list reads `(none)` — including a `/status`
+issued before the first background refresh. The only filesystem input the
+assembly reads directly is the instruction-file discovery
+(`local_instruction_files`). The row helpers and the git/context formatting live in
 `@/nori-rs/tui/src/nori/session_header/status_card.rs`; the storybook specimen
 (`cargo run -p nori-tui --features storybook --example status_card_storybook`)
 renders through those same views. The welcome card holds a live

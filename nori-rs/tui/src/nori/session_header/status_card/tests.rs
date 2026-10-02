@@ -224,16 +224,26 @@ fn compact_block_uses_the_prompt_accent_and_plain_labels() {
 }
 
 #[test]
-fn compact_block_summarizes_system_context() {
+fn compact_block_summarizes_location_and_approvals() {
     let mut view = model("claude-code", "/home/user/project");
     view.approval_mode_label = Some("Agent".to_string());
-    view.skillset.name = Some("senior-swe".to_string());
+    // Skillsets are not known when the welcome card prints; they belong on
+    // `/status` and the footer.
+    view.skillset.names = vec!["senior-swe".to_string()];
 
     let rendered = render(view, DisplayMode::Compact);
 
+    let system = rendered
+        .lines()
+        .find(|line| line.trim_start().starts_with("System"))
+        .expect("System row");
+    assert_eq!(
+        system,
+        "  System       /home/user/project · Agent approvals"
+    );
     assert!(
-        rendered.contains("System       /home/user/project · Agent approvals · senior-swe"),
-        "compact System row must summarize location, approvals, and skillset, got:\n{rendered}"
+        !rendered.contains("senior-swe"),
+        "the welcome card must not show skillsets, got:\n{rendered}"
     );
 }
 
@@ -257,7 +267,6 @@ fn compact_block_omits_the_instruction_outline() {
 #[test]
 fn compact_block_on_a_cloud_session_shows_the_session_not_the_local_cwd() {
     let mut view = model("claude-code", "/home/user/local-only-checkout");
-    view.skillset.name = Some("senior-swe".to_string());
     view.cloud_session = Some(CloudSessionInfo {
         id: "nori-fast-kazunoko-aac8".to_string(),
         title: Some("Fix login flakes".to_string()),
@@ -280,7 +289,6 @@ fn compact_mode_snapshot() {
     let mut view = model("claude-code", "/home/user/project");
     view.version = "0.1.0";
     view.approval_mode_label = Some("Agent".to_string());
-    view.skillset.name = Some("senior-swe".to_string());
     view.instruction_files = instruction_files();
     configure(&view, "claude-code", &claude_options(true));
 
@@ -468,7 +476,7 @@ fn full_card_renders_the_tokens_row_only_when_tokens_were_used() {
 fn full_card_skillset_row_shows_the_name_and_version() {
     let mut view = model("claude-code", "/tmp/test");
     view.skillset = SkillsetStatus {
-        name: Some("senior-swe".to_string()),
+        names: vec!["senior-swe".to_string()],
         version: Some("1.2.3".to_string()),
         version_source: Some(NoriVersionSource::Skillsets),
     };
@@ -591,7 +599,7 @@ fn status_card_full_snapshot() {
     view.conversation_id = ConversationId::from_string("11111111-2222-3333-4444-555555555555").ok();
     view.forked_from = ConversationId::from_string("22222222-2222-2222-2222-222222222222").ok();
     view.skillset = SkillsetStatus {
-        name: Some("senior-swe".to_string()),
+        names: vec!["personal/foo".to_string(), "public/amol".to_string()],
         version: Some("1.2.3".to_string()),
         version_source: Some(NoriVersionSource::Skillsets),
     };

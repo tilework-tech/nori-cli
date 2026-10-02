@@ -16,7 +16,6 @@ use nori_harness::TranscriptTokenUsage;
 use crate::nori::agent_config_state::AgentConfigState;
 use crate::nori::agent_config_state::AgentConfigValue;
 use crate::system_info::NoriVersionSource;
-use crate::system_info::read_active_skillset;
 use nori_protocol::acp::v1 as acp;
 
 use super::AgentKindSimple;
@@ -63,11 +62,11 @@ pub(crate) struct ContextStatus {
     pub(crate) percent_used: Option<i64>,
 }
 
-/// The detected Nori skillset and the version of the tooling that installed it.
+/// The active Nori skillsets and the version of the tooling that installed them.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SkillsetStatus {
-    /// The active skillset name, when one is configured.
-    pub(crate) name: Option<String>,
+    /// Every skillset active in the session directory or its parents.
+    pub(crate) names: Vec<String>,
     /// Detected Nori skillsets version.
     pub(crate) version: Option<String>,
     /// The source of the version detection (affects the display label).
@@ -87,6 +86,8 @@ pub(crate) struct StatusFooterValues {
     pub(crate) session_title: Option<String>,
     /// First-prompt summary.
     pub(crate) prompt_summary: Option<String>,
+    /// Skillsets active in the session directory or its parents.
+    pub(crate) active_skillsets: Vec<String>,
     /// Detected Nori skillsets version.
     pub(crate) nori_version: Option<String>,
     /// The source of the version detection.
@@ -282,16 +283,10 @@ impl StatusViewModel {
     }
 }
 
-/// The active skillset and the instruction files `agent` loads from `cwd`.
-/// This is the filesystem half of the assembly step.
-pub(crate) fn local_context(
-    agent_slug: &str,
-    cwd: &Path,
-) -> (Option<String>, Vec<InstructionFile>) {
-    (
-        read_active_skillset(cwd),
-        discover_all_instruction_files(cwd, detect_agent_kind(agent_slug)),
-    )
+/// The instruction files `agent` loads from `cwd`. This is the filesystem half
+/// of the assembly step.
+pub(crate) fn local_instruction_files(agent_slug: &str, cwd: &Path) -> Vec<InstructionFile> {
+    discover_all_instruction_files(cwd, detect_agent_kind(agent_slug))
 }
 
 /// The provider name for an agent slug: the short brand name for the agent

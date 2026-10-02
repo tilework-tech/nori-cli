@@ -127,17 +127,18 @@ impl ChatWidget {
 
     fn status_view_model(&self, agent: AgentStatusHandle) -> StatusViewModel {
         let footer = self.bottom_pane.status_footer_values();
-        let (skillset, instruction_files) =
-            crate::nori::session_header::local_context(&self.config.active_agent, &self.config.cwd);
         let mut model = StatusViewModel::new(agent, self.config.cwd.clone());
         model.approval_mode_label =
             approval_mode_label(self.config.approval_policy, &self.config.sandbox_policy);
         model.skillset = SkillsetStatus {
-            name: skillset,
+            names: footer.active_skillsets,
             version: footer.nori_version,
             version_source: footer.nori_version_source,
         };
-        model.instruction_files = instruction_files;
+        model.instruction_files = crate::nori::session_header::local_instruction_files(
+            &self.config.active_agent,
+            &self.config.cwd,
+        );
         model.prompt_summary = footer.prompt_summary;
         model.session_title = footer.session_title;
         model.conversation_id = self.conversation_id();

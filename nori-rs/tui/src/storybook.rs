@@ -102,7 +102,7 @@ fn fixture_model() -> StatusViewModel {
     model.session_title = Some("Fix terminal hierarchy".to_string());
     model.prompt_summary = Some("Rework the status card".to_string());
     model.skillset = SkillsetStatus {
-        name: Some("senior-swe".to_string()),
+        names: vec!["senior-swe".to_string()],
         version: Some("1.2.3".to_string()),
         version_source: None,
     };

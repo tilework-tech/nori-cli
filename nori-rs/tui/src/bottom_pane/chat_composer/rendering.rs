@@ -168,6 +168,7 @@ impl ChatComposer {
             },
             session_title: props.session_title,
             prompt_summary: props.prompt_summary,
+            active_skillsets: props.active_skillsets,
             nori_version: props.nori_version,
             nori_version_source: props.nori_version_source,
             token_breakdown: self.transcript_token_breakdown(),

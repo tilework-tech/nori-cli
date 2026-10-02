@@ -260,9 +260,6 @@ pub(super) fn compact_lines(model: &StatusViewModel, inner_width: usize) -> Vec<
     if let Some(approval_mode) = &model.approval_mode_label {
         system_parts.push(format!("{approval_mode} approvals"));
     }
-    if let Some(skillset) = &model.skillset.name {
-        system_parts.push(skillset.clone());
-    }
 
     let mut system_spans = Vec::new();
     for (index, part) in system_parts.into_iter().enumerate() {
@@ -328,21 +325,32 @@ pub(super) fn full_lines(model: &StatusViewModel, inner_width: usize) -> Vec<Lin
         ));
     }
 
-    let skillset_display = match &model.skillset.name {
-        Some(name) => match &model.skillset.version {
+    let skillset_names = &model.skillset.names;
+    let skillset_display = if skillset_names.is_empty() {
+        "(none)".to_string()
+    } else {
+        let names = skillset_names.join(", ");
+        match &model.skillset.version {
             Some(version) => {
                 let label = model
                     .skillset
                     .version_source
                     .map(NoriVersionSource::label)
                     .unwrap_or("Skillsets");
-                format!("{name} ({label} v{version})")
+                format!("{names} ({label} v{version})")
             }
-            None => name.clone(),
-        },
-        None => "(none)".to_string(),
+            None => names,
+        }
     };
-    lines.push(status_row("Skillset", vec![Span::from(skillset_display)]));
+    let skillset_label = if skillset_names.len() > 1 {
+        "Skillsets"
+    } else {
+        "Skillset"
+    };
+    lines.push(status_row(
+        skillset_label,
+        vec![Span::from(skillset_display)],
+    ));
 
     if let Some(approval_mode) = &model.approval_mode_label {
         lines.push(status_row(
