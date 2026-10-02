@@ -12,8 +12,8 @@ and the Ratatui frontend; the npm package in `nori-cli/` is a thin launcher.
 
 - `nori-rs/` contains the Cargo workspace and production binary.
 - `nori-cli/` packages that binary for npm distribution.
-- `docs/specs/` records durable architecture decisions; `docs/plans/` records
-  their execution.
+- `docs/` holds durable references and specs for behavior that crosses crate
+  boundaries.
 - ACP owns agent-to-client messages, plans, tools, permissions, capabilities,
   configuration options, usage, and responses. Nori adds only lifecycle and
   product behavior ACP does not define.
@@ -78,9 +78,16 @@ canonical identity and organization fanout.
   transport failures as best-effort background work with a bounded final
   flush. Launch, help, version, and resume without a transported prompt are not
   meaningful activity.
-- The crate-layering decision and the exact protocol contract are documented
-  in `@/docs/specs/crate-layering.md` and
-  `@/docs/specs/protocol-unification.md`.
+- Crate dependencies point down only: `nori-cli` → `nori-tui` →
+  `nori-harness` → `nori-acp-host` → `nori-config` → `nori-protocol`. Support
+  crates (sandbox, login, git, PTY) never depend upward. `nori-tui` never
+  imports `nori-acp-host` directly; nothing below the frontends depends on
+  ratatui or renders terminal presentation; no cargo feature changes which
+  crate owns a responsibility. `nori-protocol` holds types only, with no
+  reducers, normalization, or presentation logic.
+- `nori-acp-host` owns the initialized connection. `nori-harness` may retain it
+  without a session and consumes it exactly once to build a session-bound
+  backend.
 - The optional WebSocket Agent surface can be enabled by startup `--remote` or
   managed inside the TUI with `/remote-control`. It is specified in
   `@/docs/specs/remote-acp-transport.md` and remains separate from the bounded

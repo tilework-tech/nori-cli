@@ -1,9 +1,9 @@
 # ACP Cancel Turn Boundary Bug Report
 
 **Status: Historical investigation, superseded as current protocol guidance.**
-The evidence below is retained unchanged, but the ACP-canonical boundary now
-treats each Harness prompt as exactly one `session/prompt` request and accepts a
-successful empty `EndTurn` as that request's terminal response. Nori does not
+The evidence artifacts were removed (see git history). The ACP-canonical
+boundary now treats each Harness prompt as exactly one `session/prompt` request
+and accepts a successful empty `EndTurn` as that request's terminal response. Nori does not
 absorb the response or resend the prompt. Any remaining user-visible issue in
 this scenario must be investigated from the correlated wire request/response,
 not repaired with client-side cancel-tail retry logic.
@@ -30,11 +30,6 @@ This document records the investigation only. It does not propose a fix.
 - That prompt is then completed immediately with an empty `end_turn`.
 - The UI appears to consume a stale stop/completion signal instead of treating
   the post-cancel tail as part of the cancelled turn's completion lifecycle.
-
-The captured TUI state is backed up in:
-
-- `evidence/tui-capture-after-cancel.txt`
-- `evidence/tui-capture-after-followup.txt`
 
 ## Reproduction
 
@@ -65,27 +60,6 @@ The captured TUI state is backed up in:
 - The follow-up prompt immediately receives `stopReason=end_turn` with zero usage.
 - The TUI jumps to a fresh prompt with no assistant answer.
 
-## Evidence Directory
-
-All backed-up artifacts for this investigation live in:
-
-- `spec/acp-cancel-turn-boundary-investigation/evidence/`
-
-Artifacts:
-
-- `wire-session.log`
-- `nori-acp-trace.log`
-- `nori-tui.log`
-- `tui-capture-after-cancel.txt`
-- `tui-capture-after-followup.txt`
-- `acp-cancellation-spec.txt`
-- `acp-session-update-note.txt`
-- `sacp-ordering-excerpt.txt`
-- `sacp-session-excerpt.txt`
-- `toad-conversation-excerpt.py`
-- `toad-agent-excerpt.py`
-- `instrumentation.diff`
-
 ## Raw Wire Evidence
 
 The reproduced wire sequence for the main session is:
@@ -96,7 +70,7 @@ The reproduced wire sequence for the main session is:
 4. Client sends the next `session/prompt`.
 5. Agent immediately responds with `stopReason=end_turn` and zero usage.
 
-See `evidence/wire-session.log`:
+From the captured wire session log:
 
 - line 22: `session/cancel`
 - line 23: post-cancel `usage_update`
@@ -176,7 +150,7 @@ These extra traces are what closed the loop.
 
 ### 3. Reproduced with boundary tracing enabled
 
-The decisive sequence in `evidence/nori-acp-trace.log` is:
+The decisive sequence in the captured Nori ACP trace is:
 
 1. Nori marks the active prompt as cancelling.
    - line 54

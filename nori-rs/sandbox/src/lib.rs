@@ -2,10 +2,8 @@
 //! Landlock/seccomp, Windows restricted tokens), process spawning, and the
 //! exec engine that runs commands under a sandbox policy.
 //!
-//! Split out of `codex-core` during the crate-layering cleanup
-//! (`docs/specs/crate-layering.md`). This crate must not depend on config or
-//! auth machinery; policy types it consumes live in
-//! `nori_config`.
+//! This crate must not depend on config or auth machinery; policy types it
+//! consumes live in `nori_config`.
 
 // Prevent accidental direct writes to stdout/stderr in library code.
 #![deny(clippy::print_stdout, clippy::print_stderr)]
