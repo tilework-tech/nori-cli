@@ -44,7 +44,7 @@ ACP agent facade. The facade preserves ACP request/response semantics where the
 shell caller participates, rather than serializing the private reducer or
 inventing a second public event vocabulary.
 
-The remote ACP transport (`@/docs/specs/remote-acp-transport.md`) is the other
+The remote ACP transport (`@/docs/remote-control.md`) is the other
 headless consumer. `nori-acp-host` owns the WebSocket server and defines the
 `HostedAgent` trait; [`remote_agent.rs`](src/remote_agent.rs) implements that
 trait over `HarnessHandle`, keeping the dependency direction

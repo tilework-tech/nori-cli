@@ -696,7 +696,7 @@ Quitting an attached cloud session detaches through connection teardown;
 
 `--remote <ADDR>` (in [`cli.rs`](src/cli.rs)) serves the running interactive
 session as a remote ACP agent over WebSocket, per
-`@/docs/specs/remote-acp-transport.md`. [`App`](src/app/) owns one
+`@/docs/remote-control.md`. [`App`](src/app/) owns one
 [`RemoteControlManager`](src/remote_control.rs) for the complete run. Startup
 `--remote` and runtime commands both enter this manager, which retains one
 stable `HarnessRemoteHost`, owns every `RemoteAcpServer` listener, and shuts the

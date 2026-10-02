@@ -1,5 +1,5 @@
 //! [`HostedAgent`] implemented over [`HarnessHandle`]: the harness side of
-//! the remote ACP transport (`docs/specs/remote-acp-transport.md` §3).
+//! the remote ACP transport (`docs/remote-control.md` §3).
 //!
 //! [`HarnessRemoteHost`] follows the launched harness session through the
 //! subscribable event stream, issues the stable Nori conversation id as the

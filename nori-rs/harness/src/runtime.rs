@@ -6,7 +6,7 @@
 //!
 //! Frontends build a spec from their own configuration source, call
 //! [`launch_session`], and consume [`SessionEvent`]s; no terminal or UI
-//! concepts appear here (crate-layering dependency rule 2).
+//! concepts appear here.
 
 use std::collections::VecDeque;
 use std::path::PathBuf;

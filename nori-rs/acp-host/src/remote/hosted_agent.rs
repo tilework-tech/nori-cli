@@ -5,7 +5,7 @@
 //! surface; `nori-harness` implements this interface over `HarnessHandle`.
 //! Keeping the interface here preserves the crate layering: the harness
 //! depends on this crate, never the reverse
-//! (see `docs/specs/remote-acp-transport.md` §3).
+//! (see `docs/remote-control.md` §3).
 
 use std::future::Future;
 

@@ -7,7 +7,7 @@ We only care about the ACP backend and the code that compiles into the nori bin.
 In the nori-rs folder where the rust code lives:
 
 - Crate names are prefixed with `nori-`. For example, the `tui` folder's crate is named `nori-tui`. New crates must always use the `nori-` prefix.
-  - Crates still named `codex-*` (for example `codex-core`) are inherited fork residue, not a convention to follow. Per [`docs/specs/crate-layering.md`](docs/specs/crate-layering.md), rename them as they are adopted/touched, not in churn-only PRs.
+  - Crates still named `codex-*` (for example `codex-core`) are inherited fork residue, not a convention to follow. Rename them as they are adopted/touched, not in churn-only PRs.
   - `codex` is only correct when it refers to the actual OpenAI Codex agent we integrate with as an ACP subprocess — for example `AgentKind::Codex`, the `@openai/codex` package, or reads of the agent's own `~/.codex` directory.
 - When using format! and you can inline variables into {}, always do that.
 - Install any commands the repo relies on (for example `just`, `rg`, or `cargo-insta`) if they aren't already available before running instructions here.
@@ -20,7 +20,7 @@ In the nori-rs folder where the rust code lives:
 - Do not use unsigned integer even if the number cannot be negative.
 - When possible, make `match` statements exhaustive and avoid wildcard arms.
 - Do not create small helper methods that are referenced only once.
-- When making a change that adds or changes an API, ensure that the documentation in the `docs/` folder is up to date if applicable.
+- When a change affects behavior covered by a doc in `docs/` (indexed in `docs/README.md`), update that doc in the same PR. Use `docs/glossary.md` terms.
 - Avoid large modules:
   - Prefer adding new modules instead of growing existing ones.
   - Target Rust modules under 500 LoC, excluding tests.
