@@ -8,7 +8,7 @@ over JSON-RPC/stdio, presenting one terminal interface for all of them.
 The workspace began as a fork of the OpenAI Codex CLI. The codex agent engine
 has since been removed; every agent — including Codex — runs as an external
 ACP subprocess. Remaining `codex-*` crates are inherited utility code being
-progressively adopted or removed (see `docs/specs/crate-layering.md`).
+progressively adopted or removed (see the crate layering rules in `../docs.md`).
 
 ## Key crates
 
