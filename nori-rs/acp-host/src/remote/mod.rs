@@ -3,7 +3,7 @@
 //!
 //! Serves the hosted harness session as an ACP Agent on a single `/acp`
 //! endpoint. Disabled unless remote mode is explicitly enabled; loopback by
-//! default. See `docs/specs/remote-acp-transport.md`.
+//! default. See `docs/remote-control.md`.
 //!
 //! [Streamable HTTP & WebSocket Transport RFD]:
 //!     https://agentclientprotocol.com/rfds/streamable-http-websocket-transport
