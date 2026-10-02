@@ -1941,6 +1941,77 @@ async fn resumed_load_preserves_bootstrap_response_and_brackets_raw_replay() {
 
 #[tokio::test]
 #[serial]
+async fn busy_agent_load_refusal_ends_the_session_instead_of_forking_from_the_transcript() {
+    // SAFETY: this test is serialized with every other environment-mutating test.
+    unsafe {
+        std::env::set_var("MOCK_AGENT_SUPPORT_LOAD_SESSION", "1");
+        std::env::set_var("MOCK_AGENT_LOAD_SESSION_BUSY", "1");
+    }
+    let _load_guard = EnvGuard("MOCK_AGENT_SUPPORT_LOAD_SESSION");
+    let _busy_guard = EnvGuard("MOCK_AGENT_LOAD_SESSION_BUSY");
+    let temp = tempfile::tempdir().expect("create session directory");
+    let recorder = nori_harness::TranscriptRecorder::new(
+        temp.path(),
+        temp.path(),
+        Some("mock-model".to_string()),
+        "boundary-test",
+        Some("busy-session".to_string()),
+    )
+    .await
+    .expect("create local transcript");
+    recorder
+        .record_user_message("saved-user", "saved local user turn", Vec::new())
+        .await
+        .expect("record local user turn");
+    recorder.flush().await.expect("flush local transcript");
+    let transcript = nori_harness::TranscriptLoader::new(temp.path().to_path_buf())
+        .load_transcript(recorder.project_id(), recorder.session_id())
+        .await
+        .expect("load local transcript");
+    recorder.shutdown().await.expect("close local transcript");
+    let config = NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = launch_session(SessionLaunchSpec {
+        config: Arc::new(config),
+        cli_version: "boundary-test".to_string(),
+        session_context: None,
+        initial_context: None,
+        resume: Some(SessionResume {
+            acp_session_id: Some("busy-session".to_string()),
+            transcript: Some(transcript),
+        }),
+    });
+
+    let events = collect_until_session_ended(&mut session).await;
+
+    assert!(
+        events.iter().all(|event| !matches!(
+            event,
+            SessionEvent::Acp(AcpEvent::Response {
+                response: Ok(acp::v1::AgentResponse::NewSessionResponse(_)),
+                ..
+            })
+        )),
+        "a busy agent must not be replaced by a new session replaying the transcript"
+    );
+    let ended_message = events.iter().find_map(|event| match event {
+        SessionEvent::Nori(NoriEvent::SessionEnded(ended)) => ended.message.clone(),
+        _ => None,
+    });
+    assert!(
+        ended_message
+            .as_deref()
+            .is_some_and(|message| message.contains("try again")),
+        "the session must end asking for a retry, got: {ended_message:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn failed_load_preserves_response_order_and_separates_replay_sources() {
     // SAFETY: this test is serialized with every other environment-mutating test.
     unsafe {

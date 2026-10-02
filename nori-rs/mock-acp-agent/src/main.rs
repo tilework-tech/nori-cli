@@ -1788,6 +1788,19 @@ async fn main() -> acp::Result<()> {
                         .await?;
                     }
 
+                    if std::env::var("MOCK_AGENT_LOAD_SESSION_BUSY").is_ok() {
+                        eprintln!("Mock agent: simulating a busy-agent load_session refusal");
+                        return responder.respond_with_error(
+                            acp::Error::new(
+                                -32011,
+                                "The agent is still finishing a turn that started before this connection. Try again shortly.",
+                            )
+                            .data(serde_json::json!({
+                                "noriErrorCode": "agent_busy",
+                                "retryable": true
+                            })),
+                        );
+                    }
                     if std::env::var("MOCK_AGENT_LOAD_SESSION_FAIL").is_ok() {
                         eprintln!("Mock agent: simulating load_session failure");
                         return responder.respond_with_error(acp::Error::new(

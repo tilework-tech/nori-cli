@@ -91,6 +91,10 @@ pub fn enhanced_error_message(
             "That session no longer exists on {provider_name} — it may have expired or been \
              closed elsewhere. Pick another session from /resume or start a new one."
         ),
+        AcpErrorCategory::AgentBusy => format!(
+            "The agent on {provider_name} is still finishing an earlier turn. Wait a moment, then \
+             try again with /resume."
+        ),
         AcpErrorCategory::SessionNotResumable => format!(
             "That session can't be reattached on {provider_name}. Start a new session instead."
         ),
@@ -418,3 +422,24 @@ use hooks::generate_id;
 use hooks::route_hook_results;
 use hooks::run_prompt_summary;
 use hooks::run_session_start_hooks;
+
+#[cfg(test)]
+mod tests {
+    use super::AcpErrorCategory;
+    use super::enhanced_error_message;
+
+    #[test]
+    fn busy_agent_message_asks_for_a_retry_instead_of_a_new_session() {
+        let message = enhanced_error_message(
+            AcpErrorCategory::AgentBusy,
+            "The agent is still finishing a turn that started before this connection.",
+            "Nori Cloud",
+            "",
+            "Nori Cloud",
+            "",
+        );
+
+        assert!(message.contains("try again"), "{message}");
+        assert!(!message.to_lowercase().contains("new session"), "{message}");
+    }
+}
