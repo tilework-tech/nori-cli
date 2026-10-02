@@ -1,229 +1,164 @@
-# nori-client MCP Behavior Spec
+# nori-client MCP and Goals
 
-This document specifies the desired behavior for the backend-owned
-`nori-client` MCP server. It replaces the old append-only
-`CURRENT-PROGRESS.md` log, which mixed completed implementation history with
-obsolete investigation notes.
+`nori-client` is the backend-owned MCP server through which an MCP-capable
+[agent](glossary.md#actors) reads and mutates Nori-owned state. Nori owns
+`/goal` state in the [session harness](glossary.md#nori-runtime-boundaries);
+`nori-client` and the `_session/goal` extension are the only two ways an agent
+may participate in it. Code: `nori-rs/harness/src/backend/nori_client_mcp.rs`,
+`nori_client_context.rs`, `thread_goal.rs`, `goal_ext.rs`.
 
-## Current State
+## Rules
 
-Nori owns `/goal` state in the ACP backend. Capable ACP agents also receive a
-backend-owned MCP server named `nori-client`, served as streamable HTTP on
-`127.0.0.1`, so they can call `get_goal`, `create_goal`, and `update_goal`
-against the same state the TUI uses.
+- Tools must only read or mutate Nori-owned live state. Resources must be
+  durable read-only facts. Prompts must package reusable workflows.
+- Resources and prompts must come from the fixed catalog in
+  `nori_client_context.rs`. The server must never become a filesystem reader,
+  a second goal store, a substitute for capabilities ACP already provides, or
+  a way to mutate user configuration without explicit user action.
+- The goal store (`ThreadGoalState`) must be the single source of truth. Every
+  successful mutation, from any path, must emit `GoalChanged`.
 
-Nori's built-in Codex launch disables Codex-native goals through the ACP
-adapter configuration. For that launch, only `nori-client` controls Nori thread
-goals; similarly named native or unqualified tools must not be used for this
-state.
+## Server Surface
 
-The server is intentionally general-purpose: goal tools are the first tenant,
-not the whole API. It should remain the narrow harness-side channel for
-capabilities that ACP does not yet provide directly.
+When the agent's initialize response advertises HTTP MCP
+(`mcp_capabilities.http`), the harness must spawn one server per backend and
+append it to the session's MCP servers as `McpServer::Http` named
+`nori-client`. Agents without HTTP MCP must not receive it.
 
-## Target Shape
+| Kind      | Name                                                                  |
+| --------- | --------------------------------------------------------------------- |
+| Tools     | `get_goal`, `create_goal`, `update_goal`                              |
+| Resources | `nori://context/cli`, `nori://context/repo`                           |
+| Resources | `nori://help/custom-acp-agent`, `nori://help/acp-wire-logs`           |
+| Prompts   | `register_custom_acp_agent`, `debug_acp_wire_protocol`, `answer_nori_cli_question` |
 
-`nori-client` should be the single structured way an MCP-capable ACP agent
-learns about Nori-owned client context. The prompt stream should carry user
-work, goal context when goal automation is valid, and a one-time source envelope
-that identifies Nori CLI consistently across client surfaces. Only agents
-without HTTP MCP support should receive fallback operating guidance in that
-envelope. MCP-capable agents should not receive product explanation they can
-discover through `nori-client`.
+Tool contracts:
 
-The boundary is:
+- `get_goal` returns `{"goal": <snapshot>|null}`.
+- `create_goal {objective}` must fail with a tool error when a goal already
+  exists. Agents must only create goals when the user or system instructions
+  explicitly ask for one.
+- `update_goal {status}` accepts only `complete` or `blocked`. Pause, resume,
+  and limit transitions belong to the user or system, never the agent.
+- Unknown request fields are rejected (`deny_unknown_fields`). Snapshots
+  report `token_budget` and `tokens_remaining` as `null`; budgets are not
+  implemented.
 
-- MCP tools mutate or read Nori-owned live state.
-- MCP resources expose durable read-only facts.
-- MCP prompts package reusable workflows for the agent.
-- Every agent receives first-prompt source attribution; prompt fallback is
-  reserved for agents that cannot receive the MCP server.
+Server `instructions` must point agents at resources and prompts for context
+and repeat the goal-control rules (`NORI_GOAL_CONTROL_INSTRUCTIONS`).
 
-## MCP-Capable Agent Behavior
+## Ownership and Safety
 
-When the active ACP agent advertises HTTP MCP support, Nori should advertise one
-loopback streamable-HTTP MCP server named `nori-client`.
+- The server must bind `127.0.0.1` on an ephemeral port and serve stateless
+  streamable HTTP (rmcp) at `/mcp`.
+- Each server must generate a random `Bearer` token, advertise it in the ACP
+  MCP server `headers`, and reject any request without that exact
+  `Authorization` value with `401`.
+- The serving task must abort when the owning `NoriClientServer` drops.
+- `nori-client` is reserved: config loading must reject a user
+  `[mcp_servers.nori-client]` entry (`nori-config/src/loader.rs`).
+- Nori's built-in Codex launch must set `features.goals = false` in
+  `CODEX_CONFIG` (`acp-host/src/registry.rs`) so Codex-native goal tools never
+  compete with Nori's goal state.
 
-The server should expose:
+## First-Prompt Source Envelope
 
-- Goal tools:
-  - `get_goal`
-  - `create_goal`
-  - `update_goal`
-- Context resources:
-  - `nori://context/cli` - three concise operating facts: Nori CLI is the
-    current harness, ACP is the JSON-RPC wire protocol backed by the Nori CLI
-    source repo, and `nori-client` is an internal-only backend MCP server.
-  - `nori://context/repo` - a compact source map for answering Nori CLI
-    implementation questions from the repo source.
-- Help resources and prompts:
-  - `nori://help/custom-acp-agent` and `register_custom_acp_agent`
-  - `nori://help/acp-wire-logs` and `debug_acp_wire_protocol`
-  - `answer_nori_cli_question`, which points at `nori://context/repo`
+Every TUI session must prepend exactly one `<context>` block to the first
+[prompt request](glossary.md#protocol) and never repeat it. The TUI supplies
+both variants (`tui/session_context_http_mcp.md`, `tui/session_context.md`);
+the harness selects one by the agent's HTTP MCP capability.
 
-The agent should be able to discover this context through MCP list/read/get
-requests. Nori may include short MCP server instructions that point agents
-toward the resources and prompts. Its first ordinary user prompt still receives
-the shared source envelope. When active goal context is present, that envelope
-also states that Nori CLI owns the goal and routes reads and updates to the
-`nori-client` MCP server:
+- MCP-capable agents get source attribution plus goal routing: when
+  `<goal_context>` is present, read and update it only through `nori-client`.
+  They must not receive product explanation they can discover via resources.
+- Non-MCP agents get source attribution, "operating over ACP", the
+  `https://github.com/tilework-tech/nori-cli` source reference, and an
+  explicit statement that MCP-backed affordances, including `update_goal`,
+  are unavailable.
 
-```text
-<context>
-Source: this message is from Nori CLI.
+## Goal Control Paths
 
-When <goal_context> is present, Nori CLI is its authoritative owner. Do not use native or unqualified goal tools. Read it with `get_goal` from the `nori-client` MCP server, and update it with `update_goal` from the `nori-client` MCP server.
-</context>
-```
+`/goal` must have a close-the-loop path. A session has one of three:
 
-This source attribution and conditional goal-routing guidance are distinct from
-the static Nori operating guidance that MCP-capable agents can discover through
-`nori-client`, and the envelope is consumed once rather than repeated on later
-prompts.
+| Agent advertises                 | Goal driver                                    |
+| -------------------------------- | ---------------------------------------------- |
+| `_session/goal` (± HTTP MCP)     | Agent's native loop, via the extension         |
+| HTTP MCP only                    | Harness continuation loop + `nori-client`      |
+| Neither                          | None: `/goal` unavailable                      |
 
-Resources and prompts should be curated guidance, not an arbitrary filesystem
-read API. Tools should remain reserved for Nori-owned state changes.
+### Harness loop (`nori-client`)
 
-## Non-MCP Agent Behavior
+- Every user prompt must be prefixed with `<goal_context>` (status, objective,
+  time, tokens) and `<goal_control>` while a goal exists and the server is
+  registered.
+- When the session goes idle with an active goal and an empty queue, the
+  harness must submit a hidden `GoalContinuation` prompt. Continuation is
+  gated on server registration, not on the agent having initialized it.
+- The agent must finish by calling `update_goal` with exact status `complete`
+  (or `blocked` at a genuine impasse) and verify the returned status.
 
-When the active ACP agent does not advertise HTTP MCP support, Nori should not
-advertise `nori-client`.
+### Extension bridge (`_session/goal`)
 
-Non-MCP agents should receive a concise first-prompt-only `<context>` block that:
+- The capability lives in the initialize response's top-level `_meta.goal`:
+  `{version: 1, controlMethod: "_…", actions: [...]}`. It is ignored unless
+  `version == 1`, `controlMethod` starts with `_`, and `actions` include both
+  `set` and `clear`. Unknown actions are ignored.
+- Setting an active goal must send `{sessionId, action: "set", objective}` to
+  `controlMethod`. Goals created with a non-active status always use the
+  `nori-client` loop.
+- While the extension drives a goal, the harness must suppress its
+  continuation loop and skip `<goal_context>`/`<goal_control>` injection.
+- The harness must mirror `session_info_update` `_meta.goal` snapshots into
+  the goal store (`null` clears; extension `limited` maps to
+  `usage_limited`; malformed values are skipped).
+- `/goal pause` and `/goal resume` must fail with an explicit error unless the
+  capability lists that action.
+- If `set` fails and `nori-client` is registered, the harness must fall back
+  to the MCP loop; otherwise the error surfaces to the user.
+- Before another path takes over, and on `/compact` or `/fork` session swaps,
+  the harness must stop mirroring and best-effort send `clear` to the old
+  native loop.
 
-- identifies the source as Nori CLI, matching the MCP-capable envelope,
-- says the agent is operating over ACP,
-- includes `https://github.com/tilework-tech/nori-cli` as the stable source
-  reference for implementation questions,
-- says MCP-backed Nori affordances are unavailable in this session, and
-- names `/goal` completion tools as unavailable rather than implying the agent
-  can close the loop through `update_goal`.
+### No goal path
 
-That fallback block must be consumed once and must not be repeated on later user
-prompts.
-
-## Goal Behavior
-
-`/goal` requires a close-the-loop path: the agent must be able to call the
-backend-owned goal tools to mark work complete or blocked. When `nori-client` is
-not available, goal automation should be unavailable as behavior, not merely
-dimmed as UI — unless the agent advertises the `_session/goal` extension
-described below.
-
-When the requested work is verified complete, the agent must call
-`update_goal` from the `nori-client` MCP server with the exact status `complete`
-and verify the returned status. A genuine impasse uses the
-exact status `blocked` through the same server.
-
-## Goal Extension Bridge (`_session/goal`)
-
-Agents may advertise a goal capability in the top-level `_meta` of the
-initialize response (`goal: {version: 1, controlMethod: "_session/goal",
-actions: [...]}`; `set` and `clear` are the required floor). When advertised,
-the harness prefers driving the goal through that extension: `/goal` sends
-`_session/goal` requests, the agent's native goal loop owns continuation, and
-the harness mirrors the goal snapshots the agent publishes on
-`session_info_update` `_meta.goal` into its own goal store and `GoalChanged`
-events. While the extension drives a goal:
-
-- the harness goal-continuation loop is suppressed,
-- the `<goal_context>`/`<goal_control>` prompt injection is skipped (the agent
-  runtime owns goal context), and
-- `/goal pause`/`resume` are honored only when the capability advertises those
-  actions; otherwise they fail with an explicit error rather than silently
-  diverging from the native loop.
-
-If an extension request fails and `nori-client` is available, the harness falls
-back to the MCP goal loop for that goal. Agents advertising the extension but
-not HTTP MCP get `/goal` through the extension alone. The end-to-end contract
-is exercised in `nori-rs/harness/tests/goal_ext_bridge.rs` against the mock
-agent (`MOCK_AGENT_GOAL_EXT`, `MOCK_AGENT_GOAL_EXT_AUTOCOMPLETE`).
-
-Required behavior:
-
-- The TUI keeps `/goal` visible but disabled with a clear reason.
-- Direct typed `/goal ...` submissions are rejected by the TUI.
-- Backend `ThreadGoal*` operations from user-facing paths are also rejected or
-  made inert when HTTP MCP is unavailable.
-- Replayed active goals should not inject `<goal_context>` or submit hidden goal
-  continuations into a non-MCP session. The stored goal may remain visible as
-  historical state, but it must not drive autonomous work the agent cannot
-  complete.
-- A resumed non-MCP session with an existing active goal should emit a clear
-  user-visible notice explaining that goal automation is unavailable for the
-  active agent.
-
-MCP-capable agents may still delay hidden continuation chaining until the agent
-actually initializes `nori-client`; advertising the server and connecting to it
-are different states.
+- `ThreadGoal*` backend operations must fail with "goal management is
+  unavailable for this session".
+- Replayed goals must stay visible as history but must not inject goal
+  context or trigger continuations.
+- Resuming a session whose goal is active, paused, blocked, or usage-limited
+  must emit the `/goal is unavailable` notice instead of resume hints.
 
 ## Capability Projection
 
-`SessionCapabilitiesChanged` should remain a snapshot of the current client
-state, not a collection of feature-specific one-off events.
+`SessionCapabilitiesChanged` is a full snapshot, never a feature-specific
+event. It carries:
 
-The projection should eventually distinguish:
+- `agent`: raw ACP capabilities (HTTP MCP, `session/load`, list, resume,
+  close, fork),
+- `nori_client.advertised` and `nori_client.initialized` (set on the first MCP
+  `initialize` from the agent, which re-emits the snapshot), and
+- `builtin_commands["goal"]`: enabled iff `nori-client` is advertised or the
+  goal extension is valid, with a reason string when disabled.
 
-- raw ACP capabilities such as HTTP MCP and `session/load`,
-- whether `nori-client` was advertised,
-- whether the active agent has initialized `nori-client`, and
-- derived builtin command availability such as `/goal`.
-
-Nori should re-emit the capability snapshot whenever a new ACP session is
-created or loaded, including compact-created replacement sessions. The TUI
-should render command availability from the derived builtin command map rather
-than inferring it from raw ACP details.
-
-## Server Ownership And Safety
-
-`nori-client` is a reserved MCP server name. User-configured MCP servers should
-not be allowed to shadow or duplicate that name.
-
-Before the server surface grows beyond goal tools, it should use a per-session
-loopback authentication mechanism. The expected shape is a generated bearer
-token advertised in the ACP MCP server config headers and verified before
-requests reach the streamable HTTP MCP service.
-
-The server should stay loopback-only and abort when the owning backend session
-drops.
+The harness must emit it on spawn, load/resume, and every `/compact` or
+`/fork` session swap (re-registering `nori-client` for the new session). The
+TUI must render command availability from `builtin_commands`, keep `/goal`
+visible but disabled with the reason, and reject typed `/goal` submissions.
 
 ## Verification
 
-The behavior is correct when tests prove:
+- `nori-rs/harness/src/backend/nori_client_mcp.rs` tests: tool contracts,
+  real-HTTP-client round trips (authenticated), resource and prompt
+  discovery, `/goal` availability projection.
+- `nori-rs/harness/src/backend/thread_goal.rs` tests: goal state, replay
+  rehydration, prompt context, continuation, resume notices with and without
+  goal automation.
+- `nori-rs/harness/tests/session_event_boundary.rs`: first-prompt envelope
+  once, MCP vs non-MCP variants.
+- `nori-rs/harness/tests/goal_ext_bridge.rs`: extension set/clear against the
+  mock agent (`MOCK_AGENT_GOAL_EXT`, `MOCK_AGENT_GOAL_EXT_AUTOCOMPLETE`).
+- `nori-rs/nori-config/src/loader.rs`: reserved-name rejection.
+- `nori-rs/acp-host/src/registry.rs`: Codex native goals disabled.
 
-- HTTP-MCP-capable agents receive a `nori-client` server and can initialize it.
-- MCP clients can list and read the Nori context resources.
-- MCP clients can list and get the Nori workflow prompts.
-- non-MCP agents do not receive `nori-client`.
-- every agent's first prompt receives the Nori CLI source envelope exactly once.
-- non-MCP first prompts additionally receive fallback guidance inside that
-  envelope.
-- MCP-capable first prompts do not receive fallback guidance once the MCP
-  context surface exists.
-- active goal prompts direct completion to `update_goal` from the `nori-client`
-  MCP server with exact status `complete`.
-- `/goal` is disabled in the TUI and inert in the backend when `nori-client` is
-  unavailable.
-- replayed active goals do not inject goal context or hidden continuations into
-  non-MCP sessions.
-- capability state is refreshed after spawn, resume, and compact-created session
-  replacement.
-
-## Non-Goals
-
-This surface should not become:
-
-- a general local file reader,
-- a second store for goal state,
-- a replacement for ACP capabilities that ACP already provides,
-- a way for agents to mutate user configuration without explicit user action, or
-- a broad tool bucket for anything that happens to be convenient to expose over
-  MCP.
-
-## Superseded Notes
-
-The old `nori-goal` over `acp:<uuid>` failure is no longer the current
-architecture. Nori now advertises a real loopback HTTP MCP endpoint named
-`nori-client`, served by `rmcp`'s streamable HTTP server. References to
-`nori-goal`, ACP pseudo-URLs, or hand-rolled MCP framing should be treated as
-historical notes, not active work.
+Known gaps: no test asserts a `401` for a missing bearer token, and no TUI
+test covers the disabled `/goal` popup or typed-command rejection.

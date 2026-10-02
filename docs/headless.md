@@ -24,6 +24,9 @@ subcommand, matching the flag other agent CLIs use:
 nori -p "Summarize this repository"
 ```
 
+`-p` cannot be combined with a subcommand or with `--image`; both are rejected
+rather than silently ignored.
+
 To use piped text as *context* for an instruction, ask for it with `--stdin`:
 
 ```sh
@@ -55,9 +58,9 @@ Use `--dangerously-bypass-approvals-and-sandbox` only for explicitly trusted una
 nori exec --acp
 ```
 
-This mode makes Nori an ACP agent over line-delimited JSON-RPC on stdin and stdout. There is no Nori event envelope and no raw pass-through of the downstream agent's complete event stream.
+This mode makes Nori an ACP agent over line-delimited JSON-RPC on stdin and stdout. There is no Nori event envelope and no raw pass-through of the downstream agent's complete event stream. `--acp` conflicts with a prompt argument and `--stdin`.
 
-The initial facade supports:
+The facade supports:
 
 - `initialize`
 - `session/new`
@@ -66,19 +69,22 @@ The initial facade supports:
 - `session/cancel`
 - agent-to-client `session/request_permission`
 
-`session/new` returns the downstream ACP session ID and its effective configuration options. During `session/prompt`, Nori collects the downstream assistant text and sends one complete standard `agent_message_chunk` update, followed by the correlated prompt response with the downstream `stopReason`. Permission requests are forwarded as standard ACP requests; the caller's correlated response is relayed to the downstream agent.
+`session/new` starts the downstream session in the request's `cwd` and returns the downstream ACP session ID and its effective configuration options. During `session/prompt`, Nori collects the downstream assistant text and sends one complete standard `agent_message_chunk` update, followed by the correlated prompt response with the downstream `stopReason`. Permission requests are forwarded as standard ACP requests; the caller's correlated response is relayed to the downstream agent.
 
-Version one is deliberately bounded to one session and one prompt per process. Caller-provided `mcpServers` and `additionalDirectories` are rejected. Configure the selected agent, MCP servers, approval policy, sandbox, and other runtime settings through normal Nori configuration and command-line overrides instead.
+The facade is bounded to one session and one prompt per process; a second `session/new` or `session/prompt`, or a `session/set_config_option` after the prompt starts, fails with invalid params. Caller-provided `mcpServers` and `additionalDirectories` are rejected the same way. Configure the selected agent, MCP servers, approval policy, sandbox, and other runtime settings through normal Nori configuration and command-line overrides instead.
 
 Closing stdin cancels active work, resolves outstanding downstream activity safely, and shuts down the process. Stdout remains exclusively ACP JSON-RPC; operational diagnostics use stderr or Nori's configured tracing destination.
 
 ## Common options
 
 ```text
---agent <AGENT>   Select the configured ACP agent
--C, --cwd <DIR>  Set the execution working directory
--c <KEY=VALUE>   Apply a normal Nori configuration override
+--agent <AGENT>        Select the configured ACP agent
+-C, --cwd <DIR>        Set the execution working directory
+-c, --config <K=V>     Apply a normal Nori configuration override
 ```
+
+With `nori -p`, the top-level equivalents apply instead: `-a, --agent`,
+`-C, --cd`, `--add-dir`, `-c`, and `--dangerously-bypass-approvals-and-sandbox`.
 
 Headless behavior is enabled only through the explicit `exec` subcommand or its `-p` / `--print` alias. Piping into bare `nori` does not make the run headless — see below.
 
