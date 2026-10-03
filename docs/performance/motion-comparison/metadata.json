@@ -1,0 +1,261 @@
+{
+  "binaries": {
+    "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook": "415b36966afa1a414256d3d6f6d24033d7bb9bc20e76d6ac0f2ba319877b6a74",
+    "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile": "f13fa24b5d4bf261fde4449f9bea08b7a89e2f69b4463d8f71fcc50f8cf96972"
+  },
+  "runs": [
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "240x80",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-240x80-muster-0.csv",
+        "--muster"
+      ],
+      "wall_seconds": 2.6627053629999864
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "120x40",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-120x40-muster-0.csv",
+        "--muster"
+      ],
+      "wall_seconds": 0.6588563519999866
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "120x40",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-120x40-default-0.csv"
+      ],
+      "wall_seconds": 0.6386185759999989
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "120",
+        "--height",
+        "40",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "0",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-120x40-default-0.csv"
+      ],
+      "wall_seconds": 0.4725763619999839
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "240x80",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-240x80-muster-1.csv",
+        "--muster"
+      ],
+      "wall_seconds": 2.595202531000041
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "120x40",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-120x40-muster-1.csv",
+        "--muster"
+      ],
+      "wall_seconds": 0.6964559820000318
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "240x80",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-240x80-default-1.csv"
+      ],
+      "wall_seconds": 2.735688691000007
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "240",
+        "--height",
+        "80",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "94",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-240x80-muster-1.csv"
+      ],
+      "wall_seconds": 2.218671271000005
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "120",
+        "--height",
+        "40",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "94",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-120x40-muster-1.csv"
+      ],
+      "wall_seconds": 0.6224075740000217
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "240x80",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-240x80-default-0.csv"
+      ],
+      "wall_seconds": 2.936128468999982
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "240",
+        "--height",
+        "80",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "0",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-240x80-default-1.csv"
+      ],
+      "wall_seconds": 2.220989546999988
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "120",
+        "--height",
+        "40",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "0",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-120x40-default-1.csv"
+      ],
+      "wall_seconds": 0.5299674960000402
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--bench",
+        "--size",
+        "120x40",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/current-120x40-default-1.csv"
+      ],
+      "wall_seconds": 0.689532282000016
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "120",
+        "--height",
+        "40",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "94",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-120x40-muster-0.csv"
+      ],
+      "wall_seconds": 0.5509233050000262
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "240",
+        "--height",
+        "80",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "0",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-240x80-default-0.csv"
+      ],
+      "wall_seconds": 1.933944007999969
+    },
+    {
+      "command": [
+        "/home/clifford/.codex/worktrees/b08b/nori/cli/.worktrees/animated-onboarding/nori-rs/target/release/examples/motion_profile",
+        "--width",
+        "240",
+        "--height",
+        "80",
+        "--frames",
+        "150",
+        "--repeats",
+        "1",
+        "--offset",
+        "94",
+        "--output",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-comparison/worktree-240x80-muster-0.csv"
+      ],
+      "wall_seconds": 2.1368187040000066
+    }
+  ],
+  "notes": "Existing release builds; different visuals and benchmark harnesses; 150 frames per process at simulated 25 FPS. First frame excluded. No terminal I/O. Two repetitions; sequential shuffled order."
+}

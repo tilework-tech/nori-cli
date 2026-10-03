@@ -1,0 +1,304 @@
+{
+  "binary": "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+  "sha256": "eb7a991260f91759c378cef119ea86b9d559a79f6730d6d80e86fc59bece5c0c",
+  "mode": "bench",
+  "runs": [
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-240x80-muster-0.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "240x80"
+      ],
+      "size": "240x80",
+      "muster": true,
+      "repeat": 0,
+      "wall_seconds": 1.771534627998335
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-240x80-muster-2.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "240x80"
+      ],
+      "size": "240x80",
+      "muster": true,
+      "repeat": 2,
+      "wall_seconds": 1.738634635003109
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-120x40-muster-1.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "120x40"
+      ],
+      "size": "120x40",
+      "muster": true,
+      "repeat": 1,
+      "wall_seconds": 0.4443305069980852
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-120x40-platoon-0.csv",
+        "--bench",
+        "--size",
+        "120x40"
+      ],
+      "size": "120x40",
+      "muster": false,
+      "repeat": 0,
+      "wall_seconds": 0.45290434500202537
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-240x80-muster-1.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "240x80"
+      ],
+      "size": "240x80",
+      "muster": true,
+      "repeat": 1,
+      "wall_seconds": 1.8847290160010743
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-120x40-muster-2.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "120x40"
+      ],
+      "size": "120x40",
+      "muster": true,
+      "repeat": 2,
+      "wall_seconds": 0.4432873229998222
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-320x100-muster-0.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "320x100"
+      ],
+      "size": "320x100",
+      "muster": true,
+      "repeat": 0,
+      "wall_seconds": 2.8562733539984038
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-240x80-platoon-0.csv",
+        "--bench",
+        "--size",
+        "240x80"
+      ],
+      "size": "240x80",
+      "muster": false,
+      "repeat": 0,
+      "wall_seconds": 1.789810841997678
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-120x40-platoon-1.csv",
+        "--bench",
+        "--size",
+        "120x40"
+      ],
+      "size": "120x40",
+      "muster": false,
+      "repeat": 1,
+      "wall_seconds": 0.4518949490011437
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-320x100-platoon-1.csv",
+        "--bench",
+        "--size",
+        "320x100"
+      ],
+      "size": "320x100",
+      "muster": false,
+      "repeat": 1,
+      "wall_seconds": 3.042100806000235
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-240x80-platoon-1.csv",
+        "--bench",
+        "--size",
+        "240x80"
+      ],
+      "size": "240x80",
+      "muster": false,
+      "repeat": 1,
+      "wall_seconds": 1.7751268240026548
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-120x40-muster-0.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "120x40"
+      ],
+      "size": "120x40",
+      "muster": true,
+      "repeat": 0,
+      "wall_seconds": 0.43885983699874487
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-240x80-platoon-2.csv",
+        "--bench",
+        "--size",
+        "240x80"
+      ],
+      "size": "240x80",
+      "muster": false,
+      "repeat": 2,
+      "wall_seconds": 1.7981757400011702
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-320x100-muster-2.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "320x100"
+      ],
+      "size": "320x100",
+      "muster": true,
+      "repeat": 2,
+      "wall_seconds": 3.0823035450011957
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-120x40-platoon-2.csv",
+        "--bench",
+        "--size",
+        "120x40"
+      ],
+      "size": "120x40",
+      "muster": false,
+      "repeat": 2,
+      "wall_seconds": 0.4497253000008641
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-320x100-muster-1.csv",
+        "--muster",
+        "--bench",
+        "--size",
+        "320x100"
+      ],
+      "size": "320x100",
+      "muster": true,
+      "repeat": 1,
+      "wall_seconds": 2.9299676430018735
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-320x100-platoon-0.csv",
+        "--bench",
+        "--size",
+        "320x100"
+      ],
+      "size": "320x100",
+      "muster": false,
+      "repeat": 0,
+      "wall_seconds": 3.0010234900000796
+    },
+    {
+      "command": [
+        "/home/clifford/Documents/source/nori/cli/nori-rs/target/release/examples/motion_storybook",
+        "--frames",
+        "150",
+        "--profile",
+        "/home/clifford/Documents/source/nori/cli/docs/performance/motion-low-hanging/optimized/bench-320x100-platoon-2.csv",
+        "--bench",
+        "--size",
+        "320x100"
+      ],
+      "size": "320x100",
+      "muster": false,
+      "repeat": 2,
+      "wall_seconds": 3.003743878001842
+    }
+  ]
+}
