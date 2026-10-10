@@ -1,0 +1,1564 @@
+{
+  "harness": [
+    {
+      "component": "harness",
+      "stage": "jsonl_load",
+      "turns": 0,
+      "message_bytes": 1024,
+      "fixture_bytes": 700,
+      "samples_ms": [
+        3.852365,
+        0.29329099999999997,
+        0.23995,
+        0.214779,
+        0.211172,
+        0.212069,
+        0.216724
+      ],
+      "median_ms": 0.216724,
+      "max_ms": 3.852365,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "timeline_reduce",
+      "turns": 0,
+      "message_bytes": 1024,
+      "fixture_bytes": 700,
+      "samples_ms": [
+        0.059272,
+        0.015707000000000002,
+        0.014678,
+        0.014045,
+        0.014267,
+        0.024032,
+        0.01384
+      ],
+      "median_ms": 0.014678,
+      "max_ms": 0.059272,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "live_snapshot",
+      "turns": 0,
+      "message_bytes": 1024,
+      "fixture_bytes": 700,
+      "samples_ms": [
+        0.017262,
+        0.004342,
+        0.003927,
+        0.0039380000000000005,
+        0.003944,
+        0.004014,
+        0.003926
+      ],
+      "median_ms": 0.003944,
+      "max_ms": 0.017262,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "jsonl_load",
+      "turns": 100,
+      "message_bytes": 1024,
+      "fixture_bytes": 371868,
+      "samples_ms": [
+        32.037855,
+        31.614758,
+        30.357646,
+        30.285906,
+        31.252988000000002,
+        30.859233,
+        30.894932999999998
+      ],
+      "median_ms": 30.894932999999998,
+      "max_ms": 32.037855,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "timeline_reduce",
+      "turns": 100,
+      "message_bytes": 1024,
+      "fixture_bytes": 371868,
+      "samples_ms": [
+        1.8983139999999998,
+        1.6657849999999998,
+        1.610182,
+        1.6032240000000002,
+        1.794525,
+        1.600092,
+        1.708912
+      ],
+      "median_ms": 1.6657849999999998,
+      "max_ms": 1.8983139999999998,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "live_snapshot",
+      "turns": 100,
+      "message_bytes": 1024,
+      "fixture_bytes": 371868,
+      "samples_ms": [
+        0.788467,
+        0.714185,
+        0.668933,
+        0.6313150000000001,
+        0.642404,
+        0.6282030000000001,
+        0.652695
+      ],
+      "median_ms": 0.652695,
+      "max_ms": 0.788467,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "jsonl_load",
+      "turns": 1000,
+      "message_bytes": 1024,
+      "fixture_bytes": 3720333,
+      "samples_ms": [
+        336.463522,
+        306.58966999999996,
+        297.60839500000003,
+        297.835524,
+        296.04722399999997,
+        295.516574,
+        297.108675
+      ],
+      "median_ms": 297.60839500000003,
+      "max_ms": 336.463522,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "timeline_reduce",
+      "turns": 1000,
+      "message_bytes": 1024,
+      "fixture_bytes": 3720333,
+      "samples_ms": [
+        19.208867,
+        16.602432,
+        17.110357999999998,
+        16.874396,
+        16.484713000000003,
+        16.478856999999998,
+        16.755157
+      ],
+      "median_ms": 16.755157,
+      "max_ms": 19.208867,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "live_snapshot",
+      "turns": 1000,
+      "message_bytes": 1024,
+      "fixture_bytes": 3720333,
+      "samples_ms": [
+        7.59812,
+        7.298083,
+        7.223853,
+        7.272158,
+        7.2383869999999995,
+        7.1818480000000005,
+        7.200477
+      ],
+      "median_ms": 7.2383869999999995,
+      "max_ms": 7.59812,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "jsonl_load",
+      "turns": 10000,
+      "message_bytes": 1024,
+      "fixture_bytes": 37285078,
+      "samples_ms": [
+        3295.7672310000003,
+        3135.8521690000002,
+        3091.595989,
+        3085.0096740000004,
+        3110.714738,
+        3072.828528,
+        3059.371447
+      ],
+      "median_ms": 3091.595989,
+      "max_ms": 3295.7672310000003,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "timeline_reduce",
+      "turns": 10000,
+      "message_bytes": 1024,
+      "fixture_bytes": 37285078,
+      "samples_ms": [
+        214.308477,
+        186.909506,
+        186.921986,
+        184.041916,
+        183.356085,
+        184.576874,
+        184.93896500000002
+      ],
+      "median_ms": 184.93896500000002,
+      "max_ms": 214.308477,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "live_snapshot",
+      "turns": 10000,
+      "message_bytes": 1024,
+      "fixture_bytes": 37285078,
+      "samples_ms": [
+        76.863613,
+        75.542145,
+        75.83962700000001,
+        75.927536,
+        79.306095,
+        77.391909,
+        78.131144
+      ],
+      "median_ms": 76.863613,
+      "max_ms": 79.306095,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "jsonl_load",
+      "turns": 1000,
+      "message_bytes": 16384,
+      "fixture_bytes": 34440333,
+      "samples_ms": [
+        637.7037359999999,
+        572.111018,
+        578.6915150000001,
+        579.558556,
+        578.8907170000001,
+        574.383103,
+        556.097117
+      ],
+      "median_ms": 578.6915150000001,
+      "max_ms": 637.7037359999999,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "timeline_reduce",
+      "turns": 1000,
+      "message_bytes": 16384,
+      "fixture_bytes": 34440333,
+      "samples_ms": [
+        17.3704,
+        16.404628000000002,
+        17.184238,
+        16.76259,
+        16.171809999999997,
+        16.077198,
+        16.604723
+      ],
+      "median_ms": 16.604723,
+      "max_ms": 17.3704,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    },
+    {
+      "component": "harness",
+      "stage": "live_snapshot",
+      "turns": 1000,
+      "message_bytes": 16384,
+      "fixture_bytes": 34440333,
+      "samples_ms": [
+        7.892002000000001,
+        7.046282,
+        7.029578,
+        7.040457,
+        7.020237000000001,
+        7.096784,
+        7.2494559999999995
+      ],
+      "median_ms": 7.046282,
+      "max_ms": 7.892002000000001,
+      "build": "debug",
+      "cache_state": "warm_after_first_sample",
+      "includes_fixture_generation": false
+    }
+  ],
+  "e2e": {
+    "before": [
+      {
+        "prompt": "ALPHA",
+        "used": 10000,
+        "elapsed_ms": 6644.383001999813,
+        "metric": "enter_to_visible_frame",
+        "profile": "debug",
+        "fixture": "recognized Claude instruction discovery + local mock ACP"
+      },
+      {
+        "prompt": "BETA",
+        "used": 30000,
+        "elapsed_ms": 6509.081860000151,
+        "metric": "enter_to_visible_frame",
+        "profile": "debug",
+        "fixture": "recognized Claude instruction discovery + local mock ACP"
+      },
+      {
+        "prompt": "GAMMA",
+        "used": 50000,
+        "elapsed_ms": 6588.5659659979865,
+        "metric": "enter_to_visible_frame",
+        "profile": "debug",
+        "fixture": "recognized Claude instruction discovery + local mock ACP"
+      }
+    ],
+    "after": [
+      {
+        "prompt": "ALPHA",
+        "used": 10000,
+        "elapsed_ms": 299.9417289975099,
+        "metric": "enter_to_visible_frame",
+        "profile": "debug",
+        "fixture": "recognized Claude instruction discovery + local mock ACP"
+      },
+      {
+        "prompt": "BETA",
+        "used": 30000,
+        "elapsed_ms": 349.9884880002355,
+        "metric": "enter_to_visible_frame",
+        "profile": "debug",
+        "fixture": "recognized Claude instruction discovery + local mock ACP"
+      },
+      {
+        "prompt": "GAMMA",
+        "used": 50000,
+        "elapsed_ms": 297.4088129994925,
+        "metric": "enter_to_visible_frame",
+        "profile": "debug",
+        "fixture": "recognized Claude instruction discovery + local mock ACP"
+      }
+    ]
+  },
+  "inventory": {
+    "before": [
+      {
+        "stage": "instruction_inventory",
+        "iteration": 0,
+        "temperature": "cold",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 2584551
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 1,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 2550345
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 2,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 2381774
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 3,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 2306582
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 4,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 2193485
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 5,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 2285039
+      }
+    ],
+    "after": [
+      {
+        "stage": "instruction_inventory",
+        "iteration": 0,
+        "temperature": "cold",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 786652
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 1,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 21347
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 2,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 21289
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 3,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 21244
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 4,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 21349
+      },
+      {
+        "stage": "instruction_inventory",
+        "iteration": 5,
+        "temperature": "warm",
+        "files": 3,
+        "bytes": 17100,
+        "tokens": 2700,
+        "elapsed_us": 21211
+      }
+    ]
+  },
+  "stages": {
+    "before": [
+      {
+        "timestamp": "2026-10-10T22:40:19.172805Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 705965.0,
+        "encoding_us": 137171.0,
+        "total_us": 843138.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:19.961809Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 688604.0,
+        "encoding_us": 89478.0,
+        "total_us": 778084.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:20.761137Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 681542.0,
+        "encoding_us": 117396.0,
+        "total_us": 798939.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:21.551160Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 691722.0,
+        "encoding_us": 97200.0,
+        "total_us": 788924.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:22.400550Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 721287.0,
+        "encoding_us": 127845.0,
+        "total_us": 849133.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:23.179915Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 698394.0,
+        "encoding_us": 80549.0,
+        "total_us": 778944.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:23.942346Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 685254.0,
+        "encoding_us": 76758.0,
+        "total_us": 762014.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:24.695861Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 676639.0,
+        "encoding_us": 76497.0,
+        "total_us": 753138.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:25.584649Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 710254.0,
+        "encoding_us": 131611.0,
+        "total_us": 841866.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:26.365212Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 688152.0,
+        "encoding_us": 92124.0,
+        "total_us": 780278.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:27.227192Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 700923.0,
+        "encoding_us": 160831.0,
+        "total_us": 861755.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:28.052671Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 725479.0,
+        "encoding_us": 99692.0,
+        "total_us": 825172.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:28.851636Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 696528.0,
+        "encoding_us": 102162.0,
+        "total_us": 798692.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:29.640941Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 696641.0,
+        "encoding_us": 92371.0,
+        "total_us": 789014.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:30.427166Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 701582.0,
+        "encoding_us": 84371.0,
+        "total_us": 785954.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:31.209348Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 699292.0,
+        "encoding_us": 82630.0,
+        "total_us": 781924.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:48.034740Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 716438.0,
+        "encoding_us": 116458.0,
+        "total_us": 832897.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:48.806097Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 668233.0,
+        "encoding_us": 97102.0,
+        "total_us": 765337.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:49.607177Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 651910.0,
+        "encoding_us": 148935.0,
+        "total_us": 800847.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:50.404436Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 706602.0,
+        "encoding_us": 90373.0,
+        "total_us": 796977.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:51.217229Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 694631.0,
+        "encoding_us": 117917.0,
+        "total_us": 812550.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:51.989609Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 670377.0,
+        "encoding_us": 101720.0,
+        "total_us": 772099.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:52.804771Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 715156.0,
+        "encoding_us": 99714.0,
+        "total_us": 814872.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:53.628637Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 701282.0,
+        "encoding_us": 122313.0,
+        "total_us": 823597.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:54.502338Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 702364.0,
+        "encoding_us": 152175.0,
+        "total_us": 854541.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:55.320902Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 685201.0,
+        "encoding_us": 133048.0,
+        "total_us": 818251.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:56.187743Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 735958.0,
+        "encoding_us": 130540.0,
+        "total_us": 866500.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:56.985054Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 663584.0,
+        "encoding_us": 133457.0,
+        "total_us": 797042.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:57.849539Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 731210.0,
+        "encoding_us": 132977.0,
+        "total_us": 864189.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:58.632694Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 697875.0,
+        "encoding_us": 84978.0,
+        "total_us": 782855.0
+      },
+      {
+        "timestamp": "2026-10-10T22:40:59.429234Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 695704.0,
+        "encoding_us": 100545.0,
+        "total_us": 796250.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:00.213251Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 701941.0,
+        "encoding_us": 81780.0,
+        "total_us": 783722.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:01.035687Z",
+        "stage": "context_dispatch"
+      },
+      {
+        "timestamp": "2026-10-10T22:41:01.035857Z",
+        "stage": "harness_snapshot",
+        "lock_wait_us": 4.966,
+        "clone_us": 12.323,
+        "turn_count": 1.0,
+        "segment_count": 1.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:01.903375Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 715430.0,
+        "encoding_us": 151126.0,
+        "total_us": 866558.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:02.718098Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 719810.0,
+        "encoding_us": 94625.0,
+        "total_us": 814437.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:03.581635Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 701477.0,
+        "encoding_us": 161817.0,
+        "total_us": 863296.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:04.396763Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 719397.0,
+        "encoding_us": 95431.0,
+        "total_us": 814829.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:05.225904Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 687955.0,
+        "encoding_us": 140953.0,
+        "total_us": 828910.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:05.987601Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 687541.0,
+        "encoding_us": 73860.0,
+        "total_us": 761403.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:06.741135Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 672823.0,
+        "encoding_us": 80465.0,
+        "total_us": 753289.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:07.540962Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 716548.0,
+        "encoding_us": 82987.0,
+        "total_us": 799537.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:07.541185Z",
+        "stage": "instruction_inventory",
+        "elapsed_us": 6504621.0,
+        "files": 8.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:07.591822Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 1.0,
+        "lines": 34.0,
+        "elapsed_us": 50596.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:07.641843Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 1.0,
+        "lines": 34.0,
+        "elapsed_us": 49779.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:07.642080Z",
+        "stage": "context_history_queued",
+        "elapsed_us": 100877.0,
+        "total_us": 6605515.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:07.643971Z",
+        "stage": "context_render",
+        "width": 110.0,
+        "turns": 1.0,
+        "lines": 34.0,
+        "elapsed_us": 1775.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:08.623338Z",
+        "stage": "context_dispatch"
+      },
+      {
+        "timestamp": "2026-10-10T22:41:08.623547Z",
+        "stage": "harness_snapshot",
+        "lock_wait_us": 8.465,
+        "clone_us": 18.659,
+        "turn_count": 2.0,
+        "segment_count": 2.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:09.421760Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 680978.0,
+        "encoding_us": 116696.0,
+        "total_us": 797676.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:10.199909Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 688416.0,
+        "encoding_us": 89507.0,
+        "total_us": 777926.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:11.009135Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 672805.0,
+        "encoding_us": 136208.0,
+        "total_us": 809014.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:11.770411Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 675200.0,
+        "encoding_us": 85781.0,
+        "total_us": 760983.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:12.510733Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 652580.0,
+        "encoding_us": 87515.0,
+        "total_us": 740097.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:13.347581Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 721513.0,
+        "encoding_us": 115114.0,
+        "total_us": 836629.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:14.179450Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 729670.0,
+        "encoding_us": 101903.0,
+        "total_us": 831574.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:15.004423Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 710659.0,
+        "encoding_us": 114022.0,
+        "total_us": 824683.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:15.004609Z",
+        "stage": "instruction_inventory",
+        "elapsed_us": 6380778.0,
+        "files": 8.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:15.055476Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 2.0,
+        "lines": 35.0,
+        "elapsed_us": 50819.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:15.105468Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 2.0,
+        "lines": 35.0,
+        "elapsed_us": 49768.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:15.105725Z",
+        "stage": "context_history_queued",
+        "elapsed_us": 101099.0,
+        "total_us": 6481893.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:15.107612Z",
+        "stage": "context_render",
+        "width": 110.0,
+        "turns": 2.0,
+        "lines": 35.0,
+        "elapsed_us": 1799.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:16.075720Z",
+        "stage": "context_dispatch"
+      },
+      {
+        "timestamp": "2026-10-10T22:41:16.075894Z",
+        "stage": "harness_snapshot",
+        "lock_wait_us": 5.023,
+        "clone_us": 17.395,
+        "turn_count": 3.0,
+        "segment_count": 3.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:16.872038Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 671644.0,
+        "encoding_us": 124040.0,
+        "total_us": 795685.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:17.620492Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 662323.0,
+        "encoding_us": 85894.0,
+        "total_us": 748218.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:18.423490Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 669033.0,
+        "encoding_us": 133756.0,
+        "total_us": 802790.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:19.227673Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 704270.0,
+        "encoding_us": 99621.0,
+        "total_us": 803893.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:20.068188Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 701992.0,
+        "encoding_us": 138270.0,
+        "total_us": 840263.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:20.909147Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 727906.0,
+        "encoding_us": 112751.0,
+        "total_us": 840658.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:21.710331Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 726603.0,
+        "encoding_us": 74263.0,
+        "total_us": 800867.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:22.548684Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 717614.0,
+        "encoding_us": 120532.0,
+        "total_us": 838148.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:22.548896Z",
+        "stage": "instruction_inventory",
+        "elapsed_us": 6472770.0,
+        "files": 8.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:22.599386Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 3.0,
+        "lines": 36.0,
+        "elapsed_us": 50438.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:22.649319Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 3.0,
+        "lines": 36.0,
+        "elapsed_us": 49711.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:22.649592Z",
+        "stage": "context_history_queued",
+        "elapsed_us": 100671.0,
+        "total_us": 6573465.0
+      },
+      {
+        "timestamp": "2026-10-10T22:41:22.651509Z",
+        "stage": "context_render",
+        "width": 110.0,
+        "turns": 3.0,
+        "lines": 36.0,
+        "elapsed_us": 1839.0
+      }
+    ],
+    "after": [
+      {
+        "timestamp": "2026-10-10T22:44:33.018404Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 689425.0,
+        "encoding_us": 50631.0,
+        "total_us": 740057.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.038650Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 19913.0,
+        "total_us": 19915.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.079200Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 40304.0,
+        "total_us": 40305.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.099971Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 20554.0,
+        "total_us": 20555.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.120940Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 20807.0,
+        "total_us": 20808.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.127320Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6202.0,
+        "total_us": 6203.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.133606Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6166.0,
+        "total_us": 6166.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.139953Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6255.0,
+        "total_us": 6255.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.232153Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 49103.0,
+        "total_us": 49104.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.252310Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 20019.0,
+        "total_us": 20020.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.293675Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 41264.0,
+        "total_us": 41265.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.314279Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 20484.0,
+        "total_us": 20485.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.335120Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 20764.0,
+        "total_us": 20765.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.341322Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6147.0,
+        "total_us": 6147.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.347508Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6160.0,
+        "total_us": 6160.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:33.353676Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6146.0,
+        "total_us": 6146.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.189742Z",
+        "stage": "context_dispatch"
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.189950Z",
+        "stage": "harness_snapshot",
+        "lock_wait_us": 6.258,
+        "clone_us": 14.958,
+        "turn_count": 1.0,
+        "segment_count": 1.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.240967Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 50583.0,
+        "total_us": 50586.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.261057Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 19930.0,
+        "total_us": 19932.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.301634Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 40467.0,
+        "total_us": 40468.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.322252Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 20508.0,
+        "total_us": 20509.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.343370Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 21051.0,
+        "total_us": 21051.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.349611Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6171.0,
+        "total_us": 6172.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.355801Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6163.0,
+        "total_us": 6163.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.361998Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6174.0,
+        "total_us": 6174.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.362092Z",
+        "stage": "instruction_inventory",
+        "elapsed_us": 172002.0,
+        "files": 8.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.362300Z",
+        "stage": "context_ready",
+        "elapsed_us": 172598.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.413747Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 1.0,
+        "lines": 34.0,
+        "elapsed_us": 51049.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.465221Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 1.0,
+        "lines": 34.0,
+        "elapsed_us": 51273.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.465484Z",
+        "stage": "context_history_queued",
+        "elapsed_us": 102811.0,
+        "total_us": 102815.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:34.467358Z",
+        "stage": "context_render",
+        "width": 110.0,
+        "turns": 1.0,
+        "lines": 34.0,
+        "elapsed_us": 1755.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.472031Z",
+        "stage": "context_dispatch"
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.473053Z",
+        "stage": "harness_snapshot",
+        "lock_wait_us": 12.988,
+        "clone_us": 271.874,
+        "turn_count": 2.0,
+        "segment_count": 2.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.527608Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 5.0,
+        "encoding_us": 53867.0,
+        "total_us": 53873.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.556890Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 2.0,
+        "encoding_us": 29068.0,
+        "total_us": 29071.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.599346Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 3.0,
+        "encoding_us": 42155.0,
+        "total_us": 42160.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.623635Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 2.0,
+        "encoding_us": 21465.0,
+        "total_us": 21468.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.645122Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 21344.0,
+        "total_us": 21346.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.651537Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6303.0,
+        "total_us": 6304.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.657857Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6277.0,
+        "total_us": 6277.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.664104Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6219.0,
+        "total_us": 6219.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.664431Z",
+        "stage": "instruction_inventory",
+        "elapsed_us": 191244.0,
+        "files": 8.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.664677Z",
+        "stage": "context_ready",
+        "elapsed_us": 194468.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.723896Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 2.0,
+        "lines": 35.0,
+        "elapsed_us": 56462.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.777564Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 2.0,
+        "lines": 35.0,
+        "elapsed_us": 51609.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.777932Z",
+        "stage": "context_history_queued",
+        "elapsed_us": 110535.0,
+        "total_us": 110543.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:35.779972Z",
+        "stage": "context_render",
+        "width": 110.0,
+        "turns": 2.0,
+        "lines": 35.0,
+        "elapsed_us": 1807.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.735933Z",
+        "stage": "context_dispatch"
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.736112Z",
+        "stage": "harness_snapshot",
+        "lock_wait_us": 5.9959999999999996,
+        "clone_us": 17.535999999999998,
+        "turn_count": 3.0,
+        "segment_count": 3.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.785629Z",
+        "stage": "instruction_tokens",
+        "bytes": 29757.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 49126.0,
+        "total_us": 49129.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.805477Z",
+        "stage": "instruction_tokens",
+        "bytes": 12129.0,
+        "tokenizer_us": 1.0,
+        "encoding_us": 19726.0,
+        "total_us": 19727.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.845710Z",
+        "stage": "instruction_tokens",
+        "bytes": 23884.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 40177.0,
+        "total_us": 40177.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.866305Z",
+        "stage": "instruction_tokens",
+        "bytes": 12773.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 20538.0,
+        "total_us": 20538.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.887332Z",
+        "stage": "instruction_tokens",
+        "bytes": 12182.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 20988.0,
+        "total_us": 20988.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.893657Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6278.0,
+        "total_us": 6278.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.899916Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6235.0,
+        "total_us": 6235.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.906100Z",
+        "stage": "instruction_tokens",
+        "bytes": 4900.0,
+        "tokenizer_us": 0.0,
+        "encoding_us": 6164.0,
+        "total_us": 6164.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.906173Z",
+        "stage": "instruction_inventory",
+        "elapsed_us": 169945.0,
+        "files": 8.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.906341Z",
+        "stage": "context_ready",
+        "elapsed_us": 170423.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:36.957629Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 3.0,
+        "lines": 36.0,
+        "elapsed_us": 50957.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:37.008555Z",
+        "stage": "context_render",
+        "width": 65535.0,
+        "turns": 3.0,
+        "lines": 36.0,
+        "elapsed_us": 50745.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:37.008747Z",
+        "stage": "context_history_queued",
+        "elapsed_us": 102099.0,
+        "total_us": 102103.0
+      },
+      {
+        "timestamp": "2026-10-10T22:44:37.010551Z",
+        "stage": "context_render",
+        "width": 110.0,
+        "turns": 3.0,
+        "lines": 36.0,
+        "elapsed_us": 1740.0
+      }
+    ]
+  }
+}

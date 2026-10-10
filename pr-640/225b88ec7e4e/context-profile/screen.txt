@@ -1,0 +1,70 @@
+                                             □ Free capacity
+                                             Each cell = 0.5% of the window
+
+  Current · ▦ Baseline 10,000 + ▤ T2 20,000
+
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           10,000          unknown     observed
+  T2     10,000            30,000          +20,000     observed
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens                    Skills observed           Subagents observed
+  ~/.claude/CLAUDE.md                            ~6,809    None observed             None observed
+  ~/org/.claude/CLAUDE.md                        ~2,792
+  ~/org/workspace/CLAUDE.md                      ~5,774
+  ~/org/workspace/.claude/CLAUDE.md              ~2,904
+  ~/org/workspace/cli/CLAUDE.md                  ~3,048
+  ~/org/workspace/cli/.local/context-profile/f...  ~800
+  ~/org/workspace/cli/.local/context-profile/f...  ~800
+  ~/org/workspace/cli/.local/context-profile/f...  ~800
+
+  Local file sizes; inclusion in the current context is not verified.
+
+
+› GAMMA
+
+
+• RESPONSE_GAMMA
+
+  Context
+  Claude context fixture · 3 user turns · /context
+
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    50,000 / 100,000 tokens
+  ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤    50.0% used
+  ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    Used          50,000
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ◩    Free          50,000
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Current turn  3 · ended
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Turn tokens   +20,000
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    ◩ Current fill boundary
+                                             □ Free capacity
+                                             Each cell = 0.5% of the window
+
+  Current · ▦ Baseline 10,000 + ▤ T2 20,000 + ▦ T3 20,000
+
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           10,000          unknown     observed
+  T2     10,000            30,000          +20,000     observed
+  T3     30,000            50,000          +20,000     observed
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens                    Skills observed           Subagents observed
+  ~/.claude/CLAUDE.md                            ~6,809    None observed             None observed
+  ~/org/.claude/CLAUDE.md                        ~2,792
+  ~/org/workspace/CLAUDE.md                      ~5,774
+  ~/org/workspace/.claude/CLAUDE.md              ~2,904
+  ~/org/workspace/cli/CLAUDE.md                  ~3,048
+  ~/org/workspace/cli/.local/context-profile/f...  ~800
+  ~/org/workspace/cli/.local/context-profile/f...  ~800
+  ~/org/workspace/cli/.local/context-profile/f...  ~800
+
+  Local file sizes; inclusion in the current context is not verified.
+
+
+› $ for skill listing
+
+                                                                     ⎇ feat/context-visualization · 50% / 100k
