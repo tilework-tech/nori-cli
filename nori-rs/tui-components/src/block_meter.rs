@@ -16,13 +16,35 @@ pub struct BlockMeter {
     pub capacity: Option<i64>,
 }
 
+/// An observed span of occupied capacity, in tokens.
+#[derive(Debug, Clone, Copy)]
+pub struct BlockMeterSegment {
+    pub tokens: i64,
+    pub current: bool,
+}
+
 impl BlockMeter {
+    pub const ALTERNATE_GLYPH: &str = "▤";
+
     pub const USED_GLYPH: &str = "▦";
     pub const BOUNDARY_GLYPH: &str = "◩";
     pub const FREE_GLYPH: &str = "□";
     pub const UNKNOWN_GLYPH: &str = "▨";
 
+    pub const SEGMENT_GLYPHS: [&str; 2] = [Self::USED_GLYPH, Self::ALTERNATE_GLYPH];
+
     pub fn lines(self, width: u16, theme: Theme) -> Vec<Line<'static>> {
+        self.segmented_lines(width, theme, &[])
+    }
+
+    /// Render chronological observed spans. Boundaries are rounded cumulatively,
+    /// so several sub-cell spans never inflate the occupied capacity.
+    pub fn segmented_lines(
+        self,
+        width: u16,
+        theme: Theme,
+        segments: &[BlockMeterSegment],
+    ) -> Vec<Line<'static>> {
         if width == 0 {
             return Vec::new();
         }
@@ -34,6 +56,21 @@ impl BlockMeter {
             .map(|(used, capacity)| {
                 ((used.min(capacity) as f64 / capacity as f64) * 200.0).ceil() as i64
             });
+        let mut total = 0_i64;
+        let boundaries: Vec<_> = segments
+            .iter()
+            .enumerate()
+            .map(|(index, segment)| {
+                total = total.saturating_add(segment.tokens.max(0));
+                let end = self
+                    .capacity
+                    .filter(|capacity| *capacity > 0)
+                    .map_or(0, |capacity| {
+                        ((total.min(capacity) as f64 / capacity as f64) * 200.0).ceil() as i64
+                    });
+                (index, end, segment.current)
+            })
+            .collect();
         (0..200)
             .collect::<Vec<i64>>()
             .chunks(columns as usize)
@@ -46,7 +83,16 @@ impl BlockMeter {
                     let (glyph, style) = match occupied {
                         None => (Self::UNKNOWN_GLYPH, theme.muted),
                         Some(count) if *cell == count - 1 => (Self::BOUNDARY_GLYPH, theme.pointer),
-                        Some(count) if *cell < count => (Self::USED_GLYPH, theme.text),
+                        Some(count) if *cell < count => boundaries
+                            .iter()
+                            .find(|(_, end, _)| *cell < *end)
+                            .map(|(index, _, current)| {
+                                (
+                                    Self::SEGMENT_GLYPHS[index % Self::SEGMENT_GLYPHS.len()],
+                                    if *current { theme.pointer } else { theme.text },
+                                )
+                            })
+                            .unwrap_or((Self::USED_GLYPH, theme.text)),
                         Some(_) => (Self::FREE_GLYPH, theme.muted),
                     };
                     spans.push(Span::styled(glyph, style));
@@ -61,6 +107,114 @@ impl BlockMeter {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn segments_alternate_glyphs_and_highlight_the_current_turn() {
+        let theme = Theme::default();
+        let lines = BlockMeter {
+            used: Some(60),
+            capacity: Some(200),
+        }
+        .segmented_lines(
+            39,
+            theme,
+            &[
+                BlockMeterSegment {
+                    tokens: 20,
+                    current: false,
+                },
+                BlockMeterSegment {
+                    tokens: 25,
+                    current: false,
+                },
+                BlockMeterSegment {
+                    tokens: 15,
+                    current: true,
+                },
+            ],
+        );
+        let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 39, 10));
+        ratatui::widgets::Widget::render(
+            ratatui::widgets::Paragraph::new(lines),
+            buffer.area,
+            &mut buffer,
+        );
+        assert_eq!(buffer[(0, 0)].symbol(), BlockMeter::USED_GLYPH);
+        assert_eq!(buffer[(0, 1)].symbol(), BlockMeter::ALTERNATE_GLYPH);
+        assert_eq!(buffer[(10, 2)].symbol(), BlockMeter::USED_GLYPH);
+        assert_eq!(buffer[(10, 2)].fg, theme.pointer.fg.unwrap());
+        assert_eq!(buffer[(38, 2)].symbol(), BlockMeter::BOUNDARY_GLYPH);
+        assert_eq!(buffer[(0, 3)].symbol(), BlockMeter::FREE_GLYPH);
+        let highlighted = (0..10)
+            .flat_map(|y| (0..20).map(move |x| (x * 2, y)))
+            .filter(|position| buffer[*position].fg == theme.pointer.fg.unwrap())
+            .count();
+        assert_eq!(highlighted, 15);
+    }
+
+    #[test]
+    fn an_even_current_segment_keeps_its_alternating_glyph() {
+        let theme = Theme::default();
+        let lines = BlockMeter {
+            used: Some(40),
+            capacity: Some(200),
+        }
+        .segmented_lines(
+            39,
+            theme,
+            &[
+                BlockMeterSegment {
+                    tokens: 20,
+                    current: false,
+                },
+                BlockMeterSegment {
+                    tokens: 20,
+                    current: true,
+                },
+            ],
+        );
+        let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 39, 10));
+        ratatui::widgets::Widget::render(
+            ratatui::widgets::Paragraph::new(lines),
+            buffer.area,
+            &mut buffer,
+        );
+        assert_eq!(buffer[(0, 1)].symbol(), BlockMeter::ALTERNATE_GLYPH);
+        assert_eq!(buffer[(0, 1)].fg, theme.pointer.fg.unwrap());
+        assert_eq!(buffer[(38, 1)].symbol(), BlockMeter::BOUNDARY_GLYPH);
+    }
+
+    #[test]
+    fn segment_rounding_preserves_total_occupancy_and_unknown_capacity() {
+        let segments = [BlockMeterSegment {
+            tokens: 1,
+            current: false,
+        }; 3];
+        for width in 0..40 {
+            let lines = BlockMeter {
+                used: Some(3),
+                capacity: Some(1000),
+            }
+            .segmented_lines(width, Theme::default(), &segments);
+            assert!(lines.iter().all(|line| line.width() <= usize::from(width)));
+            if width > 0 {
+                let text = lines.iter().map(ToString::to_string).collect::<String>();
+                assert_eq!(text.matches('□').count(), 199);
+            }
+        }
+        assert_eq!(
+            BlockMeter {
+                used: None,
+                capacity: Some(200)
+            }
+            .segmented_lines(39, Theme::default(), &segments),
+            BlockMeter {
+                used: None,
+                capacity: Some(200)
+            }
+            .lines(39, Theme::default())
+        );
+    }
 
     #[test]
     fn capacity_map_snapshots_and_accent() {

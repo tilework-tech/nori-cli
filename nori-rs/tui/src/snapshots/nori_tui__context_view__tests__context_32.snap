@@ -9,10 +9,14 @@ expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).c
   340,412 / 1,000,000 tokens
   34.0% used
 
-  Used      340,412
-  Free      659,588
+  Used          340,412
+  Free          659,588
 
   Agent-reported usage
+  Turn checkpoints
+  No turn checkpoints
+  recorded.
+
   Usage details
   Category split and
   compaction threshold are not

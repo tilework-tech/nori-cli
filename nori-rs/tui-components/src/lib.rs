@@ -13,6 +13,7 @@ pub mod primitives;
 pub mod theme;
 
 pub use block_meter::BlockMeter;
+pub use block_meter::BlockMeterSegment;
 pub use detail::DetailDensity;
 pub use detail::DetailEntry;
 pub use detail::DetailLabelStyle;

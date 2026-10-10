@@ -74,16 +74,23 @@ consumer application
 
 ### Core Implementation
 
-`BlockMeter` is a stateless 200-cell capacity map. Callers provide optional
-used/capacity values, a width, and the shared theme. It rounds occupied cells
-up, caps the rendered fill at capacity, highlights only the last occupied
-cell with `pointer`, and renders unknown measurements distinctly from zero.
-Patterned squares distinguish occupied (`▦`), boundary (`◩`), free (`□`),
-and unknown (`▨`) cells without relying on color. Shared glyph constants keep
-consumer legends consistent with the map. The boundary is a rounded
-occupied cell, not a fractional measurement or a separate token category.
-It owns no token semantics, input handling, or data collection.
-
+- [`BlockMeter`](src/block_meter.rs) is a stateless, fixed-resolution capacity
+  map. Callers provide optional used/capacity values, a width, and the shared
+  theme. It rounds occupied cells up, caps fill at capacity, and renders
+  unknown measurements distinctly from zero. Patterned occupied cells, a
+  divided boundary square, outlined free cells, and diagonal unknown cells
+  remain distinguishable without color.
+- `BlockMeter::segmented_lines` accepts caller-owned spans through
+  `BlockMeterSegment`. Consecutive spans alternate the shared `▦` and `▤`
+  glyphs; a span marked current uses `pointer`, as does the final occupied
+  boundary cell. Boundaries are rounded from cumulative amounts, so several
+  sub-cell spans cannot inflate total occupancy. Negative span sizes contribute
+  nothing, and rendering stays clipped to measured capacity. Small segments
+  may occupy no distinct cell at the map's resolution.
+- The meter owns no token attribution, persistence, input handling, or data
+  collection. The TUI's [context view](../tui/src/context_view.rs) supplies
+  observed-growth spans and their semantic labels; shared glyph constants keep
+  its legend consistent with the component.
 - `MenuItem` pairs a stable caller key with label and optional description,
   explicit character or number shortcuts, availability/current metadata, and
   semantic consequence tone. `MenuState::try_new` validates the aggregate

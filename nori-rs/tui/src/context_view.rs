@@ -2,6 +2,7 @@
 //! inventory, not a claim about the agent's current post-compaction prompt.
 
 use nori_tui_components::BlockMeter;
+use nori_tui_components::BlockMeterSegment;
 use nori_tui_components::Theme;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -14,6 +15,7 @@ use crate::wrapping::word_wrap_lines;
 
 #[derive(Debug, Default)]
 pub(crate) struct ContextView {
+    pub(crate) timeline: nori_harness::context_timeline::ContextTimeline,
     pub(crate) used: Option<i64>,
     pub(crate) capacity: Option<i64>,
     pub(crate) source: String,
@@ -32,21 +34,43 @@ impl HistoryCell for ContextView {
         }
         let theme = crate::style::component_theme();
         let inner = width.saturating_sub(4).max(1);
+        let recorded_turns = self.timeline.turns.len() as i64;
+        let turns = if self.timeline.turns.is_empty() || self.timeline.incomplete_history {
+            self.turns.max(recorded_turns)
+        } else {
+            recorded_turns
+        };
+        let checkpoint_count = if self.timeline.incomplete_history {
+            format!(" · {recorded_turns} checkpointed")
+        } else {
+            String::new()
+        };
+        let current_turn = self.timeline.turns.last();
         let mut lines = vec![
             Line::styled("Context", theme.title),
             Line::styled(
                 format!(
-                    "{} · {} user {} · /context",
+                    "{} · {} user {}{checkpoint_count} · /context",
                     self.agent,
-                    self.turns,
-                    if self.turns == 1 { "turn" } else { "turns" }
+                    turns,
+                    if turns == 1 { "turn" } else { "turns" }
                 ),
                 theme.muted,
             ),
             Line::default(),
         ];
-        let used = self.used.filter(|tokens| *tokens >= 0);
-        let capacity = self.capacity.filter(|tokens| *tokens > 0);
+        let observation = self.timeline.current.as_ref();
+        let allow_fallback = self.timeline.turns.is_empty()
+            && self.timeline.segments.is_empty()
+            && self.timeline.epoch == 0;
+        let used = observation
+            .map(|observation| bounded_tokens(observation.usage.used))
+            .or(self.used.filter(|_| allow_fallback))
+            .filter(|tokens| *tokens >= 0);
+        let capacity = observation
+            .map(|observation| bounded_tokens(observation.usage.size))
+            .or(self.capacity.filter(|_| allow_fallback))
+            .filter(|tokens| *tokens > 0);
         let measured = used.zip(capacity);
         let mut summary = vec![Line::from(vec![
             Span::styled(
@@ -76,6 +100,31 @@ impl HistoryCell for ContextView {
         } else {
             summary.push(Line::styled("Waiting for context usage", theme.muted));
         }
+        if let Some(turn) = current_turn {
+            summary.push(Line::default());
+            summary.push(row(
+                if self.timeline.incomplete_history {
+                    "Checkpoint"
+                } else {
+                    "Current turn"
+                },
+                format!(
+                    "{} · {}",
+                    turn.number,
+                    if turn.end.is_some() {
+                        "ended"
+                    } else {
+                        "running"
+                    }
+                ),
+                theme,
+            ));
+            summary.push(row(
+                "Turn tokens",
+                change(self.timeline.current_turn_delta()),
+                theme,
+            ));
+        }
         if inner >= 39 {
             summary.push(Line::default());
             if measured.is_some() {
@@ -99,7 +148,17 @@ impl HistoryCell for ContextView {
         // A map remains useful at ordinary terminal sizes. On very narrow
         // terminals use the same numerical summary rather than a 200-row map.
         if inner >= 39 {
-            let map = BlockMeter { used, capacity }.lines(39, theme);
+            let segments: Vec<_> = self
+                .timeline
+                .segments
+                .iter()
+                .map(|segment| BlockMeterSegment {
+                    tokens: segment.tokens,
+                    current: segment.turn.is_some()
+                        && segment.turn == current_turn.map(|turn| turn.number),
+                })
+                .collect();
+            let map = BlockMeter { used, capacity }.segmented_lines(39, theme, &segments);
             if inner >= 82 {
                 lines.extend(columns(&[(map, 39), (summary, usize::from(inner) - 43)]));
             } else {
@@ -112,8 +171,46 @@ impl HistoryCell for ContextView {
         }
         lines.push(Line::default());
         if used.is_some() {
-            lines.push(Line::styled(self.source.clone(), theme.muted));
+            lines.push(Line::styled(
+                if observation.is_some() {
+                    "ACP session usage updates".into()
+                } else {
+                    self.source.clone()
+                },
+                theme.muted,
+            ));
         }
+        if !self.timeline.segments.is_empty() {
+            lines.push(Line::styled(
+                "Observed growth · baseline + turn segments",
+                theme.title,
+            ));
+            let mut legend = Vec::new();
+            for (index, segment) in self.timeline.segments.iter().enumerate() {
+                let current =
+                    segment.turn.is_some() && segment.turn == current_turn.map(|turn| turn.number);
+                let label = segment
+                    .turn
+                    .map(|turn| format!("T{turn}"))
+                    .unwrap_or_else(|| "Baseline".into());
+                legend.push(Span::styled(
+                    format!(
+                        "{} {label} {}  ",
+                        BlockMeter::SEGMENT_GLYPHS[index % BlockMeter::SEGMENT_GLYPHS.len()],
+                        number(segment.tokens)
+                    ),
+                    if current { theme.pointer } else { theme.text },
+                ));
+            }
+            lines.push(Line::from(legend));
+            lines.push(Line::styled(
+                "Shrink, compaction, or a window change starts a new baseline.",
+                theme.muted,
+            ));
+            lines.push(Line::default());
+        }
+        lines.extend(self.checkpoint_lines(inner, theme));
+        lines.push(Line::default());
         lines.push(Line::styled("Usage details", theme.title));
         lines.push(Line::styled(
             "Category split and compaction threshold are not reported by the agent.",
@@ -204,6 +301,106 @@ impl HistoryCell for ContextView {
     }
 }
 
+impl ContextView {
+    fn checkpoint_lines(&self, width: u16, theme: Theme) -> Vec<Line<'static>> {
+        let mut lines = vec![Line::styled("Turn checkpoints", theme.title)];
+        if self.timeline.incomplete_history {
+            lines.push(Line::styled(
+                "Incomplete history · some turn boundaries were not recorded.",
+                theme.muted,
+            ));
+        }
+        if self.timeline.turns.is_empty() {
+            lines.push(Line::styled("No turn checkpoints recorded.", theme.muted));
+            return lines;
+        }
+        if width >= 74 {
+            lines.push(Line::styled(
+                format!(
+                    "{:<6} {:<17} {:<15} {:<11} Reading",
+                    "Turn", "Start", "End", "Change"
+                ),
+                theme.muted,
+            ));
+        }
+        for turn in &self.timeline.turns {
+            let start = reading(turn.start.observation.as_ref());
+            let end = turn
+                .end
+                .as_ref()
+                .map(|checkpoint| reading(checkpoint.observation.as_ref()))
+                .unwrap_or_else(|| "running".into());
+            let delta = if turn.end.is_some() {
+                turn.delta()
+            } else {
+                self.timeline.current_turn_delta()
+            };
+            let status = match &turn.end {
+                None => "during turn",
+                Some(end) if end.epoch != turn.start.epoch => "context reset",
+                Some(end) if end.observation.is_none() => "not reported",
+                Some(end)
+                    if end.observation.as_ref().map(|observation| &observation.id)
+                        == turn
+                            .start
+                            .observation
+                            .as_ref()
+                            .map(|observation| &observation.id) =>
+                {
+                    "no new reading"
+                }
+                Some(_) => "observed",
+            };
+            if width >= 74 {
+                lines.push(Line::styled(
+                    format!(
+                        "{:<6} {start:<17} {end:<15} {:<11} {status}",
+                        format!("T{}", turn.number),
+                        change(delta)
+                    ),
+                    theme.text,
+                ));
+            } else {
+                lines.push(Line::styled(
+                    format!("T{} · {} · {status}", turn.number, change(delta)),
+                    theme.text,
+                ));
+                lines.push(Line::styled(
+                    format!("Start {start} · End {end}"),
+                    theme.muted,
+                ));
+            }
+        }
+        lines.push(Line::styled(
+            "Start readings are carried from the latest observation.",
+            theme.muted,
+        ));
+        lines
+    }
+}
+
+fn bounded_tokens(tokens: u64) -> i64 {
+    i64::try_from(tokens).unwrap_or(i64::MAX)
+}
+
+fn reading(observation: Option<&nori_harness::context_timeline::ContextObservation>) -> String {
+    observation
+        .map(|observation| number(bounded_tokens(observation.usage.used)))
+        .unwrap_or_else(|| "unknown".into())
+}
+
+fn change(tokens: Option<i64>) -> String {
+    tokens
+        .map(|tokens| {
+            if tokens > 0 {
+                format!("+{}", number(tokens))
+            } else {
+                number(tokens)
+            }
+        })
+        .unwrap_or_else(|| "unknown".into())
+}
+
 fn columns(groups: &[(Vec<Line<'static>>, usize)]) -> Vec<Line<'static>> {
     let wrapped: Vec<_> = groups
         .iter()
@@ -243,7 +440,7 @@ fn number(tokens: i64) -> String {
 
 fn row(label: &str, value: String, theme: Theme) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("{label:<8}  "), theme.muted),
+        Span::styled(format!("{label:<12}  "), theme.muted),
         Span::styled(value, theme.text),
     ])
 }
@@ -254,6 +451,7 @@ mod tests {
 
     fn specimen() -> ContextView {
         ContextView {
+            timeline: Default::default(),
             used: Some(340_412),
             capacity: Some(1_000_000),
             source: "Agent-reported usage".into(),
@@ -267,6 +465,172 @@ mod tests {
             subagents: vec!["code-review".into()],
             remote: false,
         }
+    }
+
+    fn observation(id: &str, used: u64) -> nori_harness::context_timeline::ContextObservation {
+        nori_harness::context_timeline::ContextObservation {
+            id: id.into(),
+            observed_at: "2026-10-10T10:00:00Z".into(),
+            usage: serde_json::from_value(serde_json::json!({"used":used,"size":1_000_000}))
+                .unwrap(),
+        }
+    }
+
+    fn timeline_specimen() -> ContextView {
+        use nori_harness::context_timeline::ContextCheckpoint;
+        use nori_harness::context_timeline::ContextSegment;
+        use nori_harness::context_timeline::ContextTimeline;
+        use nori_harness::context_timeline::ContextTurn;
+        let checkpoint = |observation| ContextCheckpoint {
+            recorded_at: "2026-10-10T10:00:01Z".into(),
+            observation,
+            epoch: 0,
+        };
+        let first = observation("first", 100_000);
+        let second = observation("second", 240_000);
+        ContextView {
+            timeline: ContextTimeline {
+                epoch: 0,
+                current: Some(observation("third", 340_412)),
+                turns: vec![
+                    ContextTurn {
+                        number: 1,
+                        request_id: 1.into(),
+                        start: checkpoint(None),
+                        end: Some(checkpoint(Some(first.clone()))),
+                    },
+                    ContextTurn {
+                        number: 2,
+                        request_id: 2.into(),
+                        start: checkpoint(Some(first)),
+                        end: Some(checkpoint(Some(second.clone()))),
+                    },
+                    ContextTurn {
+                        number: 3,
+                        request_id: 3.into(),
+                        start: checkpoint(Some(second)),
+                        end: None,
+                    },
+                ],
+                segments: vec![
+                    ContextSegment {
+                        turn: None,
+                        tokens: 100_000,
+                    },
+                    ContextSegment {
+                        turn: Some(2),
+                        tokens: 140_000,
+                    },
+                    ContextSegment {
+                        turn: Some(3),
+                        tokens: 100_412,
+                    },
+                ],
+                incomplete_history: false,
+            },
+            ..specimen()
+        }
+    }
+
+    #[test]
+    fn turn_timeline_shows_observations_and_segments_in_the_main_grid() {
+        let view = timeline_specimen();
+        let lines = view.display_lines(100);
+        let text = lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("Turn checkpoints"));
+        assert!(text.contains("Start") && text.contains("End"));
+        assert!(text.contains("Current turn") && text.contains("100,412"));
+        assert!(text.contains("running"));
+        assert!(text.contains('▦') && text.contains('▤'));
+        assert!(text.contains("Observed growth"));
+        for width in [100, 60, 32] {
+            let lines = view.display_lines(width);
+            assert!(lines.iter().all(|line| line.width() <= usize::from(width)));
+            insta::assert_snapshot!(
+                format!("context_turns_{width}"),
+                lines
+                    .iter()
+                    .map(|line| line.to_string().trim_end().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+        }
+    }
+
+    #[test]
+    fn timeline_usage_is_not_combined_with_provider_fallback() {
+        let mut view = timeline_specimen();
+        view.used = Some(999_999);
+        view.capacity = Some(2_000_000);
+        view.source = "Provider transcript fallback".into();
+        let text = view
+            .display_lines(100)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("340,412 / 1,000,000 tokens"));
+        assert!(!text.contains("999,999") && !text.contains("Provider transcript fallback"));
+    }
+
+    #[test]
+    fn incomplete_history_preserves_known_user_turn_count() {
+        let mut view = timeline_specimen();
+        view.turns = 20;
+        view.timeline.incomplete_history = true;
+        let text = view
+            .display_lines(100)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("20 user turns"));
+        assert!(text.contains("3 checkpointed"));
+        assert!(text.contains("Checkpoint") && !text.contains("Current turn"));
+    }
+
+    #[test]
+    fn a_reset_without_a_fresh_observation_does_not_revive_old_usage() {
+        let mut view = timeline_specimen();
+        view.timeline.epoch = 1;
+        view.timeline.current = None;
+        view.timeline.segments.clear();
+        view.used = Some(999_999);
+        view.capacity = Some(2_000_000);
+        view.source = "Stale fallback".into();
+        let text = view
+            .display_lines(100)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("Waiting for context usage"));
+        assert!(
+            !text.contains("999,999")
+                && !text.contains("2,000,000")
+                && !text.contains("Stale fallback")
+        );
+        assert!(text.contains('▨'));
+    }
+
+    #[test]
+    fn carried_observations_are_not_presented_as_fresh_measurements() {
+        let mut view = timeline_specimen();
+        view.timeline.turns[2].end = Some(view.timeline.turns[2].start.clone());
+        view.timeline.incomplete_history = true;
+        let text = view
+            .display_lines(100)
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("no new reading"));
+        assert!(text.contains("Incomplete history"));
+        assert!(text.contains("carried"));
     }
 
     #[test]

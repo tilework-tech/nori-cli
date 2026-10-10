@@ -40,14 +40,17 @@ fn main() -> Result<()> {
     }
     let mut terminal = StorybookTerminal::enter()?;
     let mut used = Some(340_412);
+    let mut scroll = 0_u16;
     loop {
         terminal.terminal.draw(|frame| {
             let sections =
                 Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).split(frame.area());
             Paragraph::new(context_specimen_lines(used, sections[0].width))
+                .scroll((scroll, 0))
                 .render(sections[0], frame.buffer_mut());
             KeyHints::new([
                 KeyHint::new("u", "cycle fixture usage"),
+                KeyHint::new("↑ / ↓", "scroll"),
                 KeyHint::new("q / esc", "close"),
             ])
             .theme(terminal.theme)
@@ -58,7 +61,10 @@ fn main() -> Result<()> {
         {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => break,
+                KeyCode::Down | KeyCode::Char('j') => scroll = scroll.saturating_add(1),
+                KeyCode::Up | KeyCode::Char('k') => scroll = scroll.saturating_sub(1),
                 KeyCode::Char('u') => {
+                    scroll = 0;
                     used = match used {
                         Some(340_412) => Some(950_000),
                         Some(950_000) => Some(0),

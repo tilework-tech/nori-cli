@@ -1,6 +1,7 @@
 //! Mock ACP agent for testing nori-cli
 
 mod browser_modify;
+mod context_usage;
 mod runaway_search;
 
 use std::collections::HashMap;
@@ -100,6 +101,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for ExitOnEof<R> {
 #[derive(Default)]
 struct MockState {
     next_session_id: AtomicI64,
+    context_prompt_index: AtomicI64,
     cancel_requested: AtomicBool,
     session_configs: Mutex<HashMap<String, MockSessionConfig>>,
 }
@@ -411,13 +413,7 @@ impl MockAgent {
             }
         }
 
-        if std::env::var("MOCK_AGENT_CONTEXT_USAGE").is_ok() {
-            self.send_update(
-                session_id.clone(),
-                acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(340_412, 1_000_000)),
-            )
-            .await?;
-        }
+        context_usage::emit(&self, &session_id).await?;
 
         // Advertise a native `compact` slash command so the harness forwards
         // `/compact` as an ordinary turn instead of summarize-and-swap.

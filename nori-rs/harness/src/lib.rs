@@ -11,6 +11,7 @@ pub mod auto_worktree;
 pub mod backend;
 pub mod bash;
 pub mod compact;
+pub mod context_timeline;
 pub(crate) use nori_config as config;
 pub mod custom_prompts;
 pub use custom_prompts::CustomPrompt;

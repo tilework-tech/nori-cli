@@ -16,6 +16,9 @@ expression: "ContextView\n{\n    agent: \"ElizACP\".into(), remote: true, ..Defa
   ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
   ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
 
+  Turn checkpoints
+  No turn checkpoints recorded.
+
   Usage details
   Category split and compaction threshold are not reported by the agent.
 

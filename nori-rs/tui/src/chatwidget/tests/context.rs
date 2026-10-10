@@ -54,3 +54,61 @@ fn cumulative_billing_tokens_are_not_context_occupancy() {
         });
     assert_eq!(chat.bottom_pane.context_usage_snapshot().0.tokens, None);
 }
+
+#[test]
+fn context_query_results_from_another_session_are_discarded() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+    while rx.try_recv().is_ok() {}
+    let stale = chat.session_generation() + 1;
+    chat.handle_context_timeline(stale, chat.conversation_id, Ok(Default::default()));
+    chat.handle_context_timeline(
+        stale,
+        chat.conversation_id,
+        Err("old agent disconnected".into()),
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "stale query must emit neither a snapshot nor an error"
+    );
+}
+
+#[test]
+fn current_context_query_failure_is_visible() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+    while rx.try_recv().is_ok() {}
+    chat.handle_context_timeline(
+        chat.session_generation(),
+        chat.conversation_id,
+        Err("agent disconnected".into()),
+    );
+    let mut text = String::new();
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::InsertHistoryCell(cell) = event {
+            text.push_str(&lines_to_single_string(&cell.display_lines(100)));
+        }
+    }
+    assert!(text.contains("agent disconnected"));
+}
+
+#[test]
+fn context_query_results_from_the_parent_are_discarded_after_a_fork() {
+    let (mut chat, mut rx, _op_rx) = make_cloud_chatwidget_manual();
+    let parent =
+        nori_harness::ConversationId::from_string("11111111-1111-1111-1111-111111111111").unwrap();
+    chat.conversation_id = Some(parent);
+    let generation = chat.session_generation();
+    chat.handle_session_event(
+        generation,
+        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionForked(
+            nori_protocol::SessionForked {
+                previous_conversation_id: parent.to_string(),
+                new_conversation_id: "22222222-2222-2222-2222-222222222222".into(),
+                new_acp_session_id: "forked".into(),
+            },
+        )),
+    );
+    while rx.try_recv().is_ok() {}
+    chat.handle_context_timeline(generation, Some(parent), Ok(Default::default()));
+    chat.handle_context_timeline(generation, Some(parent), Err("parent stopped".into()));
+    assert!(rx.try_recv().is_err());
+}

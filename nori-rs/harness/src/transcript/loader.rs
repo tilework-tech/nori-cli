@@ -153,6 +153,9 @@ impl<'a> Iterator for TranscriptRecords<'a> {
                     self.assistant_blocks = Some(assistant.content.iter());
                 }
                 TranscriptEntry::SessionEvent(entry) => {
+                    if entry.historical_evidence {
+                        continue;
+                    }
                     return Some(TranscriptRecord::SessionEvent(&entry.event));
                 }
                 TranscriptEntry::SessionMeta(_)
@@ -508,7 +511,14 @@ pub(crate) async fn read_seed_entries(path: &Path) -> io::Result<Vec<TranscriptE
     Ok(transcript
         .entries
         .into_iter()
-        .filter_map(|line| {
+        .enumerate()
+        .filter_map(|(index, mut line)| {
+            if let TranscriptEntry::SessionEvent(entry) = &mut line.entry {
+                entry
+                    .observation_id
+                    .get_or_insert_with(|| format!("{}:{index}", transcript.meta.session_id));
+                entry.observed_at.get_or_insert_with(|| line.ts.clone());
+            }
             if let TranscriptEntry::SessionMeta(_) = line.entry {
                 None
             } else {

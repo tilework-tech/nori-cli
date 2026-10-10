@@ -14,16 +14,34 @@ Path: @/nori-rs/tui
 
 ### How it fits into the larger codebase
 
-`/context` writes a responsive, unboxed snapshot into history without prompting
-the agent. It uses the shared `BlockMeter` with a green current-fill marker,
-foreground occupied cells, and muted free cells. Wide terminals place the
-usage summary beside the map; narrower terminals stack it or show numbers.
+`/context` queries the Harness locally and writes a responsive, unboxed
+snapshot into history without prompting or interrupting the agent. The
+[`ChatWidget adapter`](src/chatwidget/context.rs) rejects asynchronous results
+from a replaced session generation or conversation. The
+[`context view`](src/context_view.rs) renders the Harness's detached
+[timeline](../harness/src/context_timeline/docs.md), so printed snapshots do
+not change as later updates arrive.
 
-Agent-reported ACP usage takes precedence. The fallback uses only the latest
-transcript context count, with the provider's estimated window capacity;
-cumulative billing totals never stand in for context occupancy. Missing usage
-is explicitly unknown, and zero usage is a valid measurement. Printed snapshots
-do not change when subsequent usage updates arrive.
+The main shared [`BlockMeter`](../tui-components/src/block_meter.rs) alternates
+`▦` and `▤` across observed-growth segments and highlights the latest turn's
+segment in green. Baseline and turn labels identify their measured sizes;
+these segments describe growth observed during a turn, not which tokens from
+that turn remain in context. Shrink, compaction, a capacity change, or a
+replacement context starts a new baseline. The summary includes the current
+turn and comparable observed change; the checkpoint section lists immutable
+start/end readings, running turns, missing readings, and carried readings.
+Wide terminals place the summary beside the map and use checkpoint columns;
+narrow terminals stack these sections or show numbers without the map.
+
+Agent-reported ACP observations supply the timeline and take precedence for
+its usage summary. When no timeline evidence or reset is available, the
+existing latest-usage summary can fall back to the provider transcript's latest
+context count and estimated window capacity. Cumulative billing totals never
+stand in for context occupancy, and fallback estimates never create turn
+segments. Missing usage is explicitly unknown; reported zero is valid. Partial
+history labels distinguish known checkpoints from the broader displayed turn
+count, and no delta is inferred across a context reset or an unchanged reading
+identity.
 
 The local instruction inventory follows the active agent's discovery rules at
 the effective working directory. Its token counts are estimates of local file

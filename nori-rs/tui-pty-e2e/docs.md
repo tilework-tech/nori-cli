@@ -33,6 +33,14 @@ child PIDs to prove that the current and prepared candidate coexist, activation
 reuses the prepared child, and cancellation or activation failure leaves the
 current session usable.
 
+[Context scenarios](tests/context.rs) drive `/context` before, between, and
+during actual prompts using the mock agent's
+[usage fixtures](../mock-acp-agent/src/context_usage.rs). They assert reported
+usage, alternating grid segments, checkpoint boundaries, and unchanged turn
+counts. A release-file barrier keeps a prompt active while the command runs,
+then proves that the original prompt still completes. This covers the local
+query and asynchronous rendering path without replacing Harness state.
+
 Authenticated analytics scenarios pair the real PTY workflow with a local HTTP
 sink. They prove interactive and cloud launches remain silent while merely
 connected, submit the first user prompt through the real ACP agent, observe the

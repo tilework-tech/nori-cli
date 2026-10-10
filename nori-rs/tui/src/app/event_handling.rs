@@ -154,6 +154,14 @@ impl App {
         event: AppEvent,
     ) -> Result<bool> {
         match event {
+            AppEvent::ContextTimelineReady {
+                generation,
+                conversation_id,
+                result,
+            } => {
+                self.chat_widget
+                    .handle_context_timeline(generation, conversation_id, result);
+            }
             AppEvent::NewSession => {
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
                     let Some(CandidateAgent::Prepared {
