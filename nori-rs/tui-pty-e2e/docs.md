@@ -106,7 +106,10 @@ typed `HarnessHandle` methods available to headless embedders.
   behavior rather than private reducer calls.
 - Prepared-lifecycle scenarios assert process ownership as well as terminal
   output because a correct-looking picker can otherwise hide a disposable
-  inspection subprocess.
+  inspection subprocess. Shutdown checks require the direct adapter child to be
+  reaped and its previously running descendants to stop. Descendant checks use
+  process state: an orphan zombie awaits its new parent's reap and does not
+  count as a running subprocess.
 - Prompt-fidelity assertions use mock-agent validation rather than rendered
   output, so a duplicated or transformed deferred payload fails at the ACP
   boundary.

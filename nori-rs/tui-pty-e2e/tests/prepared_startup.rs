@@ -147,6 +147,19 @@ hide_full_access_warning = true
             .status()
             .is_ok_and(|status| status.success())
     }
+
+    fn descendant_is_running(pid: u32) -> bool {
+        // Orphan descendants can remain zombies when container PID 1 does not reap.
+        // The adapter must stop them; only their new parent can reap them.
+        let output = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .expect("inspect descendant process state");
+        String::from_utf8_lossy(&output.stdout)
+            .split_whitespace()
+            .next()
+            .is_some_and(|state| !state.starts_with('Z'))
+    }
 }
 
 fn assert_lifecycle_order(stderr: &str) {
@@ -467,6 +480,7 @@ fn exit_reaps_in_flight_preparation() {
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     let pid = fake.first_pid();
     let descendant_pid = fake.wait_for_recorded_pid("descendant_pid", TIMEOUT);
+    assert!(FakeRemoteHandroll::descendant_is_running(descendant_pid));
     session.submit_input("/quit").unwrap();
 
     assert!(
@@ -482,8 +496,8 @@ fn exit_reaps_in_flight_preparation() {
         "exit must reap the in-flight adapter child {pid}"
     );
     assert!(
-        !FakeRemoteHandroll::child_is_alive(descendant_pid),
-        "exit must reap the adapter process tree"
+        !FakeRemoteHandroll::descendant_is_running(descendant_pid),
+        "exit must stop the adapter descendants"
     );
 }
 
@@ -527,6 +541,7 @@ fn primary_preparation_timeout_reaps_the_child_without_activating() {
     assert_eq!(fake.wait_for_pid_count(1, TIMEOUT), 1);
     let pid = fake.first_pid();
     let descendant_pid = fake.wait_for_recorded_pid("descendant_pid", TIMEOUT);
+    assert!(FakeRemoteHandroll::descendant_is_running(descendant_pid));
     session
         .wait_for_text(
             "timed out preparing agent after 20s",
@@ -539,6 +554,6 @@ fn primary_preparation_timeout_reaps_the_child_without_activating() {
         std::thread::sleep(Duration::from_millis(50));
     }
     assert!(!FakeRemoteHandroll::child_is_alive(pid));
-    assert!(!FakeRemoteHandroll::child_is_alive(descendant_pid));
+    assert!(!FakeRemoteHandroll::descendant_is_running(descendant_pid));
     assert!(!fake.read("agent_stderr").contains("new_session"));
 }
