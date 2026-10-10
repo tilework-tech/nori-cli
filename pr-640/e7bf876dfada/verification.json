@@ -1,0 +1,18 @@
+{
+  "head": "e7bf876dfada3013bfed784b790d8e34601c1358",
+  "baseline": "b6110f59",
+  "fixture": "local mock ACP; ALPHA/BETA/GAMMA; 10000/30000/50000 of 100000 tokens",
+  "viewport": {
+    "cols": 110,
+    "rows": 60
+  },
+  "harness_tests_passed": 380,
+  "ui_component_mock_tests_passed": 1525,
+  "ui_component_mock_tests_ignored": 11,
+  "snapshots": "reviewed",
+  "code_review": "no unresolved findings",
+  "formatter": "just fmt passed",
+  "lint": "scoped just fix passed; pre-existing cloud_mode test dead-code warning",
+  "pty_passed": 144,
+  "pty_ignored": 8
+}

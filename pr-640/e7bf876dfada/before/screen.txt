@@ -1,0 +1,60 @@
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli · Agent approvals
+  Agent        Context fixture
+
+• Context fixture options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› ALPHA
+
+
+• RESPONSE_ALPHA
+
+
+› BETA
+
+
+• RESPONSE_BETA
+
+
+› GAMMA
+
+
+• RESPONSE_GAMMA
+
+  Context
+  Context fixture · 3 user turns · /context
+
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    50,000 / 100,000 tokens
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    50.0% used
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    Used      50,000
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ◩    Free      50,000
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    ◩ Current fill boundary
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    □ Free capacity
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Each cell = 0.5% of the window
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+
+  Agent-reported usage
+  Usage details
+  Category split and compaction threshold are not reported by the agent.
+
+  Local instructions · estimated tokens                    Skills observed           Subagents observed
+  No local instruction files found for this agent.         None observed             None observed
+
+
+› ! for shell commands
+
+                                                                     ⎇ feat/context-visualization · 50% / 100k

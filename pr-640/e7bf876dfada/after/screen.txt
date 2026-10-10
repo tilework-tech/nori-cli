@@ -1,0 +1,60 @@
+  Agent        Context fixture
+
+• Context fixture options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› ALPHA
+
+
+• RESPONSE_ALPHA
+
+
+› BETA
+
+
+• RESPONSE_BETA
+
+
+› GAMMA
+
+
+• RESPONSE_GAMMA
+
+  Context
+  Context fixture · 3 user turns · /context
+
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    50,000 / 100,000 tokens
+  ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤    50.0% used
+  ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    Used          50,000
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ◩    Free          50,000
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Current turn  3 · ended
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Turn tokens   +20,000
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    ◩ Current fill boundary
+                                             □ Free capacity
+                                             Each cell = 0.5% of the window
+
+  ACP session usage updates
+  Observed growth · baseline + turn segments
+  ▦ Baseline 10,000  ▤ T2 20,000  ▦ T3 20,000
+  Shrink, compaction, or a window change starts a new baseline.
+
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           10,000          unknown     observed
+  T2     10,000            30,000          +20,000     observed
+  T3     30,000            50,000          +20,000     observed
+  Start readings are carried from the latest observation.
+
+  Usage details
+  Category split and compaction threshold are not reported by the agent.
+
+  Local instructions · estimated tokens                    Skills observed           Subagents observed
+  No local instruction files found for this agent.         None observed             None observed
+
+
+› ! for shell commands
+
+                                                                     ⎇ feat/context-visualization · 50% / 100k
