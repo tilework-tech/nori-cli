@@ -78,8 +78,9 @@ consumer application
 used/capacity values, a width, and the shared theme. It rounds occupied cells
 up, caps the rendered fill at capacity, highlights only the last occupied
 cell with `pointer`, and renders unknown measurements distinctly from zero.
-Full-height textures distinguish occupied (`█`), boundary (`▓`), free (`░`),
-and unknown (`▒`) cells without relying on color. The boundary is a rounded
+Patterned squares distinguish occupied (`▦`), boundary (`◩`), free (`□`),
+and unknown (`▨`) cells without relying on color. Shared glyph constants keep
+consumer legends consistent with the map. The boundary is a rounded
 occupied cell, not a fractional measurement or a separate token category.
 It owns no token semantics, input handling, or data collection.
 

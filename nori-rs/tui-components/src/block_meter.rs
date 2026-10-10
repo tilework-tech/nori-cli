@@ -6,9 +6,9 @@ use ratatui::text::Span;
 use crate::Theme;
 
 /// A 200-cell capacity map. The last occupied cell marks the current boundary
-/// with a dense shade in the theme's pointer color; other occupied cells use
-/// solid blocks in normal foreground. Light and medium shades distinguish
-/// free and unknown capacity, including when color is unavailable.
+/// with a divided square in the theme's pointer color; other occupied cells
+/// use crosshatched squares in normal foreground. Outlined and diagonal-fill
+/// squares distinguish free and unknown capacity without relying on color.
 /// Missing measurements render unknown cells, never an apparently empty map.
 #[derive(Debug, Clone, Copy)]
 pub struct BlockMeter {
@@ -17,6 +17,11 @@ pub struct BlockMeter {
 }
 
 impl BlockMeter {
+    pub const USED_GLYPH: &str = "▦";
+    pub const BOUNDARY_GLYPH: &str = "◩";
+    pub const FREE_GLYPH: &str = "□";
+    pub const UNKNOWN_GLYPH: &str = "▨";
+
     pub fn lines(self, width: u16, theme: Theme) -> Vec<Line<'static>> {
         if width == 0 {
             return Vec::new();
@@ -39,10 +44,10 @@ impl BlockMeter {
                         spans.push(Span::raw(" "));
                     }
                     let (glyph, style) = match occupied {
-                        None => ("▒", theme.muted),
-                        Some(count) if *cell == count - 1 => ("▓", theme.pointer),
-                        Some(count) if *cell < count => ("█", theme.text),
-                        Some(_) => ("░", theme.muted),
+                        None => (Self::UNKNOWN_GLYPH, theme.muted),
+                        Some(count) if *cell == count - 1 => (Self::BOUNDARY_GLYPH, theme.pointer),
+                        Some(count) if *cell < count => (Self::USED_GLYPH, theme.text),
+                        Some(_) => (Self::FREE_GLYPH, theme.muted),
                     };
                     spans.push(Span::styled(glyph, style));
                 }
@@ -84,7 +89,7 @@ mod tests {
             lines
                 .iter()
                 .flat_map(|line| &line.spans)
-                .filter(|span| matches!(span.content.as_ref(), "█" | "▓"))
+                .filter(|span| matches!(span.content.as_ref(), "▦" | "◩"))
                 .count(),
             69
         );
@@ -95,7 +100,7 @@ mod tests {
             &mut buffer,
         );
         assert_eq!(buffer[(16, 3)].fg, ratatui::style::Color::Green);
-        assert_eq!(buffer[(16, 3)].symbol(), "▓");
+        assert_eq!(buffer[(16, 3)].symbol(), "◩");
         assert_eq!(buffer[(18, 3)].fg, ratatui::style::Color::DarkGray);
         insta::assert_snapshot!(
             "narrow_capacity_map",
@@ -125,7 +130,7 @@ mod tests {
                 .map(ToString::to_string)
                 .collect::<String>();
             assert_eq!(
-                (text.matches(['█', '▓']).count(), text.matches('▒').count()),
+                (text.matches(['▦', '◩']).count(), text.matches('▨').count()),
                 (filled, unknown)
             );
         }
