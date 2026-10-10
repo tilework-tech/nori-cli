@@ -219,14 +219,9 @@ impl TranscriptRecorder {
     }
 
     /// Record the exact public event delivered across the Harness boundary.
-    pub(crate) async fn record_session_event(
-        &self,
-        event: &nori_protocol::SessionEvent,
-    ) -> io::Result<()> {
-        self.send_entry(TranscriptEntry::SessionEvent(SessionEventEntry {
-            event: event.clone(),
-        }))
-        .await
+    pub(crate) async fn record_session_event(&self, event: &SessionEventEntry) -> io::Result<()> {
+        self.send_entry(TranscriptEntry::SessionEvent(event.clone()))
+            .await
     }
 
     /// Flush all pending writes.

@@ -188,6 +188,7 @@ enum HarnessCommand {
 pub struct HarnessHandle {
     command_tx: mpsc::UnboundedSender<HarnessCommand>,
     first_prompt_started: Option<Arc<FirstPromptStarted>>,
+    context_timeline: Arc<tokio::sync::RwLock<crate::context_timeline::ContextTimelineState>>,
 }
 
 struct FirstPromptStarted {
@@ -209,6 +210,29 @@ impl std::fmt::Debug for HarnessHandle {
 }
 
 impl HarnessHandle {
+    /// Return the context observations captured at prompt boundaries.
+    pub async fn context_timeline(
+        &self,
+    ) -> anyhow::Result<crate::context_timeline::ContextTimeline> {
+        let waiting = std::time::Instant::now();
+        let state = self.context_timeline.read().await;
+        let lock_wait_us = waiting.elapsed().as_secs_f64() * 1_000_000.0;
+        let cloning = std::time::Instant::now();
+        let timeline = state.timeline.clone();
+        let clone_us = cloning.elapsed().as_secs_f64() * 1_000_000.0;
+        drop(state);
+        tracing::debug!(
+            target: "nori_context_profile",
+            stage = "harness_snapshot",
+            lock_wait_us,
+            clone_us,
+            turn_count = timeline.turns.len(),
+            segment_count = timeline.segments.len(),
+            "captured context timeline snapshot",
+        );
+        Ok(timeline)
+    }
+
     /// Attach a callback that fires once, after this session's first prompt
     /// reaches the ACP transport and receives its wire request id.
     pub fn with_first_prompt_started_callback(
@@ -719,9 +743,23 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
     let (primary_event_tx, event_rx) = unbounded_channel::<SessionEvent>();
     let event_tx = SessionEventFanout::new(primary_event_tx);
 
+    let initial_timeline = match &start {
+        SessionStart::Resume(resume) => resume
+            .transcript
+            .as_ref()
+            .map(Transcript::context_timeline_state)
+            .unwrap_or_else(|| {
+                let mut state = crate::context_timeline::ContextTimelineState::default();
+                state.timeline.incomplete_history = true;
+                state
+            }),
+        SessionStart::New => crate::context_timeline::ContextTimelineState::default(),
+    };
+    let context_timeline = Arc::new(tokio::sync::RwLock::new(initial_timeline));
     let handle = HarnessHandle {
         command_tx: agent_cmd_tx,
         first_prompt_started: None,
+        context_timeline: Arc::clone(&context_timeline),
     };
 
     tokio::spawn(async move {
@@ -782,6 +820,7 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
         let mut timeout = std::pin::pin!(spawn_timeout_sequence(&event_tx));
         let mut pending_commands = VecDeque::new();
         let mut raw_acp_error_observed = false;
+        let mut startup_evidence = Vec::new();
         let backend = loop {
             tokio::select! {
             result = &mut connect => {
@@ -839,6 +878,7 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
                 }
             }
             Some(BackendEvent::Public(event)) = backend_event_rx.recv() => {
+                startup_evidence.push(observe_context_event(&context_timeline, &event).await);
                 forward_connect_event(&event_tx, event, &mut raw_acp_error_observed);
             }
             () = &mut timeout => {
@@ -866,6 +906,13 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
         // fork swap redirects recording to the new transcript; otherwise post-fork
         // events would keep landing in the frozen parent transcript.
         let transcript_recorder_cell = backend.transcript_recorder_cell();
+        if let Some(recorder) = transcript_recorder_cell.read().await.clone() {
+            for evidence in startup_evidence {
+                if let Err(error) = recorder.record_session_event(&evidence).await {
+                    tracing::warn!(%error, "failed to record startup context evidence");
+                }
+            }
+        }
         let backend_for_agent = Arc::clone(&backend);
         let event_fanout = event_tx.clone();
         tokio::spawn(async move {
@@ -1030,8 +1077,9 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
 
         while let Some(BackendEvent::Public(event)) = backend_event_rx.recv().await {
             let session_ended = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
+            let evidence = observe_context_event(&context_timeline, &event).await;
             if let Some(recorder) = transcript_recorder_cell.read().await.clone()
-                && let Err(error) = recorder.record_session_event(&event).await
+                && let Err(error) = recorder.record_session_event(&evidence).await
             {
                 tracing::warn!(%error, "failed to record public session event");
             }
@@ -1053,6 +1101,19 @@ fn launch_session_from(source: SessionAgentSource, start: SessionStart) -> Launc
         handle,
         events: event_rx,
     }
+}
+
+async fn observe_context_event(
+    timeline: &tokio::sync::RwLock<crate::context_timeline::ContextTimelineState>,
+    event: &SessionEvent,
+) -> crate::transcript::SessionEventEntry {
+    let mut evidence = crate::transcript::SessionEventEntry::new(event.clone());
+    let mut state = timeline.write().await;
+    if let (Some(id), Some(at)) = (&evidence.observation_id, &evidence.observed_at) {
+        state.observe(event, id, at);
+    }
+    evidence.history_incomplete = state.timeline.incomplete_history;
+    evidence
 }
 
 #[cfg(test)]
@@ -1093,6 +1154,7 @@ mod tests {
         let handle = HarnessHandle {
             command_tx,
             first_prompt_started: None,
+            context_timeline: Arc::default(),
         };
 
         let config_options = handle
@@ -1120,6 +1182,7 @@ mod tests {
         let handle = HarnessHandle {
             command_tx,
             first_prompt_started: None,
+            context_timeline: Arc::default(),
         }
         .with_first_prompt_started_callback(move || {
             callback_count_for_handle.fetch_add(1, std::sync::atomic::Ordering::SeqCst);

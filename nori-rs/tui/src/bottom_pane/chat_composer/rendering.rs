@@ -175,6 +175,38 @@ impl ChatComposer {
         }
     }
 
+    /// Current context only: cumulative transcript billing totals must never
+    /// be presented as the occupied portion of a context window.
+    pub(crate) fn context_usage_snapshot(&self) -> (ContextStatus, &'static str) {
+        if let Some(usage) = &self.session_usage {
+            return (
+                ContextStatus {
+                    tokens: Some(usage.used_tokens).filter(|tokens| *tokens >= 0),
+                    window_tokens: Some(usage.total_tokens).filter(|tokens| *tokens > 0),
+                    percent_used: None,
+                },
+                "Agent-reported usage",
+            );
+        }
+        let transcript = self
+            .system_info
+            .as_ref()
+            .and_then(|info| info.transcript_location.as_ref());
+        (
+            ContextStatus {
+                tokens: transcript
+                    .and_then(|location| location.token_breakdown.as_ref())
+                    .and_then(|usage| usage.last_context_tokens)
+                    .filter(|tokens| *tokens >= 0),
+                window_tokens: transcript
+                    .map(|location| location.agent_kind.context_window_size())
+                    .filter(|tokens| *tokens > 0),
+                percent_used: None,
+            },
+            "Latest transcript input · estimated window",
+        )
+    }
+
     pub(super) fn footer_mode(&self) -> FooterMode {
         match self.footer_mode {
             FooterMode::EscHint => FooterMode::EscHint,

@@ -56,6 +56,12 @@ pub(crate) enum HarnessAction {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
+    ContextTimelineReady {
+        generation: SessionGeneration,
+        conversation_id: Option<nori_harness::ConversationId>,
+        result: Result<crate::chatwidget::ContextSnapshot, String>,
+    },
+
     SessionEvent {
         generation: SessionGeneration,
         event: nori_protocol::SessionEvent,

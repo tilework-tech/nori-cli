@@ -1,0 +1,34 @@
+---
+source: tui/src/context_view.rs
+expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).collect::<Vec<_>>().join(\"\\n\")"
+---
+  Context
+  Claude Code · 3 user turns · /context
+
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    340,412 / 1,000,000 tokens
+  ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤    34.0% used
+  ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▤ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ◩ □ □ □ □ □ □ □ □ □ □ □    Used          340,412
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Free          659,588
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Current turn  3 · running
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Turn tokens   +100,412
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    ◩ Current fill boundary
+                                             □ Free capacity
+                                             Each cell = 0.5% of the window
+
+  Current · ▦ Baseline 100,000 + ▤ T2 140,000 + ▦ T3 100,412
+
+  Turn checkpoints
+  Turn   Start             End             Change      Reading
+  T1     unknown           100,000         unknown     observed
+  T2     100,000           240,000         +140,000    observed
+  T3     240,000           running         +100,412    during turn
+  Starts carry the latest prior observation.
+
+  Local instructions · estimated tokens               Skills observed         Subagents observed
+  ~/AGENTS.md                               ~4,112    nori-design             code-review
+  cli/AGENTS.md                             ~2,406    nori-theming
+
+  Local file sizes; inclusion in the current context is not verified.

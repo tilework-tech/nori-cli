@@ -154,18 +154,14 @@ mod types_tests {
                 ),
             ),
         ));
-        let line = TranscriptLine::new(TranscriptEntry::SessionEvent(SessionEventEntry {
-            event: event.clone(),
-        }));
+        let line =
+            TranscriptLine::new(TranscriptEntry::SessionEvent(SessionEventEntry::new(event)));
 
         let json = serde_json::to_string(&line).unwrap();
         let parsed: TranscriptLine = serde_json::from_str(&json).unwrap();
 
         assert_eq!(line.v, 3);
-        assert_eq!(
-            parsed.entry,
-            TranscriptEntry::SessionEvent(SessionEventEntry { event })
-        );
+        assert_eq!(parsed.entry, line.entry);
     }
 
     #[test]

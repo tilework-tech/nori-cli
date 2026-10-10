@@ -7,7 +7,7 @@ private so embedders do not inherit the retired normalized protocol as API.
 Canonical implementation: `nori-rs/harness/src/transcript/` in
 `nori-harness`. The versioned `TranscriptLine` and `TranscriptEntry` storage
 types are private. Public Rust readers use `TranscriptLoader`, `Transcript`,
-`Transcript::records()`, and `TranscriptRecord`.
+`Transcript::records()`, `TranscriptRecord`, and `Transcript::context_timeline()`.
 
 ## File locations
 
@@ -92,15 +92,18 @@ The runtime v3 writer emits three entry kinds: `session_meta`, `user`, and
 }
 ```
 
-Optional fields are omitted when absent: `agent`, `git`, and
-`acp_session_id`. Within `git`, `branch` and `commit_hash` are optional.
+Optional identity fields, including `agent`, `git`, `acp_session_id`, and
+`forked_from`, are omitted when absent. `forked_from` identifies the parent
+Nori transcript for a branch-at-head fork. Within `git`, `branch` and
+`commit_hash` are optional.
 `acp_session_id` is the agent's identity used for ACP session load or resume;
 it is distinct from Nori's transcript `session_id`.
 
 ### `user`
 
-User input is stored explicitly because it travels from client to agent and
-cannot be reconstructed from an agent-to-client event stream.
+User input has an explicit stable record alongside the Harness's canonical ACP
+user-message notification. Replay uses the canonical notification when present
+and falls back to this record for older or incomplete streams.
 
 ```json
 {
@@ -121,6 +124,24 @@ input path records display text with an empty attachment list.
 
 The `event` field contains the exact public `nori_protocol::SessionEvent`
 delivered by the Harness. Its outer `source` is `acp` or `nori`.
+
+Optional fields alongside `event` carry Nori observation and replay metadata;
+they do not modify the nested ACP payload:
+
+| Field | Meaning |
+| --- | --- |
+| `observation_id` | Stable identity assigned once before live reduction and recording |
+| `observed_at` | Original observation time, distinct from the JSONL writer's `ts` |
+| `historical_evidence` | Archived timeline evidence, excluded from conversation records and replay |
+| `history_incomplete` | The recording has known gaps in prompt-boundary history |
+| `response_kind` | Private discriminator preserving the ACP response variant when its untagged payload is ambiguous |
+
+Absent flags default to false. Older entries without observation metadata use
+their transcript-relative position for identity and `ts` for observation time.
+Copies made during resume or fork preserve these original values. The response
+discriminator belongs to the storage decoder, not the public protocol; legacy
+prompt responses can still be recognized from their required `stopReason`
+field. Public readers never need to decode this metadata themselves.
 
 A representative ACP notification is:
 
@@ -185,7 +206,9 @@ The recorded live stream preserves Harness publication order.
   empty `EndTurn` is terminal for that request.
 
 Replay is a filtered projection, not a second reading mode for all stored
-events. The public replay sequence is:
+events. Archived `historical_evidence` entries are excluded before selecting
+replay content; their notifications cannot suppress legacy conversation fallback.
+The public replay sequence is:
 
 1. `NoriEvent::ReplayStarted`;
 2. historical `SessionEvent::Acp(AcpEvent::Notification(...))` values in
@@ -225,7 +248,8 @@ enum:
 
 - `Transcript::records()` exposes user text, legacy assistant text, legacy
   thinking text, and exact v3 `SessionEvent` values;
-- it skips normalized client events and legacy tool/patch storage records;
+- it skips archived timeline evidence, normalized client events, and legacy
+  tool/patch storage records;
 - internal resume code may privately derive completed display/goal state from
   selected legacy records; and
 - v1/v2 user/assistant content can be synthesized as ACP message notifications
@@ -233,19 +257,41 @@ enum:
 
 The checked-in public compatibility test covers v2 user, assistant, and
 thinking records. There is not currently a checked-in fixture matrix covering
-every legacy top-level record and all 18 former normalized `ClientEvent` tags.
+every legacy top-level record and former normalized `ClientEvent` tag.
 
 The loader does not expose a version-specific decoder API. It tolerantly
 deserializes the private storage enum; unknown fields are ignored, unknown or
 unparseable post-metadata lines are skipped, and blank lines are skipped.
 
-## Token usage
+## Context timeline and token usage
 
-Canonical v3 transcript entries have no separate Nori token-count record. ACP
-usage can appear inside stored ACP session notifications. The goodbye-card
-token statistics may also be read from the underlying agent's own transcript
-files by `nori-rs/harness/src/transcript_discovery.rs`; those third-party
-formats are outside this reference.
+There is no separate Nori token-count or computed-checkpoint record. The
+[Harness context timeline](../nori-rs/harness/src/context_timeline/docs.md)
+reconstructs prompt start/end readings from raw ACP usage, correlated responses,
+and Nori lifecycle evidence. `Transcript::context_timeline()` applies the same
+reducer as the live `HarnessHandle::context_timeline().await` query. Boundaries
+retain the latest observation available at that time; a late update never
+rewrites a completed checkpoint.
+
+When resume creates a fresh transcript, it first archives the supplied local
+transcript's required raw timeline evidence with `historical_evidence` set.
+The new file can reconstruct prior checkpoints without reading an ancestor
+file. `Transcript::records()` and conversation replay exclude these archives,
+while provider replay is still recorded separately, including messages newer
+than the local transcript. Fork seeds the child from the parent transcript and
+preserves observation identity. Repeated resume does not turn archived or
+replayed evidence into new turns.
+
+Unavailable prior boundaries remain incomplete history. A resumed unfinished
+turn receives an unknown end reading rather than inheriting a later session's
+completion. Shrink, compaction, or changed context capacity breaks comparison
+with the previous baseline; this does not delete the recorded checkpoints.
+
+Provider-specific token statistics may also be read from the underlying
+agent's transcript by
+[`transcript_discovery.rs`](../nori-rs/harness/src/transcript_discovery.rs).
+Those third-party formats and latest-usage fallbacks are outside this schema
+and do not create ACP timeline observations.
 
 ## Reading transcripts programmatically
 

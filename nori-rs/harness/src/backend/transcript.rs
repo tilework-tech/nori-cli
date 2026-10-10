@@ -15,7 +15,7 @@ pub fn transcript_to_replay_session_events(
         matches!(
             &line.entry,
             crate::transcript::TranscriptEntry::SessionEvent(entry)
-                if matches!(
+                if !entry.historical_evidence && matches!(
                     entry.event,
                     nori_protocol::SessionEvent::Acp(
                         nori_protocol::AcpEvent::Notification(
@@ -32,6 +32,9 @@ pub fn transcript_to_replay_session_events(
             let crate::transcript::TranscriptEntry::SessionEvent(entry) = &line.entry else {
                 return None;
             };
+            if entry.historical_evidence {
+                return None;
+            }
             let nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
                 nori_protocol::acp::v1::AgentNotification::SessionNotification(notification),
             )) = &entry.event
@@ -56,6 +59,7 @@ pub fn transcript_to_replay_session_events(
         .entries
         .iter()
         .flat_map(|line| {
+            if matches!(&line.entry, crate::transcript::TranscriptEntry::SessionEvent(entry) if entry.historical_evidence) { return Vec::new(); }
             if has_raw_notifications
                 && let crate::transcript::TranscriptEntry::SessionEvent(entry) = &line.entry
                 && matches!(
@@ -450,9 +454,7 @@ mod tests {
                 content: "Stored question".into(),
                 attachments: vec![],
             }),
-            TranscriptEntry::SessionEvent(SessionEventEntry {
-                event: raw_assistant_event.clone(),
-            }),
+            TranscriptEntry::SessionEvent(SessionEventEntry::new(raw_assistant_event.clone())),
         ]);
 
         let replay = transcript_to_replay_session_events(&transcript);
@@ -522,12 +524,8 @@ mod tests {
                 content: "Stored question".into(),
                 attachments: vec![],
             }),
-            TranscriptEntry::SessionEvent(SessionEventEntry {
-                event: raw_user_events[0].clone(),
-            }),
-            TranscriptEntry::SessionEvent(SessionEventEntry {
-                event: raw_user_events[1].clone(),
-            }),
+            TranscriptEntry::SessionEvent(SessionEventEntry::new(raw_user_events[0].clone())),
+            TranscriptEntry::SessionEvent(SessionEventEntry::new(raw_user_events[1].clone())),
         ]);
 
         assert_eq!(
@@ -550,8 +548,8 @@ mod tests {
                 content: "Stored question".into(),
                 attachments: vec![],
             }),
-            TranscriptEntry::SessionEvent(SessionEventEntry {
-                event: nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+            TranscriptEntry::SessionEvent(SessionEventEntry::new(
+                nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
                     nori_protocol::acp::v1::AgentNotification::SessionNotification(
                         nori_protocol::acp::v1::SessionNotification::new(
                             "recorded-session",
@@ -565,7 +563,7 @@ mod tests {
                         ),
                     ),
                 )),
-            }),
+            )),
         ]);
 
         assert_eq!(

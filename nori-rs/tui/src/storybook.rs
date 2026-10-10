@@ -22,6 +22,77 @@ use crate::nori::session_header::SkillsetStatus;
 use crate::nori::session_header::StatusViewModel;
 use crate::nori::token_count::TokenCount;
 
+/// Render fixture context data using the same history cell as `/context`.
+pub fn context_specimen_lines(used: Option<i64>, width: u16) -> Vec<Line<'static>> {
+    crate::context_view::ContextView {
+        timeline: context_specimen_timeline(used),
+        used,
+        capacity: Some(1_000_000),
+        source: "Agent-reported usage".into(),
+        agent: "Claude Code".into(),
+        turns: 6,
+        instructions: vec![
+            ("~/AGENTS.md".into(), Some(4_112)),
+            ("cli/AGENTS.md".into(), Some(2_406)),
+        ],
+        skills: vec!["nori-design".into(), "nori-theming".into()],
+        subagents: Vec::new(),
+        remote: false,
+    }
+    .display_lines(width)
+}
+
+fn context_specimen_timeline(used: Option<i64>) -> nori_harness::context_timeline::ContextTimeline {
+    use nori_harness::context_timeline::ContextCheckpoint;
+    use nori_harness::context_timeline::ContextObservation;
+    use nori_harness::context_timeline::ContextSegment;
+    use nori_harness::context_timeline::ContextTimeline;
+    use nori_harness::context_timeline::ContextTurn;
+
+    let Some(used) = used else {
+        return ContextTimeline::default();
+    };
+    let mut timeline = ContextTimeline::default();
+    let mut previous = None;
+    let mut cumulative = 0;
+    for (index, fraction) in [10, 12, 16, 20, 18, 24].into_iter().enumerate() {
+        let tokens = if index == 5 {
+            used - cumulative
+        } else {
+            used * fraction / 100
+        };
+        cumulative += tokens;
+        let turn = index as i64 + 1;
+        let timestamp = format!("2026-10-10T10:{index:02}:00Z");
+        let observation = ContextObservation {
+            id: format!("fixture-{turn}"),
+            observed_at: timestamp.clone(),
+            usage: nori_protocol::acp::v1::UsageUpdate::new(cumulative as u64, 1_000_000),
+        };
+        timeline.turns.push(ContextTurn {
+            number: turn,
+            request_id: turn.into(),
+            start: ContextCheckpoint {
+                recorded_at: timestamp.clone(),
+                observation: previous,
+                epoch: 0,
+            },
+            end: (index < 5).then(|| ContextCheckpoint {
+                recorded_at: timestamp,
+                observation: Some(observation.clone()),
+                epoch: 0,
+            }),
+        });
+        timeline.segments.push(ContextSegment {
+            turn: (index > 0).then_some(turn),
+            tokens,
+        });
+        previous = Some(observation);
+    }
+    timeline.current = previous;
+    timeline
+}
+
 /// Which status rendering to show.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum StatusSpecimen {

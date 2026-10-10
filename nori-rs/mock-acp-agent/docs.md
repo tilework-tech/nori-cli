@@ -44,6 +44,15 @@ controls on the real ACP request path, so PTY tests can observe the
 pre-`SessionStarted` UI state and user-facing ACP error projection without
 replacing Handroll or bypassing the stdio transport.
 
+[`context_usage.rs`](src/context_usage.rs) emits schema-native context usage
+fixtures on the actual prompt path. `MOCK_AGENT_CONTEXT_SEQUENCE` supplies a
+JSON array of per-prompt usage arrays, allowing fresh, absent, and reset
+readings; invalid JSON returns a structured ACP error. The optional release
+file holds completion after usage arrives, so tests can inspect an active turn
+and then release or cancel it without a timing guess. The same fixtures drive
+[Harness timeline tests](../harness/tests/context_timeline.rs) and
+[terminal context tests](../tui-pty-e2e/tests/context.rs).
+
 The mock deliberately issues outbound client requests through the SDK rather
 than calling host internals. This makes the public `AcpEvent::Request` and
 `HarnessHandle::respond_to_agent` path observable end to end.

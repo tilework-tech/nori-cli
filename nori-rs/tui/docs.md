@@ -14,6 +14,49 @@ Path: @/nori-rs/tui
 
 ### How it fits into the larger codebase
 
+`/context` queries the Harness locally and writes a responsive, unboxed
+snapshot into history without prompting or interrupting the agent. The
+[`ChatWidget adapter`](src/chatwidget/context.rs) rejects asynchronous results
+from a replaced session generation or conversation. The
+[`context view`](src/context_view.rs) renders the Harness's detached
+[timeline](../harness/src/context_timeline/docs.md), so printed snapshots do
+not change as later updates arrive.
+
+The main shared [`BlockMeter`](../tui-components/src/block_meter.rs) alternates
+`▦` and `▤` across observed-growth segments and highlights the latest turn's
+segment in green. A compact `Current` row combines baseline and turn sizes;
+these segments describe growth observed during a turn, not which tokens from
+that turn remain in context. Reset state appears in that row, and the checkpoint
+section carries a brief reminder that start readings use the latest prior
+observation. Shrink, compaction, a capacity change, or a
+replacement context starts a new baseline. The summary includes the current
+turn and comparable observed change; the checkpoint section lists immutable
+start/end readings, running turns, missing readings, and carried readings.
+Wide terminals place the summary beside the map and use checkpoint columns;
+narrow terminals stack these sections or show numbers without the map.
+
+Agent-reported ACP observations supply the timeline and take precedence for
+its usage summary. When no timeline evidence or reset is available, the
+existing latest-usage summary can fall back to the provider transcript's latest
+context count and estimated window capacity. Cumulative billing totals never
+stand in for context occupancy, and fallback estimates never create turn
+segments. Missing usage is explicitly unknown; reported zero is valid. Partial
+history labels distinguish known checkpoints from the broader displayed turn
+count, and no delta is inferred across a context reset or an unchanged reading
+identity.
+
+The local instruction inventory follows the active agent's discovery rules at
+the effective working directory. Its token counts are estimates of local file
+sizes, not a category allocation or proof that those files remain in context
+after compaction. Cloud sessions never display the client machine's files as
+remote instructions. Observed skills and subagents are session activity only.
+The view does not infer category allocations or automatic compaction thresholds.
+
+Run `cargo run -p nori-tui --features storybook --example context_storybook`
+for a production-rendered specimen with fixture usage, including zero and
+unknown states. Press `u` to cycle usage and resize the terminal to inspect
+the responsive layout. `--json` exports styled spans for browser review.
+
 ```text
 nori-tui
    |  typed HarnessHandle methods
@@ -51,6 +94,51 @@ and updates to `get_goal` and `update_goal` from the `nori-client` MCP server,
 never to similarly named native agent tools.
 
 ### Core Implementation
+
+#### Context inspection and profiling
+
+The [context adapter](src/chatwidget/context.rs) captures the active agent and
+working directory, then collects the complete instruction inventory in one
+`spawn_blocking` task alongside the asynchronous Harness snapshot query. File
+discovery, reads, and token encoding stay outside the TUI event loop. Both
+results join into a completion event carrying the initiating session
+generation and conversation identity; stale results cannot insert a snapshot
+into a replacement session. A worker failure is returned as a local command
+error rather than an empty inventory.
+
+[`token_count.rs`](src/nori/token_count.rs) shares a process-wide `OnceLock`
+containing the `o200k_base` tokenizer initialization result. This avoids rebuilding
+the vocabulary for every instruction file. Initialization failure is cached as
+well and retains the heuristic fallback. File contents and counts are not
+cached: every inventory request reads current files and encodes them again, so
+instruction edits appear on the next `/context` request. Existing provider
+approximation flags are preserved.
+
+Run the built CLI with `RUST_LOG=nori_context_profile=debug` to record stage
+timings in the configured Nori home's rolling `log/nori-acp.YYYY-MM-DD` file.
+The CLI initializes that subscriber before the TUI, so `nori-tui.log` can remain
+empty. These debug events separate Harness lock wait and snapshot cloning from
+tokenizer setup, encoding, inventory collection, rendering, and history queueing.
+`context_ready.elapsed_us` covers dispatch through background completion;
+`context_history_queued` measures only insertion work, including its `total_us`
+field. Rendering is timed separately. Events record durations and sizes, not
+instruction text or ACP metadata. A live query clones existing Harness state;
+it does not load JSONL or reconstruct checkpoint history.
+
+The ignored [inventory profile](src/nori/session_header/profile.rs) measures
+cold and repeated real-file discovery, then verifies an edited file produces a
+fresh count. Run it in a fresh process from `nori-rs`, with an explicit output
+directory so artifacts survive fixture cleanup:
+
+```sh
+NORI_CONTEXT_PROFILE_DIR="$(pwd)/../.local/context-profile" cargo test -p nori-tui profile_context_instruction_inventory -- --ignored --nocapture --test-threads=1
+```
+
+The [Harness profiling guide](../harness/src/context_timeline/docs.md) measures
+JSONL load, checkpoint reduction, and live snapshot queries independently.
+[PTY coverage](../tui-pty-e2e/tests/context_instructions.rs) exercises repeated
+`/context` commands against real instruction files and checks changed counts
+within the warm interactive latency budget.
 
 #### Prompt-bound authenticated analytics
 
