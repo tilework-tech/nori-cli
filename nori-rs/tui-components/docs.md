@@ -74,6 +74,12 @@ consumer application
 
 ### Core Implementation
 
+`BlockMeter` is a stateless 200-cell capacity map. Callers provide optional
+used/capacity values, a width, and the shared theme. It rounds occupied cells
+up, caps the rendered fill at capacity, highlights only the last occupied
+cell with `pointer`, and renders unknown measurements distinctly from zero.
+It owns no token semantics, input handling, or data collection.
+
 - `MenuItem` pairs a stable caller key with label and optional description,
   explicit character or number shortcuts, availability/current metadata, and
   semantic consequence tone. `MenuState::try_new` validates the aggregate

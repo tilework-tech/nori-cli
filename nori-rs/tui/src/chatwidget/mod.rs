@@ -61,6 +61,7 @@ use self::agent::spawn_agent;
 
 mod approvals;
 mod constructors;
+mod context;
 mod event_handlers;
 mod goal;
 mod helpers;

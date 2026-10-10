@@ -411,6 +411,14 @@ impl MockAgent {
             }
         }
 
+        if std::env::var("MOCK_AGENT_CONTEXT_USAGE").is_ok() {
+            self.send_update(
+                session_id.clone(),
+                acp::SessionUpdate::UsageUpdate(acp::UsageUpdate::new(340_412, 1_000_000)),
+            )
+            .await?;
+        }
+
         // Advertise a native `compact` slash command so the harness forwards
         // `/compact` as an ordinary turn instead of summarize-and-swap.
         if std::env::var("MOCK_AGENT_ADVERTISE_COMPACT").is_ok() {

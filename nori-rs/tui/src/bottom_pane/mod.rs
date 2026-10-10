@@ -658,6 +658,12 @@ impl BottomPane {
         self.composer.status_footer_values()
     }
 
+    pub(crate) fn context_usage_snapshot(
+        &self,
+    ) -> (crate::nori::session_header::ContextStatus, &'static str) {
+        self.composer.context_usage_snapshot()
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.composer.is_empty()
     }

@@ -22,6 +22,25 @@ use crate::nori::session_header::SkillsetStatus;
 use crate::nori::session_header::StatusViewModel;
 use crate::nori::token_count::TokenCount;
 
+/// Render fixture context data using the same history cell as `/context`.
+pub fn context_specimen_lines(used: Option<i64>, width: u16) -> Vec<Line<'static>> {
+    crate::context_view::ContextView {
+        used,
+        capacity: Some(1_000_000),
+        source: "Agent-reported usage".into(),
+        agent: "Claude Code".into(),
+        turns: 6,
+        instructions: vec![
+            ("~/AGENTS.md".into(), Some(4_112)),
+            ("cli/AGENTS.md".into(), Some(2_406)),
+        ],
+        skills: vec!["nori-design".into(), "nori-theming".into()],
+        subagents: Vec::new(),
+        remote: false,
+    }
+    .display_lines(width)
+}
+
 /// Which status rendering to show.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum StatusSpecimen {

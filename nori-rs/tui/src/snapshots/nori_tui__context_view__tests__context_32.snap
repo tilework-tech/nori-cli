@@ -1,0 +1,35 @@
+---
+source: tui/src/context_view.rs
+expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).collect::<Vec<_>>().join(\"\\n\")"
+---
+  Context
+  Claude Code · 6 user turns
+  · /context
+
+  340,412 / 1,000,000 tokens
+  34.0% used
+
+  Used      340,412
+  Free      659,588
+
+  Agent-reported usage
+  Usage details
+  Category split and
+  compaction threshold are not
+  reported by the agent.
+
+  Local instructions ·
+  estimated tokens
+  ~/AGENTS.md           ~4,112
+  cli/AGENTS.md         ~2,406
+
+  Skills observed
+  nori-design
+  nori-theming
+
+  Subagents observed
+  code-review
+
+  Local file sizes; inclusion
+  in the current context is
+  not verified.

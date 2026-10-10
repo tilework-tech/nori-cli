@@ -4,6 +4,7 @@
 //! Consumers translate their input events into component actions, update
 //! caller-owned state, and render the resulting widgets.
 
+pub mod block_meter;
 pub mod detail;
 pub mod markdown;
 pub mod menu;
@@ -11,6 +12,7 @@ pub mod picker;
 pub mod primitives;
 pub mod theme;
 
+pub use block_meter::BlockMeter;
 pub use detail::DetailDensity;
 pub use detail::DetailEntry;
 pub use detail::DetailLabelStyle;

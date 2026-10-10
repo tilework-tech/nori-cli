@@ -14,6 +14,30 @@ Path: @/nori-rs/tui
 
 ### How it fits into the larger codebase
 
+`/context` writes a responsive, unboxed snapshot into history without prompting
+the agent. It uses the shared `BlockMeter` with a green current-fill marker,
+foreground occupied cells, and muted free cells. Wide terminals place the
+usage summary beside the map; narrower terminals stack it or show numbers.
+
+Agent-reported ACP usage takes precedence. The fallback uses only the latest
+transcript context count, with the provider's estimated window capacity;
+cumulative billing totals never stand in for context occupancy. Missing usage
+is explicitly unknown, and zero usage is a valid measurement. Printed snapshots
+do not change when subsequent usage updates arrive.
+
+The local instruction inventory follows the active agent's discovery rules at
+the effective working directory. Its token counts are estimates of local file
+sizes, not a category allocation or proof that those files remain in context
+after compaction. Cloud sessions never display the client machine's files as
+remote instructions. Observed skills and subagents are session activity only.
+Category allocations and automatic compaction thresholds remain unreported
+until the agent supplies them.
+
+Run `cargo run -p nori-tui --features storybook --example context_storybook`
+for a production-rendered specimen with fixture usage, including zero and
+unknown states. Press `u` to cycle usage and resize the terminal to inspect
+the responsive layout. `--json` exports styled spans for browser review.
+
 ```text
 nori-tui
    |  typed HarnessHandle methods
