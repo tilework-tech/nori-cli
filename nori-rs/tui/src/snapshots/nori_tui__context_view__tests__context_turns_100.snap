@@ -18,20 +18,14 @@ expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).c
                                              □ Free capacity
                                              Each cell = 0.5% of the window
 
-  ACP session usage updates
-  Observed growth · baseline + turn segments
-  ▦ Baseline 100,000  ▤ T2 140,000  ▦ T3 100,412
-  Shrink, compaction, or a window change starts a new baseline.
+  Current · ▦ Baseline 100,000 + ▤ T2 140,000 + ▦ T3 100,412
 
   Turn checkpoints
   Turn   Start             End             Change      Reading
   T1     unknown           100,000         unknown     observed
   T2     100,000           240,000         +140,000    observed
   T3     240,000           running         +100,412    during turn
-  Start readings are carried from the latest observation.
-
-  Usage details
-  Category split and compaction threshold are not reported by the agent.
+  Starts carry the latest prior observation.
 
   Local instructions · estimated tokens               Skills observed         Subagents observed
   ~/AGENTS.md                               ~4,112    nori-design             code-review

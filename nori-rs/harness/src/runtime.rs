@@ -214,7 +214,23 @@ impl HarnessHandle {
     pub async fn context_timeline(
         &self,
     ) -> anyhow::Result<crate::context_timeline::ContextTimeline> {
-        Ok(self.context_timeline.read().await.timeline.clone())
+        let waiting = std::time::Instant::now();
+        let state = self.context_timeline.read().await;
+        let lock_wait_us = waiting.elapsed().as_secs_f64() * 1_000_000.0;
+        let cloning = std::time::Instant::now();
+        let timeline = state.timeline.clone();
+        let clone_us = cloning.elapsed().as_secs_f64() * 1_000_000.0;
+        drop(state);
+        tracing::debug!(
+            target: "nori_context_profile",
+            stage = "harness_snapshot",
+            lock_wait_us,
+            clone_us,
+            turn_count = timeline.turns.len(),
+            segment_count = timeline.segments.len(),
+            "captured context timeline snapshot",
+        );
+        Ok(timeline)
     }
 
     /// Attach a callback that fires once, after this session's first prompt

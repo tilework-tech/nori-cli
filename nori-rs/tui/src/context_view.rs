@@ -29,6 +29,7 @@ pub(crate) struct ContextView {
 
 impl HistoryCell for ContextView {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let render_started = std::time::Instant::now();
         if width == 0 {
             return Vec::new();
         }
@@ -170,52 +171,43 @@ impl HistoryCell for ContextView {
             lines.extend(summary);
         }
         lines.push(Line::default());
-        if used.is_some() {
-            lines.push(Line::styled(
-                if observation.is_some() {
-                    "ACP session usage updates".into()
-                } else {
-                    self.source.clone()
-                },
-                theme.muted,
-            ));
+        let mut current = vec![Span::styled("Current · ", theme.muted)];
+        if self.timeline.epoch > 0 {
+            current.push(Span::styled("context reset · ", theme.muted));
         }
-        if !self.timeline.segments.is_empty() {
-            lines.push(Line::styled(
-                "Observed growth · baseline + turn segments",
-                theme.title,
-            ));
-            let mut legend = Vec::new();
+        if self.timeline.segments.is_empty() {
+            let status = if used.is_none() {
+                "usage not reported".to_string()
+            } else if observation.is_none() && !self.source.is_empty() {
+                self.source.clone()
+            } else {
+                "no segments recorded".to_string()
+            };
+            current.push(Span::styled(status, theme.muted));
+        } else {
             for (index, segment) in self.timeline.segments.iter().enumerate() {
-                let current =
+                if index > 0 {
+                    current.push(Span::styled(" + ", theme.muted));
+                }
+                let active =
                     segment.turn.is_some() && segment.turn == current_turn.map(|turn| turn.number);
                 let label = segment
                     .turn
                     .map(|turn| format!("T{turn}"))
                     .unwrap_or_else(|| "Baseline".into());
-                legend.push(Span::styled(
+                current.push(Span::styled(
                     format!(
-                        "{} {label} {}  ",
+                        "{} {label} {}",
                         BlockMeter::SEGMENT_GLYPHS[index % BlockMeter::SEGMENT_GLYPHS.len()],
                         number(segment.tokens)
                     ),
-                    if current { theme.pointer } else { theme.text },
+                    if active { theme.pointer } else { theme.text },
                 ));
             }
-            lines.push(Line::from(legend));
-            lines.push(Line::styled(
-                "Shrink, compaction, or a window change starts a new baseline.",
-                theme.muted,
-            ));
-            lines.push(Line::default());
         }
-        lines.extend(self.checkpoint_lines(inner, theme));
+        lines.push(Line::from(current));
         lines.push(Line::default());
-        lines.push(Line::styled("Usage details", theme.title));
-        lines.push(Line::styled(
-            "Category split and compaction threshold are not reported by the agent.",
-            theme.muted,
-        ));
+        lines.extend(self.checkpoint_lines(inner, theme));
         lines.push(Line::default());
         let wide = inner >= 90;
         let inventory_width = if wide {
@@ -291,13 +283,15 @@ impl HistoryCell for ContextView {
         }
         let wrapped = word_wrap_lines(&lines, RtOptions::new(usize::from(inner)));
         let inset = " ".repeat(usize::from(width.saturating_sub(1).min(2)));
-        wrapped
+        let rendered: Vec<_> = wrapped
             .into_iter()
             .map(|mut line| {
                 line.spans.insert(0, Span::raw(inset.clone()));
                 line
             })
-            .collect()
+            .collect();
+        tracing::debug!(target: "nori_context_profile", stage = "context_render", width, turns = self.timeline.turns.len(), lines = rendered.len(), elapsed_us = render_started.elapsed().as_micros(), "context snapshot rendered");
+        rendered
     }
 }
 
@@ -372,7 +366,7 @@ impl ContextView {
             }
         }
         lines.push(Line::styled(
-            "Start readings are carried from the latest observation.",
+            "Starts carry the latest prior observation.",
             theme.muted,
         ));
         lines
@@ -546,7 +540,7 @@ mod tests {
         assert!(text.contains("Current turn") && text.contains("100,412"));
         assert!(text.contains("running"));
         assert!(text.contains('▦') && text.contains('▤'));
-        assert!(text.contains("Observed growth"));
+        assert!(text.contains("Current · ▦ Baseline 100,000 + ▤ T2 140,000 + ▦ T3 100,412"));
         for width in [100, 60, 32] {
             let lines = view.display_lines(width);
             assert!(lines.iter().all(|line| line.width() <= usize::from(width)));
@@ -559,6 +553,45 @@ mod tests {
                     .join("\n")
             );
         }
+    }
+
+    #[test]
+    fn compact_middle_keeps_one_current_row_and_checkpoint_evidence() {
+        let lines = timeline_specimen().display_lines(100);
+        let text = lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let current_rows = lines
+            .iter()
+            .filter(|line| line.to_string().contains("Current ·"))
+            .count();
+        assert_eq!(current_rows, 1);
+        assert!(text.contains("Starts carry the latest prior observation."));
+        let row = lines
+            .iter()
+            .position(|line| line.to_string().contains("Current ·"))
+            .unwrap();
+        let row_text = lines[row].to_string();
+        let glyph_byte = row_text.find("▦ T3").unwrap();
+        let column = row_text[..glyph_byte].chars().count() as u16;
+        let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(
+            0,
+            0,
+            100,
+            lines.len() as u16,
+        ));
+        ratatui::widgets::Widget::render(
+            ratatui::widgets::Paragraph::new(lines),
+            buffer.area,
+            &mut buffer,
+        );
+        assert_eq!(buffer[(column, row as u16)].symbol(), "▦");
+        assert_eq!(
+            buffer[(column, row as u16)].fg,
+            ratatui::style::Color::Green
+        );
     }
 
     #[test]
@@ -615,6 +648,7 @@ mod tests {
                 && !text.contains("Stale fallback")
         );
         assert!(text.contains('▨'));
+        assert!(text.contains("context reset"));
     }
 
     #[test]
@@ -630,7 +664,7 @@ mod tests {
             .join("\n");
         assert!(text.contains("no new reading"));
         assert!(text.contains("Incomplete history"));
-        assert!(text.contains("carried"));
+        assert!(text.contains("Starts carry the latest prior observation."));
     }
 
     #[test]

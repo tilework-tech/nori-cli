@@ -15,14 +15,9 @@ expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).c
   Current turn  3 · running
   Turn tokens   +100,412
 
-  ACP session usage updates
-  Observed growth · baseline +
-  turn segments
-  ▦ Baseline 100,000  ▤ T2
-  140,000  ▦ T3 100,412
-  Shrink, compaction, or a
-  window change starts a new
-  baseline.
+  Current · ▦ Baseline 100,000
+  + ▤ T2 140,000 + ▦ T3
+  100,412
 
   Turn checkpoints
   T1 · unknown · observed
@@ -31,13 +26,8 @@ expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).c
   Start 100,000 · End 240,000
   T3 · +100,412 · during turn
   Start 240,000 · End running
-  Start readings are carried
-  from the latest observation.
-
-  Usage details
-  Category split and
-  compaction threshold are not
-  reported by the agent.
+  Starts carry the latest
+  prior observation.
 
   Local instructions ·
   estimated tokens

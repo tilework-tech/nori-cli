@@ -29,7 +29,8 @@ ACP notifications + Nori prompt lifecycle
 - [`runtime.rs`](../runtime.rs) updates the reducer before recording and
   publishing each public event. `HarnessHandle::context_timeline().await`
   clones the current read model under a shared lock without submitting an
-  agent request or waiting for a running prompt to finish.
+  agent request or waiting for a running prompt to finish. It does not reread
+  JSONL or rerun the reducer for each query.
 - The [transcript reader](../transcript/context_timeline.rs) exposes
   `Transcript::context_timeline()` and seeds the live reducer when a local
   transcript is supplied for resume. The [TUI](../../../tui/docs.md) owns
@@ -83,5 +84,22 @@ ACP notifications + Nori prompt lifecycle
   when a recorder is unavailable.
 - These APIs are local Harness reads. They do not add an ACP wire query or
   fabricate remote historical prompt boundaries that were never recorded.
+- Debug events on the `nori_context_profile` target measure snapshot lock wait
+  and clone time separately and include turn/segment sizes without recording
+  ACP payloads. The [profiling fixture](../../tests/context_timeline/profile.rs)
+  compares repeated JSONL loads, reductions, and live queries with representative
+  message sizes and usage metadata; fixture generation is outside the timing.
+
+Run the ignored profile from `nori-rs` with the mock ACP agent built. Set a
+shared artifact directory to compare it with the
+[TUI instruction inventory profile](../../../tui/docs.md#context-inspection-and-profiling):
+
+```sh
+NORI_CONTEXT_PROFILE_DIR="$(pwd)/../.local/context-profile" cargo test -p nori-harness --test context_timeline profile_load_reduce_and_live_snapshot -- --ignored --nocapture --test-threads=1
+```
+
+The JSONL artifacts retain individual samples and fixture dimensions. Compare
+build mode and cold/warm state when interpreting measurements; the Harness
+query, transcript reconstruction, and TUI inventory are different workloads.
 
 Created and maintained by Nori.

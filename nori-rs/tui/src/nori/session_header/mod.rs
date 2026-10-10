@@ -22,6 +22,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
 
+#[cfg(test)]
+mod profile;
 mod status_card;
 pub(crate) mod status_view;
 

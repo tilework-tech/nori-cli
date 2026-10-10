@@ -8,6 +8,9 @@ use nori_protocol::acp::v1 as acp;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
+#[path = "context_timeline/profile.rs"]
+mod profile;
+
 fn phase(id: i64) -> SessionEvent {
     SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Prompting {
         request_id: id.into(),

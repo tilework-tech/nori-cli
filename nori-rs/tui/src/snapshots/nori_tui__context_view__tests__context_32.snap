@@ -12,15 +12,12 @@ expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).c
   Used          340,412
   Free          659,588
 
-  Agent-reported usage
+  Current · Agent-reported
+  usage
+
   Turn checkpoints
   No turn checkpoints
   recorded.
-
-  Usage details
-  Category split and
-  compaction threshold are not
-  reported by the agent.
 
   Local instructions ·
   estimated tokens

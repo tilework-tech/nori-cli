@@ -6,6 +6,7 @@
 //! - Gemini / unknown: heuristic estimate (bytes / 4)
 
 use super::session_header::AgentKindSimple;
+use std::sync::OnceLock;
 
 /// Result of counting tokens in a text string.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +31,12 @@ pub fn count_tokens(text: &str, agent_kind: Option<AgentKindSimple>) -> TokenCou
 ///
 /// Falls back to heuristic if the tokenizer fails to initialize.
 fn count_tokens_bpe(text: &str, approximate: bool) -> TokenCount {
-    match tiktoken_rs::o200k_base() {
+    static TOKENIZER: OnceLock<anyhow::Result<tiktoken_rs::CoreBPE>> = OnceLock::new();
+    let started = std::time::Instant::now();
+    let tokenizer = TOKENIZER.get_or_init(tiktoken_rs::o200k_base);
+    let tokenizer_us = started.elapsed().as_micros();
+    let encoding_started = std::time::Instant::now();
+    let count = match tokenizer {
         Ok(bpe) => {
             let tokens = bpe.encode_ordinary(text);
             TokenCount {
@@ -39,7 +45,17 @@ fn count_tokens_bpe(text: &str, approximate: bool) -> TokenCount {
             }
         }
         Err(_) => count_tokens_heuristic(text),
-    }
+    };
+    tracing::debug!(
+        target: "nori_context_profile",
+        stage = "instruction_tokens",
+        bytes = text.len(),
+        tokenizer_us,
+        encoding_us = encoding_started.elapsed().as_micros(),
+        total_us = started.elapsed().as_micros(),
+        "instruction token count completed"
+    );
+    count
 }
 
 /// Heuristic token count: bytes / 4, rounded up.

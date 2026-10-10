@@ -16,11 +16,10 @@ expression: "ContextView\n{\n    agent: \"ElizACP\".into(), remote: true, ..Defa
   ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
   ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨ ▨
 
+  Current · usage not reported
+
   Turn checkpoints
   No turn checkpoints recorded.
-
-  Usage details
-  Category split and compaction threshold are not reported by the agent.
 
   Local instructions · estimated tokens
   Remote instruction files are not available locally.

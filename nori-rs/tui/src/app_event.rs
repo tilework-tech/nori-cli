@@ -59,7 +59,7 @@ pub(crate) enum AppEvent {
     ContextTimelineReady {
         generation: SessionGeneration,
         conversation_id: Option<nori_harness::ConversationId>,
-        result: Result<nori_harness::context_timeline::ContextTimeline, String>,
+        result: Result<crate::chatwidget::ContextSnapshot, String>,
     },
 
     SessionEvent {
