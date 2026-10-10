@@ -5,16 +5,16 @@ expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).c
   Context
   Claude Code · 6 user turns · /context
 
-  ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■    340,412 / 1,000,000 tokens
-  ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■    34.0% used
-  ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■
-  ■ ■ ■ ■ ■ ■ ■ ■ ■ □ □ □ □ □ □ □ □ □ □ □    Used      340,412
-  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Free      659,588
-  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
-  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    ■ Current fill boundary
-  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    □ Free capacity
-  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Each cell = 0.5% of the window
-  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █    340,412 / 1,000,000 tokens
+  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █    34.0% used
+  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █
+  █ █ █ █ █ █ █ █ ▓ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░    Used      340,412
+  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░    Free      659,588
+  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░
+  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░    ▓ Current fill boundary
+  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░    ░ Free capacity
+  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░    Each cell = 0.5% of the window
+  ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░
 
   Agent-reported usage
   Usage details

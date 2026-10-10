@@ -80,12 +80,12 @@ impl HistoryCell for ContextView {
             summary.push(Line::default());
             if measured.is_some() {
                 summary.push(Line::from(vec![
-                    Span::styled("■", theme.pointer),
+                    Span::styled("▓", theme.pointer),
                     Span::styled(" Current fill boundary", theme.muted),
                 ]));
-                summary.push(Line::styled("□ Free capacity", theme.muted));
+                summary.push(Line::styled("░ Free capacity", theme.muted));
             } else {
-                summary.push(Line::styled("· Usage not reported", theme.muted));
+                summary.push(Line::styled("▒ Usage not reported", theme.muted));
             }
             summary.push(Line::styled("Each cell = 0.5% of the window", theme.muted));
         }
