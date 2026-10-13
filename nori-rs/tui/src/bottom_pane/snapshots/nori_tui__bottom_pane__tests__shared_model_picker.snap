@@ -6,16 +6,16 @@ expression: model_render
   Model                                                                                             
   Select a value for this ACP session setting                                                       
                                                                                                     
-     Recommended                                                                                    
-                                                                                                    
   ▏1. Stable (current)                                                                           ▕  
   ▏                                                                                              ▕  
    2. Preview                                                                                       
                                                                                                     
-     Other                                                                                          
-                                                                                                    
-   3. Experimental                                                                                  
-      experimental                                                                                  
-   4. Use custom model...                                                                           
+   3. Use custom model...                                                                           
       Enter any model ID                                                                            
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
   ↑↓/j/k move  enter select  esc close

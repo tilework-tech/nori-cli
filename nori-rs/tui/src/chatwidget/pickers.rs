@@ -751,13 +751,8 @@ impl ChatWidget {
         &mut self,
         option: nori_protocol::acp::v1::SessionConfigOption,
     ) {
-        let other_models = nori_harness::AgentKind::from_slug(&self.config.active_agent)
-            .map(nori_harness::AgentKind::other_models)
-            .unwrap_or(&[]);
-        let params = crate::nori::session_config_picker::acp_session_config_value_picker_params(
-            &option,
-            other_models,
-        );
+        let params =
+            crate::nori::session_config_picker::acp_session_config_value_picker_params(&option);
         self.bottom_pane.show_selection_view(params);
     }
 

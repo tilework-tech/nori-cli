@@ -133,15 +133,11 @@ The dependency direction stays `nori-harness -> nori-acp-host`.
   `AcpAgentConfig::inject_model` applies the resolved strategy to the spawn env
   or args and is a no-op for `None`, so callers (the harness) may invoke it
   unconditionally; `supports_model_injection()` reports whether a channel exists.
-- `AgentKind::other_models()` returns a curated, per-agent
-  `&'static [OtherModel]` (`{ id, label }`) of real models the adapter does *not*
-  advertise but that generally run when forced through injection. It is the
-  durable complement to the advertised catalog: the advertised set is
-  agent/version/account-dependent and adapters do not hardcode it, so this static
-  list plus render-time dedup against the live catalog is how the TUI populates
-  the `/model` picker's "Other" section without a second source of truth.
-  Selecting one routes through injection exactly like a `[default_models]` custom
-  id. `OtherModel` is re-exported from `nori-harness` for that picker.
+- There is deliberately no curated list of unadvertised models per agent. The
+  advertised catalog is agent/version/account-dependent and a hardcoded
+  complement went stale (retired models, ids the adapter's auth mode rejects), so
+  out-of-catalog models are reached only through a user-supplied id (the TUI's
+  "Use custom model..." entry or `[default_models]`) forced via injection.
 
 ### Things to Know
 

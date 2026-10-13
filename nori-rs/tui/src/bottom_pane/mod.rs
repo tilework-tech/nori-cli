@@ -1075,17 +1075,9 @@ mod tests {
         assert_snapshot!("shared_session_config_picker", config_render);
 
         pane.show_selection_view(
-            crate::nori::session_config_picker::acp_session_config_value_picker_params(
-                &option,
-                &[nori_harness::OtherModel {
-                    id: "experimental",
-                    label: "Experimental",
-                }],
-            ),
+            crate::nori::session_config_picker::acp_session_config_value_picker_params(&option),
         );
         let model_render = render_snapshot(&pane, Rect::new(0, 0, 100, 18));
-        assert!(model_render.contains("Recommended"), "{model_render}");
-        assert!(model_render.contains("Other"), "{model_render}");
         assert_selected_row_has_symmetric_rails(&model_render, "Stable");
         assert_snapshot!("shared_model_picker", model_render);
     }

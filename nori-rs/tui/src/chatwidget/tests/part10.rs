@@ -1874,3 +1874,39 @@ fn session_forked_shows_resume_hint_for_previous_conversation() {
         "fork hint should offer a copy-pasteable resume command for the previous conversation, got:\n{rendered}"
     );
 }
+
+#[test]
+fn model_picker_offers_only_the_agents_advertised_models_plus_custom_entry() {
+    let (mut chat, _rx, _unused_rx) = make_chatwidget_manual();
+    chat.config.active_agent = "claude-code".to_string();
+    let option = nori_protocol::acp::v1::SessionConfigOption::select(
+        "model",
+        "Model",
+        "default",
+        vec![
+            nori_protocol::acp::v1::SessionConfigSelectOption::new("default", "Default"),
+            nori_protocol::acp::v1::SessionConfigSelectOption::new("haiku", "Haiku"),
+        ],
+    )
+    .category(nori_protocol::acp::v1::SessionConfigOptionCategory::Model);
+
+    chat.open_acp_session_config_value_picker(option);
+
+    let rendered = render_bottom_pane(&mut chat, 100);
+    let rows: Vec<&str> = rendered
+        .lines()
+        .map(|line| line.trim_start_matches([' ', '▏']))
+        .filter(|line| {
+            line.split_once(". ")
+                .is_some_and(|(n, _)| n.parse::<i32>().is_ok())
+        })
+        .collect();
+    assert_eq!(
+        rows.len(),
+        3,
+        "only the advertised models and the custom entry should be listed, got:\n{rendered}"
+    );
+    assert!(rows[0].contains("Default"), "{rendered}");
+    assert!(rows[1].contains("Haiku"), "{rendered}");
+    assert!(rows[2].contains("Use custom model..."), "{rendered}");
+}

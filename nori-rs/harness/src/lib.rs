@@ -55,7 +55,6 @@ pub use registry::AcpAgentConfig;
 pub use registry::AcpAgentInfo;
 pub use registry::AcpProviderInfo;
 pub use registry::AgentKind;
-pub use registry::OtherModel;
 pub use registry::PackageManager;
 pub use registry::Provider;
 pub use registry::RegisteredAgent;

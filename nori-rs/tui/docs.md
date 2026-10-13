@@ -324,28 +324,14 @@ types.
   `/config` open), the multi-toggle Footer Segments sub-picker (which already
   stays open by replacing itself), and the bespoke Hotkeys view. Failed persists
   never reopen.
-- Model-category value pickers (`acp_session_config_value_picker_params()`)
-  split into two labeled sections when both have content. **Recommended** lists
-  the values the agent advertises over ACP, exactly as reported. **Other** lists
-  a curated, per-agent set of real models the adapter does *not* advertise but
-  that generally run when forced via spawn-time injection; it comes from
-  `nori_harness::AgentKind::other_models()`, resolved in
-  `@/nori-rs/tui/src/chatwidget/pickers.rs` via `AgentKind::from_slug` on the
-  active agent (custom/unknown agents resolve to an empty list → no Other
-  section). The Other list is deduplicated at render time against the advertised
-  values so a model an account already sees under Recommended never appears
-  twice. When either side is empty — no advertised catalog, no curated
-  complement, or a non-model option — the picker renders one flat list exactly as
-  before and the labeled headers do not appear. The durable-complement design is
-  intentional: the advertised set is agent/version/account-dependent, so the
-  curated list plus runtime dedup avoids a second, drift-prone source of truth.
-- An Other row whose id already equals the session's injected `currentValue` is
-  marked `(current)` and carries no action; every other Other row emits
-  `AppEvent::SetAcpSessionConfigOption { is_custom_model: true }` — the same event
-  a free-text custom entry emits — so it follows the identical
-  reject → persist-to-`[default_models]` → restart-with-injection recovery path
-  (below). `initial_selected_idx` prefers the current row.
-- Section labels remain non-selectable through `SelectionItem::is_header` in
+- Value pickers (`acp_session_config_value_picker_params()`, which takes only
+  the `SessionConfigOption`) list exactly the values the agent advertises over
+  ACP, in reported order, preserving ACP groups as headers. For Model-category
+  options there is no curated supplement of unadvertised models: a static
+  per-agent list went stale against changing adapter catalogs and auth modes, so
+  any model outside the advertised set is reached only via the pinned
+  "Use custom model..." entry (below).
+- ACP group headers remain non-selectable through `SelectionItem::is_header` in
   [`list_selection_view.rs`](src/bottom_pane/list_selection_view.rs). The shared
   adapter maps that flag to `PickerItem::section_heading`, so grouped model and
   config rows render as bold structure rather than faded disabled choices;
