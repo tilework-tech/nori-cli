@@ -377,7 +377,11 @@ trust_level = "trusted"
 
         // Mock instruction files for consistent banner width across machines
         // This returns a constant list (~/.claude/CLAUDE.md) instead of discovering real files
-        cmd.env("NORI_MOCK_INSTRUCTION_FILES", "1");
+        if config.mock_instruction_files {
+            cmd.env("NORI_MOCK_INSTRUCTION_FILES", "1");
+        } else {
+            cmd.env_remove("NORI_MOCK_INSTRUCTION_FILES");
+        }
 
         // Enable debug logging for nori_harness to capture timing information
         cmd.env(
@@ -707,6 +711,8 @@ pub struct SessionConfig {
     pub args: Vec<String>,
     pub mock_agent_env: HashMap<String, String>,
     pub no_color: bool,
+    /// Use deterministic instruction inventory instead of filesystem discovery.
+    pub mock_instruction_files: bool,
     /// Skip the trust directory prompt (passes --skip-trust-directory flag).
     /// Enabled by default for E2E tests to avoid interactive prompts.
     pub skip_trust_directory: bool,
@@ -747,6 +753,7 @@ impl SessionConfig {
             args: Vec::new(),
             mock_agent_env: HashMap::new(),
             no_color: true,
+            mock_instruction_files: true,
             skip_trust_directory: true, // Skip trust prompt by default for E2E tests
             cwd: None,
             config_toml: None,
@@ -758,6 +765,12 @@ impl SessionConfig {
             // Tests that need installers should explicitly add it via with_extra_path().
             exclude_binaries: vec!["nori-ai".to_string(), "nori-skillsets".to_string()],
         }
+    }
+
+    /// Exercise instruction discovery and token counting against real files.
+    pub fn with_real_instruction_files(mut self) -> Self {
+        self.mock_instruction_files = false;
+        self
     }
 
     pub fn with_allow_http_fallback(mut self, allow_http_fallback: bool) -> Self {

@@ -116,6 +116,11 @@ arboard = { workspace = true }
 
 
 [[example]]
+name = "context_storybook"
+path = "examples/context_storybook.rs"
+required-features = ["storybook"]
+
+[[example]]
 name = "status_card_storybook"
 path = "examples/status_card_storybook.rs"
 required-features = ["storybook"]

@@ -489,12 +489,20 @@ state. It assembles streaming messages and tools, tracks live phase/config/
 usage, and supports persistence and product behavior. It is neither exported
 from `nori-protocol` nor delivered as a second public event vocabulary.
 
-ACP `UsageUpdate` values retain both current and maximum context tokens for
-consumers such as the TUI footer. Transcript discovery remains a provider
-fallback: `TranscriptTokenUsage.last_context_tokens` reports the latest context
-fill, while the detected `AgentKind` supplies the maximum window size. The TUI
-uses live ACP usage when present and otherwise combines those transcript values;
-the default and atomic footer context segments share that resolved state.
+ACP `UsageUpdate` values retain the schema-native context usage payload.
+[`context_timeline`](src/context_timeline/docs.md) derives immutable prompt
+start/end checkpoints and observed-growth segments from those notifications
+and Nori lifecycle boundaries. `HarnessHandle::context_timeline().await`
+returns a detached live snapshot; `Transcript::context_timeline()` uses the
+same reducer over saved evidence. The runtime reduces each event before
+publishing it, so a consumer that receives a boundary can query its checkpoint.
+These are Harness read APIs, not a second usage protocol or an ACP extension.
+
+Transcript discovery remains a provider fallback for the TUI's latest-usage
+summary: `TranscriptTokenUsage.last_context_tokens` reports the latest context
+fill, while the detected `AgentKind` supplies the maximum window size. Those
+estimates never become ACP timeline observations. The footer's default and
+atomic context segments share their resolved latest-usage state.
 
 Transcript schema v3 records:
 
@@ -520,7 +528,14 @@ marker. A resume without a local transcript must preserve the requested remote
 session identity, so load failure is terminal rather than calling
 `session/new`. Private v2 compatibility types remain in the transcript loader;
 storage enums are not exported. Public readers use `Transcript::records()` and
-`TranscriptRecord`.
+`TranscriptRecord` for conversation events, or `Transcript::context_timeline()`
+for checkpoint history. Resume copies only the raw evidence needed by the
+timeline into the new transcript, preserving original observation identity and
+time. This archived evidence is excluded from conversation records and replay;
+agent replay remains independently recorded, including content newer than the
+local transcript. Fork copies the parent transcript and retains those same
+identities. See the [transcript format](../../docs/transcripts.md) for optional
+storage metadata and compatibility rules.
 
 #### Browser sessions and profile tiers
 

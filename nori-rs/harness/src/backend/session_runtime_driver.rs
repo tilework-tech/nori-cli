@@ -426,10 +426,16 @@ impl AcpBackend {
             .thread_goal_update_from_client_event(&client_event)
             .await;
         let public_event = match &client_event {
-            ClientEvent::SessionPhaseChanged(_) => {
-                Some(nori_protocol::NoriEvent::SessionPhaseChanged(
-                    self.session_driver.lock().await.public_phase(),
-                ))
+            ClientEvent::SessionPhaseChanged(phase) => {
+                let phase = if matches!(
+                    phase,
+                    crate::normalized::session_runtime::SessionPhaseView::Idle
+                ) {
+                    nori_protocol::SessionPhase::Idle
+                } else {
+                    self.session_driver.lock().await.public_phase()
+                };
+                Some(nori_protocol::NoriEvent::SessionPhaseChanged(phase))
             }
             ClientEvent::QueueChanged(queue) => Some(nori_protocol::NoriEvent::QueueChanged(
                 nori_protocol::QueueSnapshot {

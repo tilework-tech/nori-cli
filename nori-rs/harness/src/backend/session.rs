@@ -608,6 +608,14 @@ impl AcpBackend {
                 None
             }
         };
+        if let (Some(recorder), Some(transcript)) = (&transcript_recorder, transcript) {
+            for evidence in transcript.archived_context_evidence() {
+                if let Err(error) = recorder.record_session_event(&evidence).await {
+                    warn!(%error, "Failed to archive context timeline evidence");
+                    break;
+                }
+            }
+        }
         let transcript_id = transcript_recorder
             .as_ref()
             .map(|recorder| recorder.session_id().to_string());

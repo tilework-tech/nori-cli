@@ -14,9 +14,11 @@
 //!       └── {session-id}.jsonl # Individual session transcript
 //! ```
 
+mod context_timeline;
 mod loader;
 mod project;
 mod recorder;
+mod session_event;
 mod types;
 
 /// Subdirectory for transcripts within NORI_HOME
@@ -52,7 +54,6 @@ pub(crate) use types::ClientEventEntry;
 pub(crate) use types::PatchApplyEntry;
 #[cfg(test)]
 pub(crate) use types::PatchOperationType;
-#[cfg(test)]
 pub(crate) use types::SessionEventEntry;
 #[cfg(test)]
 pub(crate) use types::ToolCallEntry;

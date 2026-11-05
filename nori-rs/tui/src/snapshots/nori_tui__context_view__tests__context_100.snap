@@ -1,0 +1,28 @@
+---
+source: tui/src/context_view.rs
+expression: "lines.iter().map(|line|\nline.to_string().trim_end().to_string()).collect::<Vec<_>>().join(\"\\n\")"
+---
+  Context
+  Claude Code · 6 user turns · /context
+
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    340,412 / 1,000,000 tokens
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦    34.0% used
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦
+  ▦ ▦ ▦ ▦ ▦ ▦ ▦ ▦ ◩ □ □ □ □ □ □ □ □ □ □ □    Used          340,412
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Free          659,588
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    ◩ Current fill boundary
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    □ Free capacity
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □    Each cell = 0.5% of the window
+  □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □ □
+
+  Current · Agent-reported usage
+
+  Turn checkpoints
+  No turn checkpoints recorded.
+
+  Local instructions · estimated tokens               Skills observed         Subagents observed
+  ~/AGENTS.md                               ~4,112    nori-design             code-review
+  cli/AGENTS.md                             ~2,406    nori-theming
+
+  Local file sizes; inclusion in the current context is not verified.

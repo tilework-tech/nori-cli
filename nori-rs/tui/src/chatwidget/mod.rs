@@ -61,6 +61,8 @@ use self::agent::spawn_agent;
 
 mod approvals;
 mod constructors;
+mod context;
+pub(crate) use context::ContextSnapshot;
 mod event_handlers;
 mod goal;
 mod helpers;

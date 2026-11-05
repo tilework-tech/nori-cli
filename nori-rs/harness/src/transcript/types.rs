@@ -61,16 +61,7 @@ pub struct ClientEventEntry {
     pub event: NoriClientEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionEventEntry {
-    pub event: nori_protocol::SessionEvent,
-}
-
-impl PartialEq for SessionEventEntry {
-    fn eq(&self, other: &Self) -> bool {
-        serde_json::to_value(&self.event).ok() == serde_json::to_value(&other.event).ok()
-    }
-}
+pub use super::session_event::SessionEventEntry;
 
 /// Git repository information captured at session start.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
