@@ -2,6 +2,7 @@
 //!
 //! These tests verify that when ACP prompts fail, the error is properly
 //! displayed to the user in the TUI rather than being silently swallowed.
+#![cfg(target_os = "linux")]
 
 use std::time::Duration;
 use tui_pty_e2e::SessionConfig;
@@ -24,7 +25,6 @@ use tui_pty_e2e::TuiSession;
 /// When a prompt fails, the user should see an error message in the TUI
 /// indicating what went wrong (e.g., authentication error, rate limit, etc.)
 #[test]
-#[cfg(target_os = "linux")]
 fn test_acp_prompt_failure_shows_error_to_user() {
     // Configure mock agent to fail on prompt
     let config = SessionConfig::new()
@@ -94,7 +94,6 @@ fn test_acp_prompt_failure_shows_error_to_user() {
 /// After a prompt error, the TUI should be responsive and ready for new input.
 /// The prompt indicator "›" should be visible after the error is processed.
 #[test]
-#[cfg(target_os = "linux")]
 fn test_acp_prompt_failure_tui_remains_responsive() {
     // Configure mock agent to fail on prompt
     let config = SessionConfig::new()
