@@ -2,10 +2,11 @@ use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
 
-/// The final row of the `/context` panel. The panel reaches the screen as one
-/// history insert, which a PTY can deliver across several reads (macOS hands
-/// the master at most ~1 KB per read), so wait for this row before asserting
-/// on anything above it.
+/// The final row of the `/context` panel, present because `SessionConfig`
+/// enables the mock instruction files by default. The panel reaches the screen
+/// as one history insert, which a PTY can deliver across several reads (macOS
+/// hands the master at most ~1 KB per read), so wait for this row before
+/// asserting on anything above it.
 const PANEL_LAST_ROW: &str = "Local file sizes; inclusion in the current context is not verified.";
 
 #[test]

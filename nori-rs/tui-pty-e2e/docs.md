@@ -37,7 +37,10 @@ current session usable.
 during actual prompts using the mock agent's
 [usage fixtures](../mock-acp-agent/src/context_usage.rs). They assert reported
 usage, alternating grid segments, checkpoint boundaries, and unchanged turn
-counts. A release-file barrier keeps a prompt active while the command runs,
+counts. Each scenario waits for the panel's final row before asserting, because
+the panel arrives as one history insert that macOS PTYs deliver in ~1 KB reads;
+waiting for an early row returns before the rows below it are parsed. A
+release-file barrier keeps a prompt active while the command runs,
 then proves that the original prompt still completes. This covers the local
 query and asynchronous rendering path without replacing Harness state.
 The [instruction inventory scenario](tests/context_instructions.rs) opts into
