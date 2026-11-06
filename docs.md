@@ -13,7 +13,8 @@ and the Ratatui frontend; the npm package in `nori-cli/` is a thin launcher.
 - `nori-rs/` contains the Cargo workspace and production binary.
 - `nori-cli/` packages that binary for npm distribution.
 - `docs/` holds one prescriptive doc per cross-cutting topic, indexed in
-  `@/docs/README.md`.
+  `@/docs/README.md`. `@/docs/feature-catalogue.md` lists candidate CLI features
+  for prioritization.
 - ACP owns agent-to-client messages, plans, tools, permissions, capabilities,
   configuration options, usage, and responses. Nori adds only lifecycle and
   product behavior ACP does not define.
