@@ -2,6 +2,13 @@ use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
 
+/// The final row of the `/context` panel, present because `SessionConfig`
+/// enables the mock instruction files by default. The panel reaches the screen
+/// as one history insert, which a PTY can deliver across several reads (macOS
+/// hands the master at most ~1 KB per read), so wait for this row before
+/// asserting on anything above it.
+const PANEL_LAST_ROW: &str = "Local file sizes; inclusion in the current context is not verified.";
+
 #[test]
 fn context_command_renders_agent_reported_usage() {
     let mut session = TuiSession::spawn_with_config(
@@ -19,9 +26,13 @@ fn context_command_renders_agent_reported_usage() {
         .expect("response");
     session.submit_input("/context").expect("submit command");
     session
-        .wait_for_text("340,412 / 1,000,000 tokens", TIMEOUT)
-        .expect("reported usage");
+        .wait_for_text(PANEL_LAST_ROW, TIMEOUT)
+        .expect("context panel");
     let screen = session.screen_contents();
+    assert!(
+        screen.contains("340,412 / 1,000,000 tokens"),
+        "reported usage: {screen}"
+    );
     assert!(screen.contains("34.0% used"), "percentage: {screen}");
     assert!(
         screen.contains("1 user turn"),
@@ -57,9 +68,13 @@ fn context_grid_alternates_turn_segments_without_adding_a_prompt() {
     }
     session.submit_input("/context").expect("inspect context");
     session
-        .wait_for_text("50,000 / 100,000 tokens", TIMEOUT)
-        .expect("latest observation");
+        .wait_for_text(PANEL_LAST_ROW, TIMEOUT)
+        .expect("context panel");
     let screen = session.screen_contents();
+    assert!(
+        screen.contains("50,000 / 100,000 tokens"),
+        "latest observation: {screen}"
+    );
     assert!(
         screen.contains("3 user turns"),
         "no inspection prompt: {screen}"
@@ -94,9 +109,13 @@ fn context_can_inspect_an_unfinished_turn_without_interrupting_it() {
         .submit_input("/context")
         .expect("inspect active turn");
     session
-        .wait_for_text("Turn checkpoints", TIMEOUT)
+        .wait_for_text(PANEL_LAST_ROW, TIMEOUT)
         .expect("checkpoint snapshot during turn");
     let screen = session.screen_contents();
+    assert!(
+        screen.contains("Turn checkpoints"),
+        "checkpoint history: {screen}"
+    );
     assert!(
         screen.contains("running"),
         "unfinished end checkpoint: {screen}"
