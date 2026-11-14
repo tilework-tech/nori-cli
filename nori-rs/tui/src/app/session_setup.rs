@@ -218,7 +218,7 @@ impl App {
             true,
             None,
         );
-        self.chat_widget = ChatWidget::new(init);
+        self.install_active_widget(ChatWidget::new(init));
         self.configure_new_chat_widget();
         self.pending_session_activation = Some(PendingSessionActivation::Resume {
             acp_session_id,
@@ -235,8 +235,15 @@ impl App {
         config
     }
 
+    /// Let go of the active session before another widget takes its place.
+    /// With `[features] multi_session` a live session keeps running and is
+    /// parked when the next widget is installed; otherwise it shuts down.
     pub(crate) fn shutdown_current_conversation(&mut self) {
-        self.chat_widget.shutdown_harness_session();
+        if self.config.multi_session && self.chat_widget.has_harness_session() {
+            self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
+        } else {
+            self.chat_widget.shutdown_harness_session();
+        }
     }
 
     /// Display a loaded transcript in the history view.

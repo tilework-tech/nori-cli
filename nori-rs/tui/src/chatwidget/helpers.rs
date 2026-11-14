@@ -531,6 +531,9 @@ impl ChatWidget {
     /// Recompute and write the terminal title. Schedules the next animation
     /// frame if the spinner is active.
     pub(crate) fn refresh_terminal_title(&mut self) {
+        if !self.foreground {
+            return;
+        }
         let now = Instant::now();
         let spinner_frame = if self.should_animate_terminal_title_spinner() {
             Some(crate::terminal_title::spinner_frame_at(
@@ -566,6 +569,16 @@ impl ChatWidget {
         if spinner_frame.is_some() {
             self.frame_requester
                 .schedule_frame_in(crate::terminal_title::SPINNER_INTERVAL);
+        }
+    }
+
+    /// Bring the session on screen, or park it behind another session.
+    pub(crate) fn set_foreground(&mut self, foreground: bool) {
+        self.foreground = foreground;
+        if foreground {
+            self.last_terminal_title = None;
+            self.refresh_terminal_title();
+            self.frame_requester.schedule_frame();
         }
     }
 

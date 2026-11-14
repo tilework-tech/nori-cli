@@ -96,6 +96,7 @@ impl App {
     ) -> Result<bool> {
         if matches!(event, TuiEvent::Draw) {
             self.handle_resize_reflow_draw(tui)?;
+            self.run_pending_session_reprint(tui)?;
         }
         if self.overlay.is_some() {
             let _ = self.handle_backtrack_overlay_event(tui, event).await?;
@@ -240,7 +241,7 @@ impl App {
                         None,
                     );
                     init.prepared_agent = Some(agent);
-                    self.chat_widget = ChatWidget::new(init);
+                    self.install_active_widget(ChatWidget::new(init));
                     self.configure_new_chat_widget();
                     self.chat_widget.restore_composer_draft(composer_draft);
                     if let Some((remaining, total)) = loop_state {
@@ -273,7 +274,7 @@ impl App {
                     true,
                     None,
                 );
-                self.chat_widget = ChatWidget::new(init);
+                self.install_active_widget(ChatWidget::new(init));
                 self.configure_new_chat_widget();
                 self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Idle);
                 if let Some(summary) = summary {
@@ -311,7 +312,7 @@ impl App {
                     true,
                     None,
                 );
-                self.chat_widget = ChatWidget::new(init);
+                self.install_active_widget(ChatWidget::new(init));
                 self.configure_new_chat_widget();
                 self.deferred_spawn_pending = true;
                 self.begin_agent_preparation(crate::app_event::AgentPrepareIntent::Picker {
@@ -616,8 +617,12 @@ impl App {
                 );
                 init.prepared_agent = Some(agent);
                 self.begin_replacing_session_transcript(tui)?;
-                self.chat_widget =
-                    ChatWidget::new_resumed_acp(init, acp_session_id, title, transcript);
+                self.install_active_widget(ChatWidget::new_resumed_acp(
+                    init,
+                    acp_session_id,
+                    title,
+                    transcript,
+                ));
                 self.configure_new_chat_widget();
                 tui.frame_requester().schedule_frame();
             }
@@ -652,46 +657,20 @@ impl App {
                 self.chat_widget.begin_exit();
             }
             AppEvent::InsertHistoryCell(cell) => {
-                let cell: Arc<dyn HistoryCell> = cell.into();
-                if let Some(Overlay::Transcript(t)) = &mut self.overlay {
-                    t.insert_cell(cell.clone());
-                    tui.frame_requester().schedule_frame();
-                }
-                self.transcript_cells.push(cell.clone());
-                let mut display = cell.display_lines(tui.terminal.last_known_screen_size.width);
-                if !display.is_empty() {
-                    // Only insert a separating blank line for new cells that are not
-                    // part of an ongoing stream. Streaming continuations should not
-                    // accrue extra blank lines between chunks.
-                    if !cell.is_stream_continuation() {
-                        if self.has_emitted_history_lines {
-                            display.insert(0, Line::from(""));
-                        } else {
-                            self.has_emitted_history_lines = true;
-                        }
-                    }
-                    if self.overlay.is_some() {
-                        self.deferred_history_lines.extend(display);
-                    } else {
-                        tui.insert_history_lines(display);
-                    }
-                }
+                self.insert_active_history_cell(tui, cell);
             }
             AppEvent::ConsolidateAgentMessage { source, cwd } => {
-                let consolidation = crate::transcript_reflow::consolidate_agent_message_cells(
-                    &mut self.transcript_cells,
-                    source,
-                    &cwd,
-                );
-                if let Some((range, replacement)) = consolidation
-                    && let Some(Overlay::Transcript(transcript)) = &mut self.overlay
-                {
-                    transcript.replace_cells(range, replacement);
-                    tui.frame_requester().schedule_frame();
-                }
-                if self.transcript_reflow.take_stream_finish_reflow_needed() {
-                    self.transcript_reflow.schedule_immediate();
-                    tui.frame_requester().schedule_frame();
+                self.consolidate_active_agent_message(tui, source, cwd);
+            }
+            AppEvent::SessionHistory { generation, event } => {
+                match self.route_session_history(generation, *event) {
+                    Some(AppEvent::InsertHistoryCell(cell)) => {
+                        self.insert_active_history_cell(tui, cell);
+                    }
+                    Some(AppEvent::ConsolidateAgentMessage { source, cwd }) => {
+                        self.consolidate_active_agent_message(tui, source, cwd);
+                    }
+                    Some(_) | None => {}
                 }
             }
             AppEvent::StartCommitAnimation => {
@@ -714,7 +693,7 @@ impl App {
                 self.commit_anim_running.store(false, Ordering::Release);
             }
             AppEvent::CommitTick => {
-                self.chat_widget.on_commit_tick();
+                self.tick_all_sessions();
             }
             AppEvent::SessionEvent { generation, event } => {
                 let candidate_matches = matches!(
@@ -761,10 +740,13 @@ impl App {
                         else {
                             unreachable!("candidate generation checked above")
                         };
+                        let (initial_prompt, initial_images) =
+                            self.chat_widget.take_initial_input();
+                        self.shutdown_current_conversation();
                         if resumes {
                             self.begin_replacing_session_transcript(tui)?;
                         }
-                        let mut old_widget = std::mem::replace(&mut self.chat_widget, *widget);
+                        self.install_active_widget(*widget);
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
                         self.configure_new_chat_widget();
@@ -776,7 +758,6 @@ impl App {
                         {
                             tracing::warn!(%error, "failed to attach committed candidate to remote ACP host");
                         }
-                        let (initial_prompt, initial_images) = old_widget.take_initial_input();
                         self.chat_widget
                             .submit_launch_input(initial_prompt, initial_images);
                         self.cancel_primary_agent_preparation();
@@ -784,7 +765,6 @@ impl App {
                             tokio::spawn(agent.shutdown());
                         }
                         self.prepared_agent_initial_context = None;
-                        old_widget.shutdown_harness_session();
                         if let Err(error) = ConfigEditsBuilder::new(&self.config.nori_home)
                             .set_agent(&self.config.active_agent)
                             .apply()
@@ -808,6 +788,9 @@ impl App {
                         self.chat_widget.add_error_message(message);
                     }
                 } else {
+                    let Some(event) = self.route_parked_session_event(generation, event) else {
+                        return Ok(true);
+                    };
                     let started = match &event {
                         nori_protocol::SessionEvent::Nori(
                             nori_protocol::NoriEvent::SessionStarted(started),
@@ -1412,7 +1395,7 @@ impl App {
                     true,
                     None,
                 );
-                self.chat_widget = ChatWidget::new(init);
+                self.install_active_widget(ChatWidget::new(init));
                 self.configure_new_chat_widget();
                 self.chat_widget.set_loop_state(remaining, total);
                 self.pending_session_activation = Some(PendingSessionActivation::New);
@@ -1634,12 +1617,12 @@ impl App {
                         );
                         init.prepared_agent = Some(agent);
                         self.begin_replacing_session_transcript(tui)?;
-                        self.chat_widget = ChatWidget::new_resumed_acp(
+                        self.install_active_widget(ChatWidget::new_resumed_acp(
                             init,
                             acp_session_id,
                             None,
                             Some(transcript),
-                        );
+                        ));
                         self.configure_new_chat_widget();
 
                         self.chat_widget.add_info_message(
@@ -1761,12 +1744,12 @@ impl App {
                 );
                 init.prepared_agent = Some(agent);
                 self.begin_replacing_session_transcript(tui)?;
-                self.chat_widget = ChatWidget::new_resumed_acp(
+                self.install_active_widget(ChatWidget::new_resumed_acp(
                     init,
                     Some(acp_session_id.clone()),
                     title.clone(),
                     None,
-                );
+                ));
                 self.configure_new_chat_widget();
 
                 self.chat_widget.add_info_message(
@@ -1847,7 +1830,7 @@ impl App {
                     true,
                     None,
                 );
-                self.chat_widget = ChatWidget::new(init);
+                self.install_active_widget(ChatWidget::new(init));
                 self.configure_new_chat_widget();
                 self.pending_session_activation = Some(PendingSessionActivation::New);
                 self.begin_agent_preparation_with_context(

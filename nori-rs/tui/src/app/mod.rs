@@ -101,6 +101,16 @@ pub(crate) struct App {
 
     pub(crate) transcript_cells: Vec<Arc<dyn HistoryCell>>,
 
+    /// Every session this TUI holds, in navigation order. Sessions that are
+    /// not on screen are parked here with their own widget and transcript.
+    session_deck: session_deck::SessionDeck<Box<ChatWidget>>,
+    /// The active session's transcript, taken when that session is about to be
+    /// parked behind a new one. Set only with `[features] multi_session`.
+    retiring_transcript: Option<Vec<Arc<dyn HistoryCell>>>,
+    /// The active session changed and the terminal must be reprinted on the
+    /// next draw. Several jumps before a draw reprint once.
+    session_reprint_pending: bool,
+
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
     pub(crate) deferred_history_lines: Vec<Line<'static>>,
@@ -228,6 +238,7 @@ struct SystemInfoRefreshRequest {
 mod config_persistence;
 mod event_handling;
 mod resize_reflow;
+mod session_deck;
 mod session_setup;
 mod session_view;
 
@@ -328,6 +339,9 @@ impl App {
             file_search,
             enhanced_keys_supported,
             transcript_cells: Vec::new(),
+            session_deck: Default::default(),
+            retiring_transcript: None,
+            session_reprint_pending: false,
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
@@ -367,6 +381,8 @@ impl App {
                 crate::history_cell::new_remote_control_event(report.lines()),
             ));
         }
+
+        app.session_deck.add(app.chat_widget.session_generation());
 
         // Propagate NoriConfig settings to the textarea.
         app.hotkey_config = app.config.hotkeys.clone();

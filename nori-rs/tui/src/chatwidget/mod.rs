@@ -306,6 +306,9 @@ pub(crate) struct ChatWidget {
     terminal_title_animation_origin: Instant,
     // Terminal title state: cache to avoid redundant OSC writes.
     last_terminal_title: Option<String>,
+    /// False while the session is parked behind another one. A parked
+    /// session never writes the terminal title.
+    foreground: bool,
 }
 
 struct UserMessage {
@@ -349,7 +352,9 @@ impl ChatWidget {}
 
 impl Drop for ChatWidget {
     fn drop(&mut self) {
-        if let Err(err) = self.clear_managed_terminal_title() {
+        if self.foreground
+            && let Err(err) = self.clear_managed_terminal_title()
+        {
             tracing::debug!(error = %err, "failed to clear terminal title on drop");
         }
     }

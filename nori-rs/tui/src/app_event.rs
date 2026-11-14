@@ -157,6 +157,13 @@ pub(crate) enum AppEvent {
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
+    /// History (`InsertHistoryCell` or `ConsolidateAgentMessage`) sent by
+    /// the widget of session `generation`.
+    SessionHistory {
+        generation: SessionGeneration,
+        event: Box<AppEvent>,
+    },
+
     /// Replace the just-finished assistant stream cells with one raw-Markdown cell.
     ConsolidateAgentMessage {
         source: String,

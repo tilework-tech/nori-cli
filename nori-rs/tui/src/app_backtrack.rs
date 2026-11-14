@@ -323,7 +323,7 @@ impl App {
         let fork_parent = self.chat_widget.managed_conversation_id();
         self.shutdown_current_conversation();
         let init = self.chat_widget_init(tui.frame_requester(), None, Vec::new(), None, true, None);
-        self.chat_widget = crate::chatwidget::ChatWidget::new(init);
+        self.install_active_widget(crate::chatwidget::ChatWidget::new(init));
         self.configure_new_chat_widget();
         self.pending_session_activation = Some(crate::app::PendingSessionActivation::New);
         self.begin_agent_preparation_with_context(
