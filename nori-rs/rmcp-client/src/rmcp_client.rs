@@ -24,15 +24,14 @@ use mcp_types::ReadResourceRequestParams;
 use mcp_types::ReadResourceResult;
 use mcp_types::RequestId;
 use reqwest::header::HeaderMap;
-use rmcp::model::CallToolRequestParam;
+use rmcp::model::CallToolRequestParams as RmcpCallToolRequestParams;
 use rmcp::model::ClientNotification;
-use rmcp::model::CreateElicitationRequestParam;
-use rmcp::model::CreateElicitationResult;
 use rmcp::model::CustomNotification;
-use rmcp::model::Extensions;
-use rmcp::model::InitializeRequestParam;
-use rmcp::model::PaginatedRequestParam;
-use rmcp::model::ReadResourceRequestParam;
+use rmcp::model::ElicitRequestParams;
+use rmcp::model::ElicitResult;
+use rmcp::model::InitializeRequestParams as RmcpInitializeRequestParams;
+use rmcp::model::PaginatedRequestParams;
+use rmcp::model::ReadResourceRequestParams as RmcpReadResourceRequestParams;
 use rmcp::service::RoleClient;
 use rmcp::service::RunningService;
 use rmcp::service::{self};
@@ -84,8 +83,8 @@ enum ClientState {
     },
 }
 
-pub type Elicitation = CreateElicitationRequestParam;
-pub type ElicitationResponse = CreateElicitationResult;
+pub type Elicitation = ElicitRequestParams;
+pub type ElicitationResponse = ElicitResult;
 
 /// Interface for sending elicitation requests to the UI and awaiting a response.
 pub type SendElicitation = Box<
@@ -217,7 +216,7 @@ impl RmcpClient {
         timeout: Option<Duration>,
         send_elicitation: SendElicitation,
     ) -> Result<InitializeResult> {
-        let rmcp_params: InitializeRequestParam = convert_to_rmcp(params.clone())?;
+        let rmcp_params: RmcpInitializeRequestParams = convert_to_rmcp(params.clone())?;
         let client_handler = LoggingClientHandler::new(rmcp_params, send_elicitation);
 
         let (transport, oauth_persistor) = {
@@ -286,7 +285,7 @@ impl RmcpClient {
         self.refresh_oauth_if_needed().await;
         let service = self.service().await?;
         let rmcp_params = params
-            .map(convert_to_rmcp::<_, PaginatedRequestParam>)
+            .map(convert_to_rmcp::<_, PaginatedRequestParams>)
             .transpose()?;
 
         let fut = service.list_tools(rmcp_params);
@@ -304,7 +303,7 @@ impl RmcpClient {
         self.refresh_oauth_if_needed().await;
         let service = self.service().await?;
         let rmcp_params = params
-            .map(convert_to_rmcp::<_, PaginatedRequestParam>)
+            .map(convert_to_rmcp::<_, PaginatedRequestParams>)
             .transpose()?;
 
         let fut = service.list_resources(rmcp_params);
@@ -322,7 +321,7 @@ impl RmcpClient {
         self.refresh_oauth_if_needed().await;
         let service = self.service().await?;
         let rmcp_params = params
-            .map(convert_to_rmcp::<_, PaginatedRequestParam>)
+            .map(convert_to_rmcp::<_, PaginatedRequestParams>)
             .transpose()?;
 
         let fut = service.list_resource_templates(rmcp_params);
@@ -339,7 +338,7 @@ impl RmcpClient {
     ) -> Result<ReadResourceResult> {
         self.refresh_oauth_if_needed().await;
         let service = self.service().await?;
-        let rmcp_params: ReadResourceRequestParam = convert_to_rmcp(params)?;
+        let rmcp_params: RmcpReadResourceRequestParams = convert_to_rmcp(params)?;
         let fut = service.read_resource(rmcp_params);
         let result = run_with_timeout(fut, timeout, "resources/read").await?;
         let converted = convert_to_mcp(result)?;
@@ -356,7 +355,7 @@ impl RmcpClient {
         self.refresh_oauth_if_needed().await;
         let service = self.service().await?;
         let params = CallToolRequestParams { arguments, name };
-        let rmcp_params: CallToolRequestParam = convert_to_rmcp(params)?;
+        let rmcp_params: RmcpCallToolRequestParams = convert_to_rmcp(params)?;
         let fut = service.call_tool(rmcp_params);
         let rmcp_result = run_with_timeout(fut, timeout, "tools/call").await?;
         let converted = convert_call_tool_result(rmcp_result)?;
@@ -372,11 +371,9 @@ impl RmcpClient {
         let service: Arc<RunningService<RoleClient, LoggingClientHandler>> = self.service().await?;
         service.service();
         service
-            .send_notification(ClientNotification::CustomNotification(CustomNotification {
-                method: method.to_string(),
-                params,
-                extensions: Extensions::new(),
-            }))
+            .send_notification(ClientNotification::CustomNotification(
+                CustomNotification::new(method, params),
+            ))
             .await?;
         Ok(())
     }
@@ -443,7 +440,7 @@ async fn create_oauth_transport_and_runtime(
     let manager = match oauth_state {
         OAuthState::Authorized(manager) => manager,
         OAuthState::Unauthorized(manager) => manager,
-        OAuthState::Session(_) | OAuthState::AuthorizedHttpClient(_) => {
+        _ => {
             return Err(anyhow!("unexpected OAuth state during client setup"));
         }
     };

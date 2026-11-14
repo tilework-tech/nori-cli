@@ -8,6 +8,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use reqwest::ClientBuilder;
 use rmcp::transport::auth::AuthorizationMetadata;
+use rmcp::transport::auth::AuthorizationRequest;
 use rmcp::transport::auth::OAuthState;
 use tiny_http::Response;
 use tiny_http::Server;
@@ -84,8 +85,6 @@ pub async fn start_oauth_login(
     let default_headers = build_default_headers(http_headers, env_http_headers)?;
     let http_client = apply_default_headers(ClientBuilder::new(), &default_headers).build()?;
 
-    let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
-
     if let Some(pre_client_id) = client_id {
         // Pre-configured credentials path: use oauth2 crate directly to
         // avoid rmcp's mandatory dynamic client registration.
@@ -106,7 +105,12 @@ pub async fn start_oauth_login(
         // Dynamic registration path: use OAuthState from rmcp.
         let mut oauth_state = OAuthState::new(&server_url, Some(http_client)).await?;
         oauth_state
-            .start_authorization(&scope_refs, &redirect_uri, Some("Nori"))
+            .start_authorization(
+                AuthorizationRequest::new(&redirect_uri)
+                    .with_scopes(scopes)
+                    .with_initial_scope_selection()
+                    .with_client_name("Nori"),
+            )
             .await?;
         let auth_url = oauth_state.get_authorization_url().await?;
 
@@ -124,11 +128,10 @@ pub async fn start_oauth_login(
                 let _ = cancel_rx.await;
             };
 
-            let (code, csrf_state) =
+            let callback =
                 wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await?;
 
-            oauth_state
-                .handle_callback(&code, &csrf_state)
+            complete_oauth_callback(&mut oauth_state, callback)
                 .await
                 .context("failed to handle OAuth callback")?;
 
@@ -171,7 +174,7 @@ async fn start_oauth_login_preconfigured(
     store_mode: OAuthCredentialsStoreMode,
     http_client: reqwest::Client,
     redirect_uri: String,
-    callback_rx: oneshot::Receiver<(String, String)>,
+    callback_rx: oneshot::Receiver<OauthCallbackResult>,
     _guard: CallbackServerGuard,
     scopes: Vec<String>,
     pre_client_id: String,
@@ -185,7 +188,6 @@ async fn start_oauth_login_preconfigured(
     use oauth2::RedirectUrl;
     use oauth2::Scope;
     use oauth2::TokenUrl;
-    use oauth2::basic::BasicClient;
 
     // Discover OAuth metadata from the server's well-known endpoint.
     let metadata = discover_oauth_metadata(&http_client, &server_url).await?;
@@ -195,10 +197,11 @@ async fn start_oauth_login_preconfigured(
     let token_url = TokenUrl::new(metadata.token_endpoint).context("invalid token endpoint")?;
     let redirect = RedirectUrl::new(redirect_uri).context("invalid redirect URI")?;
 
-    let mut client_builder = BasicClient::new(ClientId::new(pre_client_id.clone()))
-        .set_auth_uri(auth_url)
-        .set_token_uri(token_url)
-        .set_redirect_uri(redirect);
+    let mut client_builder =
+        crate::oauth_http_client::McpOAuthClient::new(ClientId::new(pre_client_id.clone()))
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url)
+            .set_redirect_uri(redirect);
 
     if let Some(secret) = &client_secret {
         client_builder = client_builder.set_client_secret(ClientSecret::new(secret.clone()));
@@ -229,18 +232,19 @@ async fn start_oauth_login_preconfigured(
             let _ = cancel_rx.await;
         };
 
-        let (code, returned_csrf) =
+        let callback =
             wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await?;
 
-        if returned_csrf != *csrf_token.secret() {
+        if callback.state != *csrf_token.secret() {
             return Err(anyhow!("CSRF token mismatch"));
         }
 
-        let http_client_for_oauth = http_client;
+        let exchange_http =
+            |request| crate::oauth_http_client::request(http_client.clone(), request);
         let token_response = client
-            .exchange_code(oauth2::AuthorizationCode::new(code))
+            .exchange_code(oauth2::AuthorizationCode::new(callback.code))
             .set_pkce_verifier(pkce_verifier)
-            .request_async(&http_client_for_oauth)
+            .request_async(&exchange_http)
             .await
             .context("failed to exchange code for token")?;
 
@@ -350,9 +354,13 @@ pub async fn perform_oauth_login(
     let http_client = apply_default_headers(ClientBuilder::new(), &default_headers).build()?;
 
     let mut oauth_state = OAuthState::new(server_url, Some(http_client)).await?;
-    let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
     oauth_state
-        .start_authorization(&scope_refs, &redirect_uri, Some("Nori"))
+        .start_authorization(
+            AuthorizationRequest::new(&redirect_uri)
+                .with_scopes(scopes)
+                .with_initial_scope_selection()
+                .with_client_name("Nori"),
+        )
         .await?;
     let auth_url = oauth_state.get_authorization_url().await?;
 
@@ -370,11 +378,9 @@ pub async fn perform_oauth_login(
         let _ = tokio::io::AsyncBufReadExt::read_line(&mut stdin, &mut buf).await;
     };
 
-    let (code, csrf_state) =
-        wait_for_callback_or_cancel(rx, cancel, Duration::from_secs(300)).await?;
+    let callback = wait_for_callback_or_cancel(rx, cancel, Duration::from_secs(300)).await?;
 
-    oauth_state
-        .handle_callback(&code, &csrf_state)
+    complete_oauth_callback(&mut oauth_state, callback)
         .await
         .context("failed to handle OAuth callback")?;
 
@@ -399,18 +405,18 @@ pub async fn perform_oauth_login(
     Ok(())
 }
 
-fn spawn_callback_server(server: Arc<Server>, tx: oneshot::Sender<(String, String)>) {
+fn spawn_callback_server(server: Arc<Server>, tx: oneshot::Sender<OauthCallbackResult>) {
     tokio::task::spawn_blocking(move || {
         while let Ok(request) = server.recv() {
             let path = request.url().to_string();
-            if let Some(OauthCallbackResult { code, state }) = parse_oauth_callback(&path) {
+            if let Some(callback) = parse_oauth_callback(&path) {
                 let response =
                     Response::from_string("Authentication complete. You may close this window.");
                 if let Err(err) = request.respond(response) {
                     eprintln!("Failed to respond to OAuth callback: {err}");
                 }
-                if let Err(err) = tx.send((code, state)) {
-                    eprintln!("Failed to send OAuth callback: {err:?}");
+                if tx.send(callback).is_err() {
+                    eprintln!("OAuth callback receiver closed");
                 }
                 break;
             } else {
@@ -424,9 +430,20 @@ fn spawn_callback_server(server: Arc<Server>, tx: oneshot::Sender<(String, Strin
     });
 }
 
+#[derive(Debug)]
 struct OauthCallbackResult {
     code: String,
     state: String,
+    issuer: Option<String>,
+}
+
+async fn complete_oauth_callback(
+    oauth_state: &mut OAuthState,
+    callback: OauthCallbackResult,
+) -> Result<(), rmcp::transport::auth::AuthError> {
+    oauth_state
+        .handle_callback_with_issuer(&callback.code, &callback.state, callback.issuer.as_deref())
+        .await
 }
 
 fn parse_oauth_callback(path: &str) -> Option<OauthCallbackResult> {
@@ -437,6 +454,7 @@ fn parse_oauth_callback(path: &str) -> Option<OauthCallbackResult> {
 
     let mut code = None;
     let mut state = None;
+    let mut issuer = None;
 
     for pair in query.split('&') {
         let (key, value) = pair.split_once('=')?;
@@ -444,6 +462,7 @@ fn parse_oauth_callback(path: &str) -> Option<OauthCallbackResult> {
         match key {
             "code" => code = Some(decoded),
             "state" => state = Some(decoded),
+            "iss" => issuer = Some(decoded),
             _ => {}
         }
     }
@@ -451,17 +470,18 @@ fn parse_oauth_callback(path: &str) -> Option<OauthCallbackResult> {
     Some(OauthCallbackResult {
         code: code?,
         state: state?,
+        issuer,
     })
 }
 
 /// Wait for the OAuth callback or a cancellation signal, with a timeout.
-/// Returns the (code, csrf_state) pair from the callback, or an error if
+/// Returns the authorization code, state, and optional issuer, or an error if
 /// cancelled or timed out.
 async fn wait_for_callback_or_cancel(
-    rx: oneshot::Receiver<(String, String)>,
+    rx: oneshot::Receiver<OauthCallbackResult>,
     cancel: impl std::future::Future<Output = ()>,
     timeout_duration: Duration,
-) -> Result<(String, String)> {
+) -> Result<OauthCallbackResult> {
     tokio::select! {
         // Prefer callback over cancel when both are ready simultaneously.
         biased;
@@ -482,8 +502,90 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
+    async fn callback_preserves_and_validates_authorization_issuer() -> anyhow::Result<()> {
+        use axum::routing::get;
+        use axum::routing::post;
+        use rmcp::transport::auth::AuthError;
+        use serde_json::json;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let base = format!("http://{}", listener.local_addr()?);
+        let issuer = format!("{base}/mcp");
+        let metadata = json!({
+            "issuer": issuer,
+            "authorization_endpoint": format!("{base}/authorize"),
+            "token_endpoint": format!("{base}/token"),
+            "authorization_response_iss_parameter_supported": true,
+            "scopes_supported": ["admin", "write"]
+        });
+        let router = axum::Router::new()
+            .route(
+                "/.well-known/oauth-authorization-server/mcp",
+                get(move || async move {
+                    ([("content-type", "application/json")], metadata.to_string())
+                }),
+            )
+            .route(
+                "/token",
+                post(|| async {
+                    (
+                        [("content-type", "application/json")],
+                        json!({"access_token": "local-token", "token_type": "Bearer"}).to_string(),
+                    )
+                }),
+            );
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        for returned_issuer in [Some(issuer.as_str()), None, Some("https://wrong.example")] {
+            let http = reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()?;
+            let mut state = OAuthState::new(&issuer, Some(http)).await?;
+            state
+                .start_authorization(
+                    AuthorizationRequest::new("http://127.0.0.1/callback")
+                        .with_preregistered_client("local-client")
+                        .with_initial_scope_selection(),
+                )
+                .await?;
+            let url = reqwest::Url::parse(&state.get_authorization_url().await?)?;
+            let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
+            assert!(
+                !query.contains_key("scope"),
+                "unspecified scopes must not expand to all AS scopes"
+            );
+            let mut path = format!("/callback?code=local-code&state={}", query["state"]);
+            if let Some(issuer) = returned_issuer {
+                path.push_str(&format!("&iss={}", urlencoding::encode(issuer)));
+            }
+            let callback = parse_oauth_callback(&path).expect("valid callback");
+            let result = complete_oauth_callback(&mut state, callback).await;
+            match returned_issuer {
+                Some(value) if value == issuer => {
+                    result?;
+                    assert!(state.get_credentials().await?.1.is_some());
+                }
+                None => assert!(matches!(
+                    result,
+                    Err(AuthError::AuthorizationServerMissingIssuer { .. })
+                )),
+                Some(value) => assert!(matches!(
+                    result,
+                    Err(AuthError::AuthorizationServerMismatch {
+                        expected_issuer,
+                        received_issuer,
+                    }) if expected_issuer == issuer && received_issuer == value
+                )),
+            }
+        }
+        server.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn cancel_signal_aborts_callback_wait() {
-        let (_callback_tx, callback_rx) = oneshot::channel::<(String, String)>();
+        let (_callback_tx, callback_rx) = oneshot::channel::<OauthCallbackResult>();
 
         // Cancel resolves immediately.
         let cancel = std::future::ready(());
@@ -499,10 +601,14 @@ mod tests {
 
     #[tokio::test]
     async fn callback_returns_code_and_state() {
-        let (callback_tx, callback_rx) = oneshot::channel::<(String, String)>();
+        let (callback_tx, callback_rx) = oneshot::channel::<OauthCallbackResult>();
 
         callback_tx
-            .send(("auth_code_123".to_string(), "csrf_state_abc".to_string()))
+            .send(OauthCallbackResult {
+                code: "auth_code_123".into(),
+                state: "csrf_state_abc".into(),
+                issuer: None,
+            })
             .unwrap();
 
         // Cancel never resolves.
@@ -511,14 +617,14 @@ mod tests {
         let result =
             wait_for_callback_or_cancel(callback_rx, cancel, Duration::from_secs(300)).await;
 
-        let (code, state) = result.unwrap();
-        assert_eq!(code, "auth_code_123");
-        assert_eq!(state, "csrf_state_abc");
+        let callback = result.unwrap();
+        assert_eq!(callback.code, "auth_code_123");
+        assert_eq!(callback.state, "csrf_state_abc");
     }
 
     #[tokio::test]
     async fn timeout_returns_error_when_no_callback_or_cancel() {
-        let (_callback_tx, callback_rx) = oneshot::channel::<(String, String)>();
+        let (_callback_tx, callback_rx) = oneshot::channel::<OauthCallbackResult>();
 
         // Cancel never resolves.
         let cancel = std::future::pending();

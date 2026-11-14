@@ -357,6 +357,16 @@ is the agent-facing control plane: agents read the goal with `get_goal` from the
 MCP server. Completion uses the exact status `complete`; genuine impasses use
 `blocked`.
 
+[`nori_client_mcp.rs`](src/backend/nori_client_mcp.rs) serves streamable HTTP
+at an ephemeral loopback `/mcp` endpoint protected by a per-server bearer token.
+The `rmcp` service disables legacy session mode and SSE keep-alives, preserving
+stateless transport while sharing harness-owned goal state across requests.
+It explicitly advertises MCP `2024-11-05`; upgrading the SDK does not change
+that protocol contract. The newer `discover` method returns method-not-found,
+preserving `initialize` as the connection boundary that marks the agent
+connected, publishes capabilities, and enables hidden goal continuations.
+Dropping the server aborts its listener task.
+
 This ownership boundary is repeated in the active-goal context, automatic
 continuation prompt, and `nori-client` MCP server instructions. Before ending a
 goal turn, the agent is instructed to read the Nori-owned goal, update it only

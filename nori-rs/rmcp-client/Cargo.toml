@@ -19,10 +19,12 @@ futures = { workspace = true, default-features = false, features = ["std"] }
 keyring = { workspace = true, features = ["crypto-rust"] }
 mcp-types = { path = "../mcp-types" }
 oauth2 = "5"
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13.2", default-features = false, features = [
+    "http2",
     "json",
     "stream",
-    "rustls-tls",
+    "system-proxy",
+    "rustls",
 ] }
 rmcp = { workspace = true, default-features = false, features = [
     "auth",
@@ -54,7 +56,6 @@ webbrowser = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
-escargot = { workspace = true }
 pretty_assertions = { workspace = true }
 serial_test = { workspace = true }
 tempfile = { workspace = true }

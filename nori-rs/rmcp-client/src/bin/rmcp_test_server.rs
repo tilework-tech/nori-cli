@@ -5,13 +5,13 @@ use std::sync::Arc;
 use rmcp::ErrorData as McpError;
 use rmcp::ServiceExt;
 use rmcp::handler::server::ServerHandler;
-use rmcp::model::CallToolRequestParam;
+use rmcp::model::CallToolRequestParams;
 use rmcp::model::CallToolResult;
 use rmcp::model::JsonObject;
 use rmcp::model::ListToolsResult;
-use rmcp::model::PaginatedRequestParam;
+use rmcp::model::PaginatedRequestParams;
 use rmcp::model::ServerCapabilities;
-use rmcp::model::ServerInfo;
+use rmcp::model::ServerConfig;
 use rmcp::model::Tool;
 use serde::Deserialize;
 use serde_json::json;
@@ -61,36 +61,36 @@ struct EchoArgs {
 }
 
 impl ServerHandler for TestToolServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            capabilities: ServerCapabilities::builder()
+    fn supported_protocol_versions(&self) -> Cow<'static, [rmcp::model::ProtocolVersion]> {
+        Cow::Borrowed(rmcp::model::ProtocolVersion::known_up_to(
+            &rmcp::model::ProtocolVersion::V_2025_03_26,
+        ))
+    }
+
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(
+            ServerCapabilities::builder()
                 .enable_tools()
                 .enable_tool_list_changed()
                 .build(),
-            ..ServerInfo::default()
-        }
+        )
+        .with_protocol_version(rmcp::model::ProtocolVersion::V_2025_03_26)
     }
 
     fn list_tools(
         &self,
-        _request: Option<PaginatedRequestParam>,
+        _request: Option<PaginatedRequestParams>,
         _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
     ) -> impl std::future::Future<Output = Result<ListToolsResult, McpError>> + Send + '_ {
         let tools = self.tools.clone();
-        async move {
-            Ok(ListToolsResult {
-                tools: (*tools).clone(),
-                next_cursor: None,
-                meta: None,
-            })
-        }
+        async move { Ok(ListToolsResult::with_all_items((*tools).clone())) }
     }
 
     async fn call_tool(
         &self,
-        request: CallToolRequestParam,
+        request: CallToolRequestParams,
         _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<rmcp::model::CallToolResponse, McpError> {
         match request.name.as_ref() {
             "echo" => {
                 let args: EchoArgs = match request.arguments {
@@ -112,12 +112,9 @@ impl ServerHandler for TestToolServer {
                     "env": env_snapshot.get("MCP_TEST_VALUE"),
                 });
 
-                Ok(CallToolResult {
-                    content: Vec::new(),
-                    structured_content: Some(structured_content),
-                    is_error: Some(false),
-                    meta: None,
-                })
+                let mut result = CallToolResult::success(Vec::new());
+                result.structured_content = Some(structured_content);
+                Ok(result.into())
             }
             other => Err(McpError::invalid_params(
                 format!("unknown tool: {other}"),
