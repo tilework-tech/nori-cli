@@ -256,6 +256,31 @@ fn provider_kind(agent_name: &str) -> ProviderKind {
 }
 
 impl App {
+    /// Post the notifications parked sessions asked for, naming the session.
+    /// Only top-level sessions notify; a child's news reaches the user
+    /// through its parent. The terminal shows them only while unfocused.
+    pub(super) fn post_parked_session_notifications(&mut self, tui: &mut crate::tui::Tui) {
+        let mut pending = Vec::new();
+        for (generation, parked) in self.session_deck.parked_sessions_mut() {
+            if let Some(message) = parked.widget.take_pending_notification() {
+                let parent = parked
+                    .widget
+                    .managed_conversation_id()
+                    .and_then(|id| self.session_manager.get(&id))
+                    .and_then(|record| record.parent);
+                if parent.is_none() {
+                    pending.push((generation, message));
+                }
+            }
+        }
+        for (generation, message) in pending {
+            let title = self
+                .session_rows_title(generation)
+                .unwrap_or_else(|| "A session".to_string());
+            tui.notify(format!("{title}: {message}"));
+        }
+    }
+
     /// Bring on screen the next session, after the active one in navigation
     /// order, whose family is waiting on the user.
     pub(super) fn show_next_waiting_session(&mut self) {

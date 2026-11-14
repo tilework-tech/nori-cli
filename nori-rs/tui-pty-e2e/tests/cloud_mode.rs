@@ -930,3 +930,57 @@ fn test_cloud_mode_surfaces_auth_error_from_child_stderr() {
         )
         .expect("the auth error should include an actionable login command");
 }
+
+/// With `[features] multi_session`, `/new` in cloud mode starts a second cloud
+/// session beside the first, and both are listed as Nori Cloud sessions.
+#[test]
+#[cfg(target_os = "linux")]
+fn test_cloud_sessions_share_the_session_list() {
+    let fake = FakeHandroll::new();
+    let config = cloud_session_config(&fake)
+        .with_extra_config_toml("[features]\nmulti_session = true\n")
+        .with_mock_response("cloud answer");
+    let mut session =
+        TuiSession::spawn_with_config(30, 110, config).expect("Failed to spawn nori cloud");
+    session
+        .wait_for_text("Nori Cloud · Mock Default Model", TIMEOUT)
+        .expect("the first cloud session should connect");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.submit_input("first cloud question").unwrap();
+    session
+        .wait_for_text("cloud answer", TIMEOUT)
+        .expect("the first cloud session answers");
+    std::thread::sleep(Duration::from_millis(500));
+
+    session.submit_input("/new").unwrap();
+    fake.wait_for_child_pid_count(2, TIMEOUT);
+    session
+        .wait_for(
+            |screen| !screen.contains("first cloud question") && screen.contains("2 ready"),
+            TIMEOUT,
+        )
+        .expect("a second cloud session starts beside the first");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.submit_input("second cloud question").unwrap();
+    session
+        .wait_for_text("cloud answer", TIMEOUT)
+        .expect("the second cloud session answers");
+
+    session.send_key(Key::Alt('s')).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("Sessions 2")
+                    && screen.contains("first cloud question")
+                    && screen.contains("second cloud question")
+                    && screen.matches("Nori Cloud").count() >= 2
+            },
+            Duration::from_secs(3),
+        )
+        .expect("both cloud sessions are listed");
+    let pids = fake.wait_for_child_pid_count(2, Duration::from_millis(100));
+    assert!(
+        pids.iter().all(|pid| FakeHandroll::child_is_alive(*pid)),
+        "both cloud children stay alive: {pids:?}"
+    );
+}

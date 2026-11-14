@@ -112,6 +112,7 @@ impl App {
                     self.refresh_session_overview();
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
+                    self.post_parked_session_notifications(tui);
                     if self
                         .chat_widget
                         .handle_paste_burst_tick(tui.frame_requester())

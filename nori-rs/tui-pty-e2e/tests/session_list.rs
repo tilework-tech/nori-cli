@@ -345,3 +345,47 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
         normalize_for_input_snapshot(screen)
     );
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn an_unfocused_terminal_is_notified_when_a_background_session_needs_you() {
+    let mut session = spawn();
+    ask(&mut session, "alpha question", ALPHA_ANSWER);
+    start_new_session(&mut session);
+    session.submit_input(BACKGROUND_REQUEST).unwrap();
+    session.settle(Duration::from_millis(200));
+    session.send_key(Key::Alt(',')).unwrap();
+    session.send_key(Key::FocusOut).unwrap();
+    session
+        .wait_for_text("1 needs you", Duration::from_secs(8))
+        .expect("the request arrives in the background");
+    session.settle(Duration::from_millis(500));
+    let raw = String::from_utf8_lossy(session.raw_output()).to_string();
+    let notification = raw
+        .split("\u{1b}]9;")
+        .nth(1)
+        .and_then(|rest| rest.split('\u{7}').next())
+        .unwrap_or_else(|| panic!("no OSC 9 notification in the output"));
+    assert_eq!(
+        notification,
+        "mock:request-permission:rm -rf target/debug: Approval requested: Execute shell command"
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn a_focused_terminal_gets_no_notification() {
+    let mut session = spawn();
+    session.send_key(Key::FocusIn).unwrap();
+    ask(&mut session, "alpha question", ALPHA_ANSWER);
+    start_new_session(&mut session);
+    session.submit_input(BACKGROUND_REQUEST).unwrap();
+    session.settle(Duration::from_millis(200));
+    session.send_key(Key::Alt(',')).unwrap();
+    session
+        .wait_for_text("1 needs you", Duration::from_secs(8))
+        .expect("the request arrives in the background");
+    session.settle(Duration::from_millis(500));
+    let raw = String::from_utf8_lossy(session.raw_output()).to_string();
+    assert!(!raw.contains("\u{1b}]9;"), "unexpected notification");
+}
