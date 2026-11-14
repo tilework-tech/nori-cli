@@ -26,6 +26,7 @@ pub(crate) struct SessionFacts {
     pub(crate) family_status: SessionStatus,
     pub(crate) conversation_id: Option<ConversationId>,
     pub(crate) parent: Option<ConversationId>,
+    pub(crate) agent: String,
     pub(crate) on_screen: bool,
 }
 
@@ -64,7 +65,8 @@ impl App {
                         .and_then(|id| self.session_manager.family_status(&id))
                         .unwrap_or(status),
                     conversation_id,
-                    parent: record.and_then(|record| record.parent),
+                    parent: record.as_ref().and_then(|record| record.parent),
+                    agent: widget.config_ref().active_agent.clone(),
                     on_screen: *generation == active,
                 })
             })
@@ -74,7 +76,8 @@ impl App {
     /// Rows for the session list: navigation order, with each session's
     /// children directly under it.
     pub(crate) fn session_rows(&self) -> Vec<SessionRow> {
-        let facts = self.session_facts();
+        let mut facts = self.session_facts();
+        facts.extend(self.unviewed_descendants(&facts));
         let by_conversation: HashMap<ConversationId, SessionGeneration> = facts
             .iter()
             .filter_map(|fact| Some((fact.conversation_id?, fact.generation)))
@@ -125,11 +128,44 @@ impl App {
             .filter(|title| !title.is_empty())
     }
 
+    /// Sessions in the manager that descend from a session this TUI shows but
+    /// have no view here, such as sessions another session started. They are
+    /// listed under their parent; their keys are negative so they never
+    /// collide with a session generation.
+    fn unviewed_descendants(&self, shown: &[SessionFacts]) -> Vec<SessionFacts> {
+        let mut known: Vec<ConversationId> = shown
+            .iter()
+            .filter_map(|fact| fact.conversation_id)
+            .collect();
+        let records = self.session_manager.list();
+        let mut extra = Vec::new();
+        loop {
+            let found: Vec<_> = records
+                .iter()
+                .filter(|record| !known.contains(&record.conversation_id))
+                .filter(|record| record.parent.is_some_and(|parent| known.contains(&parent)))
+                .collect();
+            if found.is_empty() {
+                return extra;
+            }
+            for record in found {
+                known.push(record.conversation_id);
+                let key = -i64::try_from(extra.len() + 1).unwrap_or(i64::MAX);
+                extra.push(SessionFacts {
+                    generation: key,
+                    status: record.status,
+                    family_status: record.status,
+                    conversation_id: Some(record.conversation_id),
+                    parent: record.parent,
+                    agent: record.agent.clone(),
+                    on_screen: false,
+                });
+            }
+        }
+    }
+
     fn session_row(&self, fact: &SessionFacts, depth: i32) -> SessionRow {
-        let widget = self.widget_for(fact.generation);
-        let agent_name = widget
-            .map(|widget| widget.config_ref().active_agent.clone())
-            .unwrap_or_default();
+        let agent_name = fact.agent.clone();
         let title = self
             .session_rows_title(fact.generation)
             .unwrap_or_else(|| "New session".to_string());

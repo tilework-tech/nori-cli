@@ -299,3 +299,49 @@ fn an_agent_that_dies_fails_only_its_session_which_can_be_resumed() {
         .expect("resuming replays the failed session's transcript on a new agent");
     ask(&mut session, "after resume", ALPHA_ANSWER);
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
+    let mut session = spawn();
+    ask(&mut session, "parent question", ALPHA_ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("parent question", Duration::from_secs(5))
+        .expect("the fork picker lists the parent's messages");
+    std::thread::sleep(TIMEOUT_INPUT);
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for(|screen| screen.contains("2 ready"), Duration::from_secs(10))
+        .expect("the fork starts beside its parent");
+    session.settle(Duration::from_millis(500));
+    // The fork prefills the composer with the message it rewound to.
+    session.send_key(Key::Ctrl('u')).unwrap();
+    session.submit_input(BACKGROUND_REQUEST).unwrap();
+    session.settle(Duration::from_millis(200));
+    session.send_key(Key::Alt(',')).unwrap();
+    session
+        .wait_for_text("1 needs you", Duration::from_secs(8))
+        .expect("the child's request arrives while the parent is on screen");
+
+    session.send_key(Key::Alt('s')).unwrap();
+    session
+        .wait_for(
+            |screen| screen.contains("└─ ● mock:request-permission"),
+            Duration::from_secs(3),
+        )
+        .expect("the fork is indented under its parent");
+    let screen = session.screen_contents();
+    let parent_row = screen
+        .lines()
+        .find(|line| line.contains("parent question (current)"))
+        .unwrap_or_else(|| panic!("parent row missing:\n{screen}"));
+    assert!(
+        parent_row.contains("needs you"),
+        "the child's request marks the parent row:\n{screen}"
+    );
+    insta::assert_snapshot!(
+        "session_list_fork_under_parent",
+        normalize_for_input_snapshot(screen)
+    );
+}
