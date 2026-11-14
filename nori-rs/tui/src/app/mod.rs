@@ -112,6 +112,8 @@ pub(crate) struct App {
     session_reprint_pending: bool,
     /// Sessions that finished a turn while off screen and were not viewed.
     unseen_finishes: crate::session_status::UnseenFinishes,
+    /// What each session is doing, for the session list.
+    session_previews: crate::session_preview::SessionPreviews,
 
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
@@ -347,6 +349,7 @@ impl App {
             retiring_transcript: None,
             session_reprint_pending: false,
             unseen_finishes: Default::default(),
+            session_previews: Default::default(),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
@@ -388,6 +391,7 @@ impl App {
         }
 
         app.session_deck.add(app.chat_widget.session_generation());
+        crate::slash_command::set_multi_session_commands(app.config.multi_session);
 
         // Propagate NoriConfig settings to the textarea.
         app.hotkey_config = app.config.hotkeys.clone();

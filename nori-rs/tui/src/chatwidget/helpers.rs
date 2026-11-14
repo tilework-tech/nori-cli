@@ -581,6 +581,15 @@ impl ChatWidget {
         }
     }
 
+    pub(crate) fn show_session_list(&mut self, rows: Vec<crate::bottom_pane::SessionRow>) {
+        self.bottom_pane.show_session_list(rows);
+        self.request_redraw();
+    }
+
+    pub(crate) fn update_session_list(&mut self, rows: &[crate::bottom_pane::SessionRow]) {
+        self.bottom_pane.update_session_list(rows);
+    }
+
     /// Replace the lines about other sessions shown above the bottom pane.
     pub(crate) fn set_session_lines(&mut self, lines: Vec<Line<'static>>) {
         if self.session_lines != lines {

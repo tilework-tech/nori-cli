@@ -1,0 +1,20 @@
+---
+source: tui-pty-e2e/tests/session_list.rs
+assertion_line: 133
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+› gamma question
+
+• alpha agent answer
+
+  1 needs you · 2 ready
+
+  Sessions 3 · 1 needs you · 2 ready  tab: all sessions · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ● mock:request-permission:rm -rf target/debug                             Mock ACP Alt    needs you
+    approve: rm -rf target/debug
+
+  ↑↓ move  enter open  tab waiting on you  esc close

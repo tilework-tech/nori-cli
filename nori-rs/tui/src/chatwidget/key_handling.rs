@@ -140,6 +140,9 @@ impl ChatWidget {
             SlashCommand::New => {
                 self.app_event_tx.send(AppEvent::NewSession);
             }
+            SlashCommand::Sessions => {
+                self.app_event_tx.send(AppEvent::OpenSessionList);
+            }
             SlashCommand::Resume => {
                 self.open_resume_session_picker();
             }

@@ -157,6 +157,14 @@ pub(crate) enum AppEvent {
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
+    /// Open the list of sessions (`[features] multi_session`).
+    OpenSessionList,
+
+    /// Bring a session on screen.
+    ShowSession {
+        generation: SessionGeneration,
+    },
+
     /// History (`InsertHistoryCell` or `ConsolidateAgentMessage`) sent by
     /// the widget of session `generation`.
     SessionHistory {

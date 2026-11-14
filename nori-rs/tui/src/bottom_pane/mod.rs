@@ -40,6 +40,8 @@ mod paste_burst;
 pub mod popup_consts;
 mod queued_user_messages;
 mod scroll_state;
+mod session_list_view;
+pub(crate) use session_list_view::SessionRow;
 mod selection_popup_common;
 mod skill_popup;
 mod textarea;
@@ -524,6 +526,21 @@ impl BottomPane {
 
     /// Show a domain-free picker from the shared component crate, adapting
     /// typed outcomes into this application's event callbacks.
+    /// Open the session list over the composer.
+    pub(crate) fn show_session_list(&mut self, rows: Vec<SessionRow>) {
+        let view = session_list_view::SessionListView::new(rows, self.app_event_tx.clone());
+        self.push_view(Box::new(view));
+    }
+
+    /// Refresh the session list if it is open.
+    pub(crate) fn update_session_list(&mut self, rows: &[SessionRow]) {
+        if let Some(view) = self.view_stack.last_mut()
+            && view.update_session_list(rows)
+        {
+            self.request_redraw();
+        }
+    }
+
     pub(crate) fn show_component_picker(&mut self, params: ComponentPickerParams) {
         let view =
             component_picker_view::ComponentPickerView::new(params, self.app_event_tx.clone());

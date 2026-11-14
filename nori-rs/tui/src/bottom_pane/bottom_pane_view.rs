@@ -63,6 +63,12 @@ pub(crate) trait BottomPaneView: Renderable {
         false
     }
 
+    /// Replace the rows of the session list. Only the session list uses this;
+    /// other views ignore it.
+    fn update_session_list(&mut self, _rows: &[super::SessionRow]) -> bool {
+        false
+    }
+
     /// Remove an item in a generic selection view by stable id.
     fn remove_selection_item(&mut self, _stable_id: &str) -> bool {
         false

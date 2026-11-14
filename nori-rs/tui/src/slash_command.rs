@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use strum::IntoEnumIterator;
 use strum_macros::AsRefStr;
 use strum_macros::EnumIter;
@@ -33,6 +35,7 @@ pub enum SlashCommand {
     Vim,
     Goal,
     New,
+    Sessions,
     Resume,
     ResumeViewonly,
     Close,
@@ -63,6 +66,7 @@ impl SlashCommand {
         match self {
             SlashCommand::Agent => "switch between available ACP agents",
             SlashCommand::New => "start a new chat during a conversation",
+            SlashCommand::Sessions => "list sessions and move between them",
             SlashCommand::Resume => "resume a previous session",
             SlashCommand::ResumeViewonly => "view a previous session transcript (read-only)",
             SlashCommand::Close => "close (release) the current session and start a fresh chat",
@@ -122,6 +126,7 @@ impl SlashCommand {
             | SlashCommand::Close
             | SlashCommand::Browser => false,
             SlashCommand::Browse
+            | SlashCommand::Sessions
             | SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
@@ -153,6 +158,7 @@ impl SlashCommand {
             | SlashCommand::Vim
             | SlashCommand::Goal
             | SlashCommand::New
+            | SlashCommand::Sessions
             | SlashCommand::Resume
             | SlashCommand::ResumeViewonly
             | SlashCommand::Init
@@ -177,9 +183,18 @@ impl SlashCommand {
         match self {
             #[cfg(not(feature = "login"))]
             SlashCommand::Logout => false,
+            SlashCommand::Sessions => MULTI_SESSION_COMMANDS.load(Ordering::Relaxed),
             _ => true,
         }
     }
+}
+
+/// Whether commands that exist only with `[features] multi_session` are
+/// offered. Set once when the App starts; the flag needs a restart to change.
+static MULTI_SESSION_COMMANDS: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn set_multi_session_commands(enabled: bool) {
+    MULTI_SESSION_COMMANDS.store(enabled, Ordering::Relaxed);
 }
 
 /// Return all built-in commands in a Vec paired with their command string.

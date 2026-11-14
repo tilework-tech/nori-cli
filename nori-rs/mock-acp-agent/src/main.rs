@@ -1104,6 +1104,12 @@ impl MockAgent {
 
         // Support requesting permission from client for testing approval bridging
         if request_permission || std::env::var("MOCK_AGENT_REQUEST_PERMISSION").is_ok() {
+            if let Some(delay) = std::env::var("MOCK_AGENT_PERMISSION_DELAY_MS")
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+            {
+                sleep(Duration::from_millis(delay)).await;
+            }
             eprintln!("Mock agent: requesting permission from client");
 
             // Create a tool call update describing the operation
