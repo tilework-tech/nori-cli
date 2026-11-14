@@ -336,6 +336,9 @@ impl ChatWidget {
         // resumable and is surfaced as `forked from:` on the status card.
         self.conversation_id =
             nori_harness::ConversationId::from_string(&forked.new_conversation_id).ok();
+        if self.conversation_id.is_some() {
+            self.managed_conversation_id = self.conversation_id;
+        }
         self.forked_from =
             nori_harness::ConversationId::from_string(&forked.previous_conversation_id).ok();
 

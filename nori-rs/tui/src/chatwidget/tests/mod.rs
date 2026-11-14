@@ -117,6 +117,9 @@ fn make_chatwidget_manual_for_mode(
         prepared_agent: None,
         cloud_mode,
         analytics: None,
+        session_manager: nori_harness::session_manager::SessionManager::new(
+            nori_harness::session_manager::SessionManagerConfig::default(),
+        ),
     });
     let (_unused_tx, unused_rx) = unbounded_channel();
     (widget, event_rx, unused_rx)

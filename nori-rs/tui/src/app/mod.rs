@@ -86,6 +86,9 @@ pub(crate) struct App {
     pub(crate) chat_widget: ChatWidget,
     pub(crate) auth_manager: Arc<AuthManager>,
     remote_control: crate::remote_control::RemoteControlManager,
+    /// Registry of every session this process runs. The active widget's
+    /// session and a hidden `/agent` switch candidate are both entries.
+    session_manager: nori_harness::session_manager::SessionManager,
 
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: NoriConfig,
@@ -240,6 +243,9 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
+        let session_manager = nori_harness::session_manager::SessionManager::new(
+            nori_harness::session_manager::SessionManagerConfig::default(),
+        );
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),
@@ -257,6 +263,7 @@ impl App {
                 fork_context: None,
                 prepared_agent: None,
                 analytics: analytics.clone(),
+                session_manager: session_manager.clone(),
             };
             match resume_selection {
                 ResumeSelection::Resume(target) => {
@@ -299,6 +306,7 @@ impl App {
             chat_widget,
             auth_manager: auth_manager.clone(),
             remote_control: crate::remote_control::RemoteControlManager::new(),
+            session_manager,
             config,
             vertical_footer,
             cloud_mode,
@@ -475,6 +483,10 @@ impl App {
         app.prepared_agent_initial_context = None;
         app.discard_candidate();
         app.remote_control.disable().await;
+        let report = app.session_manager.shutdown().await;
+        if !report.timed_out.is_empty() || !report.failed.is_empty() {
+            tracing::warn!(?report, "some sessions did not shut down cleanly");
+        }
 
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;
@@ -512,6 +524,7 @@ impl App {
             fork_context,
             prepared_agent: None,
             analytics: self.analytics.clone(),
+            session_manager: self.session_manager.clone(),
         }
     }
 

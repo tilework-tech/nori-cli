@@ -6,7 +6,9 @@ Path: @/nori-rs/nori-protocol
 
 `nori-protocol` is the public, types-only boundary for embedding a Nori ACP
 session. It re-exports the official ACP schema as `nori_protocol::acp` and adds
-only the session events whose semantics belong to the Nori harness.
+only the session events whose semantics belong to the Nori harness, plus the
+envelope and status types the session manager publishes for multi-session
+clients.
 
 ### How it fits into the larger codebase
 
@@ -47,7 +49,7 @@ pub enum AcpEvent {
 }
 ```
 
-`NoriEvent` has exactly sixteen outer variants:
+`NoriEvent` outer variants:
 
 ```rust
 pub enum NoriEvent {
@@ -85,6 +87,20 @@ carries `previous_conversation_id` (the now-frozen parent conversation),
 active), and `new_acp_session_id` (the forked ACP session). It is recorded into
 the new conversation, not the parent.
 
+`SessionEnvelope` (in [`session_envelope.rs`](src/session_envelope.rs)) wraps
+one `SessionEvent` with the `conversation_id` it belongs to, the `agent` name
+from the agent registry, and a `seq` number. `seq` starts at 1 for each
+conversation and increases by one per event with no gaps, so a client
+following several sessions can order events per session and detect a drop. A
+fork starts a new conversation and therefore a new sequence. The envelope adds
+routing only; the wrapped event is unchanged.
+
+`SessionStatus` is the coarse per-session status shown in a session list:
+`Starting`, `Working`, `NeedsYou`, `Ready`, `Failed`, or `Closed` (serialized
+in snake case). The rules that derive it from the event stream live in the
+harness session manager (see [`nori-harness`](../harness/docs.md)); this crate
+defines only the values.
+
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the
 original `RequestId`; consumers do not correlate requests from content or from
@@ -102,6 +118,8 @@ exact ACP wire `RequestId` for harness-issued operations.
 - Output without an active local request remains raw `SessionEvent::Acp`
   traffic. Presentation grouping and optional lifecycle hints stay private to
   consumers such as [`nori-tui`](../tui/docs.md).
+- `SessionEnvelope` and `SessionStatus` are Nori routing and summary types, not
+  ACP extensions.
 - The crate contains no reducer, normalizer, parser, formatter, transcript
   compatibility decoder, or presentation state.
 - `ReplayStarted` and `ReplayFinished` bracket historical ACP notifications

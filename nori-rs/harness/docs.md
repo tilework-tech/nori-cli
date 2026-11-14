@@ -4,7 +4,7 @@ Path: @/nori-rs/harness
 
 ### Overview
 
-`nori-harness` is the headless, embeddable runtime for one Nori ACP session. It
+`nori-harness` is the headless, embeddable runtime for Nori ACP sessions. It
 composes the low-level ACP host with session lifecycle, private reduction,
 transcripts, queueing, history, goals, undo, hooks, user-shell operations, and
 worktree behavior. It has no terminal dependency.
@@ -15,6 +15,11 @@ prepared owner with an explicit session choice, then control the active session
 through typed methods and one ordered stream of `nori_protocol::SessionEvent`
 values. Additional bounded subscribers can follow the same ordered stream
 without disturbing the primary consumer.
+
+The session manager sits above that per-session runtime. It keeps a registry of
+live sessions keyed by conversation ID, runs each session on its own agent
+process, tags every event as a `nori_protocol::SessionEnvelope`, and tracks a
+coarse `SessionStatus` for each session and each session family.
 
 ### How it fits into the larger codebase
 
@@ -43,6 +48,12 @@ and event stream to implement both a finite plaintext projection and a bounded
 ACP agent facade. The facade preserves ACP request/response semantics where the
 shell caller participates, rather than serializing the private reducer or
 inventing a second public event vocabulary.
+
+`nori-tui` starts every session through one app-owned `SessionManager`. The
+manager calls the same launch internals as `launch_session`, so a managed
+session behaves exactly like a directly launched one. `nori-exec`, the remote
+ACP host, and the public `launch_session`/`prepare_and_launch_session` entry
+points still use the per-session runtime directly and see only one session.
 
 The remote ACP transport (`@/docs/remote-control.md`) is the other
 headless consumer. `nori-acp-host` owns the WebSocket server and defines the
@@ -547,6 +558,81 @@ local transcript. Fork copies the parent transcript and retains those same
 identities. See the [transcript format](../../docs/transcripts.md) for optional
 storage metadata and compatibility rules.
 
+#### Session manager and envelopes
+
+[`session_manager`](src/session_manager/mod.rs) is the multi-session layer.
+Its public type `SessionManager` is cheap to clone; clones share one registry.
+The registry itself ([`registry.rs`](src/session_manager/registry.rs)) is pure
+state with no I/O, so status and family rules are unit-tested without agent
+processes.
+
+```text
+ client (TUI)                    SessionManager
+     | start / resume / close        |  registry: conversation ID -> record
+     v                               |  capacity semaphore (max_sessions)
+  StartSession ----------------------+
+                                     |  one pump task per agent process
+                 per-session runtime |  applies event -> status, seq
+                 (HarnessHandle) ----+--> session's own stream (unbounded)
+                                     +--> subscribe() streams (bounded, all sessions)
+```
+
+- **Start.** `start` takes an agent (already `Prepared`, or a `Prepare` spec to
+  spawn one), a `SessionStart`, an optional parent, and a `SessionSource`
+  (`User`, `Fork`, or `Session`). The manager reserves a capacity slot, mints
+  the conversation ID before launch, and passes it down through
+  `AcpBackendConfig.conversation_id`; the transcript recorder uses it as the
+  transcript ID. It returns a `ManagedSession` with the ID, a `HarnessHandle`,
+  and the session's own envelope stream. Start fails with `CapacityReached`,
+  `ShuttingDown`, `UnknownParent`, or `AgentAlreadyActivated`.
+- **Envelopes.** One pump task per agent process applies each event to the
+  registry first, then publishes the envelope to all-session subscribers and to
+  the session's own stream. The own stream is unbounded and lossless, matching
+  the primary receiver of a directly launched session. `subscribe(capacity)`
+  follows every session; a subscriber that falls `capacity` envelopes behind is
+  dropped and its receiver closes, and sessions are never slowed.
+- **Status.** Each record carries a `SessionStatus`:
+
+  | Status | When |
+  | --- | --- |
+  | `Starting` | Before `SessionStarted` |
+  | `Working` | Phase is `Prompting`, `Loading`, or `Cancelling` |
+  | `NeedsYou` | An ACP permission request is pending |
+  | `Ready` | Idle |
+  | `Failed` | `SessionEnded` with `ConnectionLost`, `SpawnFailed`, or `TimedOut`, or the stream closed with no end event |
+  | `Closed` | `SessionEnded` with `Shutdown` or `Closed`, or superseded by a fork |
+
+  A pending request clears when any `HarnessHandle` clone answers it through
+  `respond_to_agent` (the handle reports answers to the manager through a
+  crate-private observer), when the phase returns to `Idle` or enters
+  `Cancelling`, or when the session ends.
+- **Families.** A session family is a top-level session plus all of its
+  descendants. `family_status` rolls member statuses up with priority
+  `NeedsYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed`.
+- **Fork.** On `NoriEvent::SessionForked` (branch at head) the parent becomes
+  `Closed` and a child record (source `Fork`, parent = previous conversation)
+  takes over the same agent process and capacity slot. `SessionForked` is
+  delivered as sequence 1 of the child conversation.
+- **Resume.** `resume(failed_id, spec)` restarts a `Failed` session from its
+  transcript on a new agent process. The new session gets a new conversation
+  ID, records the old one in `resumed_from`, keeps the parent and source,
+  replaces the old record, and adopts the old record's children. Errors are
+  `Unknown`, `NotFailed`, `NoTranscript`, `AgentMismatch`, and `Transcript`.
+- **Close and shutdown.** `close(id, child_grace)` shuts one session down,
+  bounded by `shutdown_timeout`; closing an ended session does nothing.
+  `shutdown()` stops admission, then shuts every live session down in parallel,
+  each with the same timeout, and returns a `ShutdownReport` of closed,
+  timed-out, and failed sessions.
+- **Queries.** `get`, `list` (registration order, ended sessions kept), and
+  `handle` (live sessions only) read the registry. A record holds the agent,
+  parent, source, `resumed_from`, cwd, model, approval policy, transcript path,
+  ACP session ID, and status. The model starts as the config default and is
+  replaced by the agent-advertised model-category config option from
+  `SessionStarted` or a config option update.
+
+`SessionManagerConfig` defaults to eight sessions and a five-second shutdown
+timeout.
+
 #### Browser sessions and profile tiers
 
 `backend/browser_session.rs` (`#[cfg(unix)]`) launches a headed Chrome browser
@@ -609,6 +695,17 @@ temp dir is removed.
   (last connect wins), and a consumer whose bounded queue overflows is dropped,
   which closes its connection. Remote-host behavior is exercised in
   `@/nori-rs/harness/tests/remote_host.rs` against the mock ACP agent.
+- Session manager invariants: one agent process per session; conversation ID
+  = transcript ID = envelope `conversation_id`; envelope `seq` starts at 1 per
+  conversation with no gaps, and a fork starts a new sequence; a capacity slot
+  is held from before spawn until the session ends, and a fork moves it to the
+  child.
+- A dead agent process fails only the session it carries. Other sessions keep
+  their status, sequence, and slot.
+- The manager record does not mirror approval-policy changes made later
+  through the raw `HarnessHandle`. Prepared agents held outside the manager
+  (such as a TUI warm-up before any session exists) do not count against the
+  cap.
 - Remote and local frontends share notifications but not request ownership.
   Local prompts may queue; remote prompts reject while busy, remote cancel is
   scoped to the registered harness request id, and only the remote submitter

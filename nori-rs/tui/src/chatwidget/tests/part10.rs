@@ -1428,12 +1428,34 @@ fn stale_session_events_do_not_reach_the_current_widget() {
 }
 
 #[tokio::test]
-async fn session_shutdown_uses_live_handle_without_a_conversation_id() {
-    let mut session = start_mock_session().await;
-
+async fn session_shutdown_reaches_the_live_session_before_it_reports_a_conversation_id() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual();
+    let temp = tempfile::tempdir().expect("create session directory");
+    let config = nori_config::NoriConfig {
+        active_agent: "mock-model".to_string(),
+        cwd: temp.path().to_path_buf(),
+        nori_home: temp.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut session = chat
+        .session_manager
+        .start(nori_harness::session_manager::StartSession {
+            agent: nori_harness::session_manager::SessionAgent::Prepare(
+                nori_harness::runtime::AgentPrepareSpec {
+                    config: std::sync::Arc::new(config),
+                    cli_version: "tui-test".to_string(),
+                    session_context: None,
+                    initial_context: None,
+                },
+            ),
+            start: nori_harness::runtime::SessionStart::New,
+            parent: None,
+            source: nori_harness::session_manager::SessionSource::User,
+        })
+        .expect("start mock session");
     assert_eq!(chat.conversation_id(), None);
     chat.harness_handle = Some(session.handle.clone());
+    chat.managed_conversation_id = Some(session.conversation_id);
 
     chat.shutdown_harness_session();
 
@@ -1441,7 +1463,7 @@ async fn session_shutdown_uses_live_handle_without_a_conversation_id() {
         loop {
             if let Some(nori_protocol::SessionEvent::Nori(
                 nori_protocol::NoriEvent::SessionEnded(ended),
-            )) = session.events.recv().await
+            )) = session.events.recv().await.map(|envelope| envelope.event)
             {
                 break ended;
             }
