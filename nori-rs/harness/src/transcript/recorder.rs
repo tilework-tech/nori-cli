@@ -60,11 +60,23 @@ impl TranscriptRecorder {
         cli_version: &str,
         acp_session_id: Option<String>,
     ) -> io::Result<Self> {
+        Self::new_with_session_id(nori_home, cwd, agent, cli_version, acp_session_id, None).await
+    }
+
+    /// Initialize for a new session whose ID was chosen by the caller, such as
+    /// the session manager's conversation ID. `None` mints a fresh UUID.
+    pub async fn new_with_session_id(
+        nori_home: &Path,
+        cwd: &Path,
+        agent: Option<String>,
+        cli_version: &str,
+        acp_session_id: Option<String>,
+        session_id: Option<String>,
+    ) -> io::Result<Self> {
         // Compute project ID from cwd
         let project_id_info = compute_project_id(cwd).await?;
 
-        // Create session ID (UUID)
-        let session_id = generate_session_id();
+        let session_id = session_id.unwrap_or_else(generate_session_id);
 
         // Create directory structure
         let project_dir = nori_home

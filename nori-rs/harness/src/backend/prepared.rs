@@ -174,6 +174,11 @@ impl PreparedAgent {
         self.automatic_session_id.as_ref()
     }
 
+    /// Configuration the session will be activated with, until activation.
+    pub(crate) fn activation_config_mut(&mut self) -> Option<&mut AcpBackendConfig> {
+        self.config.as_mut()
+    }
+
     pub(crate) fn replace_activation_config(
         &mut self,
         config: AcpBackendConfig,

@@ -222,12 +222,13 @@ impl AcpBackend {
             crate::message_history::history_metadata(&config.nori_home).await;
 
         // Initialize transcript recorder (non-fatal if it fails).
-        let transcript_recorder = match TranscriptRecorder::new(
+        let transcript_recorder = match TranscriptRecorder::new_with_session_id(
             &config.nori_home,
             &cwd,
             Some(config.agent.clone()),
             &config.cli_version,
             Some(session_id.to_string()),
+            config.conversation_id.map(|id| id.to_string()),
         )
         .await
         {
@@ -246,6 +247,7 @@ impl AcpBackend {
         let conversation_id = transcript_recorder
             .as_ref()
             .and_then(|recorder| ConversationId::from_string(recorder.session_id()).ok())
+            .or(config.conversation_id)
             .unwrap_or_default();
         let pending_hook_context = session_context_for_connection(config, &connection);
         let goal_ext_capability =

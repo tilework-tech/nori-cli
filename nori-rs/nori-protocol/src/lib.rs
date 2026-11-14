@@ -3,9 +3,11 @@
 //! ACP owns agent/client semantics. Nori adds only the lifecycle and product
 //! notifications that ACP does not define.
 
+mod session_envelope;
 mod session_event;
 
 pub use agent_client_protocol_schema as acp;
+pub use session_envelope::*;
 pub use session_event::*;
 
 /// ACP `_meta` key correlating a prompt with user-message chunks that echo it.
