@@ -182,6 +182,12 @@ impl BottomPane {
         !self.view_stack.is_empty()
     }
 
+    pub(crate) fn view_captures_all_keys(&self) -> bool {
+        self.view_stack
+            .last()
+            .is_some_and(|view| view.captures_all_keys())
+    }
+
     fn push_view(&mut self, view: Box<dyn BottomPaneView>) {
         self.view_stack.push(view);
         self.request_redraw();
@@ -530,6 +536,18 @@ impl BottomPane {
     pub(crate) fn show_session_list(&mut self, rows: Vec<SessionRow>) {
         let view = session_list_view::SessionListView::new(rows, self.app_event_tx.clone());
         self.push_view(Box::new(view));
+    }
+
+    /// Close the session list if it is the view in front.
+    pub(crate) fn close_session_list(&mut self) {
+        if self
+            .view_stack
+            .last()
+            .is_some_and(|view| view.is_session_list())
+        {
+            self.view_stack.pop();
+            self.request_redraw();
+        }
     }
 
     /// Refresh the session list if it is open.

@@ -1,0 +1,20 @@
+---
+source: tui-pty-e2e/tests/session_list.rs
+assertion_line: 228
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+› alpha question
+
+• alpha agent answer
+
+• Preparing Mock ACP Alt…
+
+  ● mock:request-permission:rm -rf target/debug needs you · approve: rm -rf target/debug (+1 more) · alt +
+  down to jump
+  2 needs you · 1 ready
+
+› [DEFAULT_PROMPT]
+
+                                                                                                      ⎇ master

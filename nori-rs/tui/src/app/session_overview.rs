@@ -106,14 +106,12 @@ impl App {
         rows
     }
 
-    fn session_row(&self, fact: &SessionFacts, depth: i32) -> SessionRow {
-        let widget = self.widget_for(fact.generation);
-        let agent_name = widget
-            .map(|widget| widget.config_ref().active_agent.clone())
-            .unwrap_or_default();
-        let title = self
-            .session_previews
-            .title(fact.generation)
+    /// The title a session is listed under: the agent's summary, else the
+    /// first prompt.
+    fn session_rows_title(&self, generation: SessionGeneration) -> Option<String> {
+        let widget = self.widget_for(generation);
+        self.session_previews
+            .title(generation)
             .or_else(|| widget.and_then(ChatWidget::first_prompt_text))
             .map(|title| {
                 let line = title.lines().next().unwrap_or_default().trim().to_string();
@@ -125,6 +123,15 @@ impl App {
                 }
             })
             .filter(|title| !title.is_empty())
+    }
+
+    fn session_row(&self, fact: &SessionFacts, depth: i32) -> SessionRow {
+        let widget = self.widget_for(fact.generation);
+        let agent_name = widget
+            .map(|widget| widget.config_ref().active_agent.clone())
+            .unwrap_or_default();
+        let title = self
+            .session_rows_title(fact.generation)
             .unwrap_or_else(|| "New session".to_string());
         // A parent speaks for its family: if a child needs the user, so does
         // the parent row.
@@ -181,6 +188,7 @@ impl App {
                 .observe(fact.generation, fact.status, fact.on_screen);
         }
         let mut lines = Vec::new();
+        lines.extend(self.background_request_line(&facts));
         if facts.len() > 1
             && let Some(summary) = status_summary(facts.iter().map(|fact| fact.status))
         {
@@ -208,5 +216,57 @@ fn provider_kind(agent_name: &str) -> ProviderKind {
         ProviderKind::Nori
     } else {
         ProviderKind::Other
+    }
+}
+
+impl App {
+    /// Bring on screen the next session, after the active one in navigation
+    /// order, whose family is waiting on the user.
+    pub(super) fn show_next_waiting_session(&mut self) {
+        let waiting: Vec<SessionGeneration> = self
+            .session_facts()
+            .into_iter()
+            .filter(|fact| fact.status == SessionStatus::NeedsYou)
+            .map(|fact| fact.generation)
+            .collect();
+        let current = self.chat_widget.session_generation();
+        if let Some(target) = self.session_deck.next_where(
+            current,
+            super::session_deck::Direction::Next,
+            |generation| waiting.contains(&generation),
+        ) {
+            self.show_session(target);
+        }
+    }
+
+    /// The line naming a session in the background that waits on the user,
+    /// with the key that jumps to it.
+    fn background_request_line(&self, facts: &[SessionFacts]) -> Option<Line<'static>> {
+        let waiting: Vec<&SessionFacts> = facts
+            .iter()
+            .filter(|fact| !fact.on_screen && fact.status == SessionStatus::NeedsYou)
+            .collect();
+        let first = waiting.first()?;
+        let title = self
+            .session_rows_title(first.generation)
+            .unwrap_or_else(|| "A session".to_string());
+        let mut spans = vec![
+            "● ".yellow(),
+            title.bold(),
+            format!(" {}", crate::session_status::NEEDS_YOU_LABEL).into(),
+        ];
+        if let Some(request) = self.session_previews.pending_request(first.generation) {
+            spans.push(format!(" · {request}").dim());
+        }
+        if waiting.len() > 1 {
+            spans.push(format!(" (+{} more)", waiting.len() - 1).dim());
+        }
+        let binding = self
+            .hotkey_config
+            .binding_for(nori_config::HotkeyAction::NextWaitingSession);
+        if !binding.is_none() {
+            spans.push(format!(" · {} to jump", binding.display_name()).dim());
+        }
+        Some(Line::from(spans))
     }
 }

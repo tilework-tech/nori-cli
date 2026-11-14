@@ -46,10 +46,6 @@ impl<W> SessionDeck<W> {
         &self.order
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.order.len()
-    }
-
     /// Record a session at the end of the order. Adding a session that is
     /// already listed does nothing.
     pub(crate) fn add(&mut self, generation: SessionGeneration) {

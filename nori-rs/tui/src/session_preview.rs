@@ -126,10 +126,6 @@ impl SessionPreviews {
             .and_then(|preview| preview.pending.first())
             .map(|(_, request)| request.clone())
     }
-
-    pub(crate) fn forget(&mut self, generation: SessionGeneration) {
-        self.sessions.remove(&generation);
-    }
 }
 
 fn observe_update(preview: &mut Preview, update: &acp::SessionUpdate) {

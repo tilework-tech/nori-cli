@@ -17,17 +17,25 @@ const LEFT_ON_EMPTY_PROMPT_OPENS_SESSION_LIST: bool = true;
 
 impl App {
     /// Handle a session-move hotkey. Returns true when the key was used.
+    /// Moves work over an open view, so the user can leave a session that is
+    /// showing a request; opening the list needs the composer in front.
     pub(super) fn handle_session_hotkey(&mut self, tui: &mut tui::Tui, key: &KeyEvent) -> bool {
         if !self.config.multi_session {
             return false;
         }
         let pressed = |action| matches_binding(self.hotkey_config.binding_for(action), key);
+        let composer_in_front = !self.chat_widget.has_active_popup();
         let left_on_empty_prompt = LEFT_ON_EMPTY_PROMPT_OPENS_SESSION_LIST
             && key.code == KeyCode::Left
             && key.modifiers == KeyModifiers::NONE
             && self.chat_widget.composer_is_empty();
-        if pressed(HotkeyAction::OpenSessionList) || left_on_empty_prompt {
+        if composer_in_front && (pressed(HotkeyAction::OpenSessionList) || left_on_empty_prompt) {
             self.open_session_list();
+            tui.frame_requester().schedule_frame();
+            return true;
+        }
+        if pressed(HotkeyAction::NextWaitingSession) && self.chat_widget.composer_is_empty() {
+            self.show_next_waiting_session();
             tui.frame_requester().schedule_frame();
             return true;
         }

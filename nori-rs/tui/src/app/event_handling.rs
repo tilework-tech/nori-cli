@@ -1976,10 +1976,13 @@ impl App {
         // Check configurable hotkeys first (before the structural match),
         // but only when no popup/view is active — otherwise the popup should
         // capture the key (e.g. the hotkey picker in rebinding mode).
+        if key_event.kind == KeyEventKind::Press
+            && !self.chat_widget.view_captures_all_keys()
+            && self.handle_session_hotkey(tui, &key_event)
+        {
+            return;
+        }
         if key_event.kind == KeyEventKind::Press && !self.chat_widget.has_active_popup() {
-            if self.handle_session_hotkey(tui, &key_event) {
-                return;
-            }
             let transcript_binding = self.hotkey_config.binding_for(HotkeyAction::OpenTranscript);
             if matches_binding(transcript_binding, &key_event) {
                 let _ = tui.enter_alt_screen();

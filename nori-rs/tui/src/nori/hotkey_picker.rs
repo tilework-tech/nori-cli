@@ -195,6 +195,10 @@ impl HotkeyPickerView {
 }
 
 impl BottomPaneView for HotkeyPickerView {
+    fn captures_all_keys(&self) -> bool {
+        self.rebinding
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         if key_event.kind != KeyEventKind::Press && key_event.kind != KeyEventKind::Repeat {
             return;

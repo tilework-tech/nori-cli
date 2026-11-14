@@ -197,3 +197,63 @@ fn session_list_is_absent_without_the_flag() {
     assert!(!screen.contains("Sessions"), "{screen}");
     assert!(!screen.contains("/sessions"), "{screen}");
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer() {
+    let mut session = spawn();
+    ask(&mut session, "alpha question", ALPHA_ANSWER);
+    start_alt_session(&mut session);
+    session.submit_input(BACKGROUND_REQUEST).unwrap();
+    session.settle(Duration::from_millis(200));
+    session.send_key(Key::Alt(',')).unwrap();
+
+    start_new_session(&mut session);
+    session
+        .submit_input("mock:request-permission:git push --force")
+        .unwrap();
+    session.settle(Duration::from_millis(200));
+    session.send_key(Key::Alt('.')).unwrap();
+
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("needs you · approve: rm -rf target/debug")
+                    && screen.contains("(+1 more)")
+                    && screen.contains("to jump")
+            },
+            Duration::from_secs(8),
+        )
+        .expect("the request line names the first waiting session and its request");
+    insta::assert_snapshot!(
+        "background_request_line",
+        normalize_for_input_snapshot(session.screen_contents())
+    );
+
+    session.send_key(Key::AltDown).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("Would you like to allow") && screen.contains("rm -rf target/debug")
+            },
+            Duration::from_secs(5),
+        )
+        .expect("next_waiting_session shows the waiting request");
+    session.send_key(Key::Char('1')).unwrap();
+    session
+        .wait_for_text(
+            "Permission granted with option: allow",
+            Duration::from_secs(5),
+        )
+        .expect("the answered turn completes");
+
+    session.send_key(Key::AltDown).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("Would you like to allow") && screen.contains("git push --force")
+            },
+            Duration::from_secs(5),
+        )
+        .expect("the second request is told apart by its command");
+}

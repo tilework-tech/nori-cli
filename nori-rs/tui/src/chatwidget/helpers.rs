@@ -259,6 +259,10 @@ impl ChatWidget {
         self.bottom_pane.has_active_view()
     }
 
+    pub(crate) fn view_captures_all_keys(&self) -> bool {
+        self.bottom_pane.view_captures_all_keys()
+    }
+
     pub(crate) fn has_active_overlay_or_popup(&self) -> bool {
         self.bottom_pane.has_active_overlay_or_popup()
     }
@@ -503,9 +507,10 @@ impl ChatWidget {
         if !self.session_lines.is_empty() {
             flex.push(
                 0,
-                RenderableItem::Owned(Box::new(ratatui::widgets::Paragraph::new(
-                    self.session_lines.clone(),
-                )))
+                RenderableItem::Owned(Box::new(
+                    ratatui::widgets::Paragraph::new(self.session_lines.clone())
+                        .wrap(ratatui::widgets::Wrap { trim: false }),
+                ))
                 .inset(Insets::tlbr(1, 2, 0, 0)),
             );
         }
@@ -584,6 +589,10 @@ impl ChatWidget {
     pub(crate) fn show_session_list(&mut self, rows: Vec<crate::bottom_pane::SessionRow>) {
         self.bottom_pane.show_session_list(rows);
         self.request_redraw();
+    }
+
+    pub(crate) fn close_session_list(&mut self) {
+        self.bottom_pane.close_session_list();
     }
 
     pub(crate) fn update_session_list(&mut self, rows: &[crate::bottom_pane::SessionRow]) {

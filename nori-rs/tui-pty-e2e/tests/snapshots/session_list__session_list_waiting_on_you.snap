@@ -1,12 +1,13 @@
 ---
 source: tui-pty-e2e/tests/session_list.rs
-assertion_line: 133
+assertion_line: 135
 expression: normalize_for_input_snapshot(session.screen_contents())
 ---
 › gamma question
 
 • alpha agent answer
 
+  ● mock:request-permission:rm -rf target/debug needs you · approve: rm -rf target/debug · alt + down to jump
   1 needs you · 2 ready
 
   Sessions 3 · 1 needs you · 2 ready  tab: all sessions · type to search

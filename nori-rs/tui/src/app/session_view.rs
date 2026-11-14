@@ -93,6 +93,7 @@ impl App {
         let mut previous = std::mem::replace(&mut self.chat_widget, *parked.widget);
         let previous_transcript = std::mem::replace(&mut self.transcript_cells, parked.transcript);
         previous.set_foreground(false);
+        previous.close_session_list();
         self.session_deck.park(
             current,
             ParkedSession {

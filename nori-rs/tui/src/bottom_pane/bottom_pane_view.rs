@@ -13,6 +13,12 @@ pub(crate) trait BottomPaneView: Renderable {
     /// scheduled after this call.
     fn handle_key_event(&mut self, _key_event: KeyEvent) {}
 
+    /// Return `true` while the view needs every key, including App-level
+    /// hotkeys, for example while it records a new key binding.
+    fn captures_all_keys(&self) -> bool {
+        false
+    }
+
     /// Return `true` if the view has finished and should be removed.
     fn is_complete(&self) -> bool {
         false
@@ -66,6 +72,10 @@ pub(crate) trait BottomPaneView: Renderable {
     /// Replace the rows of the session list. Only the session list uses this;
     /// other views ignore it.
     fn update_session_list(&mut self, _rows: &[super::SessionRow]) -> bool {
+        false
+    }
+
+    fn is_session_list(&self) -> bool {
         false
     }
 

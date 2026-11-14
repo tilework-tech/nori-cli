@@ -231,6 +231,10 @@ impl BottomPaneView for SessionListView {
         CancellationEvent::Handled
     }
 
+    fn is_session_list(&self) -> bool {
+        true
+    }
+
     fn update_session_list(&mut self, rows: &[SessionRow]) -> bool {
         self.replace_rows(rows.to_vec());
         true
