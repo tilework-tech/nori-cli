@@ -1454,7 +1454,6 @@ async fn session_shutdown_reaches_the_live_session_before_it_reports_a_conversat
         })
         .expect("start mock session");
     assert_eq!(chat.conversation_id(), None);
-    chat.harness_handle = Some(session.handle.clone());
     chat.managed_conversation_id = Some(session.conversation_id);
 
     chat.shutdown_harness_session();

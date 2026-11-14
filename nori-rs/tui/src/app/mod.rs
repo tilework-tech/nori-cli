@@ -483,10 +483,6 @@ impl App {
         app.prepared_agent_initial_context = None;
         app.discard_candidate();
         app.remote_control.disable().await;
-        let report = app.session_manager.shutdown().await;
-        if !report.timed_out.is_empty() || !report.failed.is_empty() {
-            tracing::warn!(?report, "some sessions did not shut down cleanly");
-        }
 
         // Don't clear terminal to allow exit message to remain visible
         // tui.terminal.clear()?;

@@ -91,6 +91,10 @@ impl Default for SessionManagerConfig {
 }
 
 /// The agent process a new session runs on.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "SessionAgent is a one-shot start value, like SessionStart"
+)]
 pub enum SessionAgent {
     /// An agent that a client already prepared, for example behind a picker.
     Prepared(PreparedAgent),
@@ -171,13 +175,6 @@ impl Shared {
     fn state(&self) -> MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
-
-    fn publish(&self, envelope: &SessionEnvelope) {
-        self.subscribers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|subscriber| subscriber.try_send(envelope.clone()).is_ok());
-    }
 }
 
 impl SessionManager {
@@ -213,7 +210,6 @@ impl SessionManager {
             parent,
             source,
         } = spec;
-        let reservation = self.shared.state().registry.reserve()?;
         let conversation_id = ConversationId::new();
         let settings_from = |config: &AcpBackendConfig| SessionSettings {
             conversation_id,
@@ -241,11 +237,11 @@ impl SessionManager {
                 (SessionAgentSource::Prepare(Box::new(config)), settings)
             }
         };
-        let process = self
-            .shared
-            .state()
-            .registry
-            .register(settings, reservation)?;
+        let process = {
+            let mut state = self.shared.state();
+            let reservation = state.registry.reserve()?;
+            state.registry.register(settings, reservation)?
+        };
 
         let launched = launch_session_from(agent_source, start);
         let observer_target = Arc::downgrade(&self.shared);
@@ -256,17 +252,49 @@ impl SessionManager {
                     shared.state().registry.resolve_request(process, request_id);
                 }
             }));
-        self.shared.state().handles.insert(process, handle.clone());
+        let shutting_down = {
+            let mut state = self.shared.state();
+            state.handles.insert(process, handle.clone());
+            state.registry.admission_closed()
+        };
+        if shutting_down {
+            // `shutdown` began while this session was launching and could not
+            // see it.
+            let late = handle.clone();
+            tokio::spawn(async move {
+                if let Err(error) = late.shutdown().await {
+                    tracing::warn!(%error, "failed to shut down a session started during shutdown");
+                }
+            });
+        }
 
         let (primary_tx, primary_rx) = mpsc::unbounded_channel();
         let shared = Arc::clone(&self.shared);
         let mut events = launched.events;
         tokio::spawn(async move {
             while let Some(event) = events.recv().await {
-                let Some(envelope) = shared.state().registry.observe(process, event) else {
-                    continue;
+                let envelope = {
+                    let mut state = shared.state();
+                    let Some(envelope) = state.registry.observe(process, event) else {
+                        continue;
+                    };
+                    let ended = state
+                        .registry
+                        .conversation_of(process)
+                        .and_then(|id| state.registry.live_process(&id))
+                        .is_none();
+                    if ended {
+                        // Holding a handle to an ended session would keep its
+                        // runtime, and so this stream, alive.
+                        state.handles.remove(&process);
+                    }
+                    envelope
                 };
-                shared.publish(&envelope);
+                shared
+                    .subscribers
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .retain(|subscriber| subscriber.try_send(envelope.clone()).is_ok());
                 // The client may stop reading; status and subscribers still
                 // follow the session.
                 let _ = primary_tx.send(envelope);
@@ -368,13 +396,22 @@ impl SessionManager {
     }
 
     /// Shut down one session, waiting at most the configured time limit.
-    /// Closing a session that has already ended does nothing.
+    /// Closing a session that has already ended does nothing. Closing a
+    /// session that was forked at head closes the child that took over its
+    /// agent process.
     pub async fn close(
         &self,
         conversation_id: &ConversationId,
         child_grace: Duration,
     ) -> anyhow::Result<()> {
-        let Some(handle) = self.handle(conversation_id) else {
+        let handle = {
+            let state = self.shared.state();
+            state
+                .registry
+                .process_following_forks(conversation_id)
+                .and_then(|process| state.handles.get(&process).cloned())
+        };
+        let Some(handle) = handle else {
             return Ok(());
         };
         let limit = self.shared.config.shutdown_timeout;
@@ -386,8 +423,9 @@ impl SessionManager {
     }
 
     /// Refuse new sessions and shut every live session down in parallel, each
-    /// within the configured time limit.
-    pub async fn shutdown(&self) -> ShutdownReport {
+    /// within the configured time limit. `child_grace` lets each agent process
+    /// handle stdin EOF before it is stopped.
+    pub async fn shutdown(&self, child_grace: Duration) -> ShutdownReport {
         let live: Vec<(ConversationId, HarnessHandle)> = {
             let state = self.shared.state();
             state.registry.close_admission();
@@ -404,8 +442,12 @@ impl SessionManager {
         let limit = self.shared.config.shutdown_timeout;
         let mut closing = JoinSet::new();
         for (id, handle) in live {
-            closing
-                .spawn(async move { (id, tokio::time::timeout(limit, handle.shutdown()).await) });
+            closing.spawn(async move {
+                (
+                    id,
+                    tokio::time::timeout(limit, handle.shutdown_with_grace(child_grace)).await,
+                )
+            });
         }
         let mut report = ShutdownReport::default();
         while let Some(joined) = closing.join_next().await {

@@ -76,6 +76,10 @@ fn prepare_spec(agent: &str, home: &Path, wire_log_dir: Option<PathBuf>) -> Agen
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper fails at the session-start boundary"
+)]
 fn start(manager: &SessionManager, spec: AgentPrepareSpec) -> ManagedSession {
     manager
         .start(StartSession {
@@ -135,6 +139,10 @@ fn prompt_completed(event: &SessionEvent, request_id: &acp::v1::RequestId) -> bo
 }
 
 /// Collect a session's own envelopes until its prompt `request_id` completes.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper fails at the turn-completion boundary"
+)]
 async fn collect_turn(
     events: &mut mpsc::UnboundedReceiver<SessionEnvelope>,
     request_id: &acp::v1::RequestId,
@@ -274,7 +282,7 @@ async fn two_sessions_on_two_agent_processes_interleave_turns() {
     }
     assert_eq!(sequences.len(), 2, "only the two sessions appear");
 
-    manager.shutdown().await;
+    manager.shutdown(Duration::ZERO).await;
 }
 
 #[cfg(unix)]
@@ -320,6 +328,19 @@ async fn an_agent_killed_mid_turn_fails_only_its_session_which_can_be_resumed() 
     })
     .await
     .expect("a streams before it is killed");
+    let transcript_a = manager
+        .get(&a.conversation_id)
+        .and_then(|record| record.transcript_path)
+        .expect("a records a transcript");
+    tokio::time::timeout(WAIT, async {
+        while !std::fs::read_to_string(&transcript_a)
+            .is_ok_and(|transcript| transcript.contains("doomed reply"))
+        {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("a's reply reaches its transcript before the kill");
     // SAFETY: sends SIGKILL to the mock agent process this test started.
     let killed = unsafe { libc::kill(recorded_agent_pid(&wire_a), libc::SIGKILL) };
     assert_eq!(killed, 0, "kill the agent process of session a");
@@ -335,6 +356,12 @@ async fn an_agent_killed_mid_turn_fails_only_its_session_which_can_be_resumed() 
         vec!["survivor reply".to_string()]
     );
     assert!(manager.handle(&a.conversation_id).is_none());
+    // Once the client lets go of its handle, nothing keeps the dead session's
+    // runtime alive and its stream ends.
+    drop(a.handle);
+    let stream_ended =
+        tokio::time::timeout(WAIT, async { while a.events.recv().await.is_some() {} }).await;
+    assert!(stream_ended.is_ok(), "the failed session's stream ends");
 
     let mut resumed = manager
         .resume(
@@ -384,7 +411,7 @@ async fn an_agent_killed_mid_turn_fails_only_its_session_which_can_be_resumed() 
         (Some(a.conversation_id), "mock-model".to_string(), true, 2,)
     );
 
-    manager.shutdown().await;
+    manager.shutdown(Duration::ZERO).await;
 }
 
 #[tokio::test]
@@ -401,7 +428,7 @@ async fn shutdown_closes_every_session_and_refuses_new_ones() {
     wait_for_status(&manager, &a.conversation_id, SessionStatus::Ready).await;
     wait_for_status(&manager, &b.conversation_id, SessionStatus::Ready).await;
 
-    let mut report = manager.shutdown().await;
+    let mut report = manager.shutdown(Duration::ZERO).await;
     report.closed.sort_by_key(ToString::to_string);
     let mut expected = vec![a.conversation_id, b.conversation_id];
     expected.sort_by_key(ToString::to_string);
@@ -455,7 +482,7 @@ async fn the_cap_refuses_a_session_beyond_the_limit() {
     wait_for_status(&manager, &second.conversation_id, SessionStatus::Ready).await;
 
     assert_eq!(refused, Some(StartError::CapacityReached { limit: 1 }));
-    manager.shutdown().await;
+    manager.shutdown(Duration::ZERO).await;
 }
 
 #[tokio::test]
@@ -477,7 +504,7 @@ async fn a_session_keeps_its_conversation_id_as_its_transcript_id() {
     .expect("session starts");
 
     assert_eq!(transcript_id, Some(session.conversation_id.to_string()));
-    manager.shutdown().await;
+    manager.shutdown(Duration::ZERO).await;
 }
 
 #[tokio::test]
@@ -499,12 +526,12 @@ async fn only_failed_sessions_can_be_resumed() {
         matches!(result, Err(ResumeError::NotFailed(id)) if id == session.conversation_id),
         "resuming a ready session is refused"
     );
-    manager.shutdown().await;
+    manager.shutdown(Duration::ZERO).await;
 }
 
 #[tokio::test]
 #[serial]
-async fn a_subscriber_that_falls_behind_is_dropped_without_slowing_sessions() {
+async fn a_subscriber_that_falls_behind_is_disconnected_while_the_session_continues() {
     let home = tempfile::tempdir().expect("temp dir");
     let manager = SessionManager::new(SessionManagerConfig::default());
     let mut slow = manager.subscribe(1);
@@ -521,5 +548,5 @@ async fn a_subscriber_that_falls_behind_is_dropped_without_slowing_sessions() {
     let after_overflow = slow.recv().await.map(|envelope| envelope.seq);
 
     assert_eq!((first, after_overflow), (Some(1), None));
-    manager.shutdown().await;
+    manager.shutdown(Duration::ZERO).await;
 }

@@ -619,10 +619,17 @@ processes.
   replaces the old record, and adopts the old record's children. Errors are
   `Unknown`, `NotFailed`, `NoTranscript`, `AgentMismatch`, and `Transcript`.
 - **Close and shutdown.** `close(id, child_grace)` shuts one session down,
-  bounded by `shutdown_timeout`; closing an ended session does nothing.
-  `shutdown()` stops admission, then shuts every live session down in parallel,
-  each with the same timeout, and returns a `ShutdownReport` of closed,
-  timed-out, and failed sessions.
+  bounded by `shutdown_timeout`; closing an ended session does nothing, and
+  closing a parent that was forked at head closes the child that took over its
+  agent process. `shutdown(child_grace)` stops admission, then shuts every live
+  session down in parallel, each with the same timeout, and returns a
+  `ShutdownReport` of closed, timed-out, and failed sessions. A session whose
+  launch was in flight when admission closed is shut down as soon as it
+  registers its handle.
+- **Handle lifetime.** The manager drops its handle to a session as soon as the
+  session ends. A dead agent process therefore does not keep the session's
+  runtime alive: once clients drop their handles too, the session's event
+  stream closes.
 - **Queries.** `get`, `list` (registration order, ended sessions kept), and
   `handle` (live sessions only) read the registry. A record holds the agent,
   parent, source, `resumed_from`, cwd, model, approval policy, transcript path,

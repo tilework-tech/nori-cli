@@ -710,10 +710,11 @@ Candidate events are routed to the candidate widget until activation commits;
 after a session is replaced, events from older generations are discarded.
 Shutting down a replaced session, a discarded candidate, or the old widget
 after a switch commits goes through `SessionManager::close` with the widget's
-managed conversation ID (with the cloud detach grace when in cloud mode). On
-exit, after its existing cleanup, `App` calls `SessionManager::shutdown`, which
-shuts down any remaining sessions in parallel within a time limit and logs any
-that did not close cleanly. Preparation generations apply the
+managed conversation ID (with the cloud detach grace when in cloud mode). That
+ID follows branch-at-head forks. Exit keeps its existing path: the active
+session shuts down through its handle and a candidate is discarded, so exit
+latency is unchanged; the TUI does not call `SessionManager::shutdown`.
+Preparation generations apply the
 same stale-result rule before a widget or active session exists.
 
 Unexpected child or transport loss emits a request failure when work was in

@@ -426,7 +426,7 @@ fn requests_are_answered_per_session() {
 }
 
 #[test]
-fn records_report_the_model_the_agent_advertises() {
+fn session_started_fills_in_the_record() {
     let mut registry = Registry::new(4);
     let (id, process) = start(&mut registry, "claude", None);
     let mut started_event = started("acp-a");
@@ -544,5 +544,29 @@ fn a_resumed_session_takes_the_place_of_the_failed_one() {
                 .and_then(|record| record.resumed_from),
         ),
         (vec![child, replacement], Some(replacement), Some(failed))
+    );
+}
+
+#[test]
+fn closing_a_forked_parent_reaches_the_child_that_took_its_process() {
+    let mut registry = Registry::new(2);
+    let (parent, process) = start(&mut registry, "claude", None);
+    registry.observe(process, started("acp-parent"));
+    let child = ConversationId::new();
+    registry.observe(
+        process,
+        SessionEvent::Nori(NoriEvent::SessionForked(SessionForked {
+            previous_conversation_id: parent.to_string(),
+            new_conversation_id: child.to_string(),
+            new_acp_session_id: acp::SessionId::new("acp-child"),
+        })),
+    );
+
+    assert_eq!(
+        (
+            registry.process_following_forks(&parent),
+            registry.process_following_forks(&child),
+        ),
+        (Some(process), Some(process))
     );
 }

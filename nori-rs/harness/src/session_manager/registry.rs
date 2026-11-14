@@ -65,6 +65,8 @@ struct Entry {
     busy: bool,
     pending_requests: BTreeSet<acp::v1::RequestId>,
     ended: Option<SessionStatus>,
+    /// The child that took over this session's agent process in a fork.
+    forked_into: Option<ConversationId>,
     transcript_path: Option<PathBuf>,
     acp_session_id: Option<String>,
 }
@@ -81,6 +83,7 @@ impl Entry {
             busy: false,
             pending_requests: BTreeSet::new(),
             ended: None,
+            forked_into: None,
             transcript_path: None,
             acp_session_id: None,
         }
@@ -127,28 +130,15 @@ impl Entry {
     }
 }
 
-/// Lower ranks win when a family's statuses are rolled up into one.
-fn attention_rank(status: SessionStatus) -> i32 {
-    match status {
-        SessionStatus::NeedsYou => 0,
-        SessionStatus::Failed => 1,
-        SessionStatus::Working => 2,
-        SessionStatus::Starting => 3,
-        SessionStatus::Ready => 4,
-        SessionStatus::Closed => 5,
-    }
-}
-
 fn advertised_model(options: &[acp::v1::SessionConfigOption]) -> Option<String> {
     options.iter().find_map(|option| {
         if option.category != Some(acp::v1::SessionConfigOptionCategory::Model) {
             return None;
         }
-        match &option.kind {
-            acp::v1::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
+        let acp::v1::SessionConfigKind::Select(select) = &option.kind else {
+            return None;
+        };
+        Some(select.current_value.to_string())
     })
 }
 
@@ -186,6 +176,10 @@ impl Registry {
     /// Refuse every later reservation, for shutdown.
     pub(crate) fn close_admission(&self) {
         self.capacity.close();
+    }
+
+    pub(crate) fn admission_closed(&self) -> bool {
+        self.capacity.is_closed()
     }
 
     /// Register a session that is about to start on a new agent process.
@@ -308,6 +302,7 @@ impl Registry {
             .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
         let mut settings = parent_entry.settings.clone();
         parent_entry.end(SessionStatus::Closed);
+        parent_entry.forked_into = Some(child);
 
         settings.conversation_id = child;
         settings.parent = Some(parent);
@@ -356,6 +351,23 @@ impl Registry {
         self.sessions.get(conversation_id)?.process
     }
 
+    /// The live agent process of a session, following branch-at-head forks
+    /// to the child that took over the parent's process.
+    pub(crate) fn process_following_forks(
+        &self,
+        conversation_id: &ConversationId,
+    ) -> Option<AgentProcessId> {
+        let mut current = *conversation_id;
+        loop {
+            let entry = self.sessions.get(&current)?;
+            match (entry.process, entry.forked_into) {
+                (Some(process), _) => return Some(process),
+                (None, Some(child)) => current = child,
+                (None, None) => return None,
+            }
+        }
+    }
+
     /// The conversation an agent process currently carries.
     pub(crate) fn conversation_of(&self, process: AgentProcessId) -> Option<ConversationId> {
         self.processes.get(&process).copied()
@@ -397,7 +409,15 @@ impl Registry {
             .iter()
             .filter_map(|member| self.sessions.get(member))
             .map(Entry::status)
-            .min_by_key(|status| attention_rank(*status))
+            // The member that most needs the user decides the family status.
+            .min_by_key(|status| match status {
+                SessionStatus::NeedsYou => 0,
+                SessionStatus::Failed => 1,
+                SessionStatus::Working => 2,
+                SessionStatus::Starting => 3,
+                SessionStatus::Ready => 4,
+                SessionStatus::Closed => 5,
+            })
     }
 
     /// Replace a failed session with the session that resumes it. Its

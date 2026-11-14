@@ -215,7 +215,7 @@ fn start_managed_session(
                 }),
                 NoriEvent::SessionEnded(SessionEnded {
                     reason: SessionEndReason::SpawnFailed,
-                    message: Some(message.clone()),
+                    message: Some(message),
                 }),
             ] {
                 app_event_tx.send(AppEvent::SessionEvent {
