@@ -390,7 +390,10 @@ and `update_goal` tools must not control Nori continuation.
 ACP permission requests that require a consumer decision are emitted as
 `SessionEvent::Acp(AcpEvent::Request { request_id, request })`. A consumer
 responds through `respond_to_agent` with the same ID and a schema-native success
-or error. `AskForApproval::Never` resolves permission requests inside the
+or error. Each handle carries a responder label (`with_responder`, default
+`runtime::DEFAULT_RESPONDER` = `client`; the remote host labels its attached
+handle `remote_agent::REMOTE_CONTROL_RESPONDER` = `remote_control`) that the
+session manager uses to say who answered. `AskForApproval::Never` resolves permission requests inside the
 harness, and setup-time permission requests are cancelled internally because no
 consumer session exists yet. Filesystem requests are handled in
 `nori-acp-host`; they do not appear as duplicate delegated requests. Terminal
@@ -587,7 +590,9 @@ processes.
   `ShuttingDown`, `UnknownParent`, or `AgentAlreadyActivated`.
 - **Envelopes.** One pump task per agent process applies each event to the
   registry first, then publishes the envelope to all-session subscribers and to
-  the session's own stream. The own stream is unbounded and lossless, matching
+  the session's own stream. The pump reads two sources with a biased select:
+  the handle's answer queue first, then the agent's event stream (see
+  "Answered requests" below). The own stream is unbounded and lossless, matching
   the primary receiver of a directly launched session. `subscribe(capacity)`
   follows every session; a subscriber that falls `capacity` envelopes behind is
   dropped and its receiver closes, and sessions are never slowed.
@@ -602,26 +607,47 @@ processes.
   | `Failed` | `SessionEnded` with `ConnectionLost`, `SpawnFailed`, or `TimedOut`, or the stream closed with no end event |
   | `Closed` | `SessionEnded` with `Shutdown` or `Closed`, or superseded by a fork |
 
-  A pending request clears when any `HarnessHandle` clone answers it through
-  `respond_to_agent` (the handle reports answers to the manager through a
-  crate-private observer), when the phase returns to `Idle` or enters
-  `Cancelling`, or when the session ends.
+  A pending request clears when any `HarnessHandle` clone answers it, when the
+  phase returns to `Idle` or enters `Cancelling`, or when the session ends.
+- **Answered requests.** `respond_to_agent` on any handle clone calls a
+  crate-private observer with the request ID and the handle's responder label
+  just before it sends the answer. The manager turns that into
+  `NoriEvent::RequestResolved { request_id, answered_by }` on its answer queue;
+  because the pump drains that queue ahead of agent events, the announcement is
+  numbered before anything the agent does in reaction to the answer. The
+  registry publishes it only if the request was still pending, so it appears
+  once per request on the session's own stream and on `subscribe()` streams.
+  Requests cleared by `Idle`, `Cancelling`, or session end produce no
+  `RequestResolved`; the phase or end event already conveys it. An answer the
+  backend then rejects may still have been announced. Harness sessions never
+  emit this event themselves, so it is absent from directly launched streams
+  and from transcripts; it exists only on manager envelopes so that every
+  client following a session learns the request no longer waits on the user.
 - **Families.** A session family is a top-level session plus all of its
   descendants. `family_status` rolls member statuses up with priority
   `NeedsYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed`.
 - **Fork.** On `NoriEvent::SessionForked` (branch at head) the parent becomes
   `Closed` and a child record (source `Fork`, parent = previous conversation)
   takes over the same agent process and capacity slot. `SessionForked` is
-  delivered as sequence 1 of the child conversation.
+  delivered as sequence 1 of the child conversation. A fork to an earlier
+  message instead starts a new agent process: the caller marks the
+  `PreparedAgent` with `with_fork_parent(id)`, and the client starts it with
+  source `Fork` and that parent. Such a fork does not close its parent or set
+  the parent's `forked_into`; the client closes the old session separately.
 - **Resume.** `resume(failed_id, spec)` restarts a `Failed` session from its
   transcript on a new agent process. The new session gets a new conversation
   ID, records the old one in `resumed_from`, keeps the parent and source,
-  replaces the old record, and adopts the old record's children. Errors are
+  replaces the old record, and adopts the old record's children. A parent
+  whose `forked_into` pointed at the failed session now points at the
+  replacement, and the failed ID is remembered as superseded, so `close` on the
+  failed ID or on that parent reaches the live replacement. `get(failed_id)`
+  still returns `None` because the failed record is gone. Errors are
   `Unknown`, `NotFailed`, `NoTranscript`, `AgentMismatch`, and `Transcript`.
 - **Close and shutdown.** `close(id, child_grace)` shuts one session down,
-  bounded by `shutdown_timeout`; closing an ended session does nothing, and
-  closing a parent that was forked at head closes the child that took over its
-  agent process. `shutdown(child_grace)` stops admission, then shuts every live
+  bounded by `shutdown_timeout`; closing an ended session does nothing.
+  `close` follows the session's lineage to the live process: a parent forked at
+  head leads to the child that took over its agent process, and a resumed
+  session's old ID leads to its replacement. `shutdown(child_grace)` stops admission, then shuts every live
   session down in parallel, each with the same timeout, and returns a
   `ShutdownReport` of closed, timed-out, and failed sessions. A session whose
   launch was in flight when admission closed is shut down as soon as it
@@ -633,7 +659,8 @@ processes.
 - **Queries.** `get`, `list` (registration order, ended sessions kept), and
   `handle` (live sessions only) read the registry. A record holds the agent,
   parent, source, `resumed_from`, cwd, model, approval policy, transcript path,
-  ACP session ID, and status. The model starts as the config default and is
+  ACP session ID, status, and `pending_requests` (open agent request IDs in
+  arrival order). The model starts as the config default and is
   replaced by the agent-advertised model-category config option from
   `SessionStarted` or a config option update.
 

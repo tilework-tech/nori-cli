@@ -546,14 +546,22 @@ remains on its sessionless `/resume` or `/new` retry flow.
 `App` owns one harness `SessionManager` (default limits) and hands clones to
 every `ChatWidget` through `ChatWidgetInit`. `chatwidget/agent.rs` starts every
 session — new, resumed, from a prepared connection, and the hidden `/agent`
-switch candidate — through the manager as a user-sourced session. It unwraps
+switch candidate — through the manager. Sessions are user-sourced except a
+fork to an earlier message (`/fork` rewind or Esc-Esc backtrack fork): `App`
+passes a `ForkOrigin` (fork context plus the current widget's managed
+conversation ID) into preparation, the preparation task tags the
+`PreparedAgent` with `with_fork_parent`, and `start_managed_session` registers
+the session with source `Fork` and that parent. A parent the manager does not
+know is dropped and the session starts as user-sourced. It unwraps
 each `SessionEnvelope` and forwards the inner event as
 `AppEvent::SessionEvent { generation, event }`, so generation filtering and all
 downstream handling are the same as for a single directly launched session. A
 manager start error (for example the session cap) is delivered as a fatal
 `RequestFailed` followed by `SessionEnded(SpawnFailed)`, the same path as any
 other spawn failure. Each widget remembers its managed conversation ID and
-follows `SessionForked` to the child ID. The `/agent` candidate's process is an
+follows `SessionForked` to the child ID. The widget ignores
+`NoriEvent::RequestResolved`, which the manager adds when any handle answers a
+pending request, because it answers its own requests. The `/agent` candidate's process is an
 ordinary manager session; `CandidateAgent` holds only UI flow state (picker,
 preparation, activation capture). The pre-session `PreparedAgent` that `App`
 keeps is held outside the manager until a session consumes it.

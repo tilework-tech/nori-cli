@@ -69,6 +69,7 @@ pub enum NoriEvent {
     PromptSummaryUpdated(PromptSummary),
     Notice(Notice),
     RequestFailed(RequestFailure),
+    RequestResolved(RequestResolved),
 }
 ```
 
@@ -86,6 +87,12 @@ carries `previous_conversation_id` (the now-frozen parent conversation),
 `new_conversation_id` (the fresh conversation seeded from the parent and made
 active), and `new_acp_session_id` (the forked ACP session). It is recorded into
 the new conversation, not the parent.
+
+`RequestResolved` (`request_id`, `answered_by`) announces that a client
+answered a pending agent request; `answered_by` is a responder label such as
+`client` or `remote_control`. Only the harness session manager emits it, on
+managed envelope streams, so clients following a session learn the request no
+longer waits on the user. Harness sessions and transcripts never carry it.
 
 `SessionEnvelope` (in [`session_envelope.rs`](src/session_envelope.rs)) wraps
 one `SessionEvent` with the `conversation_id` it belongs to, the `agent` name

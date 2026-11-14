@@ -136,6 +136,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 | **Session envelope** | A session event tagged with its **conversation ID**, agent, and per-conversation sequence number. | Frame, message     |
 | **Session status**   | A managed session's coarse state: starting, working, needs you, ready, failed, or closed.         | Phase, turn status |
 | **Session family**   | A top-level **session** plus all of its descendants, whose **session statuses** roll up into one. | Thread, tree       |
+| **Request resolved** | A **session envelope** announcing that a client answered a pending agent request, and which one.  | Approval event     |
 
 ### Session lifecycle
 
@@ -171,6 +172,9 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - A **session envelope's** sequence starts at 1 for each **conversation ID**; **branch at head** starts a new sequence for the child.
 - **Session status** is derived from the event stream; it is not the harness phase or a **Nori agent-turn status**.
 - **Branch at head** closes the parent and adds the child to the parent's **session family**.
+- **Rewind to message** starts a new agent process but still registers the child in the parent's **session family**.
+- A **request resolved** envelope removes that request from the ones keeping a **session status** at "needs you"; requests cleared by idle, cancel, or session end get none.
+- When the **session manager** restarts a failed session on a new **conversation ID**, closing the old ID reaches the replacement.
 
 ### Example dialogue
 
