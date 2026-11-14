@@ -500,6 +500,15 @@ impl ChatWidget {
                 PlanDrawerMode::Off => {}
             }
         }
+        if !self.session_lines.is_empty() {
+            flex.push(
+                0,
+                RenderableItem::Owned(Box::new(ratatui::widgets::Paragraph::new(
+                    self.session_lines.clone(),
+                )))
+                .inset(Insets::tlbr(1, 2, 0, 0)),
+            );
+        }
         flex.push(
             0,
             RenderableItem::Borrowed(&self.bottom_pane).inset(Insets::tlbr(1, 0, 0, 0)),
@@ -569,6 +578,14 @@ impl ChatWidget {
         if spinner_frame.is_some() {
             self.frame_requester
                 .schedule_frame_in(crate::terminal_title::SPINNER_INTERVAL);
+        }
+    }
+
+    /// Replace the lines about other sessions shown above the bottom pane.
+    pub(crate) fn set_session_lines(&mut self, lines: Vec<Line<'static>>) {
+        if self.session_lines != lines {
+            self.session_lines = lines;
+            self.frame_requester.schedule_frame();
         }
     }
 

@@ -60,6 +60,8 @@ fn spawn_descendant_if_requested() {
 /// incoming one while the others stay alive as long as connection handles
 /// exist. Without this, the mock would hang after the client disconnects and
 /// its parent would have to SIGKILL it instead of letting it exit cleanly.
+const DEFAULT_PERMISSION_COMMAND: &str = "echo 'Hello from permission test'";
+
 struct ExitOnEof<R> {
     inner: R,
 }
@@ -374,7 +376,14 @@ impl MockAgent {
                 ));
             }
         }
-        if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok() {
+        let prompt_is = |marker: &str| {
+            arguments.prompt.iter().any(|block| {
+                matches!(block, acp::ContentBlock::Text(text) if text.text.trim() == marker)
+            })
+        };
+        if std::env::var("MOCK_AGENT_EXIT_DURING_PROMPT").is_ok()
+            || prompt_is("mock:exit-during-prompt")
+        {
             eprintln!("Mock agent: exiting during prompt");
             std::process::exit(17);
         }
@@ -448,11 +457,28 @@ impl MockAgent {
             return Ok(acp::PromptResponse::new(acp::StopReason::EndTurn));
         }
 
-        let request_permission = arguments.prompt.iter().any(|block| {
-            matches!(
-                block,
-                acp::ContentBlock::Text(text) if text.text == "mock:request-permission"
-            )
+        // `mock:request-permission` asks for permission for the default
+        // command; `mock:request-permission:<command>` names the command, so
+        // requests from different sessions can be told apart.
+        let permission_command = arguments.prompt.iter().find_map(|block| match block {
+            acp::ContentBlock::Text(text) => {
+                let text = text.text.trim();
+                if text == "mock:request-permission" {
+                    Some(None)
+                } else {
+                    text.strip_prefix("mock:request-permission:")
+                        .map(|command| Some(command.to_string()))
+                }
+            }
+            _ => None,
+        });
+        let request_permission = permission_command.is_some();
+        let permission_command = permission_command
+            .flatten()
+            .or_else(|| std::env::var("MOCK_AGENT_PERMISSION_COMMAND").ok())
+            .unwrap_or_else(|| DEFAULT_PERMISSION_COMMAND.to_string());
+        let stream_until_cancel = arguments.prompt.iter().any(|block| {
+            matches!(block, acp::ContentBlock::Text(text) if text.text.trim() == "mock:stream-until-cancel")
         });
         // Support configurable stderr output for testing stderr capture
         if let Ok(count_str) = std::env::var("MOCK_AGENT_STDERR_COUNT")
@@ -1089,11 +1115,13 @@ impl MockAgent {
                     .kind(acp::ToolKind::Execute)
                     .status(acp::ToolCallStatus::Pending)
                     .content(vec![acp::ToolCallContent::Content(acp::Content::new(
-                        acp::ContentBlock::Text(acp::TextContent::new(
-                            "echo 'Hello from permission test'",
-                        )),
+                        acp::ContentBlock::Text(acp::TextContent::new(permission_command.clone())),
                     ))])
-                    .raw_input(json!({"command": "echo", "args": ["Hello from permission test"]})),
+                    .raw_input(if permission_command == DEFAULT_PERMISSION_COMMAND {
+                        json!({"command": "echo", "args": ["Hello from permission test"]})
+                    } else {
+                        json!({"command": permission_command})
+                    }),
             );
 
             // Create permission options: allow once and reject once
@@ -1303,7 +1331,7 @@ impl MockAgent {
             }
         }
 
-        if std::env::var("MOCK_AGENT_STREAM_UNTIL_CANCEL").is_ok() {
+        if stream_until_cancel || std::env::var("MOCK_AGENT_STREAM_UNTIL_CANCEL").is_ok() {
             let mut iterations = 0usize;
             while !self.cancel_requested() && iterations < 10_000 {
                 self.send_text_chunk(session_id.clone(), "Streaming...")

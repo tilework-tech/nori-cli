@@ -309,6 +309,9 @@ pub(crate) struct ChatWidget {
     /// False while the session is parked behind another one. A parked
     /// session never writes the terminal title.
     foreground: bool,
+    /// Lines about other sessions, drawn above the bottom pane so they stay
+    /// visible while a view is open. Set by the App.
+    session_lines: Vec<Line<'static>>,
 }
 
 struct UserMessage {

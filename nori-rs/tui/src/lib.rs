@@ -69,6 +69,7 @@ mod render;
 mod resume_picker;
 mod session_log;
 pub mod session_stats;
+mod session_status;
 mod shimmer;
 mod slash_command;
 mod status;

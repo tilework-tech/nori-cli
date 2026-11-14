@@ -109,6 +109,7 @@ impl App {
                     self.chat_widget.handle_paste(pasted);
                 }
                 TuiEvent::Draw => {
+                    self.refresh_session_overview();
                     self.chat_widget.pre_draw_tick();
                     self.chat_widget.maybe_post_pending_notification(tui);
                     if self
@@ -789,6 +790,7 @@ impl App {
                     }
                 } else {
                     let Some(event) = self.route_parked_session_event(generation, event) else {
+                        tui.frame_requester().schedule_frame();
                         return Ok(true);
                     };
                     let started = match &event {

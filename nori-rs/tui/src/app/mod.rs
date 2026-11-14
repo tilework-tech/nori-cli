@@ -110,6 +110,8 @@ pub(crate) struct App {
     /// The active session changed and the terminal must be reprinted on the
     /// next draw. Several jumps before a draw reprint once.
     session_reprint_pending: bool,
+    /// Sessions that finished a turn while off screen and were not viewed.
+    unseen_finishes: crate::session_status::UnseenFinishes,
 
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
@@ -240,6 +242,7 @@ mod event_handling;
 mod resize_reflow;
 mod session_deck;
 mod session_keys;
+mod session_overview;
 mod session_setup;
 mod session_view;
 
@@ -343,6 +346,7 @@ impl App {
             session_deck: Default::default(),
             retiring_transcript: None,
             session_reprint_pending: false,
+            unseen_finishes: Default::default(),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,

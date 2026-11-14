@@ -164,6 +164,7 @@ impl ChatWidget {
             terminal_title_animation_origin: std::time::Instant::now(),
             last_terminal_title: None,
             foreground: true,
+            session_lines: Vec::new(),
         };
 
         widget
@@ -351,6 +352,7 @@ impl ChatWidget {
             terminal_title_animation_origin: std::time::Instant::now(),
             last_terminal_title: None,
             foreground: true,
+            session_lines: Vec::new(),
         };
 
         widget

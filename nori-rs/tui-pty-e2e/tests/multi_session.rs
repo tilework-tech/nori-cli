@@ -170,3 +170,30 @@ fn new_keeps_the_previous_session_running_behind_the_new_one() {
         "the first session is still there behind the new one",
     );
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn status_line_counts_sessions_by_status() {
+    let mut session = spawn(multi_session_config());
+    ask(&mut session, "finished question", ALPHA_ANSWER);
+
+    session.submit_input("/new").unwrap();
+    session
+        .wait_for_text("Mock Default Model", TIMEOUT)
+        .expect("a second session should start");
+    std::thread::sleep(Duration::from_millis(500));
+    session.submit_input("mock:stream-until-cancel").unwrap();
+    session
+        .wait_for_text("1 working · 1 ready", TIMEOUT)
+        .expect("the status line counts one working and one ready session");
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn one_session_shows_no_status_line() {
+    let mut session = spawn(multi_session_config());
+    ask(&mut session, "only question", ALPHA_ANSWER);
+    session.settle(Duration::from_millis(500));
+    let screen = session.screen_contents();
+    assert!(!screen.contains("1 ready"), "{screen}");
+}
