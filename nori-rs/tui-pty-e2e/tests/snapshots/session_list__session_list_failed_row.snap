@@ -1,0 +1,28 @@
+---
+source: tui-pty-e2e/tests/session_list.rs
+assertion_line: 287
+expression: normalize_for_input_snapshot(session.screen_contents())
+---
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+› alpha question
+
+• alpha agent answer
+
+› alpha still works
+
+• alpha agent answer
+
+  1 failed · 1 ready
+
+  Sessions 2 · 1 failed · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+    ○ alpha question (current)                                                Mock ACP        ready
+    alpha agent answer
+  › ✕ doomed question                                                         Mock ACP        failed
+    agent exited · resume available
+
+  ↑↓ move  enter open  ctrl+r resume  tab waiting on you  esc close

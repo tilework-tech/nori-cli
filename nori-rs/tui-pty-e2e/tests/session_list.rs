@@ -257,3 +257,45 @@ fn a_background_request_is_named_and_one_key_jumps_to_it_for_an_answer() {
         )
         .expect("the second request is told apart by its command");
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn an_agent_that_dies_fails_only_its_session_which_can_be_resumed() {
+    let mut session = spawn();
+    ask(&mut session, "alpha question", ALPHA_ANSWER);
+    start_new_session(&mut session);
+    ask(&mut session, "doomed question", ALPHA_ANSWER);
+    session.submit_input("mock:exit-during-prompt").unwrap();
+    session
+        .wait_for_text("1 failed · 1 ready", Duration::from_secs(8))
+        .expect("the dead agent fails only its own session");
+
+    session.send_key(Key::Alt(',')).unwrap();
+    ask(&mut session, "alpha still works", ALPHA_ANSWER);
+
+    session.send_key(Key::Alt('s')).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("failed") && screen.contains("agent exited · resume available")
+            },
+            Duration::from_secs(3),
+        )
+        .expect("the failed row offers a resume");
+    session.send_key(Key::Down).unwrap();
+    session
+        .wait_for_text("ctrl+r resume", Duration::from_secs(3))
+        .expect("the key hint names the resume key on a failed row");
+    insta::assert_snapshot!(
+        "session_list_failed_row",
+        normalize_for_input_snapshot(session.screen_contents())
+    );
+    session.send_key(Key::Ctrl('r')).unwrap();
+    session
+        .wait_for(
+            |screen| screen.contains("doomed question") && screen.contains("2 ready"),
+            Duration::from_secs(10),
+        )
+        .expect("resuming replays the failed session's transcript on a new agent");
+    ask(&mut session, "after resume", ALPHA_ANSWER);
+}

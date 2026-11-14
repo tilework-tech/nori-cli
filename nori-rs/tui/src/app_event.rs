@@ -160,6 +160,12 @@ pub(crate) enum AppEvent {
     /// Open the list of sessions (`[features] multi_session`).
     OpenSessionList,
 
+    /// Start a failed session again from its transcript, in its place in the
+    /// session list, and bring it on screen.
+    ResumeFailedSession {
+        generation: SessionGeneration,
+    },
+
     /// Bring a session on screen.
     ShowSession {
         generation: SessionGeneration,

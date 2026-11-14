@@ -245,6 +245,7 @@ mod resize_reflow;
 mod session_deck;
 mod session_keys;
 mod session_overview;
+mod session_resume;
 mod session_setup;
 mod session_view;
 

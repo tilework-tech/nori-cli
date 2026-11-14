@@ -673,6 +673,9 @@ impl App {
                 self.open_session_list();
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::ResumeFailedSession { generation } => {
+                self.resume_failed_session(tui, generation).await?;
+            }
             AppEvent::ShowSession { generation } => {
                 self.show_session(generation);
                 tui.frame_requester().schedule_frame();

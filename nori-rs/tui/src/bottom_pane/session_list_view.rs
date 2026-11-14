@@ -114,6 +114,11 @@ impl SessionListView {
         Line::from(vec![text.bold(), hint.dim()])
     }
 
+    fn selected_row(&self) -> Option<&SessionRow> {
+        let generation = self.state.selected_item()?.key;
+        self.rows.iter().find(|row| row.generation == generation)
+    }
+
     fn apply(&mut self, action: PickerAction) {
         match self.state.handle(action) {
             PickerOutcome::Selected(generation) => {
@@ -186,6 +191,17 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
 impl BottomPaneView for SessionListView {
     fn handle_key_event(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
+            return;
+        }
+        if key.code == KeyCode::Char('r') && key.modifiers == KeyModifiers::CONTROL {
+            if let Some(row) = self.selected_row()
+                && row.status == SessionStatus::Failed
+            {
+                self.app_event_tx.send(AppEvent::ResumeFailedSession {
+                    generation: row.generation,
+                });
+                self.complete = true;
+            }
             return;
         }
         let action = match (key.code, key.modifiers) {
@@ -265,12 +281,19 @@ impl Renderable for SessionListView {
             .compact_descriptions(true)
             .show_title(false)
             .show_details(false)
-            .footer_hints([
-                KeyHint::new("↑↓", "move"),
-                KeyHint::new("enter", "open"),
-                KeyHint::new("tab", WAITING_FILTER_LABEL),
-                KeyHint::new("esc", "close"),
-            ])
+            .footer_hints(
+                [
+                    Some(KeyHint::new("↑↓", "move")),
+                    Some(KeyHint::new("enter", "open")),
+                    self.selected_row()
+                        .filter(|row| row.status == SessionStatus::Failed)
+                        .map(|_| KeyHint::new("ctrl+r", "resume")),
+                    Some(KeyHint::new("tab", WAITING_FILTER_LABEL)),
+                    Some(KeyHint::new("esc", "close")),
+                ]
+                .into_iter()
+                .flatten(),
+            )
             .render(list_area, buf);
     }
 

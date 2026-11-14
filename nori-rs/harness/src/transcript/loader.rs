@@ -766,7 +766,7 @@ fn truncate_preview(content: &str) -> String {
 /// Lines that fail to deserialize (e.g. unknown entry types from older or newer
 /// versions) are silently skipped so that transcripts remain loadable across
 /// schema changes.
-pub(crate) async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
+pub async fn load_transcript_from_path(path: &Path) -> io::Result<Transcript> {
     let started = Instant::now();
     let transcript_bytes = tokio::fs::metadata(path)
         .await
