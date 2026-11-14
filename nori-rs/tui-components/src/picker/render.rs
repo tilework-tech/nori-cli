@@ -30,6 +30,7 @@ use crate::MessageLevel;
 use crate::SemanticMessage;
 use crate::Theme;
 use crate::detail::provider_tone_style;
+use crate::detail::tone_style;
 
 /// Stateless renderer for a caller-owned [`PickerState`].
 pub struct Picker<'a, K> {
@@ -39,6 +40,7 @@ pub struct Picker<'a, K> {
     show_title: bool,
     show_details: bool,
     fullscreen_selection_rails: bool,
+    compact_descriptions: bool,
     footer_hints: Option<Vec<KeyHint<'static>>>,
 }
 
@@ -51,6 +53,7 @@ impl<'a, K> Picker<'a, K> {
             show_title: true,
             show_details: true,
             fullscreen_selection_rails: false,
+            compact_descriptions: false,
             footer_hints: None,
         }
     }
@@ -84,6 +87,13 @@ impl<'a, K> Picker<'a, K> {
     /// overlay layer. Embedded and copyable content should keep this disabled.
     pub fn fullscreen_selection_rails(mut self, enabled: bool) -> Self {
         self.fullscreen_selection_rails = enabled;
+        self
+    }
+
+    /// Show each row's description on a second line in compact density too,
+    /// for lists whose rows carry a live preview.
+    pub fn compact_descriptions(mut self, enabled: bool) -> Self {
+        self.compact_descriptions = enabled;
         self
     }
 
@@ -296,9 +306,23 @@ impl<K: Clone + Eq> Picker<'_, K> {
         let columns = visible_columns(&self.state.columns, row_content_area.width);
         let widths = column_widths(&columns, self.state, &visible, row_content_area.width);
         let row_height = match self.density {
+            PickerDensity::Compact
+                if self.compact_descriptions
+                    && visible
+                        .iter()
+                        .any(|index| self.state.items[*index].description.is_some()) =>
+            {
+                2
+            }
             PickerDensity::Compact => 1,
             PickerDensity::Normal => 2,
         };
+        let guides = super::tree::tree_guides(
+            &visible
+                .iter()
+                .map(|index| self.state.items[*index].depth)
+                .collect::<Vec<_>>(),
+        );
         let simple_list = columns.len() == 1 && self.state.mode == PickerMode::Single;
         let header_height = u16::from(!simple_list && area.height > row_height);
         if header_height > 0 {
@@ -409,6 +433,10 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 primary.push_str(&badges);
                 primary.push(')');
             }
+            let (guide, description_guide) = &guides[start + row_offset];
+            if let Some(primary) = values.first_mut() {
+                primary.insert_str(0, guide);
+            }
             let row_area = Rect::new(
                 area.x,
                 area.y + header_height + row_offset as u16 * row_height,
@@ -434,9 +462,12 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     let cell_style = if selected || item.disabled {
                         style
                     } else {
-                        item.cell_tones.get(&column.key).map_or(style, |provider| {
+                        let style = item.cell_tones.get(&column.key).map_or(style, |provider| {
                             surface.patch(provider_tone_style(*provider, self.theme))
-                        })
+                        });
+                        item.cell_detail_tones
+                            .get(&column.key)
+                            .map_or(style, |tone| surface.patch(tone_style(*tone, self.theme)))
                     };
                     (value.as_str(), cell_style)
                 }),
@@ -459,12 +490,13 @@ impl<K: Clone + Eq> Picker<'_, K> {
                     row_content_area.width.saturating_sub(marker_width),
                     1,
                 );
+                let description = format!("{description_guide}{description}");
                 let description_style = if selected {
                     style.patch(self.theme.muted)
                 } else {
                     surface.patch(self.theme.muted)
                 };
-                Paragraph::new(truncate(description, description_area.width as usize))
+                Paragraph::new(truncate(&description, description_area.width as usize))
                     .style(description_style)
                     .render(description_area, buf);
             }

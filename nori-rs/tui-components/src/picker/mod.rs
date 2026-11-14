@@ -9,9 +9,11 @@ use nucleo_matcher::pattern::Normalization;
 use nucleo_matcher::pattern::Pattern;
 use ratatui::text::Line;
 
+use crate::DetailTone;
 use crate::ProviderKind;
 
 mod render;
+mod tree;
 
 pub use render::Picker;
 
@@ -72,6 +74,11 @@ pub struct PickerItem<K> {
     pub key: K,
     pub cells: BTreeMap<String, String>,
     pub cell_tones: BTreeMap<String, ProviderKind>,
+    /// Semantic tones for single cells, such as an error-coloured status.
+    pub cell_detail_tones: BTreeMap<String, DetailTone>,
+    /// Nesting level for tree rows; 0 is top level. Rows are drawn with indent
+    /// guides from their depth and the depths of the rows around them.
+    pub depth: i32,
     pub search_text: String,
     pub category: Option<String>,
     pub detail: Vec<Line<'static>>,
@@ -92,6 +99,8 @@ impl<K> PickerItem<K> {
             key,
             cells: BTreeMap::from([(primary_column.into(), label.clone())]),
             cell_tones: BTreeMap::new(),
+            cell_detail_tones: BTreeMap::new(),
+            depth: 0,
             search_text: label,
             category: None,
             detail: Vec::new(),
@@ -114,6 +123,18 @@ impl<K> PickerItem<K> {
     /// Apply an agent/provider tone to one rendered cell.
     pub fn cell_tone(mut self, column: impl Into<String>, provider: ProviderKind) -> Self {
         self.cell_tones.insert(column.into(), provider);
+        self
+    }
+
+    /// Apply a semantic tone to one rendered cell.
+    pub fn cell_detail_tone(mut self, column: impl Into<String>, tone: DetailTone) -> Self {
+        self.cell_detail_tones.insert(column.into(), tone);
+        self
+    }
+
+    /// Nest this row under the closest earlier row with a smaller depth.
+    pub fn depth(mut self, depth: i32) -> Self {
+        self.depth = depth.max(0);
         self
     }
 
@@ -378,6 +399,22 @@ impl<K: Clone + Eq> PickerState<K> {
         self
     }
 
+    /// Replace every row while the picker is open. The selection stays on the
+    /// row with the same key, or falls back to the first available row when
+    /// that key is gone.
+    pub fn replace_items(&mut self, items: impl IntoIterator<Item = PickerItem<K>>) {
+        let selected = self.selected_item().map(|item| item.key.clone());
+        self.items = items.into_iter().collect();
+        self.selected_index = selected.and_then(|key| {
+            self.visible_indices()
+                .into_iter()
+                .find(|index| self.items[*index].key == key)
+        });
+        if self.selected_index.is_none() {
+            self.select_first_available();
+        }
+    }
+
     pub fn selected_item(&self) -> Option<&PickerItem<K>> {
         self.selected_index.and_then(|index| self.items.get(index))
     }
@@ -588,3 +625,5 @@ impl<K: Clone + Eq> PickerState<K> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tree_tests;
