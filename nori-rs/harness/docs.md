@@ -617,6 +617,10 @@ processes.
   numbered before anything the agent does in reaction to the answer. The
   registry publishes it only if the request was still pending, so it appears
   once per request on the session's own stream and on `subscribe()` streams.
+  A client can read a request straight from the harness and answer it before
+  the pump has numbered the request. The registry holds such an early answer
+  and publishes it right after the request's own envelope; held answers are
+  dropped when the turn ends, is cancelled, or the session ends.
   Requests cleared by `Idle`, `Cancelling`, or session end produce no
   `RequestResolved`; the phase or end event already conveys it. An answer the
   backend then rejects may still have been announced. Harness sessions never

@@ -293,11 +293,9 @@ impl SessionManager {
                         None => break,
                     },
                 };
-                let envelope = {
+                let envelopes = {
                     let mut state = shared.state();
-                    let Some(envelope) = state.registry.observe(process, event) else {
-                        continue;
-                    };
+                    let envelopes = state.registry.observe_all(process, event);
                     let ended = state
                         .registry
                         .conversation_of(process)
@@ -308,16 +306,18 @@ impl SessionManager {
                         // runtime, and so this stream, alive.
                         state.handles.remove(&process);
                     }
-                    envelope
+                    envelopes
                 };
-                shared
-                    .subscribers
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .retain(|subscriber| subscriber.try_send(envelope.clone()).is_ok());
-                // The client may stop reading; status and subscribers still
-                // follow the session.
-                let _ = primary_tx.send(envelope);
+                for envelope in envelopes {
+                    shared
+                        .subscribers
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .retain(|subscriber| subscriber.try_send(envelope.clone()).is_ok());
+                    // The client may stop reading; status and subscribers
+                    // still follow the session.
+                    let _ = primary_tx.send(envelope);
+                }
             }
             let mut state = shared.state();
             state.registry.process_exited(process);

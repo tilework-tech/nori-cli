@@ -13,6 +13,7 @@ use std::sync::Arc;
 use nori_config::AskForApproval;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
+use nori_protocol::RequestResolved;
 use nori_protocol::SessionEndReason;
 use nori_protocol::SessionEnvelope;
 use nori_protocol::SessionEvent;
@@ -64,6 +65,9 @@ struct Entry {
     busy: bool,
     /// Agent requests waiting on a client, in arrival order.
     pending_requests: Vec<acp::v1::RequestId>,
+    /// Answers that arrived before the request they answer. A client can
+    /// read a request from the harness directly, ahead of this registry.
+    early_answers: Vec<RequestResolved>,
     ended: Option<SessionStatus>,
     /// The child that took over this session's agent process in a fork.
     forked_into: Option<ConversationId>,
@@ -82,6 +86,7 @@ impl Entry {
             started: false,
             busy: false,
             pending_requests: Vec::new(),
+            early_answers: Vec::new(),
             ended: None,
             forked_into: None,
             transcript_path: None,
@@ -111,6 +116,7 @@ impl Entry {
         self.reservation = None;
         self.busy = false;
         self.pending_requests.clear();
+        self.early_answers.clear();
     }
 
     fn record(&self) -> SessionRecord {
@@ -228,10 +234,20 @@ impl Registry {
         }
         let entry = self.sessions.get_mut(&conversation_id)?;
         if let SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) = &event {
-            let position = entry
+            let Some(position) = entry
                 .pending_requests
                 .iter()
-                .position(|pending| *pending == resolved.request_id)?;
+                .position(|pending| *pending == resolved.request_id)
+            else {
+                if !entry
+                    .early_answers
+                    .iter()
+                    .any(|early| early.request_id == resolved.request_id)
+                {
+                    entry.early_answers.push(resolved.clone());
+                }
+                return None;
+            };
             entry.pending_requests.remove(position);
         }
         match &event {
@@ -247,10 +263,12 @@ impl Registry {
                 SessionPhase::Idle => {
                     entry.busy = false;
                     entry.pending_requests.clear();
+                    entry.early_answers.clear();
                 }
                 SessionPhase::Cancelling { .. } => {
                     entry.busy = true;
                     entry.pending_requests.clear();
+                    entry.early_answers.clear();
                 }
                 SessionPhase::Loading { .. } | SessionPhase::Prompting { .. } => {
                     entry.busy = true;
@@ -294,6 +312,43 @@ impl Registry {
             seq,
             event,
         })
+    }
+
+    /// Apply one event and return every envelope it produces.
+    /// An answer that arrived before its request is announced right after
+    /// the request.
+    pub(crate) fn observe_all(
+        &mut self,
+        process: AgentProcessId,
+        event: SessionEvent,
+    ) -> Vec<SessionEnvelope> {
+        let request_id = match &event {
+            SessionEvent::Acp(AcpEvent::Request {
+                request_id,
+                request: acp::v1::AgentRequest::RequestPermissionRequest(_),
+            }) => Some(request_id.clone()),
+            _ => None,
+        };
+        let mut envelopes: Vec<SessionEnvelope> =
+            self.observe(process, event).into_iter().collect();
+        let early = request_id.and_then(|request_id| {
+            let entry = self
+                .processes
+                .get(&process)
+                .and_then(|id| self.sessions.get_mut(id))?;
+            let position = entry
+                .early_answers
+                .iter()
+                .position(|early| early.request_id == request_id)?;
+            Some(entry.early_answers.remove(position))
+        });
+        if let Some(answer) = early {
+            envelopes.extend(self.observe(
+                process,
+                SessionEvent::Nori(NoriEvent::RequestResolved(answer)),
+            ));
+        }
+        envelopes
     }
 
     /// Branch at head: the parent is frozen and the agent process, with its

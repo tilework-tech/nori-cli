@@ -485,6 +485,44 @@ fn an_answered_request_is_announced_once_in_sequence() {
 }
 
 #[test]
+fn an_answer_that_arrives_before_its_request_is_announced_after_it() {
+    let mut registry = Registry::new(4);
+    let (id, process) = start(&mut registry, "claude", None);
+    registry.observe_all(process, started("s"));
+    registry.observe_all(process, prompting(1));
+
+    let early = registry.observe_all(process, resolved(7, "remote_control"));
+    let request = registry.observe_all(process, permission(7));
+
+    let order: Vec<(i64, Option<String>)> = request
+        .iter()
+        .map(|envelope| {
+            let answered_by = match &envelope.event {
+                SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) => {
+                    Some(resolved.answered_by.clone())
+                }
+                _ => None,
+            };
+            (envelope.seq, answered_by)
+        })
+        .collect();
+    assert_eq!(
+        (
+            early.len(),
+            order,
+            pending(&registry, &id),
+            status(&registry, &id)
+        ),
+        (
+            0,
+            vec![(3, None), (4, Some("remote_control".to_string()))],
+            Vec::new(),
+            SessionStatus::Working,
+        )
+    );
+}
+
+#[test]
 fn the_record_lists_open_requests_in_the_order_they_arrived() {
     let mut registry = Registry::new(4);
     let (id, process) = start(&mut registry, "claude", None);
