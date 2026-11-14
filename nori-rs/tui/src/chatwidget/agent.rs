@@ -188,8 +188,9 @@ pub(crate) fn launch_prepared_agent(
     )
 }
 
-/// Start a user session in the session manager and forward its events,
-/// tagged with `generation`, into the TUI event loop.
+/// Start a session in the session manager and forward its events, tagged
+/// with `generation`, into the TUI event loop. An agent prepared for a fork
+/// starts a fork of that parent; any other agent starts a user session.
 fn start_managed_session(
     manager: &SessionManager,
     agent: SessionAgent,
@@ -198,11 +199,21 @@ fn start_managed_session(
     generation: crate::app_event::SessionGeneration,
     analytics: Option<AnalyticsReporter>,
 ) -> SpawnAgentResult {
+    let parent = match &agent {
+        SessionAgent::Prepared(agent) => agent.fork_parent(),
+        SessionAgent::Prepare(_) => None,
+    }
+    .filter(|parent| manager.get(parent).is_some());
+    let source = if parent.is_some() {
+        SessionSource::Fork
+    } else {
+        SessionSource::User
+    };
     let mut session = match manager.start(StartSession {
         agent,
         start,
-        parent: None,
-        source: SessionSource::User,
+        parent,
+        source,
     }) {
         Ok(session) => session,
         Err(error) => {

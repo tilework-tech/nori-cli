@@ -421,6 +421,11 @@ impl ChatWidget {
         crate::ui_types::TokenUsage::default()
     }
 
+    /// The session manager key of the session this widget drives.
+    pub(crate) fn managed_conversation_id(&self) -> Option<ConversationId> {
+        self.managed_conversation_id
+    }
+
     pub(crate) fn conversation_id(&self) -> Option<ConversationId> {
         self.conversation_id
     }

@@ -6,7 +6,6 @@
 //! and reads the results back, which keeps every rule here testable with plain
 //! [`SessionEvent`] values.
 
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -63,7 +62,8 @@ struct Entry {
     next_seq: i64,
     started: bool,
     busy: bool,
-    pending_requests: BTreeSet<acp::v1::RequestId>,
+    /// Agent requests waiting on a client, in arrival order.
+    pending_requests: Vec<acp::v1::RequestId>,
     ended: Option<SessionStatus>,
     /// The child that took over this session's agent process in a fork.
     forked_into: Option<ConversationId>,
@@ -81,7 +81,7 @@ impl Entry {
             next_seq: 1,
             started: false,
             busy: false,
-            pending_requests: BTreeSet::new(),
+            pending_requests: Vec::new(),
             ended: None,
             forked_into: None,
             transcript_path: None,
@@ -125,6 +125,7 @@ impl Entry {
             approval_policy: self.settings.approval_policy,
             transcript_path: self.transcript_path.clone(),
             acp_session_id: self.acp_session_id.clone(),
+            pending_requests: self.pending_requests.clone(),
             status: self.status(),
         }
     }
@@ -145,6 +146,8 @@ fn advertised_model(options: &[acp::v1::SessionConfigOption]) -> Option<String> 
 pub(crate) struct Registry {
     sessions: HashMap<ConversationId, Entry>,
     processes: HashMap<AgentProcessId, ConversationId>,
+    /// Failed sessions that a resume replaced, mapped to their replacement.
+    superseded: HashMap<ConversationId, ConversationId>,
     capacity: Arc<Semaphore>,
     limit: i32,
     next_order: i64,
@@ -156,6 +159,7 @@ impl Registry {
         Self {
             sessions: HashMap::new(),
             processes: HashMap::new(),
+            superseded: HashMap::new(),
             capacity: Arc::new(Semaphore::new(permits)),
             limit: max_sessions.max(1),
             next_order: 0,
@@ -223,6 +227,13 @@ impl Registry {
             conversation_id = child;
         }
         let entry = self.sessions.get_mut(&conversation_id)?;
+        if let SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) = &event {
+            let position = entry
+                .pending_requests
+                .iter()
+                .position(|pending| *pending == resolved.request_id)?;
+            entry.pending_requests.remove(position);
+        }
         match &event {
             SessionEvent::Nori(NoriEvent::SessionStarted(started)) => {
                 entry.started = true;
@@ -258,7 +269,9 @@ impl Registry {
                 request_id,
                 request: acp::v1::AgentRequest::RequestPermissionRequest(_),
             }) => {
-                entry.pending_requests.insert(request_id.clone());
+                if !entry.pending_requests.contains(request_id) {
+                    entry.pending_requests.push(request_id.clone());
+                }
             }
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::v1::AgentNotification::SessionNotification(notification),
@@ -319,21 +332,6 @@ impl Registry {
         self.processes.insert(process, child);
     }
 
-    /// A client answered an agent request on `process`.
-    pub(crate) fn resolve_request(
-        &mut self,
-        process: AgentProcessId,
-        request_id: &acp::v1::RequestId,
-    ) {
-        if let Some(entry) = self
-            .processes
-            .get(&process)
-            .and_then(|id| self.sessions.get_mut(id))
-        {
-            entry.pending_requests.remove(request_id);
-        }
-    }
-
     /// The event stream of `process` closed. A session that never reported
     /// how it ended has failed.
     pub(crate) fn process_exited(&mut self, process: AgentProcessId) {
@@ -352,14 +350,18 @@ impl Registry {
     }
 
     /// The live agent process of a session, following branch-at-head forks
-    /// to the child that took over the parent's process.
+    /// to the child that took over the parent's process and resumes to the
+    /// session that replaced a failed one.
     pub(crate) fn process_following_forks(
         &self,
         conversation_id: &ConversationId,
     ) -> Option<AgentProcessId> {
         let mut current = *conversation_id;
         loop {
-            let entry = self.sessions.get(&current)?;
+            let Some(entry) = self.sessions.get(&current) else {
+                current = *self.superseded.get(&current)?;
+                continue;
+            };
             match (entry.process, entry.forked_into) {
                 (Some(process), _) => return Some(process),
                 (None, Some(child)) => current = child,
@@ -421,7 +423,8 @@ impl Registry {
     }
 
     /// Replace a failed session with the session that resumes it. Its
-    /// children move to the replacement.
+    /// children move to the replacement, a parent that forked into it now
+    /// leads to the replacement, and its ID keeps reaching the replacement.
     pub(crate) fn supersede(&mut self, failed: &ConversationId, replacement: &ConversationId) {
         if self.sessions.remove(failed).is_none() {
             return;
@@ -430,7 +433,16 @@ impl Registry {
             if entry.settings.parent == Some(*failed) {
                 entry.settings.parent = Some(*replacement);
             }
+            if entry.forked_into == Some(*failed) {
+                entry.forked_into = Some(*replacement);
+            }
         }
+        for target in self.superseded.values_mut() {
+            if target == failed {
+                *target = *replacement;
+            }
+        }
+        self.superseded.insert(*failed, *replacement);
     }
 }
 

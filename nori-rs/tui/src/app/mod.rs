@@ -177,6 +177,17 @@ struct PrimaryAgentPreparation {
     initial_context: Option<String>,
 }
 
+/// Where a session about to be prepared comes from when it forks an earlier
+/// point of another session.
+#[derive(Clone, Default)]
+pub(crate) struct ForkOrigin {
+    /// Conversation history up to the fork point, injected into the first
+    /// prompt.
+    pub(crate) context: Option<String>,
+    /// The session being forked.
+    pub(crate) parent: Option<nori_harness::ConversationId>,
+}
+
 pub(crate) enum PendingSessionActivation {
     New,
     Resume {

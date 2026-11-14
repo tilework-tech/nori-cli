@@ -189,12 +189,17 @@ pub struct HarnessHandle {
     command_tx: mpsc::UnboundedSender<HarnessCommand>,
     first_prompt_started: Option<Arc<FirstPromptStarted>>,
     agent_response_observer: Option<AgentResponseObserver>,
+    responder: Arc<str>,
     context_timeline: Arc<tokio::sync::RwLock<crate::context_timeline::ContextTimelineState>>,
 }
 
-/// Called with the request ID after any clone of a handle answers an agent
-/// request.
-pub(crate) type AgentResponseObserver = Arc<dyn Fn(&acp::v1::RequestId) + Send + Sync>;
+/// Called with the request ID and the answering handle's responder label just
+/// before any clone of a handle sends an answer to an agent request, so the
+/// observer sees the answer before anything the agent does in reaction to it.
+pub(crate) type AgentResponseObserver = Arc<dyn Fn(&acp::v1::RequestId, &str) + Send + Sync>;
+
+/// Responder label of a handle that was never given one.
+pub const DEFAULT_RESPONDER: &str = "client";
 
 struct FirstPromptStarted {
     fired: std::sync::atomic::AtomicBool,
@@ -248,6 +253,13 @@ impl HarnessHandle {
             fired: std::sync::atomic::AtomicBool::new(false),
             callback: Box::new(callback),
         }));
+        self
+    }
+
+    /// Label this handle's answers to agent requests with `responder`, so
+    /// clients following the session can tell who answered.
+    pub fn with_responder(mut self, responder: impl Into<String>) -> Self {
+        self.responder = Arc::from(responder.into());
         self
     }
 
@@ -339,21 +351,20 @@ impl HarnessHandle {
         request_id: acp::v1::RequestId,
         response: Result<acp::v1::ClientResponse, acp::v1::Error>,
     ) -> anyhow::Result<()> {
+        if let Some(observer) = &self.agent_response_observer {
+            observer(&request_id, &self.responder);
+        }
         let (response_tx, response_rx) = oneshot::channel();
         self.command_tx
             .send(HarnessCommand::RespondToAgent {
-                request_id: request_id.clone(),
+                request_id,
                 response,
                 response_tx,
             })
             .map_err(|_| anyhow::anyhow!("ACP agent command channel closed"))?;
         response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("ACP request response was not accepted"))??;
-        if let Some(observer) = &self.agent_response_observer {
-            observer(&request_id);
-        }
-        Ok(())
+            .map_err(|_| anyhow::anyhow!("ACP request response was not accepted"))?
     }
 
     pub async fn cancel(&self) -> anyhow::Result<()> {
@@ -781,6 +792,7 @@ pub(crate) fn launch_session_from(
         command_tx: agent_cmd_tx,
         first_prompt_started: None,
         agent_response_observer: None,
+        responder: Arc::from(DEFAULT_RESPONDER),
         context_timeline: Arc::clone(&context_timeline),
     };
 
@@ -1177,6 +1189,7 @@ mod tests {
             command_tx,
             first_prompt_started: None,
             agent_response_observer: None,
+            responder: Arc::from(DEFAULT_RESPONDER),
             context_timeline: Arc::default(),
         };
 
@@ -1206,6 +1219,7 @@ mod tests {
             command_tx,
             first_prompt_started: None,
             agent_response_observer: None,
+            responder: Arc::from(DEFAULT_RESPONDER),
             context_timeline: Arc::default(),
         }
         .with_first_prompt_started_callback(move || {

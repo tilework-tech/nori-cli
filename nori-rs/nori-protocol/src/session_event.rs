@@ -56,6 +56,7 @@ pub enum NoriEvent {
     PromptSummaryUpdated(PromptSummary),
     Notice(Notice),
     RequestFailed(RequestFailure),
+    RequestResolved(RequestResolved),
 }
 
 /// Persistent and agent-side identities established for a harness session.
@@ -230,6 +231,20 @@ pub struct PromptSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Notice {
     pub message: String,
+}
+
+/// A client answered a pending agent request, such as a permission request.
+///
+/// The session manager emits this on the session's envelope stream, so every
+/// client that follows the session learns that the request no longer waits
+/// on the user, whichever client answered it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequestResolved {
+    /// The ID of the agent request that was answered.
+    pub request_id: acp::v1::RequestId,
+    /// Label of the client that answered, for example `client` or
+    /// `remote_control`.
+    pub answered_by: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

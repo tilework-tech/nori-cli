@@ -39,6 +39,7 @@ pub struct PreparedAgent {
     catalog: SessionCatalog,
     automatic_session_id: Option<acp::SessionId>,
     setup_events: Option<Vec<SessionEvent>>,
+    fork_parent: Option<crate::ConversationId>,
 }
 
 impl fmt::Debug for PreparedAgent {
@@ -53,6 +54,19 @@ impl fmt::Debug for PreparedAgent {
 }
 
 impl PreparedAgent {
+    /// Mark this agent as carrying a fork of `parent`, for example a fork to
+    /// an earlier message that starts a new agent session with the parent's
+    /// history as context.
+    pub fn with_fork_parent(mut self, parent: crate::ConversationId) -> Self {
+        self.fork_parent = Some(parent);
+        self
+    }
+
+    /// The session this agent's session will be a fork of, if any.
+    pub fn fork_parent(&self) -> Option<crate::ConversationId> {
+        self.fork_parent
+    }
+
     pub(crate) async fn prepare(
         config: AcpBackendConfig,
     ) -> std::result::Result<Self, AgentPrepareFailure> {
@@ -149,6 +163,7 @@ impl PreparedAgent {
             catalog,
             automatic_session_id,
             setup_events: Some(setup_events),
+            fork_parent: None,
         })
     }
 

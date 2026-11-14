@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use nori_config::AskForApproval;
 use nori_protocol::AcpEvent;
 use nori_protocol::NoriEvent;
+use nori_protocol::RequestResolved;
 use nori_protocol::SessionEndReason;
 use nori_protocol::SessionEnded;
 use nori_protocol::SessionEvent;
@@ -116,6 +117,20 @@ fn status(registry: &Registry, id: &ConversationId) -> SessionStatus {
     registry.record(id).expect("session is registered").status
 }
 
+fn resolved(request_id: i64, answered_by: &str) -> SessionEvent {
+    SessionEvent::Nori(NoriEvent::RequestResolved(RequestResolved {
+        request_id: acp::RequestId::Number(request_id),
+        answered_by: answered_by.to_string(),
+    }))
+}
+
+fn pending(registry: &Registry, id: &ConversationId) -> Vec<acp::RequestId> {
+    registry
+        .record(id)
+        .map(|record| record.pending_requests)
+        .unwrap_or_default()
+}
+
 #[test]
 fn envelopes_number_each_conversation_from_one_without_gaps() {
     let mut registry = Registry::new(4);
@@ -160,7 +175,7 @@ fn status_follows_start_turns_and_permission_requests() {
     statuses.push(status(&registry, &id));
     registry.observe(process, permission(7));
     statuses.push(status(&registry, &id));
-    registry.resolve_request(process, &acp::RequestId::Number(7));
+    registry.observe(process, resolved(7, "client"));
     statuses.push(status(&registry, &id));
     registry.observe(process, idle());
     statuses.push(status(&registry, &id));
@@ -417,11 +432,78 @@ fn requests_are_answered_per_session() {
         registry.observe(process, permission(0));
     }
 
-    registry.resolve_request(process_a, &acp::RequestId::Number(0));
+    registry.observe(process_a, resolved(0, "client"));
 
     assert_eq!(
         (status(&registry, &a), status(&registry, &b)),
         (SessionStatus::Working, SessionStatus::NeedsYou)
+    );
+}
+
+#[test]
+fn an_answered_request_is_announced_once_in_sequence() {
+    let mut registry = Registry::new(4);
+    let (id, process) = start(&mut registry, "claude", None);
+    registry.observe(process, started("s"));
+    registry.observe(process, prompting(1));
+    let request = registry
+        .observe(process, permission(7))
+        .expect("known process");
+
+    let announced = registry
+        .observe(process, resolved(7, "remote_control"))
+        .expect("a pending request is announced when answered");
+    let repeated = registry.observe(process, resolved(7, "client"));
+    let next = registry
+        .observe(process, agent_text("after"))
+        .expect("known process");
+
+    assert_eq!(
+        (
+            (announced.conversation_id, announced.seq),
+            match &announced.event {
+                SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) => Some(resolved.clone()),
+                _ => None,
+            },
+            repeated.map(|envelope| envelope.seq),
+            next.seq,
+            pending(&registry, &id),
+            status(&registry, &id),
+        ),
+        (
+            (id.to_string(), request.seq + 1),
+            Some(RequestResolved {
+                request_id: acp::RequestId::Number(7),
+                answered_by: "remote_control".to_string(),
+            }),
+            None,
+            request.seq + 2,
+            Vec::new(),
+            SessionStatus::Working,
+        )
+    );
+}
+
+#[test]
+fn the_record_lists_open_requests_in_the_order_they_arrived() {
+    let mut registry = Registry::new(4);
+    let (id, process) = start(&mut registry, "claude", None);
+    registry.observe(process, started("s"));
+    registry.observe(process, prompting(1));
+    registry.observe(process, permission(9));
+    registry.observe(process, permission(2));
+    let while_waiting = pending(&registry, &id);
+    registry.observe(process, resolved(9, "client"));
+    let after_one_answer = pending(&registry, &id);
+    registry.observe(process, idle());
+
+    assert_eq!(
+        (while_waiting, after_one_answer, pending(&registry, &id)),
+        (
+            vec![acp::RequestId::Number(9), acp::RequestId::Number(2)],
+            vec![acp::RequestId::Number(2)],
+            Vec::new(),
+        )
     );
 }
 
@@ -457,6 +539,7 @@ fn session_started_fills_in_the_record() {
             approval_policy: AskForApproval::OnRequest,
             transcript_path: Some(PathBuf::from("/transcripts/acp-a.jsonl")),
             acp_session_id: Some("acp-a".to_string()),
+            pending_requests: Vec::new(),
             status: SessionStatus::Ready,
         }]
     );
@@ -568,5 +651,45 @@ fn closing_a_forked_parent_reaches_the_child_that_took_its_process() {
             registry.process_following_forks(&child),
         ),
         (Some(process), Some(process))
+    );
+}
+
+#[test]
+fn after_a_resume_the_old_ids_lead_to_the_replacement() {
+    let mut registry = Registry::new(4);
+    let (parent, process) = start(&mut registry, "claude", None);
+    registry.observe(process, started("acp-parent"));
+    let child = ConversationId::new();
+    registry.observe(
+        process,
+        SessionEvent::Nori(NoriEvent::SessionForked(SessionForked {
+            previous_conversation_id: parent.to_string(),
+            new_conversation_id: child.to_string(),
+            new_acp_session_id: acp::SessionId::new("acp-child"),
+        })),
+    );
+    registry.process_exited(process);
+    let mut replacement_settings = settings("claude", Some(parent));
+    replacement_settings.source = SessionSource::Fork;
+    replacement_settings.resumed_from = Some(child);
+    let replacement = replacement_settings.conversation_id;
+    let reservation = registry.reserve().expect("slot available");
+    let replacement_process = registry
+        .register(replacement_settings, reservation)
+        .expect("replacement registers");
+
+    registry.supersede(&child, &replacement);
+
+    assert_eq!(
+        (
+            registry.process_following_forks(&parent),
+            registry.process_following_forks(&child),
+            registry.process_following_forks(&replacement),
+        ),
+        (
+            Some(replacement_process),
+            Some(replacement_process),
+            Some(replacement_process),
+        )
     );
 }

@@ -550,3 +550,177 @@ async fn a_subscriber_that_falls_behind_is_disconnected_while_the_session_contin
     assert_eq!((first, after_overflow), (Some(1), None));
     manager.shutdown(Duration::ZERO).await;
 }
+
+fn allow() -> Result<acp::v1::ClientResponse, acp::v1::Error> {
+    Ok(acp::v1::ClientResponse::RequestPermissionResponse(
+        acp::v1::RequestPermissionResponse::new(acp::v1::RequestPermissionOutcome::Selected(
+            acp::v1::SelectedPermissionOutcome::new("allow"),
+        )),
+    ))
+}
+
+fn permission_request_id(event: &SessionEvent) -> Option<acp::v1::RequestId> {
+    match event {
+        SessionEvent::Acp(AcpEvent::Request {
+            request_id,
+            request: acp::v1::AgentRequest::RequestPermissionRequest(_),
+        }) => Some(request_id.clone()),
+        _ => None,
+    }
+}
+
+fn resolution(event: &SessionEvent) -> Option<(acp::v1::RequestId, String)> {
+    match event {
+        SessionEvent::Nori(NoriEvent::RequestResolved(resolved)) => {
+            Some((resolved.request_id.clone(), resolved.answered_by.clone()))
+        }
+        _ => None,
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn an_answer_from_another_client_is_announced_to_every_follower() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let manager = SessionManager::new(SessionManagerConfig::default());
+    let mut follower = manager.subscribe(256);
+    let mut session = start(&manager, prepare_spec("mock-model", home.path(), None));
+    wait_for_status(&manager, &session.conversation_id, SessionStatus::Ready).await;
+
+    let prompt = session
+        .handle
+        .prompt(prompt_text("mock:request-permission"))
+        .await
+        .expect("prompt");
+    let request_id = tokio::time::timeout(WAIT, async {
+        loop {
+            let envelope = session.events.recv().await.expect("stream open");
+            if let Some(request_id) = permission_request_id(&envelope.event) {
+                return request_id;
+            }
+        }
+    })
+    .await
+    .expect("the agent asks for permission");
+    wait_for_status(&manager, &session.conversation_id, SessionStatus::NeedsYou).await;
+    let waiting = manager
+        .get(&session.conversation_id)
+        .map(|record| record.pending_requests);
+
+    let remote = session.handle.clone().with_responder("remote_control");
+    remote
+        .respond_to_agent(request_id.clone(), allow())
+        .await
+        .expect("the second client answers");
+
+    let rest_of_turn = collect_turn(&mut session.events, &prompt).await;
+    let announced: Vec<(acp::v1::RequestId, String)> = rest_of_turn
+        .iter()
+        .filter_map(|envelope| resolution(&envelope.event))
+        .collect();
+    let primary_seq = rest_of_turn
+        .iter()
+        .find(|envelope| resolution(&envelope.event).is_some())
+        .map(|envelope| envelope.seq);
+    let followed = tokio::time::timeout(WAIT, async {
+        loop {
+            let envelope = follower.recv().await.expect("follower open");
+            if resolution(&envelope.event).is_some() {
+                return (envelope.conversation_id, envelope.seq);
+            }
+        }
+    })
+    .await
+    .expect("the follower sees the answer");
+    wait_for_status(&manager, &session.conversation_id, SessionStatus::Ready).await;
+    let after_answer = manager
+        .get(&session.conversation_id)
+        .map(|record| record.pending_requests);
+
+    // A handle without a label answers as `client`.
+    let second_prompt = session
+        .handle
+        .prompt(prompt_text("mock:request-permission"))
+        .await
+        .expect("second prompt");
+    let second_request = tokio::time::timeout(WAIT, async {
+        loop {
+            let envelope = session.events.recv().await.expect("stream open");
+            if let Some(request_id) = permission_request_id(&envelope.event) {
+                return request_id;
+            }
+        }
+    })
+    .await
+    .expect("the agent asks again");
+    session
+        .handle
+        .respond_to_agent(second_request.clone(), allow())
+        .await
+        .expect("the primary client answers");
+    let second_announced: Vec<(acp::v1::RequestId, String)> =
+        collect_turn(&mut session.events, &second_prompt)
+            .await
+            .iter()
+            .filter_map(|envelope| resolution(&envelope.event))
+            .collect();
+
+    assert_eq!(
+        (
+            waiting,
+            announced,
+            Some(followed),
+            after_answer,
+            second_announced,
+        ),
+        (
+            Some(vec![request_id.clone()]),
+            vec![(request_id, "remote_control".to_string())],
+            primary_seq.map(|seq| (session.conversation_id.to_string(), seq)),
+            Some(Vec::new()),
+            vec![(second_request, "client".to_string())],
+        )
+    );
+
+    manager.shutdown(Duration::ZERO).await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn closing_by_the_failed_id_after_a_resume_closes_the_resumed_session() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let wire = home.path().join("wire");
+    let manager = SessionManager::new(SessionManagerConfig::default());
+    let mut failed = start(
+        &manager,
+        prepare_spec("mock-model", home.path(), Some(wire.clone())),
+    );
+    wait_for_status(&manager, &failed.conversation_id, SessionStatus::Ready).await;
+    let request = failed
+        .handle
+        .prompt(prompt_text("hello"))
+        .await
+        .expect("prompt");
+    collect_turn(&mut failed.events, &request).await;
+    // SAFETY: sends SIGKILL to the mock agent process this test started.
+    let killed = unsafe { libc::kill(recorded_agent_pid(&wire), libc::SIGKILL) };
+    assert_eq!(killed, 0, "kill the agent process");
+    wait_for_status(&manager, &failed.conversation_id, SessionStatus::Failed).await;
+    let resumed = manager
+        .resume(
+            &failed.conversation_id,
+            prepare_spec("mock-model", home.path(), None),
+        )
+        .await
+        .expect("resume");
+    wait_for_status(&manager, &resumed.conversation_id, SessionStatus::Ready).await;
+
+    manager
+        .close(&failed.conversation_id, Duration::ZERO)
+        .await
+        .expect("close by the failed session's ID");
+
+    wait_for_status(&manager, &resumed.conversation_id, SessionStatus::Closed).await;
+    manager.shutdown(Duration::ZERO).await;
+}

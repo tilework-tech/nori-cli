@@ -11,7 +11,10 @@ use std::sync::PoisonError;
 use std::time::Duration;
 
 use nori_config::AskForApproval;
+use nori_protocol::NoriEvent;
+use nori_protocol::RequestResolved;
 use nori_protocol::SessionEnvelope;
+use nori_protocol::SessionEvent;
 use nori_protocol::SessionStatus;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -57,6 +60,8 @@ pub struct SessionRecord {
     pub approval_policy: AskForApproval,
     pub transcript_path: Option<PathBuf>,
     pub acp_session_id: Option<String>,
+    /// Agent requests that wait on a client, in the order they arrived.
+    pub pending_requests: Vec<nori_protocol::acp::v1::RequestId>,
     pub status: SessionStatus,
 }
 
@@ -244,14 +249,21 @@ impl SessionManager {
         };
 
         let launched = launch_session_from(agent_source, start);
-        let observer_target = Arc::downgrade(&self.shared);
-        let handle = launched
-            .handle
-            .with_agent_response_observer(Arc::new(move |request_id| {
-                if let Some(shared) = observer_target.upgrade() {
-                    shared.state().registry.resolve_request(process, request_id);
-                }
-            }));
+        // Answers are queued before they reach the agent, and the pump reads
+        // this queue first, so an answer is numbered ahead of anything the
+        // agent does in reaction to it.
+        let (answers_tx, mut answers) = mpsc::unbounded_channel();
+        let handle =
+            launched
+                .handle
+                .with_agent_response_observer(Arc::new(move |request_id, responder| {
+                    let _ = answers_tx.send(SessionEvent::Nori(NoriEvent::RequestResolved(
+                        RequestResolved {
+                            request_id: request_id.clone(),
+                            answered_by: responder.to_string(),
+                        },
+                    )));
+                }));
         let shutting_down = {
             let mut state = self.shared.state();
             state.handles.insert(process, handle.clone());
@@ -272,7 +284,15 @@ impl SessionManager {
         let shared = Arc::clone(&self.shared);
         let mut events = launched.events;
         tokio::spawn(async move {
-            while let Some(event) = events.recv().await {
+            loop {
+                let event = tokio::select! {
+                    biased;
+                    Some(answer) = answers.recv() => answer,
+                    event = events.recv() => match event {
+                        Some(event) => event,
+                        None => break,
+                    },
+                };
                 let envelope = {
                     let mut state = shared.state();
                     let Some(envelope) = state.registry.observe(process, event) else {
