@@ -47,10 +47,17 @@ pub(crate) struct HotkeyPickerView {
 }
 
 impl HotkeyPickerView {
-    pub fn new(config: &HotkeyConfig, app_event_tx: AppEventSender) -> Self {
+    /// `include_session_moves` lists the session-move hotkeys, which exist
+    /// only with `[features] multi_session`.
+    pub fn new(
+        config: &HotkeyConfig,
+        include_session_moves: bool,
+        app_event_tx: AppEventSender,
+    ) -> Self {
         let entries: Vec<(HotkeyAction, HotkeyBinding)> = config
             .all_bindings()
             .into_iter()
+            .filter(|(action, _)| include_session_moves || !action.is_multi_session())
             .map(|(action, binding)| (action, binding.clone()))
             .collect();
 
@@ -317,12 +324,36 @@ mod tests {
         let (tx_raw, rx) = unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
         let config = HotkeyConfig::default();
-        let picker = HotkeyPickerView::new(&config, tx);
+        let picker = HotkeyPickerView::new(&config, false, tx);
         (picker, rx)
     }
 
     fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
         KeyEvent::new(code, modifiers)
+    }
+
+    #[test]
+    fn session_move_hotkeys_are_listed_only_with_multi_session() {
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let config = HotkeyConfig::default();
+        let listed = |include| {
+            HotkeyPickerView::new(&config, include, AppEventSender::new(tx_raw.clone()))
+                .entries()
+                .iter()
+                .filter(|(action, _)| action.is_multi_session())
+                .map(|(action, binding)| (*action, binding.as_str().to_string()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(listed(false), Vec::new());
+        assert_eq!(
+            listed(true),
+            vec![
+                (HotkeyAction::PreviousSession, "alt+,".to_string()),
+                (HotkeyAction::NextSession, "alt+.".to_string()),
+                (HotkeyAction::NextWaitingSession, "alt+down".to_string()),
+                (HotkeyAction::OpenSessionList, "alt+s".to_string()),
+            ]
+        );
     }
 
     #[test]

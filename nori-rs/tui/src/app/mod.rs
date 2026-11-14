@@ -239,6 +239,7 @@ mod config_persistence;
 mod event_handling;
 mod resize_reflow;
 mod session_deck;
+mod session_keys;
 mod session_setup;
 mod session_view;
 
