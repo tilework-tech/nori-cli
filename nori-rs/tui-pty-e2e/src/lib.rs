@@ -101,9 +101,20 @@ pub struct TuiSession {
     reader: Box<dyn Read + Send>,
     writer: Box<dyn Write + Send>,
     parser: Parser,
+    rows: u16,
+    cols: u16,
+    /// Every byte the TUI wrote, before control-sequence interception.
+    raw_output: Vec<u8>,
+    /// Bytes held back because they may begin a split erase-scrollback sequence.
+    pending_output: Vec<u8>,
     child: Box<dyn portable_pty::Child + Send>,
     _temp_dir: Option<tempfile::TempDir>,
 }
+
+/// Lines of terminal history kept by the session's emulator.
+pub const SCROLLBACK_ROWS: usize = 20_000;
+
+const ERASE_SCROLLBACK: &[u8] = b"\x1b[3J";
 
 impl Drop for TuiSession {
     fn drop(&mut self) {
@@ -407,7 +418,11 @@ trust_level = "trusted"
             _master: pair.master,
             reader,
             writer,
-            parser: Parser::new(rows, cols, 0),
+            parser: Parser::new(rows, cols, SCROLLBACK_ROWS),
+            rows,
+            cols,
+            raw_output: Vec::new(),
+            pending_output: Vec::new(),
             child,
             _temp_dir: temp_dir,
         })
@@ -487,8 +502,9 @@ trust_level = "trusted"
                     );
                 }
                 // Intercept and respond to control sequences before parsing
+                self.raw_output.extend_from_slice(&buf[..n]);
                 let processed = self.intercept_control_sequences(&buf[..n])?;
-                self.parser.process(&processed);
+                self.process_output(&processed);
                 Ok(())
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -541,6 +557,80 @@ trust_level = "trusted"
             }
         }
         Ok(result)
+    }
+
+    /// Feed terminal output to the emulator. `vt100` ignores `ESC[3J`, so
+    /// erase-scrollback is applied here: the emulator is rebuilt with the
+    /// visible screen kept and the history dropped, as a real terminal does.
+    fn process_output(&mut self, data: &[u8]) {
+        let mut buffered = std::mem::take(&mut self.pending_output);
+        buffered.extend_from_slice(data);
+        let mut rest = buffered.as_slice();
+        while let Some(at) = find_subslice(rest, ERASE_SCROLLBACK) {
+            self.parser.process(&rest[..at]);
+            self.erase_scrollback();
+            rest = &rest[at + ERASE_SCROLLBACK.len()..];
+        }
+        let keep = (1..ERASE_SCROLLBACK.len())
+            .rev()
+            .find(|len| rest.ends_with(&ERASE_SCROLLBACK[..*len]))
+            .unwrap_or(0);
+        self.parser.process(&rest[..rest.len() - keep]);
+        self.pending_output = rest[rest.len() - keep..].to_vec();
+    }
+
+    fn erase_scrollback(&mut self) {
+        let screen = self.parser.screen().contents_formatted();
+        let mut parser = Parser::new(self.rows, self.cols, SCROLLBACK_ROWS);
+        parser.process(&screen);
+        self.parser = parser;
+    }
+
+    /// The whole terminal history: every scrollback line, oldest first,
+    /// followed by the visible screen.
+    pub fn history_contents(&mut self) -> String {
+        self.parser.set_scrollback(usize::MAX);
+        let depth = self.parser.screen().scrollback();
+        let mut lines = Vec::with_capacity(depth + usize::from(self.rows));
+        for offset in (1..=depth).rev() {
+            self.parser.set_scrollback(offset);
+            if let Some(row) = self.parser.screen().rows(0, self.cols).next() {
+                lines.push(row);
+            }
+        }
+        self.parser.set_scrollback(0);
+        lines.extend(self.parser.screen().rows(0, self.cols));
+        lines.join("\n")
+    }
+
+    /// Keep reading output for `duration`, so the emulator catches up with
+    /// everything the TUI drew in that time.
+    pub fn settle(&mut self, duration: Duration) {
+        let deadline = std::time::Instant::now() + duration;
+        while std::time::Instant::now() < deadline {
+            let _ = self.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// Every byte the TUI has written so far, including escape sequences the
+    /// emulator does not keep, such as notifications.
+    pub fn raw_output(&self) -> &[u8] {
+        &self.raw_output
+    }
+
+    /// Resize the terminal, as a user dragging the window would.
+    pub fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
+        self._master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })?;
+        self.parser.set_size(rows, cols);
+        self.rows = rows;
+        self.cols = cols;
+        Ok(())
     }
 
     /// Wait for predicate with timeout
@@ -1511,4 +1601,10 @@ enhancements
             "  Approvals: Agent · Skillset: [SKILLSET] · Skillsets v0.9.99"
         );
     }
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }

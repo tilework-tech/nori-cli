@@ -201,6 +201,7 @@ impl App {
                         display_name,
                         widget: Box::new(widget),
                         activation_error: None,
+                        resumes: false,
                     });
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
@@ -614,6 +615,7 @@ impl App {
                     None,
                 );
                 init.prepared_agent = Some(agent);
+                self.begin_replacing_session_transcript(tui)?;
                 self.chat_widget =
                     ChatWidget::new_resumed_acp(init, acp_session_id, title, transcript);
                 self.configure_new_chat_widget();
@@ -753,11 +755,15 @@ impl App {
                             agent_name,
                             display_name,
                             widget,
+                            resumes,
                             ..
                         }) = self.candidate_agent.take()
                         else {
                             unreachable!("candidate generation checked above")
                         };
+                        if resumes {
+                            self.begin_replacing_session_transcript(tui)?;
+                        }
                         let mut old_widget = std::mem::replace(&mut self.chat_widget, *widget);
                         self.config.active_agent = agent_name.clone();
                         self.config.agent = agent_name;
@@ -1627,6 +1633,7 @@ impl App {
                             None,
                         );
                         init.prepared_agent = Some(agent);
+                        self.begin_replacing_session_transcript(tui)?;
                         self.chat_widget = ChatWidget::new_resumed_acp(
                             init,
                             acp_session_id,
@@ -1694,6 +1701,7 @@ impl App {
                         display_name,
                         widget: Box::new(widget),
                         activation_error: None,
+                        resumes: true,
                     });
                     tui.frame_requester().schedule_frame();
                     return Ok(true);
@@ -1752,6 +1760,7 @@ impl App {
                     None,
                 );
                 init.prepared_agent = Some(agent);
+                self.begin_replacing_session_transcript(tui)?;
                 self.chat_widget = ChatWidget::new_resumed_acp(
                     init,
                     Some(acp_session_id.clone()),

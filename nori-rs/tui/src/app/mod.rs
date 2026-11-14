@@ -213,6 +213,8 @@ enum CandidateAgent {
         display_name: String,
         widget: Box<ChatWidget>,
         activation_error: Option<String>,
+        /// The candidate resumes an existing session and replays its history.
+        resumes: bool,
     },
 }
 
@@ -227,6 +229,7 @@ mod config_persistence;
 mod event_handling;
 mod resize_reflow;
 mod session_setup;
+mod session_view;
 
 impl App {
     #[allow(clippy::too_many_arguments)]
