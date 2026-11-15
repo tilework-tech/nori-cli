@@ -324,8 +324,8 @@ impl ChatWidget {
                 self.replay_source = None;
             }
             nori_protocol::NoriEvent::Undo(_) | nori_protocol::NoriEvent::UserShell(_) => {}
-            // This widget answers its own requests; answers from other clients
-            // are shown by the multi-session view.
+            // This widget answers its own requests; the App's session previews
+            // drop a request another client answered.
             nori_protocol::NoriEvent::RequestResolved(_) => {}
             // TODO(#557): render forked-transcript lineage in the TUI history.
             nori_protocol::NoriEvent::SessionForked(forked) => {

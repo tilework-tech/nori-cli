@@ -53,6 +53,26 @@ and then release or cancel it without a timing guess. The same fixtures drive
 [Harness timeline tests](../harness/tests/context_timeline.rs) and
 [terminal context tests](../tui-pty-e2e/tests/context.rs).
 
+Some scenarios can also be chosen per prompt, so several sessions on one mock
+binary can behave differently without sharing an environment. A prompt whose
+text block is exactly one of these markers (surrounding whitespace ignored)
+selects the scenario for that turn:
+
+| Prompt marker | Behavior | Environment equivalent |
+| --- | --- | --- |
+| `mock:stream-until-cancel` | Streams text chunks until the turn is cancelled | `MOCK_AGENT_STREAM_UNTIL_CANCEL` |
+| `mock:exit-during-prompt` | Exits with status 17 mid-prompt | `MOCK_AGENT_EXIT_DURING_PROMPT` |
+| `mock:request-permission` | Sends a permission request for the default `echo` command | `MOCK_AGENT_REQUEST_PERMISSION` |
+| `mock:request-permission:<command>` | Sends a permission request naming `<command>` | none |
+
+The permission command comes from the prompt marker first, then
+`MOCK_AGENT_PERMISSION_COMMAND`, then the default `echo` command. A named
+command is reported as the tool call's content and as `{"command": ...}` raw
+input, which lets multi-session tests tell requests from different sessions
+apart. `MOCK_AGENT_PERMISSION_DELAY_MS` waits before the request is sent, so a
+test can move to another session before the request arrives in the
+background.
+
 The mock deliberately issues outbound client requests through the SDK rather
 than calling host internals. This makes the public `AcpEvent::Request` and
 `HarnessHandle::respond_to_agent` path observable end to end.

@@ -282,7 +282,7 @@ impl App {
     }
 
     /// Bring on screen the next session, after the active one in navigation
-    /// order, whose family is waiting on the user.
+    /// order, that is waiting on the user.
     pub(super) fn show_next_waiting_session(&mut self) {
         let waiting: Vec<SessionGeneration> = self
             .session_facts()

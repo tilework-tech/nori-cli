@@ -36,6 +36,15 @@ scrollback after width changes. It defaults to `true`; the `/settings` toggle
 persists to this same key, so startup configuration and runtime changes share
 one source of truth.
 
+`[features]` holds opt-in behavior flags, resolved to plain booleans on
+`NoriConfig`. `multi_session` (default `false`) lets the TUI hold several
+sessions and move between them; it is read once at startup. `[tui.hotkeys]`
+resolves every `HotkeyAction` to a `HotkeyBinding`, with per-action defaults
+from `HotkeyAction::default_binding`. The session-move actions
+(`previous_session`, `next_session`, `next_waiting_session`,
+`open_session_list`) always resolve, but `HotkeyAction::is_multi_session`
+marks them so frontends ignore and hide them unless `multi_session` is on.
+
 `[default_models]` maps an agent slug to a model id. This crate only stores the
 value; the id is not validated here (an agent may accept models its ACP picker
 never advertised). `nori-acp-host` reads `model_override` to build a

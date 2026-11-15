@@ -2,8 +2,8 @@
 //!
 //! A preview is derived only from the session's own events, never from a call
 //! to the agent. It shows the most urgent thing first: a request waiting on
-//! the user, then the running tool, then the latest line of agent text, then
-//! how the session ended.
+//! the user, then the running tool, then how the session ended, then the
+//! latest line of agent text.
 
 use std::collections::HashMap;
 

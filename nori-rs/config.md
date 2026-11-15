@@ -5,7 +5,7 @@ Nori reads one TOML file at `$NORI_HOME/config.toml` (default
 at startup. The resolution architecture and the full set of runtime-policy types
 live in [`nori-config/docs.md`](nori-config/docs.md); this file documents the
 agent and model configuration surface, which is the most commonly hand-edited
-part of the file.
+part of the file, plus the opt-in multi-session feature.
 
 ## Choosing an agent
 
@@ -84,3 +84,37 @@ key of `CODEX_CONFIG`) and ignore this field. For env-based channels, Nori's
 injected value takes precedence over the agent's own configured model (for
 example `~/.claude/settings.json`) for Nori-spawned sessions — Nori's
 `[default_models]` is authoritative there by design.
+
+## Several sessions in one TUI: `[features] multi_session`
+
+```toml
+[features]
+multi_session = true
+
+[tui.hotkeys]
+previous_session = "alt+,"
+next_session = "alt+."
+next_waiting_session = "alt+down"
+open_session_list = "alt+s"
+```
+
+Off by default; restart Nori after changing it. With it on, `/new`, `/resume`,
+switching agents with `/agent`, and forking to an earlier message keep the
+previous session running in the background instead of ending it. One session
+is on screen at a time, and the terminal scrollback always shows only that
+session's history.
+
+| Way in | What it does |
+| --- | --- |
+| `previous_session` / `next_session` | Move through sessions in the order they were opened, wrapping at the ends |
+| `next_waiting_session` | With an empty prompt, jump to the next session waiting on you |
+| Left on an empty prompt, `open_session_list`, or `/sessions` | Open the session list |
+
+The `[tui.hotkeys]` values above are the defaults, and the actions appear in
+the Hotkeys view only with the feature on. In the session list, Tab shows only
+sessions waiting on you, typing filters by title or agent, Enter jumps, Esc
+clears the filter and then closes, and Ctrl+R restarts a failed session from
+its transcript in the same place. A status line above the prompt counts
+sessions by status (starting, working, waiting on you, ready, failed) once two
+or more are open, and a separate line names a background session that is
+waiting on you.

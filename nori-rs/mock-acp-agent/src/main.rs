@@ -53,6 +53,9 @@ fn spawn_descendant_if_requested() {
     std::fs::write(pid_file, child_pid.to_string()).expect("write mock descendant pid");
 }
 
+/// Command shown in a permission request when the prompt names none.
+const DEFAULT_PERMISSION_COMMAND: &str = "echo 'Hello from permission test'";
+
 /// Incoming byte stream that exits the process when the peer closes stdin.
 ///
 /// The SDK's connection future never resolves on a clean stdin EOF: its
@@ -60,8 +63,6 @@ fn spawn_descendant_if_requested() {
 /// incoming one while the others stay alive as long as connection handles
 /// exist. Without this, the mock would hang after the client disconnects and
 /// its parent would have to SIGKILL it instead of letting it exit cleanly.
-const DEFAULT_PERMISSION_COMMAND: &str = "echo 'Hello from permission test'";
-
 struct ExitOnEof<R> {
     inner: R,
 }

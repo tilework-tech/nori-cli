@@ -143,7 +143,8 @@ impl App {
     }
 
     /// Re-render the full transcript into the terminal scrollback in one call.
-    /// Useful when switching sessions to ensure prior history remains visible.
+    /// Used after a fork to an earlier message to print the history kept
+    /// before the fork point. Session jumps use `show_session` instead.
     pub(crate) fn render_transcript_once(&mut self, tui: &mut tui::Tui) {
         if !self.transcript_cells.is_empty() {
             let width = tui.terminal.last_known_screen_size.width;

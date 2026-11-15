@@ -360,7 +360,7 @@ fn a_fork_is_listed_under_its_parent_and_its_request_marks_the_parent() {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn an_unfocused_terminal_is_notified_when_a_background_session_needs_you() {
+fn an_unfocused_terminal_is_notified_when_a_background_session_is_waiting_on_you() {
     let mut session = spawn();
     ask(&mut session, "alpha question", ALPHA_ANSWER);
     start_new_session(&mut session);

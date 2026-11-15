@@ -150,6 +150,24 @@ consumer application
   | Nori | Green |
 
   Pi retains the warning tone and unknown providers use normal text.
+  A cell may also carry a semantic [`DetailTone`](src/detail.rs) through
+  `PickerItem::cell_detail_tone`, for example an error-coloured status word.
+  The detail tone is applied after any provider tone and follows the same
+  enabled-and-unselected rule.
+- `PickerItem::depth` turns a flat list into a tree. Depth 0 is top level and
+  negative values clamp to 0; a row nests under the closest earlier row with a
+  smaller depth. The [`tree`](src/picker/tree.rs) helper computes indent guides
+  (`├─`, `└─`, `│`) from the depths of the visible rows only, so filtering
+  redraws the guides for what remains. The guide prefixes the primary cell and
+  a matching continuation prefixes the row's description line, at every depth.
+- `Picker::compact_descriptions(true)` keeps each row's description on a
+  second line in compact density as well, for lists whose descriptions carry a
+  live preview. Compact rows become two lines tall only when at least one
+  visible row has a description.
+- `PickerState::replace_items` swaps every row while the picker stays open.
+  The selection follows the selected row's key, falling back to the first
+  available visible row when that key is gone. Query and search state are
+  untouched. The TUI session list uses this to apply live status updates.
 - `OverlayMenu` centers a content-derived, maximum-width surface inside the
   supplied rectangle by default; `MenuPlacement::Left` anchors longer choices
   to the caller's left inset. Rendering reconciles only menu-local viewport offset and
