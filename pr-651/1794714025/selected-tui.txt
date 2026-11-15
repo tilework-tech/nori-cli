@@ -1,0 +1,40 @@
+
+
+
+• Remote control: on
+  Scope: local-only
+  ACP URLs:
+  ws://127.0.0.1:38765/acp
+  Controller: disconnected
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/pr-proof/fixture · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› proof first on-screen session
+
+
+• Local mock response complete.
+
+
+› remote proof first-session marker
+
+
+• Local mock response complete.
+
+
+› remote selected-session marker
+
+
+• Local mock response complete.
+
+  2 ready
+
+
+› ! for shell commands
+
+                                                                                           ⎇ feat/multi-session-d-remote

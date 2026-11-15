@@ -1,0 +1,40 @@
+Nori D1 proof client | ws://127.0.0.1:38765/sessions
+
+ID        AGENT               STATUS           AGE    TITLE
+a6dc57e9  mock-model          ready            1m     proof first on-screen session
+90d240a7  mock-model          ready            1m     proof second on-screen session
+On-screen session: 90d240a7
+
+Prompt -> a6dc57e9: remote proof first-session marker
+
+Prompt -> 90d240a7: mock:request-permission:echo remote proof second-session marker
+90d240a7  waiting on you  permission request seq=16
+Answer -> 90d240a7: allow
+a6dc57e9  completed  seq=16  {"Ok":{"stopReason":"end_turn"}}
+90d240a7  completed  seq=19  {"Ok":{"stopReason":"end_turn"}}
+
+ID        AGENT               STATUS           AGE    TITLE
+a6dc57e9  mock-model          ready            1m     proof first on-screen session
+90d240a7  mock-model          ready            1m     proof second on-screen session
+On-screen session: 90d240a7
+
+PASS: two sessions driven; permission answered on chosen session
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

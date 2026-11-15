@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/pr-proof/fixture · Agent approvals
+  Agent        Mock ACP · Mock Default Model · Medium
+
+
+› proof second on-screen session
+
+
+• Local mock response complete.
+
+
+› mock:request-permission:echo remote proof second-session marker
+
+
+• Local mock response complete.
+
+• Permission granted with option: allow
+
+  2 ready
+
+
+› ? for shortcuts
+
+                                                                                           ⎇ feat/multi-session-d-remote
