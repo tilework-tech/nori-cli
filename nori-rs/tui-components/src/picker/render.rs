@@ -437,14 +437,20 @@ impl<K: Clone + Eq> Picker<'_, K> {
                 .map(|column| item.cells.get(&column.key).cloned().unwrap_or_default())
                 .collect::<Vec<_>>();
             let (guide, description_guide) = &guides[start + row_offset];
-            if let Some(primary) = values.first_mut() {
+            let tree_index = self
+                .state
+                .tree_column
+                .as_ref()
+                .and_then(|key| columns.iter().position(|column| &column.key == key))
+                .unwrap_or(0);
+            if let Some(primary) = values.get_mut(tree_index) {
                 // Cut the title, not the badge, when the column is narrow.
                 let badge = if badges.is_empty() {
                     String::new()
                 } else {
                     format!(" ({badges})")
                 };
-                let room = usize::from(widths.first().copied().unwrap_or(0))
+                let room = usize::from(widths.get(tree_index).copied().unwrap_or(0))
                     .saturating_sub(guide.width() + badge.width());
                 let title = if badge.is_empty() {
                     std::mem::take(primary)

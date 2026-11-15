@@ -4,6 +4,7 @@ use tui_pty_e2e::Key;
 use tui_pty_e2e::SessionConfig;
 use tui_pty_e2e::TIMEOUT;
 use tui_pty_e2e::TuiSession;
+use tui_pty_e2e::normalize_for_input_snapshot;
 
 fn spawn(enabled: bool) -> TuiSession {
     let config = SessionConfig::new()
@@ -36,19 +37,20 @@ fn same_kind_child_starts_and_returns_without_approval_or_exiting_terminal() {
     assert!(
         !session
             .screen_contents()
-            .contains("Start delegated session")
+            .contains("start a mock-model-alt session")
     );
     session.submit_input("/sessions").unwrap();
     session
-        .wait_for_text("inspect the parser", TIMEOUT)
+        .wait_for(
+            |screen| screen.contains("Sessions 2") && screen.contains("└─ · inspect the parser"),
+            TIMEOUT,
+        )
         .unwrap();
     session.send_key(Key::Down).unwrap();
     session.send_key(Key::Enter).unwrap();
     session
         .wait_for(
-            |screen| {
-                screen.contains("inspect the parser") && !screen.contains("parent task identity")
-            },
+            |screen| screen.contains("inspect the parser") && screen.contains("alt + up to parent"),
             TIMEOUT,
         )
         .unwrap();
@@ -86,7 +88,7 @@ fn different_kind_child_needs_start_and_its_permission_stays_in_child() {
         .submit_input("/delegate mock-model-alt mock:request-permission:write-child-file")
         .unwrap();
     session
-        .wait_for_text("Start delegated session", TIMEOUT)
+        .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
     assert!(
         !session
@@ -140,7 +142,7 @@ fn declining_different_kind_does_not_start_child() {
         .submit_input("/delegate mock-model-alt inspect parser without starting a child")
         .unwrap();
     session
-        .wait_for_text("Start delegated session", TIMEOUT)
+        .wait_for_text("start a mock-model-alt session", TIMEOUT)
         .unwrap();
     session.send_key(Key::Char('2')).unwrap();
     session
@@ -151,7 +153,9 @@ fn declining_different_kind_does_not_start_child() {
         .unwrap();
     session
         .wait_for(
-            |screen| !screen.contains("Working") && !screen.contains("Start delegated session"),
+            |screen| {
+                !screen.contains("Working") && !screen.contains("start a mock-model-alt session")
+            },
             TIMEOUT,
         )
         .unwrap();
@@ -172,6 +176,93 @@ fn delegation_is_unavailable_without_multi_session() {
     assert!(
         !session
             .screen_contents()
-            .contains("Start delegated session")
+            .contains("start a mock-model-alt session")
+    );
+}
+
+#[test]
+fn delegation_reads_clearly_from_request_to_result() {
+    let mut session = spawn(true);
+    session
+        .submit_input("/delegate mock-model-alt mock:request-permission:write-child-file")
+        .unwrap();
+    session
+        .wait_for_text("start a mock-model-alt session", TIMEOUT)
+        .unwrap();
+    session.settle(Duration::from_millis(200));
+    insta::assert_snapshot!(
+        "delegation_approval_prompt",
+        normalize_for_input_snapshot(session.screen_contents())
+    );
+
+    session.send_key(Key::Char('1')).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("delegated to mock-model-alt")
+                    && screen.contains("parent task… › mock:request")
+            },
+            TIMEOUT,
+        )
+        .expect("the parent names both sessions while the child waits");
+    session.settle(Duration::from_millis(200));
+    let parent = session.screen_contents();
+    let request_line = parent
+        .lines()
+        .find(|line| line.contains("● ") && line.contains("is waiting on you"))
+        .unwrap_or_else(|| panic!("request line missing:\n{parent}"));
+    assert!(request_line.contains("alt + down"), "{parent}");
+    assert!(
+        !regex::Regex::new("[0-9a-f]{8}-[0-9a-f]{4}")
+            .unwrap()
+            .is_match(&parent),
+        "sessions are named, not identified by raw IDs:\n{parent}"
+    );
+
+    session.send_key(Key::AltDown).unwrap();
+    session
+        .wait_for_text("Would you like to allow", TIMEOUT)
+        .unwrap();
+    session
+        .wait_for_text("alt + up to parent", TIMEOUT)
+        .expect("the child shows the way back to its parent");
+
+    session.send_key(Key::Char('1')).unwrap();
+    session
+        .wait_for_text("Permission granted with option: allow", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::AltUp).unwrap();
+    session
+        .wait_for(
+            |screen| {
+                screen.contains("result from mock-model-alt")
+                    && screen.contains("parent task identity")
+            },
+            TIMEOUT,
+        )
+        .expect("the result block names the child in the parent");
+    session
+        .wait_for_text("Delegation continuation received", TIMEOUT)
+        .unwrap();
+    assert!(
+        session.history_contents().contains("returns to mock-model"),
+        "the result block says where it goes"
+    );
+
+    session.submit_input("/sessions").unwrap();
+    session
+        .wait_for(|screen| screen.contains("└─ "), TIMEOUT)
+        .expect("the child is listed under its parent");
+    session.settle(Duration::from_millis(200));
+    let list = session.screen_contents();
+    assert!(!list.contains("(parent"), "{list}");
+    // The agent still receives the child's ID; mask it for a stable snapshot.
+    let list = regex::Regex::new("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+        .unwrap()
+        .replace_all(&list, "CHILD-ID")
+        .into_owned();
+    insta::assert_snapshot!(
+        "delegation_session_tree",
+        normalize_for_input_snapshot(list)
     );
 }

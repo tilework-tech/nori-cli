@@ -15,6 +15,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
 
+use crate::history_cell::HistoryCell;
 use crate::presentation::ClientEvent;
 use crate::presentation::ClientEventNormalizer;
 use crate::presentation::MessageStream;
@@ -35,8 +36,6 @@ pub(super) struct SessionRow {
     #[serde(default)]
     pub parent: Option<String>,
     #[serde(default)]
-    pub depth: i32,
-    #[serde(default)]
     pub delegations: Vec<nori_protocol::Delegation>,
 }
 
@@ -49,6 +48,7 @@ pub(super) enum Part {
     Tool(Box<ToolSnapshot>),
     Plan(PlanSnapshot),
     Notice(String),
+    Delegation(nori_protocol::Delegation),
 }
 
 pub(super) struct Permission {
@@ -81,6 +81,8 @@ pub(super) struct AttachState {
     pub notice: Option<String>,
     pub replay_error: Option<String>,
     pub scroll: usize,
+    /// Key that moves from a delegated child to its parent.
+    pub parent_binding: nori_config::HotkeyBinding,
 }
 
 impl Default for AttachState {
@@ -100,7 +102,8 @@ impl Default for AttachState {
                 ],
                 Vec::new(),
             )
-            .search_placeholder("Title or agent"),
+            .search_placeholder("Title or agent")
+            .tree_column("title"),
             watching: true,
             connected: false,
             stopped: None,
@@ -109,6 +112,7 @@ impl Default for AttachState {
             notice: None,
             replay_error: None,
             scroll: 0,
+            parent_binding: nori_config::HotkeyConfig::default().parent_session,
         }
     }
 }
@@ -128,45 +132,39 @@ impl AttachState {
             }
         }
         self.picker.title = format!("Sessions {}", self.sessions.len());
-        self.picker.replace_items(self.sessions.iter().map(|row| {
-            let seconds = row.age_seconds.max(0);
-            let age = if seconds < 60 {
-                format!("{seconds}s")
-            } else if seconds < 3600 {
-                format!("{}m", seconds / 60)
-            } else {
-                format!("{}h", seconds / 3600)
-            };
-            let title = row.title.clone().unwrap_or_else(|| "New session".into());
-            let title = row.parent.as_ref().map_or_else(
-                || title.clone(),
-                |parent| {
-                    format!(
-                        "{}↳ (parent {}) {title}",
-                        "  ".repeat(
-                            usize::try_from(row.depth.saturating_sub(1).clamp(0, 2)).unwrap_or(0)
-                        ),
-                        parent.chars().take(8).collect::<String>()
-                    )
-                },
-            );
-            let title = if self.selected.as_ref() == Some(&row.session_id) {
-                format!("(current) {title}")
-            } else {
-                title
-            };
-            PickerItem::new(row.session_id.clone(), "title", title)
-                .cell("id", row.session_id.chars().take(8).collect::<String>())
-                .cell("agent", row.agent.clone())
-                .cell("status", crate::session_status::status_label(row.status))
-                .cell("age", age)
-                .search_text(format!(
-                    "{} {} {}",
-                    row.title.as_deref().unwrap_or_default(),
-                    row.agent,
-                    row.session_id
-                ))
-        }));
+        let links: Vec<(&str, Option<&str>)> = self
+            .sessions
+            .iter()
+            .map(|row| (row.session_id.as_str(), row.parent.as_deref()))
+            .collect();
+        let order = nori_tui_components::picker::tree_order(&links);
+        self.picker
+            .replace_items(order.into_iter().map(|(index, depth)| {
+                let row = &self.sessions[index];
+                let seconds = row.age_seconds.max(0);
+                let age = if seconds < 60 {
+                    format!("{seconds}s")
+                } else if seconds < 3600 {
+                    format!("{}m", seconds / 60)
+                } else {
+                    format!("{}h", seconds / 3600)
+                };
+                let title = row.title.clone().unwrap_or_else(|| "New session".into());
+                PickerItem::new(row.session_id.clone(), "title", title)
+                    .cell("id", row.session_id.chars().take(8).collect::<String>())
+                    .cell("agent", row.agent.clone())
+                    .cell("status", crate::session_status::status_label(row.status))
+                    .cell_detail_tone("status", crate::session_status::status_tone(row.status))
+                    .cell("age", age)
+                    .depth(depth)
+                    .current(self.selected.as_ref() == Some(&row.session_id))
+                    .search_text(format!(
+                        "{} {} {}",
+                        row.title.as_deref().unwrap_or_default(),
+                        row.agent,
+                        row.session_id
+                    ))
+            }));
         Ok(())
     }
 
@@ -182,6 +180,12 @@ impl AttachState {
                     .map(|part| match part {
                         Part::Message { text, .. } | Part::Notice(text) => text.clone(),
                         Part::Tool(tool) => tool.title.clone(),
+                        Part::Delegation(delegation) => delegation_cell(delegation)
+                            .display_lines(u16::MAX)
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
                         Part::Plan(plan) => plan
                             .entries
                             .iter()
@@ -305,9 +309,11 @@ impl AttachState {
                     conversation
                         .delegations
                         .retain(|current| current.request_id != delegation.request_id);
-                    conversation
-                        .parts
-                        .push(Part::Notice(crate::delegation::summary(&delegation)));
+                    if delegation.status != nori_protocol::DelegationStatus::AwaitingApproval {
+                        conversation
+                            .parts
+                            .push(Part::Delegation(delegation.clone()));
+                    }
                     conversation.delegations.push(delegation);
                     conversation.message_boundary = true;
                 }
@@ -400,4 +406,15 @@ impl Conversation {
             _ => {}
         }
     }
+}
+
+/// Attached clients have no transcript view or local session list key, so
+/// delegation cells show no key hints.
+pub(super) fn delegation_cell(
+    delegation: &nori_protocol::Delegation,
+) -> crate::delegation::DelegationCell {
+    crate::delegation::DelegationCell::new(
+        delegation.clone(),
+        crate::delegation::DelegationHints::default(),
+    )
 }

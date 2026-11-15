@@ -30,6 +30,7 @@ codex-execpolicy = { workspace = true }
 codex-process-hardening = { workspace = true }
 codex-stdio-to-uds = { workspace = true }
 nori-tui = { workspace = true }
+nori-tui-components = { workspace = true }
 ctor = { workspace = true }
 crossterm = { workspace = true }
 unicode-segmentation = { workspace = true }

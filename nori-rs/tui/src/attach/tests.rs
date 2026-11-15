@@ -367,7 +367,7 @@ fn current_session_row_keeps_short_id_visible() {
     let rendered = screen(&state);
     let row = rendered
         .lines()
-        .find(|line| line.contains("Review parser"))
+        .find(|line| line.contains("Review parser") && line.contains("2m"))
         .unwrap();
     assert!(row.contains("abcd1234"), "{rendered}");
     assert!(row.contains("current"), "{rendered}");
@@ -477,11 +477,15 @@ fn delegation_approval_names_both_sessions_and_cannot_be_answered_by_watcher() {
             .unwrap();
         let rendered = screen(&runtime.state);
         assert!(
-            rendered.contains("child-session") && rendered.contains("parent-session"),
+            rendered.contains("mock-model-alt") && rendered.contains("Review the parser"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("Start") && rendered.contains("Decline"),
+            !rendered.contains("child-session"),
+            "the prompt names the child, not its ID: {rendered}"
+        );
+        assert!(
+            rendered.contains("start it") && rendered.contains("decline"),
             "{rendered}"
         );
         if approved {
@@ -519,6 +523,10 @@ fn delegation_result_replaces_approval_and_replay_is_not_duplicated() {
     let rendered = screen(&state);
     assert!(rendered.contains("Parser reviewed"), "{rendered}");
     assert!(
+        rendered.contains("result from mock-model-alt") && !rendered.contains("child-session"),
+        "{rendered}"
+    );
+    assert!(
         !rendered.contains("1 Start"),
         "completed delegation must not retain approval"
     );
@@ -550,10 +558,8 @@ fn next_waiting_opens_actual_child_and_keeps_parent_identity_in_list() {
         rendered.contains("Parent task") && rendered.contains("Child task"),
         "{rendered}"
     );
-    assert!(
-        rendered.contains("(parent parent-s) Child task"),
-        "{rendered}"
-    );
+    assert!(rendered.contains("└─ "), "{rendered}");
+    assert!(!rendered.contains("(parent"), "{rendered}");
     insta::assert_snapshot!("delegation_child_list", rendered);
     runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
     assert_eq!(runtime.state.selected.as_deref(), Some("child-session"));
@@ -561,6 +567,92 @@ fn next_waiting_opens_actual_child_and_keeps_parent_identity_in_list() {
     let request = rx.try_recv().unwrap();
     assert_eq!(request["method"], "_nori/session/subscribe");
     assert_eq!(request["params"]["session_id"], "child-session");
+}
+
+#[test]
+fn session_tree_keeps_children_under_their_parent_with_aligned_columns() {
+    let mut state = AttachState {
+        connected: true,
+        ..Default::default()
+    };
+    state.replace_sessions(json!({"sessions":[
+        {"session_id":"root-one","agent":"mock-model","status":"working","title":"Ship tree picker","age_seconds":300},
+        {"session_id":"root-two","agent":"mock-model","status":"ready","title":"Spike transport","age_seconds":200},
+        {"session_id":"child-one","agent":"mock-model-alt","status":"waiting_on_you","title":"Port picker","parent":"root-one","depth":1,"source":"session","age_seconds":100},
+        {"session_id":"grandchild","agent":"mock-model","status":"failed","title":"Write snapshot tests","parent":"child-one","depth":2,"source":"session","age_seconds":50},
+        {"session_id":"child-two","agent":"mock-model","status":"ready","title":"Update docs","parent":"root-one","depth":1,"source":"session","age_seconds":20}
+    ]})).unwrap();
+    let rendered = screen(&state);
+    let titles: Vec<_> = rendered
+        .lines()
+        .filter_map(|line| {
+            ["Ship", "Port", "Write", "Update", "Spike"]
+                .iter()
+                .find(|word| line.contains(*word))
+                .map(|word| {
+                    let at = line.find("mock-model").expect("agent column");
+                    (*word, unicode_width::UnicodeWidthStr::width(&line[..at]))
+                })
+        })
+        .collect();
+    assert_eq!(
+        titles.iter().map(|(word, _)| *word).collect::<Vec<_>>(),
+        ["Ship", "Port", "Write", "Update", "Spike"],
+        "children follow their parent: {rendered}"
+    );
+    assert!(
+        titles.iter().all(|(_, column)| *column == titles[0].1),
+        "the AGENT column does not move: {rendered}"
+    );
+    insta::assert_snapshot!("delegation_session_tree", rendered);
+}
+
+#[test]
+fn child_view_shows_breadcrumb_and_alt_up_returns_to_parent() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("child-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.replace_sessions(json!({"sessions":[
+        {"session_id":"parent-session","agent":"mock-model","status":"working","title":"Parent task","depth":0},
+        {"session_id":"child-session","agent":"mock-model-alt","status":"waiting_on_you","title":"Child task","parent":"parent-session","depth":1,"source":"session"}
+    ]})).unwrap();
+    runtime.state.list_open = false;
+    let rendered = screen(&runtime.state);
+    let breadcrumb = rendered
+        .lines()
+        .find(|line| line.contains("›"))
+        .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
+    assert!(
+        breadcrumb.contains("Parent task") && breadcrumb.contains("Child task"),
+        "{rendered}"
+    );
+    assert!(breadcrumb.contains("alt+up"), "{rendered}");
+    insta::assert_snapshot!("delegation_child_breadcrumb", rendered);
+    runtime.key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    assert_eq!(runtime.state.selected.as_deref(), Some("parent-session"));
+    let request = rx.try_recv().unwrap();
+    assert_eq!(request["method"], "_nori/session/subscribe");
+    assert_eq!(request["params"]["session_id"], "parent-session");
+}
+
+#[test]
+fn alt_up_in_a_top_level_session_stays_put() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.replace_sessions(json!({"sessions":[
+        {"session_id":"parent-session","agent":"mock-model","status":"ready","title":"Parent task"}
+    ]})).unwrap();
+    runtime.state.list_open = false;
+    runtime.key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    assert_eq!(runtime.state.selected.as_deref(), Some("parent-session"));
+    assert!(rx.try_recv().is_err(), "nothing to subscribe to");
 }
 
 #[test]

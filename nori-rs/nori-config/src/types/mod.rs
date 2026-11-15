@@ -825,6 +825,8 @@ pub enum HotkeyAction {
     NextWaitingSession,
     /// Open the session list (multi-session only).
     OpenSessionList,
+    /// Move from a delegated child to its parent session (multi-session only).
+    ParentSession,
 }
 
 impl HotkeyAction {
@@ -851,6 +853,7 @@ impl HotkeyAction {
             Self::NextSession => "Next Session",
             Self::NextWaitingSession => "Next Waiting Session",
             Self::OpenSessionList => "Open Session List",
+            Self::ParentSession => "Parent Session",
         }
     }
 
@@ -881,6 +884,7 @@ impl HotkeyAction {
                 "Move to the next session waiting on you (empty prompt only)"
             }
             Self::OpenSessionList => "Open the list of sessions",
+            Self::ParentSession => "Move from a delegated child to its parent session",
         }
     }
 
@@ -907,6 +911,7 @@ impl HotkeyAction {
             Self::NextSession => "next_session",
             Self::NextWaitingSession => "next_waiting_session",
             Self::OpenSessionList => "open_session_list",
+            Self::ParentSession => "parent_session",
         }
     }
 
@@ -933,6 +938,7 @@ impl HotkeyAction {
             Self::NextSession => "alt+.",
             Self::NextWaitingSession => "alt+down",
             Self::OpenSessionList => "alt+s",
+            Self::ParentSession => "alt+up",
         }
     }
 
@@ -959,6 +965,7 @@ impl HotkeyAction {
             Self::NextSession,
             Self::NextWaitingSession,
             Self::OpenSessionList,
+            Self::ParentSession,
         ]
     }
 
@@ -969,7 +976,8 @@ impl HotkeyAction {
             Self::PreviousSession
             | Self::NextSession
             | Self::NextWaitingSession
-            | Self::OpenSessionList => true,
+            | Self::OpenSessionList
+            | Self::ParentSession => true,
             Self::OpenTranscript
             | Self::OpenEditor
             | Self::MoveBackwardChar
@@ -1113,6 +1121,8 @@ pub struct HotkeyConfigToml {
     pub next_waiting_session: Option<HotkeyBinding>,
     /// Hotkey: open the list of sessions.
     pub open_session_list: Option<HotkeyBinding>,
+    /// Hotkey: move from a delegated child to its parent session.
+    pub parent_session: Option<HotkeyBinding>,
 }
 
 /// Resolved hotkey configuration with defaults applied.
@@ -1158,6 +1168,8 @@ pub struct HotkeyConfig {
     pub next_waiting_session: HotkeyBinding,
     /// Hotkey: open the list of sessions.
     pub open_session_list: HotkeyBinding,
+    /// Hotkey: move from a delegated child to its parent session.
+    pub parent_session: HotkeyBinding,
 }
 
 impl Default for HotkeyConfig {
@@ -1215,6 +1227,7 @@ impl Default for HotkeyConfig {
             open_session_list: HotkeyBinding::from_str(
                 HotkeyAction::OpenSessionList.default_binding(),
             ),
+            parent_session: HotkeyBinding::from_str(HotkeyAction::ParentSession.default_binding()),
         }
     }
 }
@@ -1295,6 +1308,10 @@ impl HotkeyConfig {
                 .open_session_list
                 .clone()
                 .unwrap_or(defaults.open_session_list),
+            parent_session: toml
+                .parent_session
+                .clone()
+                .unwrap_or(defaults.parent_session),
         }
     }
 
@@ -1321,6 +1338,7 @@ impl HotkeyConfig {
             HotkeyAction::NextSession => &self.next_session,
             HotkeyAction::NextWaitingSession => &self.next_waiting_session,
             HotkeyAction::OpenSessionList => &self.open_session_list,
+            HotkeyAction::ParentSession => &self.parent_session,
         }
     }
 
@@ -1347,6 +1365,7 @@ impl HotkeyConfig {
             HotkeyAction::NextSession => self.next_session = binding,
             HotkeyAction::NextWaitingSession => self.next_waiting_session = binding,
             HotkeyAction::OpenSessionList => self.open_session_list = binding,
+            HotkeyAction::ParentSession => self.parent_session = binding,
         }
     }
 
@@ -1379,6 +1398,7 @@ impl HotkeyConfig {
             (HotkeyAction::NextSession, &self.next_session),
             (HotkeyAction::NextWaitingSession, &self.next_waiting_session),
             (HotkeyAction::OpenSessionList, &self.open_session_list),
+            (HotkeyAction::ParentSession, &self.parent_session),
         ]
     }
 }

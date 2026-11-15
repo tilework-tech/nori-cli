@@ -14,6 +14,8 @@ pub enum Key {
     Alt(char),
     /// Down arrow pressed with Alt.
     AltDown,
+    /// Up arrow pressed with Alt.
+    AltUp,
     /// Shift+Tab.
     BackTab,
     /// The terminal window gained focus.
@@ -41,6 +43,7 @@ impl Key {
                 bytes
             }
             Key::AltDown => b"\x1b[1;3B".to_vec(),
+            Key::AltUp => b"\x1b[1;3A".to_vec(),
             Key::BackTab => b"\x1b[Z".to_vec(),
             Key::FocusIn => b"\x1b[I".to_vec(),
             Key::FocusOut => b"\x1b[O".to_vec(),

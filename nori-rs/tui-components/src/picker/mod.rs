@@ -14,6 +14,8 @@ use crate::ProviderKind;
 
 mod render;
 mod tree;
+pub use tree::tree_guides;
+pub use tree::tree_order;
 
 pub use render::Picker;
 
@@ -329,6 +331,9 @@ pub struct PickerState<K> {
     pub page_size: usize,
     pub load_state: PickerLoadState,
     pub search_placeholder: String,
+    /// Column that carries tree guides and row badges; the first visible
+    /// column when unset or hidden.
+    pub tree_column: Option<String>,
 }
 
 impl<K: Clone + Eq> PickerState<K> {
@@ -354,6 +359,7 @@ impl<K: Clone + Eq> PickerState<K> {
             page_size: 8,
             load_state: PickerLoadState::Ready,
             search_placeholder: "Type to search".to_string(),
+            tree_column: None,
         };
         state.select_first_available();
         state
@@ -386,6 +392,13 @@ impl<K: Clone + Eq> PickerState<K> {
     /// Apply an agent/provider tone to one category tab.
     pub fn category_tone(mut self, category: impl Into<String>, provider: ProviderKind) -> Self {
         self.category_tones.insert(category.into(), provider);
+        self
+    }
+
+    /// Draw tree guides and badges in this column, so earlier fixed columns
+    /// keep their alignment.
+    pub fn tree_column(mut self, key: impl Into<String>) -> Self {
+        self.tree_column = Some(key.into());
         self
     }
 

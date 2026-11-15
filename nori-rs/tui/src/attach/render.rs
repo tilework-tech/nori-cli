@@ -57,20 +57,7 @@ pub(super) fn render(
         header.push("RECONNECTING · sessions continue on the host".cyan());
     }
     Line::from(header).render(Rect::new(area.x, area.y, area.width, 1), buf);
-    let identity = state
-        .selected
-        .as_ref()
-        .map(|id| {
-            let row = state.sessions.iter().find(|row| &row.session_id == id);
-            format!(
-                " {} · {} · {}",
-                row.map_or("session", |row| row.agent.as_str()),
-                id,
-                row.map_or("", |row| crate::session_status::status_label(row.status))
-            )
-        })
-        .unwrap_or_else(|| " Sessions · /new starts a session · ctrl+d detaches".into());
-    Line::from(identity.dim()).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
+    identity_line(state).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
     let input = composer_area(state, composer, area);
     let notice_lines = notice_lines(state, area.width);
     let notice_height = u16::try_from(notice_lines.len())
@@ -124,6 +111,41 @@ pub(super) fn render(
     composer.render_ref(input, buf);
 }
 
+/// The selected session's agent, name, and status. Inside a delegated child
+/// it is a breadcrumb from the parent with the key that returns there.
+fn identity_line(state: &AttachState) -> Line<'static> {
+    let Some(id) = state.selected.as_ref() else {
+        return Line::from(" Sessions · /new starts a session · ctrl+d detaches".dim());
+    };
+    let row = |id: &str| state.sessions.iter().find(|row| row.session_id == id);
+    let name = |row: &super::state::SessionRow| {
+        row.title
+            .as_deref()
+            .and_then(nori_protocol::session_display_name)
+            .unwrap_or_else(|| row.session_id.chars().take(8).collect())
+    };
+    let Some(current) = row(id) else {
+        return Line::from(format!(" session · {id}").dim());
+    };
+    let mut spans = vec![" ".into()];
+    if let Some(parent) = current.parent.as_deref().and_then(row) {
+        spans.extend([
+            format!("{} · ", parent.agent).dim(),
+            name(parent).into(),
+            " › ".dim(),
+        ]);
+    }
+    spans.extend([
+        format!("{} · ", current.agent).dim(),
+        name(current).bold(),
+        format!(" · {}", crate::session_status::status_label(current.status)).dim(),
+    ]);
+    if current.parent.as_deref().and_then(row).is_some() && !state.parent_binding.is_none() {
+        spans.push(format!(" · {} parent", state.parent_binding.as_str()).dim());
+    }
+    Line::from(spans)
+}
+
 fn notice_lines(state: &AttachState, width: u16) -> Vec<Line<'static>> {
     state
         .stopped
@@ -150,19 +172,16 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
         .find(|delegation| delegation.status == nori_protocol::DelegationStatus::AwaitingApproval);
     let delegation_lines = delegation
         .map(|delegation| {
+            let (title, rows) = crate::delegation::approval_lines(delegation);
+            let mut lines = vec![Line::from(title.bold())];
+            lines.extend(rows);
+            lines.push(Line::from(vec![
+                "1 Yes, start it".green(),
+                " · ".dim(),
+                "2 No, decline".into(),
+            ]));
             crate::wrapping::word_wrap_lines(
-                [
-                    Line::from("Start delegated session?".bold()),
-                    Line::from(format!(
-                        "Child {} ({}) · parent {} ({})",
-                        delegation.child_id,
-                        delegation.agent,
-                        delegation.parent_id,
-                        delegation.parent_agent
-                    )),
-                    Line::from(delegation.task.clone()),
-                    Line::from("1 Start · 2 Decline".green()),
-                ],
+                lines.iter(),
                 usize::from(area.width.saturating_sub(2)),
             )
         })
@@ -217,6 +236,11 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
                     };
                     lines.push(Line::from(format!("{marker} {}", entry.step)));
                 }
+            }
+            Part::Delegation(delegation) => {
+                lines.extend(
+                    super::state::delegation_cell(delegation).display_lines(history_area.width),
+                );
             }
             Part::Notice(notice) => {
                 lines.extend(crate::wrapping::word_wrap_lines(

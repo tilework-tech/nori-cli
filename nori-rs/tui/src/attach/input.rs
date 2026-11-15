@@ -29,6 +29,28 @@ impl Runtime {
             self.next_waiting_session(true);
             return true;
         }
+        if crate::nori::hotkey_match::matches_binding(&self.state.parent_binding, &key)
+            && let Some(parent) = self.state.selected.as_ref().and_then(|id| {
+                self.state
+                    .sessions
+                    .iter()
+                    .find(|row| &row.session_id == id)
+                    .and_then(|row| row.parent.clone())
+            })
+            && self
+                .state
+                .sessions
+                .iter()
+                .any(|row| row.session_id == parent)
+        {
+            self.state.selected = Some(parent);
+            self.state.list_open = false;
+            self.state.scroll = 0;
+            self.state.notice = None;
+            self.state.replay_error = None;
+            self.subscribe_selected();
+            return true;
+        }
         if crate::nori::hotkey_match::matches_binding(&self.session_list_binding, &key) {
             self.state.list_open = !self.state.list_open;
             self.refresh_list();

@@ -39,6 +39,17 @@ impl App {
             tui.frame_requester().schedule_frame();
             return true;
         }
+        if pressed(HotkeyAction::ParentSession)
+            && let Some(parent) = self.on_screen_parent()
+            && let Some(target) = self
+                .session_facts()
+                .into_iter()
+                .find(|fact| fact.conversation_id == Some(parent))
+        {
+            self.show_session(target.generation);
+            tui.frame_requester().schedule_frame();
+            return true;
+        }
         let direction = if pressed(HotkeyAction::PreviousSession) {
             Direction::Previous
         } else if pressed(HotkeyAction::NextSession) {

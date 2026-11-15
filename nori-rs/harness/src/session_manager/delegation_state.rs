@@ -183,10 +183,18 @@ impl State {
         let Ok(parent) = ConversationId::from_string(&value.parent_id) else {
             return;
         };
+        let parent_name = self
+            .journal
+            .info(&value.parent_id)
+            .and_then(|info| info.title)
+            .and_then(|title| nori_protocol::session_display_name(&title))
+            .unwrap_or_else(|| "this session".to_owned());
         let event = SessionEvent::Nori(NoriEvent::Notice(nori_protocol::Notice {
             message: format!(
-                "Child session {} ({}) of parent session {} ({}) needs your answer. Switch to the child with Alt+Down.",
-                value.child_id, value.agent, value.parent_id, value.parent_agent
+                "{} · {} is waiting on you (delegated by {} · {parent_name}). Press Alt+Down to answer it.",
+                value.agent,
+                nori_protocol::delegation_child_name(&value),
+                value.parent_agent,
             ),
         }));
         if let Some(envelope) = self.registry.emit(&parent, event) {
@@ -219,10 +227,13 @@ impl State {
         if self.delegation.closed.contains(&parent) {
             return;
         }
-        let result = value.result.as_deref().unwrap_or("");
         self.delegation.deliveries.push_back(Delivery {
-            request: value.request_id.clone(), parent, in_flight: false, submitted: None, process: None,
-            text: format!("[Nori delegation result]\nChild session {} ({}) for parent session {} ({}): {:?}\n{}", value.child_id, value.agent, value.parent_id, value.parent_agent, value.status, result),
+            request: value.request_id.clone(),
+            parent,
+            in_flight: false,
+            submitted: None,
+            process: None,
+            text: nori_protocol::delegation_result_prompt(value),
         });
     }
 

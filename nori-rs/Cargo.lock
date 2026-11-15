@@ -3821,6 +3821,7 @@ dependencies = [
  "nori-harness",
  "nori-installed",
  "nori-tui",
+ "nori-tui-components",
  "owo-colors",
  "predicates",
  "pretty_assertions",

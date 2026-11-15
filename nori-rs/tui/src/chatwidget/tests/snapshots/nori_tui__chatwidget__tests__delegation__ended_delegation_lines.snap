@@ -1,0 +1,10 @@
+---
+source: tui/src/chatwidget/tests/delegation.rs
+expression: "rendered.join(\"\\n---\\n\")"
+---
+✕ mock-model-alt · Review the parser · failed · agent exited (code 1)
+  sent to mock-model as a failure · its history: alt + s
+---
+✕ delegation to mock-model-alt · Review the parser · declined by you
+---
+✕ delegation to mock-model-alt · Review the parser · cancelled · Session closed by the user

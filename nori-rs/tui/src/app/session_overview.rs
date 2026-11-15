@@ -23,6 +23,10 @@ const TITLE_CHARS: i32 = 60;
 /// line fits one row of a 100-column terminal.
 const REQUEST_LINE_TITLE_CHARS: i32 = 24;
 const REQUEST_LINE_REQUEST_CHARS: i32 = 28;
+/// A child's request names its parent too, so each part is shorter.
+const REQUEST_LINE_PARENT_CHARS: i32 = 12;
+const REQUEST_LINE_CHILD_CHARS: i32 = 16;
+const REQUEST_LINE_CHILD_REQUEST_CHARS: i32 = 24;
 
 fn cut(text: &str, limit: i32) -> String {
     let limit = usize::try_from(limit).unwrap_or(0);
@@ -189,20 +193,6 @@ impl App {
         let title = self
             .session_rows_title(fact.generation)
             .unwrap_or_else(|| "New session".to_string());
-        let title = fact
-            .conversation_id
-            .and_then(|id| self.session_manager.get(&id))
-            .filter(|record| record.source == nori_harness::session_manager::SessionSource::Session)
-            .and_then(|record| record.parent)
-            .map_or_else(
-                || title.clone(),
-                |parent| {
-                    format!(
-                        "(parent {}) {title}",
-                        parent.to_string().chars().take(8).collect::<String>()
-                    )
-                },
-            );
         // A parent speaks for its family: if a child needs the user, so does
         // the parent row.
         let shown_status = if depth == 0 {
@@ -268,6 +258,7 @@ impl App {
             let name = self.agent_display_name(agent_name);
             lines.push(Line::from(format!("Preparing {name}…").dim()));
         }
+        lines.extend(self.parent_breadcrumb(&facts));
         lines.extend(self.background_request_line(&facts));
         if facts.len() > 1
             && let Some(summary) = status_summary(facts.iter().map(|fact| fact.status))
@@ -355,23 +346,24 @@ impl App {
         let title = self
             .session_title(first.generation, REQUEST_LINE_TITLE_CHARS)
             .unwrap_or_else(|| "A session".to_string());
-        let title = first.parent.map_or_else(
-            || title.clone(),
-            |parent| {
+        let (title, request_chars) = match first.parent {
+            Some(parent) => (
                 format!(
-                    "(parent {}) {title}",
-                    parent.to_string().chars().take(8).collect::<String>()
-                )
-            },
-        );
-        let title = cut(&title, REQUEST_LINE_TITLE_CHARS);
+                    "{} › {}",
+                    self.session_name(&parent, REQUEST_LINE_PARENT_CHARS),
+                    cut(&title, REQUEST_LINE_CHILD_CHARS)
+                ),
+                REQUEST_LINE_CHILD_REQUEST_CHARS,
+            ),
+            None => (title, REQUEST_LINE_REQUEST_CHARS),
+        };
         let mut spans = vec![
-            "● ".cyan(),
+            ratatui::text::Span::styled("● ", crate::style::component_theme().warning),
             title.bold(),
             format!(" is {}", crate::session_status::WAITING_ON_YOU_LABEL).into(),
         ];
         if let Some(request) = self.session_previews.pending_request(first.generation) {
-            let request = cut(&request, REQUEST_LINE_REQUEST_CHARS);
+            let request = cut(&request, request_chars);
             spans.push(format!(" · {request}").dim());
         }
         if waiting.len() > 1 {
@@ -382,6 +374,63 @@ impl App {
             .binding_for(nori_config::HotkeyAction::NextWaitingSession);
         if !binding.is_none() {
             spans.push(format!(" · {} to jump", binding.display_name()).dim());
+        }
+        Some(Line::from(spans))
+    }
+
+    /// A readable name for any session the manager knows: its title in this
+    /// TUI, else its recorded title, else a short ID.
+    pub(super) fn session_name(&self, id: &ConversationId, limit: i32) -> String {
+        self.session_facts()
+            .iter()
+            .find(|fact| fact.conversation_id.as_ref() == Some(id))
+            .and_then(|fact| self.session_title(fact.generation, limit))
+            .or_else(|| {
+                self.session_manager
+                    .replay_info(id)
+                    .and_then(|info| info.title)
+                    .and_then(|title| nori_protocol::session_display_name(&title))
+                    .map(|title| cut(&title, limit))
+            })
+            .unwrap_or_else(|| {
+                let short: String = id.to_string().chars().take(8).collect();
+                format!("session {short}")
+            })
+    }
+
+    /// The parent of the delegated child on screen, if any.
+    pub(super) fn on_screen_parent(&self) -> Option<ConversationId> {
+        self.chat_widget
+            .managed_conversation_id()
+            .and_then(|id| self.session_manager.get(&id))
+            .filter(|record| record.source == nori_harness::session_manager::SessionSource::Session)
+            .and_then(|record| record.parent)
+    }
+
+    /// Where a delegated child sits, with the key that returns to its parent.
+    fn parent_breadcrumb(&self, facts: &[SessionFacts]) -> Option<Line<'static>> {
+        let parent = self.on_screen_parent()?;
+        let child = facts.iter().find(|fact| fact.on_screen)?;
+        let parent_agent = self
+            .session_manager
+            .get(&parent)
+            .map(|record| record.agent)
+            .unwrap_or_default();
+        let child_name = self
+            .session_title(child.generation, REQUEST_LINE_TITLE_CHARS)
+            .unwrap_or_else(|| "this session".to_string());
+        let mut spans = vec![
+            format!("{parent_agent} · ").dim(),
+            self.session_name(&parent, REQUEST_LINE_TITLE_CHARS).into(),
+            " › ".dim(),
+            format!("{} · ", child.agent).dim(),
+            child_name.bold(),
+        ];
+        let binding = self
+            .hotkey_config
+            .binding_for(nori_config::HotkeyAction::ParentSession);
+        if !binding.is_none() {
+            spans.push(format!(" · {} to parent", binding.display_name()).dim());
         }
         Some(Line::from(spans))
     }

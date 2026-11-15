@@ -356,6 +356,7 @@ mod tests {
                 (HotkeyAction::NextSession, "alt+.".to_string()),
                 (HotkeyAction::NextWaitingSession, "alt+down".to_string()),
                 (HotkeyAction::OpenSessionList, "alt+s".to_string()),
+                (HotkeyAction::ParentSession, "alt+up".to_string()),
             ]
         );
     }

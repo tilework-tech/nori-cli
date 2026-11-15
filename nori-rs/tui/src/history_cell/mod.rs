@@ -84,7 +84,30 @@ pub(crate) struct UserHistoryCell {
 }
 
 impl HistoryCell for UserHistoryCell {
+    /// A child's result reaches its parent as user input; on screen it reads
+    /// as one line because its result block was already shown when the child
+    /// ended. The transcript view keeps the exact text the agent received.
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let Some(summary) = nori_protocol::delegation_result_summary(&self.message) else {
+            return self.transcript_lines(width);
+        };
+        let style = user_message_style();
+        let line = Line::from(vec![
+            "› ".bold().dim(),
+            "delegation result ".dim(),
+            summary.to_owned().into(),
+            " · delivered to this session".dim(),
+        ]);
+        let mut lines = vec![Line::from("").style(style)];
+        lines.extend(word_wrap_lines(
+            [line.style(style)],
+            RtOptions::new(usize::from(width.max(1))).subsequent_indent("  ".into()),
+        ));
+        lines.push(Line::from("").style(style));
+        lines
+    }
+
+    fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = Vec::new();
 
         let wrap_width = width

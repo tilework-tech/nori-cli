@@ -203,15 +203,6 @@ fn glyph(status: SessionStatus) -> &'static str {
     }
 }
 
-fn tone(status: SessionStatus) -> DetailTone {
-    match status {
-        SessionStatus::WaitingOnYou => DetailTone::Warning,
-        SessionStatus::Failed => DetailTone::Error,
-        SessionStatus::Closed | SessionStatus::Starting => DetailTone::Muted,
-        SessionStatus::Working | SessionStatus::Ready => DetailTone::Default,
-    }
-}
-
 fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
     rows.iter()
         .map(|row| {
@@ -222,7 +213,10 @@ fn items(rows: &[SessionRow]) -> Vec<PickerItem<SessionGeneration>> {
             )
             .cell(AGENT, row.agent.clone())
             .cell(STATUS, row.status_word.clone())
-            .cell_detail_tone(STATUS, tone(row.family_status))
+            .cell_detail_tone(
+                STATUS,
+                crate::session_status::status_tone(row.family_status),
+            )
             .search_text(format!("{} {}", row.title, row.agent))
             .depth(row.depth)
             .current(row.on_screen);
@@ -436,6 +430,58 @@ mod tests {
             .find(|line| line.contains("parent session"))
             .expect("parent row");
         assert!(parent_line.contains("● parent session"), "{screen}");
+    }
+
+    #[test]
+    fn status_words_are_colored_by_what_the_session_needs() {
+        use ratatui::style::Color;
+        let rows = vec![
+            row(1, "asks", SessionStatus::WaitingOnYou),
+            row(2, "busy", SessionStatus::Working),
+            row(3, "done", SessionStatus::Ready),
+            row(4, "broke", SessionStatus::Failed),
+            SessionRow {
+                on_screen: true,
+                ..row(5, "selected", SessionStatus::Closed)
+            },
+        ];
+        let titles = [
+            ("waiting on you", "asks"),
+            ("working", "busy"),
+            ("ready", "done"),
+            ("failed", "broke"),
+        ];
+        let list = view(rows);
+        let height = list.desired_height(80);
+        let mut terminal = Terminal::new(TestBackend::new(80, height)).expect("terminal");
+        terminal
+            .draw(|frame| list.render(frame.area(), frame.buffer_mut()))
+            .expect("draw");
+        let buffer = terminal.backend().buffer();
+        let color_of = |word: &str| {
+            let title = titles
+                .iter()
+                .find(|(status, _)| *status == word)
+                .map(|(_, title)| *title)
+                .expect("row title");
+            (0..buffer.area.height)
+                .find_map(|y| {
+                    let line: String = (0..buffer.area.width)
+                        .map(|x| buffer[(x, y)].symbol())
+                        .collect();
+                    if !line.contains(title) {
+                        return None;
+                    }
+                    let column = line.rfind(word)?;
+                    let x = line[..column].chars().count() as u16;
+                    Some(buffer[(x, y)].fg)
+                })
+                .unwrap_or_else(|| panic!("{word} is shown"))
+        };
+        assert_eq!(color_of("waiting on you"), Color::Yellow);
+        assert_eq!(color_of("working"), Color::Cyan);
+        assert_eq!(color_of("ready"), Color::Green);
+        assert_eq!(color_of("failed"), Color::Red);
     }
 
     #[test]
