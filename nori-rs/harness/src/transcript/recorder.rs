@@ -18,6 +18,7 @@ use super::BY_PROJECT_DIR;
 use super::PROJECT_METADATA_FILE;
 use super::SESSIONS_DIR;
 use super::TRANSCRIPTS_DIR;
+use super::Transcript;
 use super::project::ProjectId;
 use super::project::compute_project_id;
 use super::types::Attachment;
@@ -47,6 +48,71 @@ pub struct TranscriptRecorder {
 }
 
 impl TranscriptRecorder {
+    /// Continue the same Nori session without exposing a truncated transcript.
+    /// The replacement inode also isolates any writer retained by the old runtime.
+    pub(crate) async fn resume_same_session(
+        nori_home: &Path,
+        transcript: &Transcript,
+        acp_session_id: String,
+        agent_history: Option<Vec<nori_protocol::SessionEvent>>,
+    ) -> io::Result<Self> {
+        let mut meta = transcript.meta.clone();
+        meta.acp_session_id = Some(acp_session_id);
+        let sessions_dir = nori_home
+            .join(TRANSCRIPTS_DIR)
+            .join(BY_PROJECT_DIR)
+            .join(&meta.project_id)
+            .join(SESSIONS_DIR);
+        tokio::fs::create_dir_all(&sessions_dir).await?;
+        let transcript_path = sessions_dir.join(format!("{}.jsonl", meta.session_id));
+        let temporary = tempfile::Builder::new()
+            .prefix(".resume-")
+            .tempfile_in(&sessions_dir)?;
+        let (file, temporary_path) = temporary.into_parts();
+        let mut file = File::from_std(file);
+        let mut metadata_line = transcript.entries[0].clone();
+        metadata_line.entry = TranscriptEntry::SessionMeta(meta.clone());
+        let mut batch = serialize_line(&metadata_line)?;
+        if let Some(events) = agent_history {
+            for evidence in transcript.archived_context_evidence() {
+                batch.push_str(&serialize_line(&TranscriptLine::new(
+                    TranscriptEntry::SessionEvent(evidence),
+                ))?);
+            }
+            let replay_start = nori_protocol::SessionEvent::Nori(
+                nori_protocol::NoriEvent::ReplayStarted(nori_protocol::ReplayStarted {
+                    source: nori_protocol::ReplaySource::Agent,
+                }),
+            );
+            let replay_end =
+                nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::ReplayFinished);
+            for event in std::iter::once(replay_start)
+                .chain(events)
+                .chain(std::iter::once(replay_end))
+            {
+                batch.push_str(&serialize_line(&TranscriptLine::new(
+                    TranscriptEntry::SessionEvent(SessionEventEntry::new(event)),
+                ))?);
+            }
+        } else {
+            for line in transcript.entries.iter().skip(1) {
+                batch.push_str(&serialize_line(line)?);
+            }
+        }
+        file.write_all(batch.as_bytes()).await?;
+        file.flush().await?;
+        file.sync_data().await?;
+        tokio::fs::rename(&temporary_path, &transcript_path).await?;
+        let (tx, rx) = mpsc::channel::<TranscriptCmd>(256);
+        tokio::spawn(run_writer_loop(file, rx));
+        Ok(Self {
+            tx,
+            session_id: meta.session_id,
+            project_id: meta.project_id,
+            transcript_path,
+        })
+    }
+
     /// Initialize for a new session.
     ///
     /// - Detects project from cwd (git root or cwd path)

@@ -895,9 +895,12 @@ App
   session list, Ctrl+R on a failed row invokes
   [`resume_failed_session`](src/app/session_resume.rs), which calls
   `SessionManager::resume` and installs the returned managed session in the
-  failed widget's place. The manager loads the transcript, starts the same
-  agent on a new process, replaces the failed registry record, and preserves
-  its lineage and children. The resumed session inherits
+  failed widget's place. The manager loads the transcript and starts the same
+  agent on a new process while retaining the Nori conversation ID, list
+  position, lineage, children, and envelope sequence. Remote subscriptions
+  and replay cursors keep addressing that ID even if the underlying ACP
+  session ID changes. The replacement widget receives history replay to
+  rebuild the view. The resumed session inherits
   the failed one's title (`SessionPreviews::inherit_title`) until it has its
   own.
 

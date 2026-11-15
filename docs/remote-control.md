@@ -336,9 +336,12 @@ prompts; the WebSocket extension controls sessions already owned by the TUI.
 A list row reports identity, agent, status, cwd, lineage, pending request IDs,
 sequence bounds (`latest_seq`, `first_available_seq`), age in seconds, and a
 title derived from observed session activity. `replay_cursors` includes every
-conversation known to the journal, including superseded IDs no longer in the
-live registry. A resume creates a new conversation ID and records
-`resumed_from`; cursor identity must follow the envelopes, not the row position.
+conversation known to the journal. Restarting a failed session with Ctrl+R keeps
+its Nori conversation ID, list row, and sequence counter. Existing subscriptions
+and saved cursors continue to address that ID after the new agent process
+starts; clients do not migrate to a replacement ID. The downstream ACP session
+ID can change when native load is unavailable or fails. `resumed_from` remains
+internal manager metadata and is omitted from the remote list.
 
 An explicit `session_id` always wins. Omitting it uses the currently selected
 TUI session (the first successfully started session in exec). Subscriptions pin that choice
@@ -404,8 +407,9 @@ supply `replay_cursors` for all-session live following, or the chosen row's
 recovery of the missing prefix.
 
 `/acp` and `/sessions` share one controller slot across all exact listeners;
-last connect wins. Disconnect or listener shutdown detaches managed clients
-without stopping sessions, cancelling admitted turns, or answering pending
+last connect wins. Whether future clients can both control, or one can control
+while another watches, remains a pending D2 decision. Disconnect or listener
+shutdown detaches managed clients without stopping sessions, cancelling admitted turns, or answering pending
 permissions. Those permissions remain visible and answerable after reconnect
 or from the TUI. A slow managed consumer is dropped when its bounded live queue
 fills. The WebSocket adapter closes that connection after draining buffered

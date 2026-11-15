@@ -116,7 +116,6 @@ impl ManagedRemoteHost {
                         "status":record.status,
                         "cwd":record.cwd,
                         "parent":record.parent.map(|id| id.to_string()),
-                        "resumed_from":record.resumed_from.map(|id| id.to_string()),
                         "pending_requests":record.pending_requests,
                         "latest_seq":replay.as_ref().map_or(0, |info| info.latest_seq),
                         "first_available_seq":replay.as_ref().map_or(1, |info| info.first_available_seq),

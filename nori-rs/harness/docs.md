@@ -586,13 +586,19 @@ public entry for reading a saved transcript file; the TUI uses it to resume a
 failed session from its manager record's transcript path. Public readers use
 `Transcript::records()` and
 `TranscriptRecord` for conversation events, or `Transcript::context_timeline()`
-for checkpoint history. Resume copies only the raw evidence needed by the
-timeline into the new transcript, preserving original observation identity and
-time. This archived evidence is excluded from conversation records and replay;
-agent replay remains independently recorded, including content newer than the
-local transcript. Fork copies the parent transcript and retains those same
-identities. See the [transcript format](../../docs/transcripts.md) for optional
-storage metadata and compatibility rules.
+for checkpoint history. Resume into a new conversation archives the local raw
+timeline evidence with its original observation identity and time, separately
+from recorded agent replay. Same-ID crash resume instead uses
+[`TranscriptRecorder::resume_same_session`](src/transcript/recorder.rs) to
+atomically replace the canonical file with a complete seed and updated ACP
+identity. Successful native load with conversation content supplies that seed,
+plus archived local timeline evidence; fallback or empty native history keeps
+the existing local entries. The runtime publishes seeded history replay without
+recording it twice and drains the writer before publishing `SessionEnded`, so
+an immediate resume reads the completed prior stream. Continuation-recorder
+failure ends activation rather than dropping persistence. Fork copies the
+parent transcript and retains its observation identities. See the
+[transcript format](../../docs/transcripts.md) for storage and replay details.
 
 #### Session manager and envelopes
 
@@ -640,9 +646,9 @@ processes.
   start at zero. History eviction is global across sessions, and an expired or
   invalid cursor fails instead of silently truncating replay. Retention is
   bounded and lasts only as long as the manager; persisted transcripts are
-  not a source of transport sequence numbers. Journal identity and latest
-  cursors survive registry replacement on resume so all-session clients can
-  acknowledge superseded conversations too.
+  not a source of transport sequence numbers. Resume preserves the journal,
+  sequence counter, and subscribers for the same conversation ID, so both
+  single-session and all-session clients continue across process replacement.
 - **Status.** Each record carries a `SessionStatus`:
 
   | Status | When |
@@ -686,14 +692,17 @@ processes.
   source `Fork` and that parent. Such a fork does not close its parent or set
   the parent's `forked_into`; the client closes the old session separately.
 - **Resume.** `resume(failed_id, spec)` restarts a `Failed` session from its
-  transcript on a new agent process. The new session gets a new conversation
-  ID, records the old one in `resumed_from`, keeps the parent and source,
-  replaces the old record, and adopts the old record's children. A parent
-  whose `forked_into` pointed at the failed session now points at the
-  replacement, and the failed ID is remembered as superseded, so `close` on the
-  failed ID or on that parent reaches the live replacement. `get(failed_id)`
-  still returns `None` because the failed record is gone. Errors are
-  `Unknown`, `NotFailed`, `NoTranscript`, `AgentMismatch`, and `Transcript`.
+  transcript on a new agent process while keeping its conversation ID,
+  registration order, parent, source, children, and sequence counter. Registry
+  replacement and process routing change atomically; events and EOF from the
+  old process generation cannot alter the restarted session. Native ACP load
+  uses the recorded ACP session ID when supported; a fallback new ACP session
+  stays mapped to the same Nori identity. `get`, `handle`, remote targeting,
+  and subscriptions therefore keep using `failed_id`. `resumed_from` is
+  private registry metadata used for restart logging; neither `SessionRecord`
+  nor managed remote list responses expose it.
+  Resume validates failed status, agent identity, and a readable transcript,
+  then reserves capacity before launching the replacement.
 - **Close and shutdown.** `close(id, child_grace)` shuts one session down,
   bounded by `shutdown_timeout`; closing an ended session does nothing.
   Successful close waits for the manager's event pump to observe process end
@@ -702,9 +711,10 @@ processes.
   pump notifies waiters after reducing terminal state or stream EOF; close
   does not synthesize a lifecycle event.
   `close` follows the session's lineage to the live process: a parent forked at
-  head leads to the child that took over its agent process, and a resumed
-  session's old ID leads to its replacement. `shutdown(child_grace)` stops admission, then shuts every live
-  session down in parallel, each with the same timeout, and returns a
+  head leads to the child that took over its agent process; a resumed
+  session keeps that same lineage target. `shutdown(child_grace)` stops
+  admission, then shuts every live session down in parallel, each with the same
+  timeout, and returns a
   `ShutdownReport` of closed, timed-out, and failed sessions. A session whose
   launch was in flight when admission closed is shut down as soon as it
   registers its handle.
@@ -714,7 +724,7 @@ processes.
   stream closes.
 - **Queries.** `get`, `list` (registration order, ended sessions kept), and
   `handle` (live sessions only) read the registry. A record holds the agent,
-  parent, source, `resumed_from`, cwd, model, approval policy, transcript path,
+  parent, source, cwd, model, approval policy, transcript path,
   ACP session ID, status, and `pending_requests` (open agent request IDs in
   arrival order). The model starts as the config default and is
   replaced by the agent-advertised model-category config option from
@@ -788,9 +798,9 @@ temp dir is removed.
   reconnect delivery against the manager's envelope stream.
 - Session manager invariants: one agent process per session; conversation ID
   = transcript ID = envelope `conversation_id`; envelope `seq` starts at 1 per
-  conversation with no gaps, and a fork starts a new sequence; a capacity slot
-  is held from before spawn until the session ends, and a fork moves it to the
-  child.
+  conversation with no gaps, a crash resume continues it, and a fork starts a
+  new sequence; a capacity slot is held from before spawn until the session
+  ends, and a fork moves it to the child.
 - A dead agent process fails only the session it carries. Other sessions keep
   their status, sequence, and slot.
 - The manager record does not mirror approval-policy changes made later

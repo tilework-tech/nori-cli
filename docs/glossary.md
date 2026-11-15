@@ -167,7 +167,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 
 ### Relationships
 
-- One **Conversation ID** may outlive multiple **ACP session IDs**, notably after fallback **compaction**.
+- One **Conversation ID** may outlive multiple **ACP session IDs**, notably after fallback **compaction** or a failed managed session's restart.
 - **Load** produces agent-sourced **replay**; Nori's fallback uses transcript-sourced replay after **New**.
 - A **Transcript** records selected session traffic but is not the agent-maintained **conversation history**.
 - **Close** ends an active session; later resumability is agent-specific, while quitting may only detach.
@@ -178,7 +178,7 @@ ACP v1 defines prompt turns but no agent-initiated turn primitive.
 - **Branch at head** closes the parent and adds the child to the parent's **session family**.
 - **Rewind to message** starts a new agent process but still registers the child in the parent's **session family**.
 - A **request resolved** envelope removes that request from the ones keeping a **session status** at "waiting on you"; requests cleared by idle, cancel, or session end get none.
-- When the **session manager** restarts a failed session on a new **conversation ID**, closing the old ID reaches the replacement.
+- When the **session manager** restarts a failed session, its **conversation ID**, family position, and envelope sequence continue across the new agent process. Remote targets, subscriptions, and replay cursors keep using that ID.
 - With `[features] multi_session`, replacing the **active session** parks it instead of closing it; a **parked session** keeps running and receiving its events.
 
 ### Example dialogue

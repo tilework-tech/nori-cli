@@ -128,13 +128,16 @@ by side. [`session_lifecycle.rs`](tests/session_lifecycle.rs) covers the
 closing from the list with Ctrl+D (including the
 second press a busy session needs) and from `/close`, starting a session beside
 a busy one, a background loop staying in its own row, a restarted session
-keeping its title and replacing its failed registry record through manager
-resume, `/agent` preparation leaving no line in the old session, and the
-background-request line fitting one row. Real WebSocket coverage verifies
+keeping its title and conversation ID through manager resume, `/agent`
+preparation leaving no line in the old session, and the background-request line
+fitting one row. Real WebSocket coverage verifies
 that remote permission answers clear the TUI modal, that the default remote
 session is the one on screen, and that an existing controller remains pinned
-when the local user changes sessions. A cloud-mode scenario checks
-that `/close` beside another open session lists the released one as closed. The ignored `jump_timing_on_a_long_history` test reports how long a
+when the local user changes sessions. The restart scenario keeps a managed
+WebSocket subscription open through Ctrl+R, checks the list ID and continued
+envelope sequence, and sends a prompt to that same ID after restart. A cloud-mode
+scenario checks that `/close` beside another open session lists the released one
+as closed. The ignored `jump_timing_on_a_long_history` test reports how long a
 jump to a long history takes; run it with `--ignored --nocapture`.
 
 The protocol hard cut did not introduce a test-only compatibility path. PTY

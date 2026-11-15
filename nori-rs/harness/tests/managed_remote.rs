@@ -524,3 +524,201 @@ async fn malformed_requests_and_unknown_targets_do_not_drive_any_session() {
     }
     fixture.stop().await;
 }
+
+async fn remote_turn(
+    socket: &mut Socket,
+    rpc_id: i64,
+    session_id: ConversationId,
+    text: &str,
+    after_seq: i64,
+) -> Vec<Value> {
+    send(
+        socket,
+        rpc_id,
+        "_nori/session/prompt",
+        prompt(session_id, text),
+    )
+    .await;
+    let mut admitted = None;
+    let mut completed = Vec::new();
+    let mut events = Vec::new();
+    loop {
+        let value = receive(socket).await;
+        assert!(value.get("error").is_none(), "{value}");
+        if value["id"] == rpc_id {
+            assert_eq!(value["result"]["session_id"], session_id.to_string());
+            admitted = Some(
+                serde_json::from_value::<nori_protocol::acp::v1::RequestId>(
+                    value["result"]["request_id"].clone(),
+                )
+                .unwrap(),
+            );
+        }
+        if let Some(envelope) = event(&value) {
+            assert_eq!(envelope.conversation_id, session_id.to_string());
+            if let nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Response {
+                request_id,
+                response: Ok(_),
+            }) = envelope.event
+                && envelope.seq > after_seq
+            {
+                completed.push(request_id);
+            }
+            events.push(value["params"].clone());
+        }
+        if admitted
+            .as_ref()
+            .is_some_and(|request| completed.contains(request))
+        {
+            return events;
+        }
+    }
+}
+
+#[tokio::test]
+async fn websocket_subscription_and_precrash_cursor_follow_the_same_id_after_resume() {
+    let fixture = Fixture::new(4096).await;
+    let id = fixture.ids[0];
+    let mut socket = fixture.connect().await;
+    send(
+        &mut socket,
+        1,
+        "_nori/session/subscribe",
+        json!({"session_id":id.to_string()}),
+    )
+    .await;
+    let before = remote_turn(&mut socket, 2, id, "before crash", 0).await;
+    let cursor = before.last().unwrap()["seq"].as_i64().unwrap();
+    fixture
+        .manager
+        .handle(&id)
+        .unwrap()
+        .flush_transcript()
+        .await
+        .unwrap();
+    let reference = fixture
+        .manager
+        .subscribe_from(Some(id), &HashMap::from([(id.to_string(), cursor)]), 4096)
+        .unwrap();
+    // The WebSocket and its original single-session subscription stay open
+    // throughout the agent process replacement.
+    fixture
+        .manager
+        .handle(&id)
+        .unwrap()
+        .prompt(vec![nori_protocol::acp::v1::ContentBlock::Text(
+            nori_protocol::acp::v1::TextContent::new("mock:exit-during-prompt"),
+        )])
+        .await
+        .unwrap();
+    wait_status(&fixture.manager, id, SessionStatus::Failed).await;
+    let resumed = fixture
+        .manager
+        .resume(
+            &id,
+            AgentPrepareSpec {
+                config: Arc::new(NoriConfig {
+                    active_agent: "mock-model".into(),
+                    cwd: fixture._homes[0].path().into(),
+                    nori_home: fixture._homes[0].path().into(),
+                    ..Default::default()
+                }),
+                cli_version: "managed-remote-test".into(),
+                session_context: None,
+                initial_context: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(resumed.conversation_id, id);
+    wait_status(&fixture.manager, id, SessionStatus::Ready).await;
+    let resumed_cursor = fixture.manager.replay_info(&id).unwrap().latest_seq;
+    let continued = remote_turn(&mut socket, 3, id, "after crash", resumed_cursor).await;
+    assert!(
+        continued.iter().any(|envelope| {
+            serde_json::from_value::<SessionEnvelope>(envelope.clone()).is_ok_and(|envelope| {
+                matches!(
+                    envelope.event,
+                    nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionStarted(_))
+                )
+            })
+        }),
+        "the existing subscription sees the replacement process start"
+    );
+    let through = continued.last().unwrap()["seq"].as_i64().unwrap();
+    assert_eq!(
+        continued
+            .iter()
+            .map(|event| event["seq"].as_i64().unwrap())
+            .collect::<Vec<_>>(),
+        ((cursor + 1)..=through).collect::<Vec<_>>()
+    );
+    let mut expected = reference
+        .replay
+        .into_iter()
+        .map(|event| serde_json::to_value(event).unwrap())
+        .collect::<Vec<_>>();
+    let mut reference_events = reference.events;
+    while expected
+        .last()
+        .and_then(|event| event["seq"].as_i64())
+        .unwrap_or(cursor)
+        < through
+    {
+        expected.push(
+            serde_json::to_value(
+                tokio::time::timeout(WAIT, reference_events.recv())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap(),
+        );
+    }
+    assert_eq!(
+        continued, expected,
+        "the original subscription preserves every envelope"
+    );
+    drop(socket);
+    let mut socket = fixture.connect().await;
+    send(&mut socket, 4, "_nori/session/list", json!({})).await;
+    let listed = receive(&mut socket).await;
+    assert_eq!(listed["result"]["selected_session_id"], id.to_string());
+    assert_eq!(
+        listed["result"]["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["session_id"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>(),
+        fixture.ids.map(|id| id.to_string()).to_vec()
+    );
+    assert!(
+        listed["result"]["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row.get("resumed_from").is_none()),
+        "restart bookkeeping is internal"
+    );
+    send(
+        &mut socket,
+        5,
+        "_nori/session/subscribe",
+        json!({"session_id":id.to_string(),"cursors":HashMap::from([(id.to_string(),cursor)])}),
+    )
+    .await;
+    let mut replayed = Vec::new();
+    while replayed.len() < continued.len() {
+        let value = receive(&mut socket).await;
+        assert!(value.get("error").is_none(), "{value}");
+        if value["method"] == "_nori/session/event" {
+            replayed.push(value["params"].clone());
+        }
+    }
+    assert_eq!(
+        replayed, continued,
+        "a pre-crash cursor replays across restart without gaps or duplicates"
+    );
+    fixture.stop().await;
+}

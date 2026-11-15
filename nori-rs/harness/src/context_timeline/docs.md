@@ -61,12 +61,14 @@ ACP notifications + Nori prompt lifecycle
   is active; adjacent spans with the same association are combined. Shrink,
   capacity changes, compaction, and replacement contexts invalidate the prior
   segmentation. Compaction clears current usage until another reading arrives.
-- Resume archives the necessary raw timeline events with their original
-  identities and times, independently of conversation replay. Archived evidence
-  is excluded from `Transcript::records()` and public replay. The reducer
-  ignores replayed notifications as new observations and deduplicates evidence
-  identities. Fork inherits the parent evidence through transcript seeding.
-  See [transcript storage](../../../../docs/transcripts.md).
+- Resume preserves raw timeline evidence with its original identities and
+  times, independently of conversation replay. A fresh transcript or a same-ID
+  resume seeded from native agent history archives that evidence; a same-ID
+  fallback preserves the original local entries. Archived evidence is excluded
+  from `Transcript::records()` and public replay. The reducer ignores replayed
+  notifications as new observations and deduplicates evidence identities. Fork
+  inherits the parent evidence through transcript seeding. See
+  [transcript storage](../../../../docs/transcripts.md).
 
 ### Things to Know
 

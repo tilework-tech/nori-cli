@@ -58,8 +58,6 @@ pub struct SessionRecord {
     pub agent: String,
     pub parent: Option<ConversationId>,
     pub source: SessionSource,
-    /// The failed session this one resumed, if any.
-    pub resumed_from: Option<ConversationId>,
     pub cwd: PathBuf,
     pub model: Option<String>,
     pub approval_policy: AskForApproval,
@@ -80,6 +78,8 @@ pub enum StartError {
     UnknownParent(ConversationId),
     #[error("the prepared agent already carries a session")]
     AgentAlreadyActivated,
+    #[error("session {0} has not failed; only failed sessions can be resumed")]
+    NotFailed(ConversationId),
 }
 
 /// Limits applied by a [`SessionManager`].
@@ -224,7 +224,7 @@ impl SessionManager {
         )
     }
 
-    /// Current cursors include superseded conversations whose events remain replayable.
+    /// Current cursors include ended conversations whose events remain replayable.
     pub fn replay_cursors(&self) -> HashMap<String, i64> {
         self.shared.state().journal.cursors()
     }
@@ -252,7 +252,7 @@ impl SessionManager {
             parent,
             source,
         } = spec;
-        let conversation_id = ConversationId::new();
+        let conversation_id = resumed_from.unwrap_or_default();
         let settings_from = |config: &AcpBackendConfig| SessionSettings {
             conversation_id,
             agent: config.agent.clone(),
@@ -372,8 +372,8 @@ impl SessionManager {
 
     /// Resume a failed session from its transcript on a new agent process.
     ///
-    /// The resumed session gets a new conversation ID, takes the failed
-    /// session's place in the registry, and records it in `resumed_from`.
+    /// The session keeps its conversation ID, position, family links and
+    /// envelope sequence while its agent process is replaced.
     pub async fn resume(
         &self,
         failed: &ConversationId,
@@ -400,22 +400,23 @@ impl SessionManager {
                     id: *failed,
                     source,
                 })?;
-        let resumed = self.start_session(
-            StartSession {
-                agent: SessionAgent::Prepare(spec),
-                start: SessionStart::Resume(SessionResume {
-                    acp_session_id: record.acp_session_id,
-                    transcript: Some(transcript),
-                }),
-                parent: record.parent,
-                source: record.source,
-            },
-            Some(*failed),
-        )?;
-        self.shared
-            .state()
-            .registry
-            .supersede(failed, &resumed.conversation_id);
+        let resumed = self
+            .start_session(
+                StartSession {
+                    agent: SessionAgent::Prepare(spec),
+                    start: SessionStart::Resume(SessionResume {
+                        acp_session_id: record.acp_session_id,
+                        transcript: Some(transcript),
+                    }),
+                    parent: record.parent,
+                    source: record.source,
+                },
+                Some(*failed),
+            )
+            .map_err(|error| match error {
+                StartError::NotFailed(id) => ResumeError::NotFailed(id),
+                error => ResumeError::Start(error),
+            })?;
         Ok(resumed)
     }
 

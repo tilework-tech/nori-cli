@@ -776,6 +776,13 @@ pub(crate) fn launch_session_from(
     let (primary_event_tx, event_rx) = unbounded_channel::<SessionEvent>();
     let event_tx = SessionEventFanout::new(primary_event_tx);
 
+    let resumed_transcript_id = match &start {
+        SessionStart::Resume(resume) => resume
+            .transcript
+            .as_ref()
+            .map(|transcript| transcript.meta.session_id.clone()),
+        SessionStart::New => None,
+    };
     let initial_timeline = match &start {
         SessionStart::Resume(resume) => resume
             .transcript
@@ -941,10 +948,33 @@ pub(crate) fn launch_session_from(
         // fork swap redirects recording to the new transcript; otherwise post-fork
         // events would keep landing in the frozen parent transcript.
         let transcript_recorder_cell = backend.transcript_recorder_cell();
+        let history_already_seeded =
+            transcript_recorder_cell
+                .read()
+                .await
+                .as_ref()
+                .is_some_and(|recorder| {
+                    resumed_transcript_id.as_deref() == Some(recorder.session_id())
+                });
+        let mut replaying = false;
         if let Some(recorder) = transcript_recorder_cell.read().await.clone() {
             for evidence in startup_evidence {
-                if let Err(error) = recorder.record_session_event(&evidence).await {
+                if matches!(
+                    evidence.event,
+                    SessionEvent::Nori(NoriEvent::ReplayStarted(_))
+                ) {
+                    replaying = true;
+                }
+                if !(history_already_seeded && replaying)
+                    && let Err(error) = recorder.record_session_event(&evidence).await
+                {
                     tracing::warn!(%error, "failed to record startup context evidence");
+                }
+                if matches!(
+                    evidence.event,
+                    SessionEvent::Nori(NoriEvent::ReplayFinished)
+                ) {
+                    replaying = false;
                 }
             }
         }
@@ -1110,13 +1140,30 @@ pub(crate) fn launch_session_from(
         // Drop our Arc reference; the typed command task owns the backend.
         drop(backend);
 
+        let mut recorder_stopped = false;
         while let Some(BackendEvent::Public(event)) = backend_event_rx.recv().await {
             let session_ended = matches!(event, SessionEvent::Nori(NoriEvent::SessionEnded(_)));
+            if matches!(event, SessionEvent::Nori(NoriEvent::ReplayStarted(_))) {
+                replaying = true;
+            }
             let evidence = observe_context_event(&context_timeline, &event).await;
-            if let Some(recorder) = transcript_recorder_cell.read().await.clone()
-                && let Err(error) = recorder.record_session_event(&evidence).await
-            {
-                tracing::warn!(%error, "failed to record public session event");
+            if let Some(recorder) = transcript_recorder_cell.read().await.clone() {
+                if !(history_already_seeded && replaying)
+                    && let Err(error) = recorder.record_session_event(&evidence).await
+                {
+                    tracing::warn!(%error, "failed to record public session event");
+                }
+                // A consumer may restart immediately after observing SessionEnded.
+                // Commit its complete transcript before publishing that boundary.
+                if session_ended {
+                    if let Err(error) = recorder.shutdown().await {
+                        tracing::warn!(%error, "failed to shut down transcript recorder");
+                    }
+                    recorder_stopped = true;
+                }
+            }
+            if matches!(event, SessionEvent::Nori(NoriEvent::ReplayFinished)) {
+                replaying = false;
             }
             if event_tx.send(event).is_err() {
                 break;
@@ -1125,7 +1172,8 @@ pub(crate) fn launch_session_from(
                 break;
             }
         }
-        if let Some(recorder) = transcript_recorder_cell.read().await.clone()
+        if !recorder_stopped
+            && let Some(recorder) = transcript_recorder_cell.read().await.clone()
             && let Err(error) = recorder.shutdown().await
         {
             tracing::warn!(%error, "failed to shut down transcript recorder");
@@ -1237,3 +1285,7 @@ mod tests {
         assert_eq!(callback_count.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_resume_tests.rs"]
+mod resume_tests;
