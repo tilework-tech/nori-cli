@@ -58,6 +58,9 @@ impl App {
     /// screen. The last open session is not closed this way.
     pub(super) fn close_session(&mut self, generation: SessionGeneration) {
         let active = self.chat_widget.session_generation();
+        if generation == active && self.session_setup_pending() {
+            return;
+        }
         let next = self.next_open_session(generation);
         if generation == active && next.is_none() {
             self.chat_widget.add_error_message(
@@ -84,7 +87,11 @@ impl App {
             return;
         };
         widget.mark_closed_by_user();
-        if let Some(id) = widget.managed_conversation_id() {
+        // A cloud session is released, as `/close` does; detaching would
+        // leave it running.
+        if self.cloud_mode && widget.supports_session_close() {
+            widget.start_cloud_close();
+        } else if let Some(id) = widget.managed_conversation_id() {
             let manager = self.session_manager.clone();
             tokio::spawn(async move {
                 if let Err(error) = manager.close(&id, grace).await {
@@ -162,14 +169,36 @@ impl App {
         total: i32,
     ) {
         let iteration = total - remaining;
-        tracing::info!("Loop iteration {iteration}/{total} (remaining: {remaining})");
         let note = format!("Loop iteration {iteration} of {total}");
         if generation != self.chat_widget.session_generation() {
-            let Some(parked) = self.session_deck.parked(generation) else {
+            let Some(parked) = self.session_deck.parked_mut(generation) else {
                 return;
             };
-            parked.widget.shutdown_harness_session();
-            let agent = parked.widget.config_ref().active_agent.clone();
+            // The next iteration needs the slot this one holds, so it starts
+            // once this session's agent process has ended.
+            if !parked.widget.is_closed_by_user()
+                && let Some(id) = parked.widget.managed_conversation_id()
+                && self.session_manager.get(&id).is_some_and(|record| {
+                    !matches!(record.status, SessionStatus::Closed | SessionStatus::Failed)
+                })
+            {
+                parked.widget.mark_closed_by_user();
+                let manager = self.session_manager.clone();
+                let tx = self.app_event_tx.clone();
+                tokio::spawn(async move {
+                    if let Err(error) = manager.close(&id, std::time::Duration::ZERO).await {
+                        tracing::warn!(%error, "a loop iteration did not shut down cleanly");
+                    }
+                    tx.send(crate::app_event::AppEvent::LoopIteration {
+                        generation,
+                        prompt,
+                        remaining,
+                        total,
+                    });
+                });
+                return;
+            }
+            let config = parked.widget.config_ref().clone();
             let mut init = self.chat_widget_init(
                 tui.frame_requester(),
                 Some(prompt),
@@ -178,11 +207,12 @@ impl App {
                 false,
                 None,
             );
-            init.config = self.config_for_agent(&agent);
+            init.config = config;
             let mut widget = ChatWidget::new(init);
             widget.set_foreground(false);
             widget.set_loop_state(remaining, total);
             widget.add_info_message(note, None);
+            tracing::info!("Loop iteration {iteration}/{total} (remaining: {remaining})");
             let next = widget.session_generation();
             let transcript = self
                 .session_deck
@@ -199,6 +229,7 @@ impl App {
             return;
         }
 
+        tracing::info!("Loop iteration {iteration}/{total} (remaining: {remaining})");
         self.chat_widget.shutdown_harness_session();
         let init = self.chat_widget_init(
             tui.frame_requester(),

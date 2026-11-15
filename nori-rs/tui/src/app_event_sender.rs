@@ -7,9 +7,9 @@ use crate::session_log;
 #[derive(Clone, Debug)]
 pub(crate) struct AppEventSender {
     pub app_event_tx: UnboundedSender<AppEvent>,
-    /// The session whose widget owns this sender. History it sends is tagged
-    /// with the session so the App can file it in that session's transcript,
-    /// even while another session is on screen.
+    /// The session whose widget owns this sender. History and agent start-up
+    /// news it sends are tagged with the session, so the App can file them
+    /// with that session even while another session is on screen.
     session: Option<SessionGeneration>,
 }
 
@@ -40,7 +40,10 @@ impl AppEventSender {
         let event = match (self.session, event) {
             (
                 Some(generation),
-                event @ (AppEvent::InsertHistoryCell(_) | AppEvent::ConsolidateAgentMessage { .. }),
+                event @ (AppEvent::InsertHistoryCell(_)
+                | AppEvent::ConsolidateAgentMessage { .. }
+                | AppEvent::AgentConnecting { .. }
+                | AppEvent::AgentSpawnFailed { .. }),
             ) => AppEvent::SessionHistory {
                 generation,
                 event: Box::new(event),

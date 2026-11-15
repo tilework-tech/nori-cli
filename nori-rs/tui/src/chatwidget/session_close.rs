@@ -37,4 +37,13 @@ impl ChatWidget {
     pub(crate) fn mark_closed_by_user(&mut self) {
         self.closed_by_user = true;
     }
+
+    pub(crate) fn is_closed_by_user(&self) -> bool {
+        self.closed_by_user
+    }
+
+    /// Whether the agent can release this session with `session/close`.
+    pub(crate) fn supports_session_close(&self) -> bool {
+        self.session_agent_capabilities.session_close
+    }
 }

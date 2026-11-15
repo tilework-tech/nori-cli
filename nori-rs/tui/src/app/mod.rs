@@ -278,12 +278,15 @@ impl App {
         // a later user/session decision, after any per-session skillset setup.
         let needs_deferred_spawn = true;
         let mut pending_session_activation = None;
-        let session_manager = nori_harness::session_manager::SessionManager::new(
-            nori_harness::session_manager::SessionManagerConfig {
-                max_sessions: config.max_sessions,
-                ..nori_harness::session_manager::SessionManagerConfig::default()
-            },
-        );
+        let session_manager =
+            nori_harness::session_manager::SessionManager::new(if config.multi_session {
+                nori_harness::session_manager::SessionManagerConfig {
+                    max_sessions: config.max_sessions,
+                    ..nori_harness::session_manager::SessionManagerConfig::default()
+                }
+            } else {
+                nori_harness::session_manager::SessionManagerConfig::default()
+            });
         let mut chat_widget = {
             let init = crate::chatwidget::ChatWidgetInit {
                 config: config.clone(),

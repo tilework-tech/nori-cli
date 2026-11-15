@@ -685,6 +685,12 @@ impl App {
                     Some(AppEvent::ConsolidateAgentMessage { source, cwd }) => {
                         self.consolidate_active_agent_message(tui, source, cwd);
                     }
+                    Some(AppEvent::AgentConnecting { display_name }) => {
+                        self.chat_widget.show_connecting_status(&display_name);
+                    }
+                    Some(AppEvent::AgentSpawnFailed { agent_name, error }) => {
+                        self.chat_widget.on_agent_spawn_failed(&agent_name, &error);
+                    }
                     Some(_) | None => {}
                 }
             }

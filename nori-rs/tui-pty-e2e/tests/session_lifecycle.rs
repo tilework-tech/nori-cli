@@ -213,8 +213,10 @@ fn a_new_session_starts_beside_a_busy_one_and_takes_the_next_prompt() {
 #[test]
 #[cfg(target_os = "linux")]
 fn a_loop_in_the_background_stays_in_its_own_row() {
-    let mut session =
-        spawn_with(config("[tui]\nloop_count = 3\n").with_agent_env("MOCK_AGENT_DELAY_MS", "1200"));
+    let mut session = spawn_with(
+        config("[tui]\nloop_count = 3\nmax_sessions = 2\n")
+            .with_agent_env("MOCK_AGENT_DELAY_MS", "1200"),
+    );
     ask(&mut session, "home question", ANSWER);
     session
         .wait_for_text("Loop iteration 3 of 3", Duration::from_secs(20))

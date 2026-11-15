@@ -84,7 +84,8 @@ impl App {
     /// so keys reach it; the terminal is reprinted on the next draw.
     pub(super) fn show_session(&mut self, target: SessionGeneration) {
         let current = self.chat_widget.session_generation();
-        if target == current {
+        // A session being set up for the screen would lose its place.
+        if target == current || self.session_setup_pending() {
             return;
         }
         let Some(parked) = self.session_deck.unpark(target) else {
@@ -168,6 +169,12 @@ impl App {
                     source,
                     &cwd,
                 );
+            }
+            AppEvent::AgentConnecting { display_name } => {
+                parked.widget.show_connecting_status(&display_name);
+            }
+            AppEvent::AgentSpawnFailed { agent_name, error } => {
+                parked.widget.on_agent_spawn_failed(&agent_name, &error);
             }
             other => return Some(other),
         }
