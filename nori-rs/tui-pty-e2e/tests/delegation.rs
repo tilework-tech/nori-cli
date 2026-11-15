@@ -254,13 +254,14 @@ fn delegation_reads_clearly_from_request_to_result() {
         .wait_for(|screen| screen.contains("└─ "), TIMEOUT)
         .expect("the child is listed under its parent");
     session.settle(Duration::from_millis(200));
-    let list = session.screen_contents();
-    assert!(!list.contains("(parent"), "{list}");
-    // The agent still receives the child's ID; mask it for a stable snapshot.
-    let list = regex::Regex::new("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-        .unwrap()
-        .replace_all(&list, "CHILD-ID")
-        .into_owned();
+    let screen = session.screen_contents();
+    assert!(!screen.contains("(parent"), "{screen}");
+    // Only the list itself; the transcript above it is covered elsewhere.
+    let list = screen
+        .lines()
+        .skip_while(|line| !line.contains("Sessions 2"))
+        .collect::<Vec<_>>()
+        .join("\n");
     insta::assert_snapshot!(
         "delegation_session_tree",
         normalize_for_input_snapshot(list)

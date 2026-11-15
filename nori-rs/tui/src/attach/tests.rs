@@ -656,6 +656,71 @@ fn alt_up_in_a_top_level_session_stays_put() {
 }
 
 #[test]
+fn delivered_result_prompt_reads_as_one_line_in_attached_parent() {
+    use nori_protocol::acp::v1 as acp;
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("parent-session".into()),
+        list_open: false,
+        ..Default::default()
+    };
+    state.apply(delegation_event(1, "completed")).unwrap();
+    let nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::DelegationChanged(done)) =
+        delegation_event(1, "completed").event
+    else {
+        panic!("delegation fixture");
+    };
+    let prompt = nori_protocol::delegation_result_prompt(&done);
+    let chunk = acp::ContentChunk::new(acp::ContentBlock::Text(acp::TextContent::new(prompt)))
+        .message_id("delivery");
+    state
+        .apply(SessionEnvelope {
+            conversation_id: "parent-session".into(),
+            agent: "mock-model".into(),
+            seq: 2,
+            event: nori_protocol::SessionEvent::Acp(nori_protocol::AcpEvent::Notification(
+                acp::AgentNotification::SessionNotification(acp::SessionNotification::new(
+                    "agent-session",
+                    acp::SessionUpdate::UserMessageChunk(chunk),
+                )),
+            )),
+        })
+        .unwrap();
+    let rendered = screen(&state);
+    assert_eq!(
+        rendered.matches("Parser reviewed").count(),
+        1,
+        "the result shows once, in its block: {rendered}"
+    );
+    assert!(
+        rendered.contains("delegation result from mock-model-alt"),
+        "{rendered}"
+    );
+    assert!(!rendered.contains("child-session"), "{rendered}");
+}
+
+#[test]
+fn a_fork_gets_no_parent_breadcrumb_or_parent_key() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("fork-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.replace_sessions(json!({"sessions":[
+        {"session_id":"parent-session","agent":"mock-model","status":"closed","title":"Parent task"},
+        {"session_id":"fork-session","agent":"mock-model","status":"ready","title":"Forked task","parent":"parent-session","source":"fork"}
+    ]})).unwrap();
+    runtime.state.list_open = false;
+    let rendered = screen(&runtime.state);
+    assert!(!rendered.contains("alt+up"), "{rendered}");
+    assert!(!rendered.contains("Parent task"), "{rendered}");
+    runtime.key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    assert_eq!(runtime.state.selected.as_deref(), Some("fork-session"));
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
 fn next_waiting_uses_the_configured_binding() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;

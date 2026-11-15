@@ -423,7 +423,9 @@ characters. A completed child's result is automatically queued as attributed
 input to the parent, including when the parent is busy. That prompt's first
 line is `[Nori delegation result] from <agent> · <child name> · <outcome>`, its
 second is `Child session: <child id>`, and the rest is the child's result
-text; the parent's own ID is not included. The manager retains delivery until that parent's correlated
+text (its last turn's message text, with a paragraph break wherever a tool
+call, permission request, or other update interrupted it); the parent's own ID
+is not included. The manager retains delivery until that parent's correlated
 ACP prompt response, rather than treating queue admission as acknowledgment.
 If the parent process crashes before acknowledgment, stable-ID resume submits
 the result again. A delegated child with descendants waits for them and its
@@ -501,7 +503,7 @@ released after cleanup. Startup and stop do not require a terminal.
 | Command | Behavior |
 | --- | --- |
 | `nori host` | Start the background host, or report the already-running host. |
-| `nori host ls` | Print the `ID AGENT STATUS AGE TITLE` table with delegated children listed under their parent and `├─`/`└─`/`│` tree guides inside TITLE. TTY output colors status (waiting on you yellow, working/starting cyan, ready green, failed red) and truncates titles to the terminal width; piped output keeps full titles without color and appends `  (parent <full id>)` to each child row. |
+| `nori host ls` | Print the `ID AGENT STATUS AGE TITLE` table with delegated children listed under their parent and `├─`/`└─`/`│` tree guides inside TITLE. TTY output colors status (waiting on you yellow, working cyan, ready green, failed red, everything else including starting dimmed) and truncates titles to the terminal width; piped output keeps full titles without color and appends `  (parent <full id>)` to every row with a parent, including a child whose parent is no longer listed and so prints at top level. |
 | `nori attach` | Open the host session list; requires `[features] multi_session = true`. |
 | `nori attach <id>` | Open the named Nori conversation. |
 | `nori attach --host <URL> --token-file <path>` | Connect to an explicit managed endpoint using a private token file. |
@@ -590,8 +592,10 @@ start delegations. The configured `hotkeys.next_waiting_session` binding
 `hotkeys.parent_session` (Alt+Up by default) returns from a delegated child to
 its parent. Both the attached list and `nori host ls` order children directly
 under their parent and draw tree guides inside TITLE, so the ID, AGENT, STATUS,
-and AGE columns stay aligned. Inside a child, the identity line reads as a
-breadcrumb from the parent's agent and name to the child's.
+and AGE columns stay aligned. Inside a delegated child (not a fork), the
+identity line reads as a breadcrumb from the parent's agent and name to the
+child's. An attached parent shows a delivered result prompt as one
+`› delegation result … · delivered to this session` line.
 
 Socket loss or a receive-liveness deadline starts recovery. Periodic session
 list requests keep idle connections observable; receiving JSON renews the

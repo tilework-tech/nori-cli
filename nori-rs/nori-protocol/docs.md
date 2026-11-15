@@ -94,7 +94,8 @@ delegated child: request, parent, and child identities, both agent names, the
 task, depth, `DelegationStatus`, optional result, and `DelegationOrigin`
 (`Agent` when the parent agent called the `delegate` tool, `User` for
 `/delegate` or a direct manager call). `origin` has a serde default of `Agent`
-so events from hosts that predate the field still deserialize.
+so events from hosts that predate the field still deserialize; a user's
+`/delegate` relayed by such a host therefore reads as the agent's request.
 
 [`delegation.rs`](src/delegation.rs) holds the only text logic in the crate:
 the shared naming and result-prompt wording that the harness, the local TUI,
@@ -106,12 +107,14 @@ and `nori attach` must agree on.
 | `delegation_child_name` | The child's display name from its task, else `session <first 8 of child ID>` |
 | `delegation_status_word` | `waiting on you`, `working`, `ready`, `failed`, `declined`, or `cancelled`, matching session status words |
 | `delegation_result_prompt` | The prompt delivered to the parent: `[Nori delegation result] from <agent> · <child name> · <outcome>`, then `Child session: <child id>`, then the result text |
-| `delegation_result_summary` | The text after `DELEGATION_RESULT_HEADER` on a prompt's first line, or `None` for any other prompt |
+| `delegation_result_summary` | The text after `DELEGATION_RESULT_HEADER` on a prompt's first line, only when that line starts with the header and the second line starts with `Child session: `; `None` for any other text |
 
 The result prompt keeps the child ID on its own line so the receiving agent can
-still address that session, while the first line stays readable. Because the
-parent TUI recognizes a delivered result only by that header prefix, the
-header string is a cross-crate contract.
+still address that session, while the first line stays readable. The local
+TUI and `nori attach` recognize a delivered result through
+`delegation_result_summary`, which requires both the header and the
+`Child session: ` second line, so ordinary user text that merely begins with
+the header is left whole. Both strings are a cross-crate contract.
 
 Session termination reasons are `Shutdown`, `Closed`, `ConnectionLost`,
 `SpawnFailed`, and `TimedOut`. Raw ACP request and response envelopes retain the

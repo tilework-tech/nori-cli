@@ -5,16 +5,19 @@ use crate::DelegationStatus;
 /// First line of every result prompt a parent agent receives from a child.
 pub const DELEGATION_RESULT_HEADER: &str = "[Nori delegation result]";
 
-const NAME_CHARS: usize = 40;
+const NAME_CHARS: i32 = 40;
+
+const CHILD_LINE_PREFIX: &str = "Child session: ";
 
 /// A short readable name for a session, taken from the first non-empty line of
 /// its task or title.
 pub fn session_display_name(text: &str) -> Option<String> {
     let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
-    if line.chars().count() <= NAME_CHARS {
+    let limit = usize::try_from(NAME_CHARS).unwrap_or_default();
+    if line.chars().count() <= limit {
         return Some(line.to_owned());
     }
-    let cut: String = line.chars().take(NAME_CHARS - 1).collect();
+    let cut: String = line.chars().take(limit - 1).collect();
     Some(format!("{}…", cut.trim_end()))
 }
 
@@ -48,7 +51,7 @@ pub fn delegation_result_prompt(delegation: &Delegation) -> String {
         other => delegation_status_word(other),
     };
     format!(
-        "{DELEGATION_RESULT_HEADER} from {} · {} · {outcome}\nChild session: {}\n{}",
+        "{DELEGATION_RESULT_HEADER} from {} · {} · {outcome}\n{CHILD_LINE_PREFIX}{}\n{}",
         delegation.agent,
         delegation_child_name(delegation),
         delegation.child_id,
@@ -58,7 +61,11 @@ pub fn delegation_result_prompt(delegation: &Delegation) -> String {
 
 /// The readable summary line of a result prompt, or `None` for other text.
 pub fn delegation_result_summary(prompt: &str) -> Option<&str> {
-    let first = prompt.lines().next()?;
+    let mut lines = prompt.lines();
+    let first = lines.next()?;
+    if !lines.next()?.starts_with(CHILD_LINE_PREFIX) {
+        return None;
+    }
     first
         .strip_prefix(DELEGATION_RESULT_HEADER)
         .map(str::trim)

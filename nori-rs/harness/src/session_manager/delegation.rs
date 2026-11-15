@@ -157,6 +157,7 @@ impl SessionManager {
                 pending_turns: HashSet::new(),
                 completed_turns: HashSet::new(),
                 output: String::new(),
+                output_break: false,
                 last_result: String::new(),
                 failure: None,
                 cancelled: false,

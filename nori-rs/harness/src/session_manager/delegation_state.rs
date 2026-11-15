@@ -15,6 +15,9 @@ pub(super) struct Entry {
     pub(super) pending_turns: HashSet<acp::v1::RequestId>,
     pub(super) completed_turns: HashSet<acp::v1::RequestId>,
     pub(super) output: String,
+    /// Something other than message text happened since the last chunk, so
+    /// the next chunk starts a new paragraph of the result.
+    pub(super) output_break: bool,
     pub(super) last_result: String,
     pub(super) failure: Option<String>,
     pub(super) cancelled: bool,
@@ -91,16 +94,25 @@ impl DelegationState {
         match &envelope.event {
             SessionEvent::Nori(NoriEvent::SessionPhaseChanged(SessionPhase::Prompting {
                 ..
-            })) => entry.output.clear(),
+            })) => {
+                entry.output.clear();
+                entry.output_break = false;
+            }
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::v1::AgentNotification::SessionNotification(n),
             )) => {
                 if let acp::v1::SessionUpdate::AgentMessageChunk(chunk) = &n.update
                     && let acp::v1::ContentBlock::Text(text) = &chunk.content
                 {
+                    if std::mem::take(&mut entry.output_break) && !entry.output.is_empty() {
+                        entry.output.push_str("\n\n");
+                    }
                     entry.output.push_str(&text.text);
+                } else {
+                    entry.output_break = true;
                 }
             }
+            SessionEvent::Acp(AcpEvent::Request { .. }) => entry.output_break = true,
             SessionEvent::Acp(AcpEvent::Response {
                 request_id,
                 response,

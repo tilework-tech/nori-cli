@@ -320,7 +320,14 @@ async fn child_permission_belongs_to_child_and_family_reports_waiting() {
         )
         .await
         .unwrap();
-    terminal(&m, &p.conversation_id, &d.request_id).await;
+    let done = terminal(&m, &p.conversation_id, &d.request_id).await;
+    let result = done.result.unwrap_or_default();
+    assert!(
+        result
+            .lines()
+            .any(|line| line.starts_with("Permission request was cancelled")),
+        "text after the permission request starts its own paragraph: {result:?}"
+    );
     m.shutdown(Duration::ZERO).await;
 }
 #[tokio::test]

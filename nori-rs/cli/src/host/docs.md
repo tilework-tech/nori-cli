@@ -58,16 +58,17 @@ host ls / host stop ---------------+                   SessionManager
   `│` prefixes. The guides are written inside TITLE, after the fixed ID, AGENT,
   STATUS, and AGE columns, so nesting never shifts metadata, and truncation
   cuts the title rather than its guide. Piped output appends
-  `  (parent <full parent ID>)` to each child's title so scripts keep the exact
-  link; terminal output omits it.
+  `  (parent <full parent ID>)` to every row that has a parent, including a
+  child whose parent is no longer listed and so prints at top level, so scripts
+  keep the exact link; terminal output omits it.
 
   | Status | Terminal color |
   | --- | --- |
   | waiting on you | yellow |
-  | working, starting | cyan |
+  | working | cyan |
   | ready | green |
   | failed | red |
-  | others | dimmed |
+  | others, including starting | dimmed |
 - Lifecycle requests prepare agents using the host's configuration. Resume
   uses the stored agent and working directory while retaining the conversation
   identity. Stop closes the server, shuts down the manager, removes discovery

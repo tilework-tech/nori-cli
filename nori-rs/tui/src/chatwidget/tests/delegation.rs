@@ -205,6 +205,42 @@ fn long_results_are_shortened_on_screen_and_kept_whole_in_the_transcript() {
 }
 
 #[test]
+fn long_result_lines_keep_the_result_rail_when_wrapped() {
+    let (mut chat, mut rx) = delegating_parent();
+    let generation = chat.session_generation();
+    let long = "word ".repeat(40);
+    chat.handle_session_event(
+        generation,
+        delegation_with("completed", "agent", "Review the parser", Some(long.trim())),
+    );
+    let (screen, _) = history_text(&mut rx);
+    let rail_lines = screen
+        .lines()
+        .filter(|line| line.starts_with("  ▏ "))
+        .count();
+    assert!(
+        rail_lines >= 2,
+        "wrapped result lines keep the rail: {screen}"
+    );
+}
+
+#[test]
+fn a_user_message_that_only_starts_like_a_result_stays_whole() {
+    let (mut chat, mut rx) = delegating_parent();
+    chat.on_task_started();
+    chat.handle_client_event(crate::presentation::ClientEvent::MessageDelta(
+        crate::presentation::MessageDelta {
+            stream: crate::presentation::MessageStream::User,
+            delta: "[Nori delegation result] what does this header mean?\nPlease explain.".into(),
+            message_id: Some("question".into()),
+        },
+    ));
+    chat.on_task_complete(None);
+    let (screen, _) = history_text(&mut rx);
+    assert!(screen.contains("Please explain."), "{screen}");
+}
+
+#[test]
 fn failed_declined_and_cancelled_delegations_read_clearly() {
     let mut rendered = Vec::new();
     for (status, result) in [

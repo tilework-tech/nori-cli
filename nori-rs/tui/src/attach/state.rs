@@ -35,6 +35,9 @@ pub(super) struct SessionRow {
     pub age_seconds: i64,
     #[serde(default)]
     pub parent: Option<String>,
+    /// `session` for a delegated child, `fork` or `user` otherwise.
+    #[serde(default)]
+    pub source: Option<String>,
     #[serde(default)]
     pub delegations: Vec<nori_protocol::Delegation>,
 }
@@ -417,4 +420,13 @@ pub(super) fn delegation_cell(
         delegation.clone(),
         crate::delegation::DelegationHints::default(),
     )
+}
+
+impl SessionRow {
+    /// The parent of a delegated child; forks and top-level sessions have none.
+    pub(super) fn delegating_parent(&self) -> Option<&str> {
+        self.parent
+            .as_deref()
+            .filter(|_| self.source.as_deref() == Some("session"))
+    }
 }

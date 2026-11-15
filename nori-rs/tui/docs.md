@@ -1083,7 +1083,7 @@ child ID.
 | Status | On screen |
 | --- | --- |
 | running | `↳ <requester> delegated to <agent> · <child name> · working`, plus `<transcript key> shows the brief` |
-| completed | `○ result from <agent> · <child name> · ready`, up to six result lines (then `… N more lines`), and `returns to <parent agent> on its own · its history: <session list key>` |
+| completed | `○ result from <agent> · <child name> · ready`, up to six result lines, each wrapped under the `▏` rail (then `… N more lines`), and `returns to <parent agent> on its own · its history: <session list key>` |
 | failed | `✕ <agent> · <child name> · failed · <reason>` and `sent to <parent agent> as a failure` |
 | declined, cancelled | `✕ delegation to <agent> · <child name> · declined by you` / `cancelled · <reason>` |
 
@@ -1101,8 +1101,10 @@ These choices control child creation, separately from a child's later ACP
 permission request.
 
 The result prompt the manager delivers to the parent appears as a
-`UserHistoryCell`. When its first line carries the `[Nori delegation result]`
-header, [`history_cell`](src/history_cell/mod.rs) shows it on screen as one
+`UserHistoryCell`. When `nori_protocol::delegation_result_summary` recognizes
+it (a `[Nori delegation result]` first line followed by a `Child session: `
+line; a user message that only begins with the header stays whole),
+[`history_cell`](src/history_cell/mod.rs) shows it on screen as one
 line (`› delegation result <summary> · delivered to this session`), because
 the result block was already shown when the child ended; the transcript view
 keeps the exact text the agent received.

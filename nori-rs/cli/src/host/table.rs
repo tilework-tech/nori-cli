@@ -35,7 +35,7 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
     let order = nori_tui_components::picker::tree_order(&links);
     let depths: Vec<i32> = order.iter().map(|(_, depth)| *depth).collect();
     let guides = nori_tui_components::picker::tree_guides(&depths);
-    for ((index, depth), (guide, _)) in order.into_iter().zip(guides) {
+    for ((index, _), (guide, _)) in order.into_iter().zip(guides) {
         let row = rows[index];
         let clean = |key: &str| {
             row[key]
@@ -49,7 +49,7 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
         let agent = clean("agent");
         let status = clean("status").replace('_', " ");
         let title = format!("{guide}{}", clean("title"));
-        let title = if depth > 0 && width.is_none() {
+        let title = if row["parent"].is_string() && width.is_none() {
             format!("{title}  (parent {})", clean("parent"))
         } else {
             title
@@ -80,7 +80,7 @@ pub(super) fn format_table(listing: &Value, width: Option<usize>, color: bool) -
             match row["status"].as_str().unwrap_or_default() {
                 "failed" => status.red().to_string(),
                 "waiting_on_you" => status.yellow().to_string(),
-                "working" | "starting" => status.cyan().to_string(),
+                "working" => status.cyan().to_string(),
                 "ready" => status.green().to_string(),
                 _ => status.dimmed().to_string(),
             }
@@ -195,6 +195,13 @@ mod tests {
         let piped = format_table(&listing, None, false);
         let child_row = piped.lines().nth(2).unwrap();
         assert_eq!(&child_row[..36], child);
+        let orphan = json!({"sessions":[
+            {"session_id":child,"agent":"m","status":"ready","title":"Port picker","parent":root,"source":"session"}
+        ]});
+        assert!(
+            format_table(&orphan, None, false).contains(root),
+            "a child whose parent is gone still names it when piped"
+        );
         assert!(
             child_row[82..].starts_with("├─ Port picker") && child_row.contains(root),
             "piped output keeps the complete parent ID: {child_row}"

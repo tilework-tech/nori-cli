@@ -128,7 +128,8 @@ fn identity_line(state: &AttachState) -> Line<'static> {
         return Line::from(format!(" session · {id}").dim());
     };
     let mut spans = vec![" ".into()];
-    if let Some(parent) = current.parent.as_deref().and_then(row) {
+    let parent = current.delegating_parent().and_then(row);
+    if let Some(parent) = parent {
         spans.extend([
             format!("{} · ", parent.agent).dim(),
             name(parent).into(),
@@ -140,7 +141,7 @@ fn identity_line(state: &AttachState) -> Line<'static> {
         name(current).bold(),
         format!(" · {}", crate::session_status::status_label(current.status)).dim(),
     ]);
-    if current.parent.as_deref().and_then(row).is_some() && !state.parent_binding.is_none() {
+    if parent.is_some() && !state.parent_binding.is_none() {
         spans.push(format!(" · {} parent", state.parent_binding.as_str()).dim());
     }
     Line::from(spans)
@@ -205,6 +206,19 @@ fn render_conversation(state: &AttachState, id: &str, area: Rect, buf: &mut Buff
     let mut lines = Vec::new();
     for part in &conversation.parts {
         match part {
+            Part::Message {
+                stream: MessageStream::User,
+                text,
+                ..
+            } if nori_protocol::delegation_result_summary(text).is_some() => {
+                let summary = nori_protocol::delegation_result_summary(text).unwrap_or_default();
+                lines.push(Line::from(vec![
+                    "› ".bold(),
+                    "delegation result ".dim(),
+                    summary.to_owned().into(),
+                    " · delivered to this session".dim(),
+                ]));
+            }
             Part::Message { stream, text, .. } => {
                 match stream {
                     MessageStream::User => lines.push(Line::from("› You".bold())),

@@ -55,7 +55,8 @@ Path: @/nori-rs/tui/src/attach
 - The identity line under the header shows the selected session as
   `<agent> · <name> · <status>`, where the name is the session title through
   `nori_protocol::session_display_name` (else the short ID). Inside a delegated
-  child whose parent is listed, it becomes a breadcrumb
+  child (a row whose `source` is `session`; forks get no breadcrumb) whose
+  parent is listed, it becomes a breadcrumb
   `<parent agent> · <parent name> › <agent> · <child name> · <status>` followed
   by the `parent_session` key (Alt+Up by default).
 - The session list is tree-ordered: [AttachState](state.rs) runs the listed
@@ -88,10 +89,14 @@ Path: @/nori-rs/tui/src/attach
   composer, including after paste, so a draft begun in the parent stays there.
   Parent notices name the child and parent readably (see the
   [harness](../../../harness/docs.md#delegation-between-managed-sessions)).
-  The `parent_session` binding moves the selection from a child to its parent
-  when that parent is in the cached list, closing the list and resubscribing.
+  The `parent_session` binding moves the selection from a delegated child
+  (`source` `session`, not a fork) to its parent when that parent is in the
+  cached list, closing the list and resubscribing; elsewhere it does nothing.
   Results return through the parent's ordinary event stream without a terminal
-  review step.
+  review step. The echoed result prompt (a user message that
+  `nori_protocol::delegation_result_summary` recognizes) renders as one
+  `› delegation result <summary> · delivered to this session` line, since the
+  result block already shows the text.
 
 ### Things to Know
 

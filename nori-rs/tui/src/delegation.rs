@@ -14,7 +14,7 @@ use ratatui::text::Span;
 use crate::history_cell::HistoryCell;
 
 /// Result lines shown on screen before the rest moves to the transcript view.
-const RESULT_PREVIEW_LINES: usize = 6;
+const RESULT_PREVIEW_LINES: i32 = 6;
 
 pub(crate) fn parse_command(text: &str) -> Option<Result<(String, String), String>> {
     let rest = text.strip_prefix("/delegate")?;
@@ -194,7 +194,9 @@ impl DelegationCell {
         Some(Line::from(format!("  {}", parts.join(" · ")).dim()))
     }
 
-    fn result_lines(&self, limit: Option<usize>) -> Vec<Line<'static>> {
+    /// The result text under a rail, each source line wrapped on its own so
+    /// continuation rows keep the rail.
+    fn result_lines(&self, width: u16, limit: Option<i32>) -> Vec<Line<'static>> {
         if self.delegation.status != DelegationStatus::Completed {
             return Vec::new();
         }
@@ -203,10 +205,20 @@ impl DelegationCell {
         if lines.is_empty() {
             return vec![Line::from(vec!["  ▏ ".dim(), "(no text)".dim().italic()])];
         }
-        let shown = limit.map_or(lines.len(), |limit| limit.min(lines.len()));
+        let shown = limit
+            .and_then(|limit| usize::try_from(limit).ok())
+            .map_or(lines.len(), |limit| limit.min(lines.len()));
+        let rail = || Line::from("  ▏ ".dim());
         let mut out: Vec<Line<'static>> = lines[..shown]
             .iter()
-            .map(|line| Line::from(vec!["  ▏ ".dim(), (*line).to_owned().into()]))
+            .flat_map(|line| {
+                crate::wrapping::word_wrap_lines(
+                    [Line::from((*line).to_owned())],
+                    crate::wrapping::RtOptions::new(usize::from(width.max(1)))
+                        .initial_indent(rail())
+                        .subsequent_indent(rail()),
+                )
+            })
             .collect();
         if shown < lines.len() {
             let more = lines.len() - shown;
@@ -225,7 +237,7 @@ impl DelegationCell {
 impl HistoryCell for DelegationCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines = vec![self.header()];
-        lines.extend(self.result_lines(Some(RESULT_PREVIEW_LINES)));
+        lines.extend(self.result_lines(width, Some(RESULT_PREVIEW_LINES)));
         lines.extend(self.footer());
         wrap_each(&lines, width)
     }
@@ -238,7 +250,7 @@ impl HistoryCell for DelegationCell {
             brief.next().unwrap_or_default().to_owned().into(),
         ]));
         lines.extend(brief.map(|line| Line::from(format!("        {line}"))));
-        lines.extend(self.result_lines(None));
+        lines.extend(self.result_lines(width, None));
         lines.push(Line::from(
             format!("  child session {}", self.delegation.child_id).dim(),
         ));

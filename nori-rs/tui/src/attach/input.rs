@@ -35,7 +35,7 @@ impl Runtime {
                     .sessions
                     .iter()
                     .find(|row| &row.session_id == id)
-                    .and_then(|row| row.parent.clone())
+                    .and_then(|row| row.delegating_parent().map(str::to_owned))
             })
             && self
                 .state

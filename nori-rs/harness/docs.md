@@ -812,7 +812,10 @@ remote /session/delegate ----------+         |
   its parent automatically, without a review step. Its text is
   `nori_protocol::delegation_result_prompt`: a readable first line naming the
   child agent, child name, and outcome, then the child ID, then the result.
-  It does not repeat the parent's own ID. The TUI recognizes these prompts by
+  It does not repeat the parent's own ID. The result is the text of the
+  child's agent message chunks from its last prompting turn; when a tool call,
+  permission request, or other session update arrived between chunks, the next
+  chunk starts a new paragraph (`\n\n`) rather than being joined directly. The TUI recognizes these prompts by
   their `[Nori delegation result]` header. A busy parent consumes it
   through its normal prompt queue. The [result driver](src/session_manager/delegation_driver.rs)
   retains that delivery until the parent's correlated ACP `PromptResponse`,
