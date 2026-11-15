@@ -98,7 +98,8 @@ typed `HarnessHandle` methods available to headless embedders.
 ### Things to Know
 
 - Build the mock agent before local runs when CI has not supplied its path.
-- Tests require the TUI `vt100-tests` feature.
+- The crate uses its own `vt100` parser and does not require the TUI
+  `vt100-tests` feature; build the real `nori` binary before running it.
 - Snapshot normalization removes dynamic session IDs, timestamps, status
   text, and disposable temp roots: `/tmp` on Linux plus `/private/tmp`,
   `/var/folders`, and canonicalized `/private/var/folders` on macOS. Meaningful

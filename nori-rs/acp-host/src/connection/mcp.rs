@@ -400,9 +400,9 @@ mod tests {
         use codex_rmcp_client::WrappedOAuthTokenResponse;
         use codex_rmcp_client::save_oauth_tokens;
         use oauth2::AccessToken;
-        use oauth2::EmptyExtraTokenFields;
         use oauth2::basic::BasicTokenType;
         use rmcp::transport::auth::OAuthTokenResponse;
+        use rmcp::transport::auth::VendorExtraTokenFields;
 
         let tmp_dir = tempfile::tempdir().unwrap();
         let tmp_path = tmp_dir.path().to_str().unwrap().to_string();
@@ -418,7 +418,7 @@ mod tests {
         let token_response = OAuthTokenResponse::new(
             AccessToken::new("test-oauth-access-token".to_string()),
             BasicTokenType::Bearer,
-            EmptyExtraTokenFields {},
+            VendorExtraTokenFields::default(),
         );
         let stored = StoredOAuthTokens {
             server_name: server_name.to_string(),
@@ -465,9 +465,9 @@ mod tests {
         use codex_rmcp_client::WrappedOAuthTokenResponse;
         use codex_rmcp_client::save_oauth_tokens;
         use oauth2::AccessToken;
-        use oauth2::EmptyExtraTokenFields;
         use oauth2::basic::BasicTokenType;
         use rmcp::transport::auth::OAuthTokenResponse;
+        use rmcp::transport::auth::VendorExtraTokenFields;
 
         let tmp_dir = tempfile::tempdir().unwrap();
         let tmp_path = tmp_dir.path().to_str().unwrap().to_string();
@@ -482,7 +482,7 @@ mod tests {
         let token_response = OAuthTokenResponse::new(
             AccessToken::new("oauth-token-should-be-ignored".to_string()),
             BasicTokenType::Bearer,
-            EmptyExtraTokenFields {},
+            VendorExtraTokenFields::default(),
         );
         let stored = StoredOAuthTokens {
             server_name: server_name.to_string(),

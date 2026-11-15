@@ -2,6 +2,7 @@ mod auth_status;
 mod find_codex_home;
 mod logging_client_handler;
 mod oauth;
+mod oauth_http_client;
 mod perform_oauth_login;
 mod program_resolver;
 mod rmcp_client;

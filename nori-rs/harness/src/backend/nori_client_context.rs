@@ -4,17 +4,15 @@
 //! the ACP agent receives only Nori-owned harness facts and source guidance.
 
 use rmcp::ErrorData as McpError;
-use rmcp::model::AnnotateAble;
 use rmcp::model::GetPromptResult;
 use rmcp::model::ListPromptsResult;
 use rmcp::model::ListResourcesResult;
 use rmcp::model::Prompt;
 use rmcp::model::PromptMessage;
-use rmcp::model::PromptMessageRole;
-use rmcp::model::RawResource;
 use rmcp::model::ReadResourceResult;
 use rmcp::model::Resource;
 use rmcp::model::ResourceContents;
+use rmcp::model::Role;
 
 const TEXT_MARKDOWN: &str = "text/markdown";
 
@@ -77,11 +75,7 @@ const PROMPT_SPECS: &[NoriPromptSpec] = &[
 ];
 
 pub(super) fn list_resources() -> ListResourcesResult {
-    ListResourcesResult {
-        meta: None,
-        resources: RESOURCE_SPECS.iter().map(resource_from_spec).collect(),
-        next_cursor: None,
-    }
+    ListResourcesResult::with_all_items(RESOURCE_SPECS.iter().map(resource_from_spec).collect())
 }
 
 pub(super) fn read_resource(uri: String) -> Result<ReadResourceResult, McpError> {
@@ -91,49 +85,29 @@ pub(super) fn read_resource(uri: String) -> Result<ReadResourceResult, McpError>
             None,
         ));
     };
-    Ok(ReadResourceResult {
-        contents: vec![ResourceContents::TextResourceContents {
-            uri: resource.uri.to_string(),
-            mime_type: Some(TEXT_MARKDOWN.to_string()),
-            text: resource.text.to_string(),
-            meta: None,
-        }],
-    })
+    Ok(ReadResourceResult::new(vec![
+        ResourceContents::text(resource.text, resource.uri).with_mime_type(TEXT_MARKDOWN),
+    ]))
 }
 
 pub(super) fn list_prompts() -> ListPromptsResult {
-    ListPromptsResult {
-        meta: None,
-        prompts: PROMPT_SPECS.iter().map(prompt_from_spec).collect(),
-        next_cursor: None,
-    }
+    ListPromptsResult::with_all_items(PROMPT_SPECS.iter().map(prompt_from_spec).collect())
 }
 
 pub(super) fn get_prompt(name: String) -> Result<GetPromptResult, McpError> {
     let Some(prompt) = PROMPT_SPECS.iter().find(|prompt| prompt.name == name) else {
         return Err(McpError::invalid_params("Nori prompt not found", None));
     };
-    Ok(GetPromptResult {
-        description: Some(prompt.description.to_string()),
-        messages: vec![PromptMessage::new_text(
-            PromptMessageRole::User,
-            prompt.text,
-        )],
-    })
+    Ok(
+        GetPromptResult::new(vec![PromptMessage::new_text(Role::User, prompt.text)])
+            .with_description(prompt.description),
+    )
 }
 
 fn resource_from_spec(spec: &NoriResourceSpec) -> Resource {
-    RawResource {
-        uri: spec.uri.to_string(),
-        name: spec.name.to_string(),
-        title: None,
-        description: Some(spec.description.to_string()),
-        mime_type: Some(TEXT_MARKDOWN.to_string()),
-        size: None,
-        icons: None,
-        meta: None,
-    }
-    .no_annotation()
+    Resource::new(spec.uri, spec.name)
+        .with_description(spec.description)
+        .with_mime_type(TEXT_MARKDOWN)
 }
 
 fn prompt_from_spec(spec: &NoriPromptSpec) -> Prompt {

@@ -1,11 +1,13 @@
+#![allow(deprecated)] // Preserve logging notifications for the negotiated MCP versions.
+
 use std::sync::Arc;
 
 use rmcp::ClientHandler;
 use rmcp::RoleClient;
 use rmcp::model::CancelledNotificationParam;
-use rmcp::model::ClientInfo;
-use rmcp::model::CreateElicitationRequestParam;
-use rmcp::model::CreateElicitationResult;
+use rmcp::model::ClientConfig;
+use rmcp::model::ElicitRequestParams;
+use rmcp::model::ElicitResult;
 use rmcp::model::LoggingLevel;
 use rmcp::model::LoggingMessageNotificationParam;
 use rmcp::model::ProgressNotificationParam;
@@ -22,12 +24,12 @@ use crate::rmcp_client::SendElicitation;
 
 #[derive(Clone)]
 pub(crate) struct LoggingClientHandler {
-    client_info: ClientInfo,
+    client_info: ClientConfig,
     send_elicitation: Arc<SendElicitation>,
 }
 
 impl LoggingClientHandler {
-    pub(crate) fn new(client_info: ClientInfo, send_elicitation: SendElicitation) -> Self {
+    pub(crate) fn new(client_info: ClientConfig, send_elicitation: SendElicitation) -> Self {
         Self {
             client_info,
             send_elicitation: Arc::new(send_elicitation),
@@ -38,9 +40,9 @@ impl LoggingClientHandler {
 impl ClientHandler for LoggingClientHandler {
     async fn create_elicitation(
         &self,
-        request: CreateElicitationRequestParam,
+        request: ElicitRequestParams,
         context: RequestContext<RoleClient>,
-    ) -> Result<CreateElicitationResult, rmcp::ErrorData> {
+    ) -> Result<ElicitResult, rmcp::ErrorData> {
         let id = match context.id {
             RequestId::String(id) => mcp_types::RequestId::String(id.to_string()),
             RequestId::Number(id) => mcp_types::RequestId::Integer(id),
@@ -56,7 +58,7 @@ impl ClientHandler for LoggingClientHandler {
         _context: NotificationContext<RoleClient>,
     ) {
         info!(
-            "MCP server cancelled request (request_id: {}, reason: {:?})",
+            "MCP server cancelled request (request_id: {:?}, reason: {:?})",
             params.request_id, params.reason
         );
     }
@@ -92,7 +94,7 @@ impl ClientHandler for LoggingClientHandler {
         info!("MCP server prompt list changed");
     }
 
-    fn get_info(&self) -> ClientInfo {
+    fn get_info(&self) -> ClientConfig {
         self.client_info.clone()
     }
 
@@ -105,6 +107,7 @@ impl ClientHandler for LoggingClientHandler {
             level,
             logger,
             data,
+            ..
         } = params;
         let logger = logger.as_deref();
         match level {
@@ -129,7 +132,7 @@ impl ClientHandler for LoggingClientHandler {
                     level, logger, data
                 );
             }
-            LoggingLevel::Debug => {
+            _ => {
                 debug!(
                     "MCP server log message (level: {:?}, logger: {:?}, data: {})",
                     level, logger, data

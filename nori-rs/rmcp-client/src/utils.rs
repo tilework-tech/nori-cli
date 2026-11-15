@@ -46,9 +46,8 @@ pub(crate) fn convert_call_tool_result(result: RmcpCallToolResult) -> Result<Cal
 
 /// Convert from mcp-types to Rust SDK types.
 ///
-/// The Rust SDK types are the same as our mcp-types crate because they are both
-/// derived from the same MCP specification.
-/// As a result, it should be safe to convert directly from one to the other.
+/// The SDK and local schema can target different protocol revisions. JSON bridges
+/// their wire-compatible subset; deserialization rejects incompatible shapes.
 pub(crate) fn convert_to_rmcp<T, U>(value: T) -> Result<U>
 where
     T: serde::Serialize,
@@ -60,9 +59,8 @@ where
 
 /// Convert from Rust SDK types to mcp-types.
 ///
-/// The Rust SDK types are the same as our mcp-types crate because they are both
-/// derived from the same MCP specification.
-/// As a result, it should be safe to convert directly from one to the other.
+/// The SDK and local schema can target different protocol revisions. JSON bridges
+/// their wire-compatible subset; deserialization rejects incompatible shapes.
 pub(crate) fn convert_to_mcp<T, U>(value: T) -> Result<U>
 where
     T: serde::Serialize,
@@ -264,12 +262,8 @@ mod tests {
     #[test]
     fn convert_call_tool_result_defaults_missing_content() -> Result<()> {
         let structured_content = json!({ "key": "value" });
-        let rmcp_result = RmcpCallToolResult {
-            content: vec![],
-            structured_content: Some(structured_content.clone()),
-            is_error: Some(true),
-            meta: None,
-        };
+        let mut rmcp_result = RmcpCallToolResult::error(vec![]);
+        rmcp_result.structured_content = Some(structured_content.clone());
 
         let result = convert_call_tool_result(rmcp_result)?;
 
@@ -282,7 +276,8 @@ mod tests {
 
     #[test]
     fn convert_call_tool_result_preserves_existing_content() -> Result<()> {
-        let rmcp_result = RmcpCallToolResult::success(vec![rmcp::model::Content::text("hello")]);
+        let rmcp_result =
+            RmcpCallToolResult::success(vec![rmcp::model::ContentBlock::text("hello")]);
 
         let result = convert_call_tool_result(rmcp_result)?;
 
