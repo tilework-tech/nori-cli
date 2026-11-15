@@ -639,6 +639,30 @@ fn child_view_shows_breadcrumb_and_alt_up_returns_to_parent() {
 }
 
 #[test]
+fn long_names_leave_room_for_the_parent_key_in_the_breadcrumb() {
+    let state = {
+        let mut state = AttachState {
+            connected: true,
+            selected: Some("child-session".into()),
+            list_open: false,
+            ..Default::default()
+        };
+        state.replace_sessions(json!({"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"working","title":"Coordinate the quarterly release notes for every product"},
+            {"session_id":"child-session","agent":"mock-model-alt","status":"waiting_on_you","title":"Verify every link in the generated changelog","parent":"parent-session","source":"session"}
+        ]})).unwrap();
+        state.list_open = false;
+        state
+    };
+    let rendered = screen(&state);
+    let breadcrumb = rendered
+        .lines()
+        .find(|line| line.contains("›"))
+        .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
+    assert!(breadcrumb.ends_with("alt+up parent"), "{rendered}");
+}
+
+#[test]
 fn alt_up_in_a_top_level_session_stays_put() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;

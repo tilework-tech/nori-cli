@@ -9,6 +9,7 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
+use unicode_width::UnicodeWidthStr;
 
 use super::state::AttachState;
 use super::state::Part;
@@ -57,7 +58,7 @@ pub(super) fn render(
         header.push("RECONNECTING · sessions continue on the host".cyan());
     }
     Line::from(header).render(Rect::new(area.x, area.y, area.width, 1), buf);
-    identity_line(state).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
+    identity_line(state, area.width).render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
     let input = composer_area(state, composer, area);
     let notice_lines = notice_lines(state, area.width);
     let notice_height = u16::try_from(notice_lines.len())
@@ -113,38 +114,63 @@ pub(super) fn render(
 
 /// The selected session's agent, name, and status. Inside a delegated child
 /// it is a breadcrumb from the parent with the key that returns there.
-fn identity_line(state: &AttachState) -> Line<'static> {
+fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
     let Some(id) = state.selected.as_ref() else {
         return Line::from(" Sessions · /new starts a session · ctrl+d detaches".dim());
     };
     let row = |id: &str| state.sessions.iter().find(|row| row.session_id == id);
+    let Some(current) = row(id) else {
+        return Line::from(format!(" session · {id}").dim());
+    };
     let name = |row: &super::state::SessionRow| {
         row.title
             .as_deref()
             .and_then(nori_protocol::session_display_name)
             .unwrap_or_else(|| row.session_id.chars().take(8).collect())
     };
-    let Some(current) = row(id) else {
-        return Line::from(format!(" session · {id}").dim());
-    };
-    let mut spans = vec![" ".into()];
-    let parent = current.delegating_parent().and_then(row);
-    if let Some(parent) = parent {
-        spans.extend([
-            format!("{} · ", parent.agent).dim(),
-            name(parent).into(),
-            " › ".dim(),
+    let status = format!(" · {}", crate::session_status::status_label(current.status));
+    let Some(parent) = current.delegating_parent().and_then(row) else {
+        return Line::from(vec![
+            " ".into(),
+            format!("{} · ", current.agent).dim(),
+            name(current).bold(),
+            status.dim(),
         ]);
-    }
-    spans.extend([
-        format!("{} · ", current.agent).dim(),
-        name(current).bold(),
-        format!(" · {}", crate::session_status::status_label(current.status)).dim(),
-    ]);
-    if parent.is_some() && !state.parent_binding.is_none() {
-        spans.push(format!(" · {} parent", state.parent_binding.as_str()).dim());
-    }
-    Line::from(spans)
+    };
+    let key = (!state.parent_binding.is_none())
+        .then(|| format!(" · {} parent", state.parent_binding.as_str()))
+        .unwrap_or_default();
+    let parent_agent = format!("{} · ", parent.agent);
+    let child_agent = format!("{} · ", current.agent);
+    // The two names share whatever the agents, status, and parent key leave.
+    let fixed = [" ", &parent_agent, " › ", &child_agent, &status, &key]
+        .iter()
+        .map(|part| part.width())
+        .sum::<usize>();
+    let room = usize::from(width).saturating_sub(fixed) / 2;
+    let fit = |name: String| {
+        if name.width() <= room {
+            return name;
+        }
+        let mut kept = String::new();
+        for ch in name.chars() {
+            if kept.width() + ch.to_string().width() + 1 > room {
+                break;
+            }
+            kept.push(ch);
+        }
+        format!("{}…", kept.trim_end())
+    };
+    Line::from(vec![
+        " ".into(),
+        parent_agent.dim(),
+        fit(name(parent)).into(),
+        " › ".dim(),
+        child_agent.dim(),
+        fit(name(current)).bold(),
+        status.dim(),
+        key.dim(),
+    ])
 }
 
 fn notice_lines(state: &AttachState, width: u16) -> Vec<Line<'static>> {
