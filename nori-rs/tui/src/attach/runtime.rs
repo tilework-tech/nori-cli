@@ -28,8 +28,9 @@ pub(super) struct Runtime {
     pub session_list_binding: nori_config::HotkeyBinding,
     pub next_waiting_binding: nori_config::HotkeyBinding,
     pub(super) next_waiting_after_refresh: bool,
-    /// Unsent text of each session not on screen, restored when it returns.
-    drafts: HashMap<String, String>,
+    /// The unsent edit of each session not on screen, restored when it
+    /// returns.
+    drafts: HashMap<String, crate::bottom_pane::ComposerDraft>,
 }
 
 impl Runtime {
@@ -81,18 +82,16 @@ impl Runtime {
         }
     }
 
-    /// Put `id` on screen. The draft in the composer stays with the session
-    /// it was typed in, and `id`'s own draft comes back.
+    /// Put `id` on screen. The edit in the composer stays with the session
+    /// it was typed in, and `id`'s own edit comes back. Text typed while no
+    /// session was open goes with the session opened next.
     pub(super) fn open_session(&mut self, id: String) {
-        if self.state.selected.as_ref() != Some(&id) {
-            if let Some(previous) = self.state.selected.take()
-                && !self.composer.is_empty()
-            {
-                self.drafts.insert(previous, self.composer.text());
-            }
-            self.composer.clear();
+        if let Some(previous) = self.state.selected.take()
+            && previous != id
+        {
+            self.drafts.insert(previous, self.composer.take_draft());
             if let Some(draft) = self.drafts.remove(&id) {
-                self.composer.handle_paste(draft);
+                self.composer.restore_draft(draft);
             }
         }
         self.state.selected = Some(id);

@@ -19,7 +19,7 @@ use crate::session_status::status_word;
 /// Longest title shown for a session that has no summary yet.
 const TITLE_CHARS: i32 = 60;
 /// For lines that fit names to the terminal width themselves.
-const WHOLE_NAME: i32 = i32::MAX;
+pub(super) const WHOLE_NAME: i32 = i32::MAX;
 
 fn cut(text: &str, limit: i32) -> String {
     nori_protocol::shorten_name(text, limit)
@@ -125,7 +125,11 @@ impl App {
 
     /// The title a session is listed under: the agent's summary, else the
     /// first prompt, cut to `limit` characters.
-    fn session_title(&self, generation: SessionGeneration, limit: i32) -> Option<String> {
+    pub(super) fn session_title(
+        &self,
+        generation: SessionGeneration,
+        limit: i32,
+    ) -> Option<String> {
         let widget = self.widget_for(generation);
         self.session_previews
             .title(generation)

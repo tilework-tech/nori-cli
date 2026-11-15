@@ -109,9 +109,11 @@ Path: @/nori-rs/tui/src/attach
   still empty, including after paste.
 - Unsent drafts are kept per session. Every switch (next waiting, parent,
   picker Enter, and the session `/new` creates) goes through
-  `Runtime::open_session`, which parks the composer text with the session it
-  was typed in and restores the target's own draft, so text never follows the
-  user into another session. Drafts live only in this terminal's memory.
+  `Runtime::open_session`, which parks the whole composer edit (text, large
+  pastes, images, cursor; the composer's own draft hand-off) with the session
+  it was typed in and restores the target's own draft, so text never follows
+  the user into another session. Text typed while no session is open goes
+  with the session opened next. Drafts live only in this terminal's memory.
   Parent notices name the child and parent readably (see the
   [harness](../../../harness/docs.md#delegation-between-managed-sessions)).
   The `parent_session` binding moves the selection from a delegated child

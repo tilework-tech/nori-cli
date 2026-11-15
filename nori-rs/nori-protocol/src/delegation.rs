@@ -34,6 +34,9 @@ pub fn shorten_name(name: &str, limit: i32) -> String {
     if count <= limit {
         return name.to_owned();
     }
+    if limit == 0 {
+        return String::new();
+    }
     let room = limit.saturating_sub(1);
     let head: String = name.chars().take(room.div_ceil(2)).collect();
     let tail: String = name.chars().skip(count - room / 2).collect();

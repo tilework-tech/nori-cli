@@ -432,8 +432,7 @@ fn the_child_breadcrumb_fits_one_row_of_an_80_column_terminal() {
     assert!(
         breadcrumb
             .trim_end()
-            .ends_with("› mock:request-permission:write-child-file")
-            || breadcrumb.contains("write-child-file · alt + up to parent"),
+            .ends_with("› mock:request-permission:write-child-file"),
         "the current name stays whole; the key gives way first:\n{screen}"
     );
 }

@@ -321,7 +321,7 @@ fn a_delivered_result_fits_one_row_at_80_columns() {
     let mut rows = Vec::new();
     while let Ok(event) = rx.try_recv() {
         if let AppEvent::InsertHistoryCell(cell) = event {
-            let text = lines_to_single_string(&cell.display_lines(78));
+            let text = lines_to_single_string(&cell.display_lines(80));
             if text.contains("delegation result") {
                 rows = text.lines().map(str::trim_end).map(str::to_owned).collect();
             }

@@ -669,10 +669,12 @@ fn long_names_keep_the_current_name_whole_before_the_parent_key() {
         .find(|line| line.contains("›"))
         .unwrap_or_else(|| panic!("breadcrumb missing:\n{rendered}"));
     assert!(
-        breadcrumb.contains("› Verify every link in the generated changelog · waiting on you")
-            || breadcrumb
-                .contains("› mock-model-alt · Verify every link in the generated changelog"),
+        breadcrumb.contains("Verify every link in the generated changelog · waiting on you"),
         "{rendered}"
+    );
+    assert!(
+        !breadcrumb.contains("alt+up"),
+        "the key gave way: {rendered}"
     );
 }
 
@@ -1062,6 +1064,7 @@ fn alt_down_with_a_draft_jumps_and_the_draft_waits_in_the_parent() {
         runtime.composer.is_empty(),
         "the draft stays with the parent"
     );
+    runtime.composer.handle_paste("child draft".into());
     key(&mut runtime, KeyCode::Up, KeyModifiers::ALT);
     key(&mut runtime, KeyCode::Up, KeyModifiers::ALT);
     assert_eq!(runtime.state.selected.as_deref(), Some("root-session"));
@@ -1071,6 +1074,59 @@ fn alt_down_with_a_draft_jumps_and_the_draft_waits_in_the_parent() {
     assert_eq!(prompt["method"], "_nori/session/prompt");
     assert_eq!(prompt["params"]["session_id"], "root-session");
     assert_eq!(prompt["params"]["prompt"][0]["text"], "my draft");
+    key(&mut runtime, KeyCode::Down, KeyModifiers::ALT);
+    assert_eq!(
+        runtime.state.selected.as_deref(),
+        Some("grandchild-session")
+    );
+    while rx.try_recv().is_ok() {}
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let prompt = rx.try_recv().unwrap();
+    assert_eq!(prompt["params"]["session_id"], "grandchild-session");
+    assert_eq!(prompt["params"]["prompt"][0]["text"], "child draft");
+}
+
+#[test]
+fn a_large_pasted_draft_survives_a_jump_and_back_whole() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("root-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.role_changed("controller");
+    runtime.state.replace_sessions(family()).unwrap();
+    runtime.state.list_open = false;
+    let pasted = "x".repeat(1500);
+    runtime.composer.handle_paste(pasted.clone());
+    key(&mut runtime, KeyCode::Down, KeyModifiers::ALT);
+    key(&mut runtime, KeyCode::Up, KeyModifiers::ALT);
+    key(&mut runtime, KeyCode::Up, KeyModifiers::ALT);
+    assert_eq!(runtime.state.selected.as_deref(), Some("root-session"));
+    while rx.try_recv().is_ok() {}
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let prompt = rx.try_recv().unwrap();
+    assert_eq!(prompt["params"]["prompt"][0]["text"], pasted.as_str());
+}
+
+#[test]
+fn text_typed_before_choosing_a_session_goes_with_the_chosen_session() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(None, tx);
+    runtime.state.connected = true;
+    runtime.state.role_changed("controller");
+    runtime.state.replace_sessions(family()).unwrap();
+    runtime.composer.handle_paste("first words".into());
+    runtime.state.list_open = true;
+    runtime.composer.clear();
+    runtime.composer.handle_paste("first words".into());
+    runtime.open_session("other-session".into());
+    while rx.try_recv().is_ok() {}
+    key(&mut runtime, KeyCode::Enter, KeyModifiers::NONE);
+    let prompt = rx.try_recv().unwrap();
+    assert_eq!(prompt["params"]["session_id"], "other-session");
+    assert_eq!(prompt["params"]["prompt"][0]["text"], "first words");
 }
 
 #[test]
@@ -1148,47 +1204,22 @@ fn a_finished_child_ends_by_pointing_back_to_its_parent() {
         })
         .unwrap();
     let rendered = screen(&state);
-    let end = rendered
-        .lines()
-        .find(|line| line.contains("finished"))
-        .unwrap_or_else(|| panic!("end line missing:\n{rendered}"));
-    assert!(end.contains("alt+up"), "{rendered}");
+    assert!(
+        rendered.contains("This child finished its task · alt+up to its parent"),
+        "{rendered}"
+    );
     assert!(!rendered.contains("/new to start"), "{rendered}");
     let mut sessions = family();
     sessions["sessions"][1]["status"] = json!("closed");
     state.replace_sessions(sessions).unwrap();
     state.list_open = false;
     let closed = screen(&state);
+    assert!(
+        closed.contains("This child session ended · alt+up to its parent"),
+        "{closed}"
+    );
     assert!(!closed.contains("finished"), "{closed}");
     assert!(!closed.contains("/new to start"), "{closed}");
-}
-
-#[test]
-fn the_grandchild_name_stays_whole_at_80_columns() {
-    let mut state = AttachState {
-        connected: true,
-        selected: Some("grandchild-session".into()),
-        ..Default::default()
-    };
-    state
-        .replace_sessions(json!({"sessions":[
-            {"session_id":"root-session","agent":"mock-model","status":"ready","title":"mock:delegate mock-model mock:delegate mock-model mock:request-permission:x"},
-            {"session_id":"child-session","agent":"mock-model","status":"working","title":"mock:delegate mock-model mock:request-permission:x","parent":"root-session","source":"session"},
-            {"session_id":"grandchild-session","agent":"mock-model","status":"waiting_on_you","title":"mock:request-permission:x","parent":"child-session","source":"session"}
-        ]}))
-        .unwrap();
-    state.list_open = false;
-    let rendered = screen_at(&state, 80);
-    assert!(
-        rendered.contains("mock:request-permission:x · waiting on you"),
-        "{rendered}"
-    );
-    assert!(!rendered.contains("alt+up"), "{rendered}");
-    let wide = screen_at(&state, 120);
-    assert!(
-        wide.contains("mock:request-permission:x · waiting on you · alt+up parent"),
-        "{wide}"
-    );
 }
 
 #[test]
@@ -1232,9 +1263,8 @@ fn a_delivered_result_fits_one_row_at_80_columns() {
         .unwrap_or_else(|| panic!("{rendered}"));
     assert!(lines[at].contains("mock:request"), "{rendered}");
     assert!(lines[at].contains("lexer-tokens · done"), "{rendered}");
-    let next = lines.get(at + 1).copied().unwrap_or_default();
     assert!(
-        !next.starts_with("  ") || next.trim().is_empty(),
-        "the line wraps onto a second row: {rendered}"
+        lines[at].trim_end().ends_with("lexer-tokens · done"),
+        "the whole line sits on one row: {rendered}"
     );
 }

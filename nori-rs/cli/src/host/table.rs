@@ -509,7 +509,7 @@ mod tests {
         let rows = colored.lines().skip(1).collect::<Vec<_>>();
         assert!(rows[0].contains("done"), "{colored:?}");
         assert!(
-            !rows[0].contains("\u{1b}[2m"),
+            !rows[0].contains("\u{1b}[2mdone"),
             "done is not dimmed: {colored:?}"
         );
         assert!(

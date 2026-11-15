@@ -5,6 +5,7 @@
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 /// One session on the way from a top-level session to the one on screen.
@@ -45,23 +46,25 @@ pub(crate) fn fit_name(text: &str, cells: usize) -> String {
         return String::new();
     }
     let room = cells - 1;
+    let graphemes: Vec<&str> = text.graphemes(true).collect();
     let mut head = String::new();
-    for ch in text.chars() {
-        if head.width() + ch.to_string().width() > room.div_ceil(2) {
+    for grapheme in &graphemes {
+        if head.width() + grapheme.width() > room.div_ceil(2) {
             break;
         }
-        head.push(ch);
+        head.push_str(grapheme);
     }
-    let mut tail: Vec<char> = Vec::new();
-    for ch in text.chars().rev() {
-        let cells = ch.to_string().width();
-        if head.width() + tail.iter().collect::<String>().width() + cells > room {
+    let mut tail_width = 0;
+    let mut tail: Vec<&str> = Vec::new();
+    for grapheme in graphemes.iter().rev() {
+        if head.width() + tail_width + grapheme.width() > room {
             break;
         }
-        tail.push(ch);
+        tail_width += grapheme.width();
+        tail.push(grapheme);
     }
-    let tail: String = tail.into_iter().rev().collect();
-    format!("{}…{}", head.trim_end(), tail.trim_start())
+    tail.reverse();
+    format!("{}…{}", head.trim_end(), tail.concat().trim_start())
 }
 
 /// Share `room` cells between names, so a short name leaves its unused cells
@@ -140,10 +143,16 @@ pub(crate) fn breadcrumb_line(
             .map(|step| step.name.as_str())
             .collect();
         let room = width.saturating_sub(fixed);
-        let floor = if index == last {
-            MIN_NAME_CELLS
-        } else {
+        // The last layout keeps other names readable too, unless the terminal
+        // is too narrow to give the current name a fair share.
+        let readable = names[..names.len().saturating_sub(1)]
+            .iter()
+            .map(|name| name.width().min(MIN_OTHER))
+            .sum::<usize>();
+        let floor = if index != last || room >= readable + MIN_OTHER * 2 {
             MIN_OTHER
+        } else {
+            MIN_NAME_CELLS
         };
         let budgets = share_current_last(&names, room, floor);
         let fits = names
@@ -436,6 +445,41 @@ mod tests {
         assert!(cut.starts_with("shared"), "{cut}");
         assert!(cut.ends_with("side"), "{cut}");
         assert!(cut.contains('…'), "{cut}");
+        for (wide, cells) in [("界界界界界界界界", 7), ("👩‍💻👩‍💻👩‍💻👩‍💻", 5), ("abcdef", 1)]
+        {
+            let cut = fit_name(wide, cells);
+            assert!(cut.width() <= cells, "{wide} @{cells}: {cut}");
+            assert!(cut.contains('…'), "{wide} @{cells}: {cut}");
+        }
+        let joined = fit_name("👩‍💻👩‍💻👩‍💻👩‍💻", 5);
+        assert_eq!(
+            joined.replace("👩‍💻", "").replace('…', ""),
+            "",
+            "graphemes stay whole: {joined:?}"
+        );
+    }
+
+    #[test]
+    fn a_long_current_name_still_leaves_the_root_readable() {
+        let path = [
+            step("mock-model", "Ship tree-row picker"),
+            step(
+                "mock-model-alt",
+                "mock:request-permission:a delegated task line that runs on for well over eighty cells in total",
+            ),
+        ];
+        let line = text(&breadcrumb_line(
+            &path,
+            " · waiting on you",
+            " · alt+up parent",
+            119,
+        ));
+        let root = line.split(" › ").next().unwrap_or_default();
+        assert!(root.width() >= 8 && root.contains("Ship"), "{line}");
+        assert!(
+            line.contains("eighty cells in total · waiting on you"),
+            "{line}"
+        );
     }
 
     #[test]
@@ -480,7 +524,7 @@ mod tests {
             let line = text(&breadcrumb_line(&long, "", KEY, width));
             assert!(line.contains("A parent"), "@{width}: {line}");
             assert!(
-                line.contains("› A gran") || line.contains("› mock-model · A gran"),
+                line.contains("A grandchild whose title is also very long here"),
                 "@{width}: {line}"
             );
         }
