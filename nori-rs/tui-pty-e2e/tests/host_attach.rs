@@ -792,3 +792,83 @@ fn host_list_truncates_tty_title_without_losing_piped_title() {
     assert!(row.trim_end().ends_with('…'), "{screen}");
     assert!(!screen.contains("continuation text"), "{screen}");
 }
+
+#[test]
+fn delegated_child_in_host_list_preserves_metadata_columns_and_can_be_opened() {
+    let host = Host::new();
+    host.start();
+    let mut client = host.create_session();
+    ask(&mut client, "parent host task");
+    client
+        .submit_input("/delegate mock-model mock:request-permission:child-column-check")
+        .unwrap();
+    let deadline = Instant::now() + TIMEOUT;
+    let listing = loop {
+        let listing = host.list();
+        if listing.lines().count() >= 3 && listing.contains("waiting on you") {
+            break listing;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "child must start: {listing}\n{}",
+            client.screen_contents()
+        );
+        client.settle(Duration::from_millis(100));
+    };
+    let rows: Vec<_> = listing.lines().skip(1).collect();
+    assert_eq!(rows.len(), 2, "{listing}");
+    for row in &rows {
+        let id = row.get(..36).unwrap();
+        assert_eq!(id.len(), 36, "{listing}");
+        assert!(
+            !id.starts_with(' '),
+            "child hierarchy must stay in TITLE: {listing}"
+        );
+        assert_eq!(row.get(38..54).unwrap().trim(), "mock-model", "{listing}");
+        assert!(
+            ["ready", "waiting on you", "working"].contains(&row.get(56..72).unwrap().trim()),
+            "STATUS must keep its column: {listing}"
+        );
+    }
+    assert!(
+        rows.iter()
+            .any(|row| row.get(82..).unwrap().contains("child-column-check")),
+        "{listing}"
+    );
+    client.wait_for_text("needs your answer", TIMEOUT).unwrap();
+    let parent_screen = client.screen_contents();
+    for row in &rows {
+        assert!(
+            parent_screen.contains(row.get(..36).unwrap()),
+            "notice names parent and child: {parent_screen}"
+        );
+    }
+    client.send_key(Key::AltDown).unwrap();
+    client.wait_for_text("child-column-check", TIMEOUT).unwrap();
+    client.wait_for_text("Allow", TIMEOUT).unwrap();
+    client.send_key(Key::Char('1')).unwrap();
+    client
+        .wait_for_text("Permission granted with option: allow", TIMEOUT)
+        .unwrap();
+}
+
+#[test]
+fn watcher_cannot_delegate_a_child() {
+    let host = Host::new();
+    host.start();
+    let mut controller = host.create_session();
+    ask(&mut controller, "delegation ownership");
+    let id = host.session_id();
+    let mut watcher = host.attach(Some(&id));
+    wait_watching(&mut watcher);
+    let before = refusal_count(&mut watcher);
+    watcher
+        .submit_input("/delegate mock-model watcher forbidden child")
+        .unwrap();
+    wait_refusal(&mut watcher, before);
+    assert_eq!(
+        host.list().lines().count(),
+        2,
+        "watcher cannot create a child"
+    );
+}

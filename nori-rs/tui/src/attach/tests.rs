@@ -429,3 +429,214 @@ fn stopped_explanation_remains_visible_above_a_tall_draft() {
     assert!(!composer.is_empty());
     insta::assert_snapshot!("attached_host_restarted_with_draft", rendered);
 }
+
+fn delegation_event(seq: i64, status: &str) -> SessionEnvelope {
+    serde_json::from_value(json!({
+        "conversation_id":"parent-session", "agent":"mock-model", "seq":seq,
+        "event":{"source":"nori", "event":{"event_type":"delegation_changed", "event":{
+            "request_id":"delegation-one", "parent_id":"parent-session", "child_id":"child-session",
+            "parent_agent":"mock-model", "agent":"mock-model-alt", "task":"Review the parser",
+            "status":status, "depth":1, "result":if status == "completed" { Some("Parser reviewed") } else { None }
+        }}}
+    })).unwrap()
+}
+
+#[test]
+fn delegation_command_targets_selected_parent_and_preserves_task() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.role_changed("controller");
+    runtime
+        .composer
+        .handle_paste("/delegate mock-model-alt Review the parser carefully".into());
+    runtime.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let request = rx.try_recv().unwrap();
+    assert_eq!(request["method"], "_nori/session/delegate");
+    assert_eq!(
+        request["params"],
+        json!({"session_id":"parent-session","agent":"mock-model-alt","task":"Review the parser carefully"})
+    );
+}
+
+#[test]
+fn delegation_approval_names_both_sessions_and_cannot_be_answered_by_watcher() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    for (key, approved) in [('1', true), ('2', false)] {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+        runtime.state.connected = true;
+        runtime
+            .state
+            .apply(delegation_event(1, "awaiting_approval"))
+            .unwrap();
+        let rendered = screen(&runtime.state);
+        assert!(
+            rendered.contains("child-session") && rendered.contains("parent-session"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("Start") && rendered.contains("Decline"),
+            "{rendered}"
+        );
+        if approved {
+            insta::assert_snapshot!("delegation_approval_watcher", rendered);
+        }
+        runtime.key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE));
+        assert!(
+            rx.try_recv().is_err(),
+            "watcher must not resolve delegation"
+        );
+        runtime.state.role_changed("controller");
+        runtime.key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE));
+        let request = rx.try_recv().unwrap();
+        assert_eq!(request["method"], "_nori/session/delegation/resolve");
+        assert_eq!(
+            request["params"],
+            json!({"session_id":"parent-session","request_id":"delegation-one","approved":approved})
+        );
+    }
+}
+
+#[test]
+fn delegation_result_replaces_approval_and_replay_is_not_duplicated() {
+    let mut state = AttachState {
+        connected: true,
+        selected: Some("parent-session".into()),
+        list_open: false,
+        ..Default::default()
+    };
+    state
+        .apply(delegation_event(1, "awaiting_approval"))
+        .unwrap();
+    state.apply(delegation_event(2, "completed")).unwrap();
+    state.apply(delegation_event(2, "completed")).unwrap();
+    let rendered = screen(&state);
+    assert!(rendered.contains("Parser reviewed"), "{rendered}");
+    assert!(
+        !rendered.contains("1 Start"),
+        "completed delegation must not retain approval"
+    );
+    assert_eq!(
+        state
+            .transcript_text("parent-session")
+            .matches("Parser reviewed")
+            .count(),
+        1
+    );
+    insta::assert_snapshot!("delegation_result", rendered);
+}
+
+#[test]
+fn next_waiting_opens_actual_child_and_keeps_parent_identity_in_list() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.replace_sessions(json!({"sessions":[
+        {"session_id":"parent-session","agent":"mock-model","status":"ready","title":"Parent task","parent":null,"depth":0},
+        {"session_id":"child-session","agent":"mock-model-alt","status":"waiting_on_you","title":"Child task","parent":"parent-session","depth":1}
+    ]})).unwrap();
+    runtime.state.list_open = true;
+    let rendered = screen(&runtime.state);
+    assert!(
+        rendered.contains("Parent task") && rendered.contains("Child task"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("(parent parent-s) Child task"),
+        "{rendered}"
+    );
+    insta::assert_snapshot!("delegation_child_list", rendered);
+    runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+    assert_eq!(runtime.state.selected.as_deref(), Some("child-session"));
+    assert!(!runtime.state.list_open);
+    let request = rx.try_recv().unwrap();
+    assert_eq!(request["method"], "_nori/session/subscribe");
+    assert_eq!(request["params"]["session_id"], "child-session");
+}
+
+#[test]
+fn next_waiting_uses_the_configured_binding() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.set_next_waiting_binding(nori_config::HotkeyBinding::from_str("alt+w"));
+    runtime.state.connected = true;
+    runtime.state.replace_sessions(json!({"sessions":[
+        {"session_id":"parent-session","agent":"mock-model","status":"ready","title":"Parent task"},
+        {"session_id":"child-session","agent":"mock-model-alt","status":"waiting_on_you","title":"Child task","parent":"parent-session"}
+    ]})).unwrap();
+    runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+    assert_eq!(runtime.state.selected.as_deref(), Some("parent-session"));
+    runtime.key(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::ALT));
+    assert_eq!(runtime.state.selected.as_deref(), Some("child-session"));
+}
+
+#[test]
+fn refreshed_delegation_completion_removes_an_unseen_approval() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.role_changed("controller");
+    runtime
+        .state
+        .apply(delegation_event(1, "awaiting_approval"))
+        .unwrap();
+    let nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::DelegationChanged(completed)) =
+        delegation_event(2, "completed").event
+    else {
+        panic!("delegation fixture");
+    };
+    runtime.state.replace_sessions(json!({"sessions":[{"session_id":"parent-session","agent":"mock-model","status":"ready","title":"Parent task","delegations":[completed]}]})).unwrap();
+    runtime.key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+    assert!(
+        rx.try_recv().is_err(),
+        "list refresh must remove stale approval actions before parent replay arrives"
+    );
+    assert!(!screen(&runtime.state).contains("1 Start"));
+}
+
+#[test]
+fn next_waiting_refreshes_stale_rows_and_opens_new_child_without_second_key() {
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = super::runtime::Runtime::new(Some("parent-session".into()), tx);
+    runtime.state.connected = true;
+    runtime.state.replace_sessions(json!({"sessions":[
+        {"session_id":"parent-session","agent":"mock-model","status":"ready","title":"Parent task"}
+    ]})).unwrap();
+    runtime.key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+    let refresh = rx
+        .try_recv()
+        .expect("navigation refreshes stale session rows");
+    assert_eq!(refresh["method"], "_nori/session/list");
+    runtime.connection_event(super::connection::ConnectionEvent::Message(json!({
+        "id":refresh["id"],"result":{"sessions":[
+            {"session_id":"parent-session","agent":"mock-model","status":"ready"},
+            {"session_id":"child-session","agent":"mock-model","status":"waiting_on_you","parent":"parent-session","depth":1}
+        ]}
+    }))).unwrap();
+    assert_eq!(runtime.state.selected.as_deref(), Some("child-session"));
+    let subscribe = rx.try_recv().unwrap();
+    assert_eq!(subscribe["method"], "_nori/session/subscribe");
+    assert_eq!(subscribe["params"]["session_id"], "child-session");
+    assert!(
+        rx.try_recv().is_err(),
+        "one navigation sends one subscription"
+    );
+}

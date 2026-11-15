@@ -952,7 +952,14 @@ in the prompt still moves the cursor.
   tone, and its glyph, follow its **session family** status, so a parent reads
   "waiting on you" when a child does. Manager sessions that descend from a listed session
   but have no TUI view are listed under their parent with negative keys that
-  cannot collide with a generation; they are not navigation targets.
+  cannot collide with a generation; they are not navigation targets. Delegated
+  children are adopted as real parked widgets by
+  [`app/delegation.rs`](src/app/delegation.rs), using atomic replay/live
+  subscription to populate their history; those children are navigation
+  targets, including when their task completed before the first draw. The
+  view follows the child process across branch-at-head conversation changes
+  while filtering unrelated conversations, so a fork does not strand its
+  permission UI or recreate an already-adopted child.
 - `App::refresh_session_overview` runs before every draw. While the list is
   open it replaces the rows in place, keeping the selection on the same
   session. In cloud mode every session's agent reads "Nori Cloud".
@@ -967,9 +974,9 @@ while a view is open:
 
 - a background-request line, naming the first off-screen session waiting on
   you by title (`<title> is waiting on you`), its request, `+N more` when
-  others wait, and the `next_waiting_session` key. The title and request text
-  are cut to short fixed lengths so the line fits one row of a 100-column
-  terminal;
+  others wait, and the `next_waiting_session` key. The title, including any
+  parent attribution prefix, shares one bounded label budget; the request text
+  is separately shortened so the line fits one row of a 100-column terminal;
 - a status line counting sessions by their own status, most urgent first
   (waiting on you, failed, working, starting, ready; closed is omitted), shown
   only with two or more sessions.
@@ -1038,6 +1045,38 @@ cloud /close ──> session/close ──> SessionEnded(Closed)
 The ignored `jump_timing_on_a_long_history` PTY test measures a jump to a
 long history; the reprint is bounded by the same cell and row caps as resize
 reflow.
+
+#### Delegation
+
+`/delegate <agent> <task>` is the user entry point in the local and attached
+frontends. It is enabled only with `multi_session`; the session list does not
+start delegations. The shared [parser and labels](src/delegation.rs) keep
+syntax and parent/child attribution consistent. The
+[chat-widget adapter](src/chatwidget/delegation.rs) calls the harness manager
+and renders its `DelegationChanged` events. Different-kind requests expose
+Start and Decline; same-kind requests start immediately. These approval choices
+control child creation, separately from a child's later ACP permission request.
+
+Children receive navigable parked widgets without replacing the parent on
+screen. Their stream, history, pending permissions, and session-scoped events
+follow the normal session-deck path. Alt+Down (`next_waiting_session`) opens the
+next session needing the user, where the ordinary permission UI answers the
+child. Parent notices identify both child and parent and do not open the
+child's permission popup in the parent. Child list labels put the parent
+identity before the task title so title truncation preserves attribution. Closed completed children keep
+inspectable history; ending their process must not be interpreted as exiting
+Nori.
+
+Result delivery is manager-owned and automatically prompts the parent. The
+terminal renders attributed status/result text; it neither approves the result
+nor drives completion. Explicit parent close cancels descendants; a crashed
+parent can be resumed with Ctrl+R under the same conversation ID to receive
+held results, including redelivery when the previous parent process admitted
+but never acknowledged a result turn. See the [manager lifecycle](../harness/docs.md#delegation-between-managed-sessions).
+
+The initial rendering is intentionally text and existing selection components.
+Dedicated delegation/result cards and further hierarchy styling belong to the
+later presentation workstream.
 
 #### Host attachment
 

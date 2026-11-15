@@ -36,6 +36,7 @@ pub enum SlashCommand {
     Goal,
     New,
     Sessions,
+    Delegate,
     Resume,
     ResumeViewonly,
     Close,
@@ -67,6 +68,7 @@ impl SlashCommand {
             SlashCommand::Agent => "switch between available ACP agents",
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::Sessions => "list sessions and move between them",
+            SlashCommand::Delegate => "delegate a task: /delegate <agent> <task>",
             SlashCommand::Resume => "resume a previous session",
             SlashCommand::ResumeViewonly => "view a previous session transcript (read-only)",
             SlashCommand::Close => "close (release) the current session and start a fresh chat",
@@ -127,6 +129,7 @@ impl SlashCommand {
             | SlashCommand::Browser => false,
             SlashCommand::Browse
             | SlashCommand::Sessions
+            | SlashCommand::Delegate
             | SlashCommand::Diff
             | SlashCommand::Mention
             | SlashCommand::Status
@@ -159,6 +162,7 @@ impl SlashCommand {
             | SlashCommand::Goal
             | SlashCommand::New
             | SlashCommand::Sessions
+            | SlashCommand::Delegate
             | SlashCommand::Resume
             | SlashCommand::ResumeViewonly
             | SlashCommand::Init
@@ -183,7 +187,9 @@ impl SlashCommand {
         match self {
             #[cfg(not(feature = "login"))]
             SlashCommand::Logout => false,
-            SlashCommand::Sessions => MULTI_SESSION_COMMANDS.load(Ordering::Relaxed),
+            SlashCommand::Sessions | SlashCommand::Delegate => {
+                MULTI_SESSION_COMMANDS.load(Ordering::Relaxed)
+            }
             _ => true,
         }
     }

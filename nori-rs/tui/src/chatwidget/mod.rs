@@ -62,6 +62,7 @@ use self::agent::spawn_agent;
 mod approvals;
 mod constructors;
 mod context;
+mod delegation;
 pub(crate) use context::ContextSnapshot;
 mod event_handlers;
 mod goal;
@@ -240,6 +241,9 @@ pub(crate) struct ChatWidget {
     /// True once the user closed this session beside others, so its agent
     /// shutting down ends only this session, not Nori.
     closed_by_user: bool,
+    delegated_child: bool,
+    delegations: HashMap<String, nori_protocol::Delegation>,
+    delegation_approval: Option<String>,
     /// True once the user asked to quit: input is refused, and a hard-exit
     /// watchdog guarantees the process leaves within ~a second even if the
     /// backend teardown stalls. On cloud agents this exit is a detach — the

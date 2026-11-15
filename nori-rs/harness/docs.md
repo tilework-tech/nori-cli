@@ -664,7 +664,7 @@ processes.
   | --- | --- |
   | `Starting` | Before `SessionStarted` |
   | `Working` | Phase is `Prompting`, `Loading`, or `Cancelling` |
-  | `WaitingOnYou` | An ACP permission request is pending |
+  | `WaitingOnYou` | An ACP permission request or child-start approval is pending |
   | `Ready` | Idle |
   | `Failed` | `SessionEnded` with `ConnectionLost`, `SpawnFailed`, or `TimedOut`, or the stream closed with no end event |
   | `Closed` | `SessionEnded` with `Shutdown` or `Closed`, or superseded by a fork |
@@ -712,8 +712,10 @@ processes.
   nor managed remote list responses expose it.
   Resume validates failed status, agent identity, and a readable transcript,
   then reserves capacity before launching the replacement.
-- **Close and shutdown.** `close(id, child_grace)` shuts one session down,
-  bounded by `shutdown_timeout`; closing an ended session does nothing.
+- **Close and shutdown.** `close(id, child_grace)` cancels delegated descendants and shuts the
+  target session down, bounded by `shutdown_timeout`. An ended target has no
+  process to stop, but its running descendants and pending approvals still
+  require cancellation.
   Successful close waits for the manager's event pump to observe process end
   and release the capacity slot, so a caller can immediately start a
   replacement. Backend shutdown and that observation share one timeout. The
@@ -741,6 +743,80 @@ processes.
 
 `SessionManagerConfig` defaults to eight sessions and a five-second shutdown
 timeout.
+
+#### Delegation between managed sessions
+
+The [session manager](src/session_manager/mod.rs) owns delegation admission,
+approval, parent/child links, result delivery, and descendant lifetime. Both terminal `/delegate` commands and the session-bound `delegate`
+tool on the existing authenticated
+[`nori-client` HTTP MCP server](src/backend/nori_client_mcp.rs) enter this same
+manager path. The tool takes an agent and task; its authority comes from the
+calling session, not a caller-supplied parent ID. Delegation requires the
+parent's resolved `multi_session` flag. Direct single-session launch behavior
+is unchanged.
+
+```text
+parent agent -- HTTP MCP delegate --+
+local /delegate -------------------+--> SessionManager
+remote /session/delegate ----------+         |
+                                   different agent? -> Start / Decline
+                                             |
+                                      child ACP process
+                                             |
+                                  correlated prompt outcome
+                                             |
+                                 attributed parent prompt queue
+```
+
+- Delegation records reserve a child conversation identity before approval.
+  Same-kind children start immediately; different-kind children stay
+  `awaiting_approval` until Start or Decline. Approval is scoped to the
+  requesting parent and request ID. Spawn admission uses the manager's shared
+  session cap, including children, and is checked when a child actually starts.
+- Depth counts delegation edges, separately from fork ancestry. A top-level
+  session may delegate to a child, which may delegate to a grandchild;
+  deeper requests fail with an error returned to the requester. Branch-at-head
+  transfers delegation ownership to the conversation now carried by that
+  process without adding depth. Parent links, pending start approvals, and
+  result correlation follow the fork; the delegation request identity remains
+  stable. [State reduction](src/session_manager/delegation_state.rs) republishes
+  the changed attribution for observers.
+- `DelegationChanged` carries request, parent, and child identities, agent
+  names, task, depth, status, and optional result. Manager envelopes make those
+  changes observable through ordinary subscriptions and reconnect replay,
+  including events published while a failed parent has no process. Child-start
+  approval contributes to the parent's `WaitingOnYou` status separately from
+  its ACP permission request IDs.
+  ACP permission requests remain owned by the child conversation; permission
+  responses must target that child, not its parent.
+- A child's final output or failure becomes an attributed prompt queued into
+  its parent automatically, without a review step. A busy parent consumes it
+  through its normal prompt queue. The [result driver](src/session_manager/delegation_driver.rs)
+  retains that delivery until the parent's correlated ACP `PromptResponse`,
+  not merely queue admission. If the process crashes first, stable-ID resume
+  resubmits the unacknowledged result; the parent may therefore see it again.
+  A child that delegates waits for its descendants and resulting continuation
+  turns before returning its own final result. Terminal completion stops the
+  child process and releases its capacity slot while retaining the registry
+  record and transcript.
+- Explicit parent close cancels descendants and invalidates pending delegation
+  approvals, including when the parent has already failed. A parent process
+  crash leaves children running; results wait for the parent's stable-ID
+  resume. These held results and delegation state belong to the live manager,
+  not a persistent host restart snapshot. A child crash produces a failure
+  result without failing its parent.
+- Admission and explicit close share a mutex so a start cannot escape a parent
+  close. Result work is claimed under manager state, then prompts and process
+  shutdown run outside that lock. Prompt request IDs, outstanding descendants,
+  and in-flight result submissions determine completion; an idle phase alone
+  does not prove that a delegated task has finished. The MCP authority follows
+  its registered process through a weak manager reference, avoiding an
+  ownership cycle and rejecting calls from an ended process.
+
+Agents without HTTP MCP support can still receive children started by the
+user's `/delegate`; an agent-side stdio delegation tool is not provided.
+The [managed remote contract](../../docs/remote-control.md#delegation) defines
+controller authorization and request payloads.
 
 #### Browser sessions and profile tiers
 

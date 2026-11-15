@@ -251,7 +251,10 @@ impl App {
     /// With `[features] multi_session` a live session keeps running and is
     /// parked when the next widget is installed; otherwise it shuts down.
     pub(crate) fn shutdown_current_conversation(&mut self) {
-        if self.config.multi_session && self.chat_widget.has_harness_session() {
+        if self.config.multi_session
+            && (self.chat_widget.has_harness_session()
+                || self.chat_widget.managed_conversation_id().is_some())
+        {
             self.retiring_transcript = Some(std::mem::take(&mut self.transcript_cells));
         } else {
             self.chat_widget.shutdown_harness_session();

@@ -629,6 +629,12 @@ impl BottomPaneView for ListSelectionView {
         self.update_item(stable_id, name, description, search_value)
     }
 
+    fn has_selection_item(&self, stable_id: &str) -> bool {
+        self.items
+            .iter()
+            .any(|item| item.search_value.as_deref().map(search_value_id) == Some(stable_id))
+    }
+
     fn remove_selection_item(&mut self, stable_id: &str) -> bool {
         self.remove_item(stable_id)
     }

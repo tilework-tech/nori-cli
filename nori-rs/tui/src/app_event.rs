@@ -163,6 +163,12 @@ pub(crate) enum AppEvent {
     /// Open the list of sessions (`[features] multi_session`).
     OpenSessionList,
 
+    ResolveDelegation {
+        parent: nori_harness::ConversationId,
+        request_id: String,
+        approved: bool,
+    },
+
     /// Start a failed session again from its transcript, in its place in the
     /// session list, and bring it on screen.
     ResumeFailedSession {

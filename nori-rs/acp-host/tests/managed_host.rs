@@ -130,6 +130,8 @@ async fn watcher_cannot_mutate_and_takeover_notifies_both_without_disconnecting(
         "_nori/session/close",
         "_nori/session/cancel",
         "_nori/session/resume",
+        "_nori/session/delegate",
+        "_nori/session/delegation/resolve",
     ] {
         send(&mut second, 2, method, json!({})).await;
         let response = receive(&mut second).await;

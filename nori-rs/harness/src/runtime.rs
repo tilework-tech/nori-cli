@@ -701,6 +701,8 @@ pub(crate) fn build_backend_config(spec: AgentPrepareSpec) -> AcpBackendConfig {
 
     AcpBackendConfig {
         agent: agent.clone(),
+        multi_session: config.multi_session,
+        delegation_context: None,
         cwd: config.cwd.clone(),
         approval_policy: config.approval_policy,
         sandbox_policy: config.sandbox_policy.clone(),

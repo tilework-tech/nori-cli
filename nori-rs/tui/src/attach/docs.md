@@ -54,6 +54,23 @@ Path: @/nori-rs/tui/src/attach
   permissions but must take control before sending mutations. The current
   session marker appears in TITLE, preserving the short ID in its own column.
 
+- Delegation uses the shared [command parser](../delegation.rs):
+  `/delegate <agent> <task>` sends the selected parent to the manager's remote
+  delegate method. Different-kind Start/Decline decisions resolve the manager
+  request; watchers must take control before either operation. Session lists
+  carry pending delegation state so reconnecting terminals can recover the
+  approval view without resending a mutation.
+- Child permissions stay in the child's conversation. The configured
+  `next_waiting_session` binding (Alt+Down by default) navigates there. If the
+  cached list has no waiting target, a connected terminal retains the navigation
+  action while refreshing the list, then selects a newly discovered waiting
+  session from the response. List errors or disconnection clear that pending
+  action. Parent notices and child list rows identify the child and its parent.
+  Hierarchy labels prefix TITLE so parent attribution survives long task titles while
+  metadata columns keep their positions.
+  Results return through the parent's ordinary event stream without a terminal
+  review step.
+
 ### Things to Know
 
 - [Input routing](input.rs) honors `hotkeys.open_session_list`, also opens the

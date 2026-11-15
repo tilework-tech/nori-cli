@@ -57,6 +57,7 @@ pub enum NoriEvent {
     Notice(Notice),
     RequestFailed(RequestFailure),
     RequestResolved(RequestResolved),
+    DelegationChanged(Delegation),
 }
 
 /// Persistent and agent-side identities established for a harness session.
@@ -259,4 +260,29 @@ pub struct RequestFailure {
 pub enum RequestFailureKind {
     Retryable,
     Fatal,
+}
+
+/// Manager-owned delegation state, attributed to both participating sessions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delegation {
+    pub request_id: String,
+    pub parent_id: String,
+    pub child_id: String,
+    pub parent_agent: String,
+    pub agent: String,
+    pub task: String,
+    pub status: DelegationStatus,
+    pub depth: i32,
+    pub result: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DelegationStatus {
+    AwaitingApproval,
+    Running,
+    Declined,
+    Completed,
+    Failed,
+    Cancelled,
 }

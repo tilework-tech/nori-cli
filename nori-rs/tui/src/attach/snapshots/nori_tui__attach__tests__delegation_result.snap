@@ -1,0 +1,21 @@
+---
+source: tui/src/attach/tests.rs
+expression: rendered
+---
+ Nori host  WATCHING · read-only · alt+t take control
+ session · parent-session ·
+
+ Child child-session (mock-model-alt) · parent parent-session (mock-model) · awaiting
+ approval
+
+ Child child-session (mock-model-alt) · parent parent-session (mock-model) · completed
+ Parser reviewed
+
+
+
+
+
+
+
+
+› Send a prompt

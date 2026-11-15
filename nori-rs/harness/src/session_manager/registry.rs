@@ -65,6 +65,7 @@ struct Entry {
     busy: bool,
     /// Agent requests waiting on a client, in arrival order.
     pending_requests: Vec<acp::v1::RequestId>,
+    delegation_approvals: std::collections::HashSet<String>,
     /// Answers that arrived before the request they answer. A client can
     /// read a request from the harness directly, ahead of this registry.
     early_answers: Vec<RequestResolved>,
@@ -86,6 +87,7 @@ impl Entry {
             started: false,
             busy: false,
             pending_requests: Vec::new(),
+            delegation_approvals: std::collections::HashSet::new(),
             early_answers: Vec::new(),
             ended: None,
             forked_into: None,
@@ -99,7 +101,7 @@ impl Entry {
             ended
         } else if !self.started {
             SessionStatus::Starting
-        } else if !self.pending_requests.is_empty() {
+        } else if !self.pending_requests.is_empty() || !self.delegation_approvals.is_empty() {
             SessionStatus::WaitingOnYou
         } else if self.busy {
             SessionStatus::Working
@@ -240,6 +242,34 @@ impl Registry {
         }
         self.processes.insert(process, conversation_id);
         Ok(process)
+    }
+
+    /// Number manager-owned events even when the session has no live process.
+    pub(crate) fn emit(
+        &mut self,
+        conversation: &ConversationId,
+        event: SessionEvent,
+    ) -> Option<SessionEnvelope> {
+        let entry = self.sessions.get_mut(conversation)?;
+        if let SessionEvent::Nori(NoriEvent::DelegationChanged(delegation)) = &event
+            && delegation.parent_id == conversation.to_string()
+        {
+            if delegation.status == nori_protocol::DelegationStatus::AwaitingApproval {
+                entry
+                    .delegation_approvals
+                    .insert(delegation.request_id.clone());
+            } else {
+                entry.delegation_approvals.remove(&delegation.request_id);
+            }
+        }
+        let seq = entry.next_seq;
+        entry.next_seq += 1;
+        Some(SessionEnvelope {
+            conversation_id: conversation.to_string(),
+            agent: entry.settings.agent.clone(),
+            seq,
+            event,
+        })
     }
 
     /// Apply one event from `process` and return it wrapped in its envelope.
@@ -412,6 +442,13 @@ impl Registry {
         entry.acp_session_id = Some(acp_session_id);
         entry.transcript_path = transcript_dir.map(|dir| dir.join(format!("{child}.jsonl")));
         self.sessions.insert(child, entry);
+        for entry in self.sessions.values_mut() {
+            if entry.settings.parent == Some(parent)
+                && entry.settings.source == SessionSource::Session
+            {
+                entry.settings.parent = Some(child);
+            }
+        }
         self.processes.insert(process, child);
     }
 

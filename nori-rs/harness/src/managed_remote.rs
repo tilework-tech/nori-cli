@@ -46,6 +46,22 @@ struct RespondParams {
     response: acp::RequestPermissionResponse,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DelegateParams {
+    session_id: Option<String>,
+    agent: String,
+    task: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResolveDelegationParams {
+    session_id: Option<String>,
+    request_id: String,
+    approved: bool,
+}
+
 struct RemoteError {
     code: i32,
     message: String,
@@ -110,6 +126,14 @@ impl ManagedRemoteHost {
                 let selected = *self.selected.lock().unwrap_or_else(PoisonError::into_inner);
                 let sessions = self.manager.list().into_iter().map(|record| {
                     let replay = self.manager.replay_info(&record.conversation_id);
+                    let mut depth = 0;
+                    let mut ancestor = Some(record.clone());
+                    while let Some(current) = ancestor {
+                        if current.source == crate::session_manager::SessionSource::Session {
+                            depth += 1;
+                        }
+                        ancestor = current.parent.and_then(|parent| self.manager.get(&parent));
+                    }
                     json!({
                         "session_id":record.conversation_id.to_string(),
                         "agent":record.agent,
@@ -117,6 +141,13 @@ impl ManagedRemoteHost {
                         "cwd":record.cwd,
                         "parent":record.parent.map(|id| id.to_string()),
                         "pending_requests":record.pending_requests,
+                        "source": match record.source {
+                            crate::session_manager::SessionSource::User => "user",
+                            crate::session_manager::SessionSource::Fork => "fork",
+                            crate::session_manager::SessionSource::Session => "session",
+                        },
+                        "depth": depth,
+                        "delegations": self.manager.delegations(&record.conversation_id),
                         "latest_seq":replay.as_ref().map_or(0, |info| info.latest_seq),
                         "first_available_seq":replay.as_ref().map_or(1, |info| info.first_available_seq),
                         "age_seconds":replay.as_ref().map_or(0, |info| info.age_seconds),
@@ -165,6 +196,28 @@ impl ManagedRemoteHost {
                     json!({"session_id":id.to_string(),"request_id":request_id}),
                     None,
                 ))
+            }
+            "_nori/session/delegate" => {
+                let params: DelegateParams = serde_json::from_value(params)
+                    .map_err(|error| RemoteError::new(-32602, error))?;
+                let parent = self.target(params.session_id.as_deref())?;
+                let delegation = self
+                    .manager
+                    .delegate(&parent, params.agent, params.task)
+                    .await
+                    .map_err(|error| RemoteError::new(-32000, error))?;
+                Ok((json!(delegation), None))
+            }
+            "_nori/session/delegation/resolve" => {
+                let params: ResolveDelegationParams = serde_json::from_value(params)
+                    .map_err(|error| RemoteError::new(-32602, error))?;
+                let parent = self.target(params.session_id.as_deref())?;
+                let delegation = self
+                    .manager
+                    .resolve_delegation(&parent, &params.request_id, params.approved)
+                    .await
+                    .map_err(|error| RemoteError::new(-32000, error))?;
+                Ok((json!(delegation), None))
             }
             "_nori/session/respond" => {
                 let params: RespondParams = serde_json::from_value(params)

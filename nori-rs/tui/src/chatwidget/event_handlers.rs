@@ -235,13 +235,16 @@ impl ChatWidget {
                 };
                 self.handle_client_phase_changed(phase);
             }
+            nori_protocol::NoriEvent::DelegationChanged(delegation) => {
+                self.handle_delegation_changed(delegation);
+            }
             nori_protocol::NoriEvent::SessionEnded(ended) => {
                 if !self.session_configured_received {
                     self.bottom_pane.hide_status_indicator();
                 }
                 match ended.reason {
                     nori_protocol::SessionEndReason::Shutdown => {
-                        if !self.closed_by_user {
+                        if !self.closed_by_user && !self.delegated_child {
                             self.app_event_tx.send(AppEvent::ExitRequest);
                         }
                     }
@@ -348,6 +351,11 @@ impl ChatWidget {
             nori_harness::ConversationId::from_string(&forked.new_conversation_id).ok();
         if self.conversation_id.is_some() {
             self.managed_conversation_id = self.conversation_id;
+            if self.delegated_child {
+                self.harness_handle = self
+                    .conversation_id
+                    .and_then(|id| self.session_manager.handle(&id));
+            }
         }
         self.forked_from =
             nori_harness::ConversationId::from_string(&forked.previous_conversation_id).ok();
