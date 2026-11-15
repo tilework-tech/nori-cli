@@ -100,7 +100,7 @@ impl Entry {
         } else if !self.started {
             SessionStatus::Starting
         } else if !self.pending_requests.is_empty() {
-            SessionStatus::NeedsYou
+            SessionStatus::WaitingOnYou
         } else if self.busy {
             SessionStatus::Working
         } else {
@@ -468,7 +468,7 @@ impl Registry {
             .map(Entry::status)
             // The member that most needs the user decides the family status.
             .min_by_key(|status| match status {
-                SessionStatus::NeedsYou => 0,
+                SessionStatus::WaitingOnYou => 0,
                 SessionStatus::Failed => 1,
                 SessionStatus::Working => 2,
                 SessionStatus::Starting => 3,

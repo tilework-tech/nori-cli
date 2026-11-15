@@ -186,7 +186,7 @@ fn status_follows_start_turns_and_permission_requests() {
             SessionStatus::Starting,
             SessionStatus::Ready,
             SessionStatus::Working,
-            SessionStatus::NeedsYou,
+            SessionStatus::WaitingOnYou,
             SessionStatus::Working,
             SessionStatus::Ready,
         ]
@@ -338,7 +338,7 @@ fn a_child_needs_a_parent_that_is_registered() {
 }
 
 #[test]
-fn a_family_needs_you_when_any_member_does() {
+fn a_family_is_waiting_on_you_when_any_member_does() {
     let mut registry = Registry::new(4);
     let (parent, parent_process) = start(&mut registry, "codex", None);
     let (child, child_process) = start(&mut registry, "pi", Some(parent));
@@ -358,9 +358,9 @@ fn a_family_needs_you_when_any_member_does() {
             status(&registry, &parent),
         ),
         (
-            Some(SessionStatus::NeedsYou),
-            Some(SessionStatus::NeedsYou),
-            Some(SessionStatus::NeedsYou),
+            Some(SessionStatus::WaitingOnYou),
+            Some(SessionStatus::WaitingOnYou),
+            Some(SessionStatus::WaitingOnYou),
             SessionStatus::Ready,
         )
     );
@@ -401,7 +401,7 @@ fn a_waiting_request_outranks_a_failed_member() {
 
     assert_eq!(
         registry.family_status(&parent),
-        Some(SessionStatus::NeedsYou)
+        Some(SessionStatus::WaitingOnYou)
     );
 }
 
@@ -436,7 +436,7 @@ fn requests_are_answered_per_session() {
 
     assert_eq!(
         (status(&registry, &a), status(&registry, &b)),
-        (SessionStatus::Working, SessionStatus::NeedsYou)
+        (SessionStatus::Working, SessionStatus::WaitingOnYou)
     );
 }
 

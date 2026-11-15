@@ -602,7 +602,7 @@ processes.
   | --- | --- |
   | `Starting` | Before `SessionStarted` |
   | `Working` | Phase is `Prompting`, `Loading`, or `Cancelling` |
-  | `NeedsYou` | An ACP permission request is pending |
+  | `WaitingOnYou` | An ACP permission request is pending |
   | `Ready` | Idle |
   | `Failed` | `SessionEnded` with `ConnectionLost`, `SpawnFailed`, or `TimedOut`, or the stream closed with no end event |
   | `Closed` | `SessionEnded` with `Shutdown` or `Closed`, or superseded by a fork |
@@ -629,7 +629,7 @@ processes.
   client following a session learns the request no longer waits on the user.
 - **Families.** A session family is a top-level session plus all of its
   descendants. `family_status` rolls member statuses up with priority
-  `NeedsYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed`.
+  `WaitingOnYou` > `Failed` > `Working` > `Starting` > `Ready` > `Closed`.
 - **Fork.** On `NoriEvent::SessionForked` (branch at head) the parent becomes
   `Closed` and a child record (source `Fork`, parent = previous conversation)
   takes over the same agent process and capacity slot. `SessionForked` is

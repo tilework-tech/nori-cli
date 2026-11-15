@@ -103,7 +103,7 @@ fork starts a new conversation and therefore a new sequence. The envelope adds
 routing only; the wrapped event is unchanged.
 
 `SessionStatus` is the coarse per-session status shown in a session list:
-`Starting`, `Working`, `NeedsYou`, `Ready`, `Failed`, or `Closed` (serialized
+`Starting`, `Working`, `WaitingOnYou`, `Ready`, `Failed`, or `Closed` (serialized
 in snake case). The rules that derive it from the event stream live in the
 harness session manager (see [`nori-harness`](../harness/docs.md)); this crate
 defines only the values.

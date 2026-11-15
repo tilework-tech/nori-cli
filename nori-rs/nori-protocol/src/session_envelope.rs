@@ -30,7 +30,7 @@ pub enum SessionStatus {
     /// A turn, load, or cancellation is in progress.
     Working,
     /// The agent is waiting on the user, for example for a permission choice.
-    NeedsYou,
+    WaitingOnYou,
     /// The session is idle and accepts a prompt.
     Ready,
     /// The session ended without being asked to, for example because its

@@ -602,7 +602,12 @@ async fn an_answer_from_another_client_is_announced_to_every_follower() {
     })
     .await
     .expect("the agent asks for permission");
-    wait_for_status(&manager, &session.conversation_id, SessionStatus::NeedsYou).await;
+    wait_for_status(
+        &manager,
+        &session.conversation_id,
+        SessionStatus::WaitingOnYou,
+    )
+    .await;
     let waiting = manager
         .get(&session.conversation_id)
         .map(|record| record.pending_requests);
