@@ -1,0 +1,40 @@
+  Child session: 82794949-00a7-47fd-92a1-641daf7c352c
+  The user declined this delegation.
+
+↳ you delegated to mock-model-alt · mock:request-permission:write-report · working
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · mock:request-permission:write-report is waiting on you (delegated by mock-model · parent task
+  identity). Press Alt+Down to answer it.
+
+○ result from mock-model-alt · mock:request-permission:write-report · ready
+  ▏ child final answer
+  ▏
+  ▏ Permission granted with option: allow
+  returns to mock-model on its own · its history: alt + s
+
+
+› delegation result from mock-model-alt · mock:request-permission:write-report · completed · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model-alt · mock:request-permission:write-report
+  · completed
+  Child session: df8fc674-0eed-4493-a2f7-a8cc337e4fcd
+  child final answer
+
+  Permission granted with option: allow
+
+  1 ready
+
+  Sessions 2 · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ○ parent task identity (current)                                          Mock ACP        ready
+    Permission granted with option: allow
+    └─ · mock:request-permission:write-report                                 Mock ACP Alt    closed
+       closed
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

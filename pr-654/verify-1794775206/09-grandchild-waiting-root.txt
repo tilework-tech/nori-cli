@@ -1,0 +1,40 @@
+• {"delegation":{"request_id":"0af457c3-817c-453c-b60d-17220edb7668","parent_id":"b6964886-9ceb-4cd1-8d12-
+  ce0d4760a8ea","child_id":"f3a5e8e0-4fb8-4afe-b532-e633cd41d1d5","parent_agent":"mock-model","agent":"mock-model-
+  alt","task":"summarize the parser module","status":"awaiting_approval","depth":1,"result":null,"origin":"agent"}}
+
+↳ mock-model delegated to mock-model-alt · summarize the parser module · working
+  ctrl + t shows the brief
+
+○ result from mock-model-alt · summarize the parser module · ready
+  ▏ child final answer
+  returns to mock-model on its own · its history: alt + s
+
+
+› delegation result from mock-model-alt · summarize the parser module · completed · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model-alt · summarize the parser module ·
+  completed
+  Child session: f3a5e8e0-4fb8-4afe-b532-e633cd41d1d5
+  child final answer
+
+
+› mock:delegate mock-model mock:delegate mock-model mock:request-permission:leaf-step
+
+
+↳ mock-model delegated to mock-model · mock:delegate mock-model mock:request-p… · working
+  ctrl + t shows the brief
+
+─ Worked for 0s ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• {"delegation":{"request_id":"6995bfa2-a708-4c46-99a9-316c2140cf2c","parent_id":"b6964886-9ceb-
+  4cd1-8d12-ce0d4760a8ea","child_id":"188a00bf-f730-42e4-88d7-1f56ae7a78c5","parent_agent":"mock-
+  model","agent":"mock-model","task":"mock:delegate mock-model mock:request-permission:leaf-
+  step","status":"running","depth":1,"result":null,"origin":"agent"}}
+
+  ● mock:delega… › mock:request-pe… is waiting on you · approve: leaf-step · alt + j to jump
+  1 waiting on you · 2 ready
+
+
+› $ for skill listing
+

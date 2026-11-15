@@ -1,0 +1,40 @@
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/cli-e2-verify/.verify/run/loc1/work · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› parent task identity
+
+
+• parent final answer
+
+✕ delegation to mock-model-alt · mock:request-permission:write-report · declined by you
+
+
+› delegation result from mock-model-alt · mock:request-permission:write-report · declined · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model-alt · mock:request-permission:write-report
+  · declined
+  Child session: 82794949-00a7-47fd-92a1-641daf7c352c
+  The user declined this delegation.
+
+↳ you delegated to mock-model-alt · mock:request-permission:write-report · working
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · mock:request-permission:write-report is waiting on you (delegated by mock-model · parent task
+  identity). Press Alt+Down to answer it.
+
+  ● parent task… › mock:request-pe… is waiting on you · approve: write-report · alt + down to jump
+  1 waiting on you · 1 ready
+
+
+› / for slash command menu
+
+

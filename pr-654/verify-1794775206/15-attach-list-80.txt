@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ mock-model · mock:de… › mock-model · mock:re… · waiting on you · alt+up parent
+
+
+  Sessions 3
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  24444c0e  mock-model      ready             1m     mock:delegate mock-m…▕
+     1ff7c93d  mock-model      ready             1m     └─ mock:delegate moc…
+     b747f659  mock-model      waiting on you    1m        └─ mock… (current)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detac

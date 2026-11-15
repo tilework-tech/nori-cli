@@ -1,0 +1,40 @@
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/cli-e2-verify/.verify/run/off1/work · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› hello flag off
+
+
+• parent final answer
+
+• Unrecognized command '/delegate'. Type "/" for a list of supported commands.
+
+
+› /agent/delegate mock-model x
+
+
+• parent final answer
+
+
+  Resume previous session
+  Search by first message or session id
+                                                                                  Details
+     Session                  First message        Turns    Updated
+  ▏  just now · 2 turns       "hello flag off"     Not re…  just now        ▕     Session        bf5c4335-6929-470…
+
+  ↑↓/j/k move  / search  enter select  esc close
+
+
+
+
+
+
+
+

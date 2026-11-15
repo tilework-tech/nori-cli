@@ -1,0 +1,40 @@
+  ▏ Delegation continuation received: [Nori delegation result] from mock-model · mock:request-permission:leaf-step
+  ▏ · completed
+  ▏ Child session: cf53515e-2fb0-4c22-bd55-0fbe759ca9bb
+  ▏ parent final answer
+  ▏
+  ▏ Permission granted with option: allow
+  returns to mock-model on its own · its history: alt + s
+
+
+› delegation result from mock-model · mock:delegate mock-model mock:request-p… · completed · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model · mock:delegate mock-model mock:request-p…
+  · completed
+  Child session: 188a00bf-f730-42e4-88d7-1f56ae7a78c5
+  Delegation continuation received: [Nori delegation result] from mock-model · mock:request-permission:leaf-step ·
+  completed
+  Child session: cf53515e-2fb0-4c22-bd55-0fbe759ca9bb
+  parent final answer
+
+  Permission granted with option: allow
+
+  1 ready
+
+  Sessions 4 · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ○ mock:delegate mock-model-alt summarize the parser module (current)      Mock ACP        ready
+    Permission granted with option: allow
+    ├─ · summarize the parser module                                          Mock ACP Alt    closed
+    │  closed
+    └─ · mock:delegate mock-model mock:request-permission:leaf-step           Mock ACP        closed
+       closed
+       └─ · mock:request-permission:leaf-step                                 Mock ACP        closed
+          closed
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

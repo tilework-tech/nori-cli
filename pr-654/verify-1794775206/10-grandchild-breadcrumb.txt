@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:request-permission:leaf-step
+
+
+• parent final answer
+
+  mock-model · mock:delegate mock-mode… › mock-model · mock:request-permission… · alt + k to parent
+  1 waiting on you · 2 ready
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: leaf-step
+  leaf-step
+
+› 1. Allow (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to cancel

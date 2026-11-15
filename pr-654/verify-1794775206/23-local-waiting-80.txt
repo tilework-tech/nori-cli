@@ -1,0 +1,30 @@
+
+
+• parent final answer
+
+
+› mock:delegate mock-model-alt mock:request-permission:write-snapshot-tests
+
+
+• {"delegation":{"request_id":"6aedc0c8-9d85-451d-b13d-
+  39db9ebb50d9","parent_id":"6b2bc03b-a874-4d31-b8d1-
+  012483d8c0fe","child_id":"f26680d8-6d80-4091-bf17-
+  224734c69795","parent_agent":"mock-model","agent":"mock-
+  model-alt","task":"mock:request-permission:write-snapshot-
+  tests","status":"awaiting_approval","depth":1,"result":null,"origin":"agent"}}
+
+↳ mock-model delegated to mock-model-alt · mock:request-permission:write-
+    snapshot-… · working
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · mock:request-permission:write-snapshot-… is waiting on you
+  (delegated by mock-model · Review the tree picker). Press Alt+Down to answer
+  it.
+
+  ● Review the … › mock:request-pe… is waiting on you · approve: write-snapshot…
+  · alt + down to jump
+  1 waiting on you · 1 ready
+
+
+› ! for shell commands
+

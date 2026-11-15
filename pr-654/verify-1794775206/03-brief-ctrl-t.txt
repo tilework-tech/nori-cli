@@ -1,0 +1,40 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/cli-e2-verify/.verify/run/loc1/work · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+
+› parent task identity
+
+
+• parent final answer
+
+✕ delegation to mock-model-alt · mock:request-permission:write-report · declined by you
+  brief mock:request-permission:write-report
+  child session 82794949-00a7-47fd-92a1-641daf7c352c
+
+
+› [Nori delegation result] from mock-model-alt · mock:request-permission:write-report · declined
+  Child session: 82794949-00a7-47fd-92a1-641daf7c352c
+  The user declined this delegation.
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model-alt · mock:request-permission:write-report
+  · declined
+  Child session: 82794949-00a7-47fd-92a1-641daf7c352c
+  The user declined this delegation.
+
+↳ you delegated to mock-model-alt · mock:request-permission:write-report · working
+  brief mock:request-permission:write-report
+  child session df8fc674-0eed-4493-a2f7-a8cc337e4fcd
+
+⚠ mock-model-alt · mock:request-permission:write-report is waiting on you (delegated by mock-model · parent task
+  identity). Press Alt+Down to answer it.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit   esc to edit prev
+

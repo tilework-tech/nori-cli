@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/.worktrees/cli-e2-verify/.verify/run/loc2/work · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› mock:delegate mock-model-alt summarize the parser module
+
+
+• {"delegation":{"request_id":"0af457c3-817c-453c-b60d-17220edb7668","parent_id":"b6964886-9ceb-4cd1-8d12-
+  ce0d4760a8ea","child_id":"f3a5e8e0-4fb8-4afe-b532-e633cd41d1d5","parent_agent":"mock-model","agent":"mock-model-
+  alt","task":"summarize the parser module","status":"awaiting_approval","depth":1,"result":null,"origin":"agent"}}
+
+
+  Would you like mock-model to start a mock-model-alt session?
+
+  asked by  mock-model (this session)
+  runs on   mock-model-alt · a different agent from this session
+  task      summarize the parser module
+
+› 1. Yes, start it
+  2. No, decline
+
+  Press enter to confirm or esc to decline

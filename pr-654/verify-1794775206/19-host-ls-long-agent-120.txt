@@ -1,0 +1,10 @@
+ID                                    AGENT             STATUS               AGE  TITLE
+d3683c70-f98a-43c4-a791-b3478aee2c2b  mock-model        ready                29s  [Nori delegation result] from reviewe…
+87dc6adf-5ad7-4ad5-a96a-17a7001b9ab8  reviewer-long-agent-name-x  closed               20s  └─ Review the parser change…
+$
+
+
+
+
+
+
