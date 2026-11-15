@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/v/off-main/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› hello there
+
+
+• Test message 1Test message 2
+
+
+  Select agent
+  Creates new conversation with selected agent (history not preserved)
+
+  ▏1. Mock ACP (current)                                                                                             ▕
+  ▏   Mock agent for testing                                                                                         ▕
+   2. Mock ACP Alt
+      Alternate mock agent for testing
+   3. Claude Code
+      Anthropic
+   4. Codex
+      OpenAI
+   5. Gemini
+      Google
+  ↑↓/j/k move  enter select  shift-tab rec on  esc close
+

@@ -1,0 +1,40 @@
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/v/home/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+↳ you delegated to mock-model · inspect the parser · working
+  ctrl + t shows the brief
+
+○ result from mock-model · inspect the parser · done
+  ▏ Test message 1Test message 2
+  returns to mock-model on its own · its history: alt + s
+
+
+› delegation result from mock-model · inspect the parser · done · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model · inspect the parser · done
+  Child session: 7e556244-8d80-4dbe-bb7a-b0d853bb524d
+  Test message 1Test message 2
+
+✕ delegation to mock-model-alt · review the lexer · declined by you
+
+
+› delegation result from mock-model-alt · review the lexer · declined · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model-alt · review the lexer · declined
+  The user declined this delegation.
+
+  1 ready
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ verify/pr-654-review-fixes

@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/v/home/project · Agent approvals
+  Agent        Mock ACP · Mock Default Model · Medium
+
+
+› shared prefix for the parser review: parent side
+
+
+• Test message 1Test message 2
+
+↳ you delegated to mock-model-alt · shared prefix for the parser review: ch… · working
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · shared prefix for the parser review: ch… is waiting on you (delegated by mock-model · shared prefix
+  for the parser review: pa…). Press Alt+Down to answer it.
+
+  ● shared prefix for the parser r… › shared prefix for the parser… is waiting on you · approve: z · alt + down to jump
+  1 waiting on you · 1 failed · 2 ready
+
+
+› ? for shortcuts
+
+                                                                                            ⎇ verify/pr-654-review-fixes

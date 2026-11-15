@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · mock:delegate mock-model mock:delegate… · ready
+ ● mock:delegate mock-model mock:request-p… › mock:request-permission:x is waiting on you · alt+down to jump
+ › You
+ mock:delegate mock-model mock:delegate mock-model mock:request-permission:x
+
+ ↳ mock-model delegated to mock-model · mock:delegate mock-model mock:request-p… · working
+
+ {"delegation":{"request_id":"57495a04-6701-4b9b-8c94-0ccb38b80f79","parent_id":"3e0f0557-a689-
+ 4408-84af-7fdff6bc0245","child_id":"4b446002-3928-4d0c-9455-87600db987a4","parent_agent":"mock-
+ model","agent":"mock-model","task":"mock:delegate mock-model mock:request-
+ permission:x","status":"running","depth":1,"result":null,"origin":"agent"}}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› my draft
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

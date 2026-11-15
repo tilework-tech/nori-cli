@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       ~/org/workspace/cli/.local/v/off-pr/project · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› hello there
+
+
+• Test message 1Test message 2
+
+• Unrecognized command '/delegate'. Type "/" for a list of supported commands.
+
+
+/ delegate mock-model x
+
+  no matches
+
+
+
+
+
+
+
+
+
+
