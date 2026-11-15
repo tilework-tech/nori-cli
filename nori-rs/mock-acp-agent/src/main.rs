@@ -463,13 +463,13 @@ impl MockAgent {
         // requests from different sessions can be told apart.
         let permission_command = arguments.prompt.iter().find_map(|block| match block {
             acp::ContentBlock::Text(text) => {
-                let text = text.text.trim();
-                if text == "mock:request-permission" {
-                    Some(None)
-                } else {
-                    text.strip_prefix("mock:request-permission:")
-                        .map(|command| Some(command.to_string()))
-                }
+                let (_, marked) = text.text.split_once("mock:request-permission")?;
+                Some(
+                    marked
+                        .strip_prefix(':')
+                        .map(|command| command.trim().to_string())
+                        .filter(|command| !command.is_empty()),
+                )
             }
             _ => None,
         });
@@ -479,7 +479,7 @@ impl MockAgent {
             .or_else(|| std::env::var("MOCK_AGENT_PERMISSION_COMMAND").ok())
             .unwrap_or_else(|| DEFAULT_PERMISSION_COMMAND.to_string());
         let stream_until_cancel = arguments.prompt.iter().any(|block| {
-            matches!(block, acp::ContentBlock::Text(text) if text.text.trim() == "mock:stream-until-cancel")
+            matches!(block, acp::ContentBlock::Text(text) if text.text.contains("mock:stream-until-cancel"))
         });
         // Support configurable stderr output for testing stderr capture
         if let Ok(count_str) = std::env::var("MOCK_AGENT_STDERR_COUNT")

@@ -55,8 +55,10 @@ and then release or cancel it without a timing guess. The same fixtures drive
 
 Some scenarios can also be chosen per prompt, so several sessions on one mock
 binary can behave differently without sharing an environment. A prompt whose
-text block is exactly one of these markers (surrounding whitespace ignored)
-selects the scenario for that turn:
+text block is exactly `mock:exit-during-prompt`, or that contains
+`mock:stream-until-cancel` or `mock:request-permission` anywhere, selects the
+scenario for that turn. A named permission command runs from the colon to the
+end of the text block:
 
 | Prompt marker | Behavior | Environment equivalent |
 | --- | --- | --- |

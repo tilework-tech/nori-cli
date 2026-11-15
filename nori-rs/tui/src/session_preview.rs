@@ -42,7 +42,7 @@ impl Preview {
             .rev()
             .map(str::trim)
             .find(|line| !line.is_empty())
-            .map(str::to_string)
+            .map(newest_part)
     }
 }
 
@@ -165,6 +165,20 @@ fn observe_update(preview: &mut Preview, update: &acp::SessionUpdate) {
     }
 }
 
+/// Characters of a long streamed line kept for the preview, from its end,
+/// so a streaming session shows what it is writing now.
+const PREVIEW_TAIL_CHARS: i32 = 100;
+
+fn newest_part(line: &str) -> String {
+    let limit = usize::try_from(PREVIEW_TAIL_CHARS).unwrap_or(0);
+    let count = line.chars().count();
+    if count <= limit {
+        return line.to_string();
+    }
+    let tail: String = line.chars().skip(count - limit + 1).collect();
+    format!("…{tail}")
+}
+
 fn first_text(content: Option<&[acp::ToolCallContent]>) -> Option<String> {
     content?.iter().find_map(|item| match item {
         acp::ToolCallContent::Content(content) => match &content.content {
@@ -285,6 +299,17 @@ mod tests {
             ]),
             Some("Updated the docs".to_string())
         );
+    }
+
+    #[test]
+    fn a_long_streamed_line_shows_its_newest_text() {
+        let long = format!("{}the newest words", "older text ".repeat(20));
+        let preview = feed(&[text(&long)]).unwrap_or_default();
+        assert!(
+            preview.starts_with('…') && preview.ends_with("the newest words"),
+            "{preview}"
+        );
+        assert_eq!(preview.chars().count(), 100);
     }
 
     #[test]
