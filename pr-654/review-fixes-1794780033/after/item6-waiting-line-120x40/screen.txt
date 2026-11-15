@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/e2cap/after-i6after120/proj · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› parent task identity for the parser review
+
+
+• parent final answer
+
+↳ you delegated to mock-model-alt · mock:request-permission:write-child-file · working
+  ctrl + t shows the brief
+
+⚠ mock-model-alt · mock:request-permission:write-child-file is waiting on you (delegated by mock-model · parent task
+  identity for the parser rev…). Press Alt+Down to answer it.
+
+  ● parent task identity for t… › mock:request-permission:wr… is waiting on you · approve: write-c… · alt + down to jump
+  1 waiting on you · 1 ready
+
+
+› ! for shell commands
+
+

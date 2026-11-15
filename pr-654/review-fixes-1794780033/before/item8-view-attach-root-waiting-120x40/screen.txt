@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · mock:delegate mock-model mock:delegate… · ready
+
+ › You
+ mock:delegate mock-model mock:delegate mock-model mock:request-permission:x
+
+ ↳ mock-model delegated to mock-model · mock:delegate mock-model mock:request-p… · working
+
+ {"delegation":{"request_id":"be382e64-7a83-4a42-8f43-d1de0683641b","parent_id":"f6019c59-4411-
+ 4189-8741-06b2aa2985d6","child_id":"77e10d9a-d39d-4036-9ecc-67f452b7cc29","parent_agent":"mock-
+ model","agent":"mock-model","task":"mock:delegate mock-model mock:request-
+ permission:x","status":"running","depth":1,"result":null,"origin":"agent"}}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

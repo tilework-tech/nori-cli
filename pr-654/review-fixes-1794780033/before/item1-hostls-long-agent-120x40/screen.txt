@@ -1,0 +1,40 @@
+ID                                    AGENT             STATUS               AGE  TITLE
+37a2596f-5e92-49df-9554-3903c33a1b46  mock-model        ready                 3s  parent task identity
+8a6ab8e3-ffc5-4706-829a-69c5d278b4ca  reviewer-long-agent-name-x  closed                0s  └─ Review the parser changes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

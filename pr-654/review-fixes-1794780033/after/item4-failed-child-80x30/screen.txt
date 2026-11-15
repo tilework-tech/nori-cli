@@ -1,0 +1,30 @@
+to change)
+
+
+› parent task identity
+
+
+• parent final answer
+
+↳ you delegated to mock-model · mock:exit-during-prompt · working
+  ctrl + t shows the brief
+
+✕ mock-model · mock:exit-during-prompt · failed · Agent process exited
+    unexpectedly (exit code 17).
+  sent to mock-model as a failure · its history: alt + s
+
+
+› delegation result from mock-model · mock:exit-during-prompt · failed ·
+  delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model ·
+  mock:exit-during-prompt · failed
+  Child session: dad6e4be-b45f-4237-a83b-01f5cb84ce6d
+  Agent process exited unexpectedly (exit code 17).
+
+  1 failed · 1 ready
+
+
+› $ for skill listing
+

@@ -1,0 +1,30 @@
+
+
+
+
+
+
+• Mock ACP Alt options: Model=Mock Default Model, Thought Level=Medium (/config
+to change)
+
+
+› mock:request-permission:write-child-file
+
+
+• child final answer
+
+  mock-model · parent task identity fo… › mock-model-alt ·
+  mock:request-permission… · alt + up to parent
+  1 waiting on you · 1 ready
+
+
+  Would you like to allow execute: Execute shell command?
+
+  Execute shell command
+  Command: write-child-file
+  write-child-file
+
+› 1. Allow (y)
+  2. Reject (esc)
+
+  Press enter to confirm or esc to cancel

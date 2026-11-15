@@ -1,0 +1,30 @@
+ID                                    AGENT             STATUS               AG…
+88581810-bcc9-43f4-9651-6134ef8a43a5  mock-model        ready                 2…
+57d24e66-db79-43a5-ba2d-cb7dc9515e41  mock-model        ready                 0…
+439c4e1a-fb97-454f-bc14-c460cb7645a6  mock-model        waiting on you        0…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

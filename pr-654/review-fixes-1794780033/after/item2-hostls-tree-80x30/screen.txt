@@ -1,0 +1,30 @@
+ID        AGENT           STATUS              AGE  TITLE
+4959d806  mock-model      waiting on you       2s  mock:delegate mock-model moc…
+71bf927f  mock-model      ready                0s  └─ mock:delegate mock-model …
+2a8b5d98  mock-model      waiting on you       0s     └─ mock:request-permissio…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

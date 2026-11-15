@@ -1,0 +1,30 @@
+ Nori host  CONTROLLING
+ mock-model · mock:d… › … › mock-model · mock:… · waiting on you · alt+up parent
+
+ › You
+ mock:request-permission:x
+
+ parent final answer
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Permission · Execute shell command
+ › 1  Allow
+   2  Reject
+ ↑↓ choose · enter answer · number selects an option
+
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detac

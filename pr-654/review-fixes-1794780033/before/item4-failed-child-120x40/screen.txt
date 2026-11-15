@@ -1,0 +1,40 @@
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/e2cap/before-i4before120/proj · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› parent task identity
+
+
+• parent final answer
+
+↳ you delegated to mock-model · mock:exit-during-prompt · working
+  ctrl + t shows the brief
+
+✕ mock-model · mock:exit-during-prompt · failed · RequestFailure { request_id: Some(Str("22ae9380-5e12-4014-a395-
+    dd2fc0ae42cf")), message: "Agent process exited unexpectedly (exit code 17).\nMock agent: initialize\nMock agent:
+    advertising HTTP MCP capability\nMock agent: new_session id=0\nMock agent: prompt\nMock agent: exiting during
+    prompt", kind: Fatal }
+  sent to mock-model as a failure · its history: alt + s
+
+
+› delegation result from mock-model · mock:exit-during-prompt · failed · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model · mock:exit-during-prompt · failed
+  Child session: 281cfd14-2698-432f-b59b-e22d2cb6bc23
+  RequestFailure { request_id: Some(Str("22ae9380-5e12-4014-a395-dd2fc0ae42cf")), message: "Agent process exited
+  unexpectedly (exit code 17).\nMock agent: initialize\nMock agent: advertising HTTP MCP capability\nMock agent:
+  new_session id=0\nMock agent: prompt\nMock agent: exiting during prompt", kind: Fatal }
+
+  1 failed · 1 ready
+
+
+› @ for file mentions
+

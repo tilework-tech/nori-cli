@@ -1,0 +1,40 @@
+  System       /tmp/e2cap/before-i11before120/proj · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› parent task identity
+
+
+• parent final answer
+
+↳ you delegated to mock-model · inspect the parser · working
+  ctrl + t shows the brief
+
+○ result from mock-model · inspect the parser · ready
+  ▏ parent final answer
+  returns to mock-model on its own · its history: alt + s
+
+
+› delegation result from mock-model · inspect the parser · completed · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model · inspect the parser · completed
+  Child session: 398a6e29-f437-4a55-a0f0-96debdb2ea01
+  parent final answer
+
+  1 ready
+
+  Sessions 2 · 1 ready  tab: waiting only · type to search
+
+  All  waiting on you
+
+    Session                                                                   Agent           Status
+  › ○ parent task identity (current)                                          Mock ACP        ready
+    parent final answer
+    └─ · inspect the parser                                                   Mock ACP        closed
+       closed
+
+  ↑↓ move  enter open  ctrl+d close  tab waiting on you  esc close
+

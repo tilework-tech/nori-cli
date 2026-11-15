@@ -1,0 +1,40 @@
+ID                                    AGENT             STATUS               AGE  TITLE
+f6019c59-4411-4189-8741-06b2aa2985d6  mock-model        ready                 2s  mock:delegate mock-model mock:delegat…
+77e10d9a-d39d-4036-9ecc-67f452b7cc29  mock-model        ready                 0s  └─ mock:delegate mock-model mock:requ…
+9911a1c6-8462-4a20-b166-e255ab6dd583  mock-model        waiting on you        0s     └─ mock:request-permission:x
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,30 @@
+
+↳ you delegated to mock-model · mock:exit-during-prompt · working
+  ctrl + t shows the brief
+
+✕ mock-model · mock:exit-during-prompt · failed · RequestFailure { request_id:
+    Some(Str("28d88a72-7443-4d7e-aca7-40cb78ef6ec0")), message: "Agent process
+    exited unexpectedly (exit code 17).\nMock agent: initialize\nMock agent:
+    advertising HTTP MCP capability\nMock agent: new_session id=0\nMock agent:
+    prompt\nMock agent: exiting during prompt", kind: Fatal }
+  sent to mock-model as a failure · its history: alt + s
+
+
+› delegation result from mock-model · mock:exit-during-prompt · failed ·
+  delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model ·
+  mock:exit-during-prompt · failed
+  Child session: 31c4644b-96b9-4237-afbc-9149bcd7a91b
+  RequestFailure { request_id: Some(Str("28d88a72-7443-4d7e-aca7-
+  40cb78ef6ec0")), message: "Agent process exited unexpectedly (exit code 17).
+  \nMock agent: initialize\nMock agent: advertising HTTP MCP capability\nMock
+  agent: new_session id=0\nMock agent: prompt\nMock agent: exiting during
+  prompt", kind: Fatal }
+
+  1 failed · 1 ready
+
+
+› ! for shell commands
+

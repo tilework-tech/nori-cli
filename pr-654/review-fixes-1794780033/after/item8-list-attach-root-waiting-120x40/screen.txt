@@ -1,0 +1,40 @@
+ Nori host  CONTROLLING
+ mock-model · mock:delegate mock-model mock:delegate… · ready
+ ● mock:delegate mock-model mock:request-p… › mock:request-permission:x is waiting on you · alt+down to jump
+
+  Sessions 3
+
+     ID        AGENT           STATUS            AGE    TITLE
+  ▏  60ce350c  mock-model      waiting on you    7s     mock:delegate mock-model mock:delegat… (current)             ▕
+     1a940df6  mock-model      ready             6s     └─ mock:delegate mock-model mock:request-permis…
+     f8b8d053  mock-model      waiting on you    6s        └─ mock:request-permission:x
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ move  enter open  ctrl+r resume  ctrl+f search  esc back
+
+
+› Send a prompt
+
+   alt+s sessions    alt+down next waiting    alt+t take control    ctrl+d detach    /delegate delegate task

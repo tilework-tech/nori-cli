@@ -1,0 +1,40 @@
+
+
+
+
+
+
+
+
+  › Nori CLI v0.0.0
+
+  System       /tmp/e2cap/after-i4after120/proj · Agent approvals
+  Agent        Mock ACP
+
+• Mock ACP options: Model=Mock Default Model, Thought Level=Medium (/config to change)
+
+
+› parent task identity
+
+
+• parent final answer
+
+↳ you delegated to mock-model · mock:exit-during-prompt · working
+  ctrl + t shows the brief
+
+✕ mock-model · mock:exit-during-prompt · failed · Agent process exited unexpectedly (exit code 17).
+  sent to mock-model as a failure · its history: alt + s
+
+
+› delegation result from mock-model · mock:exit-during-prompt · failed · delivered to this session
+
+
+• Delegation continuation received: [Nori delegation result] from mock-model · mock:exit-during-prompt · failed
+  Child session: 2cec19e1-b438-4d5f-8590-038c7353c434
+  Agent process exited unexpectedly (exit code 17).
+
+  1 failed · 1 ready
+
+
+› ? for shortcuts
+
