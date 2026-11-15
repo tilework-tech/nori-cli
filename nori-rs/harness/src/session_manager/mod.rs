@@ -395,6 +395,17 @@ impl SessionManager {
         self.shared.state().registry.family_status(conversation_id)
     }
 
+    /// Most sessions that may hold an agent process at once.
+    pub fn max_sessions(&self) -> i32 {
+        self.shared.state().registry.limit()
+    }
+
+    /// How many more sessions can start before the cap is reached. A session
+    /// gives its slot back when its agent process ends.
+    pub fn free_slots(&self) -> i32 {
+        self.shared.state().registry.free_slots()
+    }
+
     /// Control handle of a session that still has an agent process.
     pub fn handle(&self, conversation_id: &ConversationId) -> Option<HarnessHandle> {
         let state = self.shared.state();

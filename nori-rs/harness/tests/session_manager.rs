@@ -487,6 +487,32 @@ async fn the_cap_refuses_a_session_beyond_the_limit() {
 
 #[tokio::test]
 #[serial]
+async fn free_slots_count_down_on_start_and_come_back_on_close() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let manager = SessionManager::new(SessionManagerConfig {
+        max_sessions: 2,
+        ..SessionManagerConfig::default()
+    });
+    let before = manager.free_slots();
+    let first = start(&manager, prepare_spec("mock-model", home.path(), None));
+    wait_for_status(&manager, &first.conversation_id, SessionStatus::Ready).await;
+    let with_one = manager.free_slots();
+    manager
+        .close(&first.conversation_id, Duration::ZERO)
+        .await
+        .expect("close first session");
+    wait_for_status(&manager, &first.conversation_id, SessionStatus::Closed).await;
+    let after_close = manager.free_slots();
+
+    assert_eq!(
+        (manager.max_sessions(), before, with_one, after_close),
+        (2, 2, 1, 2)
+    );
+    manager.shutdown(Duration::ZERO).await;
+}
+
+#[tokio::test]
+#[serial]
 async fn a_session_keeps_its_conversation_id_as_its_transcript_id() {
     let home = tempfile::tempdir().expect("temp dir");
     let manager = SessionManager::new(SessionManagerConfig::default());

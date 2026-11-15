@@ -183,6 +183,15 @@ impl Registry {
         }
     }
 
+    /// Slots left for new sessions.
+    pub(crate) fn free_slots(&self) -> i32 {
+        i32::try_from(self.capacity.available_permits()).unwrap_or(i32::MAX)
+    }
+
+    pub(crate) fn limit(&self) -> i32 {
+        self.limit
+    }
+
     /// Refuse every later reservation, for shutdown.
     pub(crate) fn close_admission(&self) {
         self.capacity.close();

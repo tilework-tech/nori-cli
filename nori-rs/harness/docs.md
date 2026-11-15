@@ -588,6 +588,9 @@ processes.
   transcript ID. It returns a `ManagedSession` with the ID, a `HarnessHandle`,
   and the session's own envelope stream. Start fails with `CapacityReached`,
   `ShuttingDown`, `UnknownParent`, or `AgentAlreadyActivated`.
+  `max_sessions()` and `free_slots()` report the cap and the slots left, so
+  a client can refuse a new session before it starts an agent process. A
+  slot comes back when the session's agent process ends.
 - **Envelopes.** One pump task per agent process applies each event to the
   registry first, then publishes the envelope to all-session subscribers and to
   the session's own stream. The pump reads two sources with a biased select:
