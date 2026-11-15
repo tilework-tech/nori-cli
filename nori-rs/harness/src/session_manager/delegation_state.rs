@@ -121,7 +121,14 @@ impl DelegationState {
                 }
             }
             SessionEvent::Nori(NoriEvent::RequestFailed(failure)) => {
-                entry.failure = Some(format!("{failure:?}"))
+                // Only the headline reaches the parent; the stderr tail stays
+                // in the child's own history.
+                entry.failure = failure
+                    .message
+                    .lines()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty())
+                    .map(str::to_owned)
             }
             _ => {}
         }

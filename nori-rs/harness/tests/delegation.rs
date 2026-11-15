@@ -409,10 +409,16 @@ async fn child_crash_returns_failure_without_failing_parent() {
         .unwrap();
     let done = terminal(&m, &p.conversation_id, &d.request_id).await;
     assert_eq!(done.status, DelegationStatus::Failed);
+    assert_eq!(
+        done.result.as_deref(),
+        Some("Agent process exited unexpectedly (exit code 17).")
+    );
     assert!(m.handle(&p.conversation_id).is_some());
     let reply = wait_parent_reply(&mut p, &d.child_id).await;
     assert!(reply.contains(&d.parent_id));
     assert!(reply.contains("Failed"));
+    assert!(reply.contains("Agent process exited unexpectedly (exit code 17)."));
+    assert!(!reply.contains("RequestFailure"), "{reply}");
     m.shutdown(Duration::ZERO).await;
 }
 #[tokio::test]
