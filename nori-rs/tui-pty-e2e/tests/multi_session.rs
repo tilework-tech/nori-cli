@@ -197,3 +197,84 @@ fn one_session_shows_no_status_line() {
     let screen = session.screen_contents();
     assert!(!screen.contains("1 ready"), "{screen}");
 }
+
+/// Measures how long a jump to a session with a long history takes: from the
+/// key press until the reprint stops arriving. Run with
+/// `cargo test -p tui-pty-e2e --test multi_session jump_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "measurement, takes minutes"]
+#[cfg(target_os = "linux")]
+fn jump_timing_on_a_long_history() {
+    let turns: i32 = std::env::var("JUMP_TIMING_TURNS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(500);
+    let config = multi_session_config().with_agent_env(
+        "MOCK_AGENT_RESPONSE_MOCK_MODEL",
+        "A three line answer\nwith a second line\nand a third line",
+    );
+    let mut session = TuiSession::spawn_with_config(40, 120, config).expect("spawn");
+    session
+        .wait_for_text("›", TIMEOUT)
+        .expect("TUI should start");
+    std::thread::sleep(TIMEOUT_INPUT);
+    for turn in 0..turns {
+        let prompt = format!("long history turn {turn}");
+        session.submit_input(&prompt).unwrap();
+        session
+            .wait_for(
+                |screen| screen.contains("and a third line") && screen.contains(&prompt),
+                TIMEOUT,
+            )
+            .unwrap_or_else(|e| panic!("turn {turn}: {e}"));
+    }
+    session.settle(Duration::from_millis(500));
+    start_alt_session(&mut session);
+    ask(&mut session, "short history", BETA_ANSWER);
+
+    let mut samples = Vec::new();
+    for _ in 0..5 {
+        for (key, marker) in [
+            (',', format!("long history turn {}", turns - 1)),
+            ('.', "short history".to_string()),
+        ] {
+            session.settle(Duration::from_millis(300));
+            let before = session.raw_output().len();
+            let started = std::time::Instant::now();
+            session.send_key(Key::Alt(key)).unwrap();
+            let mut last_byte = started;
+            let mut seen = session.raw_output().len();
+            loop {
+                let _ = session.poll();
+                let len = session.raw_output().len();
+                if len != seen {
+                    seen = len;
+                    last_byte = std::time::Instant::now();
+                }
+                if last_byte.elapsed() > Duration::from_millis(250)
+                    && session.screen_contents().contains(&marker)
+                {
+                    break;
+                }
+                assert!(
+                    started.elapsed() < Duration::from_secs(20),
+                    "jump never settled"
+                );
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            if key == ',' {
+                samples.push((last_byte - started, seen - before));
+            }
+        }
+    }
+    let history = session.history_contents();
+    eprintln!(
+        "JUMP_TIMING turns={turns} history_lines={} samples_ms={:?} bytes={:?}",
+        history.lines().count(),
+        samples
+            .iter()
+            .map(|(d, _)| d.as_millis())
+            .collect::<Vec<_>>(),
+        samples.iter().map(|(_, b)| *b).collect::<Vec<_>>()
+    );
+}
