@@ -137,9 +137,11 @@ fn identity_line(state: &AttachState, width: u16) -> Line<'static> {
             status.dim(),
         ]);
     };
-    let key = (!state.parent_binding.is_none())
-        .then(|| format!(" · {} parent", state.parent_binding.as_str()))
-        .unwrap_or_default();
+    let key = if state.parent_binding.is_none() {
+        String::new()
+    } else {
+        format!(" · {} parent", state.parent_binding.as_str())
+    };
     let parent_agent = format!("{} · ", parent.agent);
     let child_agent = format!("{} · ", current.agent);
     // The two names share whatever the agents, status, and parent key leave.
