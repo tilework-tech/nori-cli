@@ -504,6 +504,42 @@ mod tests {
         report.lines().join("\n")
     }
 
+    // Other tests can fork while a listener is open, retaining its socket until
+    // exec even after this process closes it. Isolate same-port replacement so
+    // those unrelated children cannot inherit the listener under test.
+    async fn run_in_isolated_process(test_name: &str) -> bool {
+        const CHILD_TEST: &str = "NORI_REMOTE_CONTROL_ISOLATED_TEST";
+        if std::env::var(CHILD_TEST).ok().as_deref() == Some(test_name) {
+            return false;
+        }
+
+        let mut command = tokio::process::Command::new(
+            std::env::current_exe().expect("locate current test executable"),
+        );
+        command
+            .args([
+                "--exact",
+                test_name,
+                "--test-threads=1",
+                "--nocapture",
+                "--format=pretty",
+            ])
+            .env(CHILD_TEST, test_name)
+            .kill_on_drop(true);
+        let output = tokio::time::timeout(Duration::from_secs(15), command.output())
+            .await
+            .expect("isolated listener test timed out")
+            .expect("run isolated listener test");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed;"),
+            "isolated test {test_name} must run and pass exactly once: {}\n{stdout}\n{stderr}",
+            output.status,
+        );
+        true
+    }
+
     fn addr_from_url(url: &str) -> SocketAddr {
         url.strip_prefix("ws://")
             .and_then(|value| value.strip_suffix("/acp"))
@@ -817,6 +853,14 @@ Hint: Tailscale is available; use /remote-control on tailnet.
 
     #[tokio::test]
     async fn changing_exposure_can_reuse_the_existing_loopback_port() {
+        if run_in_isolated_process(
+            "remote_control::tests::changing_exposure_can_reuse_the_existing_loopback_port",
+        )
+        .await
+        {
+            return;
+        }
+
         let reserved = std::net::TcpListener::bind("0.0.0.0:0").expect("reserve a free port");
         let port = reserved.local_addr().expect("reserved address").port();
         drop(reserved);
@@ -846,6 +890,14 @@ Hint: Tailscale is available; use /remote-control on tailnet.
 
     #[tokio::test]
     async fn failed_same_port_replacement_restores_the_previous_surface() {
+        if run_in_isolated_process(
+            "remote_control::tests::failed_same_port_replacement_restores_the_previous_surface",
+        )
+        .await
+        {
+            return;
+        }
+
         let reserved = std::net::TcpListener::bind("0.0.0.0:0").expect("reserve a free port");
         let port = reserved.local_addr().expect("reserved address").port();
         drop(reserved);

@@ -1104,6 +1104,13 @@ controller disconnected and able to reconnect. Only a restoration bind failure
 leaves remote control off, and the user-visible error includes both failures.
 Repeating the active target is idempotent.
 
+The same-port replacement and rollback tests in
+[`remote_control.rs`](src/remote_control.rs) each run in an isolated test
+process. Concurrent subprocess launches elsewhere in the suite can briefly
+inherit a listening socket until exec, keeping its address occupied after the
+owning test closes it. Isolation preserves the close/rebind assertions without
+retrying replacement or rollback.
+
 Without `multi_session`, on every active session's `SessionStarted`,
 [`App`](src/app/event_handling.rs) attaches its stable host using the observed
 identity, even if listeners are
