@@ -42,6 +42,7 @@ pub struct Picker<'a, K> {
     fullscreen_selection_rails: bool,
     compact_descriptions: bool,
     footer_hints: Option<Vec<KeyHint<'static>>>,
+    empty_state: Option<(&'a str, &'a str)>,
 }
 
 impl<'a, K> Picker<'a, K> {
@@ -55,7 +56,14 @@ impl<'a, K> Picker<'a, K> {
             fullscreen_selection_rails: false,
             compact_descriptions: false,
             footer_hints: None,
+            empty_state: None,
         }
+    }
+
+    /// Supply caller-specific copy when the current view contains no rows.
+    pub fn empty_state(mut self, title: &'a str, detail: &'a str) -> Self {
+        self.empty_state = Some((title, detail));
+        self
     }
 
     pub fn theme(mut self, theme: Theme) -> Self {
@@ -274,7 +282,9 @@ impl<K: Clone + Eq> Picker<'_, K> {
 
         let visible = self.state.visible_indices();
         if visible.is_empty() {
-            let (title, detail) = if self.state.query.is_empty() {
+            let (title, detail) = if let Some(message) = self.empty_state {
+                message
+            } else if self.state.query.is_empty() {
                 (
                     "No options available",
                     "The caller has not supplied any rows.",

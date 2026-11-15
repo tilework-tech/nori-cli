@@ -892,11 +892,12 @@ App
   session title, only for top-level sessions (a child's news reaches the user
   through its parent) and only while the terminal is unfocused.
 - **Failed sessions.** A session whose agent dies fails alone. From the
-  session list, Ctrl+R on a failed row runs
-  [`resume_failed_session`](src/app/session_resume.rs): it loads the failed
-  record's transcript through `nori_harness::transcript::load_transcript_from_path`,
-  starts the same agent on a new process, and installs the resumed widget in
-  the failed one's place in the navigation order. The resumed session inherits
+  session list, Ctrl+R on a failed row invokes
+  [`resume_failed_session`](src/app/session_resume.rs), which calls
+  `SessionManager::resume` and installs the returned managed session in the
+  failed widget's place. The manager loads the transcript, starts the same
+  agent on a new process, replaces the failed registry record, and preserves
+  its lineage and children. The resumed session inherits
   the failed one's title (`SessionPreviews::inherit_title`) until it has its
   own.
 
@@ -934,7 +935,9 @@ in the prompt still moves the cursor.
 - The header counts sessions by status. Tab toggles a "waiting on you" filter
   and back (the footer then offers "tab all sessions"); typing filters by title
   or agent; Esc clears the query first, then closes; Enter shows the selected
-  session.
+  session. When nobody needs attention, the waiting filter displays
+  "No sessions waiting on you" with a Tab hint; an unmatched text query keeps
+  the normal search-empty message.
 - Ctrl+D closes the selected session through `AppEvent::CloseSession`. A
   `working`, `waiting on you`, or `starting` row is armed by the first press
   (footer "ctrl+d again to close") and closed by the second; any other key
@@ -990,13 +993,16 @@ cloud /close ──> session/close ──> SessionEnded(Closed)
 ```
 
 - **Session cap.** `App` builds its `SessionManager` with
-  `NoriConfig.max_sessions` (`[tui] max_sessions`). Before `/new` or `/agent`
-  prepares an agent, `refuse_at_session_cap` checks
+  `NoriConfig.max_sessions` (`[tui] max_sessions`). Before `/new`, `/agent`,
+  `/resume`, or a new-process fork prepares or activates an agent,
+  `refuse_at_session_cap` checks
   `SessionManager::free_slots()` and, at zero, prints an error naming the cap
   and how to close a session. The check applies only when a harness session
   already exists, and `/new` skips it when consuming an already prepared
-  candidate. The manager's own `CapacityReached` start error remains the
-  backstop.
+  candidate. The resume picker and its activation both check, so capacity
+  cannot be assumed to remain available while the picker is open. An ACP
+  branch at the current head reuses its process and remains allowed at the cap.
+  The manager's own `CapacityReached` start error remains the backstop.
 - **Closing.** `close_session` refuses to close the last open session on screen
   ("Use /quit"), ignores an already closed one, marks the widget
   `closed_by_user`, and shuts its process down through `SessionManager::close`
@@ -1016,10 +1022,15 @@ cloud /close ──> session/close ──> SessionEnded(Closed)
   on-screen iteration takes the screen as before; a background iteration builds
   a non-deferred widget for the same agent, parks it in place with the old
   transcript, and never takes over the screen.
-- **Remote control.** The remote host attaches on the `SessionStarted` of the
-  widget that is active when it starts, and moving between sessions does not
-  re-attach it, so remote control follows the most recently started session,
-  not necessarily the one on screen.
+- **Remote control.** The manager remembers each committed session's handle
+  and identity, including starts delivered to parked widgets. The on-screen
+  widget selects the default target; starting a background session does not
+  take it over. A legacy `/acp` connection pins that default when it connects
+  and stays on it across local navigation. A subsequent connection adopts the
+  newly selected default. Unstarted and ended on-screen sessions clear that
+  default, and removed or replaced widgets release their remembered handle.
+  The managed `/sessions` endpoint supports explicit
+  targets independently of the screen; see [the wire contract](../../docs/remote-control.md).
 
 The ignored `jump_timing_on_a_long_history` PTY test measures a jump to a
 long history; the reprint is bounded by the same cell and row caps as resize
@@ -1033,7 +1044,9 @@ session as a remote ACP agent over WebSocket, per
 [`RemoteControlManager`](src/remote_control.rs) for the complete run. Startup
 `--remote` and runtime commands both enter this manager, which retains one
 stable `HarnessRemoteHost`, owns every `RemoteAcpServer` listener, and shuts the
-listeners down on exit. All remote types reach the TUI through
+listeners down on exit. With `multi_session` it also exposes a
+`ManagedRemoteHost` over the same app-owned `SessionManager` at `/sessions`.
+All remote types reach the TUI through
 `nori_harness::remote_agent` re-exports, preserving the dependency boundary.
 
 The client-owned `/remote-control` command is handled before active-session
@@ -1067,8 +1080,9 @@ controller disconnected and able to reconnect. Only a restoration bind failure
 leaves remote control off, and the user-visible error includes both failures.
 Repeating the active target is idempotent.
 
-On every active session's `SessionStarted`, [`App`](src/app/event_handling.rs)
-attaches its stable host using the observed identity, even if listeners are
+Without `multi_session`, on every active session's `SessionStarted`,
+[`App`](src/app/event_handling.rs) attaches its stable host using the observed
+identity, even if listeners are
 disabled. During a candidate switch, the old host attachment remains until
 the replacement reaches that commit event. Committing the replacement closes
 any current controller; after reconnecting, it discovers the new conversation

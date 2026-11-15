@@ -39,9 +39,10 @@ pub(crate) enum PromptAdmission {
     RejectIfBusy,
 }
 
+/// An idle-only prompt was rejected because the session already has an active turn.
 #[derive(Debug, thiserror::Error)]
 #[error("session already has an active turn")]
-pub(crate) struct PromptBusy;
+pub struct PromptBusy;
 
 // =============================================================================
 // Error Categorization

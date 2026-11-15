@@ -231,7 +231,15 @@ struct AcpProcess {
 
 impl AcpProcess {
     fn spawn() -> Result<(Self, TempDir), Box<dyn std::error::Error>> {
+        Self::spawn_config(false)
+    }
+
+    fn spawn_config(multi_session: bool) -> Result<(Self, TempDir), Box<dyn std::error::Error>> {
         let nori_home = TempDir::new()?;
+        std::fs::write(
+            nori_home.path().join("config.toml"),
+            format!("[features]\nmulti_session = {multi_session}\n"),
+        )?;
         let nori_bin = assert_cmd::cargo::cargo_bin("nori");
         let mut child = StdCommand::new(nori_bin)
             .env("NORI_HOME", nori_home.path())
@@ -419,5 +427,245 @@ fn exec_acp_forwards_permission_requests_and_correlated_responses()
         .and_then(|message| message["params"]["update"]["content"]["text"].as_str())
         .ok_or_else(|| io::Error::other("prompt omitted final agent message"))?;
     assert!(final_text.contains("Permission granted with option: allow"));
+    Ok(())
+}
+
+#[test]
+fn exec_managed_stream_tags_every_event_and_routes_two_sessions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut process, _home) = AcpProcess::spawn_config(true)?;
+    let (first, mut observed) = process.initialize_session()?;
+    process.send(json!({"jsonrpc":"2.0","id":10,"method":"session/new",
+        "params":{"cwd":std::env::current_dir()?,"mcpServers":[]}}))?;
+    let second = process.receive_response(10, &mut observed)?["result"]["sessionId"]
+        .as_str()
+        .ok_or("second session was not created")?
+        .to_string();
+    assert_ne!(first, second);
+    process.send(
+        json!({"jsonrpc":"2.0","id":11,"method":"_nori/session/subscribe",
+        "params":{"session_id":"*","cursors":{}}}),
+    )?;
+    assert!(
+        process
+            .receive_response(11, &mut observed)?
+            .get("error")
+            .is_none()
+    );
+    for (index, id) in [&first, &second].into_iter().enumerate() {
+        process.send(json!({"jsonrpc":"2.0","id":20 + index,"method":"_nori/session/prompt",
+            "params":{"session_id":id,"prompt":[{"type":"text","text":format!("route marker {index}")}]}}))?;
+        assert!(
+            process
+                .receive_response(20 + i64::try_from(index)?, &mut observed)?
+                .get("error")
+                .is_none()
+        );
+    }
+    let mut cursors = std::collections::HashMap::<String, i64>::new();
+    let mut completed = std::collections::HashSet::new();
+    let mut routed = std::collections::HashSet::new();
+    loop {
+        if observed.is_empty() {
+            observed.push(process.receive()?);
+        }
+        for message in observed.drain(..) {
+            if message["method"] != "_nori/session/event" {
+                continue;
+            }
+            let envelope = &message["params"];
+            let id = envelope["conversation_id"]
+                .as_str()
+                .ok_or("event lacks session")?;
+            assert!([first.as_str(), second.as_str()].contains(&id));
+            assert_eq!(envelope["agent"], "mock-model");
+            for (index, expected_id) in [&first, &second].into_iter().enumerate() {
+                if envelope["event"]
+                    .to_string()
+                    .contains(&format!("route marker {index}"))
+                {
+                    assert_eq!(id, expected_id);
+                    routed.insert(id.to_string());
+                }
+            }
+            let next = cursors.entry(id.to_string()).or_default();
+            *next += 1;
+            assert_eq!(envelope["seq"], *next, "missing or duplicate event");
+            if envelope["event"]["event"]["message_type"] == "response"
+                && envelope.to_string().contains("end_turn")
+            {
+                completed.insert(id.to_string());
+            }
+        }
+        if completed.len() == 2 {
+            break;
+        }
+    }
+    assert_eq!(cursors.len(), 2);
+    assert_eq!(routed.len(), 2);
+    Ok(())
+}
+
+#[test]
+fn exec_managed_mode_preserves_standard_acp_prompt_behavior()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut process, _home) = AcpProcess::spawn_config(true)?;
+    let (id, mut observed) = process.initialize_session()?;
+    process.send(json!({"jsonrpc":"2.0","id":3,"method":"session/prompt",
+        "params":{"sessionId":id,"prompt":[{"type":"text","text":"hello"}]}}))?;
+    assert_eq!(
+        process.receive_response(3, &mut observed)?["result"]["stopReason"],
+        "end_turn"
+    );
+    let updates: Vec<_> = observed
+        .iter()
+        .filter(|event| event["method"] == "session/update")
+        .collect();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0]["params"]["sessionId"], id);
+    assert_eq!(
+        updates[0]["params"]["update"]["content"]["text"],
+        "Test message 1Test message 2"
+    );
+    Ok(())
+}
+
+#[test]
+fn exec_managed_preserves_standard_permission_answers() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut acp, _nori_home) = AcpProcess::spawn_config(true)?;
+    let (session_id, _) = acp.initialize_session()?;
+    acp.send(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "session/prompt",
+        "params": {
+            "sessionId": session_id,
+            "prompt": [{"type": "text", "text": "mock:request-permission"}]
+        }
+    }))?;
+
+    let mut observed = Vec::new();
+    let permission = loop {
+        let message = acp.receive()?;
+        if message["method"] == "session/request_permission" {
+            break message;
+        }
+        observed.push(message);
+    };
+    let permission_id = permission["id"].clone();
+    assert!(
+        permission["params"]["options"]
+            .as_array()
+            .is_some_and(|options| options.iter().any(|option| option["optionId"] == "allow"))
+    );
+    acp.send(json!({
+        "jsonrpc": "2.0",
+        "id": permission_id,
+        "result": {"outcome": {"outcome": "selected", "optionId": "allow"}}
+    }))?;
+
+    let prompt_response = acp.receive_response(3, &mut observed)?;
+    assert_eq!(prompt_response["result"]["stopReason"], "end_turn");
+    let final_text = observed
+        .iter()
+        .find(|message| message["method"] == "session/update")
+        .and_then(|message| message["params"]["update"]["content"]["text"].as_str())
+        .ok_or_else(|| io::Error::other("prompt omitted final agent message"))?;
+    assert!(final_text.contains("Permission granted with option: allow"));
+    Ok(())
+}
+
+#[test]
+fn exec_standard_prompt_after_extension_turn_excludes_old_output()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut process, _home) = AcpProcess::spawn_config(true)?;
+    let (id, mut observed) = process.initialize_session()?;
+    process.send(json!({"jsonrpc":"2.0","id":10,"method":"_nori/session/subscribe","params":{"session_id":id}}))?;
+    process.receive_response(10, &mut observed)?;
+    process.send(json!({"jsonrpc":"2.0","id":11,"method":"_nori/session/prompt","params":{"session_id":id,"prompt":[{"type":"text","text":"first turn"}]}}))?;
+    process.receive_response(11, &mut observed)?;
+    while !observed.iter().any(|message| {
+        message["method"] == "_nori/session/event"
+            && message["params"]["event"]["event"]["message_type"] == "response"
+            && message.to_string().contains("end_turn")
+    }) {
+        observed.push(process.receive()?);
+    }
+    observed.clear();
+    process.send(json!({"jsonrpc":"2.0","id":12,"method":"session/prompt","params":{"sessionId":id,"prompt":[{"type":"text","text":"second turn"}]}}))?;
+    assert_eq!(
+        process.receive_response(12, &mut observed)?["result"]["stopReason"],
+        "end_turn"
+    );
+    let updates: Vec<_> = observed
+        .iter()
+        .filter(|message| message["method"] == "session/update")
+        .collect();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(
+        updates[0]["params"]["update"]["content"]["text"],
+        "Test message 1Test message 2"
+    );
+    Ok(())
+}
+
+#[test]
+fn exec_standard_prompt_completes_when_permission_is_answered_through_managed_protocol()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut process, _home) = AcpProcess::spawn_config(true)?;
+    let (session_id, mut observed) = process.initialize_session()?;
+    process.send(
+        json!({"jsonrpc":"2.0","id":10,"method":"_nori/session/subscribe",
+        "params":{"session_id":session_id}}),
+    )?;
+    process.receive_response(10, &mut observed)?;
+    process.send(json!({"jsonrpc":"2.0","id":11,"method":"session/prompt",
+        "params":{"sessionId":session_id,"prompt":[{"type":"text","text":"mock:request-permission"}]}}))?;
+    let mut forwarded = None;
+    let mut original = None;
+    while forwarded.is_none() || original.is_none() {
+        let message = process.receive()?;
+        if message["method"] == "session/request_permission" {
+            forwarded = Some(message["id"].clone());
+        }
+        if message["method"] == "_nori/session/event"
+            && message["params"]["event"]["event"]["message_type"] == "request"
+        {
+            original = Some(message["params"]["event"]["event"]["request_id"].clone());
+        }
+        observed.push(message);
+    }
+    process.send(
+        json!({"jsonrpc":"2.0","id":12,"method":"_nori/session/respond",
+        "params":{"session_id":session_id,"request_id":original.unwrap(),
+            "response":{"outcome":{"outcome":"selected","optionId":"allow"}}}}),
+    )?;
+    assert_eq!(
+        process.receive_response(12, &mut observed)?["result"]["answered"],
+        true
+    );
+    assert_eq!(
+        process.receive_response(11, &mut observed)?["result"]["stopReason"],
+        "end_turn"
+    );
+    let update = observed
+        .iter()
+        .find(|message| message["method"] == "session/update")
+        .ok_or("standard prompt omitted final output")?;
+    assert!(
+        update["params"]["update"]["content"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Permission granted")
+    );
+    // A late answer to the forwarded ACP request must not poison the next turn.
+    process.send(json!({"jsonrpc":"2.0","id":forwarded.unwrap(),
+        "result":{"outcome":{"outcome":"selected","optionId":"allow"}}}))?;
+    process.send(json!({"jsonrpc":"2.0","id":13,"method":"session/prompt",
+        "params":{"sessionId":session_id,"prompt":[{"type":"text","text":"still usable"}]}}))?;
+    assert_eq!(
+        process.receive_response(13, &mut observed)?["result"]["stopReason"],
+        "end_turn"
+    );
     Ok(())
 }

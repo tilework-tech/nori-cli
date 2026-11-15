@@ -168,6 +168,10 @@ consumer application
   second line in compact density as well, for lists whose descriptions carry a
   live preview. Compact rows become two lines tall only when at least one
   visible row has a description.
+- `Picker::empty_state` supplies caller-owned title and detail text when no
+  rows are visible. The shared component keeps generic empty and unmatched
+  search messages by default; domain-specific consumers choose when a custom
+  state applies, as the TUI's waiting-session filter does.
 - `PickerState::replace_items` swaps every row while the picker stays open.
   The selection follows the selected row's key, falling back to the first
   available visible row when that key is gone. Query and search state are

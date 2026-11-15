@@ -51,14 +51,18 @@ inventing a second public event vocabulary.
 
 `nori-tui` starts every session through one app-owned `SessionManager`. The
 manager calls the same launch internals as `launch_session`, so a managed
-session behaves exactly like a directly launched one. `nori-exec`, the remote
-ACP host, and the public `launch_session`/`prepare_and_launch_session` entry
-points still use the per-session runtime directly and see only one session.
+session behaves exactly like a directly launched one. With the runtime
+`multi_session` flag, `nori-exec --acp` and the remote `/sessions` endpoint also
+use that manager. Plaintext, flag-off exec, and the public
+`launch_session`/`prepare_and_launch_session` entry points retain their direct
+per-session runtime paths.
 
 The remote ACP transport (`@/docs/remote-control.md`) is the other
 headless consumer. `nori-acp-host` owns the WebSocket server and defines the
 `HostedAgent` trait; [`remote_agent.rs`](src/remote_agent.rs) implements that
-trait over `HarnessHandle`, keeping the dependency direction
+trait over `HarnessHandle`, while
+[`managed_remote.rs`](src/managed_remote.rs) implements `ManagedAgent` over
+`SessionManager`. Both keep the dependency direction
 `nori-harness -> nori-acp-host`. Remote mutations pass through the same typed
 handle as local ones, so hooks, transcripts, goals, and permission policy all
 still apply, and the TUI observes remote-driven activity on its own stream.
@@ -307,6 +311,13 @@ not keep a process-global host or own listener policy.
   from that commit boundary onward. During an agent switch the current session
   remains attached until the candidate reaches this event, so candidate
   preparation, failure, or cancellation cannot replace it.
+- With multi-session TUI navigation, `set_default_started` stages the visible
+  session for the next legacy subscription without replacing the current
+  controller's attached session. Committed identities are remembered for
+  background widgets too, so the most recently started session cannot override
+  the on-screen default. `clear_default_session` leaves the next controller
+  unattached when the visible session has not started or has ended, without
+  retargeting an already connected controller.
 - Host attachment and listener lifetime are independent. The TUI keeps the
   app-owned host attached while runtime remote control is disabled, allowing a
   later enable to expose the current session without relaunching it. Stopping
@@ -357,6 +368,25 @@ not keep a process-global host or own listener policy.
 - When the remote controller detaches or is replaced, its unanswered delegated
   requests are answered with a cancelled permission outcome so they cannot
   wedge the agent.
+
+#### Managed remote hosting
+
+[`ManagedRemoteHost`](src/managed_remote.rs) shares one command boundary
+between the WebSocket `/sessions` adapter and managed ACP stdio. It lists
+manager records and journal cursors, resolves explicit conversation IDs before
+using the frontend's selected default, and opens one-session or all-session
+subscriptions. Its `_nori/session/event` notifications retain the complete
+manager envelope, including Nori events; legacy ACP projection stays separate.
+The [wire contract](../../docs/remote-control.md) defines request parameters,
+acknowledgements, and reconnect errors.
+
+Prompt admission calls `HarnessHandle::prompt_with_meta_if_idle` and returns
+the harness request ID; completion remains in the envelope stream. Permission
+answers validate the session/request pair against manager pending requests and
+serialize managed answer claims until the event pump observes resolution.
+They use the remote responder label, so TUI and remote observers see the same
+`RequestResolved`. Managed disconnect does not cancel a turn or resolve its
+pending permission: the continuing session can be controlled after reconnect.
 
 #### Goal ownership and MCP routing
 
@@ -580,7 +610,7 @@ processes.
                                      |  one pump task per agent process
                  per-session runtime |  applies event -> status, seq
                  (HarnessHandle) ----+--> session's own stream (unbounded)
-                                     +--> subscribe() streams (bounded, all sessions)
+                                     +--> journal + bounded subscriber streams
 ```
 
 - **Start.** `start` takes an agent (already `Prepared`, or a `Prepare` spec to
@@ -602,6 +632,17 @@ processes.
   the primary receiver of a directly launched session. `subscribe(capacity)`
   follows every session; a subscriber that falls `capacity` envelopes behind is
   dropped and its receiver closes, and sessions are never slowed.
+- **Replay.** [`replay.rs`](src/session_manager/replay.rs) journals envelopes
+  under the same mutex as registry updates and publication. `subscribe_from`
+  validates per-conversation cursors, snapshots envelopes strictly after them,
+  and registers the live subscriber atomically. Single-session filters keep
+  that identity; all-session filters include future sessions. Missing cursors
+  start at zero. History eviction is global across sessions, and an expired or
+  invalid cursor fails instead of silently truncating replay. Retention is
+  bounded and lasts only as long as the manager; persisted transcripts are
+  not a source of transport sequence numbers. Journal identity and latest
+  cursors survive registry replacement on resume so all-session clients can
+  acknowledge superseded conversations too.
 - **Status.** Each record carries a `SessionStatus`:
 
   | Status | When |
@@ -734,11 +775,12 @@ temp dir is removed.
   agent tools cannot stop harness continuation.
 - Consumers should correlate raw requests and responses only by the supplied
   ACP `RequestId`.
-- The remote host exposes exactly one session (the running one) and keeps
-  exactly one remote consumer; a newer subscription replaces the current one
-  (last connect wins), and a consumer whose bounded queue overflows is dropped,
-  which closes its connection. Remote-host behavior is exercised in
-  `@/nori-rs/harness/tests/remote_host.rs` against the mock ACP agent.
+- The legacy `HarnessRemoteHost` exposes one attached session; the managed
+  host exposes the manager registry. WebSocket endpoints share one controller
+  slot (last connect wins). Bounded consumers close on overflow without
+  blocking sessions. [Legacy remote tests](tests/remote_host.rs) exercise the
+  ACP projection; [managed WebSocket tests](tests/managed_remote.rs) compare
+  reconnect delivery against the manager's envelope stream.
 - Session manager invariants: one agent process per session; conversation ID
   = transcript ID = envelope `conversation_id`; envelope `seq` starts at 1 per
   conversation with no gaps, and a fork starts a new sequence; a capacity slot
@@ -750,9 +792,9 @@ temp dir is removed.
   through the raw `HarnessHandle`. Prepared agents held outside the manager
   (such as a TUI warm-up before any session exists) do not count against the
   cap.
-- Remote and local frontends share notifications but not request ownership.
-  Local prompts may queue; remote prompts reject while busy, remote cancel is
-  scoped to the registered harness request id, and only the remote submitter
+- Legacy remote and local frontends share notifications but not request
+  ownership. Local prompts may queue; remote prompts reject while busy,
+  legacy remote cancel is scoped to the registered harness request id, and only the remote submitter
   receives a correlated prompt outcome. Prompt registration belongs to
   `HarnessRemoteHost`, so controller replacement cannot strand admission state,
   while hosted-session replacement invalidates the old registration token.

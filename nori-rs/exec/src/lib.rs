@@ -1,5 +1,8 @@
 //! Scriptable, terminal-independent execution over Nori's ACP harness.
 
+mod managed;
+
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -67,6 +70,8 @@ pub async fn run_plaintext(
         request_id,
         PermissionMode::Reject,
         None,
+        None,
+        None,
     )
     .await;
     let shutdown_result = launched.handle.shutdown().await;
@@ -98,16 +103,66 @@ struct PromptResult {
     permission_denied: bool,
 }
 
+trait PromptEvents {
+    fn recv_event(&mut self) -> impl Future<Output = Option<SessionEvent>> + Send;
+}
+
+impl PromptEvents for UnboundedReceiver<SessionEvent> {
+    async fn recv_event(&mut self) -> Option<SessionEvent> {
+        self.recv().await
+    }
+}
+
+impl PromptEvents for tokio::sync::mpsc::Receiver<SessionEvent> {
+    async fn recv_event(&mut self) -> Option<SessionEvent> {
+        self.recv().await
+    }
+}
+
+async fn next_permission_resolution(
+    resolutions: &mut Option<tokio::sync::mpsc::Receiver<nori_protocol::SessionEnvelope>>,
+) -> Option<acp::RequestId> {
+    loop {
+        let Some(events) = resolutions.as_mut() else {
+            return std::future::pending().await;
+        };
+        match events.recv().await {
+            Some(nori_protocol::SessionEnvelope {
+                event: SessionEvent::Nori(NoriEvent::RequestResolved(resolved)),
+                ..
+            }) => return Some(resolved.request_id),
+            Some(_) => {}
+            None => {
+                *resolutions = None;
+                return None;
+            }
+        }
+    }
+}
+
 async fn collect_prompt(
     handle: &HarnessHandle,
-    events: &mut UnboundedReceiver<SessionEvent>,
+    events: &mut impl PromptEvents,
     prompt_request_id: acp::RequestId,
     permission_mode: PermissionMode,
     client: Option<&ConnectionTo<Client>>,
+    outward_session_id: Option<&acp::SessionId>,
+    mut resolutions: Option<tokio::sync::mpsc::Receiver<nori_protocol::SessionEnvelope>>,
 ) -> anyhow::Result<PromptResult> {
     let mut output = String::new();
     let mut permission_denied = false;
-    while let Some(event) = events.recv().await {
+    let mut resolved_requests = HashSet::new();
+    loop {
+        let event = tokio::select! {
+            event = events.recv_event() => match event { Some(event) => event, None => break },
+            resolved = next_permission_resolution(&mut resolutions) => {
+                let Some(request_id) = resolved else {
+                    anyhow::bail!("permission resolution stream ended before the prompt completed");
+                };
+                resolved_requests.insert(request_id);
+                continue;
+            },
+        };
         match event {
             SessionEvent::Acp(AcpEvent::Notification(
                 acp::AgentNotification::SessionNotification(notification),
@@ -120,16 +175,39 @@ async fn collect_prompt(
             }
             SessionEvent::Acp(AcpEvent::Request {
                 request_id,
-                request: acp::AgentRequest::RequestPermissionRequest(request),
+                request: acp::AgentRequest::RequestPermissionRequest(mut request),
             }) => {
+                if resolved_requests.remove(&request_id) {
+                    continue;
+                }
                 let response = match permission_mode {
                     PermissionMode::Reject => {
                         permission_denied = true;
                         reject_permission(&request)
                     }
                     PermissionMode::Forward => {
+                        if let Some(id) = outward_session_id {
+                            request.session_id = id.clone();
+                        }
                         let client = client.context("ACP client connection is unavailable")?;
-                        match client.send_request(request).block_task().await {
+                        let answer = client.send_request(request).block_task();
+                        tokio::pin!(answer);
+                        let outcome = loop {
+                            tokio::select! {
+                                response = &mut answer => break Some(response),
+                                resolved = next_permission_resolution(&mut resolutions) => {
+                                    match resolved {
+                                        Some(resolved) if resolved == request_id => break None,
+                                        Some(resolved) => { resolved_requests.insert(resolved); },
+                                        None => anyhow::bail!("permission resolution stream ended before the request was answered"),
+                                    }
+                                },
+                            }
+                        };
+                        let Some(outcome) = outcome else {
+                            continue;
+                        };
+                        match outcome {
                             Ok(response) => response,
                             Err(error) => {
                                 handle
@@ -270,6 +348,9 @@ pub async fn run_acp(
     cli_version: String,
     analytics: Option<AnalyticsReporter>,
 ) -> anyhow::Result<()> {
+    if config.multi_session {
+        return managed::run(config, cli_version, analytics).await;
+    }
     let state = Arc::new(Mutex::new(FacadeState {
         base_config: config,
         cli_version,
@@ -433,6 +514,8 @@ pub async fn run_acp(
                             request_id,
                             PermissionMode::Forward,
                             Some(&client),
+                            None,
+                            None,
                         )
                         .await;
                         if let Err(error) = handle.shutdown().await {

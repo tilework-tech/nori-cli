@@ -114,6 +114,7 @@ impl App {
             return;
         }
         self.session_deck.remove(generation);
+        self.remote_control.forget_session(generation);
     }
 
     /// A session released through `/close`. With another session open, that
@@ -219,6 +220,7 @@ impl App {
                 .replace(generation, next)
                 .map(|old| old.transcript)
                 .unwrap_or_default();
+            self.remote_control.forget_session(generation);
             self.session_deck.park(
                 next,
                 ParkedSession {

@@ -490,3 +490,211 @@ fn a_request_answered_by_remote_control_clears_the_approval_in_the_tui() {
         "the answered request is still asked:\n{screen}"
     );
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn at_the_cap_resume_preserves_the_current_session_and_explains_how_to_make_room() {
+    let mut session = spawn_with(config("[tui]\nmax_sessions = 1\n"));
+    ask(&mut session, "keep this conversation", ANSWER);
+    session.submit_input("/resume").unwrap();
+    session
+        .wait_for_text("1 sessions are open", TIMEOUT)
+        .expect("resume refuses before opening another picker");
+    let screen = session.screen_contents();
+    assert!(
+        screen.contains("ctrl+d") && screen.contains("/close"),
+        "{screen}"
+    );
+    assert!(screen.contains("keep this conversation"), "{screen}");
+    ask(&mut session, "still usable after refusal", ANSWER);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn at_the_cap_a_transcript_fork_preserves_the_current_session() {
+    let mut session = spawn_with(config("[tui]\nmax_sessions = 1\n"));
+    ask(&mut session, "keep this parent", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("1 sessions are open", TIMEOUT)
+        .expect("fork refuses before preparing another process");
+    let screen = session.screen_contents();
+    assert!(
+        screen.contains("ctrl+d") && screen.contains("/close"),
+        "{screen}"
+    );
+    assert!(screen.contains("keep this parent"), "{screen}");
+    ask(&mut session, "parent still usable", ANSWER);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn restarting_a_failed_parent_keeps_its_child_under_the_replacement() {
+    let mut session = spawn_with(config(""));
+    ask(&mut session, "parent question", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("Select a message to rewind to", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session.wait_for_text("2 ready", TIMEOUT).unwrap();
+    session.settle(TIMEOUT_INPUT);
+    session.send_key(Key::Ctrl('u')).unwrap();
+    ask(&mut session, "child question", ANSWER);
+    session.send_key(Key::Alt(',')).unwrap();
+    session.wait_for_text("parent question", TIMEOUT).unwrap();
+    session.submit_input("mock:exit-during-prompt").unwrap();
+    session.wait_for_text("1 failed", TIMEOUT).unwrap();
+    open_list(&mut session, "Sessions 2");
+    session.send_key(Key::Ctrl('r')).unwrap();
+    session.wait_for_text("2 ready", TIMEOUT).unwrap();
+    open_list(&mut session, "Sessions 2");
+    let screen = session.screen_contents();
+    assert!(
+        screen
+            .lines()
+            .any(|line| line.contains("└─") && line.contains("child question")),
+        "{screen}"
+    );
+    session.send_key(Key::Escape).unwrap();
+    session
+        .wait_for(|screen| !screen.contains("Sessions 2"), TIMEOUT)
+        .expect("the session list closes before typing into the composer");
+    ask(&mut session, "restarted parent usable", ANSWER);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn legacy_remote_control_follows_the_session_on_screen() {
+    let port = reserve_loopback_port();
+    let mut session = spawn_with(
+        config("")
+            .with_arg("--remote")
+            .with_arg(port.to_string())
+            .with_excluded_binary("tailscale"),
+    );
+    ask(&mut session, "first session marker", ANSWER);
+    let (mut first_client, _) = connect(format!("ws://127.0.0.1:{port}/acp").as_str()).unwrap();
+    if let tungstenite::stream::MaybeTlsStream::Plain(stream) = first_client.get_ref() {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+    }
+    send(
+        &mut first_client,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+        "params":{"protocolVersion":1,"clientCapabilities":{}}}),
+    );
+    read_until(&mut first_client, |value| value["id"] == json!(1));
+    send(
+        &mut first_client,
+        json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}),
+    );
+    let first_catalog = read_until(&mut first_client, |value| value["id"] == json!(2));
+    let first_id = first_catalog["result"]["sessions"][0]["sessionId"].clone();
+    drop(first_client);
+    start_new_session(&mut session, "2 ready");
+    ask(&mut session, "second session marker", ANSWER);
+    session.send_key(Key::Alt(',')).unwrap();
+    session
+        .wait_for_text("first session marker", TIMEOUT)
+        .unwrap();
+    let (mut client, _) = connect(format!("ws://127.0.0.1:{port}/acp").as_str()).unwrap();
+    if let tungstenite::stream::MaybeTlsStream::Plain(stream) = client.get_ref() {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(15)))
+            .unwrap();
+    }
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+        "params":{"protocolVersion":1,"clientCapabilities":{}}}),
+    );
+    read_until(&mut client, |value| value["id"] == json!(1));
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}),
+    );
+    let catalog = read_until(&mut client, |value| value["id"] == json!(2));
+    assert_eq!(
+        catalog["result"]["sessions"][0]["sessionId"], first_id,
+        "a fresh legacy connection defaults to the session on screen"
+    );
+    let id = catalog["result"]["sessions"][0]["sessionId"]
+        .as_str()
+        .unwrap();
+    send(
+        &mut client,
+        json!({"jsonrpc":"2.0","id":3,"method":"session/prompt",
+        "params":{"sessionId":id,"prompt":[{"type":"text","text":"remote selected-session marker"}]}}),
+    );
+    read_until(&mut client, |value| value["id"] == json!(3));
+    session
+        .wait_for_text("remote selected-session marker", TIMEOUT)
+        .expect("the remote prompt reaches the older session on screen");
+    session.send_key(Key::Alt('.')).unwrap();
+    session
+        .wait_for_text("second session marker", TIMEOUT)
+        .unwrap();
+    assert!(
+        !session
+            .history_contents()
+            .contains("remote selected-session marker")
+    );
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn managed_remote_endpoint_requires_multi_session() {
+    for multi_session in [false, true] {
+        let port = reserve_loopback_port();
+        let settings = if multi_session {
+            config("")
+        } else {
+            SessionConfig::new()
+        };
+        let mut session = spawn_with(
+            settings
+                .with_arg("--remote")
+                .with_arg(port.to_string())
+                .with_excluded_binary("tailscale"),
+        );
+        session
+            .wait_for_text("ACP URLs:", TIMEOUT)
+            .expect("listener enabled");
+        let connected = connect(format!("ws://127.0.0.1:{port}/sessions").as_str());
+        assert_eq!(
+            connected.is_ok(),
+            multi_session,
+            "endpoint exposure follows the feature flag"
+        );
+    }
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn a_same_process_head_fork_is_allowed_at_the_cap_but_a_transcript_fork_is_not() {
+    let mut session = spawn_with(
+        config("[tui]\nmax_sessions = 1\n").with_agent_env("MOCK_AGENT_SUPPORT_SESSION_FORK", "1"),
+    );
+    ask(&mut session, "original question", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("Branch from current point", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("Session forked.", TIMEOUT)
+        .expect("head fork shares the existing process");
+    ask(&mut session, "after head fork", ANSWER);
+    session.submit_input("/fork").unwrap();
+    session
+        .wait_for_text("Branch from current point", TIMEOUT)
+        .unwrap();
+    session.send_key(Key::Down).unwrap();
+    session.send_key(Key::Enter).unwrap();
+    session
+        .wait_for_text("1 sessions are open", TIMEOUT)
+        .expect("a transcript fork still needs another process slot");
+    ask(&mut session, "still here after refused fork", ANSWER);
+}

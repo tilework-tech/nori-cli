@@ -285,7 +285,8 @@ impl HarnessHandle {
             .await
     }
 
-    pub(crate) async fn prompt_with_meta_if_idle(
+    /// Submit only when idle, rejecting busy sessions atomically at admission.
+    pub async fn prompt_with_meta_if_idle(
         &self,
         content: Vec<acp::v1::ContentBlock>,
         meta: Option<acp::v1::Meta>,

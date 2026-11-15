@@ -623,6 +623,13 @@ impl App {
                 tui.frame_requester().schedule_frame();
             }
             AppEvent::OpenAgentSessionPicker => {
+                if self.refuse_at_session_cap() {
+                    return Ok(true);
+                }
+                if self.chat_widget.has_harness_session() {
+                    self.chat_widget.open_resume_session_picker();
+                    return Ok(true);
+                }
                 self.discard_candidate();
                 self.pending_session_activation = None;
                 if let Some(agent) = &self.prepared_agent {
@@ -781,7 +788,12 @@ impl App {
                         if let Some(handle) = self.chat_widget.harness_handle()
                             && let Err(error) = self
                                 .remote_control
-                                .attach_started(handle, self.config.nori_home.clone(), started)
+                                .remember_started(
+                                    generation,
+                                    handle,
+                                    self.config.nori_home.clone(),
+                                    started,
+                                )
                                 .await
                         {
                             tracing::warn!(%error, "failed to attach committed candidate to remote ACP host");
@@ -816,28 +828,44 @@ impl App {
                         self.chat_widget.add_error_message(message);
                     }
                 } else {
+                    if let nori_protocol::SessionEvent::Nori(
+                        nori_protocol::NoriEvent::SessionStarted(started),
+                    ) = &event
+                    {
+                        let handle = if self.chat_widget.session_generation() == generation {
+                            self.chat_widget.harness_handle()
+                        } else {
+                            self.session_deck
+                                .parked_mut(generation)
+                                .and_then(|parked| parked.widget.harness_handle())
+                        };
+                        if let Some(handle) = handle
+                            && let Err(error) = self
+                                .remote_control
+                                .remember_started(
+                                    generation,
+                                    handle,
+                                    self.config.nori_home.clone(),
+                                    started.clone(),
+                                )
+                                .await
+                        {
+                            tracing::warn!(%error, "failed to attach session to remote ACP host");
+                        }
+                    }
+                    if matches!(
+                        &event,
+                        nori_protocol::SessionEvent::Nori(nori_protocol::NoriEvent::SessionEnded(
+                            _
+                        ))
+                    ) {
+                        self.remote_control.forget_session(generation);
+                    }
                     let Some(event) = self.route_parked_session_event(generation, event) else {
                         tui.frame_requester().schedule_frame();
                         return Ok(true);
                     };
-                    let started = match &event {
-                        nori_protocol::SessionEvent::Nori(
-                            nori_protocol::NoriEvent::SessionStarted(started),
-                        ) if self.chat_widget.session_generation() == generation => {
-                            Some(started.clone())
-                        }
-                        _ => None,
-                    };
                     self.chat_widget.handle_session_event(generation, event);
-                    if let Some(started) = started
-                        && let Some(handle) = self.chat_widget.harness_handle()
-                        && let Err(error) = self
-                            .remote_control
-                            .attach_started(handle, self.config.nori_home.clone(), started)
-                            .await
-                    {
-                        tracing::warn!(%error, "failed to attach session to remote ACP host");
-                    }
                 }
             }
             AppEvent::ConversationHistory(ev) => {
@@ -1573,6 +1601,9 @@ impl App {
                 project_id,
                 session_id,
             } => {
+                if self.refuse_at_session_cap() {
+                    return Ok(true);
+                }
                 let loader = nori_harness::transcript::TranscriptLoader::new(nori_home);
                 match loader.load_transcript(&project_id, &session_id).await {
                     Ok(transcript) => {
@@ -1652,6 +1683,9 @@ impl App {
                 acp_session_id,
                 title,
             } => {
+                if self.refuse_at_session_cap() {
+                    return Ok(true);
+                }
                 if matches!(self.candidate_agent, Some(CandidateAgent::Prepared { .. })) {
                     let Some(CandidateAgent::Prepared {
                         agent_name,
@@ -1802,6 +1836,9 @@ impl App {
                 // Only agents that advertise ACP `session/fork` can branch at the
                 // current head; without it, the picker only rewinds to a message.
                 let supports_fork = self.chat_widget.agent_capabilities().session_fork;
+                if !supports_fork && self.refuse_at_session_cap() {
+                    return Ok(true);
+                }
                 if !supports_fork && messages.is_empty() {
                     self.chat_widget
                         .add_info_message("No messages to fork from.".to_string(), None);
@@ -1823,6 +1860,9 @@ impl App {
                 cell_index,
                 prefill,
             } => {
+                if self.refuse_at_session_cap() {
+                    return Ok(true);
+                }
                 let summary =
                     crate::app_backtrack::build_fork_summary(&self.transcript_cells, cell_index);
                 let fork_context = if summary.is_empty() {

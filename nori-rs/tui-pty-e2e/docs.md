@@ -124,12 +124,16 @@ notifications gated on terminal focus. [`session_transcripts.rs`](tests/session_
 covers the always-on fix that `/new` then `/resume` shows each turn once,
 including after a resize, and a cloud scenario lists two cloud sessions side
 by side. [`session_lifecycle.rs`](tests/session_lifecycle.rs) covers the
-`[tui] max_sessions` refusal, closing from the list with Ctrl+D (including the
+`[tui] max_sessions` refusal across new, resume, and new-process fork paths,
+closing from the list with Ctrl+D (including the
 second press a busy session needs) and from `/close`, starting a session beside
 a busy one, a background loop staying in its own row, a restarted session
-keeping its title, `/agent` preparation leaving no line in the old session, the
-background-request line fitting one row, and an approval answered over a real
-remote-control WebSocket clearing the TUI modal. A cloud-mode scenario checks
+keeping its title and replacing its failed registry record through manager
+resume, `/agent` preparation leaving no line in the old session, and the
+background-request line fitting one row. Real WebSocket coverage verifies
+that remote permission answers clear the TUI modal, that the default remote
+session is the one on screen, and that an existing controller remains pinned
+when the local user changes sessions. A cloud-mode scenario checks
 that `/close` beside another open session lists the released one as closed. The ignored `jump_timing_on_a_long_history` test reports how long a
 jump to a long history takes; run it with `--ignored --nocapture`.
 

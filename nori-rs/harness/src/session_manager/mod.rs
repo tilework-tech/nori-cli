@@ -1,6 +1,10 @@
 //! Session manager: one registry of live sessions per Nori process.
 
 mod registry;
+mod replay;
+
+pub use replay::ReplayError;
+pub use replay::ReplayInfo;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -168,12 +172,12 @@ pub struct SessionManager {
 struct Shared {
     config: SessionManagerConfig,
     state: Mutex<State>,
-    subscribers: Mutex<Vec<mpsc::Sender<SessionEnvelope>>>,
 }
 
 struct State {
     registry: Registry,
     handles: HashMap<AgentProcessId, HarnessHandle>,
+    journal: replay::Journal,
 }
 
 impl Shared {
@@ -183,17 +187,47 @@ impl Shared {
 }
 
 impl SessionManager {
+    /// Retain at most 4096 envelopes across this manager's sessions.
     pub fn new(config: SessionManagerConfig) -> Self {
+        Self::with_replay_capacity(config, 4096)
+    }
+
+    /// Configure the bounded in-process reconnect history, independently of live queue sizes.
+    pub fn with_replay_capacity(config: SessionManagerConfig, capacity: i32) -> Self {
         Self {
             shared: Arc::new(Shared {
                 config,
                 state: Mutex::new(State {
                     registry: Registry::new(config.max_sessions),
                     handles: HashMap::new(),
+                    journal: replay::Journal::new(capacity),
                 }),
-                subscribers: Mutex::new(Vec::new()),
             }),
         }
+    }
+
+    /// Replay strictly after each cursor and follow live events at one atomic boundary.
+    /// `None` selects all sessions, including sessions subsequently started.
+    pub fn subscribe_from(
+        &self,
+        session: Option<ConversationId>,
+        cursors: &HashMap<String, i64>,
+        capacity: i32,
+    ) -> Result<nori_acp_host::remote::ManagedSubscription, ReplayError> {
+        self.shared.state().journal.subscribe_from(
+            session.map(|id| id.to_string()),
+            cursors,
+            capacity,
+        )
+    }
+
+    /// Current cursors include superseded conversations whose events remain replayable.
+    pub fn replay_cursors(&self) -> HashMap<String, i64> {
+        self.shared.state().journal.cursors()
+    }
+
+    pub fn replay_info(&self, session: &ConversationId) -> Option<ReplayInfo> {
+        self.shared.state().journal.info(&session.to_string())
     }
 
     /// Start a session on its own agent process.
@@ -245,7 +279,9 @@ impl SessionManager {
         let process = {
             let mut state = self.shared.state();
             let reservation = state.registry.reserve()?;
-            state.registry.register(settings, reservation)?
+            let process = state.registry.register(settings, reservation)?;
+            state.journal.register(conversation_id.to_string());
+            process
         };
 
         let launched = launch_session_from(agent_source, start);
@@ -296,6 +332,9 @@ impl SessionManager {
                 let envelopes = {
                     let mut state = shared.state();
                     let envelopes = state.registry.observe_all(process, event);
+                    for envelope in &envelopes {
+                        state.journal.publish(envelope);
+                    }
                     let ended = state
                         .registry
                         .conversation_of(process)
@@ -309,11 +348,6 @@ impl SessionManager {
                     envelopes
                 };
                 for envelope in envelopes {
-                    shared
-                        .subscribers
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .retain(|subscriber| subscriber.try_send(envelope.clone()).is_ok());
                     // The client may stop reading; status and subscribers
                     // still follow the session.
                     let _ = primary_tx.send(envelope);
@@ -417,13 +451,7 @@ impl SessionManager {
     /// `capacity` envelopes behind is dropped and its receiver closes; the
     /// sessions are never slowed down.
     pub fn subscribe(&self, capacity: i32) -> mpsc::Receiver<SessionEnvelope> {
-        let (tx, rx) = mpsc::channel(usize::try_from(capacity.max(1)).unwrap_or(1));
-        self.shared
-            .subscribers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(tx);
-        rx
+        self.shared.state().journal.subscribe(None, capacity)
     }
 
     /// Shut down one session, waiting at most the configured time limit.
